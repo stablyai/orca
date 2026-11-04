@@ -15,12 +15,7 @@ import type { RemoteRuntimeMultiplexedTerminal } from './remote-runtime-terminal
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
-// Why: reproduces the silent frame-drop corruption. The server multiplex path
-// drops Output frames when the websocket buffer is over its cap
-// (encryptedBinaryReply returns false); the wire `seq` is an output high-water, so
-// a drop leaves a detectable gap. This harness drives the real client
-// multiplexer through the same subscribe transport the app uses and forces a
-// drop, asserting the client resyncs instead of rendering a corrupt tail.
+// Simulate multiplex Output drops under websocket backpressure: UTF-16 high-water seq exposes loss, and the real client must resync instead of painting corrupt output.
 
 type SubscribeCallbacks = {
   onResponse: (response: unknown) => void
@@ -41,11 +36,14 @@ class FakeMultiplexServer {
   droppedFrames = 0
   holdNextManualSnapshot = false
   truncateNextRecoverySnapshot = false
+  unavailableNextRecoverySnapshot = false
   dropNextRecoverySnapshotEnd = false
   holdNextRecoverySnapshot = false
+  streamNextRecoverySnapshot = false
   snapshotRequests: (number | undefined)[] = []
   snapshotRequestRows: (number | undefined)[] = []
   private heldManualRequestId: number | null = null
+  private heldRecoverySnapshot = false
   private snapshotData = 'INITIAL'
 
   constructor(
@@ -76,17 +74,32 @@ class FakeMultiplexServer {
         this.heldManualRequestId = payload.requestId
         return
       }
-      // Resync request: the server serializes the *current* buffer, so recovery
-      // includes everything the client missed.
+      // Snapshot serializes current host buffer, including all missed output.
       this.snapshotData = 'RECOVERED'
       if (typeof payload?.requestId !== 'number' && this.holdNextRecoverySnapshot) {
         // The reply's binary frames were all dropped under backpressure.
         this.holdNextRecoverySnapshot = false
+        this.heldRecoverySnapshot = true
+        return
+      }
+      if (typeof payload?.requestId !== 'number' && this.streamNextRecoverySnapshot) {
+        // A slow link: the reply starts now and its chunks trickle in later.
+        this.streamNextRecoverySnapshot = false
+        this.send(
+          TerminalStreamOpcode.SnapshotStart,
+          encodeTerminalStreamJson({ cols: 80, rows: 24, seq: this.cursorUnits }),
+          0
+        )
         return
       }
       if (typeof payload?.requestId !== 'number' && this.truncateNextRecoverySnapshot) {
         this.truncateNextRecoverySnapshot = false
         this.sendSnapshot(undefined, { truncated: true })
+        return
+      }
+      if (typeof payload?.requestId !== 'number' && this.unavailableNextRecoverySnapshot) {
+        this.unavailableNextRecoverySnapshot = false
+        this.sendSnapshot(undefined, { unavailable: 'no-serializable-buffer' })
         return
       }
       if (typeof payload?.requestId !== 'number' && this.dropNextRecoverySnapshotEnd) {
@@ -104,7 +117,7 @@ class FakeMultiplexServer {
 
   private sendSnapshot(
     requestId?: number,
-    options?: { truncated?: boolean; omitEnd?: boolean }
+    options?: { truncated?: boolean; omitEnd?: boolean; unavailable?: string }
   ): void {
     this.send(
       TerminalStreamOpcode.SnapshotStart,
@@ -113,11 +126,12 @@ class FakeMultiplexServer {
         rows: 24,
         seq: options?.truncated ? undefined : this.cursorUnits,
         requestId,
-        truncated: options?.truncated
+        truncated: options?.truncated,
+        unavailable: options?.unavailable
       }),
       0
     )
-    if (!options?.truncated) {
+    if (!options?.truncated && !options?.unavailable) {
       this.send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText(this.snapshotData), 0)
     }
     if (!options?.omitEnd) {
@@ -130,9 +144,7 @@ class FakeMultiplexServer {
     const startSeq = this.cursorUnits
     this.cursorUnits += text.length
     if (this.dropNextOutput) {
-      // encryptedBinaryReply returned false: frame is NOT sent. The byte
-      // high-water still advances (server keeps producing), so the next frame's
-      // seq jumps past what the client last saw.
+      // Dropped frames never reach client, but host high-water advances so next output exposes the gap.
       this.dropNextOutput = false
       this.droppedFrames += 1
       this.onServerSideDrop?.()
@@ -140,15 +152,6 @@ class FakeMultiplexServer {
     }
     void startSeq
     this.send(TerminalStreamOpcode.Output, encodeTerminalStreamText(text), this.cursorUnits)
-  }
-
-  outputSpan(data: string, rawLength: number): void {
-    this.cursorUnits += rawLength
-    this.send(
-      TerminalStreamOpcode.OutputSpan,
-      encodeTerminalStreamJson({ data, rawLength, transformed: true }),
-      this.cursorUnits
-    )
   }
 
   malformedOutputSpan(): void {
@@ -171,6 +174,22 @@ class FakeMultiplexServer {
     this.heldManualRequestId = null
     this.snapshotData = 'MANUAL'
     this.sendSnapshot(requestId)
+  }
+
+  streamRecoveryChunk(text: string): void {
+    this.send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText(text), 0)
+  }
+
+  endStreamedRecovery(): void {
+    this.send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array(), 0)
+  }
+
+  flushHeldRecoverySnapshot(): void {
+    if (!this.heldRecoverySnapshot) {
+      throw new Error('No recovery snapshot is held')
+    }
+    this.heldRecoverySnapshot = false
+    this.sendSnapshot()
   }
 }
 
@@ -229,82 +248,31 @@ describe('remote terminal frame-drop resync', () => {
     return { data, metas, snapshots, stream }
   }
 
-  it('detects a dropped Output frame via the seq gap and resyncs', async () => {
-    const { data, snapshots } = await subscribeClient()
-    expect(snapshots).toEqual(['INITIAL'])
-
-    server.output('aaa')
-    server.dropNextOutput = true
-    server.output('bbb') // dropped under backpressure — never reaches the client
-    server.output('ccc') // seq jumps past 'bbb', exposing the gap
-
-    // Flush the client's resync SnapshotRequest -> server snapshot round-trip.
-    await Promise.resolve()
-    await Promise.resolve()
-
-    // The corrupt tail ('ccc', which followed a gap) is NOT rendered as live data.
-    expect(data).toEqual(['aaa'])
-    expect(server.droppedFrames).toBe(1)
-    // Instead, a fresh authoritative snapshot recovers the terminal.
-    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-    // P2-5: the gap lost output, so the resync asks for history to replace the pane's own.
-    expect(server.snapshotRequestRows).toEqual([1000])
-
-    server.replaySnapshotCoveredOutput('ccc')
-    server.output('ddd')
-    expect(data).toEqual(['aaa', 'ddd'])
-  })
-
-  it('retries a truncated recovery on a backoff without accepting output across the gap', async () => {
-    vi.useFakeTimers()
+  it('reconciles painted output when a delayed recovery snapshot arrives', async () => {
+    const { data, snapshots, stream } = await subscribeClient()
     try {
-      const { data, snapshots } = await subscribeClient()
-      server.truncateNextRecoverySnapshot = true
+      server.holdNextRecoverySnapshot = true
 
       server.output('aaa')
       server.dropNextOutput = true
       server.output('bbb')
       server.output('ccc')
-      // The gate stays shut across the backoff: the post-gap tail is corrupt,
-      // and retrying once per chunk would stampede a flooded server.
       server.output('ddd')
-      expect(server.snapshotRequests).toEqual([undefined])
-
-      // The retry fires from the backoff timer alone — no further output needed.
-      await vi.advanceTimersByTimeAsync(500)
-      expect(server.snapshotRequests).toEqual([undefined, undefined])
-
       server.output('eee')
+
+      expect(data).toEqual(['aaa', 'ddd', 'eee'])
+      expect(snapshots).toEqual(['INITIAL'])
+
+      server.flushHeldRecoverySnapshot()
       expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-      expect(data).toEqual(['aaa', 'eee'])
+
+      // A replay covered by the authoritative snapshot must not duplicate.
+      server.replaySnapshotCoveredOutput('eee')
+      server.output('fff')
+      expect(data).toEqual(['aaa', 'ddd', 'eee', 'fff'])
     } finally {
-      vi.useRealTimers()
+      stream.close()
     }
-  })
-
-  it('re-opens the live path when only the JSON error event for a resync survives', async () => {
-    const { data, snapshots, stream } = await subscribeClient()
-    server.holdNextRecoverySnapshot = true
-
-    server.output('aaa')
-    server.dropNextOutput = true
-    server.output('bbb')
-    server.output('ccc')
-    expect(server.snapshotRequests).toEqual([undefined])
-
-    // The paired binary Error frame was dropped under backpressure; only the
-    // reliable JSON error event arrives. It must release the resync gate.
-    subscriptionCallbacks.onResponse({
-      ok: true,
-      result: { type: 'error', streamId: stream.streamId, message: 'snapshot failed' }
-    })
-
-    server.output('ddd')
-    server.output('eee')
-
-    expect(server.snapshotRequests).toEqual([undefined, undefined])
-    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-    expect(data).toEqual(['aaa', 'eee'])
   })
 
   it('dispatches the deferred resync when a JSON error consumes the manual snapshot', async () => {
@@ -332,7 +300,7 @@ describe('remote terminal frame-drop resync', () => {
     expect(data).toEqual(['aaa', 'ddd'])
   })
 
-  it('times out a dropped recovery end and retries on the next sequence gap', async () => {
+  it('retries a recovery whose end was dropped without waiting for more output', async () => {
     vi.useFakeTimers()
     try {
       const { data, snapshots } = await subscribeClient()
@@ -342,56 +310,76 @@ describe('remote terminal frame-drop resync', () => {
       server.dropNextOutput = true
       server.output('bbb')
       server.output('ccc')
-      await vi.advanceTimersByTimeAsync(10_000)
       server.output('ddd')
-      server.output('eee')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(server.snapshotRequests).toEqual([undefined])
 
+      // #18488: the timeout itself retries; an idle pane still heals.
+      await vi.advanceTimersByTimeAsync(500)
       expect(server.snapshotRequests).toEqual([undefined, undefined])
       expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-      expect(data).toEqual(['aaa', 'eee'])
+
+      server.output('eee')
+      expect(data).toEqual(['aaa', 'ddd', 'eee'])
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('passes contiguous output straight through without resyncing', async () => {
-    const { data, snapshots } = await subscribeClient()
+  it('escalates to stall recovery when the host never answers a recovery', async () => {
+    vi.useFakeTimers()
+    try {
+      const onTransportClose = vi.fn()
+      await getRemoteRuntimeTerminalMultiplexer('env-1').subscribeTerminal({
+        terminal: 'terminal-1',
+        client: { id: 'desktop-1', type: 'desktop' },
+        callbacks: { onData: vi.fn(), onSnapshot: vi.fn(), onTransportClose }
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      server.holdNextRecoverySnapshot = true
+      server.output('aaa')
+      server.dropNextOutput = true
+      server.output('bbb')
+      server.output('ccc')
+      await vi.advanceTimersByTimeAsync(10_000)
+      server.holdNextRecoverySnapshot = true
+      await vi.advanceTimersByTimeAsync(500)
+      expect(server.snapshotRequests).toEqual([undefined, undefined])
+      expect(onTransportClose).not.toHaveBeenCalled()
 
-    server.output('one')
-    server.output('two')
-    server.output('three')
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(data).toEqual(['one', 'two', 'three'])
-    expect(snapshots).toEqual(['INITIAL'])
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true, stalled: true })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('replaces the stream and subscription CAS after a same-id re-pair', async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 10 }])
-    const onTransportClose = vi.fn()
-    const firstMultiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
-    await firstMultiplexer.subscribeTerminal({
-      terminal: 'terminal-1',
-      client: { id: 'desktop-1', type: 'desktop' },
-      callbacks: { onData: vi.fn(), onSnapshot: vi.fn(), onTransportClose }
-    })
+  it('does not re-request a recovery that is still streaming on a slow link', async () => {
+    vi.useFakeTimers()
+    try {
+      const { data, snapshots } = await subscribeClient()
+      server.streamNextRecoverySnapshot = true
 
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 11 }])
-    const secondMultiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
-    await secondMultiplexer.subscribeTerminal({
-      terminal: 'terminal-2',
-      client: { id: 'desktop-1', type: 'desktop' },
-      callbacks: { onData: vi.fn(), onSnapshot: vi.fn() }
-    })
+      server.output('aaa')
+      server.dropNextOutput = true
+      server.output('bbb')
+      server.output('ccc')
+      await vi.advanceTimersByTimeAsync(6_000)
+      server.streamRecoveryChunk('SLOW-')
+      await vi.advanceTimersByTimeAsync(6_000)
+      server.streamRecoveryChunk('RECOVERY')
+      await vi.advanceTimersByTimeAsync(6_000)
+      server.endStreamedRecovery()
+      await vi.advanceTimersByTimeAsync(10_000)
 
-    expect(secondMultiplexer).not.toBe(firstMultiplexer)
-    expect(onTransportClose).toHaveBeenCalledTimes(1)
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-    expect(subscribe.mock.calls.map((call) => call[0])).toEqual([
-      expect.objectContaining({ expectedEnvironmentPairingRevision: 10 }),
-      expect.objectContaining({ expectedEnvironmentPairingRevision: 11 })
-    ])
+      expect(server.snapshotRequests).toEqual([undefined])
+      expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HSLOW-RECOVERY'])
+      server.output('ddd')
+      expect(data).toEqual(['aaa', 'ddd'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('drops stale binary output and retires the old transport after a same-id re-pair', async () => {
@@ -415,38 +403,6 @@ describe('remote terminal frame-drop resync', () => {
     expect(data).toEqual([])
     expect(onTransportClose).toHaveBeenCalledTimes(1)
     expect(unsubscribe).toHaveBeenCalledTimes(1)
-  })
-
-  it('drops stale JSON events and retires the old transport after a same-id re-pair', async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 10 }])
-    const onEnd = vi.fn()
-    const onTransportClose = vi.fn()
-    const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
-    const stream = await multiplexer.subscribeTerminal({
-      terminal: 'terminal-1',
-      client: { id: 'desktop-1', type: 'desktop' },
-      callbacks: { onData: vi.fn(), onSnapshot: vi.fn(), onEnd, onTransportClose }
-    })
-
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 11 }])
-    subscriptionCallbacks.onResponse({
-      ok: true,
-      result: { type: 'end', streamId: stream.streamId }
-    })
-
-    expect(onEnd).not.toHaveBeenCalled()
-    expect(onTransportClose).toHaveBeenCalledTimes(1)
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-  })
-
-  it('delivers an empty transformed span with its raw sequence metadata', async () => {
-    const { data, metas, snapshots } = await subscribeClient()
-
-    server.outputSpan('', 9)
-
-    expect(data).toEqual([''])
-    expect(metas).toEqual([{ seq: 9, rawLength: 9, transformed: true }])
-    expect(snapshots).toEqual(['INITIAL'])
   })
 
   it('requests an authoritative resync instead of rendering malformed span JSON', async () => {

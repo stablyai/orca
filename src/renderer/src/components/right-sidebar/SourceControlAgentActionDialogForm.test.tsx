@@ -1,21 +1,37 @@
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { sourceControlActionRecipeEntry } from '../../../../shared/source-control-action-selection'
+import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import React, { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { SourceControlAgentActionDialogForm } from './SourceControlAgentActionDialogForm'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
 
-vi.mock('@/components/agent/AgentCombobox', () => ({
-  default: ({
-    value,
-    allowBlankTerminal
+vi.mock('@/components/agent/AgentLaunchPicker', () => ({
+  AgentLaunchPicker: ({
+    agent,
+    draftForEntry
   }: {
-    value: string | null
-    allowBlankTerminal?: boolean
+    agent: string | null
+    draftForEntry?: (entry: AgentPickerEntry) => unknown
   }) =>
     React.createElement('div', {
-      'data-agent-value': value ?? '',
-      'data-allow-blank': String(allowBlankTerminal === true)
+      'data-agent-value': agent ?? '',
+      'data-allow-blank': 'false',
+      'data-draft':
+        draftForEntry && agent && (agent === 'codex' || agent === 'antigravity')
+          ? JSON.stringify(
+              draftForEntry({
+                agent,
+                label: agent,
+                rows: [],
+                surfaces: ['chat', 'terminal'],
+                defaultSurface: 'chat',
+                terminal: {},
+                structured: {},
+                catalog: { origin: 'unknown' }
+              })
+            )
+          : ''
     })
 }))
 
@@ -47,7 +63,9 @@ vi.mock('../source-control/SourceControlActionVariableChips', () => ({
 }))
 
 function renderForm(
-  overrides: Partial<React.ComponentProps<typeof SourceControlAgentActionDialogForm>> = {}
+  overrides: Partial<
+    Omit<React.ComponentProps<typeof SourceControlAgentActionDialogForm>, 'recipe'>
+  > & { recipe?: SourceControlActionRecipe } = {}
 ): string {
   return renderToStaticMarkup(
     React.createElement(SourceControlAgentActionDialogForm, {
@@ -58,6 +76,11 @@ function renderForm(
       selectedAgent: 'codex',
       hasEnabledAgents: true,
       detecting: false,
+      surfaceRows: {
+        model: { state: 'loading', placeholderCount: 0 },
+        selection: { ready: true, cli: false },
+        onPick: () => {}
+      },
       statusCopy: null,
       agentArgs: '',
       agentArgsApply: true,
@@ -76,119 +99,83 @@ function renderForm(
       canStart: true,
       isStarting: false,
       startLabel: 'Start agent',
-      onSelectedAgentChange: () => {},
+      onAgentPick: () => {},
       onAgentArgsChange: () => {},
       onCommandTemplateChange: () => {},
       onSaveLaunchRecipeChange: () => {},
       onSaveAgentDefaultChange: () => {},
       onCancel: () => {},
       onStart: () => {},
-      ...overrides
+      ...overrides,
+      recipe: sourceControlActionRecipeEntry(
+        overrides.recipe ?? {
+          agentId: overrides.selectedAgent ?? 'codex',
+          commandInputTemplate: overrides.commandTemplate ?? '{basePrompt}',
+          ...(overrides.agentArgs !== undefined ? { agentArgs: overrides.agentArgs } : {})
+        }
+      )
     })
   )
 }
 
-function settingsWithSavedGlobalRecipe(): GlobalSettings {
-  return {
-    sourceControlAi: {
-      enabled: true,
-      agentId: 'codex',
-      selectedModelByAgent: {},
-      selectedThinkingByModel: {},
-      customAgentCommand: '',
-      instructionsByOperation: {},
-      actions: {
-        resolveConflicts: {
-          agentId: 'codex',
-          commandInputTemplate: '{basePrompt}'
-        }
+describe('SourceControlAgentActionDialogForm', () => {
+  it('names the saved choice on chat and terminal launches alike', () => {
+    const recipe = {
+      agentId: 'codex' as const,
+      launchPreferences: {
+        agentId: 'codex' as const,
+        model: 'saved',
+        permissionMode: 'ask' as const
       }
     }
-  } as unknown as GlobalSettings
-}
-
-const repoWithoutSavedRecipe = {
-  id: 'repo-1',
-  sourceControlAi: { enabled: true }
-} satisfies Pick<Repo, 'id' | 'sourceControlAi'>
-
-describe('SourceControlAgentActionDialogForm', () => {
-  it('passes the base prompt preview to the variable chip hover content', () => {
-    const markup = renderForm()
-
-    expect(markup).toContain('Resolve the merge conflicts reported for this pull request.')
-  })
-
-  it('offers agents only, since an action cannot start without one', () => {
-    expect(renderForm()).toContain('data-allow-blank="false"')
-  })
-
-  it('checks already-saved copy against the selected save target', () => {
-    const settings = settingsWithSavedGlobalRecipe()
-    const saveTargets = [
-      { value: 'none', label: "Don't save" },
-      { value: 'repo', label: 'This repository' },
-      { value: 'global', label: 'All repositories' }
-    ]
-
-    const globalMarkup = renderForm({
-      settings,
-      repo: repoWithoutSavedRecipe,
-      saveTargets,
-      saveTargetValue: 'global'
-    })
-    const repoMarkup = renderForm({
-      settings,
-      repo: repoWithoutSavedRecipe,
-      saveTargets,
-      saveTargetValue: 'repo'
-    })
-
-    expect(globalMarkup).toContain('Launch recipe already saved')
-    expect(globalMarkup).not.toContain('Save &amp; start agent')
-    expect(repoMarkup).not.toContain('Launch recipe already saved')
-    expect(repoMarkup).toContain('Save &amp; start agent')
-  })
-
-  it('surfaces a diverging repo override alongside the save controls', () => {
-    const markup = renderForm({
-      agentScopeNote: { effectiveAgentLabel: 'Codex', globalAgentLabel: 'Claude' }
-    })
-
-    expect(markup).toContain('overrides your global default (Claude)')
-    expect(markup).toContain('currently runs Codex')
-  })
-
-  it('omits the scope note when there is no diverging repo override', () => {
-    const markup = renderForm({ agentScopeNote: null })
-
-    expect(markup).not.toContain('overrides your global default')
-  })
-
-  it('omits the scope note when the save controls are hidden', () => {
-    const markup = renderForm({
-      agentScopeNote: { effectiveAgentLabel: 'Codex', globalAgentLabel: 'Claude' },
-      canSaveAgentDefault: false
-    })
-
-    expect(markup).not.toContain('overrides your global default')
+    expect(renderForm({ recipe, agentArgsApply: true })).toContain('saved')
+    expect(
+      renderForm({
+        recipe: {
+          ...recipe,
+          launchPreferences: {
+            agentId: 'claude',
+            permissionMode: 'ask',
+            modelSelection: {
+              base: 'inherit',
+              model: { agentId: 'codex', value: 'saved' }
+            }
+          }
+        },
+        agentArgsApply: false
+      })
+    ).toContain('saved')
+    expect(
+      renderForm({
+        recipe: {
+          agentId: 'codex',
+          launchPreferences: {
+            agentId: 'codex',
+            modelSelection: {
+              base: 'default',
+              options: { effort: { agentId: 'codex', value: 'high' } }
+            }
+          }
+        }
+      })
+    ).toContain('high')
+    expect(
+      renderForm({
+        selectedAgent: 'antigravity',
+        recipe: {
+          agentId: 'antigravity',
+          launchPreferences: { agentId: 'antigravity', permissionMode: 'ask' }
+        }
+      })
+    ).toContain('ask')
   })
 })
 
 describe('CLI arguments field applicability', () => {
-  it('offers the field when the launch would apply the arguments', () => {
+  it('keeps terminal arguments inside the shared picker', () => {
     const markup = renderForm({ agentArgsApply: true })
 
-    expect(markup).toContain('source-control-agent-cli-args')
-    expect(markup).toContain('CLI arguments')
-  })
-
-  // Why: absent, not disabled — a structured native chat session reads no CLI arguments,
-  // so the dialog must not show a control that launch would drop.
-  it('leaves the field out entirely when they would not apply', () => {
-    const markup = renderForm({ agentArgsApply: false })
-
+    expect(markup).toContain('data-draft')
     expect(markup).not.toContain('source-control-agent-cli-args')
-    expect(markup).not.toContain('CLI arguments')
   })
 })

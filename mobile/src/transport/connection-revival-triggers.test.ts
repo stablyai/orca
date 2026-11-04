@@ -1,93 +1,172 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
+import { recordSocketDeadlineAppState, startSocketDeadlineClock } from './socket-deadline-clock'
 
+type RevivalNudge = Parameters<typeof subscribeConnectionRevivalTriggers>[0]
 type AppStateListener = (next: string) => void
 type NetworkSnapshot = { isConnected?: boolean; type?: string }
 type NetworkListener = (state: NetworkSnapshot) => void
 
-let appStateListener: AppStateListener | null = null
-let networkListener: NetworkListener | null = null
-let seededNetworkState: NetworkSnapshot = { isConnected: true, type: 'WIFI' }
+const appStateListeners = new Map<string, Set<AppStateListener>>()
+const networkListeners = new Set<NetworkListener>()
+const subscriptions = new Set<() => void>()
 const appStateRemove = vi.fn()
 const networkRemove = vi.fn()
 
 vi.mock('react-native', () => ({
   AppState: {
-    addEventListener: (_event: string, listener: AppStateListener) => {
-      appStateListener = listener
-      return { remove: appStateRemove }
+    currentState: 'active',
+    addEventListener: (event: string, listener: AppStateListener) => {
+      const listeners = appStateListeners.get(event) ?? new Set<AppStateListener>()
+      appStateListeners.set(event, listeners)
+      listeners.add(listener)
+      return {
+        remove: () => {
+          appStateRemove()
+          listeners.delete(listener)
+        }
+      }
     }
   }
 }))
 
 vi.mock('expo-network', () => ({
-  getNetworkStateAsync: () => Promise.resolve(seededNetworkState),
   addNetworkStateListener: (listener: NetworkListener) => {
-    networkListener = listener
-    return { remove: networkRemove }
+    networkListeners.add(listener)
+    return {
+      remove: () => {
+        networkRemove()
+        networkListeners.delete(listener)
+      }
+    }
   }
 }))
 
-// Why: the baseline seed resolves on a microtask; flush it so listener
-// events in the test observe the same ordering as a real subscription.
-async function subscribeAndSeed(nudge: () => void): Promise<() => void> {
+function subscribe(nudge: RevivalNudge): () => void {
   const unsubscribe = subscribeConnectionRevivalTriggers(nudge)
-  await Promise.resolve()
-  return unsubscribe
+  subscriptions.add(unsubscribe)
+  return () => {
+    subscriptions.delete(unsubscribe)
+    unsubscribe()
+  }
+}
+
+function emitAppState(next: string): void {
+  expect(appStateListeners.get('change')?.size).toBe(1)
+  for (const listener of appStateListeners.get('change') ?? []) {
+    listener(next)
+  }
+}
+
+function emitNetwork(state: NetworkSnapshot): void {
+  expect(networkListeners.size).toBe(1)
+  for (const listener of networkListeners) {
+    listener(state)
+  }
 }
 
 describe('subscribeConnectionRevivalTriggers', () => {
-  let nudge: ReturnType<typeof vi.fn>
+  let nudge: Mock<RevivalNudge>
 
   beforeEach(() => {
     vi.clearAllMocks()
-    appStateListener = null
-    networkListener = null
-    seededNetworkState = { isConnected: true, type: 'WIFI' }
-    nudge = vi.fn()
+    appStateListeners.clear()
+    networkListeners.clear()
+    nudge = vi.fn<RevivalNudge>()
   })
 
-  it('nudges when the app returns to the foreground, not on background', async () => {
-    await subscribeAndSeed(nudge)
-    appStateListener?.('background')
+  afterEach(() => {
+    for (const unsubscribe of subscriptions) {
+      unsubscribe()
+    }
+    subscriptions.clear()
+    expect([...appStateListeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
+    expect(networkListeners.size).toBe(0)
+    recordSocketDeadlineAppState('active')
+    vi.restoreAllMocks()
+  })
+
+  it('nudges when the app returns to the foreground, not on background', () => {
+    subscribe(nudge)
+    emitAppState('background')
     expect(nudge).not.toHaveBeenCalled()
-    appStateListener?.('active')
+    emitAppState('active')
     expect(nudge).toHaveBeenCalledTimes(1)
+    expect(nudge).toHaveBeenLastCalledWith('app-resume')
   })
 
-  it('nudges when the network comes back online', async () => {
-    await subscribeAndSeed(nudge)
-    networkListener?.({ isConnected: false, type: 'NONE' })
+  it('does not treat focus or an inactive interruption as a background return', () => {
+    subscribe(nudge)
+    emitAppState('active')
+    emitAppState('inactive')
+    emitAppState('active')
     expect(nudge).not.toHaveBeenCalled()
-    networkListener?.({ isConnected: true, type: 'WIFI' })
-    expect(nudge).toHaveBeenCalledTimes(1)
+
+    emitAppState('background')
+    emitAppState('inactive')
+    emitAppState('active')
+    emitAppState('active')
+    expect(nudge).toHaveBeenCalledExactlyOnceWith('app-resume')
   })
 
-  it('nudges when the app started offline and the first event is the recovery', async () => {
-    seededNetworkState = { isConnected: false, type: 'NONE' }
-    await subscribeAndSeed(nudge)
-    networkListener?.({ isConnected: true, type: 'WIFI' })
-    expect(nudge).toHaveBeenCalledTimes(1)
+  it('keeps elapsed background time when a device sleep pauses the monotonic clock', () => {
+    let wall = 1_000
+    let monotonic = 50
+    const wallClock = vi.spyOn(Date, 'now').mockImplementation(() => wall)
+    const monotonicClock = vi.spyOn(performance, 'now').mockImplementation(() => monotonic)
+    const unsubscribe = subscribe(nudge)
+    const elapsed = startSocketDeadlineClock()
+    try {
+      emitAppState('background')
+      wall += 3 * 60 * 60_000
+      monotonic += 12_000
+      emitAppState('active')
+      expect(elapsed()).toBe(3 * 60 * 60_000)
+      expect(nudge).toHaveBeenCalledTimes(1)
+      expect(nudge).toHaveBeenLastCalledWith('app-resume')
+    } finally {
+      unsubscribe()
+      wallClock.mockRestore()
+      monotonicClock.mockRestore()
+    }
   })
 
-  it('nudges on a Wi-Fi to cellular handoff that never reports offline', async () => {
-    await subscribeAndSeed(nudge)
-    networkListener?.({ isConnected: true, type: 'CELLULAR' })
-    expect(nudge).toHaveBeenCalledTimes(1)
-  })
-
-  it('stays quiet when the network state matches the seeded baseline', async () => {
-    await subscribeAndSeed(nudge)
-    networkListener?.({ isConnected: true, type: 'WIFI' })
-    networkListener?.({ isConnected: true, type: 'WIFI' })
+  it('nudges when the network comes back online', () => {
+    subscribe(nudge)
+    emitNetwork({ isConnected: false, type: 'NONE' })
     expect(nudge).not.toHaveBeenCalled()
+    emitNetwork({ isConnected: true, type: 'WIFI' })
+    expect(nudge).toHaveBeenCalledTimes(1)
+    expect(nudge).toHaveBeenLastCalledWith('network-change')
   })
 
-  it('ignores a stale seed that resolves after unsubscribe', async () => {
-    seededNetworkState = { isConnected: false, type: 'NONE' }
-    const unsubscribe = subscribeConnectionRevivalTriggers(nudge)
+  it('nudges on the first connected network event', () => {
+    subscribe(nudge)
+    emitNetwork({ isConnected: true, type: 'WIFI' })
+    expect(nudge).toHaveBeenCalledTimes(1)
+    expect(nudge).toHaveBeenLastCalledWith('network-change')
+  })
+
+  it('nudges on a Wi-Fi to cellular handoff that never reports offline', () => {
+    subscribe(nudge)
+    emitNetwork({ isConnected: true, type: 'WIFI' })
+    nudge.mockClear()
+    emitNetwork({ isConnected: true, type: 'CELLULAR' })
+    expect(nudge).toHaveBeenCalledTimes(1)
+    expect(nudge).toHaveBeenLastCalledWith('network-change')
+  })
+
+  it('nudges on same-type Wi-Fi events because the path may have changed', () => {
+    subscribe(nudge)
+    emitNetwork({ isConnected: true, type: 'WIFI' })
+    emitNetwork({ isConnected: true, type: 'WIFI' })
+    expect(nudge.mock.calls).toEqual([['network-change'], ['network-change']])
+  })
+
+  it('removes both OS listeners when disposed', () => {
+    const unsubscribe = subscribe(nudge)
     unsubscribe()
-    await Promise.resolve()
     expect(appStateRemove).toHaveBeenCalledTimes(1)
     expect(networkRemove).toHaveBeenCalledTimes(1)
   })

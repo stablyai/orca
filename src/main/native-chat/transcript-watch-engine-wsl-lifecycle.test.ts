@@ -15,14 +15,14 @@ const mocks = vi.hoisted(() => ({
   stat: vi.fn()
 }))
 
-vi.mock('../wsl-running-path-filter', () => ({
+vi.mock('../wsl/filesystem/wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: mocks.filterRunning
 }))
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),
   stat: mocks.stat
 }))
-vi.mock('./transcript-native-watcher', () => ({
+vi.mock('../../shared/transcript-native-watcher', () => ({
   createTranscriptNativeWatcher: () => ({
     bind: mocks.bind,
     dispose: mocks.dispose,
@@ -126,29 +126,6 @@ describe('installed WSL transcript watcher lifecycle', () => {
 
     expect(mocks.stat.mock.calls.length).toBeGreaterThan(statsBeforeStop)
     expect(mocks.bind).not.toHaveBeenCalled()
-    subscription?.unsubscribe()
-  })
-
-  it('returns the running reconciliation promise to the shared observer', async () => {
-    const subscription = await installTranscriptWatcher(UNC_PATH, () => null, {
-      agent: 'codex',
-      sessionId: 'wsl-session',
-      onAppend: () => {}
-    })
-    await vi.advanceTimersByTimeAsync(50)
-    let finishStat: (() => void) | undefined
-    mocks.stat.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishStat = () => resolve(EMPTY_STATS)
-        })
-    )
-
-    const reconciliation = mocks.observation?.(true)
-    expect(reconciliation).toBeInstanceOf(Promise)
-    await vi.waitFor(() => expect(finishStat).toBeDefined())
-    finishStat?.()
-    await reconciliation
     subscription?.unsubscribe()
   })
 

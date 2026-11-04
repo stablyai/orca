@@ -1,10 +1,10 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
   getGitLabProjectRefForRemoteMock,
-  getGlabKnownHostsMock,
-  gitRunner
+  getGlabKnownHostsMock
 } from '../orca-runtime-test-mocks.spec'
 import { TEST_REPO_ID, TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
 
@@ -24,7 +24,7 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
     }
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync')
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync')
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     await expect(
@@ -42,7 +42,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps the MR source base when the optional compare-base fetch fails', async () => {
-    // Why (#6263): a merged MR's target ref may be deleted; a failed compare-base fetch must not drop the worktree onto the default branch.
+    // #6263: deleted merged-MR target refs must not fall back to the default branch.
     const localRepo = {
       id: TEST_REPO_ID,
       path: TEST_REPO_PATH,
@@ -61,7 +61,7 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (
         args[0] === 'fetch' &&
         args[2] === '+refs/heads/feature/fix:refs/remotes/origin/feature/fix'
@@ -69,7 +69,6 @@ describe('OrcaRuntimeService', () => {
         return { stdout: '', stderr: '' }
       }
       if (args[0] === 'fetch' && args[2] === '+refs/heads/main:refs/remotes/origin/main') {
-        // Target branch was deleted on the remote (merged MR).
         throw new Error("couldn't find remote ref refs/heads/main")
       }
       if (args[0] === 'rev-parse' && args[1] === '--verify' && args[2] === 'origin/feature/fix') {
@@ -100,7 +99,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps the MR compare base when the fetch fails but the local ref resolves', async () => {
-    // Why: a transient fetch failure must not drop a compare base we already have on disk.
+    // Transient fetch failure must retain the compare base already pinned on disk.
     const localRepo = {
       id: TEST_REPO_ID,
       path: TEST_REPO_PATH,
@@ -119,7 +118,7 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (
         args[0] === 'fetch' &&
         args[2] === '+refs/heads/feature/fix:refs/remotes/origin/feature/fix'

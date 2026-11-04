@@ -1,26 +1,4 @@
-/**
- * STA-4593 incident: typing into a visible remote Codex pane produced no
- * visible output until the user switched workspaces away and back. The host
- * DROPS output while a stream is paused yet keeps accepting input, and every
- * hide→show cycle heals the pane with an unconditional snapshot repaint —
- * which is why the switch "fixed" it and why nothing ever logged an error.
- *
- * Invariant under test: a VISIBLE pane must never be left with a paused output
- * intent. The pause bit must be re-derived from live visibility whenever the
- * chance to sync it was missed.
- *
- * Causal boundary: syncHiddenRendererPtyDelivery issues setOutputPaused only
- * when canUseHiddenOutputSnapshot(ptyId) — which requires
- * transport.getPtyId() === ptyId. During a stream rebind getPtyId() is
- * transiently null, so a reveal that lands in that window is a silent no-op:
- * desiredOutputPaused stays true, the transport replays it verbatim onto the
- * recovered stream, the host drops all output, and the stall watchdog never
- * arms on a paused stream. Nothing re-derives the bit on onConnect or
- * onStreamRecovered.
- *
- * Rig: the hidden-backlog-snapshot suite's mock-transport harness; fake
- * visibility flips drive the real connectPanePty binding.
- */
+// STA-4593: reveal during a null-ID rebind cannot unpause immediately; reconnect must rederive pause intent from live visibility or the host drops visible output indefinitely. Test both connect and stream-recovery callbacks.
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
@@ -31,7 +9,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -125,6 +107,7 @@ async function connectVisibleRemotePane(): Promise<{
   pauseCalls: () => boolean[]
 }> {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.setOutputPaused = vi.fn(() => true)
   transport.serializeBuffer = vi.fn()
@@ -138,8 +121,8 @@ async function connectVisibleRemotePane(): Promise<{
   const binding = connectPanePty(
     createPane(1) as never,
     createManager(1) as never,
-    deps as never
-  ) as Binding
+    bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(captured.callbacks).not.toBeNull()
   return {
@@ -168,54 +151,6 @@ describe('remote pane output pause vs visibility', () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('control: a hide/show cycle with a stable stream ends unpaused', async () => {
-    const { binding, deps, pauseCalls } = await connectVisibleRemotePane()
-
-    ;(deps.isVisibleRef as { current: boolean }).current = false
-    binding.syncProcessTracking()
-    expect(pauseCalls().at(-1)).toBe(true)
-    ;(deps.isVisibleRef as { current: boolean }).current = true
-    binding.syncProcessTracking()
-
-    expect(pauseCalls().at(-1)).toBe(false)
-    binding.dispose()
-  })
-
-  it('red: a reveal that lands mid-rebind must still end with the visible pane unpaused', async () => {
-    const { transport, binding, deps, callbacks, pauseCalls } = await connectVisibleRemotePane()
-
-    // Hide the pane: the transport is asked to pause host output.
-    ;(deps.isVisibleRef as { current: boolean }).current = false
-    binding.syncProcessTracking()
-    expect(pauseCalls().at(-1)).toBe(true)
-
-    // The stream drops and a resubscribe is in flight: the transport has no
-    // bound PTY id during the rebind window.
-    transport.getPtyId.mockImplementation(() => null)
-
-    // The user switches back while the rebind is in flight. The sync cannot
-    // reach the host right now — the defect is that nothing ever retries it.
-    ;(deps.isVisibleRef as { current: boolean }).current = true
-    binding.syncProcessTracking()
-
-    // The rebind completes: the transport re-derives the same pane and reports
-    // the recovered stream. Production replays desiredOutputPaused onto the new
-    // stream verbatim, so unless this moment re-derives pause-from-visibility,
-    // the host keeps dropping every byte for a pane the user is looking at —
-    // while its input keeps being accepted, and the paused stream never arms
-    // the stall watchdog.
-    transport.getPtyId.mockImplementation(() => REMOTE_PTY_ID)
-    callbacks().onStreamRecovered?.()
-    callbacks().onConnect?.()
-    await flushAsyncTicks(6)
-
-    expect(
-      pauseCalls().at(-1),
-      `a visible pane was left output-paused after a mid-rebind reveal (setOutputPaused calls: ${JSON.stringify(pauseCalls())})`
-    ).toBe(false)
-    binding.dispose()
-  })
-
   it('red: a content-bearing recovery fires only onConnect, which must re-derive the pause bit alone', async () => {
     const { transport, binding, deps, callbacks, pauseCalls } = await connectVisibleRemotePane()
 
@@ -227,9 +162,7 @@ describe('remote pane output pause vs visibility', () => {
     ;(deps.isVisibleRef as { current: boolean }).current = true
     binding.syncProcessTracking()
 
-    // When the recovery subscribe's push snapshot carried content — the common
-    // case — the transport fires ONLY onConnect (onStreamRecovered is gated on
-    // an empty snapshot). onConnect must therefore re-derive the bit by itself.
+    // Contentful recovery fires only onConnect; it must repair pause intent without onStreamRecovered.
     transport.getPtyId.mockImplementation(() => REMOTE_PTY_ID)
     callbacks().onConnect?.()
     await flushAsyncTicks(6)

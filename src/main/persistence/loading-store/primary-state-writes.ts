@@ -13,7 +13,8 @@ import { writeToDiskSync } from './primary-state-write-sync'
 import { writeProfileStateInWorker } from './primary-state-write-worker'
 import type { DurableProfileStateMutation } from './store-runtime-state'
 import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
-import { notifyWorkspaceSessionWritten } from './workspace-session-write-listeners'
+import { notifyWorkspaceSessionOperationEnded } from './workspace-session-write-listeners'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { finishMutationScrollbackDeletions } from './terminal-session-cleanup'
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
@@ -52,7 +53,7 @@ export class PrimaryStateWriteOperations {
     this[primaryStateWriteOperationsContext].runtime.activeViewPreference.flushOrThrow()
   }
 
-  /** Expected refusals return persist: false; thrown callbacks stop saving to protect partial state. */
+  /** Use persist:false for expected refusal; thrown mutations freeze saving to protect partial state. */
   runDurableMutation<T>(mutate: () => DurableProfileStateMutation<T>): Promise<T> {
     const { runtime } = this[primaryStateWriteOperationsContext]
     if (runtime.writesFrozen || runtime.quitFlushStarted || runtime.profileMaintenancePending) {
@@ -75,7 +76,11 @@ export class PrimaryStateWriteOperations {
     }
     let mutation: DurableProfileStateMutation<T>
     try {
-      mutation = this.runAdmittedMutationCallback('mutate', mutate)
+      mutation = this.runAdmittedMutationCallback(
+        'mutate',
+        mutate,
+        (result) => result.writtenHostIds
+      )
     } catch (error) {
       await stopAfterFailedPrimaryStateMutation(runtime, error)
       throw error
@@ -107,9 +112,12 @@ export class PrimaryStateWriteOperations {
     if (!mutation.rollback) {
       return
     }
-    let compensation: ReturnType<NonNullable<typeof mutation.rollback>>
+    let compensation: { persist: true } | void
     try {
-      compensation = this.runAdmittedMutationCallback('rollback', mutation.rollback)
+      compensation = this.runAdmittedMutationCallback<{ persist: true } | void>(
+        'rollback',
+        mutation.rollback
+      )
     } catch (error) {
       await stopAfterFailedPrimaryStateMutation(
         this[primaryStateWriteOperationsContext].runtime,
@@ -138,16 +146,26 @@ export class PrimaryStateWriteOperations {
     }
   }
 
-  private runAdmittedMutationCallback<T>(phase: 'mutate' | 'rollback', callback: () => T): T {
+  private runAdmittedMutationCallback<T>(
+    phase: 'mutate' | 'rollback',
+    callback: () => T,
+    /** Rollback may write any partition; normal mutation reports its written hosts. */
+    writtenHostIdsOf: (result: T) => readonly ExecutionHostId[] | undefined = () => undefined
+  ): T {
     const { runtime } = this[primaryStateWriteOperationsContext]
     // Finalization drains admitted mutations; the disk wait must not admit new snapshots.
     runtime.durableMutationPhase = phase
+    let result: T | undefined
     try {
-      return callback()
+      result = callback()
+      return result
     } finally {
       runtime.durableMutationPhase = null
       // Durable writers may edit sessions without scheduling a save; a rollback republishes.
-      notifyWorkspaceSessionWritten(runtime)
+      notifyWorkspaceSessionOperationEnded(
+        runtime,
+        result === undefined ? null : (writtenHostIdsOf(result) ?? null)
+      )
     }
   }
 
@@ -189,7 +207,7 @@ export function enqueueWrite(
   const queued = context.queuedSnapshot
   if (batchable && queued) {
     queued.capture.skipIfClean &&= options.skipIfClean === true
-    // Merged explicit flushes must retain the full capture that covered untracked getter edits.
+    // Explicit flushes must retain full capture for getter edits outside tracked domains.
     queued.capture.fullCheckpoint ||= !queued.capture.skipIfClean
     queued.capture.pendingSnapshotFileWork = runtime.pendingSnapshotFileWork
     return queued.completion
@@ -200,7 +218,7 @@ export function enqueueWrite(
     pendingSnapshotFileWork: runtime.pendingSnapshotFileWork
   }
   const completion = enqueuePrimaryStateOperation(owner, async () => {
-    // Later flushes must capture edits made after this batch starts, even without a new generation.
+    // Once batching starts, later flushes need fresh captures even without generation changes.
     if (context.queuedSnapshot?.capture === capture) {
       context.queuedSnapshot = undefined
     }
@@ -219,7 +237,7 @@ export function enqueueWrite(
     ) {
       return
     }
-    // A queued predecessor can clear dirty domains before this checkpoint runs.
+    // Earlier writes may clear dirty domains before this full checkpoint runs.
     if (capture.fullCheckpoint) {
       runtime.dirtyProfileStateDomains = null
     }
@@ -228,7 +246,7 @@ export function enqueueWrite(
   if (batchable) {
     context.queuedSnapshot = { completion, capture }
   }
-  // A caller may stop waiting; the admitted write must retain its acknowledgement and ordering.
+  // Caller cancellation must not discard an admitted write or its acknowledgement/order.
   return waitForPromiseWithSignal(completion, options.signal)
 }
 
@@ -238,7 +256,7 @@ export function enqueuePrimaryStateOperation<T>(
 ): Promise<T> {
   const context = owner[primaryStateWriteOperationsContext]
   const { runtime } = context
-  // A durable mutation, export, or independent checkpoint separates adjacent snapshot batches.
+  // Independent operations separate adjacent snapshot batches.
   context.queuedSnapshot = undefined
   const previousWrite = Promise.all([
     runtime.pendingWrite,

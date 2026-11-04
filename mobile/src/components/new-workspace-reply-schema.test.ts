@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { z } from 'zod'
 import {
   newWorkspaceRepoHooksSchema,
-  newWorkspaceUiTrustSchema,
-  SETUP_RUN_POLICIES
+  newWorkspaceUiTrustSchema
 } from './new-workspace-reply-schema'
 
 function reads<T>(schema: z.ZodType<T, unknown>, value: unknown): T {
@@ -32,8 +31,7 @@ describe('the drawer requires only what it reads unguarded', () => {
   })
 
   it('takes the recorded reply with an explicit null setupTrust without salvaging it', () => {
-    // The components-setup-ask fixture sends `setupTrust: null`; treating that as a malformed
-    // member would report a drop on a reply the host really sends.
+    // Keep setupTrust nullable: real components-setup-ask fixture sends null, which must not count as dropped malformed member.
     const reply = { hooks: null, source: null, setupRunPolicy: 'ask', setupTrust: null }
     expect(reads(newWorkspaceRepoHooksSchema, reply).setupTrust).toBe(null)
   })
@@ -45,15 +43,6 @@ describe('the drawer requires only what it reads unguarded', () => {
 })
 
 describe('the setup run policy is a closed enum with the call site defaulting it', () => {
-  // The arm list is pinned to SetupRunPolicy in the schema module, where tsc looks.
-  it('keeps each arm the drawer compares against', () => {
-    for (const policy of SETUP_RUN_POLICIES) {
-      expect(
-        reads(newWorkspaceRepoHooksSchema, { source: null, setupRunPolicy: policy }).setupRunPolicy
-      ).toBe(policy)
-    }
-  })
-
   it('drops an arm this build does not know, which behaves as run-by-default did', () => {
     expect(
       reads(newWorkspaceRepoHooksSchema, { source: null, setupRunPolicy: 'on-tuesdays' })
@@ -89,9 +78,7 @@ describe('the trust record salvages per repo', () => {
     expect(reads(newWorkspaceUiTrustSchema, { ui: null })).toBe(null)
   })
 
-  // The call site interprets this reply inside an unawaited `void (async () => {})()` with no
-  // catch, so a refusal here is an unhandled rejection that also skips the provider computation
-  // below it. Main cast the value and read `?.trustedOrcaHooks ?? {}`, which tolerated any shape.
+  // Preserve total ui.get read: unawaited async caller has no catch, so refusal would reject unhandled and skip provider computation; optional trust read tolerated all shapes.
   it('reads a non-object ui.get result as absent rather than refusing it', () => {
     for (const value of ['not-an-object', 42, true, [], [{ ui: {} }]]) {
       expect(refuses(newWorkspaceUiTrustSchema, value)).toBe(false)

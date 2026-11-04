@@ -1,15 +1,10 @@
-/**
- * Whether a Linux daemon's program files still exist (#18200). An AppImage daemon runs from a FUSE
- * mount (`.mount_*`) or a runtime extract dir (`appimage_extracted_*`); once that goes, the next
- * cold page faults with SIGBUS. The probe reads only `/proc` paths and the daemon's mount table, so
- * a dead or wedged FUSE server cannot block it.
- *
- * `severed` is a health verdict, never liveness: the daemon may keep serving for hours.
- */
+// Missing AppImage files can cause SIGBUS on later page faults; severed does not prove process death.
+// Probe proc metadata rather than traversing potentially wedged FUSE mounts.
 import { lstatSync, readFileSync, readlinkSync } from 'node:fs'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import { parseLinuxStartTicks } from '../agent-hooks/managed-hook-owner-identity'
 import { isFuseMountPoint } from './daemon-appimage-launch'
+import { appImageEphemeralRootOf } from '../../shared/appimage-ephemeral-root'
 
 export type DaemonHostImageVerdict = 'intact' | 'severed' | 'unknown' | 'not-ephemeral'
 
@@ -23,7 +18,7 @@ export type DaemonHostImageInspection = {
 export type DaemonHostImageProc = {
   readlink(path: string): string
   readFile(path: string): string
-  /** True when the path names an entry; throws on anything but ENOENT. */
+  /** Tests entry existence; ENOENT and ENOTDIR mean absent, other errors propagate. */
   exists(path: string): boolean
 }
 
@@ -67,7 +62,7 @@ export function inspectDaemonHostImage(
     verdict
   })
   try {
-    // Verify the pid is still the recorded incarnation before reading anything else about it.
+    // Reject PID reuse before inspecting the daemon's image.
     const startTicks = parseLinuxStartTicks(proc.readFile(`/proc/${record.pid}/stat`))
     const bootId = proc.readFile('/proc/sys/kernel/random/boot_id').trim()
     if (startTicks !== record.linuxStartTicks || bootId !== record.bootId) {
@@ -77,12 +72,12 @@ export function inspectDaemonHostImage(
     const deleted = executable.endsWith(DELETED_SUFFIX)
     const path = deleted ? executable.slice(0, -DELETED_SUFFIX.length) : executable
     const ephemeralOrigin = [record.spawnerExecPath, record.entryPath, path].some(
-      (candidate) => candidate !== null && ephemeralRootOf(candidate) !== null
+      (candidate) => candidate !== null && appImageEphemeralRootOf(candidate) !== null
     )
     if (!ephemeralOrigin) {
       return result('not-ephemeral')
     }
-    const root = ephemeralRootOf(path)
+    const root = appImageEphemeralRootOf(path)
     if (root?.kind === 'mount') {
       const mounted = isFuseMountPoint(proc.readFile(`/proc/${record.pid}/mountinfo`), root.path)
       return result(mounted && !deleted ? 'intact' : 'severed')
@@ -90,34 +85,16 @@ export function inspectDaemonHostImage(
     if (deleted) {
       return result(root ? 'severed' : 'not-ephemeral')
     }
-    // After a lazy unmount the kernel renders the path relative to the detached mount
-    // ("/orca-ide"), which resolves to nothing in the daemon's own root.
+    // Lazy unmounts can leave an executable path relative to the detached root, such as /orca-ide.
     const resolves = proc.exists(`/proc/${record.pid}/root${path}`)
     if (root) {
       return result(resolves ? 'intact' : 'severed')
     }
     return result(resolves ? 'not-ephemeral' : 'severed')
   } catch {
-    // EACCES (hidepid), an exited pid, or an unreadable mount table: say nothing.
+    // Unreadable proc evidence cannot establish image loss.
     return unknown()
   }
-}
-
-type EphemeralRoot = { kind: 'mount' | 'extract'; path: string }
-
-/** The AppImage mount point or runtime extract dir a path lives under, if any. */
-export function ephemeralRootOf(path: string): EphemeralRoot | null {
-  const segments = path.split('/')
-  for (let index = 1; index < segments.length - 1; index += 1) {
-    const segment = segments[index]!
-    if (segment.startsWith('.mount_')) {
-      return { kind: 'mount', path: segments.slice(0, index + 1).join('/') }
-    }
-    if (segment.startsWith('appimage_extracted_')) {
-      return { kind: 'extract', path: segments.slice(0, index + 1).join('/') }
-    }
-  }
-  return null
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {

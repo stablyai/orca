@@ -1,39 +1,53 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
-import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../quit-teardown-deadline'
+import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../shared/quit-teardown-deadline'
 
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
 const stopAgentHookServer = idle()
 const stopStructuredAgentSessionRuntime = settled()
+const beginSshShutdown = settled()
+const killAllPty = idle()
+/** Final-save calls seen by the first microtask after the SSH shutdown began. */
+let flushesByNextMicrotask = -1
 
 // Every teardown member settles except the profile store, so only the writer can hold quit.
 const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/filesystem-watcher': { closeAllWatchers: settled() },
   '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
   '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
-  '../ipc/pty/kill-all': { killAllPty: idle() },
+  '../ipc/pty/kill-all': { killAllPty },
   '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
-  '../ipc/ssh-shutdown-drain': { beginSshShutdown: settled() },
+  '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
+  './main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
   '../agent-hooks/wsl-hook-relay-manager': { wslHookRelayManager: { disposeAll: idle() } },
   '../agent-hooks/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
-  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
-  '../runtime/structured-agent-session-runtime-teardown': {
+  '../runtime/agent-session/structured-agent-session-runtime': {
+    stopStructuredAgentSessionRuntime
+  },
+  '../runtime/agent-session/structured-agent-session-runtime-teardown': {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
-  '../runtime/orca-runtime-files': { awaitRuntimeFileWatcherUnsubscribes: settled() },
+  '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
   '../runtime/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
-  '../browser/paired-runtime-browser-client-host-runtime': {
+  '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },
-  '../browser/browser-manager': { browserManager: { setBrowserGuestStateChangedListener: idle() } },
-  '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
+  '../ipc/browser/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
+  '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
+  '../browser/browser-manager': {
+    browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }
+  },
+  '../browser/sessions/browser-session-registry': { browserSessionRegistry: {} },
+  '../browser/routing/local-host-partitions/local-ssh-browser-route': {
+    closeAllLocalSshBrowserRoutes: settled()
+  },
   '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
   '../codex/codex-account-session-bridge': { stopCodexAccountSessionBridges: idle() },
-  '../git/local-repo-ref-maintenance': { awaitPackedRefsLockRelease: settled() },
+  '../git/refs/maintenance/local-repo-ref-maintenance': { awaitPackedRefsLockRelease: settled() },
   '../worktree-background-removal': { stopBackgroundWorktreeRemovals: idle() },
   '../dock/unread-badge': { setUnreadDockBadgeCount: idle() },
   '../tray/system-tray': { destroySystemTray: idle() },
@@ -41,11 +55,13 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../observability': { shutdownObservability: settled() },
   '../updater': { isQuittingForUpdate: vi.fn(() => false) },
   '../updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
-  '../macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
-  '../terminal-history-gc': { cancelHistoryGc: idle() },
+  '../macos-permissions/macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
+  '../pty/history/terminal-history-gc': { cancelHistoryGc: idle() },
   './window-all-closed-quit-policy': { shouldQuitWhenAllWindowsClosed: vi.fn(() => false) },
   './configure-process': { isDevParentShutdownRequested: vi.fn(() => false) },
-  '../persistence': { getCanonicalUserDataPath: vi.fn(() => '/unused') }
+  '../persistence/loading-store/user-data-path': {
+    getCanonicalUserDataPath: vi.fn(() => '/unused')
+  }
 }
 
 afterEach(() => {
@@ -63,6 +79,9 @@ async function startQuit(
   flushFinalOrThrowAsync: () => Promise<void>,
   services: Record<string, unknown> = {}
 ) {
+  beginSshShutdown.mockClear()
+  killAllPty.mockClear()
+  flushesByNextMicrotask = -1
   vi.resetModules()
   vi.useFakeTimers()
   const app = Object.assign(new EventEmitter(), { quit: vi.fn() })
@@ -71,6 +90,11 @@ async function startQuit(
     flushFinalOrThrowAsync: vi.fn(flushFinalOrThrowAsync),
     freezeWritesAsync: settled()
   }
+  beginSshShutdown.mockImplementation(async () => {
+    void Promise.resolve().then(() => {
+      flushesByNextMicrotask = store.flushFinalOrThrowAsync.mock.calls.length
+    })
+  })
   const profileStateAdmission: typeof admission | undefined = admission
   const state = {
     isQuitting: false,
@@ -86,7 +110,7 @@ async function startQuit(
   }
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   const { installMainProcessQuitHandlers } = await import('./main-process-quit')
-  const { quitTeardownStartGate } = await import('../quit-teardown-start-gate')
+  const { quitTeardownStartGate } = await import('./quit/quit-teardown-start-gate')
   quitTeardownStartGate.resetForTests()
   installMainProcessQuitHandlers()
   app.emit('before-quit', { defaultPrevented: false })
@@ -117,8 +141,47 @@ it('releases admission only after the final flush and freeze complete', async ()
   expect(app.quit).toHaveBeenCalledOnce()
 })
 
-// The chat teardown decides which chats to offer to resume from the hook server's status store,
-// and finishes after the hook server stops: that stop must leave the store readable.
+it('writes a pane grid still inside its write burst before the final flush', async () => {
+  const paneGrids = Promise.withResolvers<void>()
+  const { store } = await startQuit(async () => {}, {
+    runtime: {
+      getOffscreenBrowserBackend: () => null,
+      getAgentBrowserBridge: () => null,
+      getEmulatorBridge: () => null,
+      disposeSkillUploadSessions: settled(),
+      getRuntimeId: () => undefined,
+      closeNotificationDismissals: settled(),
+      flushPaneGrids: () => paneGrids.promise
+    }
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  // Before the SSH shutdown too: nothing is awaited between it and the final save.
+  expect(beginSshShutdown).not.toHaveBeenCalled()
+  expect(store.flushFinalOrThrowAsync).not.toHaveBeenCalled()
+  paneGrids.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(beginSshShutdown).toHaveBeenCalledOnce()
+  expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
+  expect(beginSshShutdown.mock.invocationCallOrder[0]).toBeLessThan(
+    store.flushFinalOrThrowAsync.mock.invocationCallOrder[0]!
+  )
+  // Nothing awaited between them: the save started in the same turn as the SSH shutdown.
+  expect(flushesByNextMicrotask).toBe(1)
+})
+
+it('starts the SSH shutdown and the final save at once when no pane grid waits', async () => {
+  const { store } = await startQuit(async () => {})
+  expect(beginSshShutdown).toHaveBeenCalledOnce()
+  expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
+  const order = [beginSshShutdown, killAllPty, store.flushFinalOrThrowAsync].map(
+    (step) => step.mock.invocationCallOrder[0]!
+  )
+  expect(order).toEqual([...order].sort((a, b) => a - b))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(flushesByNextMicrotask).toBe(1)
+})
+
+// Chat teardown reads hook status after server stop; retain it for background-only session resume offers.
 it('stops the hook server without clearing the status store the chat teardown reads', async () => {
   await startQuit(async () => {})
   expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })
@@ -143,7 +206,8 @@ it.each([
         getEmulatorBridge: () => null,
         disposeSkillUploadSessions: settled(),
         getRuntimeId: () => undefined,
-        closeNotificationDismissals
+        closeNotificationDismissals,
+        flushPaneGrids: () => null
       },
       runtimeRpc: { setMobileRelayPairingProvider: idle(), stop: vi.fn(() => rpcStop.promise) }
     })

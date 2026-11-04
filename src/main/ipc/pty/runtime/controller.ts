@@ -1,6 +1,9 @@
+import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
+import { createRuntimePtySpawnState } from './spawn-state'
 import { localProvider } from '../provider/registry'
 import {
   getLocalAutomaticWorkStatus,
+  localTerminalLimit,
   resumeLocalAutomaticWork
 } from '../../../daemon/daemon-automatic-work-resume'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -24,7 +27,9 @@ import {
   getSizeFromRuntimeController,
   hasChildProcessesFromRuntimeController,
   hasPtyFromRuntimeController,
+  getPtyAvailabilityFromRuntimeController,
   hasRendererSerializerFromRuntimeController,
+  supportsForegroundObservationFromRuntimeController,
   inspectProcessFromRuntimeController,
   probePtyLivenessFromRuntimeController,
   resizePtyFromRuntimeController,
@@ -47,25 +52,33 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       const ownerKey = makePaneSpawnReservationKey(args.worktreeId, args.connectionId, paneKey)
       return ownerKey ? claimRuntimePaneCreate(ownerKey) : () => {}
     },
-    adoptStablePane,
+    adoptStablePane: async (args) => {
+      const adopted = await adoptStablePane(args)
+      if (adopted) {
+        await adoptMaterializedRuntimePtySpawn(
+          createRuntimePtySpawnState(deps, { ...args, adoptedStablePane: adopted })
+        )
+      }
+      return adopted
+    },
     spawn: async (args) => spawnPtyFromRuntimeController(deps, args),
-    // Why the local owner only: an SSH host's gate belongs to that host's own runtime.
+    // Local owner only: an SSH host's gate belongs to that host's own runtime.
+    terminalLimit: (update) => localTerminalLimit(localProvider, update),
     getAutomaticWorkStatus: () => getLocalAutomaticWorkStatus(localProvider),
     resumeAutomaticWork: () => resumeLocalAutomaticWork(localProvider),
     write: (ptyId, data, inputKind) => writePtyFromRuntimeController(deps, ptyId, data, inputKind),
     writeWithSettlement: (ptyId, data, inputKind) =>
       writePtyFromRuntimeController(deps, ptyId, data, inputKind, { waitForSettlement: true }),
     probePtyLiveness: (ptyId) => probePtyLivenessFromRuntimeController(deps, ptyId),
-    // Why: subscriber-driven ingestion for daemon sessions no renderer pane
-    // ever attached. Local daemon sessions only — SSH panes have their own
-    // lease machinery, and the in-process local provider streams without
-    // attach. Attach-only and false-on-doubt: never creates or resizes.
+    // Attach-only ingestion serves unmounted daemon sessions without creating/resizing; SSH uses leases and local PTYs already stream.
     attach: (ptyId) => attachPtyFromRuntimeController(deps, ptyId),
     kill: (ptyId) => killPtyFromRuntimeController(deps, ptyId),
-    retireRejectedPty: (ptyId, stopConfirmed) =>
-      retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed),
+    retireRejectedPty: (ptyId, stopConfirmed, incarnationId) =>
+      retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed, incarnationId),
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),
     getForegroundProcess: (ptyId) => getForegroundProcessFromRuntimeController(ptyId),
+    supportsForegroundObservation: (ptyId) =>
+      supportsForegroundObservationFromRuntimeController(ptyId),
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),
     confirmShellForeground: (ptyId) => confirmShellForegroundFromRuntimeController(ptyId),
@@ -74,13 +87,14 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     clearBuffer: (ptyId) => clearBufferFromRuntimeController(deps, ptyId),
     resetInputModes: (ptyId) => resetInputModesFromRuntimeController(deps, ptyId),
     hasPty: (ptyId) => hasPtyFromRuntimeController(deps, ptyId),
+    getPtyAvailability: (ptyId) => getPtyAvailabilityFromRuntimeController(deps, ptyId),
     listProcesses: (hostId, opts) => listProcessesFromRuntimeController(deps, hostId, opts),
     listProcessesWithHostScope: (opts) =>
       listProcessesWithHostScopeFromRuntimeController(deps, opts),
     supportsForegroundProcessEvidence: (hostId) =>
       supportsForegroundProcessEvidenceFromRuntimeController(hostId),
     serializeBuffer: (ptyId, opts) => {
-      // Why: mobile xterm must start from the desktop's exact screen state/dimensions before live TUI chunks render correctly.
+      // Mobile needs exact screen state and geometry before rendering live TUI output.
       return requestSerializedBuffer(ptyId, opts)
     },
     serializeProviderBuffer: (ptyId, opts) =>

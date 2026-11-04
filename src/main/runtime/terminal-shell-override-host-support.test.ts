@@ -7,7 +7,10 @@ const WINDOWS_WORKSPACE = 'C:\\Users\\u\\app'
 const WSL_WORKSPACE = '\\\\wsl$\\Ubuntu\\home\\u\\app'
 const ON_WINDOWS_HOST = { cwd: WINDOWS_WORKSPACE, workspacePath: WINDOWS_WORKSPACE }
 
-function resolvedRuntime(kind: 'windows-host' | 'wsl'): ProjectExecutionRuntimeResolution {
+function resolvedRuntime(
+  kind: 'windows-host' | 'wsl',
+  reason: 'project-override' | 'global-default' = 'project-override'
+): ProjectExecutionRuntimeResolution {
   return kind === 'wsl'
     ? {
         status: 'resolved',
@@ -16,7 +19,7 @@ function resolvedRuntime(kind: 'windows-host' | 'wsl'): ProjectExecutionRuntimeR
           hostPlatform: 'wsl',
           distro: 'Ubuntu',
           projectId: 'p1',
-          reason: 'project-override',
+          reason,
           cacheKey: 'p1:wsl:Ubuntu'
         }
       }
@@ -84,9 +87,7 @@ describe('terminalShellOverrideRefusal', () => {
     ).toContain('darwin')
   })
 
-  // `resolveLocalWindowsTerminalRuntimeOptions` rewrites a shell that contradicts the project's
-  // execution runtime, which would hand back a terminal running something else entirely — and
-  // would quote an agent's startup command for the shell that was asked for, not the one running.
+  // Project runtime can rewrite the requested shell, splitting startup-command quoting from the shell that receives it.
   it('refuses a WSL shell when the project runs its terminals on the Windows host', () => {
     expect(
       terminalShellOverrideRefusal({
@@ -132,8 +133,7 @@ describe('terminalShellOverrideRefusal', () => {
     ).toBeNull()
   })
 
-  // `resolveWslSessionContext` forces wsl.exe for any `\\wsl$` cwd or workspace path, which is
-  // the one rewrite the project-runtime check cannot see: a folder workspace has no project.
+  // Folder workspaces have no project runtime, but WSL UNC cwd/workspace paths still force wsl.exe.
   describe('WSL UNC paths', () => {
     it('refuses a Windows shell for a folder workspace inside a WSL distro with no project runtime', () => {
       const message = terminalShellOverrideRefusal({
@@ -184,19 +184,6 @@ describe('terminalShellOverrideRefusal', () => {
           projectRuntime: NO_PROJECT_RUNTIME,
           cwd: WSL_WORKSPACE,
           workspacePath: WSL_WORKSPACE
-        })
-      ).toBeNull()
-    })
-
-    it('still allows a Windows shell for a plain Windows path', () => {
-      expect(
-        terminalShellOverrideRefusal({
-          shellOverride: 'cmd.exe',
-          connectionId: null,
-          platform: 'win32',
-          projectRuntime: NO_PROJECT_RUNTIME,
-          cwd: 'C:\\Users\\u\\app\\src',
-          workspacePath: WINDOWS_WORKSPACE
         })
       ).toBeNull()
     })

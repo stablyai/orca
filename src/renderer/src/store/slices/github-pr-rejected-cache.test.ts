@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { persistGitHubCacheChanges } from '../github/cache-persistence'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
@@ -82,6 +83,7 @@ describe.each(['manual', 'coordinator'] as const)('%s rejected PR cache results'
       }
     })
     const outcome = { kind: 'no-pr' as const, fetchedAt: 2, rejectedPRUrls: [rejectedUrl] }
+    persistGitHubCacheChanges(store)
     if (source === 'manual') {
       mockApi.gh.refreshPRNow.mockResolvedValueOnce(outcome)
       await expect(

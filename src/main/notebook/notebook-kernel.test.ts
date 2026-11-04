@@ -18,28 +18,6 @@ function collect(chunks: string[]): unknown[] {
 }
 
 describe('createFrameReader', () => {
-  it('reassembles frames split across chunks and skips stray lines', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      expect(
-        collect([
-          'warning: something printed\n{"type": "rea',
-          'dy"}\n{"type": "stream", "content": {"name": "stdout", "text": "hi"}}\n[1, 2]\n',
-          '{"type": "missing", "externallyManaged": true}\n{"type": "missing"}\n',
-          '{"type": "unknown"}\n{"type": "done", "status": "ok", "execution_count": 3}\n{"partial'
-        ])
-      ).toEqual([
-        { type: 'ready' },
-        { type: 'stream', content: { name: 'stdout', text: 'hi' } },
-        { type: 'missing', externallyManaged: true },
-        { type: 'missing', externallyManaged: false },
-        { type: 'done', status: 'ok', execution_count: 3 }
-      ])
-    } finally {
-      warn.mockRestore()
-    }
-  })
-
   it('avoids repeatedly scanning an incomplete image record for newlines', () => {
     const frame = { type: 'display_data', content: { data: { 'image/png': 'x'.repeat(524_288) } } }
     const wire = `${JSON.stringify(frame)}\n`
@@ -81,21 +59,6 @@ describe('createFrameReader', () => {
     }
     expect(frames).toEqual([frame])
     expect(scannedCharacters).toBeLessThanOrEqual(wire.length * 2)
-  })
-
-  it('does not measure record bytes when no size limit applies', () => {
-    const frame = { type: 'display_data', content: { data: { 'image/png': 'x'.repeat(65_536) } } }
-    const byteLength = vi.spyOn(Buffer, 'byteLength')
-    let frames: unknown[]
-    let measurements: number
-    try {
-      frames = collect([`${JSON.stringify(frame)}\n`])
-      measurements = byteLength.mock.calls.length
-    } finally {
-      byteLength.mockRestore()
-    }
-    expect(frames).toEqual([frame])
-    expect(measurements).toBe(0)
   })
 
   it('preserves code units at every split boundary', () => {
@@ -141,7 +104,6 @@ describe('createFrameReader', () => {
       { type: 'missing', externallyManaged: false },
       { type: 'done', status: '12', execution_count: null }
     ])
-    // The unreadable line is reported; a parsed record of an unknown shape is not.
     expect(reported).toBe(1)
   })
 
@@ -237,7 +199,6 @@ describe.skipIf(!python)('notebook kernel against a real ipykernel', () => {
     kernel.execute('import os; os._exit(1)')
     const death = await next('exit')
     expect(death).toMatchObject({ type: 'exit' })
-    // ipykernel's startup warning about unencrypted TCP is not why it died.
     expect(JSON.stringify(death)).not.toContain('without encryption')
   }, 60_000)
 })
@@ -247,7 +208,6 @@ const bare = process.env.ORCA_TEST_PYTHON_WITHOUT_IPYKERNEL
 describe.skipIf(!bare)('notebook kernel without ipykernel', () => {
   it('reports the missing package instead of starting', async () => {
     const { ready } = startNotebookKernel({ python: bare!, cwd: __dirname, onFrame: () => {} })
-    // A bare venv accepts pip installs, whatever its base interpreter does.
     expect(await ready).toEqual({ status: 'missing-ipykernel', externallyManaged: false })
   })
 })

@@ -1,11 +1,14 @@
 import {
-  clearWorkingIndicators,
+  type AgentStatus,
+  isCursorNativeAgentTitle,
+  shouldSuppressCursorNativeTitle
+} from '../../../../shared/agent-status/title/agent-title-core'
+import {
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
-  isCursorNativeAgentTitle,
-  normalizeTerminalTitle,
-  shouldSuppressCursorNativeTitle
-} from '../../../../shared/agent-detection'
+  normalizeTerminalTitle
+} from '../../../../shared/agent-status/title/agent-title-status'
+import { clearWorkingIndicators } from '../../../../shared/agent-status/title/agent-title-working-indicators'
 import type { IpcPtyTransportOptions } from './pty-transport-types'
 import type { PendingPtySideEffect } from './pty-output-side-effect-queue'
 
@@ -26,6 +29,8 @@ export type PtyOutputTitleObserver = {
     titleScanEffect: PendingPtySideEffect['titleScanEffect'],
     suppressAgentTracker: boolean
   ) => void
+  applyProgramActivity: (activity: AgentStatus | null) => void
+  seedProgramActivity: (activity: AgentStatus | null) => void
   clearStaleTitleTimer: () => void
   reset: () => void
 }
@@ -47,7 +52,7 @@ export function createPtyOutputTitleObserver({
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
-          (title) => onAgentBecameIdle?.(title),
+          (title, status) => onAgentBecameIdle?.(title, { status }),
           onAgentBecameWorking,
           onAgentExited,
           initialTrackerTitle
@@ -126,6 +131,8 @@ export function createPtyOutputTitleObserver({
     getLastEmittedTitle: () => lastEmittedTitle,
     countWorkingTitles,
     processObservedTitles,
+    applyProgramActivity: (activity) => agentTracker?.handleProgramActivity(activity),
+    seedProgramActivity: (activity) => agentTracker?.seedProgramActivity(activity),
     clearStaleTitleTimer,
     reset: () => {
       clearStaleTitleTimer()

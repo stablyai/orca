@@ -1,21 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * iPadOS Hangul with a hardware keyboard fires no composition events at all
- * (#13345). Captured on the device, each jamo is a plain keydown whose `key` is
- * the jamo, followed by the IME rewriting the composing syllable in place:
- *
- *   keydown 'ㅎ' → insertText 'ㅎ'                       value 'ㅎ'
- *   keydown 'ㅏ' → deleteContentBackward, insertText '하' value '하'
- *   keydown 'ㄴ' → deleteContentBackward, insertText '한' value '한'
- *   keydown 'ㄱ' → insertText 'ㄱ'                       value '한ㄱ'
- *
- * Unpatched xterm sends the jamo from `_keyPress` and drops the composed
- * `insertText`, because `_inputEvent` admits a composed insert only when no key
- * is down — and one is down for every one of them. The PTY sees `ㅎㅏㄴㄱㅡㄹ`.
- *
- * These suites drive a real xterm `Terminal` through the same tracker, bypass
- * policy and preedit controller the pane lifecycle installs.
- */
+/** iPad hardware Hangul rewrites its textarea without composition events (#13345); xterm otherwise sends raw jamo and drops composed input. Exercise the pane’s real tracker, bypass and preedit stack. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   disposeOpenTerminals,
@@ -178,8 +162,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
   })
 
   it('keeps the syllable painted between the delete and insert that replace it', async () => {
-    // Why: the IME empties the field for one event in the middle of growing a
-    // syllable, and reading it there would blank the overlay every keystroke.
+    // Transient empty fields between delete/insert halves must not blank the overlay.
     pretendIosWeb()
     const rig = openIosTerminal()
     await typeJamo(rig, '\u314E', '\u314E', { replaces: false })
@@ -196,9 +179,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
   })
 
   it('holds the syllable when Backspace decomposes it as delete-then-insert', async () => {
-    // Why: the IME rewrites a growing syllable as deleteContentBackward then a
-    // replacing insertText, and there is no reason a shrinking one differs. A
-    // hold that closed on the emptied half sent the next jamo raw.
+    // Shrinking syllables can also use delete-then-insert; the emptied half cannot close the hold and leak raw jamo.
     pretendIosWeb()
     const rig = openIosTerminal()
     await typeJamo(rig, '\u314E', '\uD558', { replaces: false })
@@ -238,8 +219,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
   })
 
   it('composes one syllable from a field the IME leaves decomposed', async () => {
-    // Why: NFD grows the field by appending jamo, and an append is what the diff
-    // reads as the previous syllable settling — each jamo would go out alone.
+    // NFD appends jamo, which would falsely settle each one separately without normalization.
     pretendIosWeb()
     const rig = openIosTerminal()
     const steps: [string, string][] = [
@@ -261,8 +241,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
   })
 
   it('clears the overlay when the pane disposes the controller', async () => {
-    // Why: the pane disposes the controller before xterm tears its DOM down, so
-    // a held syllable would otherwise stay painted over a dead pane.
+    // Dispose before xterm tears down DOM so held syllables do not remain painted over dead panes.
     pretendIosWeb()
     const rig = openIosTerminal()
     await typeJamo(rig, '\u314E', '\u314E', { replaces: false })
@@ -292,9 +271,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
     dispatchKey(rig, 'keydown', { key: 'ㅎ', keyCode: 'ㅎ'.charCodeAt(0) })
     await nextEventLoop()
 
-    // Nothing is sent on a timer: the device delivers its write later than a
-    // macrotask, so a deferred read that concluded "nothing was composed" would
-    // fire first and send every jamo raw. The hold stays open instead.
+    // Device input arrives after a macrotask; timer-based fallback would send raw jamo before the rewrite.
     expect(rig.emitted).toEqual([])
 
     dispatchKey(rig, 'keydown', { key: 'Enter', code: 'Enter', keyCode: 13 })
@@ -344,8 +321,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
     const rig = openIosTerminal()
     await typeJamo(rig, 'ㅎ', 'ㅎ', { replaces: false })
 
-    // Longer than what is held, but not an extension of it: the IME respelled
-    // the syllable rather than finishing it, so `ㅎ` is no longer owed.
+    // Non-extension rewrites respell the syllable; the opening jamo is no longer owed separately.
     rig.textarea.value = '가나'
     dispatchInput(rig, 'insertText', '가나')
     await nextEventLoop()
@@ -359,8 +335,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
     const rig = openIosTerminal()
     await typeHangeul(rig)
 
-    // Not the IME rewriting its own syllable: the text the hold measures against
-    // is gone entirely, so `글` is still owed to the PTY rather than droppable.
+    // External field replacement loses the comparison basis, so commit the held syllable instead of dropping it.
     rig.textarea.value = 'ls'
     dispatchInput(rig, 'insertText', 's')
     await nextEventLoop()
@@ -370,11 +345,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
   })
 
   it('sends a jamo composed inside a session once, not twice', async () => {
-    // The iPad on-screen keyboard does run a composition for Hangul, unlike the
-    // hardware one. A hold opened over that session would commit the raw jamo
-    // alongside xterm's own commit. `isComposing` is unreliable on a session's
-    // keydowns — the reason xterm has a 229 path at all — so the session state
-    // is what has to gate the hold.
+    // On-screen Hangul has real sessions; gate by session state rather than unreliable keydown isComposing to avoid duplicate commits.
     pretendIosWeb()
     const rig = openIosTerminal()
     dispatchComposition(rig, 'compositionstart', '')
@@ -395,9 +366,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
   })
 
   it('claims the field write even once the key has been released', async () => {
-    // xterm drops a composed `insertText` only while a key is down. When the
-    // device delivers the write after the keyup, nothing but the claim keeps
-    // xterm from sending the syllable a second time.
+    // Late input after keyup bypasses xterm’s held-key guard; ownership must still prevent a second send.
     pretendIosWeb()
     const rig = openIosTerminal()
     dispatchKey(rig, 'keydown', { key: 'ㅎ', keyCode: 'ㅎ'.charCodeAt(0) })
@@ -411,8 +380,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
   })
 
   it('stands aside for composition-owned input without consulting session state', async () => {
-    // Standing aside is read off the event, not off the tracker, so it cannot
-    // depend on which `input` listener on the pane element runs first.
+    // Read ownership from the event so listener ordering cannot decide who commits.
     pretendIosWeb()
     const rig = openIosTerminal({ isCompositionActive: () => false })
     await typeJamo(rig, 'ㅎ', 'ㅎ', { replaces: false })

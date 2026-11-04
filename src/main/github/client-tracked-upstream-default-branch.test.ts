@@ -1,4 +1,5 @@
-// #26948: tracking a base branch must not attach its integration PR to a feature branch.
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
+import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
@@ -10,6 +11,16 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync: clientMocks.gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GhExecFileModule>()),
+  ghExecFileAsync: clientMocks.ghExecFileAsyncMock
+}))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -44,7 +55,6 @@ const ACME = { owner: 'acme', repo: 'widgets' }
 const UPSTREAM = { owner: 'stablyai', repo: 'widgets' }
 const CONTRIBUTOR = { owner: 'contributor', repo: 'widgets' }
 
-/** remoteHeads maps a remote to the branch its `refs/remotes/<remote>/HEAD` points at. */
 function primeGit(
   trackedUpstream: string,
   remoteHeads: Record<string, string> = { origin: 'develop' }
@@ -154,7 +164,6 @@ function primeGh(
   )
 }
 
-/** A fork clone: `origin` is the fork, `upstream` is the repo PRs target. */
 function primeForkWithUpstream(): void {
   resolvePRRepositoryCandidatesMock.mockResolvedValue({
     candidates: [UPSTREAM, ACME],

@@ -42,8 +42,9 @@ function expectInvariants(report: SimulationReport): void {
 }
 
 describe('step 5 deterministic simulation', () => {
+  // Invariant 9 (dead-man) never trips here; its own tests below cover it.
   it.each(SEEDS)(
-    'holds invariants 1-3 and 5-8 across mixed versions, lagging polls, restarts and database stalls (seed %i)',
+    'holds invariants 1-8 across mixed versions, lagging polls, restarts and database stalls (seed %i)',
     async (seed) => {
       const report = await runReservePlacementSimulation({
         seed,
@@ -123,8 +124,7 @@ describe('step 5 deterministic simulation', () => {
   it.each(SEEDS.flatMap((seed) => [[1_200_000, seed], [300_000, seed]] as const))(
     'a drain onto an empty cell at the %i ms pace spreads within each cell intake budget (seed %i)',
     async (paceMs, seed) => {
-      // The c27 shape: the drained cell's hosts move at the 1,200 s pace onto five cells
-      // with free seats 2,805 / 841 / 777 / 667 / 26.
+      // Production c27 drain: 1,200s pacing toward cells with 2,805/841/777/667/26 free seats.
       const free = [2_805, 841, 777, 667, 26]
       const cells: SimulationConfig['cells'] = free.map((seats, index) => ({
         cellId: `asia${index + 1}`,
@@ -170,6 +170,46 @@ describe('step 5 deterministic simulation', () => {
       // Spread: the emptiest cell takes a share, not the drain.
       expect((report.arrivalsByCell.asia1 ?? 0) / total).toBeLessThan(0.6)
       expect(moved.filter(([, count]) => count / total > 0.1).length).toBeGreaterThanOrEqual(3)
+    },
+    120_000
+  )
+
+  // Same-epoch seats across cells require the DB row to break ties; short sessions/five director restarts per minute exercise boot reconcile.
+  const levelSeats = (seed: number, faults: SimulationConfig['faults']): SimulationConfig => ({
+    seed,
+    durationMs: 16 * 60_000,
+    directors: 5,
+    cells: Array.from({ length: 12 }, (_, index) => ({
+      cellId: `us${String(index).padStart(2, '0')}`,
+      region: 'us-central1' as const,
+      hardCap: 600,
+      ceiling: 480,
+      intakePerSec: 20,
+      mode: 'reserve' as const,
+      preseated: 100
+    })),
+    hosts: 3_000,
+    hostRegion: () => 'us-central1',
+    arrivalPerSec: 20,
+    meanSessionMs: 20_000,
+    reconnectDelayMs: [500, 2_000],
+    duplicateAssignShare: 0.05,
+    halfOpenShare: 0.5,
+    pollLagMs: (director) => [0, 200, 1_000, 2_000, 3_000][director]!,
+    rttMs: rtt,
+    directorRestarts: Array.from({ length: 75 }, (_, index) => ({
+      at: 60_000 + Math.floor(index / 5) * 60_000,
+      director: index % 5
+    })),
+    faults
+  })
+
+  it.each(SEEDS)(
+    'holds invariants 1-8 when directors contest level divergences (seed %i)',
+    async (seed) => {
+      const report = await runReservePlacementSimulation(levelSeats(seed, {}))
+      expect(report.contestedDivergences).toBeGreaterThan(0)
+      expectInvariants(report)
     },
     120_000
   )
@@ -234,8 +274,7 @@ describe('step 5 deterministic simulation', () => {
     durationMs: 25 * 60_000,
     oldDirectors: 1
   })
-  // Demote, re-assign, converge: a placement that never mints above the row is demoted again
-  // and again behind the same row.
+  // Reassigning without advancing past the row repeatedly demotes behind the same row.
   const rowAheadNeverRises = (): SimulationConfig => ({
     ...mixed({ mintAtFloor: true }),
     durationMs: 25 * 60_000,
@@ -251,6 +290,9 @@ describe('step 5 deterministic simulation', () => {
     [1, nearFull({ bookPastCap: true })],
     [2, drain({ intakeBurst: 200, directorShare: 0.05 })],
     [3, drainedWithoutSupersede()],
+    // Half-open seats the booking map had not seen hold their cell until the silence close.
+    [3, levelSeats(11, { skipFeedSupersede: true })],
+    [4, levelSeats(11, { localTieBreak: true })],
     [5, mixed({ unguardedLedger: true })],
     // A director restart mid-queue loses its booked joins' rows until its boot reconcile.
     [5, restartedMidQueue()],
@@ -268,16 +310,8 @@ describe('step 5 deterministic simulation', () => {
     expect(report.rowAheadDemotions).toBeGreaterThan(0)
     expect(report.violations.filter((violation) => violation.invariant === 8)).toEqual([])
     expect(report.rowAheadDemotionsPerHost.max).toBeLessThanOrEqual(2)
-    // A director whose map has not seen the leave yet may re-place level with the row; the
-    // WRONG_CELL row read keeps that a small share (the rest are repaired by one more reconcile).
+    // Unseen leaves can briefly re-place level with the row; WRONG_CELL reads limit this, then reconcile repairs it.
     expect(report.badFirstReseats / report.rowAheadDemotions).toBeLessThan(0.1)
-    const withoutRead = await runReservePlacementSimulation({ ...config, faults: { noWrongCellRowRead: true } })
-    process.stderr.write(
-      `row_ahead_repair ${JSON.stringify({
-        withRead: { demotions: report.rowAheadDemotions, badFirstReseats: report.badFirstReseats, perHost: report.rowAheadDemotionsPerHost },
-        withoutRead: { demotions: withoutRead.rowAheadDemotions, badFirstReseats: withoutRead.badFirstReseats, perHost: withoutRead.rowAheadDemotionsPerHost }
-      })}\n`
-    )
   }, 240_000)
 
   // Every director misses its feed polls for 150 s: each reserve cell's dead-man trips (60-120 s)
@@ -299,9 +333,7 @@ describe('step 5 deterministic simulation', () => {
     pollOutages: [{ at: 60_000, durationMs: 150_000 }]
   })
 
-  // Token minting, the cells' token check or a partition: no director's poll gets through again.
-  // The cells' own rows still say db once they trip, so today's path recovers without the feed;
-  // before the trips a fully reserve region has no fresh placement (60-120 s).
+  // Permanent feed/auth partition: tripped cells’ own db rows must recover placement without feed; fully reserve regions wait 60–120s for trips.
   it('recovers fresh placement while feed polls fail and stay failed, once the cells trip (invariant 9)', async () => {
     const stuck = (faults: SimulationConfig['faults']) => ({
       ...fleetTrip(faults),

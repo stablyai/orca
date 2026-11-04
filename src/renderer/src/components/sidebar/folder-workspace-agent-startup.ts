@@ -1,3 +1,7 @@
+import {
+  resolveAgentStartupPlanInputs,
+  type AgentStartupSettings
+} from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import {
   resolveRepoExecutionHostPlatform,
@@ -9,10 +13,11 @@ import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
-} from '@/lib/tui-agent-startup'
+} from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 /** OS of the host that owns a folder group; its agents are quoted for that host's shell. */
 export function getFolderWorkspaceAgentLaunchFact(
@@ -33,7 +38,6 @@ export function getFolderWorkspaceAgentLaunchFact(
   )
 }
 
-/** Resolve the linked context that should appear in the agent input without submitting. */
 export function resolveFolderWorkspaceLaunchDraft(
   linkedWorkItem: LinkedWorkItemSummary,
   note: string
@@ -44,26 +48,35 @@ export function resolveFolderWorkspaceLaunchDraft(
 
 export function buildFolderWorkspaceLinkedStartupPlan(args: {
   agent: TuiAgent
+  settings?: AgentStartupSettings
   linkedWorkItem: LinkedWorkItemSummary
   note: string
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>>
+  sessionOptionsOverrideAgentArgs?: boolean
   agentEnv?: Record<string, string>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
   isRemote: boolean
 }): AgentStartupPlan | null {
+  const inputs = resolveAgentStartupPlanInputs({
+    agent: args.agent,
+    settings: args.settings ?? { agentCmdOverrides: args.agentCmdOverrides },
+    agentArgs: args.settings ? args.agentArgs : (args.agentArgs ?? null),
+    sessionOptions: args.sessionOptions,
+    platform: args.platform,
+    shell: args.shell,
+    isRemote: args.isRemote
+  })
+  if (args.agentEnv) {
+    inputs.agentEnv = args.agentEnv
+  }
   const linkedDraftPrompt = resolveFolderWorkspaceLaunchDraft(args.linkedWorkItem, args.note)
   const draftLaunchPlan = linkedDraftPrompt
     ? buildAgentDraftLaunchPlan({
-        agent: args.agent,
-        draft: linkedDraftPrompt,
-        cmdOverrides: args.agentCmdOverrides ?? {},
-        agentArgs: args.agentArgs,
-        agentEnv: args.agentEnv,
-        platform: args.platform,
-        shell: args.shell,
-        isRemote: args.isRemote
+        ...inputs,
+        draft: linkedDraftPrompt
       })
     : null
   if (draftLaunchPlan) {
@@ -73,6 +86,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
       expectedProcess: draftLaunchPlan.expectedProcess,
       followupPrompt: null,
       launchConfig: draftLaunchPlan.launchConfig,
+      ...(draftLaunchPlan.sessionOptions ? { sessionOptions: draftLaunchPlan.sessionOptions } : {}),
       ...(draftLaunchPlan.startupCommandDelivery
         ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
         : {}),
@@ -81,15 +95,8 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   }
 
   const startupPlan = buildAgentStartupPlan({
-    agent: args.agent,
-    // Why: linked context must stay reviewable; launch empty, then paste the draft after readiness.
+    ...inputs,
     prompt: '',
-    cmdOverrides: args.agentCmdOverrides ?? {},
-    agentArgs: args.agentArgs,
-    agentEnv: args.agentEnv,
-    platform: args.platform,
-    shell: args.shell,
-    isRemote: args.isRemote,
     allowEmptyPromptLaunch: true
   })
   if (startupPlan && linkedDraftPrompt) {

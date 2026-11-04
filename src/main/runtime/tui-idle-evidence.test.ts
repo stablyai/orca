@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { detectAgentStatusFromTitle } from '../../shared/agent-title-status'
-import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
+import { detectAgentStatusFromTitle } from '../../shared/agent-status/title/agent-title-status'
+import { getSyntheticAgentTerminalTitle } from '../../shared/agent-status/title/synthetic-agent-title'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { getTuiAgentRestSignal } from '../../shared/agent-status/title/tui-agent-rest-signal'
 import { isKnownReadyPromptBody } from './terminal-wait-detection'
 import {
   evaluateAgentStateRules,
@@ -342,5 +342,29 @@ describe('evaluateTuiIdle screen input veto', () => {
         })
       )
     ).toEqual({ kind: 'pending', quietForeground: 'closed' })
+  })
+})
+
+describe('evaluateTuiIdle with OSC 7501 program status', () => {
+  const claude = (overrides: Partial<TuiIdleEvaluationInput> = {}) =>
+    input({
+      agent: 'claude',
+      // Claude drops its ✳ idle glyph once the terminal answers the OSC 7501 probe.
+      record: record({ lastOscTitle: 'Tea or coffee notes.txt', lastAgentStatus: null }),
+      ...overrides
+    })
+
+  it("settles on the program's own done although its title carries no idle glyph", () => {
+    expect(
+      evaluateTuiIdle(
+        claude({ firstPartyStatus: { state: 'done', updatedAt: Date.now(), programAtRest: true } })
+      )
+    ).toEqual({ kind: 'ready-strong' })
+  })
+
+  it('does not settle on a done that only a hook-style stream claimed', () => {
+    expect(
+      evaluateTuiIdle(claude({ firstPartyStatus: { state: 'done', updatedAt: Date.now() } }))
+    ).not.toEqual({ kind: 'ready-strong' })
   })
 })

@@ -4,10 +4,7 @@ import type { MobileGitBranchChangeEntry } from '../source-control/mobile-branch
 import type { MobileGitStatusEntry } from '../source-control/mobile-git-status'
 import {
   buildMobileDiffReviewQueue,
-  createMobileDiffReviewFileKey,
-  filterMobileDiffReviewQueue,
-  summarizeMobileDiffReviewQueue,
-  type MobileDiffReviewQueueItem
+  createMobileDiffReviewFileKey
 } from './mobile-diff-review-queue'
 
 const emptyReviewState: MobileDiffReviewState = { version: 1, files: {} }
@@ -67,8 +64,6 @@ describe('mobile diff review queue', () => {
   })
 
   it('leaves out a status entry whose staging area it does not know', () => {
-    // An unknown `area` degrades to absent, and every queue scope is a staging area — there is no
-    // section to file the row under, so it does not enter the queue.
     const queue = buildMobileDiffReviewQueue({
       worktreeId: 'wt-1',
       statusEntries: [
@@ -106,93 +101,65 @@ describe('mobile diff review queue', () => {
     expect(queue[0]).toMatchObject({ noteCount: 2, unsentNoteCount: 1, staleNoteCount: 1 })
   })
 
-  it('filters unreviewed files and noted files', () => {
-    const reviewState: MobileDiffReviewState = {
-      version: 1,
-      files: {
-        [createMobileDiffReviewFileKey('unstaged', 'unstaged', 'a.ts')]: {
-          key: createMobileDiffReviewFileKey('unstaged', 'unstaged', 'a.ts'),
-          filePath: 'a.ts',
-          scope: 'unstaged',
-          reviewedAt: 11,
-          reviewDiffIdentity: 'wrong'
-        }
-      }
-    }
+  it('keeps scope, rename, and source matching when notes share a path', () => {
     const queue = buildMobileDiffReviewQueue({
       worktreeId: 'wt-1',
       statusEntries: [
-        statusEntry({ path: 'a.ts', area: 'unstaged' }),
-        statusEntry({ path: 'b.ts', area: 'unstaged' })
+        statusEntry({ area: 'unstaged', status: 'renamed', oldPath: 'old.ts' }),
+        statusEntry({ area: 'staged' }),
+        statusEntry({ path: 'other.ts' })
       ],
-      branchEntries: [],
-      comments: [comment({ id: 'a', filePath: 'b.ts' })],
-      reviewState
+      branchEntries: [branchEntry({ path: 'src/app.ts', oldPath: 'old.ts' })],
+      comments: [
+        comment({ id: 'legacy', sentAt: 20 }),
+        comment({ id: 'unstaged', scope: 'unstaged' }),
+        comment({ id: 'staged', scope: 'staged' }),
+        comment({ id: 'branch', scope: 'branch' }),
+        comment({ id: 'rename', oldPath: 'old.ts', diffIdentity: 'stale' }),
+        comment({ id: 'wrong-rename', oldPath: 'different.ts' }),
+        comment({ id: 'markdown', source: 'markdown' }),
+        comment({ id: 'unrelated', filePath: 'absent.ts' })
+      ],
+      reviewState: emptyReviewState
     })
 
-    expect(filterMobileDiffReviewQueue(queue, 'unreviewed').map((item) => item.filePath)).toEqual([
-      'a.ts',
-      'b.ts'
-    ])
-    expect(filterMobileDiffReviewQueue(queue, 'notes').map((item) => item.filePath)).toEqual([
-      'b.ts'
-    ])
-  })
-
-  it('summarizes review counts in one pass without rereading item fields', () => {
-    const entryCount = 1_000
-    const reads = { isReviewed: 0, scope: 0, canStage: 0 }
-    let expectedReviewedCount = 0
-    let expectedReviewedUnstagedItems = 0
-    let expectedReviewedUnstagedCount = 0
-    const queue = Array.from({ length: entryCount }, (_, index) => {
-      const isReviewed = index % 2 === 0
-      const scope = index % 3 === 0 ? 'unstaged' : 'staged'
-      const canStage = index % 5 === 0
-      if (isReviewed) {
-        expectedReviewedCount += 1
-        if (scope === 'unstaged') {
-          expectedReviewedUnstagedItems += 1
-          if (canStage) {
-            expectedReviewedUnstagedCount += 1
-          }
-        }
+    expect(
+      queue.map(({ scope, filePath, noteCount, unsentNoteCount, staleNoteCount }) => ({
+        scope,
+        filePath,
+        noteCount,
+        unsentNoteCount,
+        staleNoteCount
+      }))
+    ).toEqual([
+      {
+        scope: 'unstaged',
+        filePath: 'other.ts',
+        noteCount: 0,
+        unsentNoteCount: 0,
+        staleNoteCount: 0
+      },
+      {
+        scope: 'unstaged',
+        filePath: 'src/app.ts',
+        noteCount: 3,
+        unsentNoteCount: 2,
+        staleNoteCount: 1
+      },
+      {
+        scope: 'staged',
+        filePath: 'src/app.ts',
+        noteCount: 2,
+        unsentNoteCount: 1,
+        staleNoteCount: 0
+      },
+      {
+        scope: 'branch',
+        filePath: 'src/app.ts',
+        noteCount: 3,
+        unsentNoteCount: 2,
+        staleNoteCount: 1
       }
-      const item = {} as MobileDiffReviewQueueItem
-      Object.defineProperties(item, {
-        isReviewed: {
-          enumerable: true,
-          get: () => {
-            reads.isReviewed += 1
-            return isReviewed
-          }
-        },
-        scope: {
-          enumerable: true,
-          get: () => {
-            reads.scope += 1
-            return scope
-          }
-        },
-        canStage: {
-          enumerable: true,
-          get: () => {
-            reads.canStage += 1
-            return canStage
-          }
-        }
-      })
-      return item
-    })
-
-    expect(summarizeMobileDiffReviewQueue(queue)).toEqual({
-      reviewedCount: expectedReviewedCount,
-      reviewedUnstagedCount: expectedReviewedUnstagedCount
-    })
-    expect(reads).toEqual({
-      isReviewed: entryCount,
-      scope: expectedReviewedCount,
-      canStage: expectedReviewedUnstagedItems
-    })
+    ])
   })
 })

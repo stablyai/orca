@@ -10,7 +10,7 @@ it('accepts the retained-byte boundary and rejects the next entry', () => {
 
 it('charges serialized escaping and rejects an oversized individual path', () => {
   const escaped = new FileInventoryBudget(100)
-  expect(() => escaped.record('\u0001'.repeat(20))).toThrow(FileInventoryCapacityError)
+  expect(() => escaped.record('\u0001'.repeat(18))).toThrow(FileInventoryCapacityError)
   expect(() => new FileInventoryBudget().record('x'.repeat(65537))).toThrow(
     FileInventoryCapacityError
   )

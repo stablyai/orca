@@ -1,43 +1,37 @@
-import { EventEmitter } from 'node:events'
-import type { ChildProcess } from 'node:child_process'
+import type * as ChildProcessModule from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { vi } from 'vitest'
 
-/**
- * A `child_process.spawn` stand-in for suites that drive gh/glab/git runners.
- *
- * Those runners capture output through `runProcess`, which reads the streams
- * and waits for `close`, so a bare EventEmitter is not enough — a test child
- * has to carry stdio and report an exit or the promise never settles.
- */
-export function createFakeSpawnedChild(pid = 4321): ChildProcess {
-  const child = new EventEmitter() as EventEmitter & Record<string, unknown>
-  child.pid = pid
-  child.kill = vi.fn(() => true)
-  child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  return child as unknown as ChildProcess
+// Consumers may mock spawn without exporting the ChildProcess constructor.
+const { ChildProcess: NodeChildProcess } = process.getBuiltinModule('node:child_process')
+
+class FakeSpawnedChild extends NodeChildProcess {
+  override pid: number
+  override stdin = new PassThrough()
+  override stdout = new PassThrough()
+  override stderr = new PassThrough()
+  override stdio: PipedChildProcess['stdio'] = [this.stdin, this.stdout, this.stderr, null, null]
+  override kill = vi.fn((_signal?: NodeJS.Signals | number) => true)
+  override unref = vi.fn<() => void>()
+
+  constructor(pid: number) {
+    super()
+    this.pid = pid
+  }
+}
+
+/** Stream cleanup must not imply child exit; tests explicitly emit exit/close. */
+export function createFakeSpawnedChild(pid = 4321) {
+  return new FakeSpawnedChild(pid)
 }
 
 export function createFakePipedChild(pid = 4321) {
-  const stdin = new PassThrough()
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  return Object.assign(createFakeSpawnedChild(pid), {
-    pid,
-    stdin,
-    stdout,
-    stderr,
-    stdio: [stdin, stdout, stderr, null, null] satisfies PipedChildProcess['stdio'],
-    kill: vi.fn((_signal?: NodeJS.Signals | number) => true)
-  })
+  return createFakeSpawnedChild(pid)
 }
 
-/** Emit output and a clean exit, the way a CLI that answered would. */
 export function completeFakeSpawn(
-  child: ChildProcess,
+  child: ChildProcessModule.ChildProcess,
   result: { stdout?: string; stderr?: string; code?: number } = {}
 ): void {
   if (result.stdout) {
@@ -56,35 +50,31 @@ export type FakeSpawnOutcome =
   | { stdout?: string; stderr?: string; code?: number }
   | { spawnError: Error }
 
-function settleFakeSpawn(child: ChildProcess, outcome: FakeSpawnOutcome): void {
+function settleFakeSpawn(child: ChildProcessModule.ChildProcess, outcome: FakeSpawnOutcome): void {
   if ('spawnError' in outcome) {
-    // Why an event and not a throw: an unresolvable program fails asynchronously
-    // in libuv, which is what makes ENOENT reach callers as a rejection.
+    // libuv reports missing executables asynchronously through error, not a spawn throw.
     child.emit('error', outcome.spawnError)
     return
   }
   completeFakeSpawn(child, outcome)
 }
 
-/**
- * Build a `spawn` implementation that answers every call the same way.
- *
- * Why a fresh child per call: the runners retry and fall back, and a shared
- * emitter would replay the first call's exit into the second's listeners.
- */
+/** Use a fresh child per retry/fallback so earlier exits cannot reach later listeners. */
 export function fakeSpawnReturning(
   outcome: FakeSpawnOutcome = {}
-): (program: string, args: readonly string[]) => ChildProcess {
+): (program: string, args: readonly string[]) => ChildProcessModule.ChildProcess {
   return fakeSpawnDispatch(() => outcome)
 }
 
-/** Build a `spawn` implementation that answers per invoked program and argv. */
 export function fakeSpawnDispatch(
   resolve: (program: string, args: readonly string[]) => FakeSpawnOutcome
-): (program: string, args: readonly string[]) => ChildProcess {
+): (program: string, args: readonly string[]) => ChildProcessModule.ChildProcess {
   return (program, args) => {
     const child = createFakeSpawnedChild()
     const outcome = resolve(program, args)
+    if ('spawnError' in outcome) {
+      Object.defineProperty(child, 'pid', { value: undefined })
+    }
     queueMicrotask(() => settleFakeSpawn(child, outcome))
     return child
   }

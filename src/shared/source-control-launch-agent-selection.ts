@@ -4,10 +4,13 @@ import {
   resolveSourceControlActionRecipe
 } from './source-control-ai'
 import type { SourceControlActionId, SourceControlActionRecipe } from './source-control-ai-actions'
-import { filterEnabledTuiAgents, TUI_AGENT_AUTO_PICK_ORDER } from './tui-agent-selection'
+import {
+  filterEnabledTuiAgents,
+  TUI_AGENT_AUTO_PICK_ORDER
+} from './agent-launch/catalog/tui-agent-selection'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 export function readSourceControlLaunchRecipeAgentId(
   recipe: Pick<SourceControlActionRecipe, 'agentId'> | null | undefined
@@ -21,16 +24,17 @@ export function pickSourceControlLaunchAgent(args: {
   defaultAgent: TuiAgent | 'blank' | null | undefined
   detectedAgents: TuiAgent[]
   disabledAgents?: TuiAgent[]
+  chosenOpensAsChat?: (agent: TuiAgent) => boolean
 }): TuiAgent | null {
   const enabledAgents = filterEnabledTuiAgents(args.detectedAgents, args.disabledAgents)
-  if (args.savedAgent && enabledAgents.includes(args.savedAgent)) {
+  const usable = (agent: TuiAgent): boolean =>
+    enabledAgents.includes(agent) ||
+    (filterEnabledTuiAgents([agent], args.disabledAgents).length > 0 &&
+      args.chosenOpensAsChat?.(agent) === true)
+  if (args.savedAgent && usable(args.savedAgent)) {
     return args.savedAgent
   }
-  if (
-    args.defaultAgent &&
-    args.defaultAgent !== 'blank' &&
-    enabledAgents.includes(args.defaultAgent)
-  ) {
+  if (args.defaultAgent && args.defaultAgent !== 'blank' && usable(args.defaultAgent)) {
     return args.defaultAgent
   }
   return TUI_AGENT_AUTO_PICK_ORDER.find((agent) => enabledAgents.includes(agent)) ?? null
@@ -41,16 +45,13 @@ export type SourceControlLaunchAgentScope = {
   effectiveAgentId: TuiAgent | null
   /** Agent the button would launch without a repo override (global recipe or default). */
   globalAgentId: TuiAgent | null
-  /**
-   * True when this repo pins a different launch agent than the global default —
-   * the silent-override case we surface instead of auto-launching blindly.
-   */
+  /** Repo silently pins a different agent than the global launch would use; surface before launching. */
   overridesGlobalAgent: boolean
 }
 
 export function resolveSourceControlLaunchAgentScope(input: {
   settings:
-    | Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'>
+    | Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'>>
     | null
     | undefined
   repo?: Pick<Repo, 'sourceControlAi'> | null
@@ -70,8 +71,7 @@ export function resolveSourceControlLaunchAgentScope(input: {
       actionId: input.actionId
     })
   )
-  // Why: the note compares against what would run with no override, so fall back
-  // to the global default agent when no global recipe agent is set.
+  // Compare against the actual no-override launch, including default-agent fallback when no global recipe names one.
   const defaultTuiAgent = input.settings?.defaultTuiAgent
   const globalAgentId =
     globalRecipeAgentId ?? (defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null)
@@ -87,7 +87,12 @@ export function resolveSourceControlLaunchAgentScope(input: {
   }
 }
 
-export type SourceControlActionRecipeOverrideField = 'agent' | 'commandTemplate' | 'agentArgs'
+export type SourceControlActionRecipeOverrideField =
+  | 'agent'
+  | 'commandTemplate'
+  | 'agentArgs'
+  | 'launchPreferences'
+  | 'surface'
 
 export type SourceControlActionRecipeOverride = {
   repoId: string
@@ -127,13 +132,16 @@ function readRecipeOverrideFields(
   if (Object.hasOwn(recipe ?? {}, 'agentArgs')) {
     fields.push('agentArgs')
   }
+  if (Object.hasOwn(recipe ?? {}, 'launchPreferences')) {
+    fields.push('launchPreferences')
+  }
+  if (Object.hasOwn(recipe ?? {}, 'surface')) {
+    fields.push('surface')
+  }
   return fields
 }
 
-/**
- * Which repos own any recipe setting for an action — lets the global recipe
- * editor warn that saving globally will not update those repo-specific recipes.
- */
+/** Warn global editors about repos whose own recipes will retain their settings. */
 export function summarizeReposOverridingActionRecipe(input: {
   repos: readonly Pick<Repo, 'id' | 'displayName' | 'sourceControlAi'>[]
   actionId: SourceControlActionId

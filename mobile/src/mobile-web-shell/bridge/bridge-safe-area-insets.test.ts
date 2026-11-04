@@ -75,7 +75,6 @@ describe('insets that move under a live page', () => {
     await pair.flush()
     expect(seen).toEqual([keyboardUp])
     expect(pair.client.getShellSession()?.safeAreaInsets).toEqual(keyboardUp)
-    // Same session: an insets update is not a replacement.
     expect(pair.client.getShellSession()?.sessionId).toBe(session?.sessionId)
     expect(pair.client.getShellSession()?.route).toEqual(session?.route)
   })

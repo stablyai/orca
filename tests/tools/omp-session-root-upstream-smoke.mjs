@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { resolveOmpSessionsDir } from '../../src/main/ai-vault/omp-session-root.ts'
+import { resolveOmpSessionsDir } from '../../src/main/ai-vault/scanners/omp/omp-session-root.ts'
 
 assert.ok(process.argv[2], 'Pass a read-only OMP checkout path')
 const root = await mkdtemp(join(tmpdir(), 'orca-omp-root-parity-'))

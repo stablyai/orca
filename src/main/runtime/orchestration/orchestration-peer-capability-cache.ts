@@ -1,7 +1,6 @@
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { BoundedMap } from '../../../shared/bounded-map'
-import type { OrcaRuntimeService } from '../orca-runtime'
 
 const DEFAULT_MAX_PEERS = 128
 
@@ -113,11 +112,7 @@ export class OrchestrationPeerCapabilityCache {
     return { runtimeEpoch: status.runtimeId, supported, cached: false }
   }
 
-  /**
-   * What the peer's own answers proved, or null when nothing has. Deliberately ignores the
-   * advertised capability list: shipped hosts serve federation methods they never advertise, so
-   * only a real `method_not_found` may downgrade one.
-   */
+  /** Trust peer answers, not advertised lists: shipped hosts omit supported federation methods; only method_not_found downgrades. */
   knownSupport(
     peerFingerprint: string,
     expectedRuntimeEpoch: string | null,
@@ -271,10 +266,10 @@ export class OrchestrationPeerCapabilityCache {
   }
 }
 
-const cachesByRuntime = new WeakMap<OrcaRuntimeService, OrchestrationPeerCapabilityCache>()
+const cachesByRuntime = new WeakMap<WeakKey, OrchestrationPeerCapabilityCache>()
 
 export function getOrchestrationPeerCapabilityCache(
-  runtime: OrcaRuntimeService
+  runtime: WeakKey
 ): OrchestrationPeerCapabilityCache {
   let cache = cachesByRuntime.get(runtime)
   if (!cache) {

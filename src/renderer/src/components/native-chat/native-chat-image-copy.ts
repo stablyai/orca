@@ -1,13 +1,12 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { blobToBase64, convertImageBlobToPng } from '@/lib/image-blob-png'
+import { copyImageToClipboard } from '@/lib/clipboard-image-copy'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../shared/clipboard-image'
 
 /** The chat context menu offers "Copy image" for elements carrying this attribute. */
 const COPY_IMAGE_SRC_SELECTOR = '[data-native-chat-copy-image-src]'
 
-/** Full-size source to copy for an image, or undefined when it has none. */
 export function copyableNativeChatImageSrc(src: string | undefined): string | undefined {
   // The web client's image clipboard write is a no-op.
   return isWebClientLocation() ? undefined : src
@@ -60,8 +59,7 @@ export function keepPreviewOpenForChatMenu(event: {
 
 export async function copyNativeChatImage(image: NativeChatCopyImage): Promise<void> {
   try {
-    const png = await convertImageBlobToPng(await image())
-    await window.api.ui.writeClipboardImage(`data:image/png;base64,${await blobToBase64(png)}`)
+    await copyImageToClipboard(await image())
     toast.success(translate('components.native-chat.composer.imageCopied', 'Image copied'))
   } catch (error) {
     toast.error(

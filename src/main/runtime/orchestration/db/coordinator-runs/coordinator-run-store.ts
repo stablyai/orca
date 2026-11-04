@@ -2,8 +2,6 @@ import type { CoordinatorStatus, CoordinatorRun } from '../../types'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 
-// ── Coordinator Runs ──
-
 export function createCoordinatorRun(
   this: OrchestrationDb,
   run: {
@@ -50,8 +48,6 @@ export function getActiveCoordinatorRun(this: OrchestrationDb): CoordinatorRun |
     .get() as CoordinatorRun | undefined
 }
 
-// ── Queries for Coordinator ──
-
 export function getIdleTerminals(this: OrchestrationDb, excludeHandles: string[] = []): string[] {
   const active = this.db
     .prepare(
@@ -62,7 +58,6 @@ export function getIdleTerminals(this: OrchestrationDb, excludeHandles: string[]
   for (const h of excludeHandles) {
     busyHandles.add(h)
   }
-  // Return handles from message history that aren't busy
   const allHandles = this.db
     .prepare(
       // Why: alias the UNION column — otherwise the row shape depends on the first branch's column name.

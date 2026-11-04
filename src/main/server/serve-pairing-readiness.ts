@@ -3,7 +3,6 @@ import { resolveAdvertisedPairingEndpoint } from '../runtime/pairing-endpoint'
 import { assertServeProjectRoot, renderServePairingQr } from './serve-pairing-output'
 import type { ServeReadiness, ServeReadinessOutput } from './serve-readiness'
 
-/** Endpoint and pairing-offer fields shared by the Electron serve host and orcad. */
 export async function buildServePairingReadiness(
   options: {
     pairingAddress?: string | null

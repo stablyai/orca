@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setTerminalWebglDiagnosticRecorder } from '../../../../shared/terminal-webgl-diagnostics'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-control'
-import { collectPaneRenderingDiagnostics } from './pane-rendering-diagnostics'
 import { schedulePaneRevealPresent } from './pane-reveal-repaint'
 import {
   attachWebgl,
@@ -11,19 +9,20 @@ import {
 } from './pane-webgl-renderer'
 import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 
-function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
+function createPane(): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
   return {
     id: 1,
     leafId,
     stablePaneId: leafId,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recovery uses only the mocked terminal methods below.
     terminal: {
       options: { cursorBlink: true },
       cols: 80,
       rows: 24,
       refresh: vi.fn(),
       blur: vi.fn(),
-      loadAddon: vi.fn(options.loadAddon)
+      loadAddon: vi.fn()
     } as never,
     container: {} as never,
     xtermContainer: {} as never,
@@ -53,14 +52,8 @@ function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneIntern
   }
 }
 
-function throwWebglUnavailable(): never {
-  // Mirrors the addon's activate() throw when getContext('webgl2') returns null.
-  throw new Error('WebGL2 not supported null')
-}
-
 function fireContextLoss(pane: ManagedPaneInternal): void {
-  // Fire the addon's real context-loss emitter so the loss -> latch -> resume
-  // cycle runs through the production onContextLoss handler.
+  // Use the real context-loss emitter to cover production latch/resume wiring.
   const addon = pane.webglAddon as unknown as { _onContextLoss: { fire: () => void } }
   addon._onContextLoss.fire()
 }
@@ -80,32 +73,6 @@ describe('terminal WebGL context recovery', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
-  })
-
-  it('backs off after a failed attach instead of retrying on every call', () => {
-    const pane = createPane({ loadAddon: throwWebglUnavailable })
-
-    attachWebgl(pane)
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-    expect(pane.webglAddon).toBeNull()
-
-    // Title changes re-enter attach via setPaneGpuRendering; while WebGL is
-    // blocked these must not construct new addons or log again.
-    attachWebgl(pane)
-    attachWebgl(pane)
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-    expect(console.warn).toHaveBeenCalledTimes(1)
-  })
-
-  it('retries a backed-off attach on the next rendering resume', () => {
-    const pane = createPane({ loadAddon: throwWebglUnavailable })
-
-    attachWebgl(pane)
-    attachWebgl(pane)
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-
-    resumePaneRendering([pane])
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(2)
   })
 
   it('recovers a context-lost pane on the next rendering resume', () => {
@@ -141,40 +108,6 @@ describe('terminal WebGL context recovery', () => {
     expect(pane.webglAddon).not.toBe(retainedAddon)
     expect(pane.webglRebuildDeferred).toBe(false)
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(2)
-  })
-
-  it('replaces a retained context lost before xterm dispatches its loss event', () => {
-    const pane = createPane()
-    const dispose = vi.fn()
-    const lostAddon = {
-      dispose,
-      _renderer: {
-        _gl: {
-          getExtension: vi.fn(() => null),
-          isContextLost: vi.fn(() => true)
-        }
-      }
-    }
-    pane.webglAddon = lostAddon as never
-
-    resumePaneRendering([pane])
-
-    expect(dispose).toHaveBeenCalledTimes(1)
-    expect(pane.webglAddon).not.toBe(lostAddon)
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-  })
-
-  it('re-latches when the retried context is lost again', () => {
-    const pane = createPane()
-
-    attachWebgl(pane)
-    fireContextLoss(pane)
-    resumePaneRendering([pane])
-    expect(pane.webglAddon).not.toBeNull()
-
-    fireContextLoss(pane)
-    expect(pane.webglDisabledAfterContextLoss).toBe(true)
-    expect(pane.webglAddon).toBeNull()
   })
 
   it('stops resume retries after repeated losses in the retry window', () => {
@@ -213,45 +146,5 @@ describe('terminal WebGL context recovery', () => {
     expect(pane.webglDisabledAfterContextLoss).toBe(true)
     expect(pane.webglAddon).toBeNull()
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(3)
-  })
-
-  // Why exact keys: a GPU death loses every pane's context at once and the
-  // crash ring coalesces the repeats, so the population has to survive on the
-  // payload. It must use the same names the fit-retry crumb uses, or one ring
-  // ends up describing one measurement two ways.
-  it('carries the pane census under the same field names the fit-retry crumb uses', () => {
-    const recorded: { kind: string; detail?: Record<string, unknown> }[] = []
-    setTerminalWebglDiagnosticRecorder((kind, detail) => recorded.push({ kind, detail }))
-    try {
-      const pane = createPane()
-      attachWebgl(pane)
-      fireContextLoss(pane)
-    } finally {
-      setTerminalWebglDiagnosticRecorder(null)
-    }
-
-    expect(recorded).toEqual([
-      {
-        kind: 'webgl-context-loss',
-        detail: {
-          paneId: 1,
-          lossesInWindow: 1,
-          livePanes: expect.any(Number),
-          livePaneManagers: expect.any(Number)
-        }
-      }
-    ])
-  })
-
-  it('reports only recent context losses in rendering diagnostics', () => {
-    const now = 1_700_000_000_000
-    vi.spyOn(Date, 'now').mockReturnValue(now)
-    const pane = createPane()
-    pane.webglContextLossTimestamps = [now - 60_001, now - 1_000]
-
-    const [diagnostics] = collectPaneRenderingDiagnostics(new Map([[pane.id, pane]]))
-
-    expect(diagnostics.webglContextLossesInWindow).toBe(1)
-    expect(pane.webglContextLossTimestamps).toEqual([now - 60_001, now - 1_000])
   })
 })

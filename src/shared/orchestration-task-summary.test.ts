@@ -27,8 +27,7 @@ describe('abbreviateOrchestrationTasks', () => {
   })
 
   it('does not split a surrogate pair at the truncation boundary', () => {
-    // 158 chars + an astral emoji spanning UTF-16 units 158-159: a naive
-    // slice(0, 159) would cut the pair and leave a lone high surrogate.
+    // UTF-16 boundary 159 splits the emoji’s surrogate pair.
     const [task] = abbreviateOrchestrationTasks([{ spec: `${'a'.repeat(158)}😀${'b'.repeat(40)}` }])
 
     expect(task.spec_truncated).toBe(true)

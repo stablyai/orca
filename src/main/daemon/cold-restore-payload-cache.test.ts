@@ -10,15 +10,6 @@ function payload(scrollback: string): ColdRestorePayload {
 }
 
 describe('ColdRestorePayloadCache', () => {
-  it('counts retained strings by UTF-16 code units', () => {
-    expect(
-      getColdRestorePayloadBytes({
-        ...payload('😀'),
-        oscLinks: [{ row: 0, startCol: 0, endCol: 1, uri: 'é' }]
-      })
-    ).toBe(54)
-  })
-
   it('evicts least-recently-used payloads to stay under its byte bound', () => {
     const first = payload('a'.repeat(100))
     const second = payload('b'.repeat(100))

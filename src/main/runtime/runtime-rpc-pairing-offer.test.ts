@@ -1,3 +1,6 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,20 +11,40 @@ import { parsePairingCode } from '../../shared/pairing'
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 import { STATUS_METHODS } from './rpc/methods/status'
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: listings.listWorktrees
   }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listings.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    }
+  }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 describe('OrcaRuntimeRpcServer', () => {
@@ -29,6 +52,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -55,6 +79,7 @@ describe('OrcaRuntimeRpcServer', () => {
 
   it('reports why pairing is unavailable before the WebSocket listener is ready', () => {
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
       enableWebSocket: true,
@@ -72,6 +97,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     mkdirSync(join(userDataPath, E2EE_KEYPAIR_FILENAME))
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
@@ -95,6 +121,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('reports a registry persistence failure without retaining a ghost credential', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
@@ -120,6 +147,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('rejects wildcard advertised addresses before minting a device credential', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
@@ -146,6 +174,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -176,6 +205,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -203,6 +233,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -246,6 +277,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -283,6 +315,7 @@ describe('host descriptor publication', () => {
     const start = async () => {
       const runtime = new OrcaRuntimeService()
       const server = new OrcaRuntimeRpcServer({
+        methods: [],
         runtime,
         userDataPath,
         enableWebSocket: true,
@@ -291,8 +324,10 @@ describe('host descriptor publication', () => {
       await server.start()
       return { runtime, server }
     }
-    const statusOf = async (runtime: OrcaRuntimeService) =>
-      (await STATUS_METHODS[0].handler(undefined, { runtime })).hostDescriptor
+    const statusOf = async (runtime: OrcaRuntimeService) => {
+      const status = await STATUS_METHODS[0].handler({}, { runtime })
+      return 'hostDescriptor' in status ? status.hostDescriptor : undefined
+    }
     const first = await start()
     const descriptor = await statusOf(first.runtime)
     expect(descriptor?.installationId).toBeTruthy()

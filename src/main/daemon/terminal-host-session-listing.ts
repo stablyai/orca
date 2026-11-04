@@ -1,6 +1,24 @@
 import type { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
 import type { Session } from './session'
 import type { SessionInfo } from './types'
+import type { WslGuestRoot } from '../../shared/wsl-guest-root-marker'
+
+// Why a side table: only the listing reads it, and Session is at its max-lines cap.
+const spawnPaneKeys = new WeakMap<Session, string>()
+
+/** Records the ORCA_PANE_KEY a session was spawned with; reattaching never rewrites it. */
+export function recordSessionSpawnPaneKey(session: Session, paneKey: string | undefined): void {
+  if (paneKey) {
+    spawnPaneKeys.set(session, paneKey)
+  }
+}
+
+const wslGuestRoots = new WeakMap<Session, WslGuestRoot>()
+
+/** A WSL session's guest root shell, as its own launch output reported it. */
+export function recordSessionWslGuestRoot(session: Session, root: WslGuestRoot): void {
+  wslGuestRoots.set(session, root)
+}
 
 export function listLiveTerminalHostSessions(
   sessions: ReadonlyMap<string, Session>,
@@ -12,16 +30,21 @@ export function listLiveTerminalHostSessions(
       continue
     }
     const size = session.getAppliedSize()
+    const paneKey = spawnPaneKeys.get(session)
+    const wslGuestRoot = wslGuestRoots.get(session)
+    const foregroundProcess = session.getForegroundProcess({ cachedOnly: true })
     result.push({
       sessionId: session.sessionId,
+      ...(foregroundProcess ? { foregroundProcess } : {}),
       incarnationId: session.incarnationId,
-      // Why: a session whose kill was accepted is still live but no longer restorable; readers that
-      // adopt or restore sessions must skip it, while liveness readers keep counting it.
+      // Terminating sessions still count as live but must not be adopted or restored.
       state: session.isTerminating ? 'exiting' : session.state,
       shellState: session.shellState,
       isAlive: true,
       ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
+      ...(paneKey ? { paneKey } : {}),
       wslDistro: session.wslDistro,
+      ...(wslGuestRoot ? { wslGuestRoot } : {}),
       pid: session.pid,
       cwd: session.getCwd(),
       cols: size?.cols ?? 0,
@@ -31,4 +54,13 @@ export function listLiveTerminalHostSessions(
     })
   }
   return result
+}
+
+export function hasLiveTerminalHostSessions(sessions: ReadonlyMap<string, Session>): boolean {
+  let hasLive = false
+  // Read every Session to preserve inventory error order.
+  for (const session of sessions.values()) {
+    hasLive = session.isAlive || hasLive
+  }
+  return hasLive
 }

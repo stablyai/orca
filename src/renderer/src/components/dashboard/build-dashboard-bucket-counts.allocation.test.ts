@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -158,8 +158,7 @@ describe('bucket-count work reuse', () => {
     const cache = createDashboardBucketCountsCache()
     const state = largeState()
 
-    // Five recomputes driven by agent traffic: prompt streaming on one pane,
-    // which is what actually invalidates the counts memo in the sidebar.
+    // Prompt streaming invalidates one worktree’s inputs while the rest retain their rows.
     for (let pass = 0; pass < 5; pass += 1) {
       const next: SnapshotState = {
         ...state,

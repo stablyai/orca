@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'

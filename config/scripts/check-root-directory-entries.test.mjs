@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
@@ -37,9 +38,7 @@ function commitFiles(root, files) {
   return git(root, ['rev-parse', 'HEAD'])
 }
 
-// Why: a root entry name can be bytes no filesystem here accepts (APFS rejects
-// invalid UTF-8), so build the tree in the object database instead of on disk.
-// git ls-tree -z emits exactly the record format git mktree -z reads back.
+// Build raw-byte names in Git objects: APFS rejects invalid UTF-8. ls-tree -z records round-trip through mktree -z.
 function commitRawEntries(root, parent, entries) {
   const parentTree = execFileSync('git', ['ls-tree', '-z', parent], { cwd: root })
   const records = entries.map((name) => {
@@ -136,8 +135,7 @@ describe('root directory guard', () => {
     expect(output).toContain('new-folder')
   })
 
-  // Why: git escapes odd paths unless it is read NUL-delimited, so dropping -z
-  // (or decoding the bytes wrong) reports a mangled name nobody can act on.
+  // Without NUL delimiting, Git escapes odd paths into names users cannot act on.
   it.skipIf(process.platform === 'win32')('reports a blocked entry byte-for-byte', () => {
     const awkwardName = '日本 root file\nwith newline.txt'
     const fixture = makeFixture()
@@ -149,8 +147,7 @@ describe('root directory guard', () => {
     expect(result.stdout).toContain(awkwardName)
   })
 
-  // Why: decoding git's output as UTF-8 rewrites every invalid byte to U+FFFD, so
-  // the name the guard prints is not the name anyone has to rename.
+  // UTF-8 decoding replaces invalid bytes with U+FFFD, losing the name that needs renaming.
   it('reports an entry whose name is not valid UTF-8 byte-for-byte', () => {
     const rawName = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('-raw.txt')])
     const fixture = makeFixture()
@@ -162,8 +159,7 @@ describe('root directory guard', () => {
     expect(result.stdout.includes(rawName)).toBe(true)
   })
 
-  // Why: U+FFFD is not injective, so two different invalid names decode to the
-  // same string and a new root entry gets waved through as pre-existing.
+  // Distinct invalid names collapse to U+FFFD, allowing new entries to masquerade as existing ones.
   it('does not confuse two different invalid UTF-8 names for the same entry', () => {
     const fixture = makeFixture()
     const base = commitRawEntries(fixture.root, fixture.base, [
@@ -179,8 +175,7 @@ describe('root directory guard', () => {
     expect(result.stdout.toString('latin1')).not.toContain('guard passed')
   })
 
-  // Why: the runner trims leading spaces before matching '::', so an indented
-  // entry name still reaches the workflow-command parser and can forge output.
+  // Runner trims spaces before ::, so indented names can still forge workflow commands.
   it('prints blocked entries with workflow-command parsing disabled', () => {
     const fixture = makeFixture()
     const forgedName = '::error title=forged::injected\n::warning::second line.txt'
@@ -222,30 +217,33 @@ describe('root directory guard', () => {
       'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
     ])
 
-    // Why: git's own exit status, not node's. An unhandled throw is also non-zero,
-    // so assert the status and the absent stack trace or the guard's error
-    // handling can be deleted without a test noticing.
+    // Assert Git’s status and no stack trace: an unhandled Node throw is also nonzero and could hide broken error handling.
     expect(result.status).toBe(128)
     expect(result.stderr).not.toContain('node:internal')
     expect(result.stdout).not.toContain('guard passed')
   })
 
-  it('is wired into the PR verify gate', () => {
+  it('is wired into the ready PR verify gate', () => {
     const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
     const guardJob = workflow.jobs.code_paths
     const guardStep = guardJob.steps.find(
       (step) => step.name === 'Reject new root-level files and folders'
     )
 
-    expect(guardJob.if).toBeUndefined()
+    // Only draft PRs skip the guard; verify skips with it, so no draft reports a result.
+    const runsFor = (expression, draft) =>
+      runInNewContext(expression.replace(/^\$\{\{(.*)\}\}$/s, '$1'), {
+        github: { event_name: 'pull_request', event: { pull_request: { draft } } },
+        cancelled: () => false
+      })
+    expect(runsFor(guardJob.if, false)).toBe(true)
+    expect(runsFor(guardJob.if, true)).toBe(false)
+    expect(runsFor(workflow.jobs.verify.if, true)).toBe(false)
     expect(guardStep.if).toBeUndefined()
-    // Why >= 2 rather than 0: the guard compares the merge commit's first parent against the
-    // merged tree, so it needs both parents present but no history beyond them. Depth 1 would
-    // leave HEAD^1 unreachable and the guard would fail closed on every run.
+    // Merge-ref comparison needs both parents (depth >=2); depth 1 makes HEAD^1 unreachable and every guard fail closed.
     expect(guardJob.steps[0].with['fetch-depth']).toBeGreaterThanOrEqual(2)
     expect(guardStep.run).toContain('node .github/scripts/check-root-directory-entries.mjs')
-    // The base side must come from the merge ref, not the event payload, or a shallow checkout
-    // cannot resolve it.
+    // Read base from merge ref; shallow checkout may not resolve event-payload ancestry.
     expect(guardStep.run).toContain('git-pull-request-diff-base.mjs')
     expect(workflow.jobs.verify.needs).toContain('code_paths')
   })

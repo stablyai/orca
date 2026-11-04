@@ -59,6 +59,7 @@ export function makeState(
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},

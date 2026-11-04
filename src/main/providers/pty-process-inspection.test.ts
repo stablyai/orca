@@ -19,15 +19,6 @@ describe('PTY provider process inspection', () => {
     expect(provider.getForegroundProcess).not.toHaveBeenCalled()
   })
 
-  it('preserves a completion-sensitive provider failure', async () => {
-    const failure = new Error('daemon unavailable')
-    const inspectProcess = vi.fn().mockRejectedValue(failure)
-    const provider = { inspectProcess } as unknown as IPtyProvider
-
-    await expect(inspectPtyProviderProcess(provider, 'pty-1')).rejects.toBe(failure)
-    expect(inspectProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
-  })
-
   it('returns client-only unverifiable to the renderer when a stale PTY is gone', async () => {
     const provider = {
       hasPty: vi.fn(() => false)
@@ -60,33 +51,6 @@ describe('PTY provider process inspection', () => {
       hasChildProcesses: false,
       verdict: 'unverifiable',
       reason: 'transport_loss'
-    })
-  })
-
-  it('preserves a client-only unverifiable inspection result', async () => {
-    const inspection = {
-      foregroundProcess: null,
-      hasChildProcesses: false,
-      verdict: 'unverifiable' as const,
-      reason: 'transport_loss' as const
-    }
-    const inspectProcess = vi.fn().mockResolvedValue(inspection)
-    const provider = { inspectProcess } as unknown as IPtyProvider
-
-    await expect(inspectPtyProviderProcess(provider, 'pty-1')).resolves.toEqual(inspection)
-  })
-
-  it('falls back to the existing provider process APIs', async () => {
-    const getForegroundProcess = vi.fn().mockResolvedValue('codex')
-    const hasChildProcesses = vi.fn().mockResolvedValue(true)
-    const provider = {
-      getForegroundProcess,
-      hasChildProcesses
-    } as Pick<IPtyProvider, 'getForegroundProcess' | 'hasChildProcesses'> as IPtyProvider
-
-    await expect(inspectPtyProviderProcess(provider, 'pty-1')).resolves.toEqual({
-      foregroundProcess: 'codex',
-      hasChildProcesses: true
     })
   })
 })

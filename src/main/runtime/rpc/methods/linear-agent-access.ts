@@ -1,9 +1,11 @@
 import { defineMethod } from '../core'
-import { linearError } from '../../../linear/issue-context-errors'
+import { linearError } from '../../../linear/issue-context/errors'
 import { isLinearUuid } from '../../../../shared/linear/uuid'
 import {
   AgentIssueContext,
   AgentSearchIssues,
+  LinearCommentDelete,
+  LinearCommentEdit,
   LinearCurrentContext,
   LinearIssueAddComment,
   LinearIssueAttachLink,
@@ -33,8 +35,8 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
     name: 'linear.saveIssue',
     permission: 'workspace',
     params: LinearSaveIssue,
-    handler: async (params, { runtime }) =>
-      runtime.linearSaveIssue({ ...params, writeId: parseLinearWriteId(params.writeId) })
+    handler: async (params, { runtime, signal }) =>
+      runtime.linearSaveIssue({ ...params, writeId: parseLinearWriteId(params.writeId) }, signal)
   }),
   defineMethod({
     name: 'linear.agentSearchIssues',
@@ -99,39 +101,57 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
     name: 'linear.issueSetState',
     permission: 'workspace',
     params: LinearIssueSetState,
-    handler: async (params, { runtime }) => runtime.linearIssueSetState(params)
+    handler: async (params, { runtime, signal }) => runtime.linearIssueSetState(params, signal)
   }),
   defineMethod({
     name: 'linear.issueUpdateTask',
     permission: 'workspace',
     params: LinearIssueUpdateTask,
-    handler: async (params, { runtime }) => runtime.linearIssueUpdateTask(params)
+    handler: async (params, { runtime, signal }) => runtime.linearIssueUpdateTask(params, signal)
   }),
   defineMethod({
     name: 'linear.issueRelationWrite',
     permission: 'workspace',
     params: LinearIssueRelationWrite,
-    handler: async (params, { runtime }) => runtime.linearIssueRelationWrite(params)
+    handler: async (params, { runtime, signal }) => runtime.linearIssueRelationWrite(params, signal)
   }),
   defineMethod({
     name: 'linear.issueAddComment',
     permission: 'workspace',
     params: LinearIssueAddComment,
-    handler: async (params, { runtime }) =>
-      runtime.linearIssueAddComment({ ...params, writeId: parseLinearWriteId(params.writeId) })
+    handler: async (params, { runtime, signal }) =>
+      runtime.linearIssueAddComment(
+        { ...params, writeId: parseLinearWriteId(params.writeId) },
+        signal
+      )
+  }),
+  defineMethod({
+    name: 'linear.commentEdit',
+    permission: 'workspace',
+    params: LinearCommentEdit,
+    handler: async (params, { runtime, signal }) => runtime.linearCommentEdit(params, signal)
+  }),
+  defineMethod({
+    name: 'linear.commentDelete',
+    permission: 'workspace',
+    params: LinearCommentDelete,
+    handler: async (params, { runtime, signal }) => runtime.linearCommentDelete(params, signal)
   }),
   defineMethod({
     name: 'linear.issueAttachLink',
     permission: 'workspace',
     params: LinearIssueAttachLink,
-    handler: async (params, { runtime }) =>
-      runtime.linearIssueAttachLink({ ...params, writeId: parseLinearWriteId(params.writeId) })
+    handler: async (params, { runtime, signal }) =>
+      runtime.linearIssueAttachLink(
+        { ...params, writeId: parseLinearWriteId(params.writeId) },
+        signal
+      )
   }),
   defineMethod({
     name: 'linear.issueCreate',
     permission: 'workspace',
     params: LinearIssueCreate,
-    handler: async (params, { runtime }) =>
-      runtime.linearIssueCreate({ ...params, writeId: parseLinearWriteId(params.writeId) })
+    handler: async (params, { runtime, signal }) =>
+      runtime.linearIssueCreate({ ...params, writeId: parseLinearWriteId(params.writeId) }, signal)
   })
 ]

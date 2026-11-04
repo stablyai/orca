@@ -27,7 +27,8 @@ vi.mock('node:os', async (importOriginal) => ({
 }))
 vi.mock('../codex-cli/command', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexCommand>()),
-  resolveCodexCommand: () => mocks.codexPath
+  resolveCodexCommand: () => mocks.codexPath,
+  resolveCodexCommandForSpawn: async () => mocks.codexPath
 }))
 vi.mock('./codex-hook-trust-derivation', async (importOriginal) => ({
   ...(await importOriginal<typeof TrustDerivation>()),
@@ -45,9 +46,6 @@ import { CODEX_EVENT_LABEL, getCodexManagedHookInstallMaterial } from './codex-h
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import type { CodexHookHashes } from './codex-hook-trust-derivation'
 import { readHookTrustEntries } from './config-toml-trust'
-
-// Why this file: the Settings toggle's On waits for Codex's answer outside the
-// write queue, so an Off landing in that wait must still win in every home.
 
 let root: string
 let home: string
@@ -71,7 +69,7 @@ function expectNoOrcaHook(codexHome: string): void {
 }
 
 beforeEach(() => {
-  // Why realpath: a symlinked temp dir (macOS /var) would give ~/.codex a second key spelling.
+  // Resolve macOS /var symlinks to avoid a second trust-key spelling.
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-codex-toggle-')))
   home = join(root, 'home')
   const userData = join(root, 'user-data')
@@ -119,7 +117,7 @@ describe('turning hooks off while turning them on still waits for Codex', () => 
     const on = Promise.resolve(installCodex()).finally(() => {
       onSettled = true
     })
-    // Why: Off must land while On waits for Codex's answer, if On waits at all.
+    // Turn Off during On's hash lookup, if On waits at all.
     while (!onSettled && mocks.deriveCodexHookHashes.mock.calls.length === 0) {
       await new Promise((resolve) => setTimeout(resolve, 5))
     }

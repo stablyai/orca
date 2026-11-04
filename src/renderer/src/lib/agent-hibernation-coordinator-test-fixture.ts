@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -106,10 +106,7 @@ export function installEligibleState(
     shutdownWorktreeTerminals: vi.fn() as never,
     ...overrides
   })
-  // Why: a pane idle long enough to hibernate has necessarily been observed by earlier
-  // coordinator passes, so its PTY binding is old. Seed that here — otherwise the
-  // binding-age floor (which exists to stop a wake or app restart sleeping the whole
-  // backlog immediately) would defer every candidate on its first observed tick.
+  // Seed an old PTY binding as earlier coordinator passes would; a first-seen binding must receive a fresh idle grace.
   const state = useAppStore.getState()
   observeHibernationPtyBindings({
     tabsByWorktree: state.tabsByWorktree,

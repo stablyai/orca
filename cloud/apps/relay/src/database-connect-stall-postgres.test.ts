@@ -11,9 +11,7 @@ import { isRelayDatabaseTransientError, openRelayDatabase, type RelayDatabase } 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 
-// A Cloud SQL instance that is starting has an IP but never answers. The 2026-10-11 staging stall
-// came from the transport blocking connect() itself, which no test can reproduce; these pin what
-// the pool must do over a transport that does not block: fail fast and keep the event loop turning.
+// Cloud SQL startup may accept TCP without replying; pin fast failure/event-loop progress. The 2026-10-11 blocking connect() transport stall itself cannot be reproduced here.
 type StallingDatabase = {
   port: number
   // 'forward' needs a real PostgreSQL behind it.
@@ -149,6 +147,9 @@ function watchEventLoop(): { stop: () => number } {
     longestGapMs = Math.max(longestGapMs, now - last)
     last = now
   }, 10)
+  cleanups.push(async () => {
+    clearInterval(timer)
+  })
   return {
     stop: () => {
       clearInterval(timer)

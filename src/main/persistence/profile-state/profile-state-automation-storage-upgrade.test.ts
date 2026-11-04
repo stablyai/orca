@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { openProfileStateDatabase, profileStatePragmaNumber } from './profile-state-database'
+import {
+  openProfileStateDatabase,
+  openProfileStateDatabaseReadOnly,
+  profileStatePragmaNumber
+} from './profile-state-database'
 import { PROFILE_STATE_DATABASE_SCHEMA_VERSION } from './profile-state-database-schema'
 import { hashProfileStatePayload } from './profile-state-document-validation'
 import { exportProfileStateJson, importProfileStateJson } from './profile-state-documents'
@@ -63,6 +67,7 @@ function seedLegacyDatabase(
   const path = databasePath()
   const db = new Database(path)
   try {
+    db.exec('BEGIN')
     db.exec(`
       CREATE TABLE profile_state_meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
       CREATE TABLE profile_state_documents (
@@ -116,6 +121,12 @@ function seedLegacyDatabase(
       }
     }
     db.pragma(`user_version = ${version}`)
+    db.exec('COMMIT')
+  } catch (error) {
+    if (db.isTransaction) {
+      db.exec('ROLLBACK')
+    }
+    throw error
   } finally {
     db.close()
   }
@@ -367,14 +378,20 @@ describe('required automation storage metadata', () => {
     }
   })
 
-  it('rejects reopening a current database with lost metadata before changing its bytes', () => {
+  it('opens current storage with lost metadata but refuses its values without rewriting them', () => {
     const path = databasePath()
     const { db } = openProfileStateDatabase(path, 'profile-a')
     db.exec('DELETE FROM profile_state_automation_runs_meta')
     db.close()
     const before = readFileSync(path)
 
-    expect(() => openDatabase(path)).toThrow()
+    const readOnly = openProfileStateDatabaseReadOnly(path, 'profile-a')
+    try {
+      expect(() => exportProfileStateJson(readOnly.db)).toThrow('metadata is malformed')
+    } finally {
+      readOnly.db.close()
+    }
+    expect(() => exportProfileStateJson(openDatabase(path))).toThrow('metadata is malformed')
     expect(readFileSync(path)).toEqual(before)
   })
 })

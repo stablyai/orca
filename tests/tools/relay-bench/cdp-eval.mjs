@@ -3,25 +3,25 @@ import WebSocket from 'ws'
 import { requirePort } from './relay-bench-invocation.mjs'
 
 const USAGE = 'node cdp-eval.mjs <port> <js-expression-returning-promise>'
-const RENDERER_ORIGIN = 'http://localhost:5173'
+// Why any port: `pnpm dev` picks a per-worktree renderer port (see the ORCA_DEV_INSTANCE line).
+const RENDERER_ORIGIN = /^http:\/\/localhost:\d+\//
 const OPEN_TIMEOUT_MS = 5_000
 
 function findRendererPage(list) {
-  return list.find((p) => p.type === 'page' && p.url.startsWith(RENDERER_ORIGIN))
+  return list.find((p) => p.type === 'page' && RENDERER_ORIGIN.test(p.url))
 }
 
 function describePages(list) {
   return list.length ? list.map((p) => `${p.type} ${p.url}`).join(', ') : 'none'
 }
 const [rawPort, expr] = process.argv.slice(2)
-// Why not interpolate directly: URL parsing reads '80@attacker.example' as userinfo, so the
-// fetch would leave the loopback DevTools endpoint for an attacker-named host.
+// Validate ports: URL parsing treats 80@attacker.example as userinfo and would leave loopback.
 const port = requirePort(rawPort, 'devtools port', USAGE)
 const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
 const page = findRendererPage(list)
 if (!page) {
   console.error(
-    `no renderer page at ${RENDERER_ORIGIN} on devtools port ${port}; pages: ${describePages(list)}`
+    `no localhost renderer page on devtools port ${port}; pages: ${describePages(list)}`
   )
   process.exit(1)
 }

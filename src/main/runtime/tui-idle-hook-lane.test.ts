@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusIpcPayload
-} from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { hookAuthority } from './agent-state-rules/agent-state-rules-engine'
 import { parseAgentStateRuleFiles } from './agent-state-rules/agent-state-rules-catalog'
 import { hookLeadTurnState, readTuiIdleHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
@@ -381,8 +379,7 @@ describe('evaluateTuiIdle turn-end hook lane (codex)', () => {
 })
 
 describe('evaluateTuiIdle turn-end hook lane (dsh)', () => {
-  // DSH's title carries no rest status and it emits no OSC 9999, so its hook row is its only
-  // rest signal: before this lane, `terminal wait --for tui-idle` ran to timeout (STA-9409).
+  // DSH emits no rest title/OSC status; its hook row is the only settle signal (STA-9409).
   const dsh = (hookRows: AgentStatusIpcPayload[], over: { lastInputAt?: number } = {}) =>
     evaluateTuiIdle(
       input({

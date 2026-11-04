@@ -7,6 +7,7 @@ export type { WorktreeManualOrderUpdate } from './worktree-manual-order-ranks'
 
 export type WorktreeDragGroup = {
   key: string
+  /** Host identities: same-id copies on two hosts are separate cards. */
   worktreeIds: readonly string[]
 }
 
@@ -20,8 +21,7 @@ function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
 }
 
 function appendWorktreeIds(target: string[], ids: readonly string[]): void {
-  // Why: generated workspace fleets can exceed V8's argument limit for
-  // `push(...ids)` while manual ordering still needs the full visible order.
+  // Large workspace fleets can exceed V8’s push(...ids) argument limit.
   for (const id of ids) {
     target.push(id)
   }

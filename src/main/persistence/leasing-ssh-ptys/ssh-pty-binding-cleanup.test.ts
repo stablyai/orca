@@ -88,8 +88,6 @@ describe('SSH binding cleanup indexing', () => {
   })
 
   it('normalizes app-form binding ids onto the relay-form lease key', () => {
-    // Leases store the relay-local id; sessions may hold the app-wide "ssh:<target>@@<id>" form.
-    // The index key is the normalized form, so both spellings still name the same PTY.
     const operations = fixture(1)
     operations.toComparablePtyId = vi.fn(toComparableRelaySshPtyId)
     operations.state.workspaceSession!.tabsByWorktree.wt[0].ptyId = 'ssh:ssh-one@@pty-0'
@@ -99,8 +97,7 @@ describe('SSH binding cleanup indexing', () => {
   })
 
   it('keeps a binding whose app-form id names a different SSH target', () => {
-    // Relay-local ids collide across targets ("pty-0" exists on every host). Clearing ssh-one must
-    // never scrub a pane still bound to a live ssh-two shell.
+    // Relay-local IDs collide across hosts; an app-form target must still match.
     const operations = fixture(1)
     operations.toComparablePtyId = vi.fn(toComparableRelaySshPtyId)
     operations.state.workspaceSession!.tabsByWorktree.wt[0].ptyId = 'ssh:ssh-two@@pty-0'
@@ -111,7 +108,6 @@ describe('SSH binding cleanup indexing', () => {
   })
 
   it('keeps every binding when no lease names its PTY', () => {
-    // A bucket miss must fail closed: leak a stale id rather than unbind a live pane.
     const operations = fixture(2)
     for (const lease of operations.leases) {
       lease.ptyId = `unrelated-${lease.ptyId}`

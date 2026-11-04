@@ -8,11 +8,7 @@ const HOST_ID = '6f0f6b1c-6c8e-4a5f-9a6b-8d3f2b1c4e5a'
 const OTHER_HOST_ID = '0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f'
 
 describe('browser client host id argument', () => {
-  // Why the stamp is not last and why a decoy sits ahead of it: a real macOS renderer's argv runs
-  // on past our argument — Electron appends --seatbelt-client after it — so a fixture that ends on
-  // the stamp passes a reader that only looks at the tail and fails on every real renderer. The
-  // decoy is an argument that merely contains the prefix; matching on containment would slice the
-  // id out of the middle of someone else's flag.
+  // Keep the stamp before Electron's trailing --seatbelt-client and add a prefix-containing decoy; tail-only/substring readers otherwise pass fixtures but fail real macOS renderers.
   it('reads back the id it formatted, from the middle of a real argv', () => {
     const argv = [
       '/Applications/Orca.app/Contents/MacOS/Orca',
@@ -26,8 +22,7 @@ describe('browser client host id argument', () => {
     expect(readBrowserClientHostIdArgument(argv)).toBe(HOST_ID)
   })
 
-  // Why a tie-break is pinned when main stamps exactly one: it is what decides the answer if
-  // anything ever appends a second stamp, and only the first one is the one this app placed.
+  // First stamp wins because it is the app's; pin behavior if another appears later.
   it('takes the first stamp when argv carries two', () => {
     const argv = [
       '--type=renderer',
@@ -39,8 +34,7 @@ describe('browser client host id argument', () => {
     expect(readBrowserClientHostIdArgument(argv)).toBe(HOST_ID)
   })
 
-  // Why an empty value is null and not '': an empty host id would compare equal to nothing a
-  // placement can carry, but it would still latch the renderer's cache as an answer.
+  // Empty IDs must return null or the renderer cache would latch an unusable answer.
   it.each([
     ['an argv with no such argument', ['--type=renderer', '--enable-sandbox']],
     ['an empty argv', []],
@@ -50,8 +44,7 @@ describe('browser client host id argument', () => {
     expect(readBrowserClientHostIdArgument(argv)).toBeNull()
   })
 
-  // Why the prefix is pinned as a literal: main stamps it and the preload parses it, and a rename
-  // on one side alone reads exactly like a client that hosts nothing.
+  // Pin the shared main/preload literal; one-sided renames look like a non-hosting client.
   it('formats the argument main and the preload have to agree on', () => {
     expect(formatBrowserClientHostIdArgument(HOST_ID)).toBe(
       `--orca-browser-client-host-id=${HOST_ID}`

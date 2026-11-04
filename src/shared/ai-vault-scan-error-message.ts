@@ -1,10 +1,6 @@
-/**
- * Maps the session scanner's internal supervision errors onto copy a user can
- * act on. Applied at both surfaces the panel paints: the local leg's scan-issue
- * row and the thrown-rejection banner. Anything unrecognized passes through, so
- * scanner-authored messages (host name, remote path, cap) keep their own wording.
- */
-const RETRY = 'Refresh to try again.'
+import { aiVaultScanIssueText, type AiVaultScanIssueText } from './ai-vault-scan-issue-copy'
+
+// Map supervision errors at scan-issue rows and rejection banners. Pass unknown scanner-authored messages through to retain host/path/cap details.
 
 /** Electron wraps every rejected `ipcMain.handle` before the renderer sees it. */
 const IPC_INVOKE_PREFIX = /^Error invoking remote method '[^']*': (?:\w*Error: )?/
@@ -17,34 +13,43 @@ function toSeconds(ms: string): number {
   return Math.max(1, Math.round(Number(ms) / 1000))
 }
 
-function humanize(text: string): string | null {
+function classify(text: string): AiVaultScanIssueText | null {
   const sshTimeout = /^Agent Session History scan timed out after (\d+)ms on this SSH host\.$/.exec(
     text
   )
   if (sshTimeout) {
-    return `Session scan timed out after ${toSeconds(sshTimeout[1]!)}s on this SSH host. ${RETRY}`
+    return aiVaultScanIssueText('scanTimedOutOnSshHost', {
+      params: { seconds: toSeconds(sshTimeout[1]!) }
+    })
   }
   const timeout = new RegExp(String.raw`^${SCANNER} timed out after (\d+)ms\.$`).exec(text)
   if (timeout) {
-    return `Session scan timed out after ${toSeconds(timeout[1]!)}s — the machine may be busy. ${RETRY}`
+    return aiVaultScanIssueText('scanTimedOut', {
+      params: { seconds: toSeconds(timeout[1]!) }
+    })
   }
   if (text === 'AI Vault service restart circuit is open.') {
-    return `Session scanning paused after repeated failures. ${RETRY}`
+    return aiVaultScanIssueText('scannerPaused')
   }
   if (new RegExp(String.raw`^${SCANNER} (?:client )?queue is full\.$`).test(text)) {
-    return 'Too many session scans in flight. Wait a moment, then refresh.'
+    return aiVaultScanIssueText('scannerBusy')
   }
   if (new RegExp(String.raw`^${SCANNER} entry not found: `).test(text)) {
-    return 'The session scanner is missing from this Orca install. Reinstalling Orca restores it.'
+    return aiVaultScanIssueText('scannerMissing')
   }
   if (new RegExp(String.raw`^${SCANNER}\b`).test(text)) {
-    return `The session scanner stopped unexpectedly. ${RETRY}`
+    return aiVaultScanIssueText('scannerStopped')
   }
   return null
 }
 
+/** User-facing copy with its code when the error is a known supervision fault; otherwise the original text. */
+export function classifyAiVaultScanError(raw: string): AiVaultScanIssueText {
+  const text = raw.replace(IPC_INVOKE_PREFIX, '').replace(RELAY_PREFIX, '')
+  return classify(text) ?? { message: text }
+}
+
 /** Returns user-facing copy, or the original text when it is already meaningful. */
 export function describeAiVaultScanError(raw: string): string {
-  const text = raw.replace(IPC_INVOKE_PREFIX, '').replace(RELAY_PREFIX, '')
-  return humanize(text) ?? text
+  return classifyAiVaultScanError(raw).message
 }

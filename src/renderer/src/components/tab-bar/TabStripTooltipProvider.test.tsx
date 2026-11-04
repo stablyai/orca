@@ -1,178 +1,124 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { StrictMode, useContext } from 'react'
+import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { TabCloseTooltip } from './TabCloseTooltip'
 import { TabHoverCard } from './TabHoverCard'
-import {
-  TAB_TOOLTIP_DELAY_MS,
-  TAB_TOOLTIP_SKIP_DELAY_MS,
-  TabCardOpenContext,
-  TabStripTooltipProvider
-} from './TabStripTooltipProvider'
+import { TAB_TOOLTIP_DELAY_MS, TabStripTooltipProvider } from './TabStripTooltipProvider'
 
-vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
-
-function CardEvents({ id }: { id: string }): React.JSX.Element {
-  const strip = useContext(TabCardOpenContext)
-  return (
-    <>
-      <button onClick={() => strip?.onOpenChange(id, true)}>open {id}</button>
-      <button onClick={() => strip?.onOpenChange(id, false)}>close {id}</button>
-      <output aria-label={`${id} delay`}>{strip?.isWarm ? 'immediate' : 'delayed'}</output>
-    </>
+function renderTabs(): void {
+  render(
+    <StrictMode>
+      <TabStripTooltipProvider>
+        <TabHoverCard title="Build" icon={<span />} programName="Terminal">
+          <button>
+            <span className="tab-label">first tab</span>
+          </button>
+        </TabHoverCard>
+        <TabHoverCard title="Codex Chat" icon={<span />} programName="Codex">
+          <button>
+            <span className="tab-label">second tab</span>
+          </button>
+        </TabHoverCard>
+      </TabStripTooltipProvider>
+    </StrictMode>
   )
 }
 
-function renderTooltip(label: string, tip: string): void {
-  render(
-    <TabStripTooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button type="button">{label}</button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{tip}</TooltipContent>
-      </Tooltip>
-    </TabStripTooltipProvider>
-  )
+function hover(name: string): void {
+  fireEvent.pointerMove(screen.getByRole('button', { name }), { pointerType: 'mouse' })
+}
+
+function advance(ms: number): void {
+  act(() => vi.advanceTimersByTime(ms))
 }
 
 describe('TabStripTooltipProvider', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    renderTabs()
+    for (const label of document.querySelectorAll('.tab-label')) {
+      Object.defineProperties(label, {
+        clientWidth: { configurable: true, value: 60 },
+        scrollWidth: { configurable: true, value: 100 }
+      })
+    }
   })
 
   afterEach(() => {
-    vi.useRealTimers()
     cleanup()
+    vi.useRealTimers()
   })
 
-  it('holds a tab tooltip until the full delay elapses', () => {
-    renderTooltip('tab label', 'tab tooltip')
-    fireEvent.pointerMove(screen.getByRole('button', { name: 'tab label' }), {
-      pointerType: 'mouse'
-    })
-
-    act(() => {
-      vi.advanceTimersByTime(TAB_TOOLTIP_DELAY_MS - 1)
-    })
-    expect(screen.queryByText('tab tooltip')).toBeNull()
-
-    act(() => {
-      vi.advanceTimersByTime(1)
-    })
-    expect(screen.getByText('tab tooltip')).toBeTruthy()
+  it('keeps previews hidden when the full title fits, including keyboard focus', () => {
+    Object.defineProperty(screen.getByText('first tab'), 'clientWidth', { value: 100 })
+    hover('first tab')
+    advance(TAB_TOOLTIP_DELAY_MS)
+    expect(screen.queryByText('Build')).toBeNull()
+    act(() => screen.getByRole('button', { name: 'first tab' }).focus())
+    expect(screen.queryByText('Build')).toBeNull()
   })
 
-  it('opens the next tab immediately after a card was shown', () => {
-    render(
-      <TabStripTooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button type="button">first tab</button>
-          </TooltipTrigger>
-          <TooltipContent>first tip</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button type="button">second tab</button>
-          </TooltipTrigger>
-          <TooltipContent>second tip</TooltipContent>
-        </Tooltip>
-      </TabStripTooltipProvider>
-    )
-
-    const first = screen.getByRole('button', { name: 'first tab' })
-    const second = screen.getByRole('button', { name: 'second tab' })
-
-    fireEvent.pointerMove(first, { pointerType: 'mouse' })
-    act(() => {
-      vi.advanceTimersByTime(TAB_TOOLTIP_DELAY_MS)
-    })
-    expect(screen.getByText('first tip')).toBeTruthy()
-
-    fireEvent.pointerLeave(first)
-    fireEvent.pointerMove(second, { pointerType: 'mouse' })
-
-    act(() => {
-      vi.advanceTimersByTime(0)
-    })
-    expect(screen.getByText('second tip')).toBeTruthy()
-    expect(screen.queryByText('first tip')).toBeNull()
-
-    fireEvent.pointerLeave(second)
-    act(() => {
-      vi.advanceTimersByTime(301)
-    })
-    fireEvent.pointerMove(first, { pointerType: 'mouse' })
-    act(() => {
-      vi.advanceTimersByTime(TAB_TOOLTIP_DELAY_MS - 1)
-    })
-    expect(screen.queryByText('first tip')).toBeNull()
-    act(() => {
-      vi.advanceTimersByTime(1)
-    })
-    expect(screen.getByText('first tip')).toBeTruthy()
+  it('remeasures the title when a tab shrinks before the next hover', () => {
+    const label = screen.getByText('first tab')
+    Object.defineProperty(label, 'clientWidth', { configurable: true, value: 120 })
+    hover('first tab')
+    advance(TAB_TOOLTIP_DELAY_MS)
+    expect(screen.queryByText('Build')).toBeNull()
+    fireEvent.pointerLeave(screen.getByRole('button', { name: 'first tab' }))
+    Object.defineProperty(label, 'clientWidth', { value: 60 })
+    hover('first tab')
+    advance(TAB_TOOLTIP_DELAY_MS)
+    expect(screen.getAllByText('Build').length).toBeGreaterThan(0)
   })
 
-  it('ignores a late close from the previous card and resets the delay after the active card closes', () => {
-    render(
-      <TabStripTooltipProvider>
-        <CardEvents id="first" />
-        <CardEvents id="second" />
-      </TabStripTooltipProvider>
-    )
-    const delay = screen.getByLabelText('first delay')
-    expect(delay.textContent).toBe('delayed')
-    fireEvent.click(screen.getByText('open first'))
-    fireEvent.click(screen.getByText('close first'))
-    fireEvent.click(screen.getByText('open second'))
-    fireEvent.click(screen.getByText('close first'))
-    act(() => vi.advanceTimersByTime(TAB_TOOLTIP_SKIP_DELAY_MS + 1))
-    expect(delay.textContent).toBe('immediate')
-
-    fireEvent.click(screen.getByText('close second'))
-    act(() => vi.advanceTimersByTime(TAB_TOOLTIP_SKIP_DELAY_MS - 1))
-    expect(delay.textContent).toBe('immediate')
-    act(() => vi.advanceTimersByTime(1))
-    expect(delay.textContent).toBe('delayed')
+  it('holds the first preview until a 500 ms hover', () => {
+    hover('first tab')
+    advance(499)
+    expect(screen.queryByText('Build')).toBeNull()
+    advance(1)
+    expect(screen.getAllByText('Build').length).toBeGreaterThan(0)
   })
 
-  it('shows only the close hint when the close button receives keyboard focus', () => {
-    const { container } = render(
-      <TabStripTooltipProvider>
-        <TabHoverCard title="Build" icon={<span />} programName="Terminal">
-          <div tabIndex={0}>
-            <TabCloseTooltip>
-              <button>close</button>
-            </TabCloseTooltip>
-          </div>
-        </TabHoverCard>
-      </TabStripTooltipProvider>
-    )
-    act(() => screen.getByRole('button', { name: 'close' }).focus())
-    expect(container.ownerDocument.querySelector('[data-tab-close-tooltip]')).not.toBeNull()
-    expect(container.ownerDocument.querySelector('[data-tab-hover-card]')).toBeNull()
-    act(() => screen.getByRole('button', { name: 'close' }).parentElement?.focus())
-    expect(container.ownerDocument.querySelector('[data-tab-hover-card]')).not.toBeNull()
-    expect(container.ownerDocument.querySelector('[data-tab-close-tooltip]')).toBeNull()
+  it('requires a full delay on the next tab after a preview was shown', () => {
+    hover('first tab')
+    advance(TAB_TOOLTIP_DELAY_MS)
+    expect(screen.getAllByText('Build').length).toBeGreaterThan(0)
+
+    fireEvent.pointerLeave(screen.getByRole('button', { name: 'first tab' }))
+    hover('second tab')
+    advance(TAB_TOOLTIP_DELAY_MS - 1)
+    expect(screen.queryByText('Build')).toBeNull()
+    expect(screen.queryByText('Codex Chat')).toBeNull()
+    advance(1)
+    expect(screen.getAllByText('Codex Chat').length).toBeGreaterThan(0)
   })
 
-  it('keeps the strip warm while a card is open in StrictMode', () => {
-    render(
-      <StrictMode>
-        <TabStripTooltipProvider>
-          <CardEvents id="probe" />
-          <TabHoverCard title="Build" icon={<span />} programName="Terminal">
-            <button>tab</button>
-          </TabHoverCard>
-        </TabStripTooltipProvider>
-      </StrictMode>
-    )
-    act(() => screen.getByRole('button', { name: 'tab' }).focus())
-    expect(screen.getByLabelText('probe delay').textContent).toBe('immediate')
-    act(() => vi.advanceTimersByTime(TAB_TOOLTIP_SKIP_DELAY_MS + 1))
-    expect(screen.getByLabelText('probe delay').textContent).toBe('immediate')
+  it('cancels previews when passing quickly across tabs', () => {
+    hover('first tab')
+    advance(400)
+    fireEvent.pointerLeave(screen.getByRole('button', { name: 'first tab' }))
+    hover('second tab')
+    advance(400)
+    expect(screen.queryByText('Build')).toBeNull()
+    expect(screen.queryByText('Codex Chat')).toBeNull()
+    fireEvent.pointerLeave(screen.getByRole('button', { name: 'second tab' }))
+    advance(TAB_TOOLTIP_DELAY_MS)
+    expect(screen.queryByText('Codex Chat')).toBeNull()
+  })
+
+  it('restarts the full delay when returning to the same tab', () => {
+    hover('first tab')
+    advance(TAB_TOOLTIP_DELAY_MS)
+    fireEvent.pointerLeave(screen.getByRole('button', { name: 'first tab' }))
+    hover('first tab')
+    advance(TAB_TOOLTIP_DELAY_MS - 1)
+    expect(screen.queryByText('Build')).toBeNull()
+    advance(1)
+    expect(screen.getAllByText('Build').length).toBeGreaterThan(0)
+  })
+
+  it('still shows previews immediately for keyboard focus', () => {
+    act(() => screen.getByRole('button', { name: 'first tab' }).focus())
+    expect(screen.getAllByText('Build').length).toBeGreaterThan(0)
   })
 })

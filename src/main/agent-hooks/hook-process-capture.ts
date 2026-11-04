@@ -1,11 +1,9 @@
 /** Capture before Orca inserts its managed-script shell. */
-export const CLAUDE_HOOK_PARENT_CAPTURE =
-  'ORCA_HOOK_AGENT_PID="${PPID:-}"; export ORCA_HOOK_AGENT_PID; '
+export const HOOK_PARENT_CAPTURE = 'ORCA_HOOK_AGENT_PID="${PPID:-}"; export ORCA_HOOK_AGENT_PID; '
 
 export function buildHookProcessCapture(): string[] {
   return [
     'orca_agent_process=',
-    // Why: skip the process reads for Claude sessions outside an Orca pane.
     '[ -z "${ORCA_PANE_KEY:-}" ] || case "${ORCA_HOOK_AGENT_PID:-}" in ""|*[!0-9]*) ;; *)',
     '  if [ -r "/proc/$ORCA_HOOK_AGENT_PID/stat" ]; then',
     '    orca_agent_stat=$(cat "/proc/$ORCA_HOOK_AGENT_PID/stat" 2>/dev/null) || orca_agent_stat=',
@@ -15,10 +13,13 @@ export function buildHookProcessCapture(): string[] {
     '    case "$orca_agent_start" in ""|*[!0-9]*) ;; *)',
     '      [ -z "$orca_agent_boot" ] || orca_agent_process=$(printf \'{"pid":%s,"platform":"linux","startTime":"%s:%s"}\' "$ORCA_HOOK_AGENT_PID" "$orca_agent_boot" "$orca_agent_start") ;; esac',
     '  elif [ "$(uname -s 2>/dev/null)" = Darwin ]; then',
-    // Why: lstart is local time; the host probe pins the same zone so the strings compare.
+    // Match the host probe's timezone when comparing local-time lstart strings.
     '    orca_agent_start=$(TZ=UTC0 LC_ALL=C /bin/ps -p "$ORCA_HOOK_AGENT_PID" -o lstart= 2>/dev/null | sed \'s/^ *//;s/ *$//\')',
     '    [ -z "$orca_agent_start" ] || orca_agent_process=$(printf \'{"pid":%s,"platform":"darwin","startTime":"%s"}\' "$ORCA_HOOK_AGENT_PID" "$orca_agent_start")',
     '  fi ;;',
-    'esac'
+    'esac',
+    // A tmux pane's own server, socket and pane id; only a lookup hint for the host's attachment check.
+    'orca_tmux_pane=',
+    'case "${TMUX_PANE:-}" in %[0-9]*) [ -z "${TMUX:-}" ] || orca_tmux_pane="$TMUX_PANE ${TMUX%,*,*}" ;; esac'
   ]
 }

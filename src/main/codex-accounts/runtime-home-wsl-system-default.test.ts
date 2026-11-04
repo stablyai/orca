@@ -18,8 +18,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -39,7 +39,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome
     }))
@@ -75,7 +75,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome
     }))
@@ -142,7 +142,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome
     }))
@@ -213,7 +213,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome
     }))
@@ -254,7 +254,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome
     }))
@@ -303,7 +303,7 @@ describe('CodexRuntimeHomeService', () => {
   it('passes the Linux source config directory for mounted-drive WSL homes', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => 'C:\\Users\\alice'
     }))

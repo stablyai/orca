@@ -1,13 +1,4 @@
-/**
- * Read the top-level option keys of a call's object-literal argument out of raw
- * source text.
- *
- * Text rather than an AST because typescript@7 no longer ships the classic
- * compiler API and every installed parser is a transitive dependency. The
- * tradeoff is handled by refusing to guess: any shape this cannot read comes
- * back as `unreadable` with a reason, and callers must treat that as a failure
- * rather than as an absence of keys.
- */
+// Read call option keys from source text, failing unreadable shapes explicitly so hidden keys never appear absent.
 
 export type CallOptionKeys =
   | { readonly readable: true; readonly keys: readonly string[] }
@@ -42,10 +33,7 @@ function opensNonCode(current: string, next: string | undefined): ScanState | nu
   return null
 }
 
-/**
- * Text between an open paren and its match, tracking strings and comments so a
- * brace inside either cannot unbalance the count. Null when it never closes.
- */
+// Balance parentheses outside strings/comments; unterminated input returns null.
 function balancedArguments(text: string, openIndex: number): string | null {
   let depth = 0
   let state: ScanState = 'code'
@@ -178,11 +166,7 @@ function objectLiteralKeys(body: string): string[] {
   return keys
 }
 
-/**
- * Option keys of the call whose argument list opens at `parenIndex`, or the
- * reason the shape could not be read. Spreads and computed keys land in the
- * latter: either can carry a key this would otherwise report as absent.
- */
+// Fail spreads/computed keys as unreadable: either can conceal keys this parser would otherwise report absent.
 export function readCallOptionKeys(text: string, parenIndex: number): CallOptionKeys {
   const args = balancedArguments(text, parenIndex)
   if (args === null) {

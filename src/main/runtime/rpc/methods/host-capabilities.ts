@@ -1,7 +1,8 @@
 import { defineMethod } from '../core'
-import { isPwshAvailableAsync } from '../../../pwsh'
-import { isWslAvailableAsync, listWslDistrosAsync } from '../../../wsl'
-import { isGitBashAvailable } from '../../../git-bash'
+import { isPwshAvailableAsync } from '../../../pty/shell-startup/pwsh'
+import { isWslAvailableAsync } from '../../../wsl/discovery/wsl-availability'
+import { listWslDistrosAsync } from '../../../wsl/discovery/distro-catalog'
+import { isGitBashAvailable } from '../../../pty/shell-startup/git-bash'
 
 export const HOST_CAPABILITY_METHODS = [
   defineMethod({
@@ -10,8 +11,7 @@ export const HOST_CAPABILITY_METHODS = [
     params: null,
     handler: async () => ({ platform: process.platform })
   }),
-  // Why: paired web/mobile clients route capability reads here, so a sync probe would
-  // execFileSync wsl.exe/pwsh.exe on this host's main event loop for up to 5s per call.
+  // Paired capability reads must not block this host's main loop with synchronous wsl.exe/pwsh.exe probes (up to 5s).
   defineMethod({
     name: 'host.wsl.isAvailable',
     permission: 'workspace',

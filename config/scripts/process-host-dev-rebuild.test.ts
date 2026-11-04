@@ -12,7 +12,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
-import { rolldown, watch } from 'rolldown'
+import { watch } from 'rolldown'
 import type { Plugin, RolldownWatcher } from 'rolldown'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createProcessHostDevRebuildPlugin } from '../build-plugins/process-host-dev-rebuild'
@@ -38,7 +38,7 @@ function fixture(): { root: string; packageDir: string; main: string } {
   // Runs the real package build against this fixture package.
   writeFileSync(
     join(packageDir, 'scripts', 'build-dist.mjs'),
-    `const { buildPackageDist } = await import(${JSON.stringify(pathToFileURL(resolve(realPackageDir, 'scripts', 'build-dist.mjs')).href)})\nawait buildPackageDist(${JSON.stringify(packageDir)})\n`
+    `import { appendFileSync } from 'node:fs'\nappendFileSync(${JSON.stringify(join(packageDir, 'builds.txt'))}, 'build\\n')\nconst { buildPackageDist } = await import(${JSON.stringify(pathToFileURL(resolve(realPackageDir, 'scripts', 'build-dist.mjs')).href)})\nawait buildPackageDist(${JSON.stringify(packageDir)})\n`
   )
   mkdirSync(join(root, 'node_modules', '@orca'), { recursive: true })
   const packageRequire = createRequire(join(realPackageDir, 'package.json'))
@@ -69,6 +69,7 @@ function fixture(): { root: string; packageDir: string; main: string } {
       extends: '../../../tsconfig.base.json',
       compilerOptions: {
         target: 'ES2022',
+        lib: ['ES2022'],
         module: 'Node16',
         moduleResolution: 'Node16',
         rootDir: 'src',
@@ -76,7 +77,8 @@ function fixture(): { root: string; packageDir: string; main: string } {
         noEmitOnError: true,
         types: []
       },
-      include: ['src/**/*.ts']
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/**/__fixtures__/**']
     })
   )
   writeFileSync(join(sourceDir, 'entry.ts'), "export { version } from './internal'\n")
@@ -126,6 +128,66 @@ function readEmittedVersion(root: string): number {
 }
 
 describe('External process-host development rebuilds', () => {
+  it('rebuilds when an explicitly imported excluded source is created or edited', async () => {
+    const { root, packageDir, main } = fixture()
+    const versions: number[] = []
+    const watcher = watch({
+      input: main,
+      external: ['@orca/process-host'],
+      plugins: [
+        createProcessHostDevRebuildPlugin(root),
+        {
+          name: 'fake-electron-reload',
+          closeBundle() {
+            versions.push(readEmittedVersion(root))
+          }
+        }
+      ],
+      output: { file: join(root, 'out', 'main.cjs'), format: 'cjs' }
+    })
+    watchers.push(watcher)
+    closeSuccessfulBundles(watcher)
+    await nextEvent(watcher, 'END')
+    const failed = nextEvent(watcher, 'ERROR')
+    writeFileSync(
+      join(packageDir, 'src', 'internal.ts'),
+      "export { version } from './included.test'\n"
+    )
+    await failed
+
+    const imported = join(packageDir, 'src', 'included.test.ts')
+    writeFileSync(imported, 'export const version = 6\n')
+    await expect.poll(() => versions.at(-1), { timeout: 15_000 }).toBe(6)
+    writeFileSync(imported, 'export const version = 7\n')
+    await expect.poll(() => versions.at(-1), { timeout: 15_000 }).toBe(7)
+  })
+
+  it('recompiles when a nested package manifest is created or removed', async () => {
+    const { root, packageDir, main } = fixture()
+    writeFileSync(join(packageDir, 'src', 'entry.ts'), 'export const version = 1\n')
+    const watcher = watch({
+      input: main,
+      external: ['@orca/process-host'],
+      plugins: [createProcessHostDevRebuildPlugin(root)],
+      output: { file: join(root, 'out', 'main.cjs'), format: 'cjs' }
+    })
+    watchers.push(watcher)
+    closeSuccessfulBundles(watcher)
+    await nextEvent(watcher, 'END')
+    const output = join(packageDir, 'dist', 'entry.js')
+    expect(readFileSync(output, 'utf8')).toContain('exports.version')
+
+    const manifest = join(packageDir, 'src', 'package.json')
+    writeFileSync(manifest, JSON.stringify({ type: 'module' }))
+    await expect
+      .poll(() => readFileSync(output, 'utf8'), { timeout: 15_000 })
+      .toContain('export const')
+    rmSync(manifest)
+    await expect
+      .poll(() => readFileSync(output, 'utf8'), { timeout: 15_000 })
+      .toContain('exports.version')
+  })
+
   it('emits private source edits and new imports before the Electron reload hook', async () => {
     const { root, packageDir, main } = fixture()
     const loadedVersions: number[] = []
@@ -225,7 +287,7 @@ describe('External process-host development rebuilds', () => {
     if (typeof buildStart !== 'function') {
       throw new Error('The process-host rebuild plugin must have a buildStart hook')
     }
-    rebuildPlugin.buildStart = function (...args) {
+    rebuildPlugin.buildStart = async function (...args) {
       const addWatchFile = this.addWatchFile.bind(this)
       const registration = vi.spyOn(this, 'addWatchFile').mockImplementation((file) => {
         addWatchFile(file)
@@ -234,7 +296,7 @@ describe('External process-host development rebuilds', () => {
         }
       })
       try {
-        return buildStart.apply(this, args)
+        return await buildStart.apply(this, args)
       } finally {
         registration.mockRestore()
       }
@@ -290,18 +352,6 @@ describe('External process-host development rebuilds', () => {
     watchers.splice(watchers.indexOf(watcher), 1)
     for (const signal of watchSignals) {
       expect(existsSync(dirname(signal))).toBe(false)
-    }
-  })
-
-  it('leaves non-watch release compilation to the build:packages prerequisite', async () => {
-    const bundle = await rolldown({
-      input: resolve('src/packages/process-host/src/process-spec.ts'),
-      plugins: [createProcessHostDevRebuildPlugin('/unavailable-development-root')]
-    })
-    try {
-      await bundle.generate({ format: 'cjs' })
-    } finally {
-      await bundle.close()
     }
   })
 })

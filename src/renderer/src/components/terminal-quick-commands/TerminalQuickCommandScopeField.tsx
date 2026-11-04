@@ -18,6 +18,7 @@ import { QUICK_COMMAND_TOGGLE_ITEM_CLASS } from './terminal-quick-command-toggle
 import { translate } from '@/i18n/i18n'
 
 type TerminalQuickCommandScopeFieldProps = {
+  disabled: boolean
   repos: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   selectedScope: TerminalQuickCommandScope
   selectedRepoId: string
@@ -39,6 +40,7 @@ export function getQuickCommandProjectScopeRepoId(
 }
 
 export function TerminalQuickCommandScopeField({
+  disabled,
   repos,
   selectedScope,
   selectedRepoId,
@@ -57,6 +59,7 @@ export function TerminalQuickCommandScopeField({
       </Label>
       <div className="flex flex-wrap items-center gap-2">
         <ToggleGroup
+          disabled={disabled}
           type="single"
           value={selectedScope.type}
           onValueChange={(value) => {
@@ -68,8 +71,7 @@ export function TerminalQuickCommandScopeField({
               if (!repoId) {
                 return
               }
-              // Why: toggling Global should not discard the command's project
-              // and silently move it to whichever repo is first in the list.
+              // Global toggling must preserve the chosen project instead of selecting the first repo.
               rememberRepoScopeId(repoId)
               setDraft((current) => ({
                 ...current,
@@ -100,6 +102,7 @@ export function TerminalQuickCommandScopeField({
         {selectedScope.type === 'repo' && repos.length > 0 ? (
           <div className="space-y-1">
             <Select
+              disabled={disabled}
               value={selectedRepoId}
               onValueChange={(repoId) => {
                 rememberRepoScopeId(repoId)
@@ -123,7 +126,7 @@ export function TerminalQuickCommandScopeField({
               </SelectTrigger>
               <SelectContent>
                 {repos.map((repo) => (
-                  <SelectItem key={repo.id} value={repo.id}>
+                  <SelectItem key={repo.id} value={repo.id} disabled={disabled}>
                     <RepoBadgeLabel
                       name={getRepoLabel(repo)}
                       color={repo.badgeColor}

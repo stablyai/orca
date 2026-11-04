@@ -1,4 +1,6 @@
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { useEffect } from 'react'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
@@ -55,6 +57,7 @@ export function useWorktreeCardLifecycleEffects({
     showIssue: boolean
     showLinearIssue: boolean
   }): void {
+  const hostedReviewExactKey = !branch || branch === 'HEAD' ? hostedReviewCacheKey : undefined
   useEffect(() => {
     if (
       !newCardStyle ||
@@ -73,11 +76,13 @@ export function useWorktreeCardLifecycleEffects({
     // Why: hidden card metadata is revealed on whole-card hover, so fetch lazily instead of always-on polling.
     void fetchHostedReviewForBranch(repo.path, branch, {
       repoId: repo.id,
+      repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+      ...(hostedReviewExactKey ? { exactReviewKey: hostedReviewExactKey } : {}),
       linkedGitHubPR: worktree.linkedPR ?? null,
       ...(cachedBranchFallbackGitHubPRNumber !== null
         ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }
         : {}),
-      currentHeadOid: worktree.head ?? null,
+      currentHeadOid: hostedReviewExactKey ? null : (worktree.head ?? null),
       linkedGitLabMR,
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
@@ -100,10 +105,11 @@ export function useWorktreeCardLifecycleEffects({
     linkedGiteaPR,
     fetchHostedReviewForBranch,
     branch,
-    hostedReviewCacheKey
+    hostedReviewCacheKey,
+    hostedReviewExactKey
   ])
 
-  // Why: same as above for issues — hidden-surface polling only burns GitHub calls for invisible data.
+  // Poll issues only while visible; hidden metadata does not justify GitHub calls.
   useEffect(() => {
     // Why: per-card decoration lookups from the browser flood the RPC path at paired-web startup; the host is authoritative.
     if (
@@ -155,19 +161,24 @@ export function useWorktreeCardLifecycleEffects({
     if (!worktree.linkedLinearIssue || !showLinearIssue) {
       return
     }
+    const controller = new AbortController()
     const linearIssueId = worktree.linkedLinearIssue
     const refreshLinearIssueIfVisible = (): void => {
       if (!isWindowVisible()) {
         return
       }
-      void fetchLinearIssue(linearIssueId, linearWorkspaceId, {
-        sourceContext: linearSourceContext
-      })
+      void consumeLinearIssueRead(
+        fetchLinearIssue(linearIssueId, linearWorkspaceId, { sourceContext: linearSourceContext }),
+        () => !controller.signal.aborted,
+        undefined,
+        controller.signal
+      ).catch(() => {})
     }
     refreshLinearIssueIfVisible()
     window.addEventListener('focus', refreshLinearIssueIfVisible)
     document.addEventListener('visibilitychange', refreshLinearIssueIfVisible)
     return () => {
+      controller.abort()
       window.removeEventListener('focus', refreshLinearIssueIfVisible)
       document.removeEventListener('visibilitychange', refreshLinearIssueIfVisible)
     }
@@ -183,9 +194,16 @@ export function useWorktreeCardLifecycleEffects({
     if (!newCardStyle || !hoverDetailsOpen || showLinearIssue || !worktree.linkedLinearIssue) {
       return
     }
-    void fetchLinearIssue(worktree.linkedLinearIssue, linearWorkspaceId, {
-      sourceContext: linearSourceContext
-    })
+    const controller = new AbortController()
+    void consumeLinearIssueRead(
+      fetchLinearIssue(worktree.linkedLinearIssue, linearWorkspaceId, {
+        sourceContext: linearSourceContext
+      }),
+      () => !controller.signal.aborted,
+      undefined,
+      controller.signal
+    ).catch(() => {})
+    return () => controller.abort()
   }, [
     newCardStyle,
     hoverDetailsOpen,

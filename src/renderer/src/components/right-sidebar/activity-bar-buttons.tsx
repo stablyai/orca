@@ -100,6 +100,7 @@ export function TopActivityOverflowMenu({
             <DropdownMenuItem
               key={item.id}
               onSelect={() => onSelect(item.id)}
+              data-workspace-board-dismiss=""
               className={cn(active && 'bg-accent text-accent-foreground')}
               aria-current={active ? 'page' : undefined}
               aria-label={activityItemAriaLabel(item, item.statusIndicator)}
@@ -150,6 +151,7 @@ export function ActivityBarButton({
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
           onClick={onClick}
+          data-workspace-board-dismiss=""
           aria-label={activityItemAriaLabel(item, effectiveStatus)}
         >
           <Icon size={isTop ? 16 : 18} />

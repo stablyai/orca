@@ -1,8 +1,9 @@
-// Loader rules for each pane's data. Stored data keys it by leaf within a tab (layouts) and by pane
-// key (records); the model keys it by leaf id alone, so a leaf id repeated in the partition gets a
-// new id first and every record lands on the pane it named.
+// Stored pane data uses leaf IDs within tabs and full pane keys in records; remint repeated IDs before loading into the partition-wide leaf map.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import {
+  isPaneSleepRecord,
+  type SleepingAgentSessionRecord
+} from '../agent-session/lifecycle/agent-session-resume'
 import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { omitStoredFields } from './stored-record-fields'
@@ -11,7 +12,7 @@ import type {
   DesktopLayoutView,
   LayoutContentFacts
 } from './workspace-layout-beside'
-import { isSameTerminal } from './terminal-owner-invariants'
+import { isRepeatingRelayPtyId } from './terminal-owner-invariants'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import { updateLegacyPersistence } from './workspace-layout-legacy-persistence'
 import type { WorkspaceLayoutLoadContext } from './workspace-layout-load-types'
@@ -20,7 +21,8 @@ import {
   tabsInOrder,
   type LayoutLeaf,
   type LayoutTerminalPanes,
-  type WorkspaceLayoutModel
+  type WorkspaceLayoutModel,
+  type WorkspaceLayout
 } from './workspace-layout-model'
 import { retireExitedSurface } from './workspace-layout-removal'
 
@@ -40,7 +42,6 @@ type Remint = {
   context: WorkspaceLayoutLoadContext
 }
 
-/** The tree with every leaf id already `seen` replaced. */
 function remintRepeatedLeaves(
   root: LayoutTerminalPanes['root'],
   remint: Remint
@@ -75,7 +76,8 @@ function loadLeaf(
   paneKey: string,
   records: PaneRecords
 ) {
-  const sleeping = records.sleeping[paneKey]
+  const saved = records.sleeping[paneKey]
+  const record = saved && omitStoredFields(saved, ['paneKey', 'tabId', 'worktreeId'])
   const leaf: LayoutLeaf = {
     ...(stored.ptyIdsByLeafId?.[leafId] !== undefined
       ? { ptyId: stored.ptyIdsByLeafId[leafId] }
@@ -86,20 +88,17 @@ function loadLeaf(
     ...(stored.titlesByLeafId?.[leafId] !== undefined
       ? { title: stored.titlesByLeafId[leafId] }
       : {}),
-    ...(sleeping
-      ? { sleeping: omitStoredFields(sleeping, ['paneKey', 'tabId', 'worktreeId']) }
-      : {})
+    ...(stored.lastGridsByLeafId?.[leafId] !== undefined
+      ? { lastGrid: stored.lastGridsByLeafId[leafId] }
+      : {}),
+    ...(record && (isPaneSleepRecord(record) ? { sleeping: record } : { resume: record }))
   }
   delete records.sleeping[paneKey]
   delete records.incarnations[paneKey]
   return leaf
 }
 
-/**
- * Builds each pane's data from its tab's stored layout and the records its pane key names. One
- * leaf id in two places: the first in tab order keeps it (kept apart so the owner's choice is one
- * edit); the other pane gets a new id and its data. Records naming no pane are carried as stored.
- */
+/** The first pane in tab order keeps a repeated leaf ID; later panes receive fresh IDs and their own records. Carry records naming no pane unchanged. */
 export function loadLeaves(
   model: WorkspaceLayoutModel,
   stored: { session: WorkspaceSessionState; layouts: ReadonlyMap<string, TerminalLayoutSnapshot> },
@@ -111,10 +110,11 @@ export function loadLeaves(
     incarnations: { ...stored.session.terminalPtyIncarnationsByPaneKey }
   }
   const seen = new Set<string>()
+  const ownedLeaves = new Set<WorkspaceLayout>()
   for (const { workspace, tab } of terminalTabsInOrder(model)) {
     const layout = stored.layouts.get(tab.entityId)!
     const renamed = new Map<string, string>()
-    // Loaded objects are fresh copies, so editing them in place touches no stored data.
+    // Loaded copies can be edited without mutating stored data.
     tab.panes.root = remintRepeatedLeaves(tab.panes.root, {
       tabId: tab.entityId,
       seen,
@@ -133,11 +133,25 @@ export function loadLeaves(
     for (const [storedId, leafId] of renamed) {
       const leaf = loadLeaf(layout, storedId, paneKeyOf(tab.entityId, storedId), records)
       if (leafId !== storedId) {
-        // A pane given a new id starts unbound: its terminal was started for the old one.
+        // A reminted pane cannot retain a terminal started for its previous ID.
         delete leaf.ptyId
+      } else {
+        const generation = context.ptyGenerationOf?.(leafId)
+        if (generation !== undefined) {
+          leaf.ptyGeneration = generation
+        }
       }
       if (Object.keys(leaf).length > 0) {
-        workspace.leaves = { ...workspace.leaves, [leafId]: leaf }
+        if (!ownedLeaves.has(workspace)) {
+          workspace.leaves = { ...workspace.leaves }
+          ownedLeaves.add(workspace)
+        }
+        Object.defineProperty(workspace.leaves, leafId, {
+          value: leaf,
+          enumerable: true,
+          configurable: true,
+          writable: true
+        })
       }
       const scrollback = {
         ...(layout.buffersByLeafId?.[storedId] !== undefined
@@ -156,26 +170,38 @@ export function loadLeaves(
   beside.carried.unplacedIncarnations = records.incarnations
 }
 
-/** One terminal bound in two panes: the first pane in tab order keeps it, the other is unbound. */
 export function unbindDuplicateTerminals(model: WorkspaceLayoutModel): void {
-  const owners: { ptyId: string; incarnationId?: string }[] = []
+  const owners = new Map<string, { missing: boolean; defined: Set<string> }>()
   for (const { workspace, tab } of terminalTabsInOrder(model)) {
     for (const leafId of collectLayoutLeafIdsInOrder(tab.panes.root)) {
       const leaf = workspace.leaves?.[leafId]
       if (leaf?.ptyId === undefined) {
         continue
       }
-      const binding = { ptyId: leaf.ptyId, incarnationId: leaf.incarnationId }
-      if (owners.some((candidate) => isSameTerminal(candidate, binding))) {
+      const accepted = owners.get(leaf.ptyId)
+      const incarnation = leaf.incarnationId
+      const duplicate =
+        accepted &&
+        ((incarnation !== undefined && accepted.defined.has(incarnation)) ||
+          ((incarnation === undefined || accepted.missing) && !isRepeatingRelayPtyId(leaf.ptyId)))
+      if (duplicate) {
         delete leaf.ptyId
       } else {
-        owners.push(binding)
+        const bucket = accepted ?? { missing: false, defined: new Set<string>() }
+        if (incarnation === undefined) {
+          bucket.missing = true
+        } else {
+          bucket.defined.add(incarnation)
+        }
+        if (!accepted) {
+          owners.set(leaf.ptyId, bucket)
+        }
       }
     }
   }
 }
 
-/** Legacy per-surface tombstones: applied as today's retirement would, then never written again. */
+/** Apply legacy surface tombstones as retirements, then stop writing them. */
 export function applyLegacySurfaceTombstones(
   model: WorkspaceLayoutModel,
   session: WorkspaceSessionState,

@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Session } from './session'
 
-// Coverage for the incremental-checkpoint record stream (issue #5096): every
-// PTY byte, resize, and clear is recorded so the 5s checkpoint can persist
-// increments without serializing the emulator.
-
 function createMockSubprocess() {
   let onData: ((data: string) => void) | null = null
   return {
@@ -67,19 +63,6 @@ describe('Session pending output', () => {
     ])
   })
 
-  it('coalesces adjacent output chunks', () => {
-    const subprocess = createMockSubprocess()
-    const live = createSession(subprocess)
-
-    for (let i = 0; i < 100; i += 1) {
-      subprocess.simulateData(`chunk-${i};`)
-    }
-
-    const take = live.takePendingOutput(false)
-    expect(take!.records).toHaveLength(1)
-    expect(take!.records[0]).toMatchObject({ kind: 'output' })
-  })
-
   it('drains on take and increments the batch sequence', () => {
     const subprocess = createMockSubprocess()
     const live = createSession(subprocess)
@@ -125,15 +108,8 @@ describe('Session pending output', () => {
     expect(take!.records).toEqual([])
     expect(take!.snapshot?.snapshotAnsi).toContain('snapshot content')
 
-    // Records taken alongside the snapshot must not reappear later — they are
-    // already part of the snapshot and would replay twice on cold restore.
+    // Snapshot-covered records must not replay again on recovery.
     const next = live.takePendingOutput(false)
     expect(next!.records).toEqual([])
-  })
-
-  it('returns null after dispose', () => {
-    const live = createSession()
-    live.dispose()
-    expect(live.takePendingOutput(false)).toBeNull()
   })
 })

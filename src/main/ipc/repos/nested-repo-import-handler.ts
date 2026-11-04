@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectGroupImportResult } from '../../../shared/project-group-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
@@ -14,9 +14,9 @@ import {
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { ProjectGroupImportNestedArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'
@@ -66,7 +66,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
 
       for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
         try {
-          // Why: an SSH target is not served here; never inspect its path with local git.
+          // This process cannot validate SSH paths with local Git.
           if (args.connectionId) {
             results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
             continue
@@ -102,7 +102,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {
-              store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
+              store.moveProjectToGroup(existing, group.id, projectGroupOrder)
             }
             importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
@@ -134,7 +134,6 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           await prepareLocalWorktreeRootForRepo(store, repo)
           importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
           results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
-          // Why: reaches here only after the isGitRepoAsync guard above confirmed a git repo, so always true.
           emitRepoAdded('folder_picker', false, true)
         } catch (error) {
           results.push({

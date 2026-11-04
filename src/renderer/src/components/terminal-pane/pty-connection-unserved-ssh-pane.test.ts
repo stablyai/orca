@@ -2,13 +2,18 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import { createPane, createManager, type MockTransport } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -82,7 +87,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
-// Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
+// Pass useCallback through because this suite invokes notification hooks without rendering React.
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return {
@@ -115,7 +120,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
+// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
@@ -159,9 +164,15 @@ describe('a pane on an unconverted SSH row', () => {
     }
     await installTerminalTestGlobals()
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     connectPane = (paneId, deps) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the connection fields exercised here without a real terminal or DOM.
-      connectPanePty(createPane(paneId) as never, createManager(paneId) as never, deps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(paneId),
+          createManager(paneId),
+          bindPaneAgentTitleMocks(deps, agentTitleMocks)
+        )
+      )
   })
 
   afterEach(async () => {
@@ -173,7 +184,10 @@ describe('a pane on an unconverted SSH row', () => {
     await flushAsyncTicks(10)
 
     expect(createdTransportOptions).toEqual([])
-    expect(sshApi().connect).toHaveBeenCalledExactlyOnceWith({ targetId: 'conn-1' })
+    expect(sshApi().connect).toHaveBeenCalledExactlyOnceWith({
+      targetId: 'conn-1',
+      automatic: true
+    })
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 
@@ -224,30 +238,5 @@ describe('a pane on an unconverted SSH row', () => {
     await flushAsyncTicks(10)
 
     expect(sshApi().connect).not.toHaveBeenCalled()
-  })
-
-  it('reports a failed dial on the pane', async () => {
-    sshApi().connect.mockRejectedValueOnce(new Error('host unreachable'))
-
-    const { deps } = mountUnservedPane()
-    await flushAsyncTicks(10)
-
-    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
-      expect.any(Number),
-      'SSH connection failed: host unreachable'
-    )
-  })
-
-  it('leaves recovery to the overlay when typed input cannot be delivered', async () => {
-    const pane = createPane(1)
-    const { connectPanePty } = await import('./pty-connection')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the connection fields exercised here without a real terminal or DOM.
-    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
-    await flushAsyncTicks(10)
-
-    vi.mocked(pane.terminal.onData).mock.calls[0]?.[0]('ls\r')
-    await flushAsyncTicks(10)
-
-    expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
   })
 })

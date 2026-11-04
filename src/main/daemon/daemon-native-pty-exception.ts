@@ -14,3 +14,17 @@ export function isNativePtyException(error: unknown): boolean {
       NATIVE_PTY_ERROR_CODE_PATTERN.test(code ?? error.message))
   )
 }
+
+// Name and message alone could not say which stream failed in #33350; keep the error's origin.
+export function uncaughtExceptionLogDetails(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) {
+    return { message: String(error) }
+  }
+  return {
+    name: error.name,
+    message: error.message,
+    code: 'code' in error ? error.code : undefined,
+    syscall: 'syscall' in error ? error.syscall : undefined,
+    stack: error.stack
+  }
+}

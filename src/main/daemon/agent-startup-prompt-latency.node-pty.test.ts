@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -66,7 +66,7 @@ async function launch(
       if (legacy) {
         legacyTimer = setTimeout(() => active.write(`${COMMAND}\n`), 300)
       } else {
-        active.write(`${COMMAND}\n`)
+        active.writeStartupCommand(`${COMMAND}\n`)
       }
     })
   } finally {
@@ -94,30 +94,5 @@ describe('agent startup at the rendered shell prompt', () => {
       expect(result.output.split(COMMAND)).toHaveLength(2)
       expect(result.output.indexOf('prompt> ')).toBeLessThan(result.output.indexOf(COMMAND))
     }
-  )
-
-  it.skipIf(!process.env.ORCA_STARTUP_BENCH || SHELLS.length === 0)(
-    'compares legacy input timing with prompt delivery',
-    async () => {
-      for (const shell of SHELLS) {
-        for (const slow of [false, true]) {
-          const legacy: number[] = []
-          const current: number[] = []
-          for (let i = 0; i < 5; i++) {
-            legacy.push((await launch(shell, slow, true)).ms)
-            const result = await launch(shell, slow)
-            expect(result.output).not.toContain('orca-shell-ready')
-            expect(result.output.split(COMMAND)).toHaveLength(2)
-            current.push(result.ms)
-          }
-          const result = JSON.stringify({ shell, slow, legacy, current })
-          if (process.env.ORCA_STARTUP_BENCH_OUTPUT) {
-            appendFileSync(process.env.ORCA_STARTUP_BENCH_OUTPUT, `${result}\n`)
-          }
-          console.log(result)
-        }
-      }
-    },
-    60_000
   )
 })

@@ -1,11 +1,21 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { setSpawnObserver } from './spawn-observer'
+import {
+  E2E_SPAWN_LOG_ENV,
+  E2E_USER_DATA_DIR_ENV,
+  hasSpawnObserver,
+  notifySpawnObserver,
+  setSpawnObserver
+} from './spawn-observer'
 import { runProcess, runProcessSync, spawnProcess } from './run-process'
 
 afterEach(() => {
   setSpawnObserver(null)
+  vi.restoreAllMocks()
+  delete process.env[E2E_SPAWN_LOG_ENV]
+  delete process.env[E2E_USER_DATA_DIR_ENV]
 })
 
 describe('spawn observer', () => {
@@ -56,13 +66,58 @@ describe('spawn observer', () => {
     expect(seen).toEqual([missing, process.execPath])
   })
 
-  it('stays silent with no observer registered', async () => {
+  it('stops reporting after the observer is cleared', async () => {
     let calls = 0
-    setSpawnObserver(null)
-    await runProcess({ program: process.execPath, args: ['-e', 'process.exit(0)'] })
     setSpawnObserver(() => {
       calls += 1
     })
+    setSpawnObserver(null)
+    await runProcess({ program: process.execPath, args: ['-e', 'process.exit(0)'] })
     expect(calls).toBe(0)
+  })
+
+  it('logs every spawn, sync or async, to the e2e spawn log when one is named', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'orca-spawn-log-'))
+    const log = path.join(dir, 'spawns.jsonl')
+    process.env[E2E_SPAWN_LOG_ENV] = log
+    process.env[E2E_USER_DATA_DIR_ENV] = dir
+    try {
+      await runProcess({ program: process.execPath, args: ['-e', 'process.exit(0)'] })
+      runProcessSync({ program: process.execPath, args: ['-e', 'process.exit(0)'] })
+      const lines = readFileSync(log, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+      const spawned = {
+        file: process.execPath,
+        args: ['-e', 'process.exit(0)'],
+        at: expect.any(Number),
+        stack: expect.arrayContaining([expect.stringContaining('spawn-observer.test')])
+      }
+      expect(lines).toEqual([spawned, spawned])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('outside e2e mode writes nothing and captures no stack, even with the log variable set', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'orca-spawn-log-'))
+    const log = path.join(dir, 'spawns.jsonl')
+    process.env[E2E_SPAWN_LOG_ENV] = log
+    const errors = vi.spyOn(globalThis, 'Error')
+    try {
+      notifySpawnObserver(process.execPath, ['-e', 'process.exit(0)'], 0)
+      expect(errors).not.toHaveBeenCalled()
+      expect(existsSync(log)).toBe(false)
+      expect(hasSpawnObserver()).toBe(false)
+
+      // Control: the same call in e2e mode does capture the stack and write the line.
+      process.env[E2E_USER_DATA_DIR_ENV] = dir
+      notifySpawnObserver(process.execPath, ['-e', 'process.exit(0)'], 0)
+      expect(errors).toHaveBeenCalledTimes(1)
+      expect(existsSync(log)).toBe(true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

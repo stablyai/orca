@@ -13,12 +13,7 @@ import { buildSkillDiscoverySources, type SkillScanRoot } from '../skill-discove
 import type { ResolvedSkillDiscoveryTarget } from '../skill-discovery-target'
 import type { SkillProviderRootOverrides } from '../skill-provider-destinations'
 
-/**
- * The delete host owns everything about where skills may live, so it rebuilds
- * the discovery root set from the same three inputs `discoverSkillsOnTarget`
- * uses — target, repo list, provider-root overrides. Rebuilding beats trusting
- * the client: the worst case is a refusal, never a delete outside a root.
- */
+/** Rebuild roots from target, repos and provider overrides on the delete host; trusting client roots could authorize out-of-root deletion. */
 export type SkillDeleteRootSet = {
   roots: SkillScanRoot[]
   semantics: SkillPathSemantics
@@ -44,8 +39,7 @@ export async function buildSkillDeleteRootSet(input: {
           pathApi: pathPosix,
           providerRootOverrides: input.providerRootOverrides
         }),
-        // Why tolerated: plugin metadata is enrichment. A failed read must not
-        // turn every skill on the host into `unowned`.
+        // Plugin metadata only enriches roots; read failure must not mark every skill unowned.
         ...(await discoverClaudePluginSkillSourcesInWsl({ distro, homeDir, cwd }).catch(() => []))
       ],
       // A WSL runtime is POSIX and case-sensitive even though the process is win32.
@@ -58,9 +52,7 @@ export async function buildSkillDeleteRootSet(input: {
   const cwd = input.target.cwd
   return {
     roots: [
-      // Mirrors `discoverSkillsOnTarget`: a cwd-scoped scan drops the repo list,
-      // and `buildSkillDiscoverySources` adds `cwd ?? process.cwd()` on top
-      // either way, so `repos: []` is not the whole exclusivity rule by itself.
+      // Match discovery's cwd exclusivity and process.cwd fallback; clearing repos alone does not exclude other workspace roots.
       ...buildSkillDiscoverySources({
         homeDir: home,
         ...(cwd ? { cwd } : {}),

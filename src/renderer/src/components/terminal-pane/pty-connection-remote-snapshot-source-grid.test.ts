@@ -1,9 +1,18 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushAsyncTicks, renderHeadlessBuffer } from './pty-connection-test-async'
-import { createMockTransport, createPane, createManager } from './pty-connection-test-pane-fixtures'
+import { flushAsyncTicks } from './pty-connection-test-async'
+import {
+  terminalWriteText,
+  createMockTransport,
+  createPane,
+  createManager
+} from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
@@ -122,8 +131,7 @@ const HOST_ROWS = 12
 const PANE_COLS = 120
 const PANE_ROWS = 40
 
-// A serialized TUI frame the way @xterm/addon-serialize emits one: newline-fed
-// rows plus a trailing absolute CUP. Both are grid-relative.
+// SerializeAddon emits newline-fed rows plus absolute CUP; both depend on the capture grid.
 const HOST_FRAME = `\x1b[?1049h\x1b[2J\x1b[H${Array.from(
   { length: HOST_ROWS },
   (_unused, index) => `host row ${index + 1}`
@@ -141,6 +149,7 @@ async function connectRemotePane(): Promise<{
   dispose: () => void
 }> {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, 'env-1')
   const transport = createMockTransport('remote:env-1@@terminal-1')
   const captured: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }
@@ -154,7 +163,8 @@ async function connectRemotePane(): Promise<{
   pane.terminal.cols = PANE_COLS
   pane.terminal.rows = PANE_ROWS
   const operations: { kind: 'resize' | 'write'; value: string }[] = []
-  pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+  pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+    data = terminalWriteText(data)
     operations.push({ kind: 'write', value: data })
     callback?.()
   })
@@ -169,7 +179,11 @@ async function connectRemotePane(): Promise<{
   })
 
   const manager = createManager(1)
-  const disposable = connectPanePty(pane as never, manager as never, createDeps() as never)
+  const disposable = connectPanePty(
+    pane as never,
+    manager as never,
+    bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   transport.resize.mockClear()
 
@@ -211,32 +225,9 @@ describe('pushed remote snapshot replay grid', () => {
     )
     expect(sourceResizeIndex).toBeGreaterThanOrEqual(0)
     expect(frameWriteIndex).toBeGreaterThan(sourceResizeIndex)
-    // Why the PTY push matters: the pane must not be left driving the host at
-    // the replay geometry once the destination fit has run.
+    // Push the destination grid to the host after replay so the PTY cannot stay at capture geometry.
     expect(session.transport.resize).toHaveBeenCalledWith(PANE_COLS, PANE_ROWS)
     expect(session.transport.resize).not.toHaveBeenCalledWith(HOST_COLS, HOST_ROWS)
     session.dispose()
-  })
-
-  it('keeps the pane grid when the host published no snapshot dimensions', async () => {
-    const session = await connectRemotePane()
-
-    session.replay(HOST_FRAME)
-    await flushAsyncTicks(20)
-
-    expect(session.pane.terminal.resize).not.toHaveBeenCalledWith(HOST_COLS, HOST_ROWS)
-    session.dispose()
-  })
-
-  it('only reproduces the host frame when it is parsed at the host grid', async () => {
-    const atHostGrid = await renderHeadlessBuffer([HOST_FRAME], HOST_COLS, HOST_ROWS)
-    const atPaneGrid = await renderHeadlessBuffer([HOST_FRAME], PANE_COLS, HOST_ROWS - 4)
-
-    // Why this is the user-visible failure: the alternate screen has no
-    // scrollback, so rows scrolled off by a shorter grid are gone for good and
-    // an idle TUI never repaints them.
-    expect(atHostGrid.filter((line) => line.startsWith('host row'))).toHaveLength(HOST_ROWS)
-    expect(atPaneGrid.filter((line) => line.startsWith('host row')).length).toBeLessThan(HOST_ROWS)
-    expect(atPaneGrid).not.toContain('host row 1')
   })
 })

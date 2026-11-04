@@ -25,8 +25,7 @@ export function isMacOS14OrNewer(): boolean {
   return Number.isFinite(darwinMajor) && darwinMajor >= 23
 }
 
-// Why: Node treats unhandled socket 'error' events as process exceptions, so
-// stale helper sockets keep a no-op listener that does not retain the client.
+// Suppress stale socket errors without retaining the client or crashing the process.
 export function ignoreStaleSocketError(): void {}
 
 export function attachMacOSNativeProviderSocketListeners(
@@ -103,11 +102,9 @@ export async function startMacOSNativeProviderSocket({
   const socketToken = randomUUID()
   const socketTokenPath = join(socketDirectory, 'provider.token')
   writeFileSync(socketTokenPath, socketToken, { encoding: 'utf8', mode: 0o600 })
-  // Why: launching the nested helper via LaunchServices can make TCC evaluate
-  // Orca.app as responsible; the signed helper executable owns this grant.
+  // Spawn the signed helper directly so TCC does not charge LaunchServices activity to Orca.app.
   const provider = spawnProvider(helperExecutablePath, socketPath, socketTokenPath)
-  // Why: own the helper from birth. Adopting only after connect leaves a window
-  // where a quit during startup strands it with nobody holding the handle.
+  // Own the helper before connecting so shutdown during startup cannot strand it.
   providerProcess.adopt(provider)
   const providerFailure = waitForProviderLaunchFailure(provider)
   const connectAbort = new AbortController()
@@ -129,10 +126,8 @@ export async function startMacOSNativeProviderSocket({
   } catch (error) {
     connectAbort.abort()
     providerFailure.cleanup()
-    // Why: connect failures and superseded startups both happen after spawn;
-    // escalate so a helper that ignores SIGTERM cannot outlive the attempt.
+    // Escalate cleanup after failed or superseded startup, even if the helper ignores SIGTERM.
     reapMacOSProviderProcess(provider)
-    // Each attempt owns a unique directory, even after its generation is superseded.
     cleanupSocketDirectory(socketDirectory)
     throw error
   }

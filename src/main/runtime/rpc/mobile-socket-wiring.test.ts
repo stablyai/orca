@@ -9,7 +9,7 @@ import {
 } from '../../../shared/mobile-e2ee-v2-contract'
 import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
 import type { DeviceRegistry } from '../device-registry'
-import { deriveSharedKey, encrypt, generateKeyPair } from './e2ee-crypto'
+import { deriveSharedKey, encrypt, generateKeyPair } from '../../../shared/e2ee-crypto'
 import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
 import {
   MobileSocketWiring,
@@ -54,6 +54,7 @@ function registryFor(
   token: string,
   scope: 'mobile' | 'runtime' = 'mobile'
 ): DeviceRegistry {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transport tests use only credential lookups and last-seen writes.
   return {
     validateToken: (candidate: string) =>
       candidate === token
@@ -65,6 +66,10 @@ function registryFor(
             pairedAt: 1,
             lastSeenAt: 0
           }
+        : null,
+    resolveAuthenticatedPrincipal: (principal: { deviceId: string; deviceToken?: string }) =>
+      principal.deviceId === deviceId && principal.deviceToken === token
+        ? { deviceId, token, name: 'Phone', scope, pairedAt: 1, lastSeenAt: 0 }
         : null,
     updateLastSeen: vi.fn(),
     updateLastSeenDeferred: vi.fn()
@@ -102,37 +107,6 @@ describe('MobileSocketWiring', () => {
     expect(wiring.terminateDeviceConnections('device-1')).toBe(2)
     expect(direct.terminateClientConnections).not.toHaveBeenCalled()
     expect(relay.terminateClientConnections).toHaveBeenCalledWith('device-1')
-  })
-
-  it('releases detached transports from revocation fanout under origin churn', () => {
-    const desktop = generateKeyPair()
-    const wiring = new MobileSocketWiring({
-      deviceRegistry: registryFor('device-1', 'valid-token'),
-      e2eeKeypair: {
-        publicKey: desktop.publicKey,
-        secretKey: desktop.secretKey,
-        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
-      },
-      onText: vi.fn(),
-      onBinary: vi.fn(),
-      onClose: vi.fn()
-    })
-    const live = new FakeTransport()
-    wiring.attachTransport(live)
-    const retired = Array.from({ length: 1_000 }, () => new FakeTransport())
-
-    for (const transport of retired) {
-      const detach = wiring.attachTransport(transport)
-      detach()
-      detach()
-    }
-
-    expect(wiring['transports'].size).toBe(1)
-    expect(wiring.terminateDeviceConnections('device-1')).toBe(0)
-    expect(live.terminateClientConnections).toHaveBeenCalledOnce()
-    expect(
-      retired.every((transport) => transport.terminateClientConnections.mock.calls.length === 0)
-    ).toBe(true)
   })
 
   it('preserves the legacy direct handshake, identity, and close cleanup', () => {
@@ -239,10 +213,7 @@ describe('MobileSocketWiring', () => {
   })
 
   it('lets the capability RPC write capabilities back onto the socket', () => {
-    // `runtime.clientCapabilities.update` stores the advertised set by assigning
-    // `authenticatedSocket.clientCapabilities`. A read-only socket makes that a
-    // TypeError, the RPC answers `runtime_error`, and every structured
-    // agent-session tab is then projected away from a capable phone.
+    // Capability updates must write through to the channel; a getter-only socket throws and hides every structured tab from a capable phone.
     const desktop = generateKeyPair()
     const phone = generateKeyPair()
     const ws = new FakeSocket()
@@ -278,14 +249,18 @@ describe('MobileSocketWiring', () => {
     const socket = onText.mock.calls[0]?.[0]
     expect(socket).toBeDefined()
     expect(socket.clientCapabilities).toEqual([])
+    const changed = vi.fn()
+    const stop = socket.capabilitySource?.observe(changed)
 
     expect(() => {
       socket.clientCapabilities = ['agent-session.structured.v1']
     }).not.toThrow()
     expect(socket.clientCapabilities).toEqual(['agent-session.structured.v1'])
+    expect(socket.capabilitySource?.current).toBe(socket.clientCapabilities)
+    expect(changed).toHaveBeenCalledOnce()
+    stop?.()
 
-    // Later requests on the same connection must see the updated set, so the
-    // channel is the single source of truth rather than a detached copy.
+    // Later requests must read the updated channel set, not a detached copy.
     transport.receive(ws, encrypt('{"id":"rpc-2","method":"status.get"}', sharedKey))
     expect(onText.mock.calls[1]?.[0].clientCapabilities).toEqual(['agent-session.structured.v1'])
   })

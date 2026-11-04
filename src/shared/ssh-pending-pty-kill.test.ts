@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeSshPendingPtyKill } from './ssh-pending-pty-kill'
 
-// A close whose incarnation was never learned still owes the kill only when the id is epoch-scoped:
-// a `pty2:` id carries a per-start mint epoch, so the id alone names one process.
+// Epoch-scoped pty2: IDs fence one process even when incarnation was never learned.
 describe('normalizeSshPendingPtyKill', () => {
   const unfenced = { requestedAt: 1_800_000_000_000, attempts: 0 }
 

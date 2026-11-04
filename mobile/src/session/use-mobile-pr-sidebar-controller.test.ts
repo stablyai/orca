@@ -30,21 +30,39 @@ const PR: PRInfo = {
   number: 7,
   title: 'Feat',
   state: 'open',
-  url: 'u',
+  url: 'https://github.corp/fork/widgets/pull/7',
   checksStatus: 'success',
   updatedAt: 'now',
   mergeable: 'MERGEABLE',
   reviewDecision: null,
   headSha: 'sha-pr'
-} as unknown as PRInfo
-const DETAILS = { item: { number: 7 }, checks: [] } as unknown as GitHubWorkItemDetails
+}
+const DETAILS: GitHubWorkItemDetails = {
+  item: {
+    id: 'PR_7',
+    number: 7,
+    type: 'pr',
+    url: PR.url,
+    title: 'PR',
+    state: 'open',
+    labels: [],
+    updatedAt: '',
+    author: null
+  },
+  body: 'body',
+  comments: [],
+  checks: []
+}
 const CHECKS: PRCheckDetail[] = [
   { name: 'ci', status: 'completed', conclusion: 'success', url: null }
 ]
 
-// A host reply that settled fine at the transport but carries no result — the
-// `result-absent` partition of the reply matrix.
-const RESULT_ABSENT_REPLY: RpcResponse = { id: 'x', ok: true, _meta: { runtimeId: 'r' } }
+const RESULT_ABSENT_REPLY: RpcResponse = {
+  id: 'x',
+  ok: true,
+  result: undefined,
+  _meta: { runtimeId: 'r' }
+}
 
 function ghInfo(over: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
   return {
@@ -78,7 +96,12 @@ describe('loadPrSidebarData', () => {
   function deps(over: Partial<PrSidebarLoadDeps> = {}): PrSidebarLoadDeps {
     return {
       fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(ghInfo())),
-      fetchWorktreeLinkedPR: vi.fn(async () => null),
+      fetchWorktreeGitHubPRLink: vi.fn(async () => ({
+        linkedPR: null,
+        suppressedGitHubPR: null,
+        pushTarget: null
+      })),
+      clearWorktreeReviewLink: vi.fn(async () => {}),
       fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(PR)),
       fetchWorkItemDetails: vi.fn(async () => ok<GitHubWorkItemDetails | null>(DETAILS)),
       fetchPRChecks: vi.fn(async () => ok<PRCheckDetail[]>(CHECKS)),
@@ -95,13 +118,15 @@ describe('loadPrSidebarData', () => {
     })
     expect(out).toEqual({
       kind: 'ready',
-      data: { pr: PR, details: null, checks: CHECKS, checksError: null }
+      data: { pr: PR, details: null, checks: CHECKS, checksError: null, pushTarget: null }
     })
-    // Details (heavy comments payload) are NOT fetched on the critical path.
     expect(d.fetchWorkItemDetails).not.toHaveBeenCalled()
-    // forBranch's PR number is threaded into prForBranch as the linked hint.
-    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 7 })
-    // The fetched PR head wins over the route's cached status SHA.
+    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', {
+      branch: 'feat',
+      linkedPRNumber: null,
+      fallbackPRNumber: 7,
+      currentHeadOid: 'sha-status'
+    })
     expect(d.fetchPRChecks).toHaveBeenCalledWith('w', {
       prNumber: 7,
       headSha: 'sha-pr',
@@ -112,28 +137,112 @@ describe('loadPrSidebarData', () => {
   it('passes a null hint when forBranch and the worktree linkedPR are both empty', async () => {
     const d = deps({ fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(null)) })
     await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
-    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: null })
+    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', {
+      branch: 'feat',
+      linkedPRNumber: null,
+      fallbackPRNumber: null,
+      currentHeadOid: null
+    })
   })
 
   it('falls back to the worktree linkedPR when forBranch has no open PR (closed/merged)', async () => {
     const merged = { ...PR, number: 42, state: 'merged' } as unknown as PRInfo
     const d = deps({
       fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(null)),
-      fetchWorktreeLinkedPR: vi.fn(async () => 42),
+      fetchWorktreeGitHubPRLink: vi.fn(async () => ({
+        linkedPR: 42,
+        suppressedGitHubPR: null,
+        pushTarget: null
+      })),
       fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(merged))
     })
     const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
-    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 42 })
+    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', {
+      branch: 'feat',
+      linkedPRNumber: 42,
+      fallbackPRNumber: null,
+      currentHeadOid: null
+    })
     expect(out).toEqual({
       kind: 'ready',
-      data: { pr: merged, details: null, checks: CHECKS, checksError: null }
+      data: { pr: merged, details: null, checks: CHECKS, checksError: null, pushTarget: null }
     })
   })
 
-  it('prefers the forBranch open hint over the worktree linkedPR', async () => {
-    const d = deps({ fetchWorktreeLinkedPR: vi.fn(async () => 42) })
+  it('sends the explicit link over the branch PR, which stays only a fallback', async () => {
+    const d = deps({
+      fetchWorktreeGitHubPRLink: vi.fn(async () => ({
+        linkedPR: 42,
+        suppressedGitHubPR: null,
+        pushTarget: null
+      }))
+    })
     await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
-    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 7 })
+    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', {
+      branch: 'feat',
+      linkedPRNumber: 42,
+      fallbackPRNumber: null,
+      currentHeadOid: null
+    })
+  })
+
+  it('re-resolves by branch when the linked merged PR no longer contains this head', async () => {
+    const stale: PRInfo = {
+      ...PR,
+      number: 42,
+      state: 'merged',
+      headSha: 'old',
+      headDivergedFromMergedPRAtOid: 'head-now'
+    }
+    const fetchPRForBranch = vi
+      .fn()
+      .mockResolvedValueOnce(ok<PRInfo | null>(stale))
+      .mockResolvedValueOnce(ok<PRInfo | null>(PR))
+    const d = deps({
+      fetchWorktreeGitHubPRLink: vi.fn(async () => ({
+        linkedPR: 42,
+        suppressedGitHubPR: null,
+        pushTarget: null
+      })),
+      fetchPRForBranch
+    })
+    const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat', headSha: 'head-now' })
+    expect(fetchPRForBranch).toHaveBeenLastCalledWith('w', {
+      branch: 'feat',
+      linkedPRNumber: null,
+      fallbackPRNumber: 7,
+      currentHeadOid: 'head-now'
+    })
+    expect(out).toMatchObject({ kind: 'ready', data: { pr: PR } })
+    // The clear re-checks the worktree, so a link chosen meanwhile survives.
+    const [[worktreeId, shouldApply]] = vi.mocked(d.clearWorktreeReviewLink).mock.calls
+    expect(worktreeId).toBe('w')
+    const worktree = {
+      baseRef: null,
+      linkedPR: 42,
+      suppressedGitHubPR: null,
+      pushTarget: null,
+      branch: 'feat',
+      head: 'head-now',
+      isBare: false,
+      isArchived: false
+    }
+    expect(shouldApply(worktree)).toBe(true)
+    expect(shouldApply({ ...worktree, linkedPR: 99 })).toBe(false)
+  })
+
+  it('hides the branch PR the user unlinked', async () => {
+    const d = deps({
+      fetchWorktreeGitHubPRLink: vi.fn(async () => ({
+        linkedPR: null,
+        suppressedGitHubPR: 7,
+        pushTarget: null
+      }))
+    })
+    expect(await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })).toEqual({
+      kind: 'none'
+    })
+    expect(d.fetchPRChecks).not.toHaveBeenCalled()
   })
 
   it('does not pass non-GitHub hosted-review hints into the GitHub PR lookup', async () => {
@@ -141,10 +250,19 @@ describe('loadPrSidebarData', () => {
       fetchForBranch: vi.fn(async () =>
         ok<HostedReviewInfo | null>(ghInfo({ provider: 'gitlab', number: 99 }))
       ),
-      fetchWorktreeLinkedPR: vi.fn(async () => null)
+      fetchWorktreeGitHubPRLink: vi.fn(async () => ({
+        linkedPR: null,
+        suppressedGitHubPR: null,
+        pushTarget: null
+      }))
     })
     await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
-    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: null })
+    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', {
+      branch: 'feat',
+      linkedPRNumber: null,
+      fallbackPRNumber: null,
+      currentHeadOid: null
+    })
   })
 
   it('is non-fatal when forBranch errors — prForBranch still resolves', async () => {
@@ -161,8 +279,7 @@ describe('loadPrSidebarData', () => {
     expect(out).toEqual({ kind: 'none' })
   })
 
-  // Checks are contained, not fatal: even a permanent failure keeps the PR on screen,
-  // because the title/body/comments/merge controls do not depend on the checks read.
+  // Checks failure must preserve the PR’s unrelated title/comments/merge controls.
   it('keeps the PR rendered when the checks read fails, carrying the message', async () => {
     const out = await loadPrSidebarData(
       deps({ fetchPRChecks: vi.fn(async () => fail<PRCheckDetail[]>('403 forbidden')) }),
@@ -170,12 +287,11 @@ describe('loadPrSidebarData', () => {
     )
     expect(out).toEqual({
       kind: 'ready',
-      data: { pr: PR, details: null, checks: [], checksError: '403 forbidden' }
+      data: { pr: PR, details: null, checks: [], checksError: '403 forbidden', pushTarget: null }
     })
   })
 
-  // The reply this whole PR is about: a host whose prChecks shape drifted. The reader
-  // refuses it, and the sidebar must still render the PR with a readable checks message.
+  // Reject malformed check payloads while retaining the PR and readable check-error feedback.
   it('keeps the PR rendered when the host sends a checks reply the reader refuses', async () => {
     const sendRequest = vi.fn(async () => RESULT_ABSENT_REPLY)
     const out = await loadPrSidebarData(
@@ -190,7 +306,8 @@ describe('loadPrSidebarData', () => {
         pr: PR,
         details: null,
         checks: [],
-        checksError: 'The host sent a reply this app could not read (github.prChecks)'
+        checksError: 'The host sent a reply this app could not read (github.prChecks)',
+        pushTarget: null
       }
     })
     expect(sendRequest).toHaveBeenCalledOnce()
@@ -211,7 +328,12 @@ describe('loadPrSidebarDetails (phase 2)', () => {
   function deps(over: Partial<PrSidebarLoadDeps> = {}): PrSidebarLoadDeps {
     return {
       fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(ghInfo())),
-      fetchWorktreeLinkedPR: vi.fn(async () => null),
+      fetchWorktreeGitHubPRLink: vi.fn(async () => ({
+        linkedPR: null,
+        suppressedGitHubPR: null,
+        pushTarget: null
+      })),
+      clearWorktreeReviewLink: vi.fn(async () => {}),
       fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(PR)),
       fetchWorkItemDetails: vi.fn(async () => ok<GitHubWorkItemDetails | null>(DETAILS)),
       fetchPRChecks: vi.fn(async () => ok<PRCheckDetail[]>(CHECKS)),
@@ -220,14 +342,14 @@ describe('loadPrSidebarDetails (phase 2)', () => {
   }
 
   it('returns the fetched details', async () => {
-    expect(await loadPrSidebarDetails(deps(), 'w', 7)).toBe(DETAILS)
+    expect(await loadPrSidebarDetails(deps(), 'w', PR)).toBe(DETAILS)
   })
 
   it('is non-fatal — a details failure yields null rather than erroring the sidebar', async () => {
     const d = deps({
       fetchWorkItemDetails: vi.fn(async () => fail<GitHubWorkItemDetails | null>('network down'))
     })
-    expect(await loadPrSidebarDetails(d, 'w', 7)).toBeNull()
+    expect(await loadPrSidebarDetails(d, 'w', PR)).toBeNull()
   })
 
   it('is non-fatal when fetchWorkItemDetails rejects (no escaping rejection)', async () => {
@@ -236,7 +358,7 @@ describe('loadPrSidebarDetails (phase 2)', () => {
         throw new Error('transport closed')
       })
     })
-    expect(await loadPrSidebarDetails(d, 'w', 7)).toBeNull()
+    expect(await loadPrSidebarDetails(d, 'w', PR)).toBeNull()
   })
 })
 
@@ -268,7 +390,7 @@ describe('resolvePrSidebarDetailsAfterPhase2', () => {
   })
 
   it('keeps prior details when the fetch is non-fatal null', () => {
-    const prior = emptyPrSidebarDetails(PR)
+    const prior = DETAILS
     expect(resolvePrSidebarDetailsAfterPhase2({ fetched: null, prior, pr: PR })).toBe(prior)
   })
 
@@ -291,7 +413,6 @@ describe('isPrSidebarDetailsPlaceholder / prSidebarDetailsNeedFetch', () => {
     const placeholder = emptyPrSidebarDetails(PR)
     expect(isPrSidebarDetailsPlaceholder(placeholder)).toBe(true)
     expect(isPrSidebarDetailsPlaceholder(DETAILS)).toBe(false)
-    // Host work-item ids use a colon (`pr:7`); placeholders use a hyphen (`pr-7`).
     expect(
       isPrSidebarDetailsPlaceholder({
         ...DETAILS,
@@ -309,12 +430,8 @@ describe('isPrSidebarDetailsPlaceholder / prSidebarDetailsNeedFetch', () => {
 })
 
 describe('buildMobilePrSidebarIdentity', () => {
-  it('keys identity on worktree + branch, not head SHA', () => {
+  it('keys identity on worktree and branch', () => {
     expect(buildMobilePrSidebarIdentity({ worktreeId: 'w1', branch: 'feat' })).toBe('w1\u0000feat')
-    // Head advances on commit must not form a new identity — soft refresh keeps ready UI.
-    expect(buildMobilePrSidebarIdentity({ worktreeId: 'w1', branch: 'feat' })).toBe(
-      buildMobilePrSidebarIdentity({ worktreeId: 'w1', branch: 'feat' })
-    )
   })
 
   it('is null without a branch and changes when branch or worktree changes', () => {

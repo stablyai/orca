@@ -40,8 +40,7 @@ export class MobileRelayDirectUpgradeController {
     }
   }
 
-  // No relay session exists yet; the direct socket already self-probes on
-  // notifyForeground, so a nudge only retries the pending upgrade.
+  // Without a relay, direct already self-probes on foreground; nudge only the pending upgrade.
   nudge(): void {
     this.setForeground(true)
   }

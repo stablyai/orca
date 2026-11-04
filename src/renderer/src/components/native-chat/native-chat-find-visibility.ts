@@ -1,5 +1,4 @@
-// One rule for "the reader can see this match", shared by picking a match and revealing it, so
-// a match chosen as visible is never scrolled.
+// Share visibility rules between picking and revealing so a match deemed visible is never needlessly scrolled.
 
 type Box = Pick<DOMRect, 'top' | 'bottom' | 'left' | 'right'>
 

@@ -159,11 +159,9 @@ describe('AgentHookServer removed-worktree retirement', () => {
         const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
         if (localWorktree === REMOVED) {
           expect(file.authorityCommitments?.[pane]).toMatchObject({ worktreeId: KEPT })
-          // The retained foreign launch fence rejects the removed workspace's late repaint.
           expect(file.entries[pane]).toBeUndefined()
         } else {
           expect(file.authorityCommitments?.[pane]).toBeUndefined()
-          // The occupant keeps reporting, without the removed owner's token hash stamped on its row.
           expect(file.entries[pane]).toMatchObject({ worktreeId: KEPT, payload: { state: 'done' } })
           expect(file.entries[pane].launchTokenHash).toBeUndefined()
         }

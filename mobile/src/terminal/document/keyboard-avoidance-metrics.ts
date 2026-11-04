@@ -1,4 +1,4 @@
-import { getMeasuredCellHeight, getTotalScale } from './viewport-transform'
+import { getMeasuredCellHeight, getTotalScale } from './cell-metrics'
 import { notify } from './host-notify'
 import type {
   TerminalDocumentCell,
@@ -72,7 +72,6 @@ export function emitKeyboardAvoidanceMetrics(scope: TerminalDocumentScope) {
     contentBottomRow: alt ? 0 : computeContentBottomRow(scope),
     rows: scope.term.rows || 0,
     altScreen: alt,
-    // As drawn: desktop display mode scales the desktop's rows down to the phone's width.
     rowPitch: getMeasuredCellHeight(scope) * getTotalScale(scope)
   })
 }

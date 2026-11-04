@@ -34,6 +34,7 @@ import {
   ProviderIcon,
   ProviderPanel
 } from './tooltip'
+import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 
 function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
   return {
@@ -207,8 +208,7 @@ describe('provider usage error copy', () => {
   })
 
   it('classifies the Codex chatgpt-auth-required rate-limits read error as auth, not Limited', () => {
-    // Why: the message mentions "rate limits" only as the object it failed to
-    // read; labeling it "Limited" would wrongly imply the user hit a limit.
+    // Auth failures can mention rate limits as the unread object without indicating exhausted quota.
     const p = provider({
       provider: 'codex',
       error: 'chatgpt authentication required to read rate limits'
@@ -246,34 +246,26 @@ describe('provider usage error copy', () => {
     )
   })
 
-  it('uses structured Claude failure kinds before raw auth regexes', () => {
-    const p = provider({
-      error: 'Invalid OAuth token.',
-      usageMetadata: {
-        failureKind: 'stale-token',
-        attemptedSources: ['oauth', 'cli']
-      }
-    })
+  // Why: an expired access token is not a signed-out login; Claude refreshes it the next time it runs.
+  it.each([undefined, 'system', 'wsl:Ubuntu:system', 'profile:idle'])(
+    'tells every Claude login (%s) calmly that usage updates when Claude next runs',
+    (authProvenance) => {
+      const p = provider({
+        error: 'Invalid OAuth token.',
+        usageMetadata: {
+          failureKind: 'stale-token',
+          attemptedSources: ['oauth'],
+          authProvenance
+        }
+      })
 
-    expect(getProviderUsageStatusLabel(p)).toBe('Sign-in expired')
-    expect(getProviderUsageErrorMessage(p)).toBe(
-      'Claude usage has expired. Start Claude in this account to refresh it.'
-    )
-  })
-
-  it('tells a System Default user calmly that usage updates when Claude next runs', () => {
-    const p = provider({
-      error: 'Invalid OAuth token.',
-      usageMetadata: {
-        failureKind: 'stale-token',
-        attemptedSources: ['oauth'],
-        authProvenance: 'system'
-      }
-    })
-
-    expect(getProviderUsageStatusLabel(p)).toBe('Updates when Claude runs')
-    expect(getProviderUsageErrorMessage(p)).toBe('Claude usage updates the next time Claude runs.')
-  })
+      expect(getProviderUsageStatusLabel(p)).toBe('Updates when Claude runs')
+      expect(getProviderUsageErrorMessage(p)).toBe(
+        'Claude usage updates the next time Claude runs.'
+      )
+      expect(isClaudeUsageWaitingForClaude(p)).toBe(true)
+    }
+  )
 
   it('keeps refresh copy for failure kinds only a refreshing older host reports', () => {
     const p = provider({
@@ -435,10 +427,7 @@ describe('getWindowSections', () => {
   })
 
   it('does not expose bucket names via session window in compact rendering path', () => {
-    // Why: ProviderSegment (compact mode) reads only p.session — never p.buckets.
-    // This test locks the contract: getWindowSections returns buckets for detail
-    // views, while the plain session value remains independently available for
-    // compact rendering without bucket names bleeding through.
+    // Compact rendering reads session directly; detail bucket sections must not replace its numeric value.
     const p: ProviderRateLimits = {
       provider: 'gemini',
       session: { usedPercent: 80, windowMinutes: 300, resetsAt: null, resetDescription: null },
@@ -463,9 +452,7 @@ describe('getWindowSections', () => {
       error: null,
       status: 'ok'
     }
-    // Compact path uses p.session directly — independent of getWindowSections.
     expect(p.session?.usedPercent).toBe(80)
-    // getWindowSections (detail path) returns bucket rows, not session label.
     const sections = getWindowSections(p)
     const labels = sections.map((s) => s.label)
     expect(labels).toContain('Pro')
@@ -733,7 +720,6 @@ describe('ProviderPanel extra-usage rendering', () => {
 
     expect(markup).toContain('Credits')
     expect(markup).toContain('500 credits available')
-    // A credit count is not a currency amount.
     expect(markup).not.toContain('$500')
   })
 
@@ -808,7 +794,6 @@ describe('ProviderPanel reset rendering', () => {
 
     const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
-    // Why: bars show consumption (% used), matching harness meters (#7551).
     expect(markup).toContain('35%')
     expect(markup).toContain('% used')
     expect(markup).not.toContain('% left')
@@ -888,9 +873,7 @@ describe('clampUsedPercent', () => {
 })
 
 describe('barColor', () => {
-  // Why: thresholds are on % used (consumption). The <60 band is neutral (not
-  // green) so the always-visible meter stays quiet until a limit nears; guard
-  // against flipping back to green or to remaining-based colors without noticing.
+  // Keep low consumption neutral so always-visible meters stay quiet until usage approaches a limit.
   it('maps used percent to neutral / yellow / red bands', () => {
     expect(barColor(0)).toBe('bg-muted-foreground/40')
     expect(barColor(59)).toBe('bg-muted-foreground/40')
@@ -908,9 +891,7 @@ describe('ProviderIcon', () => {
   })
 
   it('renders the official MiniMax icon asset for the minimax provider', () => {
-    // Why: the icon must travel to the status bar / tooltip unchanged so the
-    // user recognises the brand. We pin it to an <img> with a non-empty
-    // resource URL and aria-hidden so the icon stays purely decorative.
+    // Keep the official asset recognizable and decorative through status-bar and tooltip rendering.
     const markup = renderToStaticMarkup(createElement(ProviderIcon, { provider: 'minimax' }))
     expect(markup.startsWith('<img')).toBe(true)
     expect(markup).toContain('aria-hidden="true"')

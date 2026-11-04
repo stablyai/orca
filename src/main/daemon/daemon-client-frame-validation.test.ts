@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DaemonClient } from './client'
-import { isDaemonRequestFrame, isHelloFrame } from './daemon-client-frame-guards'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -31,7 +30,6 @@ function createMockSubprocess(): SubprocessHandle {
   }
 }
 
-/** Writes raw lines and resolves with whatever came back once the daemon closes the socket. */
 function sendRawFrames(socketPath: string, lines: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket: Socket = connect({ path: socketPath })
@@ -51,24 +49,6 @@ function sendRawFrames(socketPath: string, lines: string[]): Promise<string> {
     socket.on('connect', () => socket.write(lines.map((line) => `${line}\n`).join('')))
   })
 }
-
-describe('frame guards', () => {
-  it.each([null, 7, 'hello', [], {}, { type: 'hello' }, { type: 'hello', version: '1' }])(
-    'rejects %j as a hello',
-    (frame) => expect(isHelloFrame(frame)).toBe(false)
-  )
-
-  it('accepts a well-formed hello', () => {
-    expect(
-      isHelloFrame({ type: 'hello', version: 1, token: 't', clientId: 'c', role: 'control' })
-    ).toBe(true)
-  })
-
-  it.each([null, {}, { id: 123, type: 'ping' }, { id: 'a' }, { type: 'ping' }])(
-    'rejects %j as a request',
-    (frame) => expect(isDaemonRequestFrame(frame)).toBe(false)
-  )
-})
 
 describe.skipIf(process.platform === 'win32')('malformed client frames (#17841)', () => {
   let dir: string

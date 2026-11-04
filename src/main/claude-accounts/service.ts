@@ -12,6 +12,8 @@ import {
 } from './claude-account-selection'
 import { runClaudeCommandProcess } from './claude-command-process'
 import { runClaudeLoginSession } from './claude-login-session'
+import { runClaudePastedCodeLogin } from './claude-pasted-code-login'
+import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 
@@ -19,6 +21,7 @@ export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
   private pendingSignInLink: Promise<string | null> | null = null
+  private openWslSignInLink: ((signInLink: string) => void) | null = null
   private readonly selection: ClaudeAccountSelection
   private readonly registration: ClaudeAccountRegistration
 
@@ -42,7 +45,6 @@ export class ClaudeAccountService {
     return this.selection.list()
   }
 
-  /** A hidden `claude auth login` opens the browser and writes into the new account's folder. */
   addAccount(
     target: ClaudeAccountSelectionTarget = {},
     copyLink = false
@@ -57,13 +59,30 @@ export class ClaudeAccountService {
     return this.signInHidden({ accountId }, copyLink)
   }
 
-  /** The latest hidden sign-in's link once Claude hands it over; null if it ends without one. */
+  addAccountWithPastedCode(
+    channel: HostAccountSignInChannel
+  ): Promise<ClaudeRateLimitAccountsState> {
+    this.supersedePendingLogin()
+    return this.serializeMutation(() =>
+      this.registration.signIn({ runtime: 'host' }, (folder) =>
+        runClaudePastedCodeLogin(folder, this.runLoginCommand, channel, (cancel) => {
+          this.cancelPendingClaudeLogin = cancel
+        })
+      )
+    )
+  }
+
   waitForSignInLink(): Promise<string | null> {
     return this.pendingSignInLink ?? Promise.resolve(null)
   }
 
   cancelPendingLogin(): boolean {
     return this.cancelPendingClaudeLogin?.() ?? false
+  }
+
+  /** The desktop supplies an opener; orcad leaves this unset. */
+  setWslSignInLinkOpener(opener: ((signInLink: string) => void) | null): void {
+    this.openWslSignInLink = opener
   }
 
   beginSignIn(request: ClaudeSignInRequest = {}): Promise<ClaudeAccountSignIn> {
@@ -76,7 +95,7 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.registration.finish(signIn))
   }
 
-  /** Deletes the folder of a sign-in that never became an account; a saved account's is kept. */
+  /** Preserve saved accounts when cancelling sign-in. */
   cancelSignIn(signIn: Omit<ClaudeAccountSignIn, 'configDir'>): Promise<void> {
     return this.serializeMutation(() => this.registration.cancel(signIn))
   }
@@ -108,7 +127,7 @@ export class ClaudeAccountService {
     copyLink: boolean
   ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    // Why set before queueing: the renderer asks for the link right after starting the sign-in.
+    // Expose the link promise before queueing so the renderer can request it immediately.
     const signInLink = copyLink ? Promise.withResolvers<string | null>() : null
     this.pendingSignInLink = signInLink?.promise ?? null
     return this.serializeMutation(async () => {
@@ -120,7 +139,8 @@ export class ClaudeAccountService {
               runCommand: this.runLoginCommand,
               setCancel: (cancel) => {
                 this.cancelPendingClaudeLogin = cancel
-              }
+              },
+              openWslSignInLink: this.openWslSignInLink
             },
             signInLink?.resolve
           )
@@ -134,8 +154,7 @@ export class ClaudeAccountService {
     })
   }
 
-  // Why before the queue, not inside it: the abandoned login owns the queue slot every later
-  // account action waits for. Only user-driven actions supersede it.
+  // User actions cancel before queueing because the pending login holds the queue slot.
   private supersedePendingLogin(): void {
     if (this.cancelPendingLogin()) {
       console.info(

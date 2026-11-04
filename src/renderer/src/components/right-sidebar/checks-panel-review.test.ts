@@ -31,9 +31,7 @@ function makeGitLabReview(overrides: Partial<HostedReviewInfo> = {}): HostedRevi
 }
 
 describe('gitHubPRToChecksPanelReview', () => {
-  // Why: the right-sidebar merge presenter reads these fields off the converted
-  // review object. PR #4001 dropped them here, so review-required/merge-queue
-  // PRs silently rendered as plain "Able to merge" (regressing PR #2856).
+  // Preserve merge metadata: dropping it made review-required/merge-queue PRs read Able to merge (#4001/#2856).
   it('propagates review and merge-queue metadata from the PR', () => {
     const review = gitHubPRToChecksPanelReview(
       makePR({

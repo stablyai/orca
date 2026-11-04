@@ -190,9 +190,7 @@ describe('cross-platform path containment', () => {
   })
 
   it('matches macOS NFD paths against agent-recorded NFC paths', () => {
-    // Regression for #10832: macOS file pickers hand Orca decomposed (NFD) paths
-    // while Claude Code records cwd and names its project dirs in NFC, so a
-    // non-ASCII workspace never matched its own sessions.
+    // macOS pickers use NFD while Claude records NFC; non-ASCII workspaces must still match their sessions (#10832).
     const nfc = '/Users/ada/내 드라이브/프로젝트'
     const nfd = nfc.normalize('NFD')
     expect(nfd).not.toBe(nfc)
@@ -210,9 +208,7 @@ describe('cross-platform path containment', () => {
   })
 
   it('returns a byte-exact suffix when comparison folding changes length', () => {
-    // Comparison folding (NFC, case) is not length-preserving, so slicing the raw
-    // candidate by the folded root's length would cut mid-character and fabricate
-    // a path — callers rejoin this suffix and hit the filesystem with it.
+    // NFC/case folding changes length; slicing raw paths by folded lengths fabricates suffixes callers rejoin on disk.
     const nfc = '/Users/ada/프로젝트'
     const nfd = nfc.normalize('NFD')
     for (const root of [nfc, nfd]) {
@@ -224,21 +220,17 @@ describe('cross-platform path containment', () => {
     // Pre-existing over-slice: toLowerCase expands U+0130 to two UTF-16 units.
     expect(relativePathInsideRoot('C:\\İş', 'C:\\İş\\src\\a.ts')).toBe('src/a.ts')
 
-    // U+212A KELVIN SIGN folds to 'K', so the root and candidate must agree on
-    // Windows-ness or their segment counts desync and the suffix comes back ''.
+    // Kelvin U+212A folds to K; agree on Windows syntax or segment counts desynchronize.
     expect(relativePathInsideRoot('\u212A:/a\\b', '\u212A:/a\\b/c')).toBe(
       relativePathInsideRoot('K:/a\\b', 'K:/a\\b/c')
     )
 
-    // Astral characters must not be cut mid-surrogate-pair.
     expect(relativePathInsideRoot('/repo/🚀app', '/repo/🚀app/src/🎉file.ts')).toBe('src/🎉file.ts')
 
-    // A UNC-shaped candidate under POSIX root '/' used to yield a leading slash,
-    // which is not a relative path.
+    // UNC-shaped paths under / must return relative suffixes without a leading slash.
     expect(relativePathInsideRoot('/', '//server/share/x')).toBe('server/share/x')
 
-    // WSL suffixes must stay decomposed: they name files on a Linux filesystem,
-    // where NFD and NFC are distinct entries.
+    // WSL suffixes stay decomposed: Linux treats NFC/NFD as distinct entries.
     const decomposed = '프로젝트'.normalize('NFD')
     expect(
       relativePathInsideRoot(

@@ -19,12 +19,7 @@ function globalSkillLockPath(args: SkillLockSourcesArgs): string {
     : join(args.homeDir ?? homedir(), '.agents', '.skill-lock.json')
 }
 
-/**
- * Each globally installed skill's recorded `source`, keyed by name.
- *
- * Only provenance is read. The lock's hash depends on whether the skills CLI reached
- * GitHub's API when it installed, so it says nothing reliable about the bytes on disk.
- */
+/** Read provenance only: CLI lock hashes depend on GitHub API availability, so they cannot prove current disk bytes. */
 export async function readSkillLockSources(
   args: SkillLockSourcesArgs = {}
 ): Promise<ReadonlyMap<string, string>> {

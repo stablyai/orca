@@ -1,7 +1,10 @@
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
+import {
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../worker-threads/worker-thread-entry-path'
 import type { ClaudeProfileDescriptor } from './claude-profile-paths'
 import type { ClaudeProfileSetupReport } from './claude-profile-setup'
 
@@ -22,7 +25,7 @@ function workerPath(): string {
   return [entry, join(dirname(entry), '..', WORKER_FILENAME)].find(existsSync) ?? entry
 }
 
-/** One worker per setup: a first setup can merge a large history tree with sync fs calls. */
+/** Keep large history merges and synchronous filesystem calls off main. */
 export function runClaudeProfileSetupInWorker(
   job: ClaudeProfileSetupJob,
   path = workerPath(),
@@ -30,7 +33,7 @@ export function runClaudeProfileSetupInWorker(
 ): Promise<ClaudeProfileSetupReport> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(path, { workerData: job })
-    // Why: a hung setup would hold the router's in-flight entry, and every launch waiting on it, forever.
+    // Bound the wait for launches blocked on this setup.
     const timer = setTimeout(() => {
       reject(new Error('Claude account setup timed out'))
       void worker.terminate()

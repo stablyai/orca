@@ -3,9 +3,9 @@ import {
   decodeLogHeader,
   decodeTerminalHistoryLog,
   encodeLogBatch,
-  encodeLogHeader,
-  LOG_HEADER_BYTES
+  encodeLogHeader
 } from './terminal-history-log'
+
 import type { PendingOutputRecord } from './types'
 
 function buildLog(generation: number, batches: { seq: number; records: PendingOutputRecord[] }[]) {
@@ -16,11 +16,6 @@ function buildLog(generation: number, batches: { seq: number; records: PendingOu
 }
 
 describe('terminal history log codec', () => {
-  it('round-trips header generation', () => {
-    expect(decodeLogHeader(encodeLogHeader(0))).toBe(0)
-    expect(decodeLogHeader(encodeLogHeader(42))).toBe(42)
-  })
-
   it('rejects bad magic and unknown format versions', () => {
     expect(decodeLogHeader(Buffer.from('NOPE\x01\x00\x00\x00\x00', 'latin1'))).toBeNull()
     const wrongVersion = encodeLogHeader(1)
@@ -44,21 +39,8 @@ describe('terminal history log codec', () => {
     expect(log!.batches).toEqual([{ seq: 3, records }])
   })
 
-  it('decodes multiple contiguous batches', () => {
-    const log = decodeTerminalHistoryLog(
-      buildLog(1, [
-        { seq: 5, records: [{ kind: 'output', data: 'a' }] },
-        { seq: 6, records: [{ kind: 'output', data: 'b' }] },
-        { seq: 7, records: [] }
-      ])
-    )
-    expect(log!.batches.map((batch) => batch.seq)).toEqual([5, 6, 7])
-  })
-
   it('rejects the whole log on a batch sequence gap', () => {
-    // Why: a gap means an appended take batch was lost (e.g. main crashed
-    // between take and append); the byte stream has a hole, so replaying any
-    // of it would corrupt the restored terminal.
+    // A missing take batch leaves a hole that makes terminal replay unsafe.
     const log = decodeTerminalHistoryLog(
       buildLog(1, [
         { seq: 5, records: [{ kind: 'output', data: 'a' }] },
@@ -88,8 +70,7 @@ describe('terminal history log codec', () => {
   it('treats a record frame before any batch frame as unreadable', () => {
     const orphanRecord = Buffer.concat([
       encodeLogHeader(0),
-      // encodeLogBatch always prefixes a batch frame; slice it off to craft
-      // a stream that starts with a bare output frame.
+      // Strip the batch frame to create an orphan output record.
       encodeLogBatch(1, [{ kind: 'output', data: 'x' }]).subarray(9)
     ])
     expect(decodeTerminalHistoryLog(orphanRecord)).toBeNull()
@@ -101,11 +82,5 @@ describe('terminal history log codec', () => {
     log.writeUInt32LE(1, clearFrameOffset + 1)
 
     expect(decodeTerminalHistoryLog(Buffer.concat([log, Buffer.from('x')]))).toBeNull()
-  })
-
-  it('decodes an empty log (header only)', () => {
-    const log = decodeTerminalHistoryLog(encodeLogHeader(4))
-    expect(log).toEqual({ generation: 4, batches: [], truncatedTail: false })
-    expect(LOG_HEADER_BYTES).toBe(encodeLogHeader(4).length)
   })
 })

@@ -1,4 +1,3 @@
-// On first agent work in a fresh workspace, replace the auto-generated creature branch (e.g. `you/Nautilus`) with a short work-derived name.
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -11,7 +10,7 @@ import {
   stripConfiguredBranchPrefix
 } from '../../shared/branch-name-from-work'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
-import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-logic'
+import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-branch-name'
 import { gitExecFileAsync } from '../git/runner'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { resolveGitRouteForHost } from '../providers/execution-host-provider-dispatch'
@@ -30,10 +29,17 @@ import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/
 import type { AgentGenerationFailureOutput } from '../text-generation/agent-failure-output'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import { runFolderWorkspaceTitleAutoRename } from './first-work-workspace-title-rename'
+import { isWslMoveRepoBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import {
+  clearFirstWorkGenerationFailures,
+  isFirstWorkGenerationBackingOff,
+  resetFirstWorkGenerationBackoff,
+  retryFailedGeneration
+} from './first-work-generation-backoff'
 
 export type FirstWorkBranchRenameEvent = {
   paneKey: string
-  /** Agent-echoed worktree id; unreliable, used only as a fallback. */
+  /** Untrusted agent echo; use only as a fallback. */
   worktreeId: string | undefined
   tabId: string | undefined
   state: string
@@ -43,46 +49,43 @@ export type FirstWorkBranchRenameEvent = {
 }
 
 export type FirstWorkBranchRenameDeps = {
-  getSettings: () => GlobalSettings
+  getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
+    Parameters<typeof getConfiguredBranchPrefix>[0] &
+    Partial<Pick<GlobalSettings, 'autoRenameBranchFromWork'>>
   getRepo: (repoId: string) => Repo | undefined
   getAgentEnvResolvers: () => CommitMessageAgentEnvironmentResolvers | undefined
-  /** Current sidebar display name for the worktree, if one is stored. */
   getCurrentDisplayName: (worktreeId: string) => string | undefined
-  /** Current workspace path for non-git folder workspaces. */
   getFolderWorkspacePath?: (worktreeId: string) => string | undefined
-  /** True while a workspace title is waiting for the first agent message. */
+  isFolderWorkspaceWslMoveBlocked?: (worktreeId: string) => boolean
   isPendingFirstAgentMessageRename?: (worktreeId: string) => boolean
-  /** True only for Orca-created worktrees whose branch Orca is allowed to rename. */
+  /** Require Orca creation provenance before renaming a branch. */
   canRenameOrcaCreatedBranch: (worktreeId: string) => boolean
-  /** Persist a new sidebar display name for the worktree. */
   setDisplayName: (worktreeId: string, displayName: string) => void
-  /** Align the on-disk folder with the new branch leaf (best-effort, local-only). */
+  /** Best-effort local folder alignment after the branch rename. */
   renameWorktreeFolder?: (worktreeId: string, newLeaf: string) => Promise<boolean>
-  /** Record (or clear with null) an auto-rename failure for the sidebar "rename failed" badge; `failureOutput` carries bounded CLI output for on-demand display. */
+  /** Null clears the badge; failureOutput supplies bounded local diagnostics. */
   setRenameError: (
     worktreeId: string,
     error: string | null,
     failureOutput?: AgentGenerationFailureOutput | null
   ) => void
-  /** Authoritative tab→worktree resolution from the session's tab map. */
   resolveWorktreeIdForTab: (tabId: string) => string | undefined
-  /** Invalidate caches + notify the renderer so the new branch name surfaces. */
   onRenamed: (repoId: string) => void
 }
 
-// inFlight blocks concurrent generation; settled caches definitive verdicts (transient bails stay unsettled to retry later).
+// Cache only definitive verdicts; transient failures must remain retryable.
 const inFlightWorktreeIds = new Set<string>()
 const settledWorktreeIds = new Set<string>()
 export const FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT = 500
 
-/** Test seam: clear the per-process dedupe sets. */
 export function resetFirstWorkBranchRenameState(): void {
   inFlightWorktreeIds.clear()
   settledWorktreeIds.clear()
+  resetFirstWorkGenerationBackoff()
 }
 
 function rememberSettledWorktreeId(worktreeId: string): void {
-  // Why: worktree ids are unbounded over a long session; evict oldest to bound memory (costs a rare re-probe).
+  // Bound long-lived deduplication at the cost of occasional re-probes.
   settledWorktreeIds.delete(worktreeId)
   settledWorktreeIds.add(worktreeId)
   while (settledWorktreeIds.size > FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT) {
@@ -98,21 +101,23 @@ export async function maybeAutoRenameBranchOnFirstWork(
   event: FirstWorkBranchRenameEvent,
   deps: FirstWorkBranchRenameDeps
 ): Promise<void> {
-  // Cheap gates first — the signal must be a live "work has begun" event.
   if (event.isReplay || event.state !== 'working') {
     return
   }
   if (!deps.getSettings().autoRenameBranchFromWork) {
     return
   }
-  // Resolve from the tab (authoritative); the agent-echoed worktreeId isn't present on every event.
+  // Prefer authoritative tab mapping over an agent-echoed workspace ID.
   const tabId = parsePaneKey(event.paneKey)?.tabId ?? event.tabId
   const worktreeId = (tabId ? deps.resolveWorktreeIdForTab(tabId) : undefined) ?? event.worktreeId
   if (!worktreeId) {
     return
   }
-  // Short-circuit settled/in-flight worktrees before any logging or work.
-  if (settledWorktreeIds.has(worktreeId) || inFlightWorktreeIds.has(worktreeId)) {
+  if (
+    settledWorktreeIds.has(worktreeId) ||
+    inFlightWorktreeIds.has(worktreeId) ||
+    isFirstWorkGenerationBackingOff(worktreeId)
+  ) {
     return
   }
   const prompt = event.prompt?.trim()
@@ -121,27 +126,25 @@ export async function maybeAutoRenameBranchOnFirstWork(
   }
   inFlightWorktreeIds.add(worktreeId)
   try {
-    // settled = definitive verdict (renamed/ineligible); false = transient bail to retry later.
     const settled = await runAutoRename(worktreeId, prompt, event.assistantMessage, deps)
     if (settled) {
+      clearFirstWorkGenerationFailures(worktreeId)
       rememberSettledWorktreeId(worktreeId)
     }
   } catch (error) {
-    // Why: best-effort convenience; a failure must never disrupt the user's agent, so swallow after logging.
     console.warn('[auto-branch-rename] rename attempt failed:', error)
   } finally {
     inFlightWorktreeIds.delete(worktreeId)
   }
 }
 
-/** Returns true for a definitive verdict (renamed or permanently ineligible → stop re-probing), false for a transient bail worth retrying. */
+/** True settles permanently; false allows a later event to retry. */
 async function runAutoRename(
   worktreeId: string,
   prompt: string,
   assistantMessage: string | undefined,
   deps: FirstWorkBranchRenameDeps
 ): Promise<boolean> {
-  // `stop` = permanent skip (logs which gate bailed); `retry` = transient; `clearError` drops a stale "rename failed" badge on a benign final state.
   const stop = (reason: string, clearError = false): true => {
     if (clearError) {
       deps.setRenameError(worktreeId, null)
@@ -167,7 +170,7 @@ async function runAutoRename(
   }
 
   const repo = deps.getRepo(getRepoIdFromWorktreeId(worktreeId))
-  // Why: folder-workspace ids carry a synthetic `::workspace:<uuid>` suffix that's not a real dir; resolve to the backing folder for Git's cwd.
+  // Synthetic workspace suffixes must not become Git working-directory paths.
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   if (!repo || !parsed) {
     return stop('unresolved repo or worktree id')
@@ -176,8 +179,12 @@ async function runAutoRename(
     return stop('folder project has no branch to rename', true)
   }
   const worktreePath = parsed.worktreePath
+  // Defer Git work while a WSL move holds the project.
+  if (isWslMoveRepoBlocked(repo)) {
+    return retry('a WSL move is taking the project')
+  }
 
-  // Why: a runtime row's connectionId names the server's own SSH target; that host owns the branch, never this client.
+  // Runtime-host branches belong to that host, regardless of the client's SSH connection.
   const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
   if (route.kind === 'runtime') {
     return stop(`branch is owned by ${route.hostId}`)
@@ -194,18 +201,17 @@ async function runAutoRename(
   if (!deps.canRenameOrcaCreatedBranch(worktreeId)) {
     return stop(`worktree is not eligible for auto-rename`, true)
   }
-  // Only rename a branch Orca auto-named — never one the user chose.
   const leaf = currentBranch.slice(currentBranch.lastIndexOf('/') + 1)
   if (!isAutoGeneratedCreatureBranchName(leaf)) {
     return stop(`branch "${currentBranch}" is not an auto-generated name`, true)
   }
-  // Never rewrite a branch that's already been published.
+  // Preserve published branches.
   const upstreamProbe = await probeBranchUpstream(exec)
   if (upstreamProbe.outcome === 'has-upstream') {
     return stop(`branch "${currentBranch}" already has an upstream`, true)
   }
   if (upstreamProbe.outcome === 'probe-failed') {
-    // Why: settling an unreadable probe as "has upstream" made this silent + permanent via the settled cache (issue #7808).
+    // Failed probes must remain retryable rather than entering the settled cache.
     const probeError = upstreamProbe.message.replace(/\s+/g, ' ').trim()
     deps.setRenameError(
       worktreeId,
@@ -218,7 +224,6 @@ async function runAutoRename(
   const hostKey = getCommitMessageModelDiscoveryHostKey(null)
   const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
   if (!resolvedParams.ok) {
-    // Why: a generation-step failure (vs a benign skip) is user-actionable, so surface it on the card.
     deps.setRenameError(worktreeId, resolvedParams.error)
     return stop(`no generation agent: ${resolvedParams.error}`)
   }
@@ -235,15 +240,15 @@ async function runAutoRename(
     params,
     target
   )
+  // Generation can outlive the start of a WSL move.
+  if (isWslMoveRepoBlocked(repo)) {
+    return retry('a WSL move started during generation')
+  }
   if (!generated.success) {
-    // Transient failure: retry on a later event; skip the badge for a user-canceled generation.
-    if (!generated.canceled) {
-      deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
-    }
-    return retry(`generation failed: ${generated.error}`)
+    return retryFailedGeneration(worktreeId, generated, deps, retry)
   }
 
-  // Re-validate after generation (takes seconds): bail if the branch changed or was published meanwhile.
+  // Generation can outlive a branch switch or publication.
   const branchNow = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
   if (branchNow !== currentBranch) {
     return retry(`branch changed during generation (${currentBranch} -> ${branchNow})`)
@@ -258,34 +263,34 @@ async function runAutoRename(
   }
 
   const username = (await resolveLocalGitUsername(repo.path)) || null
-  // The model sometimes echoes the configured prefix (e.g. `tmchow/...`); strip it to avoid double-prefixing.
+  // Models may echo the configured prefix; strip it before adding the prefix ourselves.
   const slug = stripConfiguredBranchPrefix(
     generated.slug,
     getConfiguredBranchPrefix(settings, username)
   )
-  // Prefix-only output strips to empty; renaming would just re-add the prefix (`tmchow/tmchow`), so skip.
   if (!slug) {
     return stop('model produced only the configured prefix', true)
   }
   const newBranch = await resolveUniqueBranchName(
     exec,
     slug,
-    // Use the non-throwing builder here: the prefix was already validated at
-    // worktree-create time, and this best-effort background rename has its own
-    // retry/stop handling, so it must not throw on prefix issues.
+    // Use the nonthrowing builder so invalid prefixes follow this background task's stop/retry policy.
     (slugLeaf) => computeBranchName(slugLeaf, settings, username),
     currentBranch
   )
   if (!newBranch || newBranch === currentBranch) {
-    // No distinct name is terminal and benign, so clear any stale failure badge from a prior transient attempt.
     return stop(`no distinct unique branch name for slug "${slug}"`, true)
   }
 
+  // Awaited name lookups can outlive the start of a WSL move.
+  if (isWslMoveRepoBlocked(repo)) {
+    return retry('a WSL move started before the branch rename')
+  }
   await renameCurrentBranch(exec, newBranch)
 
-  // resolveUniqueBranchName may append a collision suffix (`-2`, …), so derive names from the resolved leaf, not the slug.
+  // Collision suffixes belong in display and folder names too.
   const newBranchLeaf = newBranch.slice(newBranch.lastIndexOf('/') + 1)
-  // Only sync the sidebar name when it's still the auto-generated creature name, so a user-typed name is left alone.
+  // Preserve user-edited display names.
   const currentDisplayName = deps.getCurrentDisplayName(worktreeId)
   const newDisplayName = humanizeBranchSlug(newBranchLeaf)
   const updateDisplay = !currentDisplayName || isAutoGeneratedCreatureBranchName(currentDisplayName)
@@ -293,12 +298,12 @@ async function runAutoRename(
     deps.setDisplayName(worktreeId, newDisplayName)
   }
 
-  // A successful rename clears any stale generation-failure surfaced earlier.
   deps.setRenameError(worktreeId, null)
 
-  // Best-effort local-only folder align, after setDisplayName so the new name rides into the migrated identity; a failure must never undo the landed rename.
+  // Update display before migrating folder identity; folder failures must preserve the landed branch rename.
   let folderRenamed = false
-  if (deps.renameWorktreeFolder) {
+  const folderBlocked = isWslMoveRepoBlocked(repo)
+  if (deps.renameWorktreeFolder && !folderBlocked) {
     try {
       folderRenamed = await deps.renameWorktreeFolder(worktreeId, newBranchLeaf)
     } catch (error) {
@@ -306,14 +311,18 @@ async function runAutoRename(
     }
   }
 
-  // A folder rename already notified the renderer, so a second onRenamed would just re-list redundantly.
+  // A folder move already notified the renderer.
   if (!folderRenamed) {
     deps.onRenamed(repo.id)
   }
   const displayLog = updateDisplay
     ? `display "${currentDisplayName ?? ''}" -> "${newDisplayName}"`
     : `display kept ("${currentDisplayName}")`
-  const folderLog = folderRenamed ? '; folder renamed' : ''
+  const folderLog = folderRenamed
+    ? '; folder renamed'
+    : folderBlocked
+      ? '; folder kept (a WSL move started)'
+      : ''
   console.info(
     `[auto-branch-rename] renamed ${currentBranch} -> ${newBranch}; ${displayLog}${folderLog}`
   )

@@ -68,7 +68,7 @@ describe('buildAutomationRunContextForRepo', () => {
       buildAutomationRunContextForRepo({
         repoId: 'repo-builder',
         repos: [repo('repo-builder')],
-        projectHostSetups: [setup({ setupState: 'setting-up' })]
+        projectHostSetups: [setup({ hostId: 'local', setupState: 'setting-up' })]
       })
     ).toBeNull()
 

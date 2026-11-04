@@ -60,10 +60,7 @@ export abstract class RelayDispatcherClientState {
     this.requestHandlers.set(method, handler)
   }
 
-  // Why it throws: this is a single slot, so a second registration silently shadows the
-  // first and which one survives depends only on construction order. `pty.ackData` shipped
-  // that way — a no-op handler was saved from disabling credit acks purely by the adapter
-  // being constructed second (STA-4571). Fail loudly instead of encoding that ordering.
+  // Throw on duplicate single-slot registration; construction order once nearly let a no-op disable PTY credit acks (STA-4571).
   onNotification(method: string, handler: NotificationHandler): void {
     if (this.notificationHandlers.has(method)) {
       throw new Error(`Notification handler for ${method} is already registered`)
@@ -81,8 +78,7 @@ export abstract class RelayDispatcherClientState {
     return () => this.disposeListeners.delete(listener)
   }
 
-  // Why single-slot rather than a listener set: admission is a veto, so two registrations would have
-  // to agree on precedence. One owner (the PTY consumer session) holds it for the dispatcher's life.
+  // Admission veto has one PTY-owner handler; multiple registrations would require ambiguous precedence.
   registerPtyDataPublicationAdmission(admission: PtyDataPublicationAdmission): () => void {
     if (this.ptyDataPublicationAdmission) {
       throw new Error('PTY data publication admission is already registered')

@@ -11,7 +11,7 @@ import {
   type FeedbackImageDraft
 } from '@/lib/feedback-image-attachments'
 
-// Why: an image that needs no shrink reads in a few ms, which would only flash the hint.
+// Delay progress hints to avoid flashing during fast unshrunk reads.
 const PREPARING_HINT_DELAY_MS = 250
 
 type SidebarFeedbackImageAttachmentsProps = {
@@ -33,9 +33,7 @@ export function SidebarFeedbackImageAttachments({
   onRemove
 }: SidebarFeedbackImageAttachmentsProps): React.JSX.Element {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
-  // Why: the byte budget binds long before the count does for full-screen
-  // screenshots, so an affordance that only knows the count invites picks that
-  // can only ever be rejected.
+  // Full-screen screenshots exhaust bytes before count; disable picks that cannot fit.
   const attachedBytes = images.reduce((total, image) => total + image.bytes, 0)
   const atCapacity =
     images.length >= MAX_FEEDBACK_IMAGE_COUNT || attachedBytes >= MAX_FEEDBACK_IMAGE_TOTAL_BYTES
@@ -60,8 +58,7 @@ export function SidebarFeedbackImageAttachments({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">
-          {/* Why: shrinking an oversized screenshot is slow enough that a silent gap
-              between the pick and the thumbnail reads as a dropped attachment. */}
+          {/* Show progress while shrinking so the thumbnail delay cannot read as a dropped attachment. */}
           {isPreparing
             ? translate(
                 'auto.components.sidebar.SidebarFeedbackImageAttachments.preparing',
@@ -100,7 +97,7 @@ export function SidebarFeedbackImageAttachments({
         className="hidden"
         onChange={(event) => {
           onAddFiles(Array.from(event.target.files ?? []))
-          // Why: reset so re-picking the same file still fires onChange.
+          // Reset so selecting the same file still emits change.
           event.target.value = ''
         }}
       />

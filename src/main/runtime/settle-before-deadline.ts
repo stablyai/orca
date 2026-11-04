@@ -1,11 +1,4 @@
-/**
- * Races `run()` against an absolute deadline (epoch ms).
- *
- * Without `failClosedError` the call is best-effort: a timeout or a rejection
- * resolves to `fallback`. With it, both surface as a rejection so destructive
- * callers can block on unproven work — `failClosedOnRunError` narrows which
- * rejections count (some are benign sentinels).
- */
+/** Use an absolute epoch-ms deadline. Default failures return fallback; failClosedError rejects timeout/run failures for destructive callers, filtered by failClosedOnRunError. */
 export async function settleBeforeDeadline<T>(
   run: () => Promise<T>,
   fallback: T,
@@ -43,8 +36,7 @@ export async function settleBeforeDeadline<T>(
       remaining
     )
     timer.unref?.()
-    // Why: `.then(run)` rather than `run()` so a synchronous throw is routed
-    // through the same fail-closed filter instead of escaping the executor.
+    // Defer run through then so synchronous throws pass the same fail-closed filter.
     void Promise.resolve()
       .then(run)
       .then(finish, (error: unknown) =>

@@ -1,17 +1,11 @@
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
-// Why: cold-park hysteresis keeps a hidden pane mounted for 30s so quick tab
-// flips never pay a re-hydrate; hot-retain keeps a bounded recently-visible
-// working set warm for 5 minutes beyond that. The cap (not the clock) is the
-// primary evictor — 4 worktrees covers the ordinary working set, so parking
-// only engages for the many-worktree tail it
-// was built for. Reveal cost is a flat ~170ms remount regardless of buffer
-// size, so cutting remount *frequency* beats shaving replay.
+// Hysteresis avoids quick-switch remounts; bounded hot-retain keeps recent worktrees warm. Reducing remount frequency matters more than replay size.
 export const TERMINAL_WORKTREE_COLD_PARK_DELAY_MS = 30_000
 export const TERMINAL_WORKTREE_HOT_RETAIN_MS = 5 * 60_000
 export const TERMINAL_WORKTREE_HOT_RETAIN_LIMIT = 4
@@ -20,8 +14,7 @@ export const TERMINAL_TAB_COLD_PARK_DELAY_MS = 30_000
 export const TERMINAL_TAB_HOT_RETAIN_MS = 5 * 60_000
 export const TERMINAL_TAB_HOT_RETAIN_LIMIT = 6
 
-// Why: tests override these per call (instead of process.env reads inside the
-// module) to shrink the 30s hysteresis to test-friendly durations.
+// Pass test overrides explicitly to shorten hysteresis without module-level environment reads.
 export type TerminalColdParkPolicyOverrides = {
   coldParkDelayMs?: number
   hotRetainMs?: number
@@ -39,9 +32,7 @@ export type TerminalWorktreeColdParkCandidate = {
   shouldMeasureHiddenWorktree: boolean
   hasActivityTerminalPortal: boolean
   hiddenSinceMs: number | null
-  /** Post-measure cool-down: hiddenSince survives a measure window (TTL/rank
-   *  clock stays honest), but re-park waits for this deadline — else every ~3s
-   *  measure lease on a past-deadline worktree thrashes remount → re-park. */
+  /** Measure preserves hiddenSince for TTL/rank; cool-down prevents immediate re-park after the lease ends. */
   parkCooldownUntilMs?: number | null
 }
 
@@ -67,10 +58,7 @@ function hasPendingActivationSpawn(tab: ColdParkableTerminalTab): boolean {
   )
 }
 
-// Why: snapshot-backed = local daemon session owned by this worktree (foreign
-// ids reattach through a path parking cannot replay). SSH is restorable too,
-// via isParkRestorableTerminalPty + main's headless model; only remote-runtime
-// ptys, which never transit main, stay unrestorable.
+// Only this worktree’s local daemon IDs have these snapshots; SSH and paired-runtime eligibility use isParkRestorableTerminalPty.
 export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: string): boolean {
   if (!ptyId) {
     return false
@@ -78,9 +66,7 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
   if (isRemoteExecutionHostPtyId(ptyId)) {
     return false
   }
-  // Why: separator-less ids come from the daemon-fail-open LocalPtyProvider;
-  // they have no daemon session model, so revealing a parked pane would
-  // silently respawn a fresh shell instead of restoring the snapshot.
+  // Daemon-fail-open IDs lack session models; remount would respawn instead of restoring the shell.
   const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
   return separatorIdx !== -1 && ptyId.slice(0, separatorIdx) === worktreeId
 }
@@ -98,8 +84,7 @@ export {
   selectPairedRuntimeParkingEnvironmentIdsFromState
 } from './paired-runtime-parking-capabilities'
 
-// Why: SSH uses local main's model; paired PTYs are eligible only when their
-// exact host advertises authoritative bounded restore.
+// SSH uses local main’s model; paired PTYs require their exact host’s bounded-restore capability.
 export function isParkRestorableTerminalPty(
   ptyId: string | null,
   worktreeId: string,
@@ -122,8 +107,7 @@ export function canParkTerminalWorktreeRenderers(args: {
   worktreeId: string
   terminalTabs: readonly ColdParkableTerminalTab[]
   pendingStartupByTabId: Readonly<Record<string, unknown>>
-  // Why: callers pass settings.terminalHiddenViewParking !== false — the
-  // design-doc kill switch that disables parking entirely.
+  // The explicit terminalHiddenViewParking kill switch disables all parking.
   parkingEnabled: boolean
   isVisible: boolean
   shouldMeasureHiddenWorktree: boolean
@@ -200,8 +184,7 @@ export type ColdParkRetainCandidate = {
   lastActivatedSeq?: number
 }
 
-// Why: a view switch stamps every owned tab at once, so activation order must
-// break the routine hidden-time tie before the deterministic UUID fallback.
+// View switches stamp tabs together; activation order breaks ties before UUID order.
 function compareColdParkRecencyDesc(
   a: ColdParkRetainCandidate,
   b: ColdParkRetainCandidate
@@ -213,10 +196,7 @@ function compareColdParkRecencyDesc(
   return activationDelta === 0 ? a.id.localeCompare(b.id) : activationDelta
 }
 
-// Why: the single most-recently-hidden candidate is the view the user just
-// switched away from; keeping it warm regardless of the TTL or cap means
-// switching back after any absence (a meeting, coffee) is always instant, the
-// remount cost users actually notice.
+// Keep the last-hidden view warm beyond cap/TTL so switching back remains instant.
 function selectLastActiveRetainedId(candidates: ColdParkRetainCandidate[]): string | null {
   let lastActive: ColdParkRetainCandidate | null = null
   for (const candidate of candidates) {
@@ -227,9 +207,7 @@ function selectLastActiveRetainedId(candidates: ColdParkRetainCandidate[]): stri
   return lastActive?.id ?? null
 }
 
-// Why: hot-retain keeps the most recently hidden ids warm up to the limit;
-// ids hidden past hotRetainMs or beyond the limit cold-park. The last-active
-// id is exempt from both so returning to it never pays a remount.
+// Park past-TTL or over-cap candidates; last-active stays exempt from both.
 export function selectIdsBeyondHotRetain(
   candidates: ColdParkRetainCandidate[],
   args: { nowMs: number; hotRetainMs: number; hotRetainLimit: number }
@@ -248,8 +226,7 @@ export function selectIdsBeyondHotRetain(
     }
   }
   retainedCandidates.sort(compareColdParkRecencyDesc)
-  // Why: the last-active id already holds one slot in the warm working set, so
-  // the cap counts it out — the remaining candidates fill hotRetainLimit-1.
+  // Last-active already uses one warm slot; remaining candidates get hotRetainLimit − 1.
   const remainingLimit = lastActiveId === null ? args.hotRetainLimit : args.hotRetainLimit - 1
   for (const candidate of retainedCandidates.slice(Math.max(0, remainingLimit))) {
     coldParkedIds.add(candidate.id)

@@ -20,6 +20,7 @@ import {
   updateMR,
   updateMRReviewers
 } from '../gitlab/client'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 
@@ -38,7 +39,7 @@ export class RuntimeGitLabMutationCommands {
       title,
       body,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -55,7 +56,7 @@ export class RuntimeGitLabMutationCommands {
       number,
       updates,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -73,7 +74,7 @@ export class RuntimeGitLabMutationCommands {
       number,
       body,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -91,7 +92,7 @@ export class RuntimeGitLabMutationCommands {
       iid,
       body,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -109,7 +110,7 @@ export class RuntimeGitLabMutationCommands {
       iid,
       input,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -129,7 +130,7 @@ export class RuntimeGitLabMutationCommands {
       discussionId,
       resolved,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -145,7 +146,7 @@ export class RuntimeGitLabMutationCommands {
       repo.path,
       jobId,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -161,7 +162,7 @@ export class RuntimeGitLabMutationCommands {
       repo.path,
       jobId,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -179,7 +180,7 @@ export class RuntimeGitLabMutationCommands {
       iid,
       method ?? 'merge',
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -197,7 +198,7 @@ export class RuntimeGitLabMutationCommands {
       repo.path,
       iid,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -215,7 +216,7 @@ export class RuntimeGitLabMutationCommands {
       iid,
       updates,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -233,7 +234,7 @@ export class RuntimeGitLabMutationCommands {
       iid,
       reviewerIds,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
       ...this.deps.getLocalGitArgs(repo)
     )

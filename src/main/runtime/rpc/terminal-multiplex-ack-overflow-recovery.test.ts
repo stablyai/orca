@@ -138,7 +138,7 @@ describe('terminal multiplex RPC', () => {
           enter: false,
           interrupt: false
         },
-        { inputKind: 'driving' }
+        { inputKind: 'driving', inputSource: 'desktop' }
       )
     )
 
@@ -179,13 +179,12 @@ describe('terminal multiplex RPC', () => {
       (frame) => frame?.opcode === TerminalStreamOpcode.Output
     )
     expect(recoveryStartIndex).toBeGreaterThanOrEqual(0)
-    // Why: clients discard truncated snapshots; a usable recovery snapshot
-    // must not be marked truncated or the dropped output gap is permanent.
+    // Clients discard truncated snapshots; mark usable recovery complete or the gap stays permanent.
     expect(
       decodeTerminalStreamJson<{ truncated?: boolean }>(drainFrames[recoveryStartIndex]!.payload)
         ?.truncated
     ).toBe(false)
-    // P2-5: the client's history ends before the dropped output, so recovery must carry history to replace it.
+    // Recovery must replace history that ends before dropped output.
     expect(runtime.serializeTerminalBuffer).toHaveBeenLastCalledWith('pty-1', {
       scrollbackRows: 1000
     })
@@ -304,8 +303,7 @@ describe('terminal multiplex RPC', () => {
       serializeTerminalBuffer: vi
         .fn()
         .mockResolvedValueOnce({ data: 'initial snapshot', cols: 120, rows: 40 })
-        // Why: the recovery snapshot seq covers the entire flood, so every
-        // retained pending chunk is already contained in the snapshot.
+        // Recovery seq covers the flood, so all retained chunks already appear in the snapshot.
         .mockResolvedValue({ data: 'recovered snapshot', cols: 120, rows: 40, seq: floodedChars }),
       getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
       getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
@@ -411,8 +409,7 @@ describe('terminal multiplex RPC', () => {
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
         .join('')
     ).toBe('recovered snapshot')
-    // Why: every retained chunk is covered by the recovery snapshot seq;
-    // replaying any of them would duplicate snapshot content.
+    // Covered chunks would duplicate recovered snapshot content.
     expect(
       framesAfterRecovery.filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
     ).toEqual([])

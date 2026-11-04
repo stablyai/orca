@@ -102,7 +102,12 @@ export function writeWebKeybindingAction(
   const currentSnapshot = getWebKeybindingSnapshot()
   const candidateOverrides = { ...currentSnapshot.overrides }
   if (normalizedBindings === null) {
-    delete candidateOverrides[actionId]
+    const common = currentSnapshot.commonOverrides[actionId]
+    if (common) {
+      candidateOverrides[actionId] = common
+    } else {
+      delete candidateOverrides[actionId]
+    }
   } else {
     candidateOverrides[actionId] = normalizedBindings
   }

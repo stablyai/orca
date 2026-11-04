@@ -3,10 +3,8 @@ import type { StoreApi } from 'zustand/vanilla'
 import type { AppState } from '@/store/types'
 import { createUIStore } from '@/store/slices/ui-slice-test-harness'
 import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from './ensure-hooks-confirmed'
-import {
-  createCompatibleRuntimeStatusResponseIfNeeded,
-  type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
+import type { RuntimeEnvironmentCallRequest } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const hooksCheckMock = vi.fn()

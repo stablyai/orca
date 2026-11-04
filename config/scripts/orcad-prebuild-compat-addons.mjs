@@ -1,8 +1,4 @@
-/**
- * The addons a compat slot builds beside node-pty (design D6 rung B). The default slots take
- * @parcel/watcher's upstream prebuild, which needs a newer libstdc++ than a glibc 2.17 host has,
- * so the compat slot compiles it from the package's own sources with the C++ runtime static.
- */
+// Compat glibc 2.17 slots build @parcel/watcher with static C++ runtime; upstream prebuilds need newer libstdc++ (design D6 rung B).
 import { cpSync, mkdirSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'

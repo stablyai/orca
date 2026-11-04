@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
-import { lstat, readlink, readdir, rename, rmdir, symlink, unlink } from 'node:fs/promises'
+import { lstat, readlink, readdir, rename, rm, rmdir, symlink, unlink } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
+import { APPIMAGE_SOURCE_RECORD_NAME } from '../../shared/appimage-cache-identity'
 import { isAppImageCacheKey, resolveCachedAppImagePayloadRoot } from './appimage-cache-layout'
 import { inspectAppImageGenerationLeases } from './appimage-generation-lease'
 import { residencyOfGeneration, scanResidentExecutables } from './appimage-generation-residency'
@@ -58,6 +59,7 @@ export async function removeAppImageInstalledPayloads(namespacePath: string): Pr
   removeAppImageLegacyLiveEndpoint(cacheRootPath)
   if (await removeInstalledEndpoint(cacheRootPath, resolvedNamespace)) {
     await pruneNamespace(cacheRootPath, resolvedNamespace, new Set())
+    await rm(join(resolvedNamespace, APPIMAGE_SOURCE_RECORD_NAME), { force: true }).catch(() => {})
     await rmdir(resolvedNamespace).catch(() => {})
   }
 }

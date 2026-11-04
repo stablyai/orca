@@ -3,7 +3,7 @@ import {
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 export type TerminalQuickCommandDialogAction = 'terminal-command' | 'agent-prompt'
 
@@ -67,8 +67,7 @@ export function switchTerminalQuickCommandDialogAction(
     scope: getTerminalQuickCommandScope(draft)
   }
 
-  // Why: action modes are independent editors; toggling should not transform
-  // terminal command text into an agent prompt, or the reverse.
+  // Action modes retain independent drafts; switching must not convert command text into an agent prompt.
   if (action === 'agent-prompt') {
     return {
       memory: nextMemory,

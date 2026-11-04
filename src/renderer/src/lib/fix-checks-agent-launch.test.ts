@@ -1,4 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
+import { getDefaultSettings } from '../../../shared/constants'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ExecutionHostFactsModule from '@/lib/execution-host-facts'
+import type * as HostChatProgramAcquisitionModule from './host-chat-program-acquisition'
+
+const hostRpc = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: hostRpc,
+  runtimeEnvironmentSupportsCapability: async () => true
+}))
+afterEach(clearHostAgentMenuSettingsForTests)
 
 const mocks = vi.hoisted(() => {
   const store = {
@@ -54,12 +70,16 @@ const mocks = vi.hoisted(() => {
     pickSourceControlLaunchAgent: vi.fn(),
     readSourceControlLaunchRecipeAgentId: vi.fn(),
     resolveSourceControlActionRecipe: vi.fn(),
-    resolveSourceControlLaunchPlatform: vi.fn(),
+    resolveRepoWorktreeLaunchPlatform: vi.fn(),
     toastError: vi.fn(),
     toastMessage: vi.fn()
   }
 })
 
+vi.mock('./host-chat-program-acquisition', async (importOriginal) => ({
+  ...(await importOriginal<typeof HostChatProgramAcquisitionModule>()),
+  acquireAgentLaunchChoices: async (_: unknown, run: () => unknown) => ({ detected: await run() })
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => mocks.store
@@ -102,9 +122,15 @@ vi.mock('../../../shared/source-control-launch-agent-selection', () => ({
   readSourceControlLaunchRecipeAgentId: mocks.readSourceControlLaunchRecipeAgentId
 }))
 
-vi.mock('@/lib/source-control-launch-platform', () => ({
-  resolveSourceControlLaunchPlatform: mocks.resolveSourceControlLaunchPlatform
-}))
+vi.mock('@/lib/execution-host-facts', async () => {
+  const actual = await vi.importActual<typeof ExecutionHostFactsModule>(
+    '@/lib/execution-host-facts'
+  )
+  return {
+    ...actual,
+    resolveRepoWorktreeLaunchPlatform: mocks.resolveRepoWorktreeLaunchPlatform
+  }
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
@@ -117,6 +143,7 @@ vi.mock('../../../shared/source-control-ai', () => ({
 describe('startFixChecksAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.store.settings = { defaultTuiAgent: 'codex' }
     mocks.store.repos = [
       {
         id: 'repo-1',
@@ -158,214 +185,213 @@ describe('startFixChecksAgent', () => {
     mocks.resolveSourceControlActionRecipe.mockReturnValue({
       commandInputTemplate: '{basePrompt}'
     })
-    mocks.resolveSourceControlLaunchPlatform.mockReturnValue('darwin')
+    mocks.resolveRepoWorktreeLaunchPlatform.mockReturnValue('darwin')
   })
 
-  it('activates the attached workspace as a surface-providing caller', async () => {
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(true)
-
-    // Why: launchAgentInNewTab creates the surface; without the opt-out, activation would
-    // also re-seed a shell in a closed-last-terminal workspace.
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true
-    })
-  })
-
-  it('fails without launching when the requested worktree is missing', async () => {
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'missing-worktree',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(false)
-
-    expect(mocks.store.ensureDetectedAgents).not.toHaveBeenCalled()
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-  })
-
-  it('fails without launching when agent detection finds no enabled agent', async () => {
-    mocks.store.ensureDetectedAgents.mockResolvedValue([])
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(false)
-
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-  })
-
-  it('rejects without launching when remote agent detection fails', async () => {
-    mocks.store.repos = [{ ...mocks.store.repos[0], connectionId: 'conn-1' }]
-    mocks.getConnectionId.mockReturnValue('conn-1')
-    mocks.store.ensureRemoteDetectedAgents.mockRejectedValue(new Error('detection failed'))
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).rejects.toThrow('detection failed')
-
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-  })
-
-  it('falls back to the repo connection when an attached workspace lookup is unresolved', async () => {
-    mocks.store.repos = [
-      {
-        ...mocks.store.repos[0],
-        connectionId: 'ssh-1'
-      }
-    ]
-    mocks.getConnectionId.mockReturnValue(undefined)
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(true)
-
-    expect(mocks.store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
-    expect(mocks.resolveSourceControlLaunchPlatform).toHaveBeenCalledWith({
-      connectionId: 'ssh-1',
-      worktreePath: '/repo/wt-1',
-      projectRuntime: undefined
-    })
-  })
-
-  it('passes the local project runtime when resolving an attached WSL workspace launch platform', async () => {
-    mocks.store.repos = [
-      {
-        ...mocks.store.repos[0],
-        path: 'C:\\Users\\alice\\repo'
-      }
-    ]
-    mocks.store.worktrees = [
-      {
-        id: 'wt-1',
-        repoId: 'repo-1',
-        path: 'C:\\Users\\alice\\repo-worktree'
-      }
-    ]
-    mocks.store.worktreesByRepo = { 'repo-1': mocks.store.worktrees }
-    mocks.store.projects = [
-      {
-        id: 'repo-1',
-        displayName: 'Repo',
-        badgeColor: '#000000',
-        sourceRepoIds: ['repo-1'],
-        createdAt: 1,
-        updatedAt: 1,
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      }
-    ]
-    mocks.resolveSourceControlLaunchPlatform.mockImplementation(({ projectRuntime }) =>
-      projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
-        ? 'linux'
-        : 'win32'
-    )
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(true)
-
-    expect(mocks.resolveSourceControlLaunchPlatform).toHaveBeenCalledWith({
-      connectionId: null,
-      worktreePath: 'C:\\Users\\alice\\repo-worktree',
-      projectRuntime: expect.objectContaining({
-        status: 'resolved',
-        runtime: expect.objectContaining({ kind: 'wsl', distro: 'Ubuntu' })
-      })
-    })
-    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({ launchPlatform: 'linux' })
-    )
-  })
-
-  it('fails without launching when the launch platform cannot be resolved', async () => {
-    mocks.resolveSourceControlLaunchPlatform.mockReturnValue(undefined)
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(false)
-
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-  })
-
-  it('rejects invalid saved CLI arguments before activating the attached workspace', async () => {
+  it('carries the actual use-default literal from Fix Checks into final startup and its recipe', async () => {
+    const settings = {
+      ...getDefaultSettings('/test'),
+      agentPermissionDefault: 'own' as const,
+      defaultTuiAgent: 'claude' as const,
+      agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } }
+    }
+    Object.assign(mocks.store.settings, settings)
+    mocks.store.ensureDetectedAgents.mockResolvedValue(['claude'])
+    mocks.pickSourceControlLaunchAgent.mockReturnValue('claude')
     mocks.resolveSourceControlActionRecipe.mockReturnValue({
+      agentId: null,
       commandInputTemplate: '{basePrompt}',
-      agentArgs: '--model "unterminated'
+      agentArgs: '--model literal'
+    })
+    const plans: ReturnType<typeof buildAgentStartupPlan>[] = []
+    mocks.launchAgentInNewTab.mockImplementation((args: LaunchAgentInNewTabArgs) => {
+      plans.push(
+        buildAgentStartupPlan({
+          ...resolveAgentStartupPlanInputs({
+            agent: args.agent,
+            settings,
+            agentArgs: args.agentArgs,
+            sessionOptions: args.sessionOptions,
+            sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+            platform: 'linux',
+            shell: 'posix',
+            isRemote: false
+          }),
+          prompt: '',
+          allowEmptyPromptLaunch: true
+        })
+      )
+      return {
+        surface: { kind: 'local-terminal', tabId: 'proof' },
+        promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+      }
     })
     const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
     await expect(
       startFixChecksAgent({
         repoId: 'repo-1',
         worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
+        basePrompt: 'Fix',
         launchSource: 'task_page'
       })
-    ).resolves.toBe(false)
-
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      'CLI arguments are invalid: Unclosed quote in command template.'
-    )
+    ).resolves.toBe(true)
+    expect(plans).toHaveLength(1)
+    expect(plans[0]?.launchCommand).toBe("claude '--model' 'literal'")
+    expect(plans[0]?.launchConfig.agentArgs).toBe('--model literal')
+    expect(plans[0]?.launchCommand).not.toContain('high')
   })
 
-  it('rejects without focusing a terminal when agent launch throws', async () => {
-    mocks.launchAgentInNewTab.mockImplementation(() => {
-      throw new Error('launch failed')
-    })
+  it('captures the canonical recipe before waiting and rederives the atomic tuple for either actual agent', async () => {
+    const recipe = {
+      agentArgs: `-c 'model="true"'`,
+      launchPreferences: {
+        agentId: 'codex' as const,
+        modelSelection: {
+          base: 'default' as const,
+          options: { effort: { agentId: 'codex' as const, value: 'high' } }
+        }
+      }
+    }
+    mocks.resolveSourceControlActionRecipe.mockReturnValue(recipe)
+    const pending = Promise.withResolvers<string[]>()
+    mocks.store.ensureDetectedAgents.mockReturnValueOnce(pending.promise)
+    mocks.readSourceControlLaunchRecipeAgentId.mockReturnValue('codex')
     const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+    const action = startFixChecksAgent({
+      repoId: 'repo-1',
+      basePrompt: 'Fix checks',
+      launchSource: 'task_page',
+      item: {
+        id: 'pr-7',
+        repoId: 'repo-1',
+        type: 'pr',
+        number: 7,
+        title: 'PR',
+        state: 'open',
+        url: 'https://example.test/pr/7',
+        labels: [],
+        updatedAt: '',
+        author: null
+      },
+      openModalFallback: () => {}
+    })
+    recipe.agentArgs = '--model later-form'
+    recipe.launchPreferences.modelSelection.options.effort.value = 'low'
+    pending.resolve(['codex'])
+    await expect(action).resolves.toBe(true)
+    const resolver = mocks.launchWorkItemDirect.mock.lastCall?.[0].resolveLaunchInputs
+    expect(resolver).toBeTypeOf('function')
+    expect(resolver('codex')).toMatchObject({
+      agentArgs: `-c 'model="true"'`,
+      sessionOptions: { effort: 'high' },
+      chatSessionOptions: { model: 'true', effort: 'high' }
+    })
+    expect(resolver('claude').agentArgs).toBe(`-c 'model="true"'`)
+    expect(resolver('claude').sessionOptions).toBeUndefined()
+    expect(JSON.stringify(resolver('codex'))).not.toContain('later-form')
+  })
 
-    await expect(
+  it('replays a saved terminal explicitly and carries saved Chat as a supported preference', async () => {
+    Object.assign(mocks.store.settings, { disabledTuiAgents: ['codex'] })
+    Object.assign(mocks.store, {
+      runtimeStatusByEnvironmentId: new Map(),
+      ensureRuntimeDetectedAgents: vi.fn().mockResolvedValue(['codex'])
+    })
+    Object.assign(mocks.store.repos[0], { kind: 'folder', executionHostId: 'runtime:alpha' })
+    Object.assign(mocks.store.worktrees[0], { hostId: 'runtime:alpha' })
+    const preferences = projectAgentLaunchSettings({
+      defaultTuiAgent: 'codex',
+      disabledTuiAgents: ['claude']
+    })
+    hostRpc.mockResolvedValue({ settings: preferences })
+    mocks.readSourceControlLaunchRecipeAgentId.mockReturnValue('codex')
+    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+    const launch = (worktreeId: string | null) =>
       startFixChecksAgent({
         repoId: 'repo-1',
-        worktreeId: 'wt-1',
+        worktreeId,
         basePrompt: 'Fix checks',
-        launchSource: 'task_page'
+        launchSource: 'task_page',
+        item: {
+          id: 'pr-7',
+          repoId: 'repo-1',
+          type: 'pr',
+          number: 7,
+          title: 'PR',
+          state: 'open',
+          url: 'https://example.test/pr/7',
+          labels: [],
+          updatedAt: '',
+          author: null
+        },
+        openModalFallback: () => {}
       })
-    ).rejects.toThrow('launch failed')
+    const saved = (surface: 'chat' | 'terminal') =>
+      mocks.resolveSourceControlActionRecipe.mockReturnValue({
+        agentId: 'codex',
+        commandInputTemplate: '{basePrompt}',
+        surface
+      })
 
-    expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+    saved('terminal')
+    await expect(launch('wt-1')).resolves.toBe(true)
+    await expect(launch(null)).resolves.toBe(true)
+    saved('chat')
+    await expect(launch('wt-1')).resolves.toBe(true)
+    await expect(launch(null)).resolves.toBe(true)
+
+    mocks.readSourceControlLaunchRecipeAgentId.mockReturnValue(null)
+    mocks.resolveSourceControlActionRecipe.mockReturnValue({ agentId: null })
+    await expect(launch(null)).resolves.toBe(true)
+    expect(
+      mocks.launchWorkItemDirect.mock.calls.every(
+        ([args]) => args.agentLaunchPreferences.defaultTuiAgent === 'codex'
+      )
+    ).toBe(true)
+    expect(hostRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'alpha' },
+      'settings.getAgentLaunch',
+      undefined,
+      expect.anything()
+    )
+    expect(mocks.launchAgentInNewTab.mock.calls.map(([args]) => args.requestedSurface)).toEqual([
+      'terminal',
+      undefined
+    ])
+    expect(mocks.launchAgentInNewTab.mock.calls.map(([args]) => args.preferredSurface)).toEqual([
+      undefined,
+      'chat'
+    ])
+    expect(
+      mocks.launchWorkItemDirect.mock.calls.map(([args]) => {
+        const inputs = args.resolveLaunchInputs('codex')
+        return {
+          requestedSurface: inputs.requestedSurface,
+          preferredSurface: inputs.preferredSurface
+        }
+      })
+    ).toEqual([
+      { requestedSurface: 'terminal', preferredSurface: undefined },
+      { requestedSurface: undefined, preferredSurface: 'chat' },
+      { requestedSurface: undefined, preferredSurface: undefined }
+    ])
+    expect(
+      mocks.launchWorkItemDirect.mock.calls[1][0].resolveLaunchInputs('claude').preferredSurface
+    ).toBeUndefined()
+    clearHostAgentMenuSettingsForTests()
+    replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
+    const pending = Promise.withResolvers<{ settings: typeof preferences }>()
+    hostRpc.mockClear().mockReturnValueOnce(pending.promise)
+    mocks.launchWorkItemDirect.mockClear()
+    saved('terminal')
+    mocks.readSourceControlLaunchRecipeAgentId.mockReturnValue('codex')
+    const retired = launch(null)
+    await vi.waitFor(() => expect(hostRpc).toHaveBeenCalledOnce())
+    replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 8 }])
+    await expect(retired).resolves.toBe(false)
+    pending.reject(new Error('retired pinned request'))
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.launchWorkItemDirect).not.toHaveBeenCalled()
+    replaceRuntimeEnvironmentRevisions([])
   })
 })

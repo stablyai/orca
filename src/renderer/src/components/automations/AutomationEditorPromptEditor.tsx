@@ -4,12 +4,12 @@ import type { editor } from 'monaco-editor'
 import { installMonacoEditorFindShortcut } from '@/components/editor/editor-shortcuts'
 import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monaco-content-sync'
 import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
-import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { monacoTypographyOptions } from '@/lib/editor-typography'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
 import '@/lib/monaco-setup'
-import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { buildAutomationPromptEditorOptions } from './automation-editor-prompt-options'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 export const AUTOMATION_PROMPT_EDITOR_SLOT = 'automation-prompt-editor'
 
@@ -32,8 +32,7 @@ function installPromptEditorEscapeDismiss(
     if (isMonacoFindWidgetOpen(target)) {
       return
     }
-    // Why: Monaco swallows Escape even with find closed; the wrapping
-    // dialog still needs the same dismiss path a textarea used to have.
+    // Monaco consumes Escape even with find closed; preserve the surrounding dialog’s dismiss path.
     if (!onDismissRef.current) {
       return
     }
@@ -60,8 +59,7 @@ export function AutomationEditorPromptEditor({
   onChange,
   onDismiss
 }: AutomationEditorPromptEditorProps): React.JSX.Element {
-  const settings = useAppStore((state) => state.settings)
-  const editorFontZoomLevel = useAppStore((state) => state.editorFontZoomLevel)
+  const typography = useEditorTypography()
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const contentRef = useRef(value)
   const lastSyncedContentRef = useRef(value)
@@ -72,18 +70,15 @@ export function AutomationEditorPromptEditor({
     onDismissRef.current = onDismiss
   }, [onDismiss])
 
-  const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
-  const fontFamily = resolveEditorFontFamily(settings)
-  const isDark = useDocumentDarkTheme()
+  const monacoTheme = useMonacoTheme()
   const options = useMemo(
     () =>
       buildAutomationPromptEditorOptions({
         ariaLabel,
-        fontFamily,
-        fontSize,
+        typography: monacoTypographyOptions(typography),
         placeholder
       }),
-    [ariaLabel, fontFamily, fontSize, placeholder]
+    [ariaLabel, typography, placeholder]
   )
 
   const handleChange = useCallback(
@@ -120,8 +115,7 @@ export function AutomationEditorPromptEditor({
     })
   }, [])
 
-  // Why: templates rewrite the draft while this editor stays mounted; push an
-  // undoable model edit instead of setValue so Cmd+Z can revert the apply.
+  // Apply template changes as undoable model edits; setValue would discard Cmd+Z history.
   useLayoutEffect(() => {
     contentRef.current = value
     const mountedEditor = editorRef.current
@@ -141,10 +135,9 @@ export function AutomationEditorPromptEditor({
     <div
       data-slot={AUTOMATION_PROMPT_EDITOR_SLOT}
       className={cn(
-        'relative min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-border/70 bg-editor-surface',
+        'code-editor-colors relative min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-border/70 bg-editor-surface',
         'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50',
-        // Why: Monaco's built-in placeholder uses this token; mix muted
-        // foreground so it reads as ghost text, not typed prompt content.
+        // Tint Monaco’s placeholder token as ghost text rather than typed content.
         '[--vscode-editor-placeholder-foreground:color-mix(in_srgb,var(--muted-foreground)_50%,transparent)]'
       )}
     >
@@ -152,10 +145,9 @@ export function AutomationEditorPromptEditor({
         <Editor
           height="100%"
           defaultLanguage="plaintext"
-          // Why: defaultValue, not controlled value — this surface owns
-          // post-mount sync so React cannot wipe Monaco's undo stack.
+          // Own post-mount syncing; a controlled value would wipe Monaco’s undo stack.
           defaultValue={value}
-          theme={isDark ? 'vs-dark' : 'vs'}
+          theme={monacoTheme}
           onChange={handleChange}
           onMount={handleMount}
           options={options}

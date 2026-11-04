@@ -19,15 +19,13 @@ import {
   type OtherAutomaticWork
 } from '../../shared/host-automatic-work-budget'
 
-// Why 256: half of macOS's machine-wide pty limit (kern.tty.ptmx_max = 511), so other terminal
-// programs and the ptys agents open inside Orca terminals keep room; five times the deleted SSH
-// relay's 50, which users with many worktrees did reach.
+// Leave roughly half the default macOS PTY limit for other terminals and agent-owned PTYs.
 export const DEFAULT_MAX_HOST_TERMINALS = 256
 const MAX_HOST_TERMINALS_ENV_VAR = 'ORCA_DAEMON_MAX_HOST_TERMINALS'
 const MAX_OVERRIDE_TERMINALS = 4096
 
 const REFRESH_INTERVAL_MS = 60_000
-// Why: a daemon wedged this long is not forking either; its entry must not block others forever.
+// Expire stale shares so stopped refreshers cannot block terminals indefinitely.
 const STALE_AFTER_MS = 5 * 60_000
 
 export function resolveMaxHostTerminals(env: NodeJS.ProcessEnv = process.env): number {
@@ -39,7 +37,7 @@ export function resolveMaxHostTerminals(env: NodeJS.ProcessEnv = process.env): n
   return parsed >= 1 && parsed <= MAX_OVERRIDE_TERMINALS ? parsed : DEFAULT_MAX_HOST_TERMINALS
 }
 
-/** Machine-local and per user: every daemon this user runs on the host, whatever its profile. */
+/** Share counts across this user's profiles on this machine. */
 export function defaultHostTerminalLedgerDir(
   platform: NodeJS.Platform = process.platform,
   uid: number | undefined = process.getuid?.()
@@ -47,7 +45,7 @@ export function defaultHostTerminalLedgerDir(
   if (platform === 'win32') {
     return join(tmpdir(), 'orca-daemon-host-terminals')
   }
-  // Why /tmp, not the data root: a home on a network share can be mounted by several machines.
+  // Network-mounted home directories can span hosts; the ledger must stay machine-local.
   return uid === undefined
     ? null
     : posix.join(`${SHORT_DAEMON_SOCKET_DIR_PREFIX}${uid}`, 'terminals')
@@ -59,7 +57,7 @@ function ensureLedgerDir(dir: string, platform: NodeJS.Platform = process.platfo
     mkdirSync(dir, { recursive: true })
     return
   }
-  // Why validated: the /tmp path is predictable, so a dir another user planted is refused.
+  // Refuse directories planted at this predictable path.
   ensureOwnedPrivateDir(posix.dirname(dir), uid)
   ensureOwnedPrivateDir(dir, uid)
 }
@@ -83,17 +81,11 @@ type HostTerminalLedgerOptions = {
   log: (event: string, details: Record<string, unknown>) => void
 }
 
-/** Every other live daemon's share of this host, summed. */
 export type OtherDaemonsShare = { terminals: number; automatic: OtherAutomaticWork }
 
 const NO_OTHER_DAEMONS: OtherDaemonsShare = { terminals: 0, automatic: NO_OTHER_AUTOMATIC_WORK }
 
-/**
- * One cap on terminals, and one automatic-restore budget, for the whole execution host. Each
- * daemon owns one file holding its share and sums everyone else's. It writes a terminal
- * reservation before reading the others, so two daemons racing for the last slot cannot both
- * see room. Fail-open: an entry or directory that cannot be read never blocks a terminal.
- */
+/** Publish reservations before reading other daemons; unreadable shares leave only the local cap enforced. */
 export class HostTerminalLedger {
   private readonly pid: number
   private readonly now: () => number
@@ -114,12 +106,12 @@ export class HostTerminalLedger {
   }
 
   /** `own` excludes the terminal being reserved; on false its previous share is restored. */
-  tryReserve(own: HostTerminalShare): boolean {
-    if (own.terminals + 1 > this.options.maxTerminals) {
+  tryReserve(own: HostTerminalShare, maximum = this.options.maxTerminals): boolean {
+    if (own.terminals + 1 > maximum) {
       return false
     }
     this.write({ ...own, terminals: own.terminals + 1 })
-    if (own.terminals + 1 + this.readOthers().terminals <= this.options.maxTerminals) {
+    if (own.terminals + 1 + this.readOthers().terminals <= maximum) {
       return true
     }
     this.write(own)
@@ -198,7 +190,7 @@ export class HostTerminalLedger {
       writeFileSync(`${path}.tmp`, JSON.stringify(entry), { mode: 0o600 })
       renameFileWithWindowsRetry(`${path}.tmp`, path)
     } catch (error) {
-      // Why: a periodic /tmp cleaner can remove the directory under a long-lived daemon.
+      // Temporary-directory cleaners can remove this path while the daemon runs.
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT' && !retried) {
         this.dirReady = false
         this.write(share, true)

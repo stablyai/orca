@@ -1,4 +1,3 @@
-/** Adapts the genuine 1.x TUI API to the existing structural pane reporter. */
 export function getLegacyOpenCodeTuiSource(): string[] {
   return String.raw`
 async function setupLegacyOpenCodeTui(api) {

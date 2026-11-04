@@ -4,8 +4,83 @@ import { HIDDEN_OUTPUT_RESTORE_PENDING_CHARS } from './hidden-output-restore-lim
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { PendingHiddenOutputRestoreChunk } from './pending-hidden-output-restore-chunk'
+import {
+  EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
+  scanTerminalReplyQuerySequences
+} from '../../../../../shared/terminal-reply-query-scan'
+import { isPrimaryDeviceAttributesQuerySequence } from '../../../../../shared/terminal-reply-query-extraction'
+import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { writeXtermParseBarrier } from '@/lib/pane-manager/xterm-parse-barrier'
 
 export function bindHiddenOutputRestoreChunk(session: ConnectPanePtySession): void {
+  let coveredQueryScan = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
+  let coveredQueryPtyId: string | null = null
+  let coveredQueryGeneration: number | undefined
+  let coveredQueryHighWater = 0
+  let coveredQuerySnapshotSeq = 0
+  session.answerSnapshotCoveredPrimaryDeviceAttributes = function (
+    chunk: PendingHiddenOutputRestoreChunk,
+    snapshotSeq: number | undefined
+  ): void {
+    if (typeof chunk.seq !== 'number' || typeof snapshotSeq !== 'number') {
+      return
+    }
+    const rawLength = chunk.rawLength ?? chunk.data.length
+    const startSeq = chunk.seq - rawLength
+    const coveredLength = Math.min(rawLength, snapshotSeq - startSeq)
+    if (coveredLength <= 0 || (rawLength !== chunk.data.length && coveredLength < rawLength)) {
+      return
+    }
+    const ptyId = session.transport.getPtyId()
+    if (
+      ptyId !== coveredQueryPtyId ||
+      session.transportStreamGeneration !== coveredQueryGeneration ||
+      snapshotSeq < coveredQuerySnapshotSeq
+    ) {
+      coveredQueryScan = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
+      coveredQueryPtyId = ptyId
+      coveredQueryGeneration = session.transportStreamGeneration
+      coveredQueryHighWater = 0
+    }
+    coveredQuerySnapshotSeq = snapshotSeq
+    const coveredEndSeq = startSeq + coveredLength
+    if (coveredEndSeq <= coveredQueryHighWater) {
+      return
+    }
+    const mapsToSeq = rawLength === chunk.data.length
+    const scanStartSeq = mapsToSeq ? Math.max(startSeq, coveredQueryHighWater) : startSeq
+    const scan = scanTerminalReplyQuerySequences(
+      chunk.data.slice(scanStartSeq - startSeq, coveredLength),
+      scanStartSeq,
+      mapsToSeq ? coveredQueryScan : EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
+    )
+    coveredQueryHighWater = coveredEndSeq
+    coveredQueryScan = mapsToSeq ? scan.state : EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
+    let primaryQueryCount = 0
+    for (const query of scan.queries) {
+      if (isPrimaryDeviceAttributesQuerySequence(query.data)) {
+        primaryQueryCount += 1
+      }
+    }
+    if (primaryQueryCount > 0) {
+      const streamGeneration = session.transportStreamGeneration
+      // Drain earlier reports without disturbing the snapshot's incomplete parser tail.
+      flushTerminalOutput(session.pane.terminal)
+      writeXtermParseBarrier(session.pane.terminal, () => {
+        if (
+          session.disposed ||
+          session.transport.getPtyId() !== ptyId ||
+          session.transportStreamGeneration !== streamGeneration
+        ) {
+          return
+        }
+        for (let index = 0; index < primaryQueryCount; index += 1) {
+          session.terminalCapabilityRepliesDisposable.replyPrimaryDeviceAttributesQuery()
+        }
+      })
+    }
+  }
+
   session.queueLiveChunkDuringRestore = function (data: string, meta?: PtyDataMeta): void {
     if (!data) {
       return
@@ -46,6 +121,9 @@ export function bindHiddenOutputRestoreChunk(session: ConnectPanePtySession): vo
     }
     if (typeof meta?.rawLength === 'number') {
       pending.rawLength = meta.rawLength
+    }
+    if (meta?.gapEscapeState) {
+      pending.gapEscapeState = meta.gapEscapeState
     }
     session.hiddenOutputRestorePendingChunks.push(pending)
     session.hiddenOutputRestorePendingChars += data.length
@@ -112,6 +190,10 @@ export function bindHiddenOutputRestoreChunk(session: ConnectPanePtySession): vo
       return { action: 'force-fresh-restore' }
     }
     if (meta.seq <= session.restoredSnapshotBaselineSeq) {
+      session.answerSnapshotCoveredPrimaryDeviceAttributes(
+        { data, seq: meta.seq, rawLength },
+        session.restoredSnapshotBaselineSeq
+      )
       return { action: 'drop-duplicate' }
     }
     if (startSeq >= session.restoredSnapshotBaselineSeq) {
@@ -122,6 +204,10 @@ export function bindHiddenOutputRestoreChunk(session: ConnectPanePtySession): vo
       return { action: 'force-fresh-restore' }
     }
     const sliced = data.slice(session.restoredSnapshotBaselineSeq - startSeq)
+    session.answerSnapshotCoveredPrimaryDeviceAttributes(
+      { data, seq: meta.seq, rawLength },
+      session.restoredSnapshotBaselineSeq
+    )
     return {
       action: 'write',
       data: sliced,

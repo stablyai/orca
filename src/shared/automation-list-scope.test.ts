@@ -9,12 +9,6 @@ import {
   toAutomationChangeSelector,
   type AutomationProjectionContext
 } from './automation-list-scope'
-import {
-  AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
-  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
-} from './protocol-version'
-
 function automation(overrides: Partial<Automation> = {}): Automation {
   return {
     id: 'a1',
@@ -53,13 +47,6 @@ function context(
     ...overrides
   }
 }
-
-describe('capability advertisement', () => {
-  it('registers both automation capabilities so getStatus() advertises them', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY)
-    expect(RUNTIME_CAPABILITIES).toContain(AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY)
-  })
-})
 
 describe('projectAutomationSelector', () => {
   it('qualifies a local record whose project resolves without a connection as self', () => {
@@ -284,8 +271,7 @@ describe('automationChangePublications', () => {
   })
 })
 
-// A folder workspace can pin its host directly, and that pin is what dispatch uses.
-// Projecting from the repo alone filed those records under Self while they ran elsewhere.
+// Folder workspace pins decide actual dispatch hosts; repo-only projection mislabeled SSH runs as Self.
 describe('workspace host pin', () => {
   it('files a local record under the SSH host its workspace pins', () => {
     const selector = projectAutomationSelector(

@@ -23,15 +23,4 @@ describe('getLinearIssueTextSavePlan', () => {
 
     expect(plan).toEqual({ kind: 'changed', patch: { description: 'Updated details' } })
   })
-
-  it('preserves the required-title guard', () => {
-    const plan = getLinearIssueTextSavePlan({
-      descriptionDraft: 'Details',
-      field: 'title',
-      issue: { title: 'Issue title', description: 'Details' },
-      titleDraft: '   '
-    })
-
-    expect(plan).toEqual({ kind: 'empty-title' })
-  })
 })

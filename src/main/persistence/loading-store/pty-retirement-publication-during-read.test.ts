@@ -7,7 +7,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -93,7 +93,6 @@ it.each(['read', 'replacement', 'legacy-replacement'] as const)(
     gate.finish.resolve()
     await exiting
     expect(readState().workspaceSession.terminalLayoutsByTabId[binding.tabId]).toBeUndefined()
-    // Why every action: the exit retired the leaf in memory before any of them could run.
     expect(runtime.snapshot()?.tabs).toHaveLength(0)
   }
 )

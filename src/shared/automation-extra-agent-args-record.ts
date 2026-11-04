@@ -3,7 +3,7 @@ import {
   EXTRA_AGENT_ARGS_REQUIRE_FRESH_SESSION,
   hasExtraAgentArgs,
   parseExtraAgentArgs
-} from './automation-extra-agent-args'
+} from './agent-launch/startup/automation-extra-agent-args'
 
 /** Stored form of an extras input: the text unchanged, or `undefined` when it holds no extras. */
 export function storedExtraAgentArgs(value: unknown): string | undefined {
@@ -18,9 +18,9 @@ export function storedExtraAgentArgs(value: unknown): string | undefined {
 
 /** Validates a whole record, so a patch that only enables Reuse still sees stored extras. */
 export function assertAutomationExtraAgentArgs(
-  automation: Pick<Automation, 'agentId' | 'extraAgentArgs' | 'reuseSession'>
+  automation: Pick<Automation, 'agentId' | 'extraAgentArgs' | 'reuseSession' | 'surface'>
 ): void {
-  if (!hasExtraAgentArgs(automation.extraAgentArgs)) {
+  if (automation.surface === 'chat' || !hasExtraAgentArgs(automation.extraAgentArgs)) {
     return
   }
   if (automation.reuseSession) {

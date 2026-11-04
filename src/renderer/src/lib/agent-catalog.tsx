@@ -1,8 +1,8 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
-import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import {
   AgentLetterIcon,
   AiderIcon,
@@ -41,54 +41,49 @@ export function getAgentLabel(agent: TerminalAgent): string {
 
 export function AgentIcon({
   agent,
-  size = 14
+  size = 14,
+  className
 }: {
   agent: TerminalAgent | null | undefined
   size?: number
+  className?: string
 }): React.JSX.Element {
-  // Why: render a neutral question-mark glyph when the agent identity is not
-  // yet known. Before, the caller coerced null → 'claude', which caused Codex
-  // panes to briefly show the Claude icon until the first hook callback
-  // arrived.
+  // Unknown identity gets a neutral glyph so Codex panes cannot briefly display Claude’s icon before hooks arrive.
   if (!agent) {
-    return <AgentLetterIcon letter="?" size={size} />
+    return <AgentLetterIcon letter="?" size={size} className={className} />
   }
   if (agent === 'claude' || agent === 'claude-agent-teams') {
-    return <ClaudeIcon size={size} />
+    return <ClaudeIcon size={size} className={className} />
   }
   if (agent === 'codex') {
-    return <OpenAIIcon size={size} />
+    return <OpenAIIcon size={size} className={className} />
   }
   if (agent === 'droid') {
-    return <DroidIcon size={size} />
+    return <DroidIcon size={size} className={className} />
   }
   if (agent === 'pi') {
-    return <PiIcon size={size} />
+    return <PiIcon size={size} className={className} />
   }
   if (agent === 'omp') {
-    return <OmpIcon size={size} />
+    return <OmpIcon size={size} className={className} />
   }
   if (agent === 'aider') {
-    return <AiderIcon size={size} />
+    return <AiderIcon size={size} className={className} />
   }
   if (agent === 'kilo') {
-    return <KiloIcon size={size} />
+    return <KiloIcon size={size} className={className} />
   }
   if (agent === 'copilot') {
-    return <CopilotIcon size={size} />
+    return <CopilotIcon size={size} className={className} />
   }
   if (agent === 'opencode' || agent === 'opencode2') {
-    return <OpenCodeIcon size={size} />
+    return <OpenCodeIcon size={size} className={className} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
-  // Why: prefer the favicon bundled at build time so the icon renders without a
-  // live network request — Google's favicon service is unreachable in some
-  // regions and offline, which left these icons broken (#8451).
-  // Why: recognition-only DSB shares the bundled DeepSeek mark.
+  // Prefer bundled favicons for offline use and regions where Google’s service is unreachable (#8451).
   const iconAgent = agent === 'dsb' ? 'dsh' : agent
   const bundledFaviconUrl = AGENT_FAVICON_ASSETS[iconAgent]
-  // Why: one resolved src for guard + attribute so empty `iconUrl` cannot pass
-  // a truthy `||` check while `??` still renders a broken `<img src="">`.
+  // Resolve src once so empty iconUrl cannot pass a truthy fallback guard yet render src="".
   const iconSrc = catalogEntry?.iconUrl ?? bundledFaviconUrl
   if (iconSrc) {
     return (
@@ -96,6 +91,7 @@ export function AgentIcon({
         src={iconSrc}
         width={size}
         height={size}
+        className={className}
         alt=""
         aria-hidden
         style={{ borderRadius: 2 }}
@@ -103,19 +99,24 @@ export function AgentIcon({
     )
   }
   if (catalogEntry?.faviconDomain) {
-    // Why: agents without a published SVG icon or bundled favicon fall back to
-    // their site favicon via Google's favicon service — same source the README
-    // uses for the agent badge list.
+    // Use Google’s favicon service only when no SVG or bundled favicon exists, as in the README badges.
     return (
       <img
         src={`https://www.google.com/s2/favicons?domain=${catalogEntry.faviconDomain}&sz=64`}
         width={size}
         height={size}
+        className={className}
         alt=""
         aria-hidden
         style={{ borderRadius: 2 }}
       />
     )
   }
-  return <AgentLetterIcon letter={getAgentLabel(agent).charAt(0).toUpperCase()} size={size} />
+  return (
+    <AgentLetterIcon
+      letter={getAgentLabel(agent).charAt(0).toUpperCase()}
+      size={size}
+      className={className}
+    />
+  )
 }

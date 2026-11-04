@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as roundTrip from './markdown-round-trip'
+import { MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES } from './markdown-rich-size-limit'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import {
   getMarkdownRichModeEligibility,
@@ -207,6 +208,24 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
       unsupportedMessage: expect.any(String)
     })
   })
+
+  it.each([false, true])(
+    'reports only the size limit beyond the hard render cap, override=%s',
+    (sizeOverridden) => {
+      const content = `${'a'.repeat(MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES)}\n[ref]: /docs\n`
+
+      const result = getMarkdownRichModeEligibility({ content, sizeOverridden })
+      expect(result).toEqual({
+        exceedsSizeLimit: true,
+        unsupportedMessage: null
+      })
+
+      expect(
+        getMarkdownRichModeEligibility({ content: '[ref]: /docs', sizeOverridden })
+          .unsupportedMessage
+      ).not.toBeNull()
+    }
+  )
 })
 
 const decide = (content: string) =>

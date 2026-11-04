@@ -28,7 +28,7 @@ import {
 export const CLAUDE_PROFILE_MERGE_SUFFIX = '.orca-profile-merge'
 const HISTORY = 'history.jsonl'
 const PENDING = `${HISTORY}${CLAUDE_PROFILE_MERGE_SUFFIX}`
-// Windows only: identity of the shared file Orca last hardlinked, so a replaced one is told apart.
+// Track Windows hardlink identity to detect replacement of the shared file.
 const LINK_RECORD = `${HISTORY}.orca-profile-link`
 
 export function lstatIfPresent(file: string): Stats | undefined {
@@ -58,14 +58,11 @@ function appendHistory(destination: string, lines: string[]): void {
       closeSync(fd)
     }
   }
-  // Why: every record ends its line so it cannot fuse with Claude's next append.
+  // Terminate records so Claude's next append starts on its own line.
   appendFileSync(destination, `${separator ? '\n' : ''}${lines.join('\n')}\n`)
 }
 
-/**
- * Keeps the renamed file and its cursor: a Claude that opened the old path just before the swap
- * appends there, and the next run drains it; a later run that finds nothing new deletes it.
- */
+// Retain the renamed file until a later drain finds no appends from handles opened before the swap.
 function drainHistory(pending: string, destination: string, shared: Set<string>): void {
   const content = readFileSync(pending)
   const cursor = `${pending}.offset`
@@ -83,12 +80,12 @@ function drainHistory(pending: string, destination: string, shared: Set<string>)
     }
   }
   if (saved && offset === content.length) {
-    // Why: cursor first; a copy without one re-drains to nothing because its lines are present.
+    // Delete the cursor first so an interrupted cleanup safely replays deduplicated lines.
     unlinkSync(cursor)
     unlinkSync(pending)
     return
   }
-  // Why: `claude purge` rewrites the shared file through the link; only lines it lacks are new.
+  // CLI rewrites can replay shared lines; append only missing ones.
   const lines = content
     .subarray(offset)
     .toString('utf8')
@@ -98,7 +95,7 @@ function drainHistory(pending: string, destination: string, shared: Set<string>)
   for (const line of lines) {
     shared.add(line)
   }
-  // Advance only after append; a crash re-drains, and lines already present are skipped.
+  // Advance after append so interrupted drains replay safely through deduplication.
   writeFileSync(cursor, `${content.length}\n`, { mode: 0o600 })
 }
 
@@ -130,7 +127,7 @@ export function crossFilesystem(): ClaudeProfileSurfaceError {
   )
 }
 
-/** Fails closed: an unreadable record must not read as "no link", which would drain a replaced default back. */
+// Treating an unreadable record as absent could restore history the user deleted.
 function readLinkRecord(profile: string): string | null {
   try {
     return readFileSync(join(profile, LINK_RECORD), 'utf8').trim()
@@ -145,10 +142,7 @@ function readLinkRecord(profile: string): string | null {
   }
 }
 
-/**
- * Links the profile's `history.jsonl` to the shared one (a same-volume hardlink on Windows, which
- * needs no privilege) and appends its own lines.
- */
+/** Use a same-volume hardlink on Windows to avoid requiring symlink privileges. */
 export function mergeClaudeProfilePromptHistory(
   profile: string,
   home: string,
@@ -168,9 +162,9 @@ export function mergeClaudeProfilePromptHistory(
       pendings.push({ name: item.name, generation })
     }
   }
-  // Why: directory order is not creation order; generations keep prompts in the order they were written.
+  // Directory enumeration order does not preserve prompt chronology.
   pendings.sort((left, right) => left.generation - right.generation)
-  // Why: a cross-volume share is refused below; draining first would leak this account's prompts.
+  // Check volumes before draining to keep prompts private when linking is refused.
   if (platform === 'win32' && pendings.length > 0) {
     if (statSync(profile).dev !== statSync(destination).dev) {
       throw crossFilesystem()
@@ -180,7 +174,7 @@ export function mergeClaudeProfilePromptHistory(
     try {
       drainHistory(join(profile, name), destination, shared)
     } catch (error) {
-      // Why: an old retained copy is bookkeeping; it must not keep the profile from being linked.
+      // A failed drain must not prevent linking the profile.
       warnClaudeProfile(report, HISTORY, error)
     }
   }
@@ -206,8 +200,7 @@ export function mergeClaudeProfilePromptHistory(
     if (statSync(profile).dev !== statSync(destination).dev) {
       throw crossFilesystem()
     }
-    // Why: the old shared file still held under Orca's link means the default was replaced or
-    // cleared; draining it would bring back history the user removed.
+    // A replaced shared file must not regain deleted history from the old hardlink.
     replaced = identity !== undefined && identity === readLinkRecord(profile)
   }
   let aside: string | undefined
@@ -223,7 +216,7 @@ export function mergeClaudeProfilePromptHistory(
       try {
         writeFileAtomically(record, `${sharedIdentity}\n`, { mode: 0o600 })
       } catch (error) {
-        // Why: a link without its record would let a later default replacement drain the old copy back.
+        // Without the record, a later replacement could restore deleted history.
         unlinkSync(source)
         throw error
       }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WslResult } from '../wsl/wsl-runner'
+import type { WslResult } from '../wsl/execution/wsl-runner'
 import {
   pendingWslWindowsCheckoutGitConfig,
   resetWslWindowsCheckoutProbesForTests,
@@ -250,13 +250,13 @@ describe('pendingWslWindowsCheckoutGitConfig', () => {
     await expect(waiting).resolves.toBeUndefined()
   })
 
-  it('samples the whole tree through argv, bounded by a deliberate cap', async () => {
+  it('passes the sample cap and the index-entry scan cap through argv', async () => {
     const { deps, run } = harness()
     await run(WRITE)
     expect(deps.runWsl).toHaveBeenCalledWith(
       expect.objectContaining({
         distro: 'Ubuntu',
-        args: ['/mnt/c/Users/dev/repo', '200'],
+        args: ['/mnt/c/Users/dev/repo', '200', '2000'],
         loginPath: 'preferred'
       })
     )

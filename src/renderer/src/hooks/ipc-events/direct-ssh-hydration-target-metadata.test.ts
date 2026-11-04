@@ -6,8 +6,13 @@ import {
 } from '@/store/slices/runtime-environment-ssh'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
+import { resetSshConfigPassiveSyncForTests } from '../../lib/ssh-config-passive-sync'
 
 type SshApiStub = {
+  importConfig?: () => Promise<{
+    targets: { id: string; label: string }[]
+    repoReadoptions: never[]
+  }>
   listTargets: () => Promise<{ id: string; label: string }[]>
   listRemovedTargetLabels: () => Promise<Record<string, string>>
   getState: (args: { targetId: string }) => Promise<SshConnectionState | null>
@@ -28,6 +33,7 @@ function stubWindow(ssh: SshApiStub): void {
       ssh: {
         ...ssh,
         listPortForwards: () => Promise.resolve([]),
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: () => Promise.resolve([]),
         onCredentialRequest: () => () => {},
         onCredentialResolved: () => () => {},
@@ -53,6 +59,7 @@ describe('direct SSH hydration target metadata', () => {
   const unsubs: (() => void)[] = []
 
   beforeEach(() => {
+    resetSshConfigPassiveSyncForTests()
     onStateChangedHandler = null
     useAppStore.setState({
       sshTargetLabels: new Map(),
@@ -68,6 +75,32 @@ describe('direct SSH hydration target metadata', () => {
     }
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+  })
+
+  it('syncs ~/.ssh/config after the saved hosts load, so a newly added host shows up', async () => {
+    const importConfig = vi
+      .fn<NonNullable<SshApiStub['importConfig']>>()
+      .mockResolvedValue({ targets: [{ id: 'ssh-new', label: 'new-box' }], repoReadoptions: [] })
+    const listTargets = vi
+      .fn<SshApiStub['listTargets']>()
+      .mockResolvedValueOnce([{ id: 'ssh-old', label: 'old-box' }])
+      .mockResolvedValue([
+        { id: 'ssh-old', label: 'old-box' },
+        { id: 'ssh-new', label: 'new-box' }
+      ])
+    stubWindow({
+      importConfig,
+      listTargets,
+      listRemovedTargetLabels: () => Promise.resolve({}),
+      getState: () => Promise.resolve(null)
+    })
+
+    registerDirectSshStateIpcBridge(unsubs)
+    await settle()
+    await settle()
+
+    expect(importConfig).toHaveBeenCalledWith()
+    expect(useAppStore.getState().sshTargetLabels.get('ssh-new')).toBe('new-box')
   })
 
   it('names a ghost host once its tombstone label lands', async () => {
@@ -113,8 +146,7 @@ describe('direct SSH hydration target metadata', () => {
       status: useAppStore.getState().sshConnectionStates.get('ssh-live')?.status
     }).toEqual({ label: 'devbox', status: 'connecting' })
 
-    // A push for a known target takes the fast path instead of re-querying the
-    // link that is already failing to answer.
+    // Known-target pushes bypass lookups on an already-unresponsive link.
     listTargetsCalls = 0
     onStateChangedHandler?.({ targetId: 'ssh-live', state: connectingState('ssh-live') })
     await settle()

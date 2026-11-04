@@ -67,7 +67,6 @@ function resetButton(): HTMLElement {
   return screen.getByRole('button', { name: /^Reset/ })
 }
 
-/** The verdict a forced re-probe returned after the reset ran. */
 function probed(freshDaemonAccess: 'allowed' | 'denied' | 'unknown'): void {
   resetFolderAccess.mockResolvedValue({
     outcome: 'probed',
@@ -125,7 +124,6 @@ describe('MacFolderAccessFixDialog', () => {
     expect(screen.getByText('Open terminals and agents will restart.')).toBeTruthy()
   })
 
-  // 'allowed' means a daemon forked now could already read the folder.
   it('hides step one and enables Restart when the grant is already in place', () => {
     openWith('allowed')
     render(<MacFolderAccessFixDialog />)
@@ -146,8 +144,7 @@ describe('MacFolderAccessFixDialog', () => {
     expect(screen.getByText(/Reset asks macOS for the permission again/)).toBeTruthy()
   })
 
-  // Only Documents, Desktop and Downloads have a TCC row, so a reset elsewhere is a button that
-  // cannot work. A workspace symlinked out of Documents, or one on an external volume, lands here.
+  // Only Documents/Desktop/Downloads have resettable TCC rows; symlinked/external locations may not.
   it.each([['other-home'], ['outside-home']] as const)(
     'points a denied %s workspace at System Settings instead of a reset',
     (cwdClass) => {
@@ -161,7 +158,6 @@ describe('MacFolderAccessFixDialog', () => {
     }
   )
 
-  // Nothing here has been verified for a class with no row, so step one promises nothing.
   it('drops the reset explanation when there is no permission to reset', () => {
     openWith('denied', 'other-home')
     render(<MacFolderAccessFixDialog />)
@@ -170,7 +166,6 @@ describe('MacFolderAccessFixDialog', () => {
     expect(screen.queryByText(/Reset asks macOS for the permission again/)).toBeNull()
   })
 
-  // An unanswered probe must not accuse the user of a missing grant, but the pane stays reachable.
   it('keeps both actions and says so when the probe could not answer', () => {
     openWith('unknown')
     render(<MacFolderAccessFixDialog />)
@@ -254,9 +249,8 @@ describe('MacFolderAccessFixDialog', () => {
     })
     expect(screen.queryByRole('button', { name: /^Restart/ })).toBeNull()
     expect(screen.getByRole('dialog').querySelectorAll('.text-status-success')).toHaveLength(2)
-    // A ticked step must not still warn about what it was going to cost.
     expect(screen.queryByText('Open terminals and agents will restart.')).toBeNull()
-    // The daemon that earned the notice is gone, so its toast goes without counting a dismissal.
+    // Retiring a replaced daemon’s toast must not count as user dismissal.
     expect(noticePhase()).toBe('retired')
   })
 
@@ -323,7 +317,6 @@ describe('MacFolderAccessFixDialog', () => {
     expect(footerButton('Open System Settings')).toBeTruthy()
   })
 
-  // Evidence gone mid-reset means the daemon was replaced; nothing is left to fix here.
   it('closes when the reset finds the evidence gone', async () => {
     resetFolderAccess.mockResolvedValue({ outcome: 'probed', mismatch: null })
     openWith('denied')
@@ -335,13 +328,12 @@ describe('MacFolderAccessFixDialog', () => {
       expect(dialogShown()).toBe(false)
     })
     expect(useMacFolderAccessFixStore.getState().mismatch).toBeNull()
-    // The toast outlives the dialog unless something retires it, and only the store can.
+    // The store must retire the toast separately because it outlives the dialog.
     expect(noticePhase()).toBe('retired')
     expect(dismissToast).toHaveBeenCalledWith('mac-daemon-folder-access-mismatch')
   })
 
-  // The footer flips to the restart branch the moment the grant lands, which can happen while the
-  // reset is still running. A button must report its own work, never the dialog's.
+  // The grant can arrive mid-reset; Restart must report its own operation.
   it('never labels the restart button with the reset that is running', async () => {
     let release: (value: { outcome: string }) => void = () => {}
     resetFolderAccess.mockReturnValue(
@@ -363,7 +355,7 @@ describe('MacFolderAccessFixDialog', () => {
     })
   })
 
-  // An unanswered probe is not evidence the reset failed, so the dialog says what it knows.
+  // An unanswered re-probe cannot establish whether reset failed.
   it('does not claim a block the re-probe never confirmed', async () => {
     probed('unknown')
     openWith('denied')
@@ -377,7 +369,6 @@ describe('MacFolderAccessFixDialog', () => {
     expect(screen.queryByText('Still blocked after the reset.')).toBeNull()
   })
 
-  // Reset failed, then the user granted it in System Settings: the failure is no longer true.
   it('drops the reset failure once the grant lands', async () => {
     const failure = 'Couldn’t reset the permission. Use System Settings instead.'
     resetFolderAccess.mockResolvedValue({ outcome: 'reset_failed' })
@@ -394,7 +385,6 @@ describe('MacFolderAccessFixDialog', () => {
     expect(screen.getByRole('dialog').querySelectorAll('.text-status-success')).toHaveLength(1)
   })
 
-  // Closing is the end of the remedy, so the scope returning later must not pop the dialog again.
   it('does not reopen itself when the original scope comes back', () => {
     openWith('denied')
     render(<MacFolderAccessFixDialog />)
@@ -406,7 +396,6 @@ describe('MacFolderAccessFixDialog', () => {
     expect(dialogShown()).toBe(false)
   })
 
-  // The remedy belongs to one folder on one daemon, so evidence that moves is a different remedy.
   it('closes itself when the evidence moves to another scope', async () => {
     openWith('denied')
     render(<MacFolderAccessFixDialog />)
@@ -491,7 +480,6 @@ describe('MacFolderAccessFixDialog', () => {
     })
   })
 
-  // With no evidence there is nothing open, so a scope that comes back opens a fresh remedy.
   it('forgets what was open once the evidence is gone', () => {
     openWith('denied')
     render(<MacFolderAccessFixDialog />)
@@ -527,7 +515,6 @@ describe('MacFolderAccessFixDialog', () => {
     expect(screen.queryByRole('button', { name: 'Done' })).toBeNull()
   })
 
-  // Closing unmounts the remedy, so no phase of it can be waiting when the same scope reopens.
   it('reopens the same scope with an unticked checklist', async () => {
     openWith('allowed')
     render(<MacFolderAccessFixDialog />)
@@ -541,7 +528,7 @@ describe('MacFolderAccessFixDialog', () => {
       useMacFolderAccessFixStore.getState().openFix()
     })
 
-    // One tick, from the verdict's own step; two would mean the finished restart outlived its close.
+    // Only the verdict step may stay ticked after closing and reopening.
     expect(screen.getByRole('dialog').querySelectorAll('.text-status-success')).toHaveLength(1)
     expect(restartButton()).toBeTruthy()
   })

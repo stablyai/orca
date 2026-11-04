@@ -1,21 +1,20 @@
-/** Retired worktree names (the name registry, not migration retirement) the target carries. */
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationDormantStatePayload
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   isEmptyRetiredNameRegistry,
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
 } from '../../../shared/worktree/retired-name-registry'
-import { getRemoteRetirementNamespaceKey } from '../../worktree-name-retirement'
+import { getRemoteRetirementNamespaceKey } from '../../workspaces/removal/retirement/worktree-name-retirement'
 import {
   swapRetirementNamespaceHost,
   retirementHostIdentity,
   retirementNamespaceKeysToRead
-} from '../../worktree-retirement-namespace'
+} from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import { compareKeys } from './orcad-source-key-order'
 
 const EMPTY_REGISTRY: RetiredNameRegistry = { exhaustedTiers: 0, names: [] }

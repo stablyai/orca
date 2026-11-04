@@ -132,7 +132,7 @@ describe('attachStreamEventReader across ingest pauses', () => {
       )
       expect(wire.length).toBeGreaterThan(STREAM_INGEST_TURN_BYTES * 4)
       const socket = new Socket()
-      // Odd chunk size splits records and multi-byte characters at every boundary.
+      // Use an odd chunk size to exercise split records and multi-byte characters.
       for (let offset = 0; offset < wire.length; offset += 7001) {
         socket.push(wire.subarray(offset, offset + 7001))
       }

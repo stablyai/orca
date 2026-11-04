@@ -99,11 +99,15 @@ describe('engine scope errors', () => {
     ).toBe(EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden)
   })
 
-  it('turns a hidden-target rejection into its own copy, not the generic note', () => {
+  it('preserves the hidden-target scope code', () => {
     const gate = externalAutomationScopeGateFromError(
       new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden)
     )
-    expect(gate?.status).toBe('not-listed')
+    expect(gate).toEqual({
+      status: 'not-listed',
+      probeOwner: null,
+      code: EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden
+    })
   })
 
   it('leaves unrelated failures alone so they are not relabelled as scope limits', () => {

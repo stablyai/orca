@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { resolveAgentBackgroundLaunchHost } from './agent-background-session-launch-host'
 
 function sshState(remotePlatform: 'linux' | 'win32') {
@@ -73,21 +74,6 @@ function makeFolderHostState(args: {
 }
 
 describe('resolveAgentBackgroundLaunchHost', () => {
-  it('keeps an authoritative local folder owner local', () => {
-    const host = resolveAgentBackgroundLaunchHost({
-      store: makeFolderHostState({ connectionId: null, folderPath: '/project' }) as never,
-      worktreeId: 'folder:folder-1',
-      worktreePath: '/project',
-      repo: null
-    })
-
-    expect(host).toMatchObject({
-      connectionId: null,
-      isRemote: false,
-      expectedConnectionId: null
-    })
-  })
-
   it('fails closed when folder ownership is ambiguous', () => {
     const store = makeFolderHostState({
       connectionId: 'ssh-1',
@@ -112,8 +98,7 @@ describe('resolveAgentBackgroundLaunchHost', () => {
     ).toThrow('unavailable or ambiguous')
   })
 
-  // Why two hosts: a single-SSH fixture passes even when the route is read off another host's
-  // row, which is the shape of the `ssh:m4air` -> openclaw leak.
+  // Two hosts expose cross-host row lookup errors that a single SSH fixture would hide.
   it('routes both spellings of SSH ownership to their own host', () => {
     const legacy = resolveAgentBackgroundLaunchHost({
       store: makeFolderHostState({ connectionId: null, folderPath: '/project' }) as never,
@@ -187,21 +172,6 @@ describe('resolveAgentBackgroundLaunchHost', () => {
     expect(host).toMatchObject({ connectionId: 'nested', isRemote: true, platform: 'linux' })
   })
 
-  it('quotes for the Orca server that owns a repo, not the client (#22204)', () => {
-    const host = resolveAgentBackgroundLaunchHost({
-      ...asLaunchInputs(makeFolderHostState({ connectionId: null, folderPath: '/project' }), {
-        id: 'repo-1',
-        connectionId: null,
-        executionHostId: 'runtime:linux-box',
-        path: '/srv/repo'
-      }),
-      worktreeId: 'repo-1::/srv/repo',
-      worktreePath: '/srv/repo'
-    })
-
-    expect(host).toMatchObject({ connectionId: null, isRemote: false, platform: 'linux' })
-  })
-
   it("uses a worktree's nested SSH host over its repo's runtime default", () => {
     const state = {
       ...makeFolderHostState({ connectionId: null, folderPath: '/project' }),
@@ -232,7 +202,7 @@ describe('resolveAgentBackgroundLaunchHost', () => {
     expect(host).toMatchObject({ platform: 'linux', isLocalHost: false, isRemote: true })
   })
 
-  it('quotes for the Orca server that owns a folder workspace', () => {
+  it('uses the headless runtime CLI for a folder workspace (#33920)', () => {
     const host = resolveAgentBackgroundLaunchHost({
       ...asLaunchInputs(
         makeFolderHostState({
@@ -246,7 +216,17 @@ describe('resolveAgentBackgroundLaunchHost', () => {
       worktreePath: '/project'
     })
 
-    expect(host.platform).toBe('linux')
+    expect(host).toMatchObject({ platform: 'linux', connectionId: null, isLocalHost: false })
+    expect(
+      buildAgentStartupPlan({
+        agent: 'claude-agent-teams',
+        prompt: '',
+        cmdOverrides: {},
+        platform: host.platform,
+        isRemote: host.isRemote,
+        allowEmptyPromptLaunch: true
+      })?.launchCommand
+    ).toBe('orca claude-teams')
   })
 
   it('refuses a launch whose SSH host never reported its OS', () => {
@@ -268,17 +248,5 @@ describe('resolveAgentBackgroundLaunchHost', () => {
         worktreePath: '/srv/repo'
       })
     ).toThrow('has not reported its operating system')
-  })
-
-  it('uses Linux startup quoting for a local WSL folder', () => {
-    const folderPath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\project'
-    const host = resolveAgentBackgroundLaunchHost({
-      store: makeFolderHostState({ connectionId: null, folderPath }) as never,
-      worktreeId: 'folder:folder-1',
-      worktreePath: folderPath,
-      repo: null
-    })
-
-    expect(host.platform).toBe('linux')
   })
 })

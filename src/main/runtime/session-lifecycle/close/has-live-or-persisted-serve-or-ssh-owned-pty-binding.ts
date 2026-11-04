@@ -1,0 +1,165 @@
+import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals as RendererTerminalRescue } from '../../session-tabs/renderer-session-terminal-rescue'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/structured-session-tab-close'
+import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState as SessionGraphAuthority } from '../../session-graph/session-graph-authority'
+import type { OrcaRuntimeWithWaitForMobileTerminalSurface as MobileTerminalSurface } from '../../terminal/view/mobile-terminal-surface'
+import type { OrcaRuntimeWithCloseHeadlessMobileTerminalTab as HeadlessTerminalClose } from '../../session-tabs/headless-terminal-tab-close'
+import { OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs } from '../projection/reconcile-headless-mobile-session-browser-tabs'
+import type {
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeMobileSessionTerminalTab
+} from '../../../../shared/runtime-types'
+import { SSH_PANE_RECOVERY_GRACE_MS } from '../../orca-runtime-core'
+import { terminalIsOfTab } from './closed-tab-terminal'
+
+export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding extends OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs {
+  protected abstract setPairedRendererSessionOwnership(
+    ...args: Parameters<RendererTerminalRescue['setPairedRendererSessionOwnership']>
+  ): ReturnType<RendererTerminalRescue['setPairedRendererSessionOwnership']>
+
+  protected abstract republishMobileSessionTabsSnapshot(
+    ...args: Parameters<StructuredSessionClose['republishMobileSessionTabsSnapshot']>
+  ): ReturnType<StructuredSessionClose['republishMobileSessionTabsSnapshot']>
+
+  protected abstract captureReadyGraphEpoch(
+    ...args: Parameters<SessionGraphAuthority['captureReadyGraphEpoch']>
+  ): ReturnType<SessionGraphAuthority['captureReadyGraphEpoch']>
+
+  protected abstract assertStableReadyGraph(
+    ...args: Parameters<SessionGraphAuthority['assertStableReadyGraph']>
+  ): ReturnType<SessionGraphAuthority['assertStableReadyGraph']>
+
+  protected abstract resolvePtyTabCloseSurfaceAuthority(
+    ...args: Parameters<MobileTerminalSurface['resolvePtyTabCloseSurfaceAuthority']>
+  ): ReturnType<MobileTerminalSurface['resolvePtyTabCloseSurfaceAuthority']>
+
+  protected abstract getMobileSessionTerminalHandle(
+    ...args: Parameters<StructuredSessionClose['getMobileSessionTerminalHandle']>
+  ): ReturnType<StructuredSessionClose['getMobileSessionTerminalHandle']>
+
+  protected abstract closeHeadlessMobileTerminalTab(
+    ...args: Parameters<HeadlessTerminalClose['closeHeadlessMobileTerminalTab']>
+  ): ReturnType<HeadlessTerminalClose['closeHeadlessMobileTerminalTab']>
+
+  protected abstract notifyRendererOfHeadlessTerminalClose(
+    ...args: Parameters<StructuredSessionClose['notifyRendererOfHeadlessTerminalClose']>
+  ): ReturnType<StructuredSessionClose['notifyRendererOfHeadlessTerminalClose']>
+
+  protected abstract isOffscreenMobileSessionBrowserTab(
+    ...args: Parameters<StructuredSessionClose['isOffscreenMobileSessionBrowserTab']>
+  ): ReturnType<StructuredSessionClose['isOffscreenMobileSessionBrowserTab']>
+
+  protected abstract closeStructuredAgentSessionTab(
+    ...args: Parameters<StructuredSessionClose['closeStructuredAgentSessionTab']>
+  ): ReturnType<StructuredSessionClose['closeStructuredAgentSessionTab']>
+
+  // Preserve serve/SSH bindings only with live or persisted evidence; id shape alone can retain dead, de-persisted snapshot rows.
+  protected hasLiveOrPersistedServeOrSshOwnedPtyBinding(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    const boundPtyIds = [
+      tab.ptyId,
+      ...Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {})
+    ].filter((ptyId): ptyId is string => this.isServeOrSshOwnedPtyId(ptyId))
+    const boundSshPtyIds = boundPtyIds.filter((ptyId) => this.isSshOwnedPtyId(ptyId))
+    if (boundPtyIds.length === 0) {
+      return this.hasRecentExpiredSshLeasePane(worktreeId, tab)
+    }
+    // Exited PTY records remain archived; only connected records prove a live binding.
+    if (boundPtyIds.some((ptyId) => this.ptysById.get(ptyId)?.connected === true)) {
+      return true
+    }
+    const now = Date.now()
+    if (
+      boundPtyIds.some((ptyId) => {
+        const pty = this.ptysById.get(ptyId)
+        return (
+          pty?.connectionId != null &&
+          pty.lastExitCode != null &&
+          pty.lastExitCode < 0 &&
+          pty.disconnectedAt != null &&
+          now - pty.disconnectedAt <= SSH_PANE_RECOVERY_GRACE_MS
+        )
+      })
+    ) {
+      // Retain panes briefly when SSH transport exit beats paired-viewer recovery so HUB remains addressable.
+      return true
+    }
+    if (
+      now - this.startedAt <= SSH_PANE_RECOVERY_GRACE_MS &&
+      boundSshPtyIds.some((ptyId) => {
+        const pty = this.ptysById.get(ptyId)
+        return !pty || (!pty.connected && pty.lastExitCode === null)
+      })
+    ) {
+      // After HUB restart, failed reattach may remove persistence before any exit record; keep the pane available for ensure.
+      return true
+    }
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    if (!session) {
+      return false
+    }
+    const persistedTab = (session.tabsByWorktree?.[worktreeId] ?? []).find(
+      (candidate) => candidate.id === tab.parentTabId
+    )
+    if (!persistedTab) {
+      return false
+    }
+    const persistedPtyIds = new Set(
+      [
+        persistedTab.ptyId,
+        ...Object.values(session.terminalLayoutsByTabId?.[persistedTab.id]?.ptyIdsByLeafId ?? {})
+      ].filter((ptyId): ptyId is string => typeof ptyId === 'string')
+    )
+    return boundPtyIds.some((ptyId) => persistedPtyIds.has(ptyId))
+  }
+
+  protected hasLiveRuntimeSessionOwnedPtyBinding(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
+    return pty?.connected === true && pty.runtimeSessionOwned
+  }
+
+  protected clearRuntimeSessionOwnershipForMobileTab(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    parentTabId: string
+  ): void {
+    for (const tab of snapshot.tabs) {
+      if (tab.type !== 'terminal' || tab.parentTabId !== parentTabId) {
+        continue
+      }
+      const ptyIds = [tab.ptyId, ...Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {})].filter(
+        (ptyId): ptyId is string => typeof ptyId === 'string'
+      )
+      for (const ptyId of ptyIds) {
+        const pty = this.ptysById.get(ptyId)
+        if (
+          pty?.worktreeId === worktreeId &&
+          terminalIsOfTab(this.paneOfPty(pty).tabId, parentTabId)
+        ) {
+          pty.runtimeSessionOwned = false
+          this.setPairedRendererSessionOwnership(pty.ptyId, false)
+        }
+      }
+    }
+  }
+
+  // Runtime tears down serve/SSH or unadopted headless tabs that would otherwise resurrect.
+  // Renderer-listed parents, including local daemon/pending tabs, retain renderer-owned durable close.
+  protected isRuntimeOwnedHeadlessMobileTab(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    if (this.hasServeOrSshOwnedBinding(tab)) {
+      return true
+    }
+    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
+    if (pty && this.isServeOrSshOwnedPtyId(pty.ptyId)) {
+      return true
+    }
+    return !this.tabs.has(tab.parentTabId)
+  }
+}

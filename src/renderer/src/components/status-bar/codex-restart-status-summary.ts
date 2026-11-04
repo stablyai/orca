@@ -28,9 +28,7 @@ export function summarizeCodexRestartStatus({
   ptyIdsByTabId,
   codexRestartNoticeByPtyId
 }: CodexRestartStatusSummaryInput): CodexRestartStatusSummary {
-  // Why: a requested restart is already scheduled for its pane's next mount, so
-  // re-offering it here would leave a prompt whose button does nothing; a
-  // dismissed notice survives only as launch-account memory.
+  // Exclude scheduled restarts and dismissed notices; dismissed records retain launch-account memory only.
   const stalePtyIds = Object.entries(codexRestartNoticeByPtyId)
     .filter(([, notice]) => awaitsCodexRestartAnswer(notice))
     .map(([ptyId]) => ptyId)

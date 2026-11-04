@@ -47,8 +47,7 @@ describe('getGitCloneFailureMessage', () => {
   })
 
   it('scrubs credential-bearing clone URLs before surfacing the fatal line', () => {
-    // Clone errors echo the URL the user typed — the most likely git error to
-    // embed a live token — and the message reaches dialogs and bug reports.
+    // Clone failures echo user URLs and can expose live tokens in dialogs/bug reports.
     const stderr =
       'Cloning into repo...\n' +
       "fatal: repository 'https://user:ghp_secret123@github.com/org/repo.git/' not found\n"

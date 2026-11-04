@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { setAppEnvironment } from '../../shared/app-environment'
-import { safeRemoveTree } from '../pty/overlay-mirror'
+import { safeRemoveTree } from '../pty/scrollback/overlay-mirror'
 import { OpenCodeHookService } from './hook-service'
 import { OPENCODE_OVERLAY_MANIFEST_FILE } from './opencode-overlay-manifest'
 
@@ -86,13 +86,3 @@ it.each(['overlay-root', 'source-overlay', 'plugins'] as const)(
     expect(result).toEqual({ OPENCODE_CONFIG_DIR: source })
   }
 )
-
-it('still removes a stale mirrored entry from a real owned overlay', () => {
-  const overlay = service.buildPtyEnv('pane-1', source).OPENCODE_CONFIG_DIR
-  if (!overlay) {
-    throw new Error('Expected an isolated overlay')
-  }
-  rmSync(join(source, 'plugins', 'user.js'))
-  expect(service.buildPtyEnv('pane-2', source)).toEqual({ OPENCODE_CONFIG_DIR: overlay })
-  expect(readdirSync(join(overlay, 'plugins'))).toEqual(['orca-test.js'])
-})

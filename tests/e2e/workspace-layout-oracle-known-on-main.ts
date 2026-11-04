@@ -24,20 +24,6 @@ type KnownOnMain = {
 const TRANSIENT = /\(transient\)$/
 
 export const LAYOUT_ORACLE_KNOWN_ON_MAIN: readonly KnownOnMain[] = [
-  // The in-app daemon restart drops the worktree's tabs from main while the window keeps them.
-  ...(['view', 'expected', 'restart', 'marker'] as const).map((check) => ({
-    scenario: 'live-daemon-restart',
-    check,
-    cause: 'daemon restart empties the runtime layout'
-  })),
-  // The relaunch after it has no tab bar for the worktree, so its group is minted again (Linux CI).
-  ...(['rules', 'client'] as const).map((check) => ({
-    scenario: 'live-daemon-restart',
-    check,
-    step: 'after relaunch',
-    platform: 'linux' as const,
-    cause: 'daemon restart empties the runtime layout'
-  })),
   // A headless host lists a worktree with no saved tab bar (and, after a restart, every worktree)
   // under a synthesized `headless-terminals:` group, while the layout stream names the same group
   // by its saved or minted id: same tabs and order, two group ids. One projection in PR 6.

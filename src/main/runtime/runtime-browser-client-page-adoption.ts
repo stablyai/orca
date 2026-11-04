@@ -1,11 +1,11 @@
 import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
-import type { BrowserHostLease } from './browser-host-lease-records'
-import type { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
+import type { BrowserHostLease } from './browser-host/browser-host-lease-records'
+import type { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import {
   buildClientPageAdoptionIntents,
   selectAdoptableClientHostedPages,
   type AdoptableClientHostedPage
-} from './browser-host-client-page-adoption'
+} from './browser-host/browser-host-client-page-adoption'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
 import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
@@ -14,13 +14,7 @@ type AdoptionAuthority = Pick<
   'authorityRuntimeId' | 'authorityEpoch' | 'adoptClientPages' | 'getPlacement'
 >
 
-/**
- * Where a workspace's client-hosted pages would be routed now.
- *
- * `unavailable` is deliberately not `workspace-gone`: the workspace is still real and its pages are
- * still live, the route just cannot be minted yet. Only `workspace-gone` is evidence a page has
- * nothing left to be restored into.
- */
+/** Unavailable routes leave real workspaces/pages alive; only workspace-gone proves there is nowhere to restore. */
 export type BrowserExecutionHostKeyResolution =
   | { status: 'resolved'; executionHostKey: string }
   | { status: 'workspace-gone' }
@@ -39,11 +33,7 @@ export type RuntimeBrowserClientPageAdoptionOptions = {
 export type RuntimeBrowserClientPageAdoptionResult = {
   /** Pages this runtime took back and republished, in inventory order. */
   adoptedPageIds: readonly string[]
-  /**
-   * Adoptable pages this attach did not take back -- a workspace whose route is not up yet, a
-   * reconciliation that failed part way. Their guests are still live on the client, so the caller
-   * must keep holding their rows rather than declaring this client reconciled.
-   */
+  /** Keep rows for failed/deferred adoption: client guests remain live until reconciliation can finish. */
   unadoptedPageIds: readonly string[]
 }
 
@@ -52,13 +42,7 @@ const NOTHING_TO_ADOPT: RuntimeBrowserClientPageAdoptionResult = Object.freeze({
   unadoptedPageIds: Object.freeze([])
 })
 
-/**
- * Rebuilds this runtime's client-hosted page records from the inventory an attaching host reports.
- *
- * A runtime restart loses the page registry but not the guests: the client still holds them, and
- * `reclaimPage` rekeys a live guest onto the new authority rather than recreating it. Adoption is
- * best effort -- a page it cannot take stays the client's problem to retire, and never fails attach.
- */
+/** After restart, reclaim live client guests under new authority instead of recreating them; best-effort failure must not reject attach. */
 export async function adoptRuntimeBrowserClientPagesFromInventory(
   options: RuntimeBrowserClientPageAdoptionOptions
 ): Promise<RuntimeBrowserClientPageAdoptionResult> {
@@ -75,10 +59,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
     inventory,
     browserHostClientId: options.lease.browserHostClientId,
     authorityRuntimeId: options.authority.authorityRuntimeId,
-    // Why a rehydrated row does not count as a page we already track: it is a record without a
-    // guest, and this client is reporting the guest. Adoption is the branch that rekeys a live
-    // guest onto this authority, so letting the persisted row shadow it would push a page whose
-    // DOM is still alive down the recovery path, which recreates it from scratch instead.
+    // Persisted rows have no guest; let adoption rekey the reported live DOM rather than recovery destroy and recreate it.
     hasRuntimePage: (browserPageId) => {
       const page = options.pages.getPage(browserPageId)
       return page !== undefined && !isRestoredClientHostedBrowserPlacement(page.placement)
@@ -97,8 +78,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
       goneWorkspaceIds.add(workspaceId)
     }
   }
-  // A page whose workspace is gone is settled, not pending: nothing will ever restore it, so it must
-  // not hold this client's rows open. Anything else unadopted is a "not yet".
+  // Gone workspaces settle permanently; other unadopted pages remain pending.
   const settle = (pages: readonly AdoptableClientHostedPage[]): readonly string[] =>
     pages
       .filter((page) => !goneWorkspaceIds.has(page.workspaceId))
@@ -144,8 +124,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
     try {
       const restored = options.pages.getPage(browserPageId)
       if (restored && isRestoredClientHostedBrowserPlacement(restored.placement)) {
-        // Why retire rather than update in place: the record is being replaced wholesale by the
-        // host's own report, and publishing over a live id is refused by design.
+        // Retire before replacing from host inventory: publishing over a live id is refused.
         options.pages.retirePage(browserPageId, restored.placement)
       }
       options.pages.publishClientPage({
@@ -157,8 +136,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
         pairedDeviceId: options.lease.pairedDeviceId,
         url: adoptedPageUrl(page),
         loading: false,
-        // Adoption never decides focus: activating here would deactivate whichever sibling the
-        // client is actually showing, and the client republishes its own activation.
+        // Leave focus to client activation reports; adopting active would deactivate a visible sibling.
         active: false
       })
       publishedWorkspaces.add(page.workspaceId)

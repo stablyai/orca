@@ -28,14 +28,7 @@ declare global {
   }
 }
 
-/**
- * Installs an in-renderer echo-latency recorder on the active terminal pane.
- *
- * Why in-page: polling a serialized buffer over CDP adds serialize + IPC +
- * poll-granularity cost to every sample, which swamped the signal it measured.
- * Timestamps here are taken inside the renderer with performance.now(), so the
- * measured window contains no cross-process work at all.
- */
+// Record in-renderer timestamps to exclude CDP serialization, IPC and polling cost from key-to-echo latency.
 export async function installCodexEchoLatencyProbe(page: Page, target: string): Promise<void> {
   await page.evaluate((target) => {
     type PendingSample = {
@@ -66,15 +59,13 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
 
     const samples: CodexEchoLatencySample[] = []
     const awaitingRender: { sample: CodexEchoLatencySample; startedAt: number }[] = []
-    // Why a queue, not one slot: a slow echo can still be outstanding when the
-    // next key is pressed, and a single slot silently discards that sample.
+    // Queue samples because one echo may still be pending when the next key arrives.
     const pending: PendingSample[] = []
     let keysObserved = 0
     let parseEvents = 0
     let renderEvents = 0
 
-    // Why concatenated without a separator: a composer line that wraps splits the
-    // token across rows, and trailing-trimmed rows rejoin exactly at the break.
+    // Join wrapped rows without separators so split echo tokens remain matchable.
     const viewportText = (): string => {
       const buffer = terminal.buffer.active
       let text = ''
@@ -90,8 +81,7 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
         return
       }
       const text = viewportText()
-      // Why drain in order: one parse can land several queued keystrokes at
-      // once, and each still gets credited against its own keydown timestamp.
+      // Credit every queued keystroke when one parse delivers several echoes.
       while (pending.length > 0 && text.includes(pending[0].expected)) {
         const entry = pending.shift()
         if (!entry) {
@@ -117,9 +107,7 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
       }
     }
 
-    // Why window capture: a listener on an ancestor in the capture phase is
-    // guaranteed to run before xterm's own keydown handler forwards to the PTY,
-    // so t0 is stamped before any of the work being measured starts.
+    // Capture on window before xterm forwards the key so t0 precedes all measured PTY work.
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key.length !== 1 || keysObserved >= target.length) {
         return

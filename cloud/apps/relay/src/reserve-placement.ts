@@ -1,15 +1,12 @@
 import type { RelayRegion } from '@orca-cloud/relay-contract'
 import { CELL_INTAKE_BURST, CELL_RESERVE_TTL_MS, type ReserveOutcome } from './cell-reserve-contract.js'
 
-// The director's half of step 5: every director picks a cell from its own map and asks the
-// cell to hold a seat. It only estimates; the cell decides. Pure, so the simulation drives
-// exactly this code.
+// Directors estimate/pick from their own maps; cells decide bookings. Simulation drives this same pure logic.
 
 export const RESERVE_MAX_TRIES = 3
 // A cell not polled this recently is not a candidate (unverifiable, never gone).
 export const RESERVE_CELL_FRESH_MS = 3_000
-// Each director assumes it owns this share of a cell's intake (5 = the configured director
-// count). Fewer live directors only under-use the budget; more only cause refusals.
+// Each director estimates 1/5 of intake; fewer under-use budget, more only cause refusals.
 export const RESERVE_DIRECTOR_SHARE = 5
 export const RESERVE_PACE_MIN_SECONDS = 1
 export const RESERVE_PACE_MAX_SECONDS = 10
@@ -63,9 +60,12 @@ export class ReservePlacer {
     )
   }
 
-  // Seats, the cell's bookings and this director's own bookings since that poll.
   load(cell: PlacementCell): number {
     return cell.seats + cell.bookings + this.ownBookingsSince(cell)
+  }
+
+  free(cell: PlacementCell): number {
+    return cell.ceiling === undefined ? 0 : Math.max(0, cell.ceiling - this.load(cell))
   }
 
   hasSeat(cell: PlacementCell): boolean {
@@ -101,8 +101,12 @@ export class ReservePlacer {
     // Above every epoch this director knows for the host.
     epoch: number
     reserve: (cellId: string, epoch: number) => Promise<ReserveAttempt>
+    // The database lane found the region full: a throttled reserve cell paces instead.
+    regionFull?: boolean
   }): Promise<PlacementResult> {
     const tried = new Set<string>()
+    // Refused for a reason other than intake: no seat to wait for this time.
+    const refused = new Set<string>()
     let epoch = input.epoch
     let calls = 0
     while (calls < RESERVE_MAX_TRIES) {
@@ -115,23 +119,29 @@ export class ReservePlacer {
       if (answer.outcome === 'ok') return { kind: 'placed', cellId: cell.cellId, epoch, calls }
       this.uncountBooking(cell, countedAt)
       if (answer.outcome === 'intake') this.drain(cell)
+      else refused.add(cell.cellId)
       if (answer.outcome === 'seated-newer' && 'epoch' in answer && typeof answer.epoch === 'number') {
         epoch = Math.max(epoch, answer.epoch + 1)
       }
     }
-    return this.fallback(input.cells, input.region, calls)
+    return this.fallback(input.cells, input.region, calls, { regionFull: input.regionFull, refused })
   }
 
-  // Database cells in the region come first, then pacing; a region with neither falls to the
-  // database path too, which spills to another region as today.
-  fallback(cells: readonly PlacementCell[], region: RelayRegion, calls: number): PlacementResult {
+  // Try regional DB cells before pacing budget-only reserve shortages; otherwise database placement may spill.
+  fallback(
+    cells: readonly PlacementCell[],
+    region: RelayRegion,
+    calls: number,
+    options: { regionFull?: boolean; refused?: ReadonlySet<string> } = {}
+  ): PlacementResult {
     const now = this.now()
-    const databaseCells = cells.some(
-      (cell) => !cell.reserve && cell.region === region && cell.general && !cell.draining
-    )
+    const databaseCells =
+      !options.regionFull &&
+      cells.some((cell) => !cell.reserve && cell.region === region && cell.general && !cell.draining)
     if (databaseCells) return { kind: 'database', calls }
     let refillMs: number | null = null
     for (const cell of cells) {
+      if (options.refused?.has(cell.cellId)) continue
       if (!this.isCandidate(cell, region, now) || !this.hasSeat(cell)) continue
       const estimate = this.refill(cell, now)
       const rate = this.ratePerSec(cell)
@@ -148,8 +158,7 @@ export class ReservePlacer {
     }
   }
 
-  // Share of the region's free seats on reserve cells; 0 unless every database cell in the
-  // region reports its ceiling, so this never places only on the new pool by accident.
+  // Without every regional DB cell’s ceiling, return zero share to avoid accidentally placing only on reserve cells.
   reservePoolShare(cells: readonly PlacementCell[], region: RelayRegion): number {
     const now = this.now()
     let reserveFree = 0
@@ -158,7 +167,7 @@ export class ReservePlacer {
       if (cell.region !== region || !cell.general || cell.draining) continue
       if (cell.reserve) {
         if (this.isCandidate(cell, region, now)) {
-          reserveFree += Math.max(0, cell.ceiling! - this.load(cell))
+          reserveFree += this.free(cell)
         }
         continue
       }
@@ -199,7 +208,7 @@ export class ReservePlacer {
       .length
   }
 
-  // Returns the entry it added, so a refusal removes that one and not a concurrent call's.
+  // Remember exact added entry so refusal cannot undo another concurrent call’s booking.
   private countBooking(cell: PlacementCell): number {
     const estimate = this.refill(cell, this.now())
     estimate.tokens = Math.max(0, estimate.tokens - 1)

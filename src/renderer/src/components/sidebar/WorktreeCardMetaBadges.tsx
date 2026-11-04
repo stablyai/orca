@@ -82,8 +82,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
     ) ?? []
 
   return (
-    // Why: Radix HoverCardTrigger uses `asChild`, so this group must forward
-    // trigger props/ref to the actual DOM node for attachment-only hover.
+    // Radix asChild needs trigger props/ref forwarded to the DOM node for attachment-only hover.
     <div
       ref={ref}
       {...props}
@@ -100,9 +99,11 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       !jiraIssue &&
       !review ? (
         <MetaIconBadge
-          label={translate('workspace.links.show', 'Show {{count}} linked reviews and tasks', {
-            count: linkedItemCount
-          })}
+          label={translate(
+            'workspace.links.showLinked',
+            'Show {{count}} linked reviews and tasks',
+            { count: linkedItemCount, defaultValue_one: 'Show {{count}} linked review or task' }
+          )}
         >
           <Link2 />
         </MetaIconBadge>

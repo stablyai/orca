@@ -20,9 +20,7 @@ export function syncTerminalScrollIntentSoon(
   queueMicrotask(sync)
   requestAnimationFrame(sync)
   requestAnimationFrame(() => requestAnimationFrame(sync))
-  // Why: preservePinnedAtBottom only bridges xterm's async scroll application.
-  // The settle tick must reclassify from the real viewport, otherwise a wheel
-  // the viewport never followed latches a phantom pin at the bottom.
+  // preservePinnedAtBottom only bridges async scrolling; settle from the actual viewport so unconsumed wheel events cannot latch phantom bottom pins.
   setTimeout(() => {
     if (options.shouldSync?.() !== false) {
       syncTerminalScrollIntentFromViewport(terminal, {

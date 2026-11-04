@@ -3,9 +3,9 @@ import type { RefObject } from 'react'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaVmRecipe } from '../../../../shared/orca-yaml-hook-types'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { ExecutionHostPlatformFact } from '@/lib/execution-host-facts'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
@@ -32,6 +32,7 @@ export type ComposerRuntimeTargetModel = {
   folderDetectedIds: TuiAgent[] | null
   folderDetectedAgentIds: Set<TuiAgent> | null
   selectedWorkspaceTarget: WorkspaceCreationTargetResolution
+  resolvedRepoId: string
   selectedRepo: Repo | undefined
   selectedRepoIsGit: boolean
   selectedRepoExecutionHostId: ExecutionHostId | null

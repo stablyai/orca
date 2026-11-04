@@ -3,14 +3,7 @@ import { PaneReparentFrameTracker } from '@/lib/pane-manager/pane-reparent-frame
 
 type PreviewBoxFitTerminal = Pick<Terminal, 'rows' | 'buffer'>
 
-/**
- * Scales the preview terminal down to the dialog box it lives in. The terminal
- * keeps the PTY's real cols/rows (replaying serialized ANSI into different
- * dimensions rewraps into garbage), so an oversized frame is transform-scaled
- * and anchored at whichever end keeps the CURSOR row visible: a fresh shell
- * prompts at the TOP of its screen (blind bottom-anchoring clipped it away),
- * while a busy TUI keeps its action at the bottom.
- */
+/** Replay at real PTY dimensions to avoid ANSI rewrap corruption; scale oversized frames and anchor the end containing the cursor. */
 export function createPreviewBoxFit(args: {
   container: HTMLElement
   getTerminal: () => PreviewBoxFitTerminal | null

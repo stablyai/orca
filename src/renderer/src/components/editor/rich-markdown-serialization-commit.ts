@@ -7,11 +7,11 @@ import {
 } from './rich-markdown-source-reconcile'
 
 export type RichMarkdownReconcileRefs = {
-  /** Current on-disk source bytes; updated to the reconciled output each commit. */
+  /** Source-style baseline, advanced by each serialization commit. */
   originalSourceRef: MutableRefObject<string>
   /** Canonical serialization of `originalSourceRef` (getMarkdown of the unedited doc). */
   baseCanonicalRef: MutableRefObject<string>
-  /** Exact bytes last handed to disk; gates the external-change reload. */
+  /** Last reconciled output; gates external-change reload echoes. */
   lastCommittedMarkdownRef: MutableRefObject<string>
 }
 
@@ -22,11 +22,7 @@ export type RichMarkdownSerializationCommit = {
   didSerialize: boolean
 }
 
-/**
- * Single place where reconciliation and ref updates happen for every disk-bound
- * serialize site. Computes edited=getMarkdown(), reconciles toward the original
- * source style, and advances the refs for the next incremental edit.
- */
+/** Reconcile every serialized edit toward source style and advance refs together for the next incremental edit. */
 export function commitRichMarkdownSerialization(
   editor: Editor | null,
   refs: RichMarkdownReconcileRefs,
@@ -36,12 +32,10 @@ export function commitRichMarkdownSerialization(
   try {
     edited = editor?.getMarkdown()
   } catch {
-    // Why: the editor can be destroyed between scheduling and serializing; a
-    // save/restart flush must never crash here.
+    // Destruction between scheduling and serialization must not crash save/restart flushing.
     edited = undefined
   }
   if (edited === undefined) {
-    // Torn-down fallback: reuse the already-reconciled bytes without patching.
     return { markdown: refs.lastCommittedMarkdownRef.current, didSerialize: false }
   }
 
@@ -76,11 +70,9 @@ export function commitRichMarkdownSerialization(
   }
 
   refs.originalSourceRef.current = reconciled
-  // Why: reconciled ≡ edited semantically, so its canonical form is `edited`
-  // (also correct in every fallback branch, which returns `edited` verbatim).
+  // Reconciled output is semantically equal to edited, whose canonical form seeds the next reconciliation.
   refs.baseCanonicalRef.current = edited
-  // Why: the external-change guard short-circuits on lastCommittedMarkdownRef, so
-  // it must hold the exact reconciled bytes that reach disk, not the canonical form.
+  // External-change guards need the exact reconciled output, not its canonical representation.
   refs.lastCommittedMarkdownRef.current = reconciled
   return { markdown: reconciled, didSerialize: true }
 }

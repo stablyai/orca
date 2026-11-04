@@ -172,7 +172,7 @@ describe('orchestration federation', () => {
     const task = createHomeTask()
 
     const response = await homeDispatcher.dispatch(
-      startRequest(task.id, { agent: 'grok', model: 'unsupported-model' })
+      startRequest(task.id, { agent: 'gemini', model: 'unsupported-model' })
     )
 
     expect(response).toMatchObject({
@@ -180,7 +180,7 @@ describe('orchestration federation', () => {
       result: {
         state: 'failed',
         launch: {
-          requested: { agent: 'grok', model: 'unsupported-model', effort: null },
+          requested: { agent: 'gemini', model: 'unsupported-model', effort: null },
           effective: null
         }
       }
@@ -611,8 +611,7 @@ describe('orchestration federation', () => {
       ok: true,
       result: {
         observation: { status: 'live', exactWorker: true },
-        // The execution host answered; the push-fed status snapshot only covers local panes,
-        // so this projection used to contradict the observation printed beside it.
+        // Host evidence must drive projection; local-only push snapshots previously contradicted the adjacent remote observation.
         projection: {
           host: { kind: 'remote', id: 'environment_windows' },
           liveness: { verdict: 'live', source: 'execution_host' },
@@ -757,6 +756,9 @@ describe('orchestration federation', () => {
       async (_selector, method) => {
         if (method === 'status.get') {
           return { runtimeId: workerRuntime.getRuntimeId(), capabilities: workerCapabilities }
+        }
+        if (method === 'orchestration.federationShow') {
+          return {}
         }
         if (method === 'orchestration.federationStop') {
           throw new Error('connection lost')

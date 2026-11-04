@@ -1,4 +1,5 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import { translate } from '@/i18n/i18n'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
@@ -15,8 +16,7 @@ export function isCachedMergedBranchPRCurrentForWorktree(
     cachedPR.headSha.length > 0 &&
     typeof worktree.head === 'string' &&
     worktree.head.length > 0 &&
-    // Why: a worktree behind its own merged PR (update-branch/web commits) is
-    // still that PR's line of work; match the main-process visibility rule.
+    // A merged PR still belongs to a worktree behind web/update-branch commits; match main’s containment rule.
     (cachedPR.headSha === worktree.head || cachedPR.confirmedContainedHeadOid === worktree.head)
   )
 }
@@ -70,13 +70,24 @@ function makeLinkedReviewFallback(
   number: number,
   review: HostedReviewInfo | null | undefined
 ): WorktreeCardPrDisplay {
-  const label = provider === 'gitlab' ? 'MR' : 'PR'
+  const isMergeRequest = provider === 'gitlab'
+  const unavailable = isMergeRequest
+    ? translate(
+        'auto.components.sidebar.worktreeCardPrDisplay.mrDetailsUnavailable',
+        'MR details unavailable'
+      )
+    : translate(
+        'auto.components.sidebar.worktreeCardPrDisplay.prDetailsUnavailable',
+        'PR details unavailable'
+      )
+  const loading = isMergeRequest
+    ? translate('auto.components.sidebar.worktreeCardPrDisplay.loadingMr', 'Loading MR...')
+    : translate('auto.components.sidebar.worktreeCardPrDisplay.loadingPr', 'Loading PR...')
   return {
     provider,
     number,
-    // Why: linked review metadata is persisted before provider details are cached.
-    // Keep the row visible on cold first render while the lookup catches up.
-    title: review === null ? `${label} details unavailable` : `Loading ${label}...`
+    // Persisted review links must remain visible while provider details warm up.
+    title: review === null ? unavailable : loading
   }
 }
 
@@ -129,8 +140,7 @@ export function getWorktreeCardPrDisplay(
       ) {
         return review
       }
-      // Why: GitHub/GitLab linked lookups can outlive the worktree metadata
-      // that requested them. A neutral branch lookup is safe to show unlinked.
+      // Linked lookups can outlive their requesting metadata; only neutral branch results are safe when unlinked.
       return options.reviewHintKey === '' ? review : null
     }
     if (review.number === linkedReviewNumber) {

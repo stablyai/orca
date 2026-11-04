@@ -1,39 +1,61 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
-import { buildAgentPromptPasteBytes } from '../../shared/agent-prompt-injection'
+import { buildAgentPromptPasteBytes } from '../../shared/agent-launch/startup/agent-prompt-injection'
 import type { RuntimeTerminalSummary } from '../../shared/runtime-terminal-contracts'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/dsb',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/dsb',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ])
-}))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/dsb',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/dsb',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 describe('manually started DeepSeek Build terminals', () => {
   afterEach(() => vi.useRealTimers())
 
   it('publishes title-only identity from captured release PTY bytes', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the store subset used by terminal observations.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     runtime.setPtyController({
       spawn: async () => ({ id: 'pty-dsb' }),
       write: () => true,
@@ -55,8 +77,7 @@ describe('manually started DeepSeek Build terminals', () => {
   it.each(['✦', '⏲', '◇', '✋'])(
     'preserves Build title and identity through OSC normalization with task glyph %s',
     async (glyph) => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the store subset used by terminal observations.
-      const runtime = new OrcaRuntimeService(makeStore() as never)
+      const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
       runtime.setPtyController({
         spawn: async () => ({ id: 'pty-dsb' }),
         write: () => true,
@@ -75,8 +96,7 @@ describe('manually started DeepSeek Build terminals', () => {
 
   it('publishes observed DSB identity and sends a prompt with generic input behavior', async () => {
     vi.useFakeTimers()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the store subset exercised by terminal recognition and prompt submission.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     const writes: string[] = []
     runtime.setPtyController({
       spawn: async () => ({ id: 'pty-dsb' }),

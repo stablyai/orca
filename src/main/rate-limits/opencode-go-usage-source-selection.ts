@@ -60,9 +60,7 @@ function usageResult(
   }
 }
 
-// Why explicit copy per verdict: #22257's reporter was misled by a generic
-// "could not parse" for what was really an entitlement answer, so each verdict
-// says what the account's state is and what to do about it.
+// Keep auth and entitlement verdicts actionable; generic parse errors misled #22257.
 function apiFailureResult(
   outcome: Exclude<OpenCodeGoUsageApiOutcome, { kind: 'ok' }>,
   credentialSource: string
@@ -84,20 +82,11 @@ function apiFailureResult(
   return emptyResult(outcome.message, 'error', {
     source: 'web',
     credentialSource,
-    failureKind: 'server'
+    failureKind: outcome.failureKind ?? 'server'
   })
 }
 
-/**
- * Fetch OpenCode Go usage from the best source the account offers.
- *
- * The keyed `GET /zen/go/v1/usage` endpoint is tried first because it needs no
- * console session; the legacy cookie path stays as the fallback for Black and
- * other legacy-console accounts, which upstream `fe51b0b19a` still serves.
- * @param input.settingsApiKey - Explicit Orca override, if the user set one.
- * @param input.cookie - The opencode.ai cookie header from Orca settings.
- * @returns A provider snapshot for the status bar.
- */
+/** Prefer the keyed usage endpoint; retain cookie fallback for Black and other legacy-console accounts. */
 export async function fetchOpenCodeGoUsage(
   input: OpenCodeGoUsageSourceInput
 ): Promise<ProviderRateLimits> {
@@ -141,8 +130,7 @@ export async function fetchOpenCodeGoUsage(
   if (!hasCookie) {
     return apiFailureResult(outcome, tier)
   }
-  // A Black-only account holds a key with no Go entitlement, so its usage still
-  // only exists behind the console session; keep that path working.
+  // Black-only keys lack Go entitlement; those accounts still need console-session usage.
   const cookieResult = await fetchOpenCodeGoRateLimits(
     input.cookie,
     input.workspaceIdOverride,

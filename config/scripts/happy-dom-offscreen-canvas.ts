@@ -1,5 +1,4 @@
-// Why: happy-dom exposes OffscreenCanvas without a default canvas adapter. xterm prefers that API
-// and then cannot open in tests that already provide the HTML canvas text-metric stand-in.
+// happy-dom exposes adapter-less OffscreenCanvas that xterm prefers; reuse the existing HTML canvas text-metric double.
 
 const OFFSCREEN_CANVAS_COMPATIBILITY_INSTALLED = Symbol.for(
   'orca.happyDomOffscreenCanvasCompatibility'
@@ -49,7 +48,7 @@ export function installHappyDomOffscreenCanvasCompatibility(): boolean {
       return context
     }
 
-    const canvas = document.createElement('canvas') as PatchableCanvas
+    const canvas = document.createElement('canvas')
     return htmlCanvas.prototype.getContext!.call(canvas, contextType, contextAttributes)
   }
   prototype[OFFSCREEN_CANVAS_COMPATIBILITY_INSTALLED] = true

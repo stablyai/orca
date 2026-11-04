@@ -6,6 +6,7 @@ import type {
 } from '@/lib/worktree-operation-route'
 import {
   getPortsPanelOwnerKey,
+  portsPanelForwardTargetId,
   portsPanelHostForOwnerKey,
   portsPanelReachesSshHost,
   type PortsPanelHost
@@ -56,8 +57,7 @@ const CASES: {
     host: { kind: 'direct-ssh', connectionId: 'box' }
   },
   {
-    // #24067: the repo row names no owner; only the workspace row names the VM. Recipe VM targets
-    // publish no connection state, so this app's own runtime scans them.
+    // Recipe VMs lack connection state; workspace ownership directs this app's scan even without repo ownership (#24067).
     name: 'recipe VM workspace whose repo row names no host',
     rows: {
       repos: [{ id: 'repo-1' }],
@@ -185,5 +185,34 @@ describe('Ports tab visibility', () => {
     }
     const host = portsPanelHostForOwnerKey(getPortsPanelOwnerKey(state, WORKTREE_ID))
     expect(portsPanelReachesSshHost(host, environments)).toBe(true)
+  })
+})
+
+describe('Ports panel forwards', () => {
+  const ports = { localPort: 41_000, remotePort: 6768 }
+  const environments = [
+    { id: 'env-paired' },
+    { id: 'env-ssh', orcadDeployment: { sshTargetId: 'box', sshTargetGeneration: 1, ...ports } },
+    { id: 'env-wsl', orcadDeployment: { kind: 'wsl' as const, distro: 'Ubuntu', ...ports } }
+  ]
+  const onServer = (environmentId: string): PortsPanelHost => ({
+    kind: 'endpoint',
+    target: { kind: 'environment', environmentId }
+  })
+
+  // #29153: a moved host's workspace is owned by its server, yet forwards still ride its SSH host.
+  it.each<[string, PortsPanelHost, string | null]>([
+    ['a workspace on a managed server reached over SSH', onServer('env-ssh'), 'box'],
+    ['a workspace on a managed WSL server', onServer('env-wsl'), null],
+    ['a workspace on a paired server', onServer('env-paired'), null],
+    ['a workspace on an unknown server', onServer('env-gone'), null],
+    ['a local workspace', { kind: 'endpoint', target: { kind: 'local' } }, null],
+    [
+      'a direct SSH workspace, which lists its own forwards',
+      { kind: 'direct-ssh', connectionId: 'box' },
+      null
+    ]
+  ])('%s', (_name, host, targetId) => {
+    expect(portsPanelForwardTargetId(host, environments)).toBe(targetId)
   })
 })

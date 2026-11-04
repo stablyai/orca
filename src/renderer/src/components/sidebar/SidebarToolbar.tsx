@@ -23,11 +23,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
   workspaceBoardDragPreviewOpen = false,
   onWorkspaceBoardToggle
 }: SidebarToolbarProps) {
-  // Why: this memo boundary needs its own language subscription, while
-  // translate() preserves Orca's pseudo-localization behavior. Without it the
-  // toolbar (and the ScrollToCurrentWorkspaceToolbarButton it renders) keeps
-  // whatever language was active at boot — English, since the persisted locale
-  // is applied asynchronously after the lazy catalog loads.
+  // Subscribe across this memo boundary so asynchronously applied locale changes relabel the toolbar and its children.
   useTranslation()
   const [workspaceBoardMovedHintOpen, setWorkspaceBoardMovedHintOpen] = React.useState(false)
   const movedHintEligibleRef = React.useRef<boolean | null>(null)
@@ -40,8 +36,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
     if (!persistedUIReady) {
       return
     }
-    // Why: only users who had already opened the old board location should
-    // see the relocation hint; first-time users should not become eligible.
+    // Limit relocation hints to users who opened the board at its old location.
     if (movedHintEligibleRef.current === null) {
       movedHintEligibleRef.current = hasUsedWorkspaceBoard
     }
@@ -80,8 +75,6 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
           <Tooltip open={workspaceBoardMovedHintOpen ? true : undefined}>
             <TooltipTrigger asChild>
               <Button
-                // Why: previewing the board from a card drag lights up the
-                // trigger so it's clear the drag is another way to open it.
                 variant={
                   workspaceBoardOpen || workspaceBoardDragPreviewOpen ? 'secondary' : 'ghost'
                 }

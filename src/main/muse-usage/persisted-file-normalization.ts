@@ -1,6 +1,6 @@
 import type { MuseUsagePersistedFile } from './types'
 
-/** Fills fields older Muse caches never wrote. Electron-free: the scan worker runs it too. */
+/** Backfill old caches in both the main process and scan worker. */
 export function normalizeMuseUsagePersistedFiles(
   files: MuseUsagePersistedFile[] | undefined
 ): MuseUsagePersistedFile[] {

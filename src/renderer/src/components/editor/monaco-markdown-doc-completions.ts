@@ -10,12 +10,15 @@ type MonacoApi = Parameters<OnMount>[1]
 
 let provider: IDisposable | null = null
 let providerMonaco: MonacoApi = null
-let documentsByModel = new WeakMap<editor.ITextModel, MarkdownDocument[]>()
+type ModelCompletionDocuments = {
+  owners: Map<symbol, MarkdownDocument[]>
+  documents: MarkdownDocument[]
+}
+
+let documentsByModel = new WeakMap<editor.ITextModel, ModelCompletionDocuments>()
 
 export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
-  // Why: if Monaco was torn down and re-created (e.g. window reload), the old
-  // provider reference is stale. Detect this by checking whether the Monaco
-  // instance changed and re-register.
+  // Re-register when Monaco is recreated; the old provider belongs to the previous instance.
   if (provider && providerMonaco === monaco) {
     return
   }
@@ -34,7 +37,7 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
         return { suggestions: [] }
       }
 
-      const documents = documentsByModel.get(model) ?? []
+      const documents = documentsByModel.get(model)?.documents ?? []
       const suffix = line.slice(position.column - 1)
       const range = {
         startLineNumber: position.lineNumber,
@@ -60,11 +63,27 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
 
 export function setMarkdownDocCompletionDocuments(
   model: editor.ITextModel,
-  documents: MarkdownDocument[]
+  documents: MarkdownDocument[],
+  owner: symbol
 ): void {
-  documentsByModel.set(model, documents)
+  const entry = documentsByModel.get(model) ?? { owners: new Map(), documents }
+  entry.owners.delete(owner)
+  entry.owners.set(owner, documents)
+  entry.documents = documents
+  documentsByModel.set(model, entry)
 }
 
-export function clearMarkdownDocCompletionDocuments(model: editor.ITextModel): void {
-  documentsByModel.delete(model)
+export function clearMarkdownDocCompletionDocuments(model: editor.ITextModel, owner: symbol): void {
+  const entry = documentsByModel.get(model)
+  if (!entry?.owners.delete(owner)) {
+    return
+  }
+  if (entry.owners.size === 0) {
+    documentsByModel.delete(model)
+    return
+  }
+  // Closing the latest supplier restores the newest catalog still owned by a mounted pane.
+  for (const documents of entry.owners.values()) {
+    entry.documents = documents
+  }
 }

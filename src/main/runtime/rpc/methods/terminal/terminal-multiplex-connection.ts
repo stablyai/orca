@@ -11,6 +11,7 @@ import type {
   TerminalMultiplexSubscribeFrame
 } from './stream-schemas'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import type { MultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
 import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal-stream-end-verdict'
 
 export type MultiplexSubscribeRequest = z.infer<typeof TerminalMultiplexSubscribeFrame>
@@ -28,6 +29,7 @@ export type TerminalMultiplexConnectionBase = {
   cursor: number
   streams: Map<number, TerminalMultiplexStream>
   pendingPtyWaitControllers: Map<number, Set<AbortController>>
+  ptyWaitAdmission: MultiplexPtyWaitAdmission
   ackTotalInFlightBytes: number
   ackTotalWindowBytes: number
   ackFlushCursorStreamId: number | null

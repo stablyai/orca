@@ -29,7 +29,7 @@ describe('check log excerpt byte-cap work', () => {
   it.each(['x', 'é', '界', '😀', '\ud83d', '\udc00'])(
     'preserves byte boundaries for %j',
     (unit) => {
-      const width = Buffer.byteLength(unit)
+      const width = new TextEncoder().encode(unit).byteLength
       for (const delta of [-1, 0, 1]) {
         const count = Math.floor(PR_CHECK_LOG_TAIL_BYTES / width) + delta
         const input = unit.repeat(count)
@@ -37,7 +37,9 @@ describe('check log excerpt byte-cap work', () => {
         expect(output).toBe(
           unit.repeat(Math.min(count, Math.floor(PR_CHECK_LOG_TAIL_BYTES / width)))
         )
-        expect(Buffer.byteLength(output)).toBeLessThanOrEqual(PR_CHECK_LOG_TAIL_BYTES)
+        expect(new TextEncoder().encode(output).byteLength).toBeLessThanOrEqual(
+          PR_CHECK_LOG_TAIL_BYTES
+        )
       }
     }
   )

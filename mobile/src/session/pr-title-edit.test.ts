@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildUpdatePRTitleParams, canEditPRTitle, isSubmittablePRTitle } from './pr-title-edit'
+import {
+  buildUpdatePRTitleParams,
+  canEditPRTitle,
+  createPrTextEditOwnership
+} from './pr-title-edit'
 
 describe('canEditPRTitle', () => {
   it('allows editing on open and draft PRs', () => {
@@ -14,20 +18,6 @@ describe('canEditPRTitle', () => {
   })
 })
 
-describe('isSubmittablePRTitle', () => {
-  it('rejects empty / whitespace-only drafts', () => {
-    expect(isSubmittablePRTitle('', 'Current')).toBe(false)
-    expect(isSubmittablePRTitle('   ', 'Current')).toBe(false)
-  })
-  it('rejects an unchanged title (after trim)', () => {
-    expect(isSubmittablePRTitle('Current', 'Current')).toBe(false)
-    expect(isSubmittablePRTitle('  Current  ', 'Current')).toBe(false)
-  })
-  it('accepts a non-empty changed title', () => {
-    expect(isSubmittablePRTitle('New title', 'Current')).toBe(true)
-  })
-})
-
 describe('buildUpdatePRTitleParams', () => {
   it('returns null for empty/unchanged drafts (no host round-trip)', () => {
     expect(buildUpdatePRTitleParams(7, '', 'Current')).toBeNull()
@@ -39,5 +29,21 @@ describe('buildUpdatePRTitleParams', () => {
       prNumber: 7,
       title: 'New title'
     })
+  })
+})
+
+describe('createPrTextEditOwnership', () => {
+  it('keeps a newer edit open when an older Save succeeds after its deferred reread', async () => {
+    const ownership = createPrTextEditOwnership()
+    // First Save's write succeeded; its reread is still pending, so Save has not resolved.
+    const firstReread = Promise.withResolvers<boolean>()
+    const first = ownership.save(() => firstReread.promise)
+    // The user edits again and the newer Save fails.
+    ownership.touch()
+    await expect(ownership.save(async () => false)).resolves.toBe(false)
+    firstReread.resolve(true)
+    await expect(first).resolves.toBe(false)
+    // With no newer edit, a successful Save still closes the editor.
+    await expect(ownership.save(async () => true)).resolves.toBe(true)
   })
 })

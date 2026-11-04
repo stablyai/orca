@@ -16,15 +16,59 @@ import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { resolveOrcaSessionParty } from '../../../orchestration/orchestration-party'
 import { locateOrchestrationParty } from '../../../orchestration/orchestration-party-location'
 import { readAgentSessionRecordStore } from '../../../orchestration/structured-session-lineage'
-import { defineMethod } from '../../core'
+import type { z } from 'zod'
+import type { OrchestrationDb } from '../../../orchestration/db'
+import { defineMethod, type RpcContext } from '../../core'
+import { openClosedWorkerTerminal } from './worker/closed-worker-terminal'
+import { ensureStructuredHostInstalled } from '../structured-agent-session-gate'
+
+async function locateParty(
+  params: z.infer<typeof PartyLocationParams>,
+  ctx: RpcContext
+): Promise<OrchestrationPartyLocationResult> {
+  let records: ReturnType<typeof readAgentSessionRecordStore> = null
+  try {
+    await ensureStructuredHostInstalled(ctx)
+    records = readAgentSessionRecordStore()
+  } catch {
+    // Terminal routing remains usable when chat records cannot be installed.
+  }
+  const { runtime } = ctx
+  return locateOrchestrationParty(
+    params.address,
+    {
+      db: runtime.getOrchestrationDb(),
+      records,
+      terminalPaneKey: (handle) => runtime.getTerminalPaneKey(handle),
+      terminalHandleForPaneKey: (paneKey) => runtime.getTerminalHandleForPaneKey(paneKey)
+    },
+    params.messageIds
+  )
+}
+
+/** The terminal worker a lookup answered with, or proved lost. */
+function closedWorkerHandle(
+  address: string,
+  located: OrchestrationPartyLocationResult,
+  db: OrchestrationDb
+): string | null {
+  if (located.location?.kind === 'terminal') {
+    return located.location.handle
+  }
+  if (located.lost !== 'terminal') {
+    return null
+  }
+  return address.startsWith('dispatch:')
+    ? (db.getDispatchContextById(address.slice('dispatch:'.length))?.assignee_handle ?? null)
+    : address
+}
 
 export const ORCHESTRATION_CALLER_METHODS = [
   defineMethod({
     name: 'orchestration.callerShow',
     permission: 'workspace',
     params: null,
-    // Why no params: the dispatch entry already resolved the session the caller's environment names,
-    // and a session it cannot admit never reaches here: its refusal is the answer.
+    // Dispatch already admitted the environment's session; do not resolve another caller from params.
     handler: (_params, { orchestrationCaller }): OrchestrationCallerShowResult => ({
       caller: orchestrationCaller
         ? { orcaSessionId: formatOrcaSessionAddress(orchestrationCaller.orcaSessionId), live: true }
@@ -35,7 +79,7 @@ export const ORCHESTRATION_CALLER_METHODS = [
     name: 'orchestration.sessionAddress',
     permission: 'workspace',
     params: SessionAddressParams,
-    // Why host-side: only the host's session records know a chat's `/clear` root.
+    // Only host records know the chat's /clear root.
     handler: (params, { runtime }): OrchestrationSessionAddressResult => {
       if (!isOrcaSessionId(params.sessionId)) {
         throw new OrchestrationError(
@@ -52,17 +96,20 @@ export const ORCHESTRATION_CALLER_METHODS = [
     name: 'orchestration.partyLocation',
     permission: 'workspace',
     params: PartyLocationParams,
-    // Why host-side: a chat sender's live session follows its `/clear` lineage on this host.
-    handler: (params, { runtime }): OrchestrationPartyLocationResult =>
-      locateOrchestrationParty(
-        params.address,
-        {
-          db: runtime.getOrchestrationDb(),
-          records: readAgentSessionRecordStore(),
-          terminalPaneKey: (handle) => runtime.getTerminalPaneKey(handle),
-          terminalHandleForPaneKey: (paneKey) => runtime.getTerminalHandleForPaneKey(paneKey)
-        },
-        params.messageIds
-      )
+    // Resolve the chat sender's live /clear successor on its owning host.
+    handler: (params, ctx): Promise<OrchestrationPartyLocationResult> => locateParty(params, ctx)
+  }),
+  defineMethod({
+    name: 'orchestration.partyOpen',
+    permission: 'workspace',
+    params: PartyLocationParams,
+    // The lookup, except that a terminal worker Orca closed resumes its conversation in a new terminal.
+    handler: async (params, ctx): Promise<OrchestrationPartyLocationResult> => {
+      const located = await locateParty(params, ctx)
+      const db = ctx.runtime.getOrchestrationDb()
+      const handle = db && closedWorkerHandle(params.address, located, db)
+      const reopened = handle ? await openClosedWorkerTerminal(ctx.runtime, db, handle) : null
+      return reopened ? { location: reopened } : located
+    }
   })
 ]

@@ -8,16 +8,17 @@ vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
   app: { getPath: () => '/tmp/orca-test' }
 }))
-vi.mock('../../../git/runner', async (importOriginal) => ({
+vi.mock('../../../git/command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
 const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provider-listing')
 const { __resetDetectedWorktreeScanCacheForTests } = await import('./detected-worktree-scan-cache')
-const { _resetWorktreeScanCacheForTests } = await import('../../../git/worktree-scan-cache')
+const { _resetWorktreeScanCacheForTests } =
+  await import('../../../git/worktrees/catalog/worktree-scan-cache')
 const { isRegisteredWorktreePath, invalidateAuthorizedRootsCache } =
-  await import('../../registered-worktree-roots-cache')
+  await import('../removal/registered-worktree-roots-cache')
 
 const REPO_PATH = '/workspace/repo'
 const repo = {
@@ -47,7 +48,7 @@ function createStore() {
   } as never
 }
 
-/** The field failure: wsl.exe exits 0xFFFFFFFF, says nothing on stderr, and git never ran. */
+/** Model WSL launcher failure before Git runs, without stderr. */
 function wslHostFailure(): Error {
   return Object.assign(new Error('Command failed: wsl.exe -d kali-linux --exec sh -lc ...'), {
     code: 4294967295,
@@ -80,9 +81,7 @@ describe('detected worktree listing authority', () => {
     expect(result.authoritative).toBe(false)
     expect(result.source).toBe('metadata-fallback')
     expect(result.worktrees).toEqual([])
-    // Why: the retained rows must carry the cause, or the user sees inert worktrees with no explanation.
     expect(result.unavailableReason).toContain('Command failed: wsl.exe')
-    // The destructive halves of a fresh scan must not run against a listing that failed.
     expect(isRegisteredWorktreePath(REPO_PATH, store)).toBe(false)
     expect(removeWorktreeLineage).not.toHaveBeenCalled()
   })
@@ -105,8 +104,7 @@ describe('detected worktree listing authority', () => {
     )
   })
 
-  // Why (measured on a real Windows host): under WSL the spawn cwd is the interop directory, so a
-  // deleted guest repo fails as `bash: cd` exit 1 — not ENOENT — and must stay retained, not pruned.
+  // WSL uses an interop cwd; a missing guest directory can yield cd exit 1 rather than ENOENT.
   it('retains a WSL repo whose guest directory is gone, and says why', async () => {
     gitExecFileAsyncMock.mockRejectedValue(
       Object.assign(new Error('bash: line 1: cd: /home/neil/repo: No such file or directory'), {

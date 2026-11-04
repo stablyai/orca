@@ -33,6 +33,8 @@ import { buildMobileMarkdownTab, buildMobileFileTab } from './mobile-session-edi
 import { buildMobileBrowserTab } from './mobile-session-browser-tabs'
 import type { MobileSessionPublicationInputs } from './types'
 import { canReuseMobileSessionSnapshot } from './mobile-session-capture'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export function buildMobileSessionTabSnapshots(
   state: AppState,
@@ -46,7 +48,7 @@ export function buildMobileSessionTabSnapshots(
   const publicationInputs: MobileSessionPublicationInputs = {
     browserTabsByWorktree,
     openFileIndexes,
-    editorDraftVersionByFileId: getEditorDraftVersionByFileId(state.editorDrafts),
+    editorDraftVersionByFileId: getEditorDraftVersionByFileId(state.editorDrafts, state.openFiles),
     agentStatusByWorktreeId: buildMobileSessionAgentStatusByWorktree(
       state.agentStatusByPaneKey ?? {},
       state.tabsByWorktree
@@ -55,7 +57,7 @@ export function buildMobileSessionTabSnapshots(
     terminalTheme: getMobileTerminalTheme(state, systemPrefersDark)
   }
   const liveFolderWorkspaceIds = new Set(
-    (state.folderWorkspaces ?? []).map((workspace) => workspace.id)
+    (selectFolderWorkspaces(state) ?? []).map((workspace) => workspace.id)
   )
   const worktreeIds = new Set<string>([
     ...Object.keys(state.tabsByWorktree),
@@ -171,7 +173,9 @@ export function buildMobileSessionTabSnapshots(
         fallbackEditorTabs.push({ tabId: fallbackTab.id, groupId: unifiedTab.groupId })
         emittedEditorTabIds.add(unifiedTab.id)
       }
-      for (const file of openFilesForWorktree.values()) {
+      // Switch point: a row goes out under its tab id only, the id main's layout resolves (L280).
+      const tablessFiles = ORCA_LAYOUT_OWNER_IS_MAIN ? [] : openFilesForWorktree.values()
+      for (const file of tablessFiles) {
         if (!isMobilePublishableOpenFile(file) || emittedEditorFileIds.has(file.id)) {
           continue
         }

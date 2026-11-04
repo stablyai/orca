@@ -76,6 +76,25 @@ describe('AgentKanbanCard', () => {
     vi.clearAllMocks()
   })
 
+  it('rerenders on a verdict-only change without a clean completion tint', () => {
+    const initial = card({ dotState: 'done', bucket: 'idle' })
+    const onOpenTerminal = vi.fn()
+    const { container, rerender } = renderCard({ card: initial, now: 2000, onOpenTerminal })
+    for (const verdict of ['interrupted', 'failed', 'unconfirmed'] as const) {
+      rerender(
+        <TooltipProvider>
+          <AgentKanbanCard
+            card={{ ...initial, verdict }}
+            now={2000}
+            onOpenTerminal={onOpenTerminal}
+          />
+        </TooltipProvider>
+      )
+      expect(agentStateDotRender).toHaveBeenLastCalledWith(verdict)
+      expect(container.firstElementChild?.className).not.toContain('emerald')
+    }
+  })
+
   it('does not render an invented age when the start time is unknown', () => {
     renderCard({ card: card({ startedAt: 0 }), now: 2_000_000_000 })
 
@@ -86,7 +105,8 @@ describe('AgentKanbanCard', () => {
     const attentionCard = card({
       bucket: 'attention',
       dotState: 'waiting',
-      askSummary: 'Approve deploy?'
+      askSummary: 'Approve deploy?',
+      verdict: 'failed'
     })
     const { container, rerender } = renderCard({ card: attentionCard, now: 2_000 })
 
@@ -217,7 +237,6 @@ describe('AgentKanbanCard', () => {
     expect(header).toHaveTextContent('Sparse-checkout parser')
     expect(header).not.toHaveTextContent('dashboard-review')
     expect(footer).toHaveTextContent('dashboard-review')
-    // The message line is attributed to the user again — the name moved up.
     expect(screen.getByText('You')).toBeInTheDocument()
   })
 

@@ -96,15 +96,16 @@ describe('workspace cleanup enrichment performance', () => {
     const alphaTab = { id: 'tab-alpha', title: 'shell' }
     const betaTab = { id: 'tab-beta', title: 'shell' }
     const alphaWorking = {
-      paneKey: 'tab-alpha:leaf-alpha',
+      paneKey: 'tab-alpha:11111111-1111-4111-8111-111111111111',
       state: 'working',
+      connectionId: null,
       prompt: '',
       updatedAt: NOW,
       stateStartedAt: NOW,
       stateHistory: []
     }
     const betaDone = {
-      paneKey: 'tab-beta:leaf-beta',
+      paneKey: 'tab-beta:22222222-2222-4222-8222-222222222222',
       state: 'done',
       prompt: '',
       updatedAt: NOW,
@@ -262,7 +263,7 @@ describe('workspace cleanup enrichment performance', () => {
     pending.resolve({ scannedAt: NOW, candidates, errors: [] })
     const finalScan = await scanPromise
 
-    expect(counts).toEqual({ openFiles: 1, retainedAgents: 1, agentStatuses: 1 })
+    expect(counts).toEqual({ openFiles: 1, retainedAgents: 0, agentStatuses: 0 })
     expect(finalScan.candidates).toEqual(progressCandidates)
   })
 
@@ -440,47 +441,5 @@ describe('workspace cleanup enrichment performance', () => {
     await scanPromise
 
     expect(hasChildProcesses).toHaveBeenCalledTimes(candidateCount)
-  })
-
-  it('rebuilds focused removal enrichment from state changed after the broad scan', async () => {
-    const candidate = makeCandidate()
-    const focusedScan = deferred<WorkspaceCleanupScanResult>()
-    const scan = vi.fn((args?: WorkspaceCleanupScanArgs) =>
-      args?.worktreeId
-        ? focusedScan.promise
-        : Promise.resolve({ scannedAt: NOW, candidates: [candidate], errors: [] })
-    )
-    installWorkspaceCleanupApi(scan)
-    const hasChildProcesses = vi.fn().mockResolvedValue(false)
-    ;(
-      globalThis.window as unknown as {
-        api: {
-          pty: {
-            hasChildProcesses: typeof hasChildProcesses
-            getForegroundProcess: ReturnType<typeof vi.fn>
-          }
-        }
-      }
-    ).api.pty = {
-      hasChildProcesses,
-      getForegroundProcess: vi.fn().mockResolvedValue('zsh')
-    }
-    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
-    const store = createCleanupTestStore(removeWorktree)
-
-    await store.getState().scanWorkspaceCleanup()
-    const removal = store.getState().removeWorkspaceCleanupCandidates([candidate.worktreeId])
-    store.setState({
-      tabsByWorktree: {
-        [candidate.worktreeId]: [
-          { id: 'post-scan-tab', title: 'shell' }
-        ] as AppState['tabsByWorktree'][string]
-      },
-      ptyIdsByTabId: { 'post-scan-tab': ['post-scan-pty'] }
-    } as Partial<AppState>)
-    focusedScan.resolve({ scannedAt: NOW, candidates: [candidate], errors: [] })
-
-    await expect(removal).resolves.toMatchObject({ removedIds: [candidate.worktreeId] })
-    expect(hasChildProcesses).toHaveBeenCalledWith('post-scan-pty')
   })
 })

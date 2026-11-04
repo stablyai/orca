@@ -20,7 +20,10 @@ import type * as TrustDerivation from './codex-hook-trust-derivation'
 import type * as RealHomeInstall from './codex-real-home-hook-install'
 
 const mocks = vi.hoisted(() => {
-  const held: { holdRealHome: Promise<void> | null } = { holdRealHome: null }
+  const held: { holdRealHome: Promise<void> | null; holdCodexScan: Promise<void> | null } = {
+    holdRealHome: null,
+    holdCodexScan: null
+  }
   return {
     ...held,
     homedir: vi.fn<() => string>(),
@@ -37,7 +40,13 @@ vi.mock('node:os', async (importOriginal) => ({
 }))
 vi.mock('../codex-cli/command', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexCommand>()),
-  resolveCodexCommand: () => mocks.codexPath
+  resolveCodexCommand: () => mocks.codexPath,
+  // Answers what PATH held when the scan began, as a scan that walked past a later install would.
+  resolveCodexCommandForSpawn: async () => {
+    const codexPath = mocks.codexPath
+    await mocks.holdCodexScan
+    return codexPath
+  }
 }))
 vi.mock('./codex-hook-trust-derivation', async (importOriginal) => ({
   ...(await importOriginal<typeof TrustDerivation>()),
@@ -79,9 +88,6 @@ import {
 } from './codex-hook-definition'
 import type { CodexHookHashes } from './codex-hook-trust-derivation'
 import { computeTrustKey, readHookTrustEntries, upsertHookTrustEntries } from './config-toml-trust'
-
-// Why this file: the reconcile is the only writer of Orca's entry in ~/.codex,
-// and the common call, on every pane spawn and Codex launch, must change nothing.
 
 let root: string
 let home: string
@@ -145,8 +151,43 @@ async function settleSpawn(): Promise<void> {
   await _internals.settledForTesting()
 }
 
+async function finishHeldLookupWait(
+  operation: () => Promise<void>,
+  launchWait = false
+): Promise<void> {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const timeout = vi.spyOn(globalThis, 'setTimeout')
+  const runsBefore = mocks.realHomeRuns
+  const derivationsBefore = mocks.deriveCodexHookHashes.mock.calls.length
+  const filesBefore = snapshot(codexHome())
+  let completed = false
+  const pending = operation().then(() => {
+    completed = true
+  })
+  try {
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(mocks.deriveCodexHookHashes.mock.calls.length).toBeGreaterThan(derivationsBefore)
+    expect(timeout).toHaveBeenCalledWith(expect.any(Function), 500)
+    if (launchWait) {
+      expect(timeout).toHaveBeenCalledWith(expect.any(Function), 3_000)
+    }
+    expect(completed).toBe(false)
+    await vi.advanceTimersByTimeAsync(499)
+    expect(completed).toBe(false)
+    expect(mocks.realHomeRuns).toBe(runsBefore)
+    expect(snapshot(codexHome())).toEqual(filesBefore)
+    await vi.advanceTimersByTimeAsync(1)
+    await pending
+    expect(completed).toBe(true)
+    expect(mocks.realHomeRuns).toBe(runsBefore + 1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    timeout.mockRestore()
+  }
+}
+
 beforeEach(() => {
-  // Why realpath: a symlinked temp dir (macOS /var) would give ~/.codex a second key spelling.
+  // Resolve macOS /var symlinks to avoid a second trust-key spelling.
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-codex-reconcile-')))
   home = join(root, 'home')
   userData = join(root, 'user-data')
@@ -165,6 +206,7 @@ beforeEach(() => {
   })
   mocks.realHomeRuns = 0
   mocks.holdRealHome = null
+  mocks.holdCodexScan = null
   enabled = true
   usesRealHome = true
   _internals.resetForTesting()
@@ -212,7 +254,7 @@ describe('reconcileCodexHooks', () => {
       })
     )
     const launch = reconcileCodexHooksForLaunch()
-    // Why past the reconcile's 500 ms answer wait: an early run would write its stopgap by then.
+    // Exceed the 500ms lookup budget to detect a premature stopgap write.
     await vi.advanceTimersByTimeAsync(600)
     expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
     expect(mocks.realHomeRuns).toBe(0)
@@ -221,6 +263,43 @@ describe('reconcileCodexHooks', () => {
     await Promise.all([started, launch])
 
     expect(mocks.realHomeRuns).toBe(1)
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('holds the startup lookup and reconcile until startAfter settles', async () => {
+    writeHooks({ Stop: [olderBuildStop()] })
+    const published = Promise.withResolvers<void>()
+    startCodexHooks({
+      isEnabled: () => enabled,
+      resolveLaunchHome: () => null,
+      pathReady: Promise.resolve(),
+      startAfter: published.promise
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
+    expect(mocks.realHomeRuns).toBe(0)
+
+    published.resolve()
+    await _internals.settledForTesting()
+
+    expect(mocks.probeCodexVersion).toHaveBeenCalled()
+    expect(mocks.realHomeRuns).toBe(1)
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('never makes a launch wait for startAfter', async () => {
+    writeHooks({ Stop: [olderBuildStop()] })
+    startCodexHooks({
+      isEnabled: () => enabled,
+      resolveLaunchHome: () => null,
+      pathReady: Promise.resolve(),
+      startAfter: new Promise<void>(() => {})
+    })
+
+    await reconcileCodexHooksForLaunch()
+
+    expect(mocks.realHomeRuns).toBe(1)
+    // The launch takes the startup run, so app start's conversion still happens.
     expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
   })
 
@@ -301,6 +380,48 @@ describe('reconcileCodexHooks', () => {
     await settleSpawn()
 
     expect(mocks.realHomeRuns).toBe(1)
+  })
+
+  it('rechecks a spawn that lands while a run is still finding Codex, which may miss a fresh install', async () => {
+    const installed = mocks.codexPath
+    mocks.codexPath = join(userData, 'missing-codex')
+    await start()
+    const scan = Promise.withResolvers<void>()
+    mocks.holdCodexScan = scan.promise
+
+    scheduleCodexHookReconcile()
+    await new Promise((resolve) => setImmediate(resolve))
+    mocks.codexPath = installed
+    mocks.holdCodexScan = null
+    scheduleCodexHookReconcile()
+    scan.resolve()
+    await settleSpawn()
+
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('rechecks a spawn that lands while Codex is still answering, so an upgrade that moved it is not missed', async () => {
+    await start()
+    rmSync(hooksPath())
+    const old = mocks.codexPath
+    // New bytes make the lookup ask this binary again.
+    writeFileSync(old, 'codex 0.161.0')
+    const probe = Promise.withResolvers<string | null>()
+    mocks.probeCodexVersion.mockReturnValueOnce(probe.promise)
+    const probesBefore = mocks.probeCodexVersion.mock.calls.length
+
+    scheduleCodexHookReconcile()
+    await vi.waitFor(() => expect(mocks.probeCodexVersion.mock.calls.length).toBe(probesBefore + 1))
+    rmSync(old)
+    const moved = join(userData, 'moved', 'codex')
+    mkdirSync(join(moved, '..'))
+    writeFileSync(moved, 'codex 0.161.0')
+    mocks.codexPath = moved
+    scheduleCodexHookReconcile()
+    probe.resolve(null)
+    await settleSpawn()
+
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
   })
 
   it("leaves an older build's entry alone on a pane spawn, and converts it at app start", async () => {
@@ -466,28 +587,30 @@ describe('while the lookup is still asking Codex', () => {
     const release = holdDerivation()
 
     const startedAt = Date.now()
-    await reconcileCodexHooksForLaunch()
+    await finishHeldLookupWait(reconcileCodexHooksForLaunch, true)
 
     expect(Date.now() - startedAt).toBeLessThan(3_000)
     expect(stopApproval()).toBe(computeOrcaCodexHookHashes().stop)
 
     release()
-    await vi.waitFor(() => expect(stopApproval()).toBe(CODEX_HASHES.stop))
+    await settleSpawn()
+    expect(stopApproval()).toBe(CODEX_HASHES.stop)
   })
 
   it('writes nothing while an entry is already in place', async () => {
     await start()
     const before = snapshot(codexHome())
-    // Why new bytes: a Codex update the lookup has not asked about yet.
-    writeFileSync(mocks.codexPath, 'codex 0.161.0')
+    // A different size invalidates the binary fingerprint even within one filesystem clock tick.
+    writeFileSync(mocks.codexPath, 'codex 0.161.0 updated')
     const release = holdDerivation()
 
-    await reconcileCodexHooksForLaunch()
+    await finishHeldLookupWait(reconcileCodexHooksForLaunch, true)
     expect(snapshot(codexHome())).toEqual(before)
 
     const runsBeforeAnswer = mocks.realHomeRuns
     release()
-    await vi.waitFor(() => expect(mocks.realHomeRuns).toBe(runsBeforeAnswer + 1))
+    await settleSpawn()
+    expect(mocks.realHomeRuns).toBe(runsBeforeAnswer + 1)
     await _internals.settledForTesting()
     expect(snapshot(codexHome())).toEqual(before)
   })
@@ -573,7 +696,7 @@ describe('an app start whose lookup has not answered within its wait', () => {
     })
     await start()
     const settled = snapshot(codexHome())
-    // A restart: in-process answers gone, the saved one kept, and `codex --version` slow.
+    // Simulate a restart retaining disk answers with a slow version probe.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     _internals.resetForTesting()
     lookupInternals.resetForTesting()
@@ -612,7 +735,7 @@ describe('an app start whose lookup has not answered within its wait', () => {
     })
     mocks.deriveCodexHookHashes.mockImplementation(() => new Promise(() => {}))
 
-    await start()
+    await finishHeldLookupWait(start)
 
     expect(readHookTrustEntries(tomlPath()).get(computeTrustKey(stop))?.trustedHash).toBe(
       'sha256:main-granted'

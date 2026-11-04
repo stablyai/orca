@@ -1,0 +1,11 @@
+id: no-eager-qrcode-import
+valid:
+  - "import type QRCode from 'qrcode'"
+  - "import { type QRCodeToStringOptions } from 'qrcode'"
+  - "const QRCode = await import('qrcode')"
+  - "import QRCode from 'qrcode-generator'"
+invalid:
+  - "import QRCode from 'qrcode'"
+  - "import * as QRCode from 'qrcode'"
+  - "import { toString, type QRCodeToStringOptions } from 'qrcode'"
+  - "import 'qrcode'"

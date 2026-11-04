@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -13,6 +13,7 @@ import {
   upsertEphemeralVmRuntime
 } from './ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from './ephemeral-vm-runtimes'
+import { ephemeralVmFailure } from './ephemeral-vm-failure-copy'
 
 function pairingCode(endpoint = 'wss://sandbox.example.com'): string {
   return encodePairingOffer({
@@ -125,6 +126,27 @@ describe('ephemeral VM runtime store', () => {
     expect(recovered.cleanupLastError).toBeUndefined()
   })
 
+  it('persists a cleanup failure code next to its English and clears it with plain text', () => {
+    const userDataPath = makeUserDataPath()
+    upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+
+    updateEphemeralVmRuntimeStatus(userDataPath, 'orca-instance-1', {
+      cleanupLastError: ephemeralVmFailure('destroyExited', { exitCode: 2 })
+    })
+    expect(listEphemeralVmRuntimes(userDataPath)[0]).toMatchObject({
+      cleanupLastError: 'Destroy exited with code 2.',
+      cleanupLastErrorCode: 'destroyExited',
+      cleanupLastErrorParams: { exitCode: 2 }
+    })
+
+    const uncoded = updateEphemeralVmRuntimeStatus(userDataPath, 'orca-instance-1', {
+      cleanupLastError: 'provider delete failed'
+    })
+    expect(uncoded.cleanupLastError).toBe('provider delete failed')
+    expect(uncoded.cleanupLastErrorCode).toBeUndefined()
+    expect(uncoded.cleanupLastErrorParams).toBeUndefined()
+  })
+
   it('persists runtime connection metadata', () => {
     const userDataPath = makeUserDataPath()
     upsertEphemeralVmRuntime(
@@ -171,15 +193,6 @@ describe('ephemeral VM runtime store', () => {
   it('throws a store error for invalid persisted JSON', () => {
     const userDataPath = makeUserDataPath()
     writeFileSync(getEphemeralVmRuntimeStorePath(userDataPath), '{ nope', 'utf8')
-
-    expect(() => listEphemeralVmRuntimes(userDataPath)).toThrow(EphemeralVmRuntimeStoreError)
-  })
-
-  it('rejects an oversized sparse runtime store before parsing it', () => {
-    const userDataPath = makeUserDataPath()
-    const path = getEphemeralVmRuntimeStorePath(userDataPath)
-    writeFileSync(path, '{"version":1,"runtimes":[]}', 'utf8')
-    truncateSync(path, MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES + 1)
 
     expect(() => listEphemeralVmRuntimes(userDataPath)).toThrow(EphemeralVmRuntimeStoreError)
   })

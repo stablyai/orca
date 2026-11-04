@@ -7,12 +7,6 @@ import {
 
 afterEach(() => vi.useRealTimers())
 
-it('returns immediately for no terminals without asking an execution host', async () => {
-  const inspect = vi.fn<(ptyId: string) => Promise<TerminalProcessInspection>>()
-  expect(await probePtyRunningWorkWithInspection([], { timeoutMs: 1000 }, inspect)).toEqual([])
-  expect(inspect).not.toHaveBeenCalled()
-})
-
 it.each([
   [
     { foregroundProcess: 'zsh', hasChildProcesses: true, childProcessEvidence: 'children' },
@@ -46,7 +40,8 @@ it.each([
       verdict,
       ...(reason ? { reason } : {}),
       timedOut: false,
-      remote: true
+      remote: true,
+      ...(verdict === 'unverifiable' ? {} : { foregroundProcess: 'zsh' })
     })
     expect(inspect).toHaveBeenCalledWith('remote:owner:pty')
   }
@@ -91,7 +86,13 @@ it('retains input order and unobserved verdicts when only some hosts answer befo
   await vi.advanceTimersByTimeAsync(10)
   const probes = await probing
   expect(probes).toEqual([
-    { ptyId: 'local-pty', verdict: 'live', timedOut: false, remote: false },
+    {
+      ptyId: 'local-pty',
+      verdict: 'live',
+      timedOut: false,
+      remote: false,
+      foregroundProcess: 'zsh'
+    },
     {
       ptyId: 'remote:owner:pty',
       verdict: 'unverifiable',

@@ -41,13 +41,11 @@ export type ClaudeUserMessageQueue = {
   end: () => void
 }
 
-/** The rejection an abandoned frame carries when nothing else has named a cause yet. */
 const UNCONFIRMED_FRAME_MESSAGE = 'claude stream-json input ended before confirming the frame write'
 
 export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
   const queued: QueuedMessage[] = []
-  // The frame the SDK has taken but not yet acknowledged. It is out of `queued`,
-  // so it is unreachable from anywhere else and would otherwise never settle.
+  // Retain the frame removed from queued so failures can settle it.
   let inFlight: QueuedMessage | null = null
   let handedOff = false
   let wake: (() => void) | null = null
@@ -89,14 +87,10 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
           yield next.message
           written = true
         } finally {
-          // The SDK's input pump abandons this iterator when its
-          // `await transport.write(...)` rejects or the query aborts, and the code
-          // after a `yield` never runs on that path. Settling here is the only
-          // place a frame it already took can be reached.
+          // The SDK may abandon the iterator on write failure; finally must settle the yielded frame.
           if (written) {
             inFlight = null
-            // Resumed only after the SDK's `await transport.write(...)` settled, so this
-            // is the same "the frame reached the child" proof the hand-rolled write gave.
+            // The SDK resumes only after transport.write completes.
             next.resolve()
           } else {
             rejectInFlight(
@@ -131,9 +125,7 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
       for (const entry of queued.splice(0)) {
         entry.reject(claudeUnwrittenUserMessageError(error))
       }
-      // A pump that never resumes cannot run the generator's cleanup, so the
-      // exit path has to reach the in-flight frame itself.
-      // A pending authorization must unwind before its caller can release correlation state.
+      // Reject handed-off frames even if the pump stalls; pending authorization must unwind first.
       if (handedOff) {
         rejectInFlight(claudeAmbiguousUserMessageError(error))
       }

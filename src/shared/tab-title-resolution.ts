@@ -1,12 +1,11 @@
 import type { Tab } from './tab-types'
 import type { TerminalTab } from './terminal-tab-types'
-import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
+import { isMeaningfulOpenCodeTerminalTitle } from './agent-status/title/providers/opencode-terminal-title'
 
 export function resolveTerminalTabTitle(
-  tab: Pick<
-    TerminalTab,
-    'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title'
-  >,
+  tab: Pick<TerminalTab, 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title'> & {
+    customTitle?: string | null
+  },
   generatedTitlesEnabled: boolean,
   fallback = ''
 ): string {

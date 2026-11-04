@@ -8,8 +8,11 @@ import {
   deferWorktreeContextMenuDeleteIntent
 } from './worktree-context-menu-delete-intent'
 import { runSleepWorktrees } from './sleep-worktree-flow'
+import { collectTwinHostsAlsoSlept } from './sleep-twin-confirmation'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import {
   planWorkspaceStatusAssignment,
@@ -22,6 +25,7 @@ export function useWorktreeContextMenuCommands(args: {
   createGroupDialogActiveRef: React.MutableRefObject<boolean>
   createProjectGroup: ReturnType<typeof useAppStore.getState>['createProjectGroup']
   folderWorkspaceId: string | null
+  getState: () => ReturnType<typeof useAppStore.getState>
   isMultiContext: boolean
   moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
@@ -30,6 +34,7 @@ export function useWorktreeContextMenuCommands(args: {
   scopeRef: React.RefObject<HTMLDivElement | null>
   setCreateGroupDialogOpen: (open: boolean) => void
   setMenuOpenState: (open: boolean) => void
+  setWorkspaceUnreadByUser: ReturnType<typeof useAppStore.getState>['setWorkspaceUnreadByUser']
   setWorktreesPinnedAndReveal: ReturnType<
     typeof useAppStore.getState
   >['setWorktreesPinnedAndReveal']
@@ -38,23 +43,28 @@ export function useWorktreeContextMenuCommands(args: {
   updateWorktreeMeta: ReturnType<typeof useAppStore.getState>['updateWorktreeMeta']
   validParentWorktreeId: string | null
   worktree: Worktree
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  statusesForWorktree: (worktree: Worktree) => readonly WorkspaceStatusDefinition[]
 }) {
   const handleCopyPath = useCallback(() => {
-    window.api.ui.writeClipboardText(args.worktree.path)
+    const owner = getWorktreeRowLocalPathOpenOwner(
+      args.getState(),
+      args.worktree,
+      args.repo?.connectionId
+    )
+    window.api.ui.writeClipboardText(formatClipboardFilePath(args.worktree.path, owner))
   }, [args])
   const handleCopyName = useCallback(() => {
     window.api.ui.writeClipboardText(resolveWorktreeDisplayName(args.worktree))
   }, [args])
   const handleToggleRead = useCallback(() => {
-    args.updateWorktreeMeta(
+    args.setWorkspaceUnreadByUser(
       args.worktree.id,
-      { isUnread: !args.worktree.isUnread },
-      { executionHostId: args.worktree.hostId ?? 'local' }
+      !args.worktree.isUnread,
+      args.worktree.hostId ?? 'local'
     )
   }, [args])
   const handleTogglePin = useCallback(() => {
-    args.setWorktreesPinnedAndReveal([args.worktree.id], !args.worktree.isPinned)
+    args.setWorktreesPinnedAndReveal([args.worktree], !args.worktree.isPinned)
   }, [args])
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!args.repo) {
@@ -75,10 +85,9 @@ export function useWorktreeContextMenuCommands(args: {
       if (!args.repo) {
         return
       }
-      const hostId = getRepoExecutionHostId(args.repo)
-      const group = await args.createProjectGroup(name, hostId)
+      const group = await args.createProjectGroup(name, getRepoExecutionHostId(args.repo))
       if (group) {
-        await args.moveProjectToGroup(args.repo.id, group.id, undefined, hostId)
+        await args.moveProjectToGroup(args.repo, group.id)
       }
     },
     [args]
@@ -88,18 +97,13 @@ export function useWorktreeContextMenuCommands(args: {
       if (!args.repo || args.repo.projectGroupId === groupId) {
         return
       }
-      void args.moveProjectToGroup(
-        args.repo.id,
-        groupId,
-        undefined,
-        getRepoExecutionHostId(args.repo)
-      )
+      void args.moveProjectToGroup(args.repo, groupId)
     },
     [args]
   )
   const handleRemoveProjectFromGroup = useCallback(() => {
     if (args.repo) {
-      void args.moveProjectToGroup(args.repo.id, null, undefined, getRepoExecutionHostId(args.repo))
+      void args.moveProjectToGroup(args.repo, null)
     }
   }, [args])
   const handleAssignWorkspaceStatus = useCallback(
@@ -108,7 +112,7 @@ export function useWorktreeContextMenuCommands(args: {
       const plan = planWorkspaceStatusAssignment(
         args.activeContextWorktrees,
         status,
-        args.workspaceStatuses,
+        args.statusesForWorktree,
         Boolean(args.onAssignWorkspaceStatus)
       )
       if (plan.kind === 'board-sync') {
@@ -143,17 +147,24 @@ export function useWorktreeContextMenuCommands(args: {
     })
   }, [args])
   const sleepWorktreesAfterMenuClose = useCallback(
-    (worktreeIds: string[]) => {
+    (worktrees: readonly Worktree[]) => {
       args.setMenuOpenState(false)
+      const worktreeIds = worktrees.map((worktree) => worktree.id)
+      // Why confirm: a twin's copies share one id, so this also sleeps copies the user didn't pick.
+      const hostIds = collectTwinHostsAlsoSlept(args.getState(), worktrees)
+      if (hostIds.length > 0) {
+        args.openModal('confirm-sleep-twin', { worktreeIds, hostIds })
+        return
+      }
       window.setTimeout(() => void runSleepWorktrees(worktreeIds), 50)
     },
     [args]
   )
   const handleCloseTerminals = useCallback(() => {
-    sleepWorktreesAfterMenuClose(args.sleepableWorktrees.map((item) => item.id))
+    sleepWorktreesAfterMenuClose(args.sleepableWorktrees)
   }, [args.sleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleSleepSubtree = useCallback(() => {
-    sleepWorktreesAfterMenuClose(args.subtreeSleepableWorktrees.map((item) => item.id))
+    sleepWorktreesAfterMenuClose(args.subtreeSleepableWorktrees)
   }, [args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleDelete = useCallback(() => {
     const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers
-} from '../../../shared/agent-session-question-answer'
+} from '../../../shared/agent-session/agent-session-question-answer'
 import { AcpRpcError } from '../acp-errors'
 import { pendingAcpResolution } from '../acp-timeline-requests'
 import type { AcpRequestPresentation, AcpRequestSettlement } from './acp-dialect'
@@ -98,12 +98,10 @@ function questionRequest(params: unknown): AcpRequestPresentation {
   }
 }
 
-/** What Grok hears once Orca has shown its plan: no approval is given for the person. */
 const PLAN_SHOWN_FEEDBACK =
   'Orca showed your plan to the user. Stop here and wait for their feedback or a request to implement it in a later turn.'
 
-/** Grok's plan-mode exit: its plan goes to the chat's plan row and the gate is answered at once
- *  (`abandoned`), so the turn ends instead of waiting on an approval card. */
+// Show the plan and abandon its approval gate so Grok waits for later user instructions.
 function settlePlanRequest(params: unknown): AcpRequestSettlement {
   const parsed = planRequestSchema.safeParse(params)
   if (!parsed.success) {

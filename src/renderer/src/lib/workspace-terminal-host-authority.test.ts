@@ -1,12 +1,17 @@
-/**
- * The seeding predicate answers one question for both remote flavors: does some other party own
- * terminal creation for this workspace right now? Three answers, and only `none` seeds.
- */
-import { describe, expect, it, vi } from 'vitest'
+/** Use one remote-authority question for seeding/resume: only none authorizes local terminal creation, never unverifiable. */
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
+import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
@@ -95,9 +100,40 @@ describe('workspace terminal seeding authority', () => {
     expect(terminalTabCount(store, LOCAL_WORKTREE_ID)).toBe(1)
   })
 
+  it.each(['local', 'unstamped', 'missing', 'folder'] as const)(
+    'seeds a %s workspace while an unrelated runtime is selected',
+    (ownership) => {
+      const store = createTestStore()
+      seedLocal(store)
+      if (ownership === 'unstamped') {
+        store.setState({
+          worktreesByRepo: {
+            repoLocal: [makeWorktree({ id: LOCAL_WORKTREE_ID, repoId: 'repoLocal' })]
+          }
+        })
+      } else if (ownership === 'missing') {
+        store.setState({ repos: [], worktreesByRepo: {} })
+      }
+      if (ownership === 'folder') {
+        store.setState({ folderWorkspaces: [makeFolderWorkspace()] })
+      }
+      const worktreeId = ownership === 'folder' ? 'folder:folder-1' : LOCAL_WORKTREE_ID
+      const state = {
+        ...store.getState(),
+        settings: {
+          ...store.getState().settings,
+          activeRuntimeEnvironmentId: ENVIRONMENT_ID
+        },
+        runtimeEnvironments: [{ id: ENVIRONMENT_ID }]
+      }
+
+      expect(ensureWorktreeHasInitialTerminal(state, worktreeId)).toBeTruthy()
+      expect(terminalTabCount(store, worktreeId)).toBe(1)
+    }
+  )
+
   it('seeds once the SSH target connects, with no workspace snapshot to wait for', () => {
-    // The relay that served host workspace snapshots is gone (#27214), so nothing will ever answer
-    // one; waiting for it left a reconnected target unable to seed or resume for good.
+    // Host workspace snapshots no longer answer after relay removal (#27214); waiting forever strands connected targets.
     const store = createTestStore()
     seedDirectSsh(store)
     expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe(
@@ -176,11 +212,7 @@ describe('workspace terminal seeding authority', () => {
     expect(terminalTabCount(store, PAIRED_WORKTREE_ID)).toBe(0)
   })
 
-  /**
-   * #15556: the guard this replaces asked "am I a client of a live paired session?". Rival detected
-   * publications make the owning environment unnameable, so that guard answered "no" and the client
-   * seeded a local terminal beside the one the host was creating. Ownership is unresolved, not local.
-   */
+  /** Rival detected owners make authority unresolved, not local; the old live-paired-client guard incorrectly seeded alongside host creation (#15556). */
   it('does not seed locally when the runtime owner cannot be named', () => {
     const store = createTestStore()
     store.setState({
@@ -220,3 +252,5 @@ describe('workspace terminal seeding authority', () => {
     expect(terminalTabCount(store, PAIRED_WORKTREE_ID)).toBe(0)
   })
 })
+
+afterEach(() => vi.unstubAllGlobals())

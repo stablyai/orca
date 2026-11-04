@@ -20,9 +20,7 @@ export function clearUnreadDockBadgeCount(): void {
 export function useUnreadDockBadge(
   floatingTerminalOpen: boolean
 ): typeof clearUnreadDockBadgeCount {
-  // Why a selector and not the raw maps: this hook is mounted on the App root, so subscribing to
-  // `tabsByWorktree` re-rendered the entire shell on every title frame. The selector both skips the
-  // rescan and keeps the subscription quiet unless the badge integer itself changes.
+  // Select the badge integer so title frames neither rescan nor rerender the App root.
   const selectUnreadBadgeCount = useMemo(() => createUnreadBadgeCountSelector(), [])
   const unreadWorkspaceCount = useAppStore(selectUnreadBadgeCount)
   // Why: the floating terminal has no workspace flag, so it counts exactly while its launcher shows the dot.
@@ -32,7 +30,6 @@ export function useUnreadDockBadge(
   const unreadCount =
     unreadWorkspaceCount + (floatingTerminalHasUnread && !floatingTerminalOpen ? 1 : 0)
 
-  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: this syncs an external OS dock badge, not React render state.
   useEffect(() => {
     setUnreadDockBadgeCountBestEffort(unreadCount)
   }, [unreadCount])

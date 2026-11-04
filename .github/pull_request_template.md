@@ -12,7 +12,7 @@
 
 ## Linked Issue
 
-_If you do not have one and are an outside contributors, your PR **wiil** be ignored. Refs is not sufficient. Link an actual issue_
+_If you do not have one and are an outside contributor, your PR **will** be ignored. Refs is not sufficient. Link an actual issue_
 <!-- Link the issue this PR addresses, there should ALWAYS be one (for outside contributors) -->
 <!-- SPECIAL CASE: If you are a maintainer (member of stablyai org) AVOID opening needless issues. Only attach pre-existing ones -->
 
@@ -20,7 +20,7 @@ Fixes #
 
 ## Visual Proof
 
-<!-- REQUIRED for UI / behavior changes. Please attach a BEFORE and AFTER that can easily tabbed/switched. Use videos for when appropriate over screenshots -->
+<!-- REQUIRED for UI / behavior changes. Please attach a BEFORE and AFTER that can easily be tabbed/switched. Use videos for when appropriate over screenshots -->
 <!-- If there is truly no visual or interaction change, write exactly: `N/A` and briefly say why. -->
 <!-- For attachments NEVER add directly to the PR files (do not commit to files), use `gh image` extension or drag + drop (works for any attachment) -->
 
@@ -30,6 +30,12 @@ Fixes #
 
 - [ ] I manually tested these changes locally
 - [ ] Automated tests added/updated, or explained why not below
+
+## Risk
+
+<!-- What could this break, and for whom? Name the riskiest part of the change and what users would see if it went wrong. Call out anything that crosses a boundary: saved data or settings, older paired phones or SSH servers, other platforms, agents, or performance. Say how to back it out: a plain revert, or what a revert would not undo. -->
+
+**Level:** <!-- Low, Medium, or High -->
 
 ## AI Disclosure
 
@@ -44,12 +50,13 @@ Fixes #
 
 ## Notes
 
-Ensure no issues in: Security, Cross-platoform support (Linux, Windows, Mac), Remote SSH, Mobile, general backwards compatibility, performance
+Ensure no issues in: Security, Cross-platform support (Linux, Windows, Mac), Remote SSH, Mobile, general backwards compatibility, performance
 
 ## Checklist
 
 - [ ] This PR is small and focused
 - [ ] I explained what changed and why (ELI5, the user-facing before/after, the mechanism, and why over the alternatives)
+- [ ] I stated the risk: what could break, for whom, and how to back it out
 - [ ] Before/after screenshots or videos attached for UI changes, or `N/A` with reason
 - [ ] Self-reviewed for correctness, security, and performance
 - [ ] Cross-platform, SSH/remote, and path/shortcut impact considered (or N/A)

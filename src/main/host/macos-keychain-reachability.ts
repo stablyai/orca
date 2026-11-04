@@ -3,21 +3,12 @@ import { runProcess } from '@orca/process-host'
 export type KeychainReachability =
   | { kind: 'reachable' }
   | { kind: 'unavailable'; reason: 'no_default_keychain' | 'interaction_not_allowed' | 'timeout' }
-  /** The probe could not tell; callers keep today's behavior. */
+  /** Inconclusive: preserve existing behavior. */
   | { kind: 'unknown' }
 
 const PROBE_TIMEOUT_MS = 5_000
 
-/**
- * Ask the macOS keychain, out of process, whether this login has a usable default keychain.
- *
- * Why out of process: the in-process question is `safeStorage`, which is synchronous and
- * can wait forever on an authorization prompt that a session without a GUI cannot show
- * (#25453). A child can be killed on a timeout.
- *
- * Why `show-keychain-info`: it reads settings of the default keychain and never reads a
- * secret, so it cannot raise the access prompt it is meant to detect.
- */
+/** Probe settings out of process so a blocked keychain can time out without accessing secrets or freezing safeStorage (#25453). */
 export async function probeMacosKeychainReachability(
   run: typeof runProcess = runProcess
 ): Promise<KeychainReachability> {
@@ -39,8 +30,7 @@ export async function probeMacosKeychainReachability(
   if (result.code === 0) {
     return { kind: 'reachable' }
   }
-  // Why exit codes too: security(1) exits with the OSStatus low byte, so a localized message
-  // still classifies (errSecNoDefaultKeychain -25307 = 37, errSecInteractionNotAllowed -25308 = 36).
+  // security(1) returns OSStatus low bytes even when its message is localized.
   const output = `${result.stderr}\n${result.stdout}`
   if (result.code === 37 || /default keychain could not be found/i.test(output)) {
     return { kind: 'unavailable', reason: 'no_default_keychain' }

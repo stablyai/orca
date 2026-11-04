@@ -8,7 +8,6 @@ import {
   withRouteScreenPaintReport
 } from './page-first-paint'
 
-/** Frames the caller drains by hand, so "one frame later" is a step rather than a wait. */
 function frames() {
   const queued = new Map<number, () => void>()
   let nextHandle = 0
@@ -36,8 +35,7 @@ function frames() {
 
 describe('when the page says it has a frame', () => {
   it('waits for a frame boundary past the commit, never the same one', () => {
-    // One frame is the frame that paints the commit, and a callback inside it can still run ahead
-    // of the paint. Reporting there would uncover the view over a tree nothing has drawn.
+    // The first animation callback may run before the commit paints; one frame would uncover an undrawn tree.
     const clock = frames()
     let reported = 0
     reportAfterFirstPaint(clock.scheduler, () => {
@@ -59,7 +57,6 @@ describe('when the page says it has a frame', () => {
   })
 })
 
-/** A route chunk the case releases by hand, so "still arriving" is a state and not a race. */
 function deferredRouteChunk() {
   let arrive: (() => void) | null = null
   const chunk = new Promise<{ default: ComponentType<Record<string, unknown>> }>((resolve) => {
@@ -94,7 +91,6 @@ describe('a route that leaves before its frame lands', () => {
         </RouteScreenPaintProvider>
       )
     })
-    // Committed and owed two frames; one has passed.
     clock.tick()
     await act(async () => {
       tree?.unmount()
@@ -112,18 +108,14 @@ describe('a route that leaves before its frame lands', () => {
       posted += 1
     })
     report()
-    // One of the first screen's two frames has passed.
     clock.tick()
-    // The replacement commits, and the screen it replaces stays mounted behind it.
     report()
     clock.tick()
-    // The frame that just ran was the replacement's first, not the one the screen behind it was
-    // still owed: that frame would report a document the view is no longer showing.
+    // The replacement owns this frame; reporting the previous screen would uncover the wrong document.
     expect(posted).toBe(0)
     clock.tick()
     expect(posted).toBe(1)
     clock.tick()
-    // And nothing is left over to report a second time.
     expect(posted).toBe(1)
     expect(clock.pending()).toBe(0)
   })
@@ -139,7 +131,6 @@ describe('a route that leaves before its frame lands', () => {
     clock.tick()
     clock.tick()
     expect(posted).toBe(1)
-    // And that one is spent: a screen leaving after the shell uncovered has nothing to undo.
     second()
     report()
     clock.tick()
@@ -154,8 +145,7 @@ describe('which commit the page reports its frame from', () => {
     const Screen = lazy(() => route.chunk.then(withRouteScreenPaintReport))
     let reports = 0
     let commitsAboveTheRouter = 0
-    // Shaped like the page: the entry's wrapper sits above expo-router, which puts every screen
-    // behind a suspense boundary of its own.
+    // Match Expo’s deferred-route shape: the entry wrapper sits above each screen’s suspense boundary.
     function WrapperAboveTheRouter({ children }: PropsWithChildren) {
       useEffect(() => {
         commitsAboveTheRouter += 1
@@ -178,8 +168,7 @@ describe('which commit the page reports its frame from', () => {
         </RouteScreenPaintProvider>
       )
     })
-    // The gap this seam exists for: the wrapper has committed, against a fallback that drew
-    // nothing, and a report hung there would uncover the shell's view over an empty body.
+    // The wrapper committed only an empty suspense fallback; it must not report first paint before the route chunk arrives.
     expect(commitsAboveTheRouter).toBe(1)
     expect(reports).toBe(0)
 

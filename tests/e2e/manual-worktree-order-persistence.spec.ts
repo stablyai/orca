@@ -155,10 +155,15 @@ test('manual drag survives activity and persisted-profile reload', async ({
     await expect
       .poll(async () => {
         const [ui, worktrees] = await first.page.evaluate(async (ids) => {
-          const [persistedUi, persistedWorktrees] = await Promise.all([
+          const [persistedUi, repos] = await Promise.all([
             window.api.ui.get(),
-            window.api.worktrees.listAll()
+            window.api.repos.list()
           ])
+          const persistedWorktrees = (
+            await Promise.all(
+              repos.map((repo) => window.api.worktrees.listDetected({ repoId: repo.id }))
+            )
+          ).flatMap((result) => result.worktrees.filter((worktree) => worktree.visible))
           return [
             persistedUi,
             persistedWorktrees

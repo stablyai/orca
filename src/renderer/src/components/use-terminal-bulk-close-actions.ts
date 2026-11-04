@@ -1,5 +1,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
+import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
+import { hasEditorFrameFlush, runAfterEditorFramesFlush } from './editor/editor-pending-flush'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
@@ -9,11 +11,18 @@ import {
   isPinnedEditorFileTab
 } from './terminal-workspace-model'
 import type { TerminalCloseController } from './use-terminal-close-actions'
+import { useBulkTabCloseConfirmation } from './use-bulk-tab-close-confirmation'
 
-export function useTerminalBulkCloseActions(controller: TerminalCloseController) {
+export function useTerminalBulkCloseActions(
+  controller: Pick<
+    TerminalCloseController,
+    'activeWorktreeId' | 'closeBrowserTab' | 'closeFile' | 'closeTab' | 'queueEditorCloseRequests'
+  >
+) {
   const { activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests } =
     controller
-  const closeTabBarTabs = useCallback(
+  const confirmBulkClose = useBulkTabCloseConfirmation()
+  const closeTabBarTabsNow = useCallback(
     (tabIds: string[]) => {
       if (!activeWorktreeId) {
         return
@@ -62,8 +71,8 @@ export function useTerminalBulkCloseActions(controller: TerminalCloseController)
         } else if (
           state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
         ) {
-          const file = state.openFiles.find((candidate) => candidate.id === id)
-          if (file?.isDirty) {
+          // Why fresh state: an earlier view of the same record may have just closed.
+          if (needsSavePromptOnClose(useAppStore.getState(), id)) {
             dirtyFileIds.push(id)
             continue
           }
@@ -84,64 +93,96 @@ export function useTerminalBulkCloseActions(controller: TerminalCloseController)
     },
     [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
   )
+  const closeTabBarTabs = useCallback(
+    (tabIds: string[]) => {
+      const state = useAppStore.getState()
+      const tabs = activeWorktreeId ? (state.unifiedTabsByWorktree[activeWorktreeId] ?? []) : []
+      const fileIdOf = (id: string): string => tabs.find((tab) => tab.id === id)?.entityId ?? id
+      // Why: a custom editor frame may still hold edits the dirty checks must see; only its tabs wait.
+      const framed = tabIds.filter((id) => hasEditorFrameFlush(state, fileIdOf(id)))
+      closeTabBarTabsNow(tabIds.filter((id) => !framed.includes(id)))
+      if (framed.length > 0) {
+        runAfterEditorFramesFlush(state, framed.map(fileIdOf), () => closeTabBarTabsNow(framed))
+      }
+    },
+    [activeWorktreeId, closeTabBarTabsNow]
+  )
 
+  const selectScopeTabIds = useCallback(
+    (scope: 'others' | 'right' | 'left', tabId: string): string[] => {
+      if (!activeWorktreeId) {
+        return []
+      }
+      const state = useAppStore.getState()
+      const order = state.tabBarOrderByWorktree[activeWorktreeId] ?? []
+      const index = order.indexOf(tabId)
+      if (index === -1) {
+        return []
+      }
+      let ids = order.filter((id) => id !== tabId)
+      if (scope === 'right') {
+        ids = order.slice(index + 1)
+      } else if (scope === 'left') {
+        ids = order.slice(0, index)
+      }
+      const tabs = state.unifiedTabsByWorktree[activeWorktreeId] ?? []
+      const pinnedIds = new Set(tabs.flatMap((tab) => (tab.isPinned ? [tab.id, tab.entityId] : [])))
+      return ids.filter((id) => !pinnedIds.has(id))
+    },
+    [activeWorktreeId]
+  )
   const handleCloseOthers = useCallback(
     (tabId: string) => {
-      if (!activeWorktreeId) {
-        return
-      }
-      const order = useAppStore.getState().tabBarOrderByWorktree[activeWorktreeId] ?? []
-      closeTabBarTabs(order.filter((id) => id !== tabId))
+      confirmBulkClose('others', () => selectScopeTabIds('others', tabId), closeTabBarTabs)
     },
-    [activeWorktreeId, closeTabBarTabs]
+    [closeTabBarTabs, confirmBulkClose, selectScopeTabIds]
   )
   const handleCloseTabsToRight = useCallback(
     (tabId: string) => {
-      if (!activeWorktreeId) {
-        return
-      }
-      const currentOrder = useAppStore.getState().tabBarOrderByWorktree[activeWorktreeId] ?? []
-      const index = currentOrder.indexOf(tabId)
-      if (index === -1) {
-        return
-      }
-      closeTabBarTabs(currentOrder.slice(index + 1))
+      confirmBulkClose('right', () => selectScopeTabIds('right', tabId), closeTabBarTabs)
     },
-    [activeWorktreeId, closeTabBarTabs]
+    [closeTabBarTabs, confirmBulkClose, selectScopeTabIds]
   )
   const handleCloseTabsToLeft = useCallback(
     (tabId: string) => {
-      if (!activeWorktreeId) {
-        return
-      }
-      const currentOrder = useAppStore.getState().tabBarOrderByWorktree[activeWorktreeId] ?? []
-      const index = currentOrder.indexOf(tabId)
-      if (index === -1) {
-        return
-      }
-      closeTabBarTabs(currentOrder.slice(0, index))
+      confirmBulkClose('left', () => selectScopeTabIds('left', tabId), closeTabBarTabs)
     },
-    [activeWorktreeId, closeTabBarTabs]
+    [closeTabBarTabs, confirmBulkClose, selectScopeTabIds]
   )
   const handleCloseAllFiles = useCallback(() => {
     if (!activeWorktreeId) {
       return
     }
-    const state = useAppStore.getState()
-    const filesInWorktree = state.openFiles.filter((file) => file.worktreeId === activeWorktreeId)
-    const closableFiles = filesInWorktree.filter(
-      (file) => !isPinnedEditorFileTab(state, activeWorktreeId, file.id)
+    confirmBulkClose(
+      'editors',
+      () => {
+        const state = useAppStore.getState()
+        return state.openFiles
+          .filter(
+            (file) =>
+              file.worktreeId === activeWorktreeId &&
+              !isPinnedEditorFileTab(state, activeWorktreeId, file.id)
+          )
+          .map((file) => file.id)
+      },
+      (fileIds) =>
+        runAfterEditorFramesFlush(useAppStore.getState(), fileIds, () => {
+          const selectedIds = new Set(fileIds)
+          const files = useAppStore.getState().openFiles.filter((file) => selectedIds.has(file.id))
+          const dirtyFileIds: string[] = []
+          for (const file of files) {
+            if (needsSavePromptOnClose(useAppStore.getState(), file.id)) {
+              dirtyFileIds.push(file.id)
+            } else {
+              closeFile(file.id)
+            }
+          }
+          if (dirtyFileIds.length > 0) {
+            queueEditorCloseRequests(dirtyFileIds)
+          }
+        })
     )
-    const dirtyFileIds = closableFiles.filter((file) => file.isDirty).map((file) => file.id)
-    for (const file of closableFiles) {
-      if (!file.isDirty) {
-        closeFile(file.id)
-      }
-    }
-    if (dirtyFileIds.length > 0) {
-      queueEditorCloseRequests(dirtyFileIds)
-    }
-  }, [activeWorktreeId, closeFile, queueEditorCloseRequests])
+  }, [activeWorktreeId, closeFile, confirmBulkClose, queueEditorCloseRequests])
 
   return {
     closeTabBarTabs,

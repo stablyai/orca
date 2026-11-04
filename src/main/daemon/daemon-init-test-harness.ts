@@ -18,7 +18,6 @@ import type {
 
 export type { DaemonInitMockState } from './daemon-init-mock-types'
 
-/** Everything a daemon-init suite destructures out of its hoisted mock graph. */
 export type DaemonInitMocks = DaemonInitMockState &
   NetConnectStubs & {
     mockConnectedAdoptionClientOnce: () => void
@@ -32,7 +31,6 @@ export const FAKE_APP_PATH = '/fake/app'
 export const FAKE_APP_OUT_MAIN_PATH = join(FAKE_APP_PATH, 'out', 'main')
 export const FAKE_DAEMON_ENTRY_PATH = join(FAKE_APP_OUT_MAIN_PATH, 'daemon-entry.js')
 
-// Why: we only care about runRestartDaemon's observable sequencing/identity invariants, so every non-daemon-init dependency is a minimal stub.
 function createDaemonInitMockState(): DaemonInitMockState {
   const getPathMock = vi.fn(() => '/fake/userData')
   const getAppPathMock = vi.fn(() => '/fake/app')
@@ -40,20 +38,18 @@ function createDaemonInitMockState(): DaemonInitMockState {
 
   const probeSocketExistsMock = vi.fn((_path?: string) => false)
   const writeFileSyncMock = vi.fn()
-  // Why: readFileSync throws by default so legacyDaemonProcessMayBeAlive treats every legacy pid file as unreadable (pre-fix cleanup behavior).
   const readFileSyncMock = vi.fn((): string => {
     throw new Error('ENOENT')
   })
   const unlinkSyncMock = vi.fn()
   const forkMock = vi.fn()
   const netConnectMock = vi.fn((): MockProbeSocket => {
-    // Why: stub the socket so probeSocket's 'error' path fires and cleanupDaemonForProtocol's alive=false branch runs without side effects.
     const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
     return {
       on(event: string, cb: () => void) {
         handlers[event]?.push(cb)
         if (event === 'error') {
-          // Fire after microtask so destroy()/resolve ordering matches real net
+          // Defer errors until the caller has installed the socket listeners.
           queueMicrotask(() => cb())
         }
         return this
@@ -109,16 +105,13 @@ function createDaemonInitMockState(): DaemonInitMockState {
     }
   })
 
-  // Why: every DaemonSpawner pushes here so assertions can check the *same* spawner was reused across restart.
   const spawnerInstances: MockSpawner[] = []
   const ensureRunningOverrides: EnsureRunningOverride[] = []
   const adoptionLeaseReleases: DaemonInitMockState['adoptionLeaseReleases'] = []
   const lifecycleLeaseErrors: Error[] = []
   const disconnectOnlyErrors: Error[] = []
   const routerSubscriptionError: { current: Error | null } = { current: null }
-  // Same for DaemonPtyAdapter — tests assert the replacement adapter is fresh but its respawn closure targets the *original* spawner.
   const adapterInstances: MockAdapter[] = []
-  // Why: adapters are built inside initDaemonPtyProvider, so tests set this before init to make listSessions report live sessions.
   const defaultListSessionsSessions: { sessionId: string }[] = []
   const listProcessesControl: {
     current: null | (() => Promise<{ sessionId: string }[]>)
@@ -203,11 +196,7 @@ function createDaemonInitMockState(): DaemonInitMockState {
   }
 }
 
-/**
- * Builds the daemon-init mock graph, the per-module factories each test file feeds to its own
- * hoisted `vi.mock` calls, and the fresh-import helper. Call it from an awaited `vi.hoisted`
- * block so the mocks exist before those factories run.
- */
+/** Call inside awaited vi.hoisted so dependency mocks exist before module factories run. */
 export function createDaemonInitMocks(): DaemonInitMocks {
   const state = createDaemonInitMockState()
 

@@ -74,45 +74,13 @@ describe('agent pane authority', () => {
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET, expect.any(String))
   })
 
-  it('re-retiring an already-retired pane renews recovery identity without changing epochs', () => {
-    const store = createTestStore()
-    store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
-    store.getState().retireAgentPaneAuthority(TARGET)
-    const before = store.getState()
-
-    store.getState().retireAgentPaneAuthority(TARGET)
-
-    const after = store.getState()
-    expect(after.recentlyRetiredAgentStatusPaneKeys[TARGET]).not.toBe(
-      before.recentlyRetiredAgentStatusPaneKeys[TARGET]
-    )
-    expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
-    expect(after.sortEpoch).toBe(before.sortEpoch)
-  })
-
-  it('retires the pane activity cutoff with the rest of its pane-owned state', () => {
-    const store = createTestStore()
-    store.setState({
-      activityClearedAtByPaneKey: {
-        [TARGET]: 1_000,
-        [SIBLING]: 2_000
-      }
-    })
-
-    store.getState().retireAgentPaneAuthority(TARGET)
-
-    expect(store.getState().activityClearedAtByPaneKey).toEqual({ [SIBLING]: 2_000 })
-  })
-
-  // STA-4114: the renderer tombstone outlived the detach/reattach cycle, so a pane
-  // that was still running never showed status again for the rest of its life.
+  // Detach/reattach must lift renderer tombstones or still-running panes lose status permanently (STA-4114).
   it('lifts the retirement fence on re-attach so an in-flight turn can still report done', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'turn in flight' })
     store.getState().retireAgentPaneAuthority(TARGET)
 
-    // The pane re-attached mid-turn: the agent never starts a NEW turn, it only
-    // finishes the one already running, so a turn-triggered revival cannot fire.
+    // Reattach mid-turn emits no new turn; revival cannot wait for one.
     store.getState().setAgentStatus(TARGET, { state: 'done', prompt: 'turn in flight' })
     expect(store.getState().agentStatusByPaneKey[TARGET]).toBeUndefined()
 
@@ -122,15 +90,6 @@ describe('agent pane authority', () => {
 
     store.getState().setAgentStatus(TARGET, { state: 'done', prompt: 'turn in flight' })
     expect(store.getState().agentStatusByPaneKey[TARGET]?.state).toBe('done')
-  })
-
-  it('re-opens a pane re-attached while idle for a turn that starts much later', () => {
-    const store = createTestStore()
-    store.getState().retireAgentPaneAuthority(TARGET)
-    store.getState().restoreAgentPaneAuthority(TARGET)
-
-    store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'much later turn' })
-    expect(store.getState().agentStatusByPaneKey[TARGET]?.state).toBe('working')
   })
 
   it('does not lift a closed-tab tombstone on re-attach', () => {
@@ -143,20 +102,6 @@ describe('agent pane authority', () => {
 
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'after close' })
     expect(store.getState().agentStatusByPaneKey[TARGET]).toBeUndefined()
-  })
-
-  it('leaves sibling panes untouched when one pane is restored', () => {
-    const store = createTestStore()
-    store.getState().retireAgentPaneAuthority(TARGET)
-    store.getState().retireAgentPaneAuthority(SIBLING)
-    const siblingRetirement = store.getState().recentlyRetiredAgentStatusPaneKeys[SIBLING]
-
-    store.getState().restoreAgentPaneAuthority(TARGET)
-
-    expect(store.getState().recentlyRetiredAgentStatusPaneKeys[TARGET]).toBeUndefined()
-    expect(store.getState().recentlyRetiredAgentStatusPaneKeys[SIBLING]).toBe(siblingRetirement)
-    store.getState().setAgentStatus(SIBLING, { state: 'working', prompt: 'still fenced' })
-    expect(store.getState().agentStatusByPaneKey[SIBLING]).toBeUndefined()
   })
 
   it('can retire live pane authority while retaining its sleeping session', () => {

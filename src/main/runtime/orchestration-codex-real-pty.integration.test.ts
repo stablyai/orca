@@ -6,22 +6,10 @@ import * as pty from 'node-pty'
 import { expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../agent-hooks/server'
 import { getManagedScript } from '../codex/codex-hook-script'
-import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
-import { extractAllOscTitles } from '../../shared/osc-title-extraction'
+import { getSyntheticAgentTerminalTitle } from '../../shared/agent-status/title/synthetic-agent-title'
+import { extractAllOscTitles } from '../../shared/agent-status/title/osc-title-extraction'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
-import {
-  createBoundRun,
-  createDatabase,
-  createRuntime,
-  insertDirectRunMessage,
-  LAUNCH_TOKEN,
-  PANE_KEY,
-  PTY_ID,
-  TAB_ID,
-  WORKTREE_ID,
-  temporaryDirectories
-} from './orchestration-mailbox-notification-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -39,6 +27,18 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 it.skipIf(!binary || process.platform === 'win32').each(trials)(
   'submits mail arriving $arrival a real Codex completion (trial $trial)',
   async ({ arrival }) => {
+    const {
+      createBoundRun,
+      createDatabase,
+      createRuntime,
+      insertDirectRunMessage,
+      LAUNCH_TOKEN,
+      PANE_KEY,
+      PTY_ID,
+      TAB_ID,
+      WORKTREE_ID,
+      temporaryDirectories
+    } = await import('./orchestration-mailbox-notification-test-harness')
     const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orca-codex-mailbox-')))
     const workspace = join(directory, 'work')
     mkdirSync(workspace)

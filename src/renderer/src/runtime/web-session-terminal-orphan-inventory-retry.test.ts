@@ -117,8 +117,14 @@ describe('web session terminal orphan inventory retries', () => {
       { call: call as never }
     )
 
+    // An unlisted pending row stays pending; the live binding survives the apply either way.
+    const unlistedPending = incoming === 'pending' && firstInventory.length === 0
     expect(first?.tabs).toEqual([
-      expect.objectContaining({ leafId: LEAF_ID, status: 'ready', terminal: HANDLE })
+      expect.objectContaining(
+        unlistedPending
+          ? { leafId: LEAF_ID, status: 'pending-handle', terminal: null }
+          : { leafId: LEAF_ID, status: 'ready', terminal: HANDLE }
+      )
     ])
     expect(appliedState.ptyIdsByTabId[localTabId]).toEqual(state.ptyIdsByTabId[localTabId])
     expect(appliedState.terminalLayoutsByTabId[localTabId]?.ptyIdsByLeafId).toEqual(
@@ -185,71 +191,5 @@ describe('web session terminal orphan inventory retries', () => {
     ])
     expect(confirmedMiss?.tabs).toEqual([])
     expect(call).toHaveBeenCalledTimes(3)
-  })
-
-  it('removes a missing surface immediately after an exact host retirement proof', async () => {
-    const worktree = 'repo::explicit-retirement'
-    const leaves = [{ leafId: LEAF_ID, handle: HANDLE }]
-    const state = makeState(worktree, leaves)
-    const snapshot: RuntimeMobileSessionTabsResult = {
-      ...makeSnapshot(worktree, 'retired-surface', leaves),
-      retiredTerminalSurfaces: [
-        {
-          parentTabId: TAB_ID,
-          leafId: LEAF_ID,
-          ptyId: PTY_ID,
-          terminal: HANDLE,
-          incarnationId: 'inc-live'
-        }
-      ],
-      tabs: []
-    }
-    const call = vi.fn()
-
-    const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
-      state,
-      snapshot,
-      ENVIRONMENT_ID,
-      { call: call as never }
-    )
-
-    expect(recovered).toBe(snapshot)
-    expect(recovered?.tabs).toEqual([])
-    expect(call).not.toHaveBeenCalled()
-  })
-
-  it('does not apply an old retirement proof to a pending replacement surface', async () => {
-    const worktree = 'repo::pending-replacement'
-    const leaves = [{ leafId: LEAF_ID, handle: HANDLE }]
-    const state = makeState(worktree, leaves)
-    const snapshot: RuntimeMobileSessionTabsResult = {
-      ...makeSnapshot(worktree, 'pending-replacement', leaves),
-      retiredTerminalSurfaces: [
-        {
-          parentTabId: TAB_ID,
-          leafId: LEAF_ID,
-          ptyId: 'pty-retired',
-          terminal: HANDLE,
-          incarnationId: 'inc-retired'
-        }
-      ],
-      tabs: [pendingSurface(TAB_ID, LEAF_ID, PTY_ID)]
-    }
-    const call = vi.fn(async () => ({
-      ok: true as const,
-      result: listResult(worktree, [])
-    }))
-
-    const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
-      state,
-      snapshot,
-      ENVIRONMENT_ID,
-      { call: call as never }
-    )
-
-    expect(recovered?.tabs).toEqual([
-      expect.objectContaining({ leafId: LEAF_ID, status: 'ready', terminal: HANDLE })
-    ])
-    expect(call).toHaveBeenCalledOnce()
   })
 })

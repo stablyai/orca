@@ -93,9 +93,7 @@ export default function SkillsPage(): React.JSX.Element {
   const ownedShares = useOwnedSkillShares()
   const mountedRef = useMountedRef()
   const scanGenerationRef = useRef(0)
-  // Why a ref: `loadSkills` must not re-identify (and re-scan) when the user
-  // merely switches selection mode. Switching modes clears the selection anyway,
-  // so a one-render lag here cannot retain the wrong rows.
+  // Keep selection mode in a ref so changing modes cannot trigger discovery; mode changes already clear selection.
   const selectionModeRef = useRef(selectionMode)
   useEffect(() => {
     selectionModeRef.current = selectionMode
@@ -104,14 +102,12 @@ export default function SkillsPage(): React.JSX.Element {
   const loadSkills = useCallback(
     async (refresh = false): Promise<void> => {
       setLoading(true)
-      // Why: a cold local scan walks every skill root, so switching runtimes can
-      // land a stale result after a newer one. Only the newest scan may write.
+      // Guard generations because a cold local scan can resolve after a newer remote scan.
       const scanGeneration = ++scanGenerationRef.current
       const isCurrentScan = (): boolean =>
         mountedRef.current && scanGeneration === scanGenerationRef.current
       if (!runtimeTarget) {
-        // Why: keep scanning until the owning runtime is known, rather than
-        // showing the client's skills to someone whose skills live remotely.
+        // Wait for the owner instead of substituting client-local skills for an unresolved remote target.
         return
       }
       try {
@@ -131,8 +127,7 @@ export default function SkillsPage(): React.JSX.Element {
       } catch (error) {
         console.error('Failed to discover skills:', error)
         if (isCurrentScan()) {
-          // Why: a failed scan needs to stay on screen with a retry — a toast
-          // disappears before the user can act on it.
+          // Persist scan errors with retry because toasts disappear before the user can act.
           setScanState((current) => ({
             runtimeTarget,
             result: current?.runtimeTarget === runtimeTarget ? current.result : null,
@@ -182,15 +177,12 @@ export default function SkillsPage(): React.JSX.Element {
 
   const deleteFlow = useSkillDeleteFlow(runtimeTarget, hostLabel, () => {
     exitSelection()
-    // Why an explicit refresh instead of firing the change event: this page
-    // would then run a second, non-refresh scan of the host it just refreshed.
-    // Other subscribers (settings badges, pickers) still hear the event.
+    // Refresh this page explicitly and notify other consumers separately to avoid a duplicate host scan.
     void loadSkills(true)
     window.dispatchEvent(new Event(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT))
   })
 
-  // Why: the search box is shared between the two lists, but a link query means
-  // nothing against skill names and vice versa.
+  // Clear search between skills and shared links because their query domains differ.
   const exitSharedLinks = useCallback((): void => {
     setView('skills')
     setFilters(NO_FILTERS)

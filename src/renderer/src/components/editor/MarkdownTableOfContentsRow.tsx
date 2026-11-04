@@ -24,9 +24,7 @@ export function MarkdownTocRow({
 }): React.JSX.Element {
   const hasChildren = item.children.length > 0
   const expanded = isMarkdownTocItemExpanded(collapsedIds, item)
-  // Why: parents already shift title right via the disclosure chevron, so deeper
-  // parents skip the base inset; only the root row keeps it so top-level titles
-  // are not flush against the panel edge.
+  // Parent chevrons supply the base inset; keep it only on root rows to avoid flush titles at the panel edge.
   const rowPaddingLeft = hasChildren
     ? depth === 0
       ? TOC_INDENT_BASE_PX

@@ -77,3 +77,17 @@ it('preserves the originating pane in the workspace route', () => {
       ?.sessionTarget?.params
   ).toEqual({ hostId: 'host', worktreeId: 'folder:/work', paneKey })
 })
+
+it('scopes a tap to a server workspace, and keeps anything else on the desktop', () => {
+  const paramsFor = (executionHost: unknown) =>
+    getNotificationNavigationTarget({ hostId: 'host', worktreeId: 'repo::/srv', executionHost })
+      ?.sessionTarget?.params
+  expect(paramsFor('runtime:env-1')).toEqual({
+    hostId: 'host',
+    worktreeId: 'repo::/srv',
+    executionHost: 'runtime:env-1'
+  })
+  for (const notAServer of [undefined, '', 'local', 'ssh:box', 'runtime:', 'env-1', 42]) {
+    expect(paramsFor(notAServer)).toEqual({ hostId: 'host', worktreeId: 'repo::/srv' })
+  }
+})

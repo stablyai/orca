@@ -3,13 +3,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  clearLinearMetadataCache,
-  useRepoLabels,
-  useRepoAssignees,
-  useTeamStates,
-  useTeamsStates
-} from './useIssueMetadata'
+import { clearLinearMetadataCache, useTeamStates, useTeamsStates } from './useIssueMetadata'
+import { useRepoLabels, useRepoAssignees } from './useGitHubRepoMetadata'
 
 const linearMocks = vi.hoisted(() => ({
   linearTeamStates: vi.fn(),
@@ -76,26 +71,6 @@ describe('useIssueMetadata hooks', () => {
       act(() => root.unmount())
     })
     document.body.replaceChildren()
-  })
-
-  it('routes repo-id-only folder metadata through local IPC', async () => {
-    let labels: string[] = []
-    githubMocks.listLabels.mockResolvedValue(['folder'])
-
-    function LabelsProbe(): null {
-      labels = useRepoLabels(null, 'folder-repo-id').data
-      return null
-    }
-
-    renderProbe(<LabelsProbe />)
-    await flushEffects()
-
-    expect(labels).toEqual(['folder'])
-    expect(githubMocks.listLabels).toHaveBeenCalledExactlyOnceWith({
-      repoPath: '',
-      repoId: 'folder-repo-id'
-    })
-    expect(runtimeMocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
   it('keeps concurrent fork and upstream label lists separate when the fork reply is late', async () => {
@@ -181,30 +156,27 @@ describe('useIssueMetadata hooks', () => {
       { kind: 'environment', environmentId: 'env-explicit' },
       'github.listLabels',
       { repo: 'remote-repo-id' },
-      { timeoutMs: 15_000 }
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: undefined,
+        expectedEnvironmentRuntimeId: undefined,
+        beforeSend: expect.any(Function)
+      }
     )
-    expect(githubMocks.listLabels).not.toHaveBeenCalled()
-  })
-
-  it('does not loop when cached team-state metadata is read with a fresh settings object', async () => {
-    let renders = 0
-    let states: unknown[] = []
-    linearMocks.linearTeamStates.mockResolvedValue([{ id: 's1', name: 'Todo' }])
-
-    function StatesProbe(): null {
-      renders += 1
-      // Fresh settings object each render — the storm trigger.
-      const metadata = useTeamStates('team-1', { kind: 'local' }, 'ws-1')
-      states = metadata.data
-      return null
+    const options: unknown = runtimeMocks.callRuntimeRpc.mock.calls[0]?.[3]
+    if (
+      !options ||
+      typeof options !== 'object' ||
+      !('beforeSend' in options) ||
+      typeof options.beforeSend !== 'function'
+    ) {
+      throw new Error('metadata request did not supply its currentness callback')
     }
-
-    renderProbe(<StatesProbe />)
-    await flushEffects()
-
-    expect(states).toEqual([{ id: 's1', name: 'Todo' }])
-    expect(linearMocks.linearTeamStates).toHaveBeenCalledTimes(1)
-    expect(renders).toBeLessThanOrEqual(4)
+    expect(Object.hasOwn(options, 'expectedEnvironmentPairingRevision')).toBe(true)
+    expect(Object.hasOwn(options, 'expectedEnvironmentRuntimeId')).toBe(true)
+    const beforeSend = options.beforeSend
+    expect(() => beforeSend()).not.toThrow()
+    expect(githubMocks.listLabels).not.toHaveBeenCalled()
   })
 
   it('does not re-issue a failed team-state fetch when a fresh settings object re-renders', async () => {

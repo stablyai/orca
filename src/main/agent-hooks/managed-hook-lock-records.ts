@@ -135,7 +135,7 @@ export async function inspectManagedHookLock(lockPath: string): Promise<ManagedH
     if (hasCode(error, 'ENOENT')) {
       return { kind: 'missing' }
     }
-    // Why: an older relay may own the canonical path as a directory.
+    // Older relays used directories for the canonical lock.
     return { kind: 'unknown' }
   }
   try {
@@ -159,13 +159,12 @@ export async function tryCreateManagedHookLock(
   const draftPath = join(lockParent, ownerDraftFileName(token))
   await writeFile(draftPath, JSON.stringify(owner), { encoding: 'utf8', flag: 'wx', mode: 0o600 })
   try {
-    // Why: the final owner name appears only after its complete record is durable.
+    // Publish the owner name only after its complete record is written.
     await rename(draftPath, ownerPath)
     try {
-      // Why: hard-link creation publishes metadata atomically and never replaces a lock.
+      // Hard links publish complete metadata without replacing an existing lock.
       await link(ownerPath, lockPath)
-      // Why: publish process-local activity before another same-process contender
-      // can mistake the newly linked owner for an abandoned release.
+      // Mark active before a same-process contender can mistake this owner for an abandoned release.
       activeOwnerTokens.add(token)
       return owner
     } catch (error) {

@@ -2,10 +2,6 @@ import { useEffect } from 'react'
 import { setBranchLineTotalMergeBase } from '../../branch-line-total-request-gate'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 
-/**
- * Publishes the merge base the visible branch view wants a line total for, and withdraws it on
- * unmount or worktree switch.
- */
 export function useSourceControlBranchLineTotalGate({
   activeWorktreeId,
   branchSummary,
@@ -17,8 +13,7 @@ export function useSourceControlBranchLineTotalGate({
   isBranchVisible: boolean
   isFolder: boolean
 }): void {
-  // Why: the merge base IS the request gate — no OID on the status request means
-  // the host runs no ranged diff, so a hidden chip costs a background worktree nothing.
+  // Omitting the merge-base OID skips the host’s ranged diff, keeping hidden chips free of background work.
   const requestedBranchLineTotalMergeBase =
     isBranchVisible && !isFolder && branchSummary?.status === 'ready'
       ? branchSummary.mergeBase

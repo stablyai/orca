@@ -1,15 +1,4 @@
-/**
- * Paired remote server: a desktop client that opens a remote terminal after it has printed more
- * than a screen must be able to scroll back through that history (#20158).
- *
- * The host used to serialize desktop subscribe snapshots screen-only, so the client pane held the
- * last screenful and nothing above it. Orcad-backed SSH panes use the same subscribe path.
- *
- * Run:
- *   pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-initial-snapshot-scrollback.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// #20158: subscribe after more than one screen of output and require full scrollback; desktop and orcad SSH share this snapshot path.
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -25,7 +14,7 @@ import {
   readPairedPaneContent,
   waitForPairedPaneMarker
 } from './helpers/paired-host-terminal'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const LINE_COUNT = 300
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-initial-scrollback-'))

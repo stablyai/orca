@@ -35,13 +35,10 @@ export type RelayReadinessProbe = {
   failingDependencies: () => RelayReadinessDependency[]
 }
 
-// The token verifier caches keys in process, so a cell keeps verifying tokens right through a JWKS
-// outage: the only thing an unreachable JWKS endpoint blocks is a key rotation nobody is running.
+// Cached verifier keys survive JWKS outages; failed fetches prevent key rotation, not verification.
 export const RELAY_READINESS_JWKS_GRACE_MS = 900_000
-// Each cell is its own load balancer backend, so failing readiness never re-routes a host, it only
-// makes that hostname unreachable. A host that lands on a SQL-dead cell gets WRONG_CELL and is
-// re-placed by the director, and existing control sockets survive a generic Postgres error. Three
-// minutes rides a Cloud SQL failover without hiding a per-cell fault for a quarter of an hour.
+// Failing a cell’s readiness loses its hostname rather than rerouting hosts; 3min rides failover without masking longer cell faults.
+// SQL-dead hellos can get WRONG_CELL and director replacement; generic DB errors preserve existing controls.
 export const RELAY_READINESS_SQL_GRACE_MS = 180_000
 export const RELAY_MAX_READINESS_GRACE_MS = 3_600_000
 
@@ -76,8 +73,7 @@ function graceTransition(
   return failure === undefined ? 'recovered' : 'expired'
 }
 
-// One dependency's own last-known-good clock; collapsing the two would let a healthy JWKS poll keep
-// a dead Postgres inside its window forever.
+// Separate dependency clocks or healthy JWKS polls keep dead PostgreSQL in grace forever.
 function createDependencyGrace(dependency: RelayReadinessDependency, graceMs: number) {
   let lastSuccessAt: number | undefined
   let inGrace = false

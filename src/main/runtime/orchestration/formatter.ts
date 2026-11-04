@@ -1,6 +1,7 @@
 import type { MessageRow } from './types'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import type { OrchestrationCliCommand } from './cli-command'
+import type { OrchestrationMailContent } from '../../../shared/agent-session/agent-session-message-source'
 
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
@@ -14,6 +15,8 @@ export type MessageFormattingAuthority =
 export type MessageFormattingOptions = {
   authority?: MessageFormattingAuthority
   supportedActionHints?: readonly string[]
+  /** The CLI name the recipient runs; a chat's reply line must name the one it has. */
+  cliCommand?: OrchestrationCliCommand
 }
 
 function resolveAuthority(
@@ -57,6 +60,13 @@ export function formatMessageBanner(
   msg: MessageRow,
   options: MessageFormattingOptions = {}
 ): string {
+  return formatMessageBannerWithContent(msg, options).text
+}
+
+export function formatMessageBannerWithContent(
+  msg: MessageRow,
+  options: MessageFormattingOptions = {}
+): { text: string; content: OrchestrationMailContent } {
   const priorityTag =
     msg.priority === 'urgent' ? ' [URGENT]' : msg.priority === 'high' ? ' [HIGH]' : ''
   const authority = resolveAuthority(msg, options.authority)
@@ -73,33 +83,37 @@ export function formatMessageBanner(
   const header = `──── From: ${senderName} (${msg.from_handle})${priorityTag}${authorityTag} (${msg.type}) ────`
 
   const lines: string[] = [header]
-  lines.push(`Subject: ${msg.subject}`)
+  const appendField = (value: string, prefix = '', suffix = ''): readonly [number, number] => {
+    const start = lines.reduce((length, line) => length + line.length + 1, prefix.length)
+    lines.push(prefix + value + suffix)
+    return [start, start + value.length]
+  }
+  const subject = appendField(msg.subject, 'Subject: ')
   if (authority !== 'current') {
     appendLegacyGuidance(lines, authority, options.supportedActionHints ?? [])
   }
 
-  if (msg.body) {
-    lines.push(msg.body)
-  }
-
-  if (msg.payload) {
-    lines.push(`[Payload: ${msg.payload}]`)
-  }
+  const body = msg.body ? appendField(msg.body) : undefined
+  const payload = msg.payload ? appendField(msg.payload, '[Payload: ', ']') : undefined
 
   if (authority === 'current') {
     const explicitFrom =
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
         ? ''
         : ` --from ${msg.to_handle}`
-    lines.push(`[Reply: orca orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`)
+    lines.push(
+      `[Reply: ${options.cliCommand ?? 'orca'} orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`
+    )
   }
   lines.push(SEPARATOR)
 
-  return lines.join('\n')
+  return {
+    text: lines.join('\n'),
+    content: { subject, ...(body ? { body } : {}), ...(payload ? { payload } : {}) }
+  }
 }
 
-// Why: grouping multiple banners under a single wrapper line lets agents detect
-// the message block boundary and parse each banner individually.
+// One wrapper marks the message block boundary while leaving each banner independently parseable.
 export function formatMessagesForInjection(messages: MessageRow[]): string {
   if (messages.length === 0) {
     return ''
@@ -112,11 +126,15 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
 export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,
-  cliCommand: OrchestrationCliCommand = 'orca'
+  cliCommand: OrchestrationCliCommand = 'orca',
+  heldDeliveryId?: string
 ): string {
   const noun = count === 1 ? 'message' : 'messages'
   const runFlag = mailboxHandle?.startsWith('run:')
     ? ` --run ${mailboxHandle.slice('run:'.length)}`
     : ''
+  if (heldDeliveryId) {
+    return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${cliCommand} orchestration check${runFlag}\` to see it again; once it is handled, run \`${cliCommand} orchestration check${runFlag} --ack ${heldDeliveryId}\`, then \`${cliCommand} orchestration check${runFlag}\` for the new mail.\n`
+  }
   return `\nYou have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}\`.\n`
 }

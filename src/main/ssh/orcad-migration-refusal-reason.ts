@@ -1,7 +1,7 @@
 import type {
   OrcadMigrationBlocker,
   OrcadMigrationDependencyKind
-} from '../../shared/orcad-migration-preflight'
+} from '../../shared/orcad-migration/orcad-migration-preflight'
 
 const DEPENDENCY_WORDS: Record<OrcadMigrationDependencyKind, string> = {
   'saved-port-forward': 'saved port forwards',
@@ -28,11 +28,19 @@ function blockerWords(blocker: OrcadMigrationBlocker): string[] {
     case 'orcad_migration_owner_unrecorded':
       return ['its server record is missing']
     case 'orcad_migration_direct_ssh_terminal_leases':
-      return ['terminals still running']
+      return [
+        `terminals still running (${blocker.terminalLeases.length}): close them, or end them on the host`
+      ]
     case 'orcad_migration_dependent_state':
-      return blocker.dependencies.map(({ kind }) => DEPENDENCY_WORDS[kind])
+      return blocker.dependencies.map(({ kind, count, names }) =>
+        names?.length
+          ? `${DEPENDENCY_WORDS[kind]} (${names.join('; ')})`
+          : `${DEPENDENCY_WORDS[kind]} (${count})`
+      )
     case 'orcad_migration_dependency_unverifiable':
-      return ['saved state Orca could not read']
+      return [
+        `saved state Orca could not read (${blocker.sources.map((kind) => DEPENDENCY_WORDS[kind]).join(', ')})`
+      ]
     case 'orcad_migration_direct_ssh_repositories':
     case 'orcad_migration_direct_ssh_folder_workspaces':
     case 'orcad_migration_saved_port_forwards':
@@ -41,7 +49,6 @@ function blockerWords(blocker: OrcadMigrationBlocker): string[] {
   }
 }
 
-/** The refusal names what blocks, in plain words; the status line shows only this text. */
 export function orcadMigrationRefusalReason(blockers: readonly OrcadMigrationBlocker[]): string {
   const words = [...new Set(blockers.flatMap(blockerWords))]
   return words.length > 0

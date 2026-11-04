@@ -19,6 +19,7 @@ import {
   withRequiredWorkspaceSessionMaps
 } from './session-host-partitions'
 import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
+import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
 import { scheduleSave } from './write-scheduling'
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 
@@ -61,7 +62,12 @@ export class SessionSnapshotOperations {
     if (runtime.durableMutationPhase === 'rollback') {
       this.assertSnapshotAdmission(true)
       // The fieldwise rollback already preserves newer edits; renderer rebasing would undo it.
-      this.publishSession(session, resolved)
+      this.publishSession(
+        resolved === LOCAL_EXECUTION_HOST_ID
+          ? keepWslMoveFrozenSessionsForStore(session, runtime.state.workspaceSession)
+          : session,
+        resolved
+      )
       return
     }
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
@@ -87,7 +93,7 @@ export class SessionSnapshotOperations {
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
-    // Why: the debounced hot path sends only changed slices; scalar/UI patches skip terminal normalization, topology patches keep stale-PTY protections.
+    // Scalar patches skip topology work; membership patches retain stale-binding protections.
     let next: WorkspaceSessionState = {
       ...this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved),
       ...patch
@@ -99,9 +105,13 @@ export class SessionSnapshotOperations {
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
     }
-    // Why: a unified-tabs patch skips full normalization, so it would bypass the close fence.
+    // Unified-tab patches bypass full normalization but still need close tombstones.
     if (Object.hasOwn(patch, 'unifiedTabs')) {
       next = dropClosedTerminalTabs(next)
+    }
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      const { state } = this[sessionSnapshotOperationsContext].runtime
+      next = keepWslMoveFrozenSessionsForStore(next, state.workspaceSession)
     }
     this.publishSession(next, resolved)
   }
@@ -119,7 +129,8 @@ export class SessionSnapshotOperations {
     }
     scheduleSave(
       scheduling,
-      hostId === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId']
+      hostId === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId'],
+      hostId
     )
   }
 

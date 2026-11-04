@@ -1,10 +1,12 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubPullRequestStateUpdate } from '../../shared/issue-mutation-types'
 import type { GitHubReactionContent } from '../../shared/github/comment-types'
 import type { Repo } from '../../shared/repo-types'
-import type { LocalProjectGhExecOptions } from '../project-runtime-git-options'
+import type { LocalProjectGhExecOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import {
   mergePR,
+  markPRDraft,
   markPRReadyForReview,
   removePRReviewers,
   requestPRReviewers,
@@ -17,6 +19,7 @@ import {
   updatePRState,
   updatePRTitle
 } from '../github/client'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
@@ -38,7 +41,7 @@ export class RuntimeGitHubReviewMutationCommands {
       repo.path,
       prNumber,
       options,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -56,7 +59,7 @@ export class RuntimeGitHubReviewMutationCommands {
       reactionSubjectId,
       content,
       reacted,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -73,7 +76,7 @@ export class RuntimeGitHubReviewMutationCommands {
       repo.path,
       threadId,
       resolve,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -86,12 +89,13 @@ export class RuntimeGitHubReviewMutationCommands {
       pullRequestId: string
       path: string
       viewed: boolean
+      expectedGhAccount?: GhAccountBinding | null
     }
   ): Promise<Awaited<ReturnType<typeof setPRFileViewed>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return setPRFileViewed({
       repoPath: repo.path,
-      connectionId: repo.connectionId ?? null,
+      connectionId: getRepoRoutingConnectionId(repo),
       localGitOptions: this.deps.getLocalGitArgs(repo)[0],
       ...args
     })
@@ -108,7 +112,7 @@ export class RuntimeGitHubReviewMutationCommands {
       repo.path,
       prNumber,
       title,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -125,7 +129,7 @@ export class RuntimeGitHubReviewMutationCommands {
       repo.path,
       prNumber,
       updates,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -142,7 +146,7 @@ export class RuntimeGitHubReviewMutationCommands {
       repo.path,
       prNumber,
       method,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -161,7 +165,7 @@ export class RuntimeGitHubReviewMutationCommands {
       prNumber,
       enabled,
       method,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -176,7 +180,22 @@ export class RuntimeGitHubReviewMutationCommands {
     return markPRReadyForReview(
       repo.path,
       prNumber,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
+      prRepo ?? null,
+      ...this.deps.getLocalGitArgs(repo)
+    )
+  }
+
+  async markRepoPRDraft(
+    repoSelector: string,
+    prNumber: number,
+    prRepo?: GitHubOwnerRepo | null
+  ): Promise<Awaited<ReturnType<typeof markPRDraft>>> {
+    const repo = await this.deps.resolveRepo(repoSelector)
+    return markPRDraft(
+      repo.path,
+      prNumber,
+      getRepoRoutingConnectionId(repo),
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -193,7 +212,7 @@ export class RuntimeGitHubReviewMutationCommands {
       repo.path,
       prNumber,
       updates,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -210,7 +229,7 @@ export class RuntimeGitHubReviewMutationCommands {
       repo.path,
       prNumber,
       reviewers,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -227,7 +246,7 @@ export class RuntimeGitHubReviewMutationCommands {
       repo.path,
       prNumber,
       reviewers,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       prRepo ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )

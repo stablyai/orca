@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
@@ -13,6 +14,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
+vi.mock('./MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'MobileSourceCopyButton' }))
 
 let renderer: ReactTestRenderer | undefined
 
@@ -30,11 +32,11 @@ function render(content: string): ReactTestRenderer {
 }
 
 function mermaidCount(tree: ReactTestRenderer): number {
-  return tree.root.findAllByType('MermaidDiagram' as never).length
+  return findAllByHostType(tree.root, 'MermaidDiagram').length
 }
 
 function firstMermaid(tree: ReactTestRenderer) {
-  return tree.root.findByType('MermaidDiagram' as never)
+  return findByHostType(tree.root, 'MermaidDiagram')
 }
 
 describe('MobileMarkdown mermaid routing', () => {

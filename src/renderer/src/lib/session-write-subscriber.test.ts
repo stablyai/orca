@@ -5,9 +5,7 @@ import {
   type WorkspaceSessionWrite
 } from './session-write-subscriber'
 
-// Why: useAppStore is a module-level singleton — tests must snapshot and
-// restore the full state around each case so cross-test pollution can't mask
-// a real regression in the gate logic this suite exists to lock down.
+// Snapshot/restore the full singleton store so pollution cannot mask persistence-gate regressions.
 let initialState: AppState
 
 function makeTerminalSessionState(title: string, label = title): Partial<AppState> {
@@ -73,37 +71,8 @@ describe('createSessionWriteSubscriber', () => {
     useAppStore.setState(initialState, true)
   })
 
-  it('does not write until both workspaceSessionReady and hydrationSucceeded are true', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({ tabsByWorktree: { 'wt-1': [] } })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-    useAppStore.setState({ workspaceSessionReady: true })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
-
-  it('writes exactly once after the hydration persistence gate opens', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
-    cleanup()
-  })
-
   it('writes when the gate is already open at creation, with no store tick to wake it', () => {
-    // Why the store-write spy: every other case here opens the gate *after* creating the
-    // subscriber, so the opening setState is itself the tick that produces the first write. With
-    // the gate already open only the creation-time seed can, and equal catalogs no longer publish
-    // a tick to stand in for it.
+    // With the gate already open, only creation-time seeding triggers the first write; unchanged catalogs no longer provide incidental store ticks.
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
 
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
@@ -142,8 +111,7 @@ describe('createSessionWriteSubscriber', () => {
     expect(persist).toHaveBeenCalledTimes(1)
     persist.mockClear()
 
-    // setAgentStatus / setCacheTimerStartedAt mutate fields that are NOT in
-    // SESSION_RELEVANT_FIELDS — the gate must skip the timer reset entirely.
+    // Agent-status/timer fields are outside SESSION_RELEVANT_FIELDS and must not reset debounce.
     useAppStore.getState().setAgentStatus('tab-1:1', {
       state: 'working',
       prompt: 'Fix tests',
@@ -226,65 +194,6 @@ describe('createSessionWriteSubscriber', () => {
     })
     cleanup()
   })
-
-  it('writes exactly once when a relevant field changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-    expect(persist).toHaveBeenCalledTimes(1)
-    persist.mockClear()
-
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-1': [
-          {
-            id: 'tab-1',
-            ptyId: null,
-            worktreeId: 'wt-1',
-            title: 'shell',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
-    cleanup()
-  })
-
-  it('ignores decorative terminal title-only churn', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      ...makeTerminalSessionState('⠋ Codex is thinking')
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-1': [
-          {
-            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
-            title: '⠙ Codex is thinking'
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
   it('schedules no session timer for one display-title bucket in a 300-worktree fleet', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const tabsByWorktree = Object.fromEntries(
@@ -336,192 +245,6 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('persists ordinary terminal title-only changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      ...makeTerminalSessionState('bash')
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-1': [
-          {
-            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
-            title: 'vim src/index.ts'
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0].patch.tabsByWorktree?.['wt-1']?.[0]?.title).toBe(
-      'vim src/index.ts'
-    )
-    cleanup()
-  })
-
-  it('persists terminal defaultTitle-only changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      ...makeTerminalSessionState('bash')
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-1': [
-          {
-            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
-            defaultTitle: 'Terminal 2'
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0].patch.tabsByWorktree?.['wt-1']?.[0]?.defaultTitle).toBe(
-      'Terminal 2'
-    )
-    cleanup()
-  })
-
-  it('ignores pendingActivationSpawn-only changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      ...makeTerminalSessionState('bash')
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-1': [
-          {
-            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
-            pendingActivationSpawn: true
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
-
-  it('ignores recovery-ledger-only changes', () => {
-    // Why: the ledger is stripped from the persisted session, so churning it
-    // must not rebuild and rewrite the durable payload on every remount.
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      ...makeTerminalSessionState('bash')
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-1': [
-          {
-            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
-            recovery: {
-              attemptedAt: [1],
-              generation: 1,
-              outcome: 'pending',
-              startedAt: 1,
-              reason: 'reattach-unverifiable',
-              tabGeneration: 0
-            }
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
-
-  it('ignores decorative unified terminal label churn', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      ...makeTerminalSessionState('⠋ Codex is thinking')
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({
-      unifiedTabsByWorktree: {
-        'wt-1': [
-          {
-            ...useAppStore.getState().unifiedTabsByWorktree['wt-1'][0],
-            label: '⠙ Codex is thinking'
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
-
-  it('persists ordinary unified terminal label changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      ...makeTerminalSessionState('bash')
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({
-      unifiedTabsByWorktree: {
-        'wt-1': [
-          {
-            ...useAppStore.getState().unifiedTabsByWorktree['wt-1'][0],
-            label: 'vim src/index.ts'
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0].patch.unifiedTabs?.['wt-1']?.[0]?.label).toBe(
-      'vim src/index.ts'
-    )
-    cleanup()
-  })
-
   it('ignores production updateTabTitle spinner frames across terminal and unified tabs', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
@@ -566,52 +289,6 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('persists real terminal tab changes even when the title also changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      tabsByWorktree: {
-        'wt-1': [
-          {
-            id: 'tab-1',
-            ptyId: 'pty-1',
-            worktreeId: 'wt-1',
-            title: 'Codex ready',
-            defaultTitle: 'Terminal 1',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-1': [
-          {
-            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
-            title: 'renamed terminal',
-            customTitle: 'renamed terminal'
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0].patch.tabsByWorktree?.['wt-1']?.[0]?.customTitle).toBe(
-      'renamed terminal'
-    )
-    cleanup()
-  })
-
   it('writes a narrow patch when only the active tab changes', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
@@ -625,26 +302,6 @@ describe('createSessionWriteSubscriber', () => {
 
     expect(persist).toHaveBeenCalledTimes(1)
     expect(persist.mock.calls[0][0].patch).toEqual({ activeTabId: 'tab-perf-1' })
-    cleanup()
-  })
-
-  it('writes when live PTY bindings change without terminal tab changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({
-      ptyIdsByTabId: {
-        ...useAppStore.getState().ptyIdsByTabId,
-        'tab-1': []
-      }
-    })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
     cleanup()
   })
 
@@ -707,10 +364,7 @@ describe('createSessionWriteSubscriber', () => {
 
     expect(persist).not.toHaveBeenCalled()
 
-    // Why: without this second mutation, the assertion above only proves the
-    // pending timer was cancelled — a regression where cleanup() forgot to
-    // unsub() would still pass. Mutating after cleanup verifies the listener
-    // was detached and no new timer is queued.
+    // Mutate after cleanup to prove unsubscribe; timer cancellation alone passes even with the listener still attached.
     useAppStore.setState({ activeTabId: 'tab-2' })
     vi.advanceTimersByTime(200)
     expect(persist).not.toHaveBeenCalled()

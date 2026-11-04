@@ -1,4 +1,5 @@
 import type { HostedReviewProvider } from '../../../../../../shared/hosted-review'
+import { normalizeForgeWebHost } from '../../../../../../shared/git-remote-host-alias'
 
 export type ManualReviewProvider = Exclude<HostedReviewProvider, 'unsupported'>
 
@@ -47,20 +48,19 @@ function cleanPath(path: string): string | null {
 }
 
 function providerForHost(host: string): ManualReviewProvider | null {
-  const normalized = host.toLowerCase()
-  if (normalized === 'github.com' || normalized === 'ssh.github.com') {
+  if (host === 'github.com') {
     return 'github'
   }
-  if (normalized === 'gitlab.com') {
+  if (host === 'gitlab.com') {
     return 'gitlab'
   }
-  if (normalized === 'bitbucket.org') {
+  if (host === 'bitbucket.org') {
     return 'bitbucket'
   }
   if (
-    normalized === 'dev.azure.com' ||
-    normalized === 'ssh.dev.azure.com' ||
-    normalized.endsWith('.visualstudio.com')
+    host === 'dev.azure.com' ||
+    host === 'ssh.dev.azure.com' ||
+    host.endsWith('.visualstudio.com')
   ) {
     return 'azure-devops'
   }
@@ -153,7 +153,7 @@ export function parseRemoteRepo(
     ? trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
     : null
   if (scpLike) {
-    const host = scpLike[1].toLowerCase()
+    const host = normalizeForgeWebHost(scpLike[1])
     const path = cleanPath(scpLike[2])
     if (!path) {
       return null
@@ -176,14 +176,15 @@ export function parseRemoteRepo(
     if (!path) {
       return null
     }
-    const host = url.hostname.toLowerCase()
+    const remoteHost = url.hostname.toLowerCase()
+    const host = normalizeForgeWebHost(remoteHost)
     const hintedProvider = normalizeProvider(providerHint)
     const inferredProvider = providerForHost(host)
     const provider = hintedProvider ?? inferredProvider
     const webOrigin =
-      host === 'ssh.github.com'
-        ? 'https://github.com'
-        : buildWebOrigin(protocol, url.host, url.hostname).replace(/\/+$/, '')
+      host === remoteHost
+        ? buildWebOrigin(protocol, url.host, url.hostname).replace(/\/+$/, '')
+        : `https://${host}`
     return {
       provider,
       path,

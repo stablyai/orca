@@ -1,3 +1,4 @@
+import type * as MobileTerminalOperations from '../../../terminal/mobile-terminal-operations'
 import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -11,32 +12,19 @@ import type {
 
 const HANDLE = 'terminal-1'
 const DEVICE_TOKEN = 'device-token-1'
-/** A two-finger scroll as the WebView bridge reports it: one SGR wheel sequence. */
 const WHEEL_REPORT = '[<64;10;5M'
-/** Mouse reporting on, alt screen off: the gate a gesture byte has to pass to reach the wire. */
 const PTY_MODES: TerminalModes = {
   bracketedPasteMode: false,
   altScreen: false,
   mouseTrackingMode: 'any',
   sgrMouseMode: true,
-  sgrMousePixelsMode: false
+  sgrMousePixelsMode: false,
+  applicationCursorKeysMode: false,
+  kittyKeyboardFlags: 0,
+  modifyOtherKeys: 0
 }
 
-/**
- * The two sends the session screen's gesture surface makes: the debounced flush of buffered wheel
- * and arrow reports, and the clear-buffer the terminal menu issues.
- *
- * Neither rides a subscription. The flush reads refs — client, connection state, PTY modes, the
- * gesture buckets, the active handle and tab type — and the clear optional-chains the webview, so a
- * mount holding no terminal ref reaches both. The webview is absent rather than substituted: the
- * local `clear()` on it is a device call this oracle has no observation of, and the send after it is
- * what the recording is evidence of.
- *
- * State is the queue accounting the hook owns — what is buffered, what is in flight, and what the
- * rate limiter has left — because that is the hook's own value; it returns callbacks and nothing
- * else. What each reply decided lands in the other two lists: an accepted send is a takeover report
- * in the sender list, and a refused clear is a toast in the effects.
- */
+// Record send/clear outcomes and queue accounting without a WebView; local clear rendering is outside this oracle.
 export function sessionTerminalGestureMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -45,11 +33,10 @@ export function sessionTerminalGestureMountAdapters(
       const useTerminalInput = modules.load<
         typeof import('../../../session/use-mobile-session-terminal-input')
       >('mobile/src/session/use-mobile-session-terminal-input.ts').useMobileSessionTerminalInput
-      const takeover = modules.load<
-        typeof import('../../../terminal/worker-terminal-takeover-report')
-      >('mobile/src/terminal/worker-terminal-takeover-report.ts')
-      // The per-client report window is module state; a fresh recording must not inherit one.
-      takeover.resetWorkerTerminalTakeoverReportsForTest()
+
+      const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
+        'mobile/src/terminal/mobile-terminal-operations.ts'
+      )
 
       const buckets = { current: new Map<string, TerminalGestureInputBucket>() }
       const queues = { current: new Map<string, TerminalGestureInputQueue>() }
@@ -59,6 +46,7 @@ export function sessionTerminalGestureMountAdapters(
         input = useTerminalInput(
           mountFixture<Parameters<typeof useTerminalInput>[0]>({
             client,
+            sendTerminalOrderedInput: terminalInputSend.request,
             connState: 'connected',
             activeHandle: HANDLE,
             clientRef: { current: client },
@@ -72,11 +60,17 @@ export function sessionTerminalGestureMountAdapters(
             terminalGestureInputInFlightRef: inFlight,
             liveInputRef: { current: null },
             liveInputFocusTimerRef: { current: null },
-            terminalUnsubsRef: { current: new Map() },
+            terminalUnsubsRef: { current: new Map([[HANDLE, () => {}]]) },
             hostQueryReplyInputSupportedRef: { current: false },
+            hostProgramStatusSupportedRef: { current: false },
             clearPendingLiveInputCommit: () => {},
             toggleTerminalLiveInput: () => false,
             getTerminalRef: () => undefined,
+            unsubscribeTerminal: (handle) => effect('terminal-unsubscribe', { handle }),
+            subscribeToTerminal: (handle) => {
+              effect('terminal-subscribe', { handle })
+              return true
+            },
             showToast: (message: string, durationMs?: number) =>
               effect('toast', { message, durationMs: durationMs ?? null })
           })
@@ -104,10 +98,7 @@ export function sessionTerminalGestureMountAdapters(
           bucketTokens: buckets.current.get(HANDLE)?.tokens ?? null,
           crash: screen.crash()
         }),
-        dispose: () => {
-          takeover.resetWorkerTerminalTakeoverReportsForTest()
-          screen.unmount()
-        }
+        dispose: () => screen.unmount()
       }
     }
   }

@@ -19,91 +19,43 @@ function stubDirectSshModules(args: { storeState: StoreLike }): void {
   }))
 }
 
-// Why: end-to-end exercise of startup agent-status restoration through
-// useIpcEvents itself. The main process owns the durable cache; the renderer
-// pulls a snapshot only after workspace tabs are ready so startup pushes
-// cannot be lost while local state is still empty.
+// Pull main’s durable status snapshot through the real hook only after tabs are ready, recovering startup pushes received before local state.
 describe('useIpcEvents agent status snapshot integration', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
   })
 
-  it('retires the exact sleeping record after adopted or exited legacy worker recovery', async () => {
-    const clearSleepingAgentSession = vi.fn()
-    let listener:
-      | ((data: { paneKey: string; resolution: 'adopted' | 'exited' }) => void)
-      | undefined
-    const storeState = buildStoreState({
-      clearSleepingAgentSession
-    })
-
-    stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
-    stubAuxiliaryModules()
-    vi.stubGlobal(
-      'window',
-      buildWindowApi({
-        onSet: () => () => {},
-        onLegacyWorkerTerminalRecovery: (callback) => {
-          listener = callback
-          return () => {}
-        }
-      })
-    )
-
-    const { useIpcEvents } = await import('./useIpcEvents')
-    useIpcEvents()
-    await Promise.resolve()
-    expect(listener).toBeTypeOf('function')
-
-    listener?.({ paneKey: 'tab-adopted:leaf-adopted', resolution: 'adopted' })
-    expect(clearSleepingAgentSession).toHaveBeenCalledWith('tab-adopted:leaf-adopted')
-
-    clearSleepingAgentSession.mockClear()
-    listener?.({ paneKey: 'tab-exited:leaf-exited', resolution: 'exited' })
-    expect(clearSleepingAgentSession).toHaveBeenCalledWith('tab-exited:leaf-exited')
-  })
-
   it.each([
     { partialAuthority: { providerEpoch: 'epoch-current' } },
     { partialAuthority: { connectionGeneration: 7 } }
-  ])(
-    'fills a same-watermark partial SSH authority and clears its bindings once',
-    async ({ partialAuthority }) => {
-      const harness = buildSshAuthorityReconciliationHarness({
-        partialAuthority,
-        latestAuthority: {
-          providerEpoch: 'epoch-current',
-          connectionGeneration: 7
-        }
-      })
-      stubDirectSshModules({ storeState: harness.storeState })
-      const { useIpcEvents } = await import('./useIpcEvents')
-      useIpcEvents()
-
-      harness.emitPartialState()
-
-      await vi.waitFor(() => {
-        expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith('target-reconciliation')
-      })
-      expect(harness.getState).toHaveBeenCalledOnce()
-      expect(harness.setSshConnectionState).toHaveBeenCalledTimes(2)
-      expect(harness.storedState()).toEqual({
-        targetId: 'target-reconciliation',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0,
+  ])('fills a same-watermark partial SSH authority', async ({ partialAuthority }) => {
+    const harness = buildSshAuthorityReconciliationHarness({
+      partialAuthority,
+      latestAuthority: {
         providerEpoch: 'epoch-current',
         connectionGeneration: 7
-      })
-    }
-  )
+      }
+    })
+    stubDirectSshModules({ storeState: harness.storeState })
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+
+    harness.emitPartialState()
+
+    await vi.waitFor(() => {
+      expect(harness.setSshConnectionState).toHaveBeenCalledTimes(2)
+    })
+    expect(harness.getState).toHaveBeenCalledOnce()
+    expect(harness.storedState()).toEqual({
+      targetId: 'target-reconciliation',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'epoch-current',
+      connectionGeneration: 7
+    })
+  })
 
   it.each([
     { partialAuthority: { providerEpoch: 'epoch-conflict' } },
@@ -128,7 +80,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expect(harness.getState).toHaveBeenCalledOnce()
       })
       await Promise.resolve()
-      expect(harness.clearBindings).not.toHaveBeenCalled()
       expect(harness.setSshConnectionState).toHaveBeenCalledOnce()
       expect(harness.storedState()).toEqual(
         expect.objectContaining({
@@ -285,13 +236,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
         sshConnectionStates.set(nextTargetId, state)
       },
       setPortForwards,
+      setUnrestoredPortForwards: vi.fn(),
       setDetectedPorts,
       setSshTargetsMetadata: vi.fn(),
       setRemovedSshTargetLabels: vi.fn(),
       fetchRuntimeEnvironmentRepos: vi.fn(async () => []),
       fetchWorktreeLineage: vi.fn(async () => undefined),
       clearRemoteDetectedAgents: vi.fn(),
-      clearDirectSshTargetPtyBindings: vi.fn(),
       clearRemovedSshTargetState: vi.fn()
     })
     let partialTargetStateCalls = 0
@@ -326,6 +277,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
             )
           },
           listPortForwards,
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts,
           onPortForwardsChanged: (
             listener: (data: { targetId: string; forwards: (typeof liveForward)[] }) => void

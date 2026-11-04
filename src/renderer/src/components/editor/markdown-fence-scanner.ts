@@ -81,10 +81,7 @@ export function createMarkdownFenceTracker(): MarkdownFenceTracker {
 // Native scan: these run over whole documents, so per-character JS is too costly.
 const LINE_BREAK = /[\n\r]/g
 
-/**
- * End of the line at `start`, excluding its terminator. marked normalizes
- * `/\r\n|\r/g` to `\n` before parsing, so a lone CR ends a line here too.
- */
+/** Honor lone CR line breaks because marked normalizes CR and CRLF before parsing. */
 export function findMarkdownLineEnd(content: string, start: number): number {
   LINE_BREAK.lastIndex = start
   return LINE_BREAK.exec(content)?.index ?? content.length

@@ -1,15 +1,12 @@
-import { buildAgentStartupPlan, planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+import { planAgentCliArgsSuffix } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 
-/**
- * What the source-control dialog checks before it starts an agent: what the user can fix here (the
- * agent, its arguments, the input). How the prompt then reaches the agent is the host's to decide
- * (`agent.launch`), so nothing here predicts it.
- */
+/** Validate user-fixable agent/arguments/input; the host’s agent.launch owns prompt delivery, never predictions here. */
 export type SourceControlLaunchCheckResult = { ok: true } | { ok: false; error: string }
 
 export function checkSourceControlAgentActionLaunch(args: {
@@ -21,8 +18,7 @@ export function checkSourceControlAgentActionLaunch(args: {
   agentArgs?: string | null
   platform?: NodeJS.Platform
   terminalWindowsShell?: string | null
-  /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
-   * `orca-ide` rename must not be applied for remote launches. */
+  // SSH installs the CLI shim as orca; never apply the local Linux orca-ide rename to remote launches.
   isRemote?: boolean
 }): SourceControlLaunchCheckResult {
   const agent = args.agent

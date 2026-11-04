@@ -1,7 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 
-/** Open the right sidebar file explorer and wait for store state to match. */
 export async function openFileExplorer(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
@@ -10,10 +9,7 @@ export async function openFileExplorer(page: Page): Promise<void> {
     }
 
     const state = store.getState()
-    // Why: hidden Electron runs do not reliably deliver Cmd/Ctrl+Shift+E or
-    // expose the sidebar DOM in time for locator-based setup. Drive the same
-    // store state the shortcut would update so file-open specs cover the
-    // explorer workflow instead of hidden-window input timing.
+    // Set the shortcut’s store state directly because hidden windows cannot reliably deliver the setup chord.
     state.setRightSidebarTab('explorer')
     state.setRightSidebarOpen(true)
   })
@@ -29,13 +25,7 @@ export async function openFileExplorer(page: Page): Promise<void> {
     .toBe(true)
 }
 
-/**
- * Open the first matching seeded file via the store.
- *
- * Why: the tests assert file-open behavior, not DOM tree rendering. Opening a
- * stable seeded file through the same editor store action avoids hidden-window
- * explorer DOM flakiness while still exercising Orca's editor tab model.
- */
+// Use the production open-file store action to isolate editor behavior from hidden-window explorer timing.
 export async function clickFileInExplorer(
   page: Page,
   candidates: string[]

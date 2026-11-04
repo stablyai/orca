@@ -31,8 +31,7 @@ function makeTwin(hostId?: string): Worktree {
   } as Worktree
 }
 
-// STA-4343: the same worktree id names one workspace per host; only the local
-// twin passes a local-only host scope.
+// Only the local twin passes the local host filter despite both rows sharing an ID.
 function stateWithLocalScopedTwins(): unknown {
   return {
     repos: [

@@ -1,8 +1,9 @@
 import { realpath } from 'node:fs/promises'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { CodexWslRuntimeHookTarget } from './codex-wsl-hook-install-plan'
 import { codexHookService } from './hook-service'
+import { runAsWslUserAct } from '../wsl/filesystem/wsl-unc-access-gate'
 import {
   isAbsolutePosixPathWithoutDotSegments,
   resolveManagedWslCodexHome,
@@ -68,8 +69,8 @@ export async function prepareManagedWslCodexHomeBeforeShellLaunch(args: {
     args.install ??
     ((home: string, hookTarget: CodexWslRuntimeHookTarget) =>
       codexHookService.installForRuntimeHomeSerialized(home, hookTarget))
-  return await install(target.runtimeHomePath, {
-    runtime: 'wsl',
-    wslDistro: target.wslDistro
-  })
+  // The guest shell asking is the user opening a terminal there: the install may touch its distro.
+  return await runAsWslUserAct(target.wslDistro, async () =>
+    install(target.runtimeHomePath, { runtime: 'wsl', wslDistro: target.wslDistro })
+  )
 }

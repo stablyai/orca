@@ -156,6 +156,15 @@ test.describe('split terminal pane paste ownership', () => {
         }
         const dataTransfer = new DataTransfer()
         dataTransfer.setData('text/x-orca-file-path', pathValue)
+        // Internal drops are refused without the source owner an Explorer drag records.
+        dataTransfer.setData(
+          'application/x-orca-workspace-file-source',
+          JSON.stringify({
+            executionHostId: 'local',
+            workspaceId: state?.activeWorktreeId,
+            version: 1
+          })
+        )
         const target = pane.container.querySelector('.xterm-screen, textarea') ?? pane.container
         for (const eventType of ['dragenter', 'dragover', 'drop']) {
           target.dispatchEvent(

@@ -16,7 +16,8 @@ describe('OMP tool updates', () => {
       rawOutput: { content: [{ type: 'text', text: 'file body' }], details: {} },
       content: [text('file body')]
     }
-    expect(normalize(update)).toBe(update)
+    const expected = structuredClone(update)
+    expect(normalize(update)).toEqual(expected)
   })
 
   it('keeps a result that itself starts with "$ "', () => {
@@ -26,7 +27,8 @@ describe('OMP tool updates', () => {
       rawOutput: { content: [{ type: 'text', text: '$ 5.00' }], details: {} },
       content: [text('$ 5.00')]
     }
-    expect(normalize(update)).toBe(update)
+    const expected = structuredClone(update)
+    expect(normalize(update)).toEqual(expected)
   })
 
   it.each([0, 3])('keeps an exit %s notice when OMP sent no matching detail', (code) => {
@@ -130,7 +132,8 @@ describe('OMP tool updates', () => {
         content: [{ type: 'text', text: 'ok' }],
         details: { wallTimeMs: 12 }
       }
-      expect(normalize(update)).toBe(update)
+      const expected = structuredClone(update)
+      expect(normalize(update)).toEqual(expected)
     }
   })
 

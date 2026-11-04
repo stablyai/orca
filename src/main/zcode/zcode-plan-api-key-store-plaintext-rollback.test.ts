@@ -2,6 +2,7 @@ import type * as fs from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setSecretStore } from '../../shared/secret-store'
 import type * as SecureFile from '../../shared/secure-file'
 import type * as ZcodePlanApiKeyStore from './zcode-plan-api-key-store'
 
@@ -12,7 +13,18 @@ const mocks = vi.hoisted(() => ({
   restrict: vi.fn((_path: string, _directory: boolean) => false)
 }))
 
-vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => false } }))
+beforeEach(() =>
+  setSecretStore({
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error('unavailable')
+    },
+    decryptString: () => {
+      throw new Error('unavailable')
+    },
+    describeProtectionGap: () => 'unavailable'
+  })
+)
 vi.mock('node:os', async (original) => ({
   ...(await original<typeof os>()),
   homedir: () => mocks.home
@@ -22,14 +34,14 @@ vi.mock('node:fs', async (original) => ({
   writeFileSync: mocks.write,
   renameSync: mocks.rename
 }))
+// Stage through mocked writeFile and inject restriction outcome like the born-restricted creator.
 vi.mock('../../shared/secure-path-windows-acl', () => ({
   restrictWindowsPathSync: mocks.restrict,
-  bestEffortRestrictWindowsPath: (
-    _path: string,
-    _directory: boolean,
-    settled: (restricted: boolean) => void
-  ) => settled(false),
-  resetSecureFileWindowsUserSidForTests: vi.fn()
+  writeRestrictedWindowsFile: (path: string, contents: string) => {
+    mocks.write(path, contents, { encoding: 'utf-8', mode: 0o600 })
+    return mocks.restrict(path, false)
+  },
+  restrictWindowsDirectory: () => Promise.resolve(false)
 }))
 
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -81,6 +93,7 @@ describe('plaintext rollback through the secure-file writer', () => {
     expect(realFs.readdirSync(join(mocks.home, '.orca'))).toEqual([])
   })
 
+  // Rename preserves staged DACL; later read-time hardening failure must not erase the restored key.
   it.each(['restriction-false', 'restriction-throws'])(
     'keeps the previous envelope if rollback publishes before %s',
     (failure) => {
@@ -114,11 +127,9 @@ describe('plaintext rollback through the secure-file writer', () => {
         realFs.writeFileSync(keyPath, envelope('previous-key'))
       }
       if (phase === 'before-rollback') {
-        mocks.restrict.mockImplementation((path) => {
-          if (path === keyPath && mocks.write.mock.calls.length === 1) {
-            realFs.writeFileSync(keyPath, envelope('other-writer-key'))
-          }
-          return false
+        mocks.rename.mockImplementationOnce((from, to) => {
+          realFs.renameSync(from, to)
+          realFs.writeFileSync(keyPath, envelope('other-writer-key'))
         })
       } else {
         mocks.write.mockImplementationOnce(realFs.writeFileSync).mockImplementationOnce(() => {
@@ -316,12 +327,7 @@ describe('conditional rollback publication through the real writer', () => {
       })
     ).toBe(true)
 
-    expect(operations).toEqual([
-      'staged restriction',
-      'ownership check',
-      'rename',
-      'published restriction'
-    ])
+    expect(operations).toEqual(['staged restriction', 'ownership check', 'rename'])
   })
 
   it('cleans guarded staging bytes if rename throws without deleting the original target', () => {

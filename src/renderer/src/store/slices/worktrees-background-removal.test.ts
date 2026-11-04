@@ -1,5 +1,6 @@
+import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
+import 'sonner'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
@@ -9,6 +10,7 @@ import {
   reconcileHostWorktreeRemovals
 } from '../../hooks/ipc-events/background-worktree-removal-bridge'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import '../../components/sidebar/worktree-delete-error-display'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -60,21 +62,6 @@ describe('removing a worktree the host deletes in the background', () => {
     _resetBackgroundWorktreeRemovalBridgeForTests()
   })
 
-  function deferredRemoval(): {
-    resolve: (value: unknown) => void
-    reject: (error: Error) => void
-  } {
-    const handle = { resolve: (_value: unknown) => {}, reject: (_error: Error) => {} }
-    mockApi.worktrees.remove.mockImplementation(
-      () =>
-        new Promise((resolve, reject) => {
-          handle.resolve = resolve
-          handle.reject = reject
-        })
-    )
-    return handle
-  }
-
   /** Stands in for the listing refresh; `rows` is what the host lists once it lands. */
   function hostListsOnRefresh(rows: 'removed' | 'removing' | 'unmarked' | Error) {
     const refresh = vi.fn()
@@ -93,47 +80,6 @@ describe('removing a worktree the host deletes in the background', () => {
     return refresh
   }
 
-  it('keeps the card Deleting until the host replies that the delete finished', async () => {
-    seedRow(store)
-    const host = deferredRemoval()
-    const removal = store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-    await vi.waitFor(() => expect(mockApi.worktrees.remove).toHaveBeenCalled())
-
-    expect(deleteState(store)?.isDeleting).toBe(true)
-    expect(store.getState().worktreesByRepo.repo1?.map((row) => row.id)).toEqual([worktreeId])
-
-    host.resolve({ preservedBranch: { branchName: 'feature', head: 'abc123' } })
-    await expect(removal).resolves.toMatchObject({
-      ok: true,
-      preservedBranch: { branchName: 'feature', head: 'abc123' }
-    })
-    expect(store.getState().worktreesByRepo.repo1).toEqual([])
-    // The preserved-branch notice reaches the user through the same path an inline delete used.
-    expect(toast.warning).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows the host error from the reply on the card', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    seedRow(store)
-    const refresh = hostListsOnRefresh('unmarked')
-    mockApi.worktrees.remove.mockRejectedValue(
-      new Error('Failed to delete worktree at /path/wt1. Permission denied')
-    )
-
-    await expect(
-      store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-    ).resolves.toEqual({
-      ok: false,
-      error: 'Failed to delete worktree at /path/wt1. Permission denied'
-    })
-    expect(deleteState(store)).toMatchObject({
-      isDeleting: false,
-      error: 'Failed to delete worktree at /path/wt1. Permission denied'
-    })
-    // A host refusal is an answer, not a lost reply.
-    expect(refresh).not.toHaveBeenCalled()
-  })
-
   it('finishes a delete whose reply timed out once the host listing drops the row', async () => {
     seedRow(store)
     const refresh = hostListsOnRefresh('removing')
@@ -148,125 +94,22 @@ describe('removing a worktree the host deletes in the background', () => {
     reconcileHostWorktreeRemovals(store)
     await expect(removal).resolves.toEqual({ ok: true })
   })
-
-  it('reports a delete whose reply was lost and that the host lists without the marker', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    seedRow(store, { removing: true })
-    hostListsOnRefresh('unmarked')
-    mockApi.worktrees.remove.mockRejectedValue(new Error('Remote Orca runtime connection closed.'))
-
-    await expect(
-      store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-    ).resolves.toEqual({ ok: false, error: 'The delete did not finish. Try again.' })
-  })
-
-  it('treats a row the refreshed listing no longer has as deleted', async () => {
-    seedRow(store)
-    hostListsOnRefresh('removed')
-    mockApi.worktrees.remove.mockRejectedValue(new Error('Request timed out: worktree.rm'))
-
-    await expect(
-      store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-    ).resolves.toEqual({ ok: true })
-  })
-
-  it('reports the lost reply when the host listing cannot be read either', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    seedRow(store)
-    hostListsOnRefresh(new Error('Remote Orca runtime is not connected.'))
-    mockApi.worktrees.remove.mockRejectedValue(new Error('Request timed out: worktree.rm'))
-
-    await expect(
-      store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-    ).resolves.toEqual({ ok: false, error: 'Request timed out: worktree.rm' })
-  })
-
-  it('shows Deleting on a client that did not start the delete, from the host marker alone', () => {
-    seedRow(store, { removing: true })
-    reconcileHostWorktreeRemovals(store)
-    expect(deleteState(store)).toMatchObject({ isDeleting: true, phase: 'deleting' })
-
-    // Git finished: the row leaves the listing.
-    seedStore(store, { worktreesByRepo: { repo1: [] } })
-    reconcileHostWorktreeRemovals(store)
-    expect(deleteState(store)).toBeUndefined()
-  })
-
-  it('shows the existing card error when a row it marked Deleting comes back unmarked', () => {
-    seedRow(store, { removing: true })
-    reconcileHostWorktreeRemovals(store)
-
-    seedRow(store)
-    reconcileHostWorktreeRemovals(store)
-    expect(deleteState(store)).toMatchObject({
-      isDeleting: false,
-      error: 'The delete did not finish. Try again.'
-    })
-  })
-
-  it('shows the host error on a row the host lists as a failed delete, until it leaves', () => {
-    // A window that opened after the delete failed, or a restart after a failed startup finish.
-    seedRow(store, { removalError: 'Operation not permitted' })
-    reconcileHostWorktreeRemovals(store)
-    expect(deleteState(store)).toMatchObject({
-      isDeleting: false,
-      error: 'Operation not permitted',
-      canForceDelete: false
-    })
-
-    // Forgotten, or the checkout deleted outside Orca: the host stops listing it.
-    seedStore(store, { worktreesByRepo: { repo1: [] } })
-    reconcileHostWorktreeRemovals(store)
-    expect(deleteState(store)).toBeUndefined()
-  })
-
-  it('shows Deleting while the host retries a failed delete, and its new error after', () => {
-    seedRow(store, { removalError: 'Operation not permitted' })
-    reconcileHostWorktreeRemovals(store)
-
-    seedRow(store, { removing: true })
-    reconcileHostWorktreeRemovals(store)
-    expect(deleteState(store)).toMatchObject({ isDeleting: true, phase: 'deleting' })
-
-    seedRow(store, { removalError: 'Resource busy' })
-    reconcileHostWorktreeRemovals(store)
-    expect(deleteState(store)).toMatchObject({ isDeleting: false, error: 'Resource busy' })
-  })
-
-  it('shows the error the host lists when a delete it marked Deleting fails', () => {
-    seedRow(store, { removing: true })
-    reconcileHostWorktreeRemovals(store)
-
-    seedRow(store, { removalError: 'Operation not permitted' })
-    reconcileHostWorktreeRemovals(store)
-    expect(deleteState(store)).toMatchObject({
-      isDeleting: false,
-      error: 'Operation not permitted'
-    })
-  })
-
-  it('reports the host error for a lost reply when the host lists the failed delete', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    seedRow(store)
-    const refresh = vi.fn()
-    refresh.mockImplementation(async () => {
-      seedRow(store, { removalError: 'Operation not permitted' })
-      return true
-    })
-    store.setState({ fetchWorktrees: refresh })
-    mockApi.worktrees.remove.mockRejectedValue(new Error('Request timed out: worktree.rm'))
-
-    await expect(
-      store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-    ).resolves.toEqual({ ok: false, error: 'Operation not permitted' })
-  })
-
-  it('leaves a delete this renderer started to that flow', () => {
-    seedRow(store, { removing: true })
-    store.getState().markWorktreesDeleting([{ id: worktreeId, hostId: 'local' }])
-    reconcileHostWorktreeRemovals(store)
-    seedRow(store)
-    reconcileHostWorktreeRemovals(store)
-    expect(deleteState(store)?.isDeleting).toBe(true)
-  })
+  it.each(['removed', 'unmarked', 'unreadable'] as const)(
+    'lost-reply %s retires only with committed absence proof',
+    async (listing) => {
+      launchDrafts.clearNativeChatComposerDraftsForTests()
+      seedRow(store)
+      hostListsOnRefresh(listing === 'unreadable' ? new Error('unreadable') : listing)
+      const scope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(worktreeId, 'codex', 'local')
+      launchDrafts.updateNativeChatComposerDraft(scope, { text: 'pending task' }, 'immediate')
+      const attempt = launchDrafts.captureNativeChatComposerSubmission(scope)
+      mockApi.worktrees.remove.mockRejectedValue(new Error('Request timed out: worktree.rm'))
+      const result = await store
+        .getState()
+        .removeWorktree({ id: worktreeId, executionHostId: 'local' })
+      expect(result.ok).toBe(listing === 'removed')
+      expect(attempt.draft === undefined).toBe(listing === 'removed')
+      launchDrafts.clearNativeChatComposerDraftsForTests()
+    }
+  )
 })

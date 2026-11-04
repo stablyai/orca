@@ -6,12 +6,15 @@ import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { ghExecFileAsync } from '../git/command-runner/gh-exec-file'
 import { glabExecFileAsync } from '../git/command-runner/glab-exec-file'
 import { execFileCaptureToTermination } from '../git/command-runner/exec-file-capture'
-import { beginLocalCommandSelection, resolveSelectedLocalCommand } from './command-path-resolver'
+import {
+  beginLocalCommandSelection,
+  resolveSelectedLocalCommand
+} from './command-path/command-path-resolver'
 import {
   execLocalPreflightCommandOrThrow,
-  findRunnableLocalCommand,
-  shellQuote
+  findRunnableLocalCommand
 } from './preflight-command-exec'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 
 vi.mock('../../shared/system-cli-install-dirs', () => ({
   getSystemCliInstallDirectories: (_platform: NodeJS.Platform, home: string) => [
@@ -32,7 +35,7 @@ async function fixtureCli(
   const binary = path.join(dir, cli)
   await writeFile(
     binary,
-    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${shellQuote(`${binary}-calls`)}\n${body}`,
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${quotePosixShell(`${binary}-calls`)}\n${body}`,
     { mode: 0o755 }
   )
   return binary

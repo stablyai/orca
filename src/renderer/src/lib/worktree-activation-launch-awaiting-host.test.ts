@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 const admit = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/structured-agent-session-host-admission', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-host-admission', () => ({
   admitStructuredLaunchOnHost: admit
 }))
 
@@ -12,9 +12,9 @@ import * as activationGate from './worktree-agent-activation-gate'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
-} from './worktree-activation-created-agent-test-state'
-import { registerWorktreeActivationReset } from './worktree-activation-test-harness'
-import { beginHostAdmittedStructuredLaunch } from './structured-agent-session-launch-admission'
+} from './worktree-activation-created-agent.test-fixture'
+import { registerWorktreeActivationReset } from './worktree-activation.test-fixture'
+import { beginHostAdmittedStructuredLaunch } from './agent-session/launch/structured-agent-session-launch-admission'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 

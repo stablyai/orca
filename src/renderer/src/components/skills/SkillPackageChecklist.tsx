@@ -54,8 +54,7 @@ function ChecklistRow({
     translate('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')
   return (
     <li>
-      {/* Why: the description stays on the row and simply unclamps when the row
-          opens, so nothing is repeated and nothing is hidden behind a click. */}
+      {/* Unclamp the existing description on expansion instead of repeating it elsewhere. */}
       <Collapsible className="group/row">
         <div className="flex items-center gap-3 px-3 py-2">
           {selected !== null ? (
@@ -101,11 +100,7 @@ function ChecklistRow({
   )
 }
 
-/**
- * What the link actually contains: one row per skill, each expandable to its
- * description and file list. Selection is offered only when there is a choice
- * to make — a single-skill package installs as one unit.
- */
+/** Expand skills into descriptions/files; offer selection only when a package contains a real choice. */
 export function SkillPackageChecklist({
   items,
   selectedIds,

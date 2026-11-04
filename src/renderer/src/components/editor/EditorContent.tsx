@@ -1,10 +1,9 @@
 import { useAppStore } from '@/store'
+import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
-import { NativeChatVisualTab } from '../native-chat/NativeChatVisualTab'
-import { NativeChatVisualUnavailable } from '../native-chat/NativeChatInlineVisual'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
@@ -17,6 +16,9 @@ import { translate } from '@/i18n/i18n'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 import type { MarkdownRenderState } from './markdown-render-mode'
+
+// Retry is a user act: it may start a stopped WSL distro.
+const USER_RETRY = { wakeWslDistro: true }
 
 const noopCloseMarkdownTableOfContents = (): void => {}
 
@@ -49,8 +51,10 @@ export function EditorContent({
   resolvedLanguage,
   isMarkdown,
   isMermaid,
+  isSvg = false,
   isCsv,
   isNotebook,
+  customEditor = null,
   mdViewMode,
   inlineMarkdownRenderState,
   isChangesMode,
@@ -77,8 +81,10 @@ export function EditorContent({
   resolvedLanguage: string
   isMarkdown: boolean
   isMermaid: boolean
+  isSvg?: boolean
   isCsv: boolean
   isNotebook: boolean
+  customEditor?: ActivePluginCustomEditor | null
   mdViewMode: MarkdownViewMode
   inlineMarkdownRenderState: MarkdownRenderState | null
   isChangesMode: boolean
@@ -93,11 +99,11 @@ export function EditorContent({
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
   const editorViewStateKey =
     viewStateScopeId === activeFile.id
-      ? activeFile.filePath
+      ? activeFile.id
       : `${activeFile.filePath}::${viewStateScopeId}`
   const diffViewStateKey =
     viewStateScopeId === activeFile.id ? activeFile.id : `${activeFile.id}::${viewStateScopeId}`
@@ -108,10 +114,9 @@ export function EditorContent({
   // Why: only the single-pane edit path gets PDF scroll memory — diff and conflict review mount several viewers on one path.
   const pdfViewStateKey =
     viewStateScopeId === activeFile.id
-      ? `${activeFile.filePath}:pdf`
+      ? `${activeFile.id}:pdf`
       : `${activeFile.filePath}::${viewStateScopeId}:pdf`
-  // Why: the same absolute path can exist in different worktrees, paired
-  // runtimes, or SSH targets; durable PDF zoom must not cross those owners.
+  // Scope durable PDF zoom by owner: identical paths can belong to different worktrees or remote hosts.
   const pdfPreferenceKey = buildPdfScalePreferenceKey(activeFile)
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
   const reloadOpenCheckRunDetailsTab = useAppStore((state) => state.reloadOpenCheckRunDetailsTab)
@@ -141,6 +146,10 @@ export function EditorContent({
     const details = checkRunDetails.details
     return (
       <CheckRunDetailsPanel
+        key={JSON.stringify([activeFile.id, viewStateScopeId, checkRunDetails.contextKey])}
+        tabId={activeFile.id}
+        viewStateScopeId={viewStateScopeId}
+        contextKey={checkRunDetails.contextKey}
         check={checkRunDetails.check}
         details={details}
         loading={checkRunDetails.loading}
@@ -151,15 +160,6 @@ export function EditorContent({
           void reloadOpenCheckRunDetailsTab(activeFile.id)
         }}
       />
-    )
-  }
-
-  if (activeFile.mode === 'chat-visual') {
-    // Why key: a different visual is a different frame, never a reused one.
-    return activeFile.chatVisual ? (
-      <NativeChatVisualTab key={activeFile.id} visual={activeFile.chatVisual} />
-    ) : (
-      <NativeChatVisualUnavailable />
     )
   }
 
@@ -187,6 +187,7 @@ export function EditorContent({
         key={viewStateScopeId}
         file={activeFile}
         viewStateKey={diffViewStateKey}
+        viewStateScopeId={viewStateScopeId}
       />
     )
   }
@@ -205,7 +206,9 @@ export function EditorContent({
         <EditorFileLoadErrorView
           message={fileContent.loadError}
           code={fileContent.loadErrorCode}
-          onRetry={() => reloadContent(activeFile)}
+          worktreeId={activeFile.worktreeId}
+          onRetry={() => reloadContent(activeFile, USER_RETRY)}
+          onHostStarted={() => reloadContent(activeFile)}
         />
       )
     }
@@ -259,8 +262,10 @@ export function EditorContent({
         monacoLanguage={monacoLanguage}
         isMarkdown={isMarkdown}
         isMermaid={isMermaid}
+        isSvg={isSvg}
         isCsv={isCsv}
         isNotebook={isNotebook}
+        customEditor={customEditor}
         mdViewMode={mdViewMode}
         inlineMarkdownRenderState={inlineMarkdownRenderState}
         isChangesMode={isChangesMode}

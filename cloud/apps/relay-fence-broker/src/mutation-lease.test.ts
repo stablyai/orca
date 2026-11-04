@@ -131,7 +131,11 @@ describe('GoogleStorageMutationLease', () => {
     expect(fetcher.mock.calls[3]?.[0]).toContain('ifGenerationMatch=7')
   })
 
-  it('rejects a live-lease takeover when any expected field differs', async () => {
+  it.each([
+    { field: 'generation', mismatch: { generation: '8' } },
+    { field: 'operationId', mismatch: { operationId: 'another-operation' } },
+    { field: 'requestDigest', mismatch: { requestDigest: 'c'.repeat(64) } }
+  ])('rejects a live-lease takeover when the expected $field differs', async ({ mismatch }) => {
     const existing = {
       operationId: request.operationId,
       requestDigest: 'b'.repeat(64),
@@ -154,9 +158,10 @@ describe('GoogleStorageMutationLease', () => {
 
     await expect(
       leaseStore.acquire(request.operationId, request, {
-        generation: '8',
+        generation: '7',
         operationId: existing.operationId,
-        requestDigest: existing.requestDigest
+        requestDigest: existing.requestDigest,
+        ...mismatch
       })
     ).rejects.toBeInstanceOf(MutationLeaseConflict)
     expect(fetcher).toHaveBeenCalledTimes(3)

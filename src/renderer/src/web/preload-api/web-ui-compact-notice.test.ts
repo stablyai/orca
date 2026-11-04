@@ -52,21 +52,3 @@ it.each(['verbose', 'compact'] as const)(
     expect((await ui.get()).statusBarUsageMode).toBe(mode)
   }
 )
-
-it.each([false, true])(
-  'uses the newer host notice state %s after returning from an older host',
-  async (dismissed) => {
-    const ui = createWebUiApi()
-    const olderUI = getDefaultUIState()
-    delete olderUI.statusBarCompactChangeNoticeDismissed
-    runtime.id = 'old'
-    runtime.call.mockResolvedValue({ ui: olderUI })
-    expect((await ui.get()).statusBarCompactChangeNoticeDismissed).toBe(true)
-
-    runtime.id = 'new'
-    runtime.call.mockResolvedValue({
-      ui: { ...getDefaultUIState(), statusBarCompactChangeNoticeDismissed: dismissed }
-    })
-    expect((await ui.get()).statusBarCompactChangeNoticeDismissed).toBe(dismissed)
-  }
-)

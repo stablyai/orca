@@ -17,6 +17,7 @@ import {
 } from '../../../../shared/workspace-cleanup-host-identity'
 import { WorkspaceCleanupBrowseToolbar } from './workspace-cleanup-browse-toolbar'
 import { WorkspaceCleanupConfirmRemove } from './workspace-cleanup-confirm-remove'
+import { WorkspaceCleanupConfirmStopAgents } from './workspace-cleanup-confirm-stop-agents'
 import { WorkspaceCleanupDialogHeader } from './workspace-cleanup-dialog-header'
 import {
   getWorkspaceCleanupDeletionPhaseByIdentity,
@@ -82,9 +83,7 @@ function WorkspaceCleanupDialogContent({
   const wasOpenRef = useRef(open)
   const mountedRef = useMountedRef()
 
-  // Why: the facet clock must be stable across renders but never older than
-  // this open — a hydrated snapshot's scannedAt can be days stale, which would
-  // misbucket idle thresholds and keep dead agent statuses "fresh".
+  // Keep facet time stable but no older than dialog open; stale hydration must not misclassify idle/agent freshness.
   const [openedAt, setOpenedAt] = useState(() => Date.now())
 
   useEffect(() => {
@@ -110,8 +109,7 @@ function WorkspaceCleanupDialogContent({
   )
 
   const candidates = useMemo(() => scan?.candidates ?? [], [scan?.candidates])
-  // The browse view promises Git facts for every row. The broad scan defers
-  // some reads for performance, so fill those gaps while the modal is open.
+  // Fill deferred broad-scan Git reads while open so every browse row gets evidence.
   const gitEvidenceNeeded = open
   const gitEvidence = useWorkspaceCleanupGitEvidence({
     enabled: gitEvidenceNeeded,
@@ -122,9 +120,7 @@ function WorkspaceCleanupDialogContent({
     () => applyWorkspaceCleanupGitEvidence(candidates, gitEvidence.evidenceByIdentity),
     [candidates, gitEvidence.evidenceByIdentity]
   )
-  // Why: a live clock would re-run every facet on each render; the newer of
-  // scan time and open time is the honest stable "as of" moment — a fresh scan
-  // keeps its timestamp, a stale hydrated snapshot is judged from this open.
+  // Use the newer of scan/open time: stable across renders without aging a fresh scan back to stale hydration.
   const facetNow = Math.max(scan?.scannedAt ?? 0, openedAt)
   const facetRows = useWorkspaceCleanupFacetRows({
     candidates: evidencedCandidates,
@@ -138,9 +134,7 @@ function WorkspaceCleanupDialogContent({
     streaming: loading,
     sort: browse.sort
   })
-  // Why (STA-4343): rows are keyed by host-qualified identity, not by
-  // `worktreeId` — two hosts can list the same `repoId::path` workspace, and an
-  // id-keyed selection would confirm one host's row and delete the other's.
+  // Host-qualify selection: identical workspace IDs on different hosts must never confirm one row and delete another (STA-4343).
   const candidateIdentities = useMemo(
     () => new Set(candidates.map((candidate) => getWorkspaceCleanupCandidateIdentity(candidate))),
     [candidates]
@@ -185,8 +179,6 @@ function WorkspaceCleanupDialogContent({
   }, [deletingIdentities, rows, selectedIds])
   const selectedCount = selectedCandidates.length
 
-  // A destructive dialog leaves selection to the user.
-
   const pruneSelectionToVisibleRows = useEffectEvent(() => {
     const next = new Set(
       [...selectedIds].filter(
@@ -205,10 +197,7 @@ function WorkspaceCleanupDialogContent({
     if (!open || removal.confirming) {
       return
     }
-    // Why: destructive selection must stay scoped to the rows the user can
-    // currently review after a filter change — and only then; keying on the
-    // user's filter state (not the matched set, whose identity changes every
-    // streaming tick) keeps a re-classified row from being silently deselected.
+    // Prune destructive selections only when user filters change; streaming reclassification must not silently deselect rows.
     pruneSelectionToVisibleRows()
   }, [browse.filters, open, removal.confirming])
 
@@ -281,7 +270,6 @@ function WorkspaceCleanupDialogContent({
         : facetRows.selectableIdentities.filter((identity) => !deletingIdentities.has(identity)),
     [deletingIdentities, facetRows.selectableIdentities, removal.removalInFlight]
   )
-  // Header state is scoped to the same rows the header action controls.
   const selectedSelectableCount = useMemo(() => {
     let count = 0
     for (const identity of selectableIdentities) {
@@ -347,7 +335,13 @@ function WorkspaceCleanupDialogContent({
         showCloseButton={false}
         className="flex h-[min(820px,90vh)] w-[calc(100vw-3rem)] max-w-[calc(100vw-3rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-3rem)] xl:w-[980px] xl:max-w-[980px]"
       >
-        {!removal.confirming ? (
+        {removal.agentStopRequest ? (
+          <WorkspaceCleanupConfirmStopAgents
+            candidates={removal.agentStopRequest.candidates}
+            onBack={removal.cancelStopAgents}
+            onConfirm={removal.confirmStopAgents}
+          />
+        ) : !removal.confirming ? (
           <>
             <WorkspaceCleanupDialogHeader
               selectedCount={selectedCount}

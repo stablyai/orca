@@ -21,7 +21,6 @@ vi.mock('electron', () => ({ app: { getPath: () => state.home } }))
 import { ClaudeHookService } from './hook-service'
 import { provisionClaudeProfile } from '../claude-accounts/claude-profile-provisioning'
 
-// Case-only aliases exist only on a case-insensitive filesystem (default APFS, NTFS).
 const caseInsensitive = (() => {
   const dir = mkdtempSync(join(tmpdir(), 'claude-case-probe-'))
   try {
@@ -83,7 +82,7 @@ const sync = async (f: ReturnType<typeof fixture>) => {
   return report
 }
 
-// Why: these create real symlinks, which Windows needs privilege for.
+// Symlink creation needs Windows privileges.
 const itLinks = it.skipIf(process.platform === 'win32')
 
 describe('Claude hooks at an explicit profile', () => {
@@ -112,7 +111,6 @@ describe('Claude hooks at an explicit profile', () => {
     await sync(f)
     expect(stop(f.profile)[0]).toEqual(hook('notify-v2'))
     expect(orcaCount(f.profile)).toBe(1)
-    // The default home is the master copy: an edit made in the profile lasts until the next refresh.
     setStop(f.profile, ['profile-only'])
     setStop(f.defaultDir, ['notify-v3'])
     await sync(f)

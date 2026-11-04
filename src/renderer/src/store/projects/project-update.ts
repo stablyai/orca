@@ -5,7 +5,7 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/installed-agent-skill-discovery'
 import type { RepoSlice } from '../repos/repo-state'
 import { getProjectSetupRuntimeTarget } from './project-host-routing'
-import { mergeUpdatedProjectCompatibilityProject } from './project-compatibility-core'
+import { mergeUpdatedProjectCompatibilityProject } from '../../../../shared/project-compatibility-merge'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 
 export function createProjectUpdateActions(

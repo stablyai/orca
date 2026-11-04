@@ -42,6 +42,5 @@ it('does not hand an automatic refusal to a user adoption of the same pane', asy
   const reservation = reservePaneSpawn(ownerKey)
   const adopted = adoptStablePane(undefined, undefined, { ...pane, cols: 80, rows: 24 })
   rejectPaneSpawnReservation(ownerKey, reservation, new Error(WORKTREE_TERMINALS_SLEEPING_ERROR))
-  // No owner exists, so the user's own create proceeds to spawn (and wake) instead of failing.
   await expect(adopted).resolves.toBeNull()
 })

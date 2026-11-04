@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadAppUpdatePreferences } from './app-update-preferences'
 
 const stored = new Map<string, string>()
@@ -7,6 +7,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     multiGet: async (keys: string[]) => keys.map((key) => [key, stored.get(key) ?? null])
   }
 }))
+
+beforeEach(() => stored.clear())
 
 describe('loadAppUpdatePreferences', () => {
   it('drops only a corrupt update record, keeping the check time and dismissal beside it', async () => {
@@ -25,8 +27,10 @@ describe('loadAppUpdatePreferences', () => {
       'orca:appUpdate:latest',
       JSON.stringify({ version: '0.0.52', url: 'https://x.test' })
     )
-    await expect(loadAppUpdatePreferences()).resolves.toMatchObject({
-      latest: { version: '0.0.52', url: 'https://x.test' }
+    await expect(loadAppUpdatePreferences()).resolves.toEqual({
+      lastCheckedAt: null,
+      latest: { version: '0.0.52', url: 'https://x.test' },
+      dismissedVersion: null
     })
   })
 })

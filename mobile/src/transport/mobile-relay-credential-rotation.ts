@@ -39,8 +39,7 @@ export async function rotateMobileRelayCredential(args: {
         reqId: `rotate-${encodeBase64Url(randomBytes(16))}`
       }
     })
-    // Why: a crash or lost response must leave enough material to query the
-    // one global install key before any second authorization attempt.
+    // Persist enough install material to query the same global key after a crash/lost reply before authorizing another.
     await args.writeBundle(bundle)
   }
 
@@ -89,8 +88,7 @@ export function mobileRelayCredentialNeedsRotation(
   bundle: MobileRelayCredentialBundle,
   now: number
 ): boolean {
-  // Why: pre-release clients hashed decoded random bytes. Direct connectivity
-  // can safely replace that unusable cloud credential using its stored hash.
+  // Repair pre-release decoded-byte hashes over authenticated direct connectivity using the stored hash.
   const malformedCurrentHash =
     bundle.current.hash !== hashMobileRelayCredential(bundle.current.token)
   return (
@@ -129,14 +127,8 @@ export function applyResumeConfirmation(
   return bundle
 }
 
-// Applies a migrated session's resume confirmation to the durable bundle and
-// derives the lease expiry to rotate against.
-// Why: rotate against the resume credential's expiry, never the hello's
-// leaseExpiresAt — that field is the cell's ~10s attach-reservation deadline,
-// and using it forced a session replacement every second.
-// Why: renewed=false means a re-resume provably returns the same unchanged
-// deadline — rotating then just churns one replacement per clamp floor until a
-// fresh credential arrives over direct or disk.
+// Rotate against resume expiry, not the hello’s short attach-reservation deadline.
+// Skip unrenewed confirmations: repeating the same expiry would churn replacements at every clamp floor.
 export async function persistResumeConfirmation(args: {
   session: {
     getResumeConfirmation(): DeviceResumeConfirmed | null
@@ -150,8 +142,7 @@ export async function persistResumeConfirmation(args: {
   let bundle = args.bundle
   if (confirmation) {
     bundle = applyResumeConfirmation(bundle, args.usedCredentialVersion, confirmation)
-    // Why: the relay is already authenticated; a SecureStore failure must not
-    // open another socket or count against transport recovery backoff.
+    // Persistence failure after relay authentication must not trigger another dial or transport cooldown.
     await args.writeBundle(bundle).catch(() => {})
   }
   const leaseExpiry =

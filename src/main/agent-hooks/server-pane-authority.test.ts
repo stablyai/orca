@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { AgentHookServer, PANE_KEY_ALIASES_MAX } from './server'
+import { AgentHookServer } from './server'
+import { PANE_KEY_ALIASES_MAX } from './server/server-constants'
 
 const SOURCE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')
@@ -53,7 +54,7 @@ describe('AgentHookServer pane authority', () => {
     ])
   })
 
-  // A pane move is announced by main and again by the renderer; the repeat must change nothing.
+  // Main and renderer can both announce the same pane transfer.
   it('ignores a transfer that is already in place', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()

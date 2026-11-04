@@ -1,3 +1,8 @@
+import { vi } from 'vitest'
+import type { Mock } from 'vitest'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import type { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
+import type { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
 export const makeStore = (overrides?: { isUnread?: boolean }) => ({
   getRepo: (id: string) =>
     makeStore(overrides)
@@ -13,7 +18,7 @@ export const makeStore = (overrides?: { isUnread?: boolean }) => ({
     }
   ],
   addRepo: () => {},
-  updateRepo: (id: string, updates: Record<string, unknown>) =>
+  updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) =>
     ({
       ...makeStore(overrides).getRepo(id),
       ...updates
@@ -36,7 +41,7 @@ export const makeStore = (overrides?: { isUnread?: boolean }) => ({
     worktreeId === 'repo-1::/tmp/worktree-a'
       ? (makeStore(overrides).getAllWorktreeMeta()[worktreeId] as never)
       : undefined,
-  setWorktreeMeta: (_worktreeId: string, meta: Record<string, unknown>) =>
+  setWorktreeMeta: (_target: HostWorktreeTarget, meta: Record<string, unknown>) =>
     ({
       ...makeStore(overrides).getAllWorktreeMeta()['repo-1::/tmp/worktree-a'],
       ...meta
@@ -49,3 +54,22 @@ export const makeStore = (overrides?: { isUnread?: boolean }) => ({
     branchPrefixCustom: ''
   })
 })
+
+export function createWorktreeListingMocks(): {
+  listWorktrees: Mock<typeof listWorktrees>
+  listWorktreesStrict: Mock<typeof listWorktreesStrict>
+} {
+  const worktrees = [
+    {
+      path: '/tmp/worktree-a',
+      head: 'abc',
+      branch: 'feature/foo',
+      isBare: false,
+      isMainWorktree: false
+    }
+  ]
+  return {
+    listWorktrees: vi.fn().mockResolvedValue(worktrees),
+    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+  }
+}

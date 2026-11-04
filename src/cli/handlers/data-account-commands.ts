@@ -2,9 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { HandlerContext } from '../dispatch'
+import { REPEATED_FLAG_SEPARATOR } from '../args'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
-import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
   ManagedDataAccountProvider,
@@ -48,17 +49,21 @@ export async function addDataAccount(
   if (typeof label !== 'string' || !label.trim() || label.trim().length > 120) {
     throw new RuntimeClientError('invalid_argument', '--label must contain 1–120 characters.')
   }
-  await assertDataAccountsSupported(ctx)
   const integration = ctx.flags.get('integration')
   if (
     integration !== undefined &&
-    (provider !== 'opencode' || typeof integration !== 'string' || !integration.trim())
+    (provider !== 'opencode' ||
+      typeof integration !== 'string' ||
+      !integration.trim() ||
+      integration.trim().startsWith('-'))
   ) {
     throw new RuntimeClientError(
       'invalid_argument',
       '--integration requires an OpenCode integration ID or name.'
     )
   }
+  const loginOptions = readOpenCodeLoginOptions(ctx, provider)
+  await assertDataAccountsSupported(ctx)
   const directory = mkdtempSync(join(tmpdir(), `orca-account-add-${provider}-`))
   const session: InteractiveLoginSession = {
     child: null,
@@ -79,6 +84,7 @@ export async function addDataAccount(
               'auth',
               'login',
               ...(typeof integration === 'string' ? [integration] : []),
+              ...loginOptions,
               '--standalone'
             ]
           : ['auth', 'login', '--force-manual-token-flow'],
@@ -107,6 +113,53 @@ export async function addDataAccount(
     }
   )
   printResult(result, ctx.json, (state) => formatDataAccounts(provider, state))
+}
+
+// Form answers can hold secrets, so failure messages show only their keys.
+export function redactLoginAnswers(args: string[]): string[] {
+  return args.map((arg, index) =>
+    args[index - 1] === '--answer' ? `${arg.slice(0, arg.indexOf('=') + 1)}<redacted>` : arg
+  )
+}
+
+export function rejectOpenCodeLoginFlagsForAgent(ctx: HandlerContext, agent: string): void {
+  if (agent !== 'opencode' && (ctx.flags.has('method') || ctx.flags.has('answer'))) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--method and --answer are only supported with --agent opencode.'
+    )
+  }
+}
+
+function readOpenCodeLoginOptions(
+  ctx: HandlerContext,
+  provider: ManagedDataAccountProvider
+): string[] {
+  rejectOpenCodeLoginFlagsForAgent(ctx, provider)
+  const method = ctx.flags.get('method')
+  // A leading dash would let OpenCode parse the value as its own flag, such as --server.
+  if (
+    method !== undefined &&
+    (typeof method !== 'string' || !method.trim() || method.trim().startsWith('-'))
+  ) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--method requires an OpenCode login method ID.'
+    )
+  }
+  const answer = ctx.flags.get('answer')
+  // Split without dropping empty entries so `--answer=` is rejected instead of skipped.
+  const answers = typeof answer === 'string' ? answer.split(REPEATED_FLAG_SEPARATOR) : []
+  if (
+    answer !== undefined &&
+    (answers.length === 0 || answers.some((a) => a.indexOf('=') < 1 || a.startsWith('-')))
+  ) {
+    throw new RuntimeClientError('invalid_argument', '--answer must be written as key=value.')
+  }
+  return [
+    ...(typeof method === 'string' ? ['--method', method] : []),
+    ...answers.flatMap((value) => ['--answer', value])
+  ]
 }
 
 export async function listDataAccounts(ctx: HandlerContext, provider: unknown): Promise<void> {

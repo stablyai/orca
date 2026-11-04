@@ -8,17 +8,17 @@ vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
   app: { getPath: () => '/tmp/orca-test' }
 }))
-vi.mock('../../../repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreesForDetectedScan: listRepoWorktreesMock
 }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
-vi.mock('../../registered-worktree-roots-cache', () => ({
+vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: vi.fn()
 }))
-vi.mock('../../../worktree-lineage-pruning', () => ({
+vi.mock('../../../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: vi.fn()
 }))
 vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
@@ -31,10 +31,15 @@ const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provid
 const { __resetDetectedWorktreeScanCacheForTests, invalidateDetectedWorktreeScanCache } =
   await import('./detected-worktree-scan-cache')
 const { getLocalWorktreeCatalogVersion, getLocalWorktreeScanGeneration } =
-  await import('../../../local-worktree-scan-generation')
+  await import('../../../workspaces/catalog/local-worktree-scan-generation')
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only id, path, displayName and connectionId off the repo row.
-const localRepo = { id: 'repo-local', path: '/repos/local', displayName: 'local' } as Repo
+const localRepo: Repo = {
+  id: 'repo-local',
+  path: '/repos/local',
+  displayName: 'local',
+  badgeColor: '#000',
+  addedAt: 0
+}
 
 function createStore(repo: Repo) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only these store methods; the pruning that would need more is mocked above.
@@ -62,9 +67,7 @@ function listLocal() {
   return listDetectedWorktreesForCapturedRepo(createStore(localRepo), localRepo, () => true)
 }
 
-// Why this suite exists: a client orders listings against the create and remove replies it has
-// applied, so a listing must name the catalog its scan began at, not the one current when the
-// reply was assembled.
+// Clients order listing rows by scan-start generation against applied create/remove replies.
 describe('the catalog version a listing carries', () => {
   beforeEach(() => {
     __resetDetectedWorktreeScanCacheForTests()
@@ -107,7 +110,7 @@ describe('the catalog version a listing carries', () => {
   it('a create reply issued after the change names a later catalog than the listing', async () => {
     listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, localRepo.path)])
     const listing = await listLocal()
-    // The create's own change notification bumps the generation before the reply is stamped.
+    // Create notifications bump generation before stamping the reply.
     invalidateDetectedWorktreeScanCache(localRepo.id)
     const createReply = getLocalWorktreeCatalogVersion(localRepo.id)
 

@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import { writePtyFromRuntimeController } from '../ipc/pty/runtime/operations'
@@ -11,24 +13,43 @@ import { sendTerminalStreamInput } from './rpc/methods/terminal/terminal-input-d
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import {
   pasteWorktreeStartupDraftWhenReady,
-  sendWorktreeStartupFollowupWhenReady,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/run-facts',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: listings.listWorktrees
   }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listings.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/run-facts',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    }
+  }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 const PTY_ID = 'pty-run-facts-input'
@@ -156,7 +177,7 @@ describe('run facts: the controller write funnel', () => {
     expect(run.firstUserInputAt()).not.toBeNull()
   })
 
-  it('records a mailbox pointer, which drives the running agent', async () => {
+  it("records a mailbox pointer as driving the agent, but not as a user's draft input", async () => {
     const run = await createFreshRun()
 
     await writeOrchestrationPointerWithSettlement({
@@ -165,8 +186,9 @@ describe('run facts: the controller write funnel', () => {
       controller: run.controller
     })
 
-    expect(run.kinds).toEqual(['driving'])
+    expect(run.kinds).toEqual(['orchestration'])
     expect(run.firstUserInputAt()).not.toBeNull()
+    expect(run.runtime.terminalRunFacts.readLastDrivingInputAt(PTY_ID)).toBeNull()
   })
 
   it('records nothing for a client query reply', async () => {
@@ -234,20 +256,16 @@ describe('run facts: a created worktree’s startup writes', () => {
     }
   }
 
-  it('reads a run whose only input was its create-time draft and follow-up as untyped', async () => {
+  it('reads a run whose only input was its create-time draft as untyped', async () => {
     vi.useFakeTimers()
     const run = await createFreshRun()
     const host = readinessHost(run)
 
     pasteWorktreeStartupDraftWhenReady(host, run.handle, { agent: 'aider', content: 'plan it' })
-    sendWorktreeStartupFollowupWhenReady(host, run.handle, {
-      expectedProcess: 'aider',
-      prompt: 'and ship it'
-    })
     await vi.runAllTimersAsync()
 
-    expect(run.kinds).toEqual(['launch', 'launch'])
-    expect(run.writes).toHaveLength(2)
+    expect(run.kinds).toEqual(['launch'])
+    expect(run.writes).toHaveLength(1)
     expect(run.firstUserInputAt()).toBeNull()
   })
 })

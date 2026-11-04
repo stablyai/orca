@@ -36,5 +36,6 @@ it('still shares one pending native request between concurrent callers', async (
   const second = getDevicePushTokenAsync()
   expect(native).toHaveBeenCalledOnce()
   resolve('device-token')
-  expect(await first).toEqual(await second)
+  await expect(first).resolves.toEqual({ type: 'ios', data: 'device-token' })
+  await expect(second).resolves.toEqual({ type: 'ios', data: 'device-token' })
 })

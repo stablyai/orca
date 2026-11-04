@@ -1,4 +1,4 @@
-import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry-instance'
 import { closeRuntimeBrowserClientPage } from './runtime-browser-client-page-creation'
 import {
   releaseRuntimeBrowserClientPageRecord,
@@ -10,15 +10,7 @@ export type WorktreeBrowserClientPageCloseHost = {
   getRuntimeId(): string
 } & RuntimeBrowserClientPageReleaseHost
 
-/**
- * Tears down the client-hosted browser pages a removed worktree owned.
- *
- * The lease command is the only way to reach the client's retained webview: the host protocol
- * carries no worktree, so a client cannot scope this itself. The runtime record is dropped whether
- * or not the client acknowledges — worktree IDs are path-derived and can be recreated, so a
- * surviving record would republish the dead worktree's tabs and let reconnect recovery
- * re-materialize a webview for a page nobody can reach any more.
- */
+/** Only the lease command reaches retained client webviews; host messages lack workspace scope. Drop runtime records even without acknowledgement so path-id reuse cannot republish dead tabs or recreate unreachable pages. */
 export function closeClientHostedBrowserPagesForWorktree(
   runtime: WorktreeBrowserClientPageCloseHost,
   worktreeId: string

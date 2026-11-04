@@ -87,18 +87,15 @@ describe('uploadSkillPackageToSignedPolicy', () => {
     const archive = Buffer.from('private-package-bytes')
     await writeFile(archivePath, archive)
     let uploaded = Buffer.alloc(0)
-    const fetcher = vi.fn(async (_url: URL | RequestInfo, init?: RequestInit) => {
-      const chunks: Buffer[] = []
-      const body = init?.body as unknown as AsyncIterable<Buffer>
-      for await (const chunk of body) {
-        chunks.push(Buffer.from(chunk))
-      }
-      uploaded = Buffer.concat(chunks)
+    let contentType = ''
+    const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
+      uploaded = Buffer.from(await new Response(init?.body).arrayBuffer())
+      contentType = new Headers(init?.headers).get('content-type') ?? ''
       expect(Number(init?.headers && new Headers(init.headers).get('content-length'))).toBe(
         uploaded.length
       )
       return new Response(null, { status: 204 })
-    }) as typeof fetch
+    })
     const progress = vi.fn()
 
     await uploadSkillPackageToSignedPolicy({
@@ -112,9 +109,28 @@ describe('uploadSkillPackageToSignedPolicy', () => {
       onProgress: progress
     })
 
-    expect(uploaded.includes(archive)).toBe(true)
-    expect(uploaded.toString('utf8')).toContain('opaque-policy')
-    expect(progress).toHaveBeenLastCalledWith(archive.length)
+    const form = await new Response(uploaded, {
+      headers: { 'content-type': contentType }
+    }).formData()
+    expect(form.get('key')).toBe('uploads/private/package.tar.gz')
+    expect(form.get('policy')).toBe('opaque-policy')
+    const file = form.get('file')
+    expect(file).toBeInstanceOf(File)
+    if (!(file instanceof File)) {
+      throw new Error('Expected uploaded package file')
+    }
+    expect(Buffer.from(await file.arrayBuffer())).toEqual(archive)
+    expect(file.name).toBe('package.tar.gz')
+    expect(uploaded.toString('utf8')).toContain(
+      'Content-Disposition: form-data; name="file"; filename="package.tar.gz"\r\nContent-Type: application/vnd.orca.skill+tar+gzip\r\n\r\n'
+    )
+    const sent = progress.mock.calls.map(([bytes]) => bytes)
+    expect(sent).not.toHaveLength(0)
+    for (const [index, bytes] of sent.entries()) {
+      expect(bytes).toBeGreaterThanOrEqual(index === 0 ? 0 : sent[index - 1])
+      expect(bytes).toBeLessThanOrEqual(archive.length)
+    }
+    expect(sent.at(-1)).toBe(archive.length)
   })
 
   it('rejects insecure destinations and source drift before upload', async () => {
@@ -150,16 +166,22 @@ describe('uploadSkillPackageToSignedPolicy', () => {
   })
 
   it('bounds a stalled signed upload even without a caller-owned signal', async () => {
+    vi.useFakeTimers()
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-cloud-upload-'))
     roots.push(root)
     const archivePath = join(root, 'package.tar.gz')
     await writeFile(archivePath, 'bytes')
-    const fetcher = vi.fn(
-      async (_url: URL | RequestInfo, init?: RequestInit) =>
+    let markStarted!: () => void
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve
+    })
+    const fetcher = vi.fn<typeof fetch>(
+      async (_url, init) =>
         await new Promise<Response>((_resolve, reject) => {
           init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+          markStarted()
         })
-    ) as typeof fetch
+    )
 
     const upload = uploadSkillPackageToSignedPolicy({
       policy: { url: 'https://storage.googleapis.com/upload', fields: {} },
@@ -168,9 +190,11 @@ describe('uploadSkillPackageToSignedPolicy', () => {
       fetcher,
       timeoutMs: 25
     })
-    const startedAt = Date.now()
-
-    await expect(upload).rejects.toThrow('skill-cloud-upload-timeout')
-    expect(Date.now() - startedAt).toBeLessThan(1_000)
+    const expectation = expect(upload).rejects.toThrow('skill-cloud-upload-timeout')
+    await started
+    await vi.advanceTimersByTimeAsync(24)
+    expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await expectation
   })
 })

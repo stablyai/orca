@@ -7,8 +7,7 @@ import {
   resolveDevChannelBaseVersion
 } from './dev-channel-base-version.mjs'
 
-/** `1.4.160-daily.202607281300` — UTC to the minute, so tags sort chronologically
- *  by semver and every build is uniquely versioned. */
+// UTC minute tags sort chronologically by semver.
 export function createDailyBuildVersion(baseVersion, date) {
   const match = /^(\d+\.\d+\.\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(baseVersion)
   if (!match) {
@@ -25,27 +24,11 @@ export function createDailyBuildVersion(baseVersion, date) {
     pad(date.getUTCHours()),
     pad(date.getUTCMinutes())
   ].join('')
-  // Why: drop any -rc.N tail. Keeping it makes every daily semver-NEWER than the
-  // RC it was cut from (1.4.160-rc.3-daily.X > 1.4.160-rc.3), which would let an
-  // ordinary RC-channel check offer untested daily builds to RC users. Stripping
-  // to the base parks dailies below both rc.N and stable ('daily' < 'rc'
-  // alphabetically), reachable only by an explicit pinned jump.
+  // Strip RC tail: rc.N-daily would outrank RC and offer untested builds automatically; base-daily sorts below RC/stable for explicit selection only.
   return `${match[1]}-daily.${stamp}`
 }
 
-/**
- * The next build number for `baseVersion`, counting from the titles of existing
- * daily releases.
- *
- * Why the series restarts at 01 on every base version: the number answers "which
- * build of 1.4.163 is this", so a counter shared across versions makes it
- * meaningless — 1.4.164 would open at 38 for no reason a reader can see.
- *
- * Why the maximum rather than a count: the prune step trims to
- * DAILY_RETAIN_COUNT, so a count would roll backwards and reissue a number
- * already in use. Titles that predate this naming simply do not match, which is
- * how the first build of a version lands on 01.
- */
+// Restart numbering per base version; use max title number, not count, so retention pruning cannot reissue numbers. Legacy unmatched titles yield 01.
 export function nextDailyBuildNumber(baseVersion, releaseNames = []) {
   const prefix = `${baseVersion} • `
   const highest = releaseNames.reduce((max, entry) => {
@@ -59,10 +42,7 @@ export function nextDailyBuildNumber(baseVersion, releaseNames = []) {
   return highest + 1
 }
 
-/**
- * `1.4.163 • 01 • Aug 9, 10:15AM • e698241` — the human-facing release title,
- * shown verbatim in both the GitHub releases list and the in-app build picker.
- */
+// Release title shown verbatim in GitHub/build picker: 1.4.163 • 01 • Aug 9, 10:15AM • e698241.
 export function formatDailyReleaseName(version, buildNumber, commit, date) {
   if (!Number.isInteger(buildNumber) || buildNumber < 1) {
     throw new Error(`Daily build number must be a positive integer: ${buildNumber}`)
@@ -75,10 +55,7 @@ export function formatDailyReleaseName(version, buildNumber, commit, date) {
   ].join(' • ')
 }
 
-// Why the number is derived here rather than passed in: it counts builds of the
-// base version, and the base is only known once the published tags have been
-// resolved just above. Computing it outside meant numbering against whatever
-// version the caller guessed.
+// Compute counter only after resolving published tags, when the actual base version is known.
 export function getDailyBuildIdentity(now = new Date(), { publishedVersions, releaseNames } = {}) {
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
   const commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
@@ -102,7 +79,6 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
     // whitespace split the version list gets.
     releaseNames: (process.env.ORCA_DAILY_RELEASE_NAMES ?? '').split('\n').filter(Boolean)
   })
-  // Consumed by the workflow via $GITHUB_OUTPUT.
   process.stdout.write(
     `version=${identity.version}\ncommit=${identity.commit}\nbuild_number=${identity.buildNumber}\nname=${identity.name}\n`
   )

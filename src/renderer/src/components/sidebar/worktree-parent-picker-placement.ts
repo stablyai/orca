@@ -17,10 +17,7 @@ export function estimateWorktreeParentPickerHeight(candidateCount: number): numb
   return PICKER_SURFACE_BORDER_HEIGHT + PICKER_HEADER_HEIGHT + PICKER_INPUT_HEIGHT + listHeight
 }
 
-// Why: Radix shifts a side="right" popover along its main (horizontal) axis
-// only — `crossAxis: false` — and `flip` only swaps left/right, so nothing
-// corrects vertical overflow and a card low in the sidebar puts the list below
-// the window. The anchor is virtual here, so lift it until the list fits.
+// Radix’s right-side popover cannot correct vertical overflow; lift the virtual anchor until the list fits.
 export function clampWorktreeParentPickerAnchorTop(
   anchorTop: number,
   contentHeight: number,

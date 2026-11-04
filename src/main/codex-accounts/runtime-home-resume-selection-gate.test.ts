@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { realpathSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { join } from 'node:path'
@@ -15,16 +16,8 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
-// STA-4422 P1g: automatic session resume picks the resumed pane's CODEX_HOME,
-// i.e. its account. The read-only resolver collapses an unreadable home to
-// `null`, which the ranking reads as "no account selected" — another account's
-// readable alias then wins and the pane resumes under the wrong credentials.
-// The resume boundary therefore resolves the selection eagerly through a
-// refusing gate.
-
 const lstatFaults = vi.hoisted(() => {
   const state = {
-    /** paths that fail on EVERY read until released (models a held AV lock) */
     held: new Set<string>(),
     reads: new Map<string, number>(),
     hold(path: string): void {
@@ -76,9 +69,10 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -137,7 +131,6 @@ describe('CodexRuntimeHomeService.resolveSelectedHostAccountCodexHomePathForResu
     const { ManagedCodexHomeTemporarilyUnavailableError } =
       await import('./host-codex-managed-home-ownership')
 
-    // Anchor: a readable marker resolves the selected account's own home.
     expect(service.resolveSelectedHostAccountCodexHomePathForResume()).toBe(managedHomePath)
 
     const markerPath = join(realpathSync(managedHomePath), '.orca-managed-home')
@@ -146,17 +139,14 @@ describe('CodexRuntimeHomeService.resolveSelectedHostAccountCodexHomePathForResu
     expect(() => service.resolveSelectedHostAccountCodexHomePathForResume()).toThrow(
       ManagedCodexHomeTemporarilyUnavailableError
     )
-    // The injected fault really was consumed by the gate under test.
+
     expect(lstatFaults.heldReads(markerPath)).toBeGreaterThan(0)
-    // Why this is the whole point: the read-only resolver still answers `null`,
-    // which the resume ranking cannot distinguish from "system default", so the
-    // resume boundary must not use it.
+    // Discovery's null fallback cannot safely rank accounts for resume.
     expect(service.getSelectedHostAccountCodexHomePath()).toBeNull()
-    // Refusing is not clearing.
+
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-a')
     expect(store.updateSettings).not.toHaveBeenCalled()
 
-    // Recovery is automatic once the lock clears.
     lstatFaults.release(markerPath)
     expect(service.resolveSelectedHostAccountCodexHomePathForResume()).toBe(managedHomePath)
   })
@@ -164,8 +154,6 @@ describe('CodexRuntimeHomeService.resolveSelectedHostAccountCodexHomePathForResu
   it('reports no managed selection for a proven untrusted home rather than refusing', async () => {
     const { service, store, managedHomePath } = await createServiceWithSelectedAccount()
 
-    // A successful observation that fails a trust check: the marker names
-    // another account. The resume must proceed on the system/default ranking.
     writeFileSync(join(managedHomePath, '.orca-managed-home'), 'someone-else\n', 'utf-8')
 
     expect(service.resolveSelectedHostAccountCodexHomePathForResume()).toBeNull()

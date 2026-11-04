@@ -15,6 +15,8 @@ import {
   type SkillScanRoot
 } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
+import { bundledSkillDiscoveryName } from './bundled-skill-discovery-name'
+import { bundledSkillNames, requestedBundledSkillName } from '../../shared/bundled-skill-names'
 
 export type WslSkillDiscoveryObservation = {
   rows: { canonicalSkillFilePath: string; skill: DiscoveredSkill }[]
@@ -67,9 +69,11 @@ export function readWslSkillDiscoveryObservation(
       skill: {
         id: stablePathId(canonicalSkillFilePath),
         name: summary.name ?? directoryName,
+        ...(bundledSkillDiscoveryName(summary.name, markdown)
+          ? { bundledName: bundledSkillDiscoveryName(summary.name, markdown) }
+          : {}),
         description: summary.description,
-        // Copy: `root.providers` is shared across every skill/source from this
-        // root, so a later in-place merge must not mutate the aliased array.
+        // Copy shared root tags so later merges cannot mutate sibling skills/sources.
         providers: [...root.providers],
         sourceKind,
         sourceLabel: sourceLabelForSkill(root, sourceKind),
@@ -104,7 +108,9 @@ export function projectWslSkillDiscovery(
   sourceKinds?: readonly SkillSourceKind[],
   names?: readonly string[]
 ): SkillDiscoveryResult {
-  const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
+  const normalizedNames = names
+    ?.flatMap((name) => bundledSkillNames(name.trim().toLowerCase()))
+    .filter(Boolean)
   const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined
   const skillsByCanonicalPath = new Map<string, DiscoveredSkill>()
   for (const { canonicalSkillFilePath, skill } of observation.rows) {
@@ -122,6 +128,15 @@ export function projectWslSkillDiscovery(
     // Filter aliases before deduplication; each name/source may select a different row.
     const existing = skillsByCanonicalPath.get(canonicalSkillFilePath)
     if (existing) {
+      if (
+        pathPosix.basename(skill.directoryPath) === skill.name &&
+        bundledSkillNames(existing.name)
+          .slice(1)
+          .includes(pathPosix.basename(existing.directoryPath))
+      ) {
+        existing.directoryPath = skill.directoryPath
+        existing.skillFilePath = skill.skillFilePath
+      }
       const existingRoots = (existing.rootPaths ??= [existing.rootPath])
       for (const rootPath of skill.rootPaths ?? [skill.rootPath]) {
         if (!existingRoots.includes(rootPath)) {
@@ -142,7 +157,12 @@ export function projectWslSkillDiscovery(
     })
   }
   return {
-    skills: sortDiscoveredSkills([...skillsByCanonicalPath.values()]),
+    skills: sortDiscoveredSkills(
+      [...skillsByCanonicalPath.values()].map((skill) => ({
+        ...skill,
+        name: requestedBundledSkillName(skill.name, names)
+      }))
+    ),
     sources: observation.sources
       .filter((source) => rootMayContainSourceKind(source, sourceKinds))
       .map((source) => ({ ...source, providers: [...source.providers] })),

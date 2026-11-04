@@ -1,10 +1,11 @@
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
+import { _resetClosedPaneFencesForTests } from '../terminal-topology/closed-pane-binding-fence'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
-import { writeTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
+import { writeTerminalScrollbackSnapshotSync } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
 import { computeOrcadMigrationManifestSha256 } from '../../orcad/orcad-migration-manifest-digest'
 
@@ -12,10 +13,13 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
+
+// Clear process-wide close fences because these tests reuse pane IDs.
+beforeEach(_resetClosedPaneFencesForTests)
 
 const binding = {
   worktreeId: 'repo-local::/fixture/local',
@@ -93,7 +97,7 @@ async function closeFixture(options: { split?: boolean } = {}) {
 
 function saveScrollback(store: Awaited<ReturnType<typeof fixture>>['store']): string {
   // Remote terminals retain renderer-captured files, including legacy copies in the local slice.
-  store.updateRepo('repo-local', { executionHostId: 'ssh:build-host' })
+  store.updateRepo({ id: 'repo-local' }, { executionHostId: 'ssh:build-host' })
   const ref = writeTerminalScrollbackSnapshotSync({
     ...binding,
     buffer: 'recover this terminal output',
@@ -161,7 +165,6 @@ it('keeps a phone close and still kills when its durable write fails', async () 
     expect.objectContaining({ message: 'close disk refused' })
   )
 
-  // Nothing rolled the removal back, so the next write makes it durable.
   await store.flushPendingOrThrowAsync()
   expect(persistedLeafIds()).toEqual([])
 })
@@ -401,7 +404,7 @@ it('commits nothing for a pane that restarted while its close waited for the wri
   store.setWorkspaceSession({ ...session, activeTabIdByWorktree: { [binding.worktreeId]: null } })
   const earlierWrite = store.flushPendingOrThrowAsync()
   await gate.started.promise
-  // The restart is queued first, so it lands after the close captured the pane it meant.
+  // Queue restart before close executes to test stale-close ownership fencing.
   const restart = store.persistPtyBinding({
     ...binding,
     ptyId: 'restarted-pty',
@@ -430,7 +433,7 @@ it('commits a renderer tab close whose split pane bound while the close waited f
   store.setWorkspaceSession({ ...session, activeTabIdByWorktree: { [binding.worktreeId]: null } })
   const earlierWrite = store.flushPendingOrThrowAsync()
   await gate.started.promise
-  // The split's binding is queued first, so it grows the tab after the close was asked.
+  // Queue the split before close executes to test a sibling added after capture.
   const split = store.persistPtyBinding({
     ...binding,
     leafId: siblingLeafId,
@@ -457,7 +460,6 @@ it('commits a renderer tab close whose split pane bound while the close waited f
       .getWorkspaceSession()
       .tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)
   ).toBe(false)
-  // Why: skipping the owner fence for the layout owner's own close must not skip its record.
   expect(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId?.[binding.tabId]).toEqual(
     expect.objectContaining({ worktreeId: binding.worktreeId, reason: 'user' })
   )

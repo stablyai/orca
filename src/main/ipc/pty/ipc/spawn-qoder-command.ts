@@ -1,10 +1,11 @@
 import { resolveQoderTerminalCommand } from '../../../runtime/qoder-terminal-command-resolution'
-import { resolveStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function preparePtyIpcQoderCommand(ctx: PtyIpcSpawnState): Promise<void> {
-  if (ctx.preAdoptedStablePane || ctx.args.launchAgent !== 'qoder') {
+  // Adopted owners and pane launch plans already determine their own runtime command.
+  if (ctx.preAdoptedStablePane || ctx.paneAgentLaunch || ctx.args.launchAgent !== 'qoder') {
     return
   }
   const connectionId = ctx.args.connectionId

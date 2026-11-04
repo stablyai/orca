@@ -1,5 +1,4 @@
-// Runtime creates (CLI, agents, phone, paired clients, orchestration) reuse prepared checkouts
-// like the app's own creates, so they must send the same create events, exactly once each.
+// Runtime creates reuse prepared checkouts and must emit the same once-only create events as the app.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -18,7 +17,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../telemetry/client', () => ({ track: mocks.track, isTelemetryEnabled: () => true }))
-vi.mock('../git/create-event-repo-probe', () => ({ probeCreateEventRepoFacts: mocks.probe }))
+vi.mock('../git/worktrees/creation/create-event-repo-probe', () => ({
+  probeCreateEventRepoFacts: mocks.probe
+}))
 vi.mock('./runtime-local-worktree-create', () => ({
   createRuntimeLocalManagedWorktree: mocks.createLocal
 }))
@@ -36,19 +37,22 @@ vi.mock('./runtime-local-worktree-setup', () => ({
     didStartInProcessSetupHook: false
   }))
 }))
-vi.mock('../ipc/filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: vi.fn(),
+vi.mock('../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: vi.fn()
+}))
+vi.mock('../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
-import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
-import type { PreparationRearmHolder } from '../worktree-create-preparation'
+import type { WorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
+import type { PreparationRearmHolder } from '../workspaces/creation/preparation/worktree-create-preparation'
 import {
   _resetWorktreeCreateConcurrencyForTests,
   beginPreparationWork,
   type PreparationWork
-} from '../worktree-create-concurrency'
+} from '../workspaces/creation/worktree-create-concurrency'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const gitRepo = {
   id: 'repo-1',
@@ -72,12 +76,12 @@ type RuntimeInternals = {
 }
 
 function makeRuntime(repo: Record<string, unknown> = gitRepo): OrcaRuntimeService {
-  const store = {
-    getSettings: () => ({ disabledTuiAgents: ['codex'], workspaceDir: '/worktrees' }),
-    getProjectHostSetups: () => []
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every store method this create path reaches is supplied above.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getSettings: () => ({ disabledTuiAgents: ['codex'], workspaceDir: '/worktrees' }),
+      getProjectHostSetups: () => []
+    })
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the named members all exist on the service; the cast only exposes non-public ones to the spies.
   const internals = runtime as unknown as RuntimeInternals
   vi.spyOn(internals, 'resolveRepoSelector').mockResolvedValue(repo)
@@ -137,33 +141,6 @@ describe('runtime create events', () => {
     _resetWorktreeCreateConcurrencyForTests()
   })
 
-  it('sends one workspace_created with the runtime entry point and the timing fields', async () => {
-    await makeRuntime().createManagedWorktree({
-      repoSelector: 'repo-1',
-      name: 'app',
-      baseBranch: 'origin/main',
-      telemetrySource: 'sidebar'
-    })
-    await vi.waitFor(() => expect(events('workspace_created')).toHaveLength(1))
-
-    expect(events('workspace_created')[0]).toMatchObject({
-      source: 'sidebar',
-      from_existing_branch: true,
-      create_entry_point: 'runtime',
-      execution_host: 'local',
-      prepared_checkout: 'hit',
-      prepared_checkout_reset: 'none',
-      prepared_checkout_origin: 'prefetch',
-      concurrent_creates: 0,
-      concurrent_preparations: 0,
-      repo_file_count_bucket: '1k-10k',
-      post_checkout_hook: 'absent'
-    })
-    expect(typeof events('workspace_created')[0].git_worktree_add_ms).toBe('number')
-    expect(mocks.probe).toHaveBeenCalledWith('/repo')
-    expect(events('workspace_create_failed')).toHaveLength(0)
-  })
-
   it('sends one workspace_create_failed naming the phase the create died in', async () => {
     mocks.createLocal.mockImplementation(async ({ timing }: LocalCreateArgs) =>
       timing.time('git_worktree_add', async () => {
@@ -190,7 +167,6 @@ describe('runtime create events', () => {
     let competing: PreparationWork | undefined
     mocks.createLocal.mockImplementation(async ({ rearm }: LocalCreateArgs) => {
       competing = beginPreparationWork()
-      // The re-arm starts its build synchronously when fired, after the create's last step.
       rearm.fire = () => {
         beginPreparationWork()
         beginPreparationWork()
@@ -247,17 +223,7 @@ describe('runtime create events', () => {
       create_entry_point: 'runtime',
       execution_host: 'ssh'
     })
-    // SSH would need a remote round trip, so the repo is not probed.
     expect(mocks.probe).not.toHaveBeenCalled()
-  })
-
-  it('sends nothing for a folder workspace, as before', async () => {
-    await makeRuntime({ id: 'folder', path: '/notes', kind: 'folder' }).createManagedWorktree({
-      repoSelector: 'folder',
-      name: 'notes'
-    })
-    await new Promise((resolve) => setImmediate(resolve))
-    expect(mocks.track).not.toHaveBeenCalled()
   })
 
   it('sends nothing when the request is rejected before any create starts', async () => {

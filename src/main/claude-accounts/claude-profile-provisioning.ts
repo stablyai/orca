@@ -8,7 +8,7 @@ import {
 } from '../claude/claude-folder-trust-file'
 import { getManagedScriptFileName, removeManagedHooks } from '../claude/hook-settings'
 import { publishFileWithoutOverwrite } from '../codex-accounts/fs-utils'
-import { CLAUDE_PROFILE_HISTORY_DIRS } from './claude-profile-history'
+import { CLAUDE_PROFILE_HISTORY_DIRS, mergeClaudeProfileDirectory } from './claude-profile-history'
 import { readClaudeProfileObject, resolveClaudeDefaultHome } from './claude-profile-paths'
 import { lstatIfPresent } from './claude-profile-prompt-history'
 import {
@@ -23,10 +23,7 @@ import { copyClaudeProfileFile, linkClaudeProfileDirectory } from './claude-prof
 
 const CLAUDE_PROFILE_MEMORY_IMPORT = '@~/.claude/CLAUDE.md\n'
 
-/**
- * Mirrors the list Claude itself leaves out when it seeds a fresh config folder from ~/.claude
- * (its self-hosted runner's host-config snapshot): login, live runtime state and caches.
- */
+// Match runtime exclusions in Claude's self-hosted host-config snapshot.
 const CLAUDE_RUNTIME_STATE_ENTRIES = [
   '.claude.json',
   '.claude.json.backup',
@@ -94,7 +91,7 @@ const CLAUDE_RUNTIME_STATE_ENTRIES = [
   'usage-data'
 ] as const
 
-/** Never linked or copied: runtime state, settings.json (copied whole) and history (linked the other way). */
+// Settings and history have dedicated sharing paths; runtime state stays private.
 const UNSHARED_ENTRIES: ReadonlySet<string> = new Set<string>([
   ...CLAUDE_RUNTIME_STATE_ENTRIES,
   'settings.json',
@@ -102,8 +99,7 @@ const UNSHARED_ENTRIES: ReadonlySet<string> = new Set<string>([
 ])
 
 function isSharedEntry(name: string): boolean {
-  // Why the prefixes: Claude's own seeding skips every hidden entry (state files, tokens, locks),
-  // daemon files and per-folder agent memory too.
+  // Match Claude seeding exclusions for hidden state, daemon files, and per-folder memory.
   return (
     !UNSHARED_ENTRIES.has(name) &&
     !name.startsWith('.') &&
@@ -112,10 +108,7 @@ function isSharedEntry(name: string): boolean {
   )
 }
 
-/**
- * Mirrors what Claude itself resets in .claude.json when it signs out (its logout, 2.1.295), plus
- * the subscription notices it resets with them. Onboarding, which logout also resets, is copied.
- */
+// Claude 2.1.295 logout keys and subscription notices; onboarding remains shareable.
 const CLAUDE_LOGOUT_STATE_KEYS = [
   'oauthAccount',
   'additionalModelOptionsCache',
@@ -138,21 +131,20 @@ const CLAUDE_LOGOUT_STATE_KEYS = [
   'hasAvailableSubscription'
 ] as const
 
-/** Never copied: logout's keys, the install ids Claude writes before any sign-in, and logins. */
 const ACCOUNT_BOUND_STATE_KEYS: ReadonlySet<string> = new Set<string>([
   ...CLAUDE_LOGOUT_STATE_KEYS,
   'userID',
   'machineID',
   'firstStartTime',
   'firstStartVersion',
-  // Why: a Console API key login; copied, it would outrank the account's own login.
+  // A copied Console key would override the account's own login.
   'primaryApiKey',
-  // Why: Claude never refetches it.
+  // Claude never refetches this account-specific date.
   'claudeCodeFirstTokenDate'
 ])
 
 function isAccountBoundState(key: string): boolean {
-  // Why the patterns too: account caches logout leaves behind (groveConfigCache, passes*).
+  // Logout leaves additional account caches such as groveConfigCache and passes*.
   return (
     ACCOUNT_BOUND_STATE_KEYS.has(key) ||
     key.includes('Cache') ||
@@ -161,17 +153,16 @@ function isAccountBoundState(key: string): boolean {
   )
 }
 
-// Why without Orca's hooks: the profile's own hook install owns those, so differing there alone
-// would recopy, and the install rewrite, the file on every launch.
+// Ignore managed hooks to avoid copy/install churn on every launch.
 function settingsWithoutOrcaHooks(value: Record<string, unknown>): string {
   return JSON.stringify(removeManagedHooks(value, getManagedScriptFileName()).config)
 }
 
-/** The whole file: the default home is the master copy, proxy address and key included. */
+// Keep proxy addresses and credentials together in the settings copy.
 function copySettings(source: string, target: string): ClaudeProfileSurfaceOutcome {
   const input = readClaudeProfileObject(source)
   const current = readClaudeProfileObject(target)
-  // Why by value: the hook installer rewrites the copy in its own layout after every refresh.
+  // Compare values because hook installation changes serialization.
   if (
     input.kind === 'present' &&
     current.kind === 'present' &&
@@ -188,7 +179,7 @@ function copySettings(source: string, target: string): ClaudeProfileSurfaceOutco
   return outcome
 }
 
-/** Keyed by folder path or server name: entries the account recorded on its own are kept. */
+// Preserve account-only project and server entries during merging.
 const MERGED_BY_ENTRY: ReadonlySet<string> = new Set(['projects', 'mcpServers'])
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -203,7 +194,7 @@ function mergeEntries(key: string, current: unknown, source: unknown): unknown {
   if (key === 'projects') {
     for (const [path, entry] of Object.entries(source)) {
       const own = current[path]
-      // Why: a folder trusted in the account, often by Orca just before launch, stays trusted.
+      // Preserve trust granted in this account, including just before launch.
       if (isPlainRecord(own) && own.hasTrustDialogAccepted === true && isPlainRecord(entry)) {
         merged[path] = { ...entry, hasTrustDialogAccepted: true }
       }
@@ -231,7 +222,7 @@ async function copyState(source: string, target: string): Promise<ClaudeProfileS
         flag: 'wx',
         mode: 0o600
       })
-      // Why a link, not a rename: whole or absent, and Claude's own file, created meanwhile, wins.
+      // Publish atomically without replacing a file Claude created concurrently.
       if (publishFileWithoutOverwrite(staged, target)) {
         return 'synced'
       }
@@ -239,7 +230,7 @@ async function copyState(source: string, target: string): Promise<ClaudeProfileS
       rmSync(staged, { force: true })
     }
   }
-  // Why no deletions: a key the default home lacks may be one Claude added only in this folder.
+  // Preserve keys Claude added only in this account folder.
   const outcome = await updateClaudeGlobalConfig(target, (current) => {
     const config = { ...current }
     for (const [key, value] of shared) {
@@ -258,23 +249,20 @@ async function copyState(source: string, target: string): Promise<ClaudeProfileS
   return outcome === 'updated' ? 'merged' : 'unchanged'
 }
 
-/**
- * Refreshes a profile from the default home, the master copy: everything but the login and
- * account-bound items. Execution-host paths; never writes the default home or credentials.
- * Callers go through provisionClaudeAccountProfile, which gates and creates the profile.
- */
+/** Call after ownership checks on the execution host; preserve account-bound state and credentials. */
 export async function provisionClaudeProfile(args: {
   profileHome: string
   userHome: string
   /** The user's own CLAUDE_CONFIG_DIR; `~/.claude` when unset. */
   userConfigDir?: string
   platform?: NodeJS.Platform
+  /** Before the setup marker, a folder in the profile is one Claude made, not one the user owns. */
+  firstSetup?: boolean
 }): Promise<ClaudeProfileReport> {
   const platform = args.platform ?? process.platform
   const defaultHome = resolveClaudeDefaultHome(args.userHome, args.userConfigDir)
   const report = createClaudeProfileReport()
-  // Why only for ~/.claude: Claude also loads it as a parent folder's memory for projects under
-  // home, so a copy would load twice; a custom CLAUDE_CONFIG_DIR is copied, as superset does.
+  // Import ~/.claude memory to avoid duplicate parent-memory loading; copy custom homes.
   const imported = resolve(defaultHome) === resolve(args.userHome, '.claude')
   let names: string[] = []
   try {
@@ -288,10 +276,14 @@ export async function provisionClaudeProfile(args: {
     const source = join(defaultHome, name)
     const target = join(args.profileHome, name)
     await runClaudeProfileSurface(report, name, () => {
-      // Why stat, not lstat: a linked entry is shared as what it points at.
+      // Share linked entries according to their target type.
       const entry = statSync(source, { throwIfNoEntry: false })
       if (entry?.isDirectory()) {
-        return linkClaudeProfileDirectory(source, target, platform)
+        const outcome = linkClaudeProfileDirectory(source, target, platform)
+        // Why: a pane's `claude` can run before setup and create e.g. plugins/installed_plugins.json.
+        return outcome === 'user-owned' && args.firstSetup && lstatIfPresent(target)?.isDirectory()
+          ? mergeClaudeProfileDirectory(args.profileHome, defaultHome, name, platform, report)
+          : outcome
       }
       if (!entry?.isFile()) {
         return 'absent'

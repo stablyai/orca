@@ -1,5 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
-import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { readHooksJson } from '../agent-hooks/installer-utils'
 import {
   assertLoadableHookTrustConfig,
@@ -34,10 +37,7 @@ import {
   readRealHomeHooksFileProblem
 } from './codex-real-home-hooks-json'
 
-/**
- * Status for `runtimeHomePath`, or for the home the next native pane gets when
- * none is named (~/.codex outside the app), against what Codex last answered.
- */
+/** Default to the next native pane's home, or ~/.codex outside the app. */
 export function readCurrentCodexHookStatus(runtimeHomePath?: string): AgentHookInstallStatus {
   const answer = readKnownCodexHookAnswer()
   if (runtimeHomePath !== undefined) {
@@ -59,7 +59,6 @@ export function readCurrentCodexHookStatus(runtimeHomePath?: string): AgentHookI
   return readCodexHookHomeStatus(home.path, answer)
 }
 
-/** Status for a managed home, read from its files. */
 export function readCodexHookHomeStatus(
   runtimeHomePath: string,
   answer: CodexHookAnswer | null
@@ -67,7 +66,6 @@ export function readCodexHookHomeStatus(
   return readHomeStatus(getManagedCodexHookHome(runtimeHomePath), answer)
 }
 
-/** Status for ~/.codex, under either spelling Codex keys it by. */
 function readRealHomeCodexHookStatus(answer: CodexHookAnswer | null): AgentHookInstallStatus {
   const home = getRealHomeCodexHookHome()
   const problem = readRealHomeHooksFileProblem()
@@ -88,11 +86,6 @@ function readRealHomeCodexHookStatus(answer: CodexHookAnswer | null): AgentHookI
   return inline ? { ...status, detail: inline } : status
 }
 
-/**
- * Codex hook status for one home, read from its files: Orca's entry in each
- * event Codex lists, and that entry's approval holding Codex's own hash under
- * any spelling Codex may key the file by. Without Codex's answer, the reason.
- */
 function readHomeStatus(
   home: CodexHookHome,
   answer: CodexHookAnswer | null
@@ -109,7 +102,7 @@ function readHomeStatus(
     return status('error', false, 'Could not parse Codex hooks.json')
   }
   const slots = findOrcaEntrySlots(config.hooks, command)
-  // Why: an unreadable config.toml is distinct from an absent one (an empty map).
+  // Distinguish unreadable config from absence, which reads as an empty map.
   let trustStates: ReadonlyMap<string, CodexHookTrustState>
   let spelled: (key: string) => boolean = () => false
   let trustReadError: string | null = null
@@ -120,7 +113,7 @@ function readHomeStatus(
     trustStates = new Map()
     trustReadError = error instanceof Error ? error.message : String(error)
   }
-  // Why every spelling: Codex on Windows ignores an approval kept only under the forward-slash key.
+  // Windows Codex ignores approvals kept only under the forward-slash key.
   const approvals = new Map(
     [...approvalsAtOrcaEntries(trustStates, slots, home.keySourcePaths, command)].map(
       ([eventLabel, held]) => [eventLabel, held.filter((approval) => spelled(approval.key))]
@@ -134,7 +127,7 @@ function readHomeStatus(
     if (answer?.kind === 'refused') {
       return status('partial', true, `Orca's hook entry is installed, but ${reason}`)
     }
-    // Why not an error: until Codex answers, the approval is the home's earlier one or Orca's own hash.
+    // Known or local approvals may stand until Codex answers.
     const known = readKnownOrcaHashes(home, command)
     const approved =
       trustReadError === null &&
@@ -160,7 +153,7 @@ function readHomeStatus(
       missing.push(eventName)
       continue
     }
-    // Why null passes: that Codex lists the entry with no hash, so it runs unapproved.
+    // Hashless listings run without approval on older Codex.
     if (hash === null) {
       continue
     }
@@ -191,10 +184,7 @@ function readHomeStatus(
     : status('partial', true, parts.join('; '))
 }
 
-/**
- * Why Orca's approvals are missing, when it is config.toml's inline approvals:
- * adding Orca's own there would leave a file Codex cannot load. Read now.
- */
+// Appending approval tables to inline config would make Codex refuse the file.
 function describeInlineApprovals(
   home: CodexHookHome,
   answer: CodexHookAnswer | null

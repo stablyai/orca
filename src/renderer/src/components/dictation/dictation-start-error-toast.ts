@@ -1,6 +1,8 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { compactIpcErrorMessage } from '@/lib/ipc-error'
+import { hostDictationErrorMessage } from '../../../../shared/host-dictation-error-messages'
 
 function openVoiceSettings(): void {
   useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
@@ -8,7 +10,10 @@ function openVoiceSettings(): void {
 }
 
 export function showDictationStartErrorToast(message: string): void {
-  if (message.includes('Permission') || message.includes('NotAllowed')) {
+  const hostMessage = hostDictationErrorMessage(compactIpcErrorMessage(message) ?? '')
+  if (hostMessage) {
+    toast.error(hostMessage)
+  } else if (message.includes('Permission') || message.includes('NotAllowed')) {
     toast.error(
       translate(
         'auto.components.dictation.DictationController.2d5b9fabf9',

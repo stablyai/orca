@@ -1,3 +1,4 @@
+import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import {
@@ -22,42 +23,59 @@ export function runLocalPlanForAgent(input: {
   agentId: string
   plan: CommitMessagePlan
   target: LocalGenerationTarget
-  emptyResultName: string
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
+  shouldExecute?: () => boolean
 }): Promise<InternalTextGenerationResult> {
+  const wslDistro = input.plan.promptFile
+    ? (wslDistroForCommand(input.target.cwd, input.target.wslDistro) ?? undefined)
+    : input.target.wslDistro
   const target = {
     ...input.target,
+    wslDistro,
     env: mergeCommandEnvironment(
       input.target.env,
       input.plan.env,
-      input.target.wslDistro ? 'linux' : process.platform
+      wslDistro ? 'linux' : process.platform
     )
   }
-  const start = (
-    holdHomeLockUntilExit = false
-  ): LocalProcessExecution<InternalTextGenerationResult> =>
-    runLocalSourceControlPlan({
+  const start = (): LocalProcessExecution<InternalTextGenerationResult> => {
+    if (input.shouldExecute && !input.shouldExecute()) {
+      return {
+        result: Promise.resolve({ success: false, error: 'Generation canceled.', canceled: true }),
+        processClosed: Promise.resolve()
+      }
+    }
+    return runLocalSourceControlPlan({
       plan: input.plan,
       cwd: input.target.cwd,
-      env: input.target.wslDistro ? input.target.env : target.env,
-      emptyResultName: input.emptyResultName,
+      env: wslDistro ? input.target.env : target.env,
       operation: input.operation,
-      wslDistro: input.target.wslDistro,
-      holdHomeLockUntilExit,
+      wslDistro,
       spawnAgent: input.spawnAgent
     })
-  if (input.agentId !== 'codex') {
-    return start().result
   }
-  return runCodexLocalPlanUnderHomeLock(start, target, input.operation, input.plan.env)
+  if (input.agentId !== 'codex') {
+    const execution = start()
+    return input.shouldExecute
+      ? execution.result.finally(() => execution.processClosed)
+      : execution.result
+  }
+  return runCodexLocalPlanUnderHomeLock(
+    start,
+    target,
+    input.operation,
+    input.plan.env,
+    !!input.shouldExecute
+  )
 }
 
 function runCodexLocalPlanUnderHomeLock(
-  start: (holdHomeLockUntilExit: boolean) => LocalProcessExecution<InternalTextGenerationResult>,
+  start: () => LocalProcessExecution<InternalTextGenerationResult>,
   target: LocalGenerationTarget,
   operation: TextGenerationOperation,
-  commandEnv?: Record<string, string>
+  commandEnv?: Record<string, string>,
+  awaitSettlement = false
 ): Promise<InternalTextGenerationResult> {
   const laneKey = localGenerationLaneKey(operation, target.cwd)
   let canceledWhileQueued = false
@@ -78,14 +96,14 @@ function runCodexLocalPlanUnderHomeLock(
     publishResult({ success: false, error: 'Generation canceled.', canceled: true })
   }
   setLocalGenerationCancelToken(laneKey, queuedCancel)
-  void withCodexHomeProcessLock(
+  const operationSettled = withCodexHomeProcessLock(
     resolveCodexHomeProcessLockKeyForSpawnEnv(target.env, target.wslDistro, commandEnv),
     async () => {
       if (canceledWhileQueued) {
         publishResult({ success: false, error: 'Generation canceled.', canceled: true })
         return
       }
-      const execution = start(true)
+      const execution = start()
       try {
         publishResult(await execution.result)
       } catch (error) {
@@ -103,7 +121,7 @@ function runCodexLocalPlanUnderHomeLock(
       }
     })
     .finally(() => clearLocalGenerationCancelToken(laneKey, queuedCancel))
-  return result
+  return awaitSettlement ? result.finally(() => operationSettled) : result
 }
 
 export function runCodexProcessWithHomeLock<T>(

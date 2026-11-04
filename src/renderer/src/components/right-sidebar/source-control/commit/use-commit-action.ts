@@ -1,7 +1,9 @@
 import { useCallback } from 'react'
+import { toast } from 'sonner'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { translate } from '@/i18n/i18n'
 import { getConnectionId } from '@/lib/connection-context'
-import { commitRuntimeGit } from '@/runtime/runtime-git-sync-client'
+import { commitRuntimeGit, completeRuntimeGitMerge } from '@/runtime/runtime-git-sync-client'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
@@ -9,10 +11,7 @@ import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'
 import { writeCommitDraftForWorktree } from './commit-drafts'
 
-/**
- * Commits the staged snapshot for a target worktree. Accepts an explicit target so a Create PR run
- * can keep committing to the worktree it started on after the user navigates away.
- */
+/** Explicit targets keep Create PR commits on their starting worktree after navigation. */
 export function useSourceControlCommitAction({
   activeRepoTarget,
   activeWorktree,
@@ -90,7 +89,7 @@ export function useSourceControlCommitAction({
       try {
         const commitResult = await commitRuntimeGit(
           {
-            // Why: route the commit by the repo OWNER host, not the focused runtime.
+            // Route commits through workspace ownership rather than focused runtime.
             target: requireGitOwnerTarget(target.target),
             worktreeId: target.worktreeId,
             worktreePath: target.worktreePath,
@@ -103,11 +102,10 @@ export function useSourceControlCommitAction({
           return false
         }
 
-        // Why: textarea stays editable during commit, so only clear the draft when it still matches what we committed — else we'd discard edits typed after Commit.
+        // Clear only an unchanged submitted draft so typing during commit cannot lose new edits.
         updateCommitDrafts((prev) => {
           const current = prev[target.worktreeId]
           if (current !== undefined && current.trim() !== message) {
-            // User typed more after submit — preserve their in-progress edits.
             return prev
           }
           return writeCommitDraftForWorktree(prev, target.worktreeId, '')
@@ -116,7 +114,7 @@ export function useSourceControlCommitAction({
         if (!options?.target) {
           void refreshActiveGitStatusAfterMutation()
         }
-        // Why: flip branchSummary to 'loading' synchronously so "No changes on this branch" doesn't flash before the branchCompare poll lands the commit.
+        // Set compare loading immediately so No changes cannot flash before the post-commit comparison arrives.
         if (!options?.target && compareBaseRef) {
           beginGitBranchCompareRequest(
             target.worktreeId,
@@ -160,7 +158,65 @@ export function useSourceControlCommitAction({
     ]
   )
 
-  return { handleCommit }
+  const handleCompleteMerge = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath || unresolvedConflictCount > 0) {
+      return
+    }
+    if (commitInFlightRef.current[activeWorktreeId]) {
+      return
+    }
+    commitInFlightRef.current[activeWorktreeId] = true
+    setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+    let result: { success: boolean; error?: string }
+    try {
+      result = await completeRuntimeGitMerge({
+        target: requireGitOwnerTarget(activeRepoTarget),
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId: getConnectionId(activeWorktreeId) ?? undefined
+      })
+    } catch (error) {
+      result = { success: false, error: error instanceof Error ? error.message : undefined }
+    } finally {
+      setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+      commitInFlightRef.current[activeWorktreeId] = false
+    }
+    void refreshActiveGitStatusAfterMutation()
+    if (!result.success) {
+      // The commit area and its inline error stay hidden while the merge is paused.
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.source.control.commit.completeMergeFailed',
+          'Complete merge failed'
+        ),
+        { description: result.error }
+      )
+      return
+    }
+    if (compareBaseRef) {
+      beginGitBranchCompareRequest(
+        activeWorktreeId,
+        `${activeWorktreeId}:${compareBaseRef}:${Date.now()}:post-commit`,
+        compareBaseRef
+      )
+    }
+    void refreshBranchCompareRef.current()
+    void refreshGitHistoryRef.current()
+  }, [
+    activeRepoTarget,
+    activeWorktreeId,
+    beginGitBranchCompareRequest,
+    commitInFlightRef,
+    compareBaseRef,
+    refreshActiveGitStatusAfterMutation,
+    refreshBranchCompareRef,
+    refreshGitHistoryRef,
+    setCommitInFlightByWorktree,
+    unresolvedConflictCount,
+    worktreePath
+  ])
+
+  return { handleCommit, handleCompleteMerge }
 }
 
 export type SourceControlCommitAction = ReturnType<typeof useSourceControlCommitAction>

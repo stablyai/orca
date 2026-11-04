@@ -1,70 +1,43 @@
-/**
- * The structured-session half of the structured pointer lane.
- *
- * Keeps every `getStructuredAgentSessionHost()` call in one place so the delivery policy above it
- * stays pure and testable. Nothing here decides whether to deliver; it only performs the read and
- * the send and reports what the host said.
- */
+/** Adapt host reads/sends for the pure structured-pointer policy; do not decide delivery here. */
 
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type {
   StructuredMailboxPointerHost,
-  StructuredPointerSessionFacts
-} from './structured-mailbox-pointer-delivery'
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+  StructuredMailSendState
+} from './structured-mailbox-pointer-host-contract'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
 import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
-import { sendAgentTurn } from './send-agent-turn'
+import { sendAgentTurn, type StructuredSessionTurnOutcome } from './send-agent-turn'
+import { subscribeForRedrive } from './structured-session-journal-redrive'
+import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
   return `trusted-local:orchestration:${dispatchId}`
 }
 
-/**
- * The caller key for direct peer mail, which is addressed to the worker's own handle and has no
- * dispatch to name.
- *
- * A separate key rather than a reshaped one: the ledger is keyed on (callerKey, operationId), so
- * changing the dispatch key's shape would orphan every nudge already in flight under the old one.
- */
+/** Scope direct mail by session; preserve existing Dispatch key shape so in-flight nudges still replay. */
 export function structuredSessionPointerCallerKey(sessionId: string): string {
   return `trusted-local:orchestration:session:${sessionId}`
 }
 
-/**
- * Whether a structured session is idle, for group addressing (`@idle`), read off its FULL reduced
- * timeline.
- *
- * Never a bounded page. A settled turn's lifecycle item is revised in place, so on any tail window
- * an idle session and a busy one whose lifecycle item scrolled off look identical — and
- * idle-with-history is the normal steady state of a working agent.
- */
+/** Use the full reduced timeline: a busy turn's revised lifecycle item can lie outside any tail page. */
 export async function readStructuredSessionGateFacts(
   sessionId: string
 ): Promise<StructuredSessionGateFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
-  return snapshot ? structuredSessionGateFacts(snapshot.items) : null
-}
-
-/** What each recorded send settled as. */
-async function readPointerSessionFacts(
-  sessionId: string
-): Promise<StructuredPointerSessionFacts | null> {
-  const snapshot = await readSessionJournal(sessionId)
   if (!snapshot) {
     return null
   }
-  const boundary =
-    getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.providerContextBoundary
-  return {
-    submissions: boundary
-      ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
-      : snapshot.submissions
-  }
+  // The host's projection of current work: an agent that ended is idle, whatever its rows say.
+  const work = getStructuredAgentSessionHost()?.currentWork(sessionId)
+  return structuredSessionGateFacts(snapshot.items, work?.scope)
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
@@ -84,21 +57,89 @@ async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapsh
   }
 }
 
+/** The host that admitted the send answers for it; this lane only acts on that answer. */
+async function observeMailSend(
+  sessionId: string,
+  operationId: string
+): Promise<StructuredMailSendState> {
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    return { kind: 'unreadable' }
+  }
+  try {
+    return await host.sendAnswer(sessionId, operationId)
+  } catch {
+    // Unreadable proves nothing, least of all that nothing was sent.
+    return { kind: 'unreadable' }
+  }
+}
+
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
   return {
-    readSessionFacts(sessionId) {
-      return readPointerSessionFacts(sessionId)
+    observe(sessionId, operationId) {
+      return observeMailSend(sessionId, operationId)
+    },
+
+    wakeQueue(sessionId) {
+      getStructuredAgentSessionHost()?.wakeQueuedMessages(sessionId)
+    },
+
+    async withdraw(sessionId, operationId) {
+      const host = getStructuredAgentSessionHost()
+      if (!host) {
+        return false
+      }
+      const fence = host.deps.store.getConversation(sessionId)?.currentFence
+      if (fence === undefined) {
+        // No conversation is left to hand the card over.
+        return true
+      }
+      const fields = { messageId: operationId }
+      const result = await host
+        .queuedMessageDelete(
+          { callerKey: structuredSessionPointerCallerKey(sessionId) },
+          {
+            envelope: {
+              sessionId,
+              clientOperationId: mintAgentSessionOperationId(Date.now()),
+              expectedRuntimeFence: fence,
+              payloadFingerprint: structuredAgentSessionPayloadFingerprint({
+                method: 'agentSession.queuedMessageDelete',
+                sessionId,
+                fields
+              })
+            },
+            ...fields
+          }
+        )
+        .catch(() => null)
+      // Already handed over, or never a card (sent at once), counts as done: nothing is left to hand over twice.
+      return result?.ok === true
+    },
+
+    watchJournal(sessionId, onActivity) {
+      const host = getStructuredAgentSessionHost()
+      let seen: string | undefined
+      // Only what mail waits on: a card handed over, deleted or edited (each moves the queue's
+      // revision without adding a card, so a new card, the lane's own included, changes nothing),
+      // handoffs settling, an accepted turn, a /clear, a new item. A streamed token changes none.
+      const relevant = (journal: AgentSessionJournal) => {
+        const order = journal.inputOrder
+        const state = journal.queuedMessages.inputState()
+        const cleared = state.queuePauseMarks.cleared?.sequence
+        const changes = state.queue.revision - state.queue.cards.size
+        const key = `${state.epoch}:${changes}:${order.unsettledSubmissions().length}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared}:${state.items.size}`
+        const changed = key !== seen
+        seen = key
+        return changed
+      }
+      return host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}
     },
 
     currentFence(sessionId) {
       return (
-        getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null
+        getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.currentFence ?? null
       )
-    },
-
-    currentContextClearOperationId(sessionId) {
-      return getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)
-        ?.providerContextBoundary?.operationId
     },
 
     async send(input) {
@@ -106,38 +147,46 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       if (!host) {
         return { kind: 'unattached' }
       }
-      const outcome = await sendAgentTurn({
-        kind: 'structured-session',
-        host,
-        sessionId: input.sessionId,
-        callerKey: input.dispatchId
-          ? structuredPointerCallerKey(input.dispatchId)
-          : structuredSessionPointerCallerKey(input.sessionId),
-        turn: {
-          body: input.body,
-          // As a person's message is: a busy chat queues it as a card, sent when the turn ends.
-          delivery: 'queue',
-          operationId: input.operationId,
-          expectedRuntimeFence: input.expectedRuntimeFence
+      let outcome: StructuredSessionTurnOutcome
+      try {
+        outcome = await sendAgentTurn({
+          kind: 'structured-session',
+          host,
+          sessionId: input.sessionId,
+          callerKey: input.dispatchId
+            ? structuredPointerCallerKey(input.dispatchId)
+            : structuredSessionPointerCallerKey(input.sessionId),
+          turn: {
+            body: input.body,
+            // A person's message: queued behind running work or a question, one handed over per turn.
+            delivery: 'queue',
+            operationId: input.operationId,
+            expectedRuntimeFence: input.expectedRuntimeFence,
+            beforeRun: () => {
+              if (!input.stillOwed()) {
+                throw new StructuredMailObsoleteError()
+              }
+            }
+          }
+        })
+      } catch (error) {
+        if (error instanceof StructuredMailObsoleteError) {
+          return { kind: 'obsolete' }
         }
-      })
+        throw error
+      }
       switch (outcome.kind) {
         case 'refused':
           return outcome.refusal.code === AGENT_SESSION_NOT_ATTACHED.code
             ? { kind: 'unattached' }
-            : { kind: 'sent', state: 'rejected' }
+            : { kind: 'refused' }
         case 'queued':
           return { kind: 'queued' }
-        case 'sent': {
-          // `pending` is not yet an acknowledgement; only `accepted` may consume mail. A send still
-          // pending after the wait parks for the next journal edge.
-          const state = outcome.submission?.dispatchState
-          return {
-            kind: 'sent',
-            state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'
-          }
-        }
+        case 'sent':
+          return { kind: 'sent', state: outcome.submission?.dispatchState ?? 'unknown' }
       }
     }
   }
 }
+
+class StructuredMailObsoleteError extends Error {}

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { AgentLaunchTabPublishRequest } from '../../../shared/agent-launch-tab-publication'
+import type { AgentLaunchTabPublishRequest } from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 
@@ -33,7 +33,6 @@ vi.mock('@/hooks/ipc-events/terminal-command-state', async (importOriginal) => (
 createTabsSliceMockApi()
 
 const { publishAgentLaunchTab } = await import('./agent-launch-tab-publication')
-const { agentLaunchPanePrompt } = await import('./agent-launch-pane-prompt')
 
 const WT = 'repo1::/tmp/feature'
 const OTHER_WT = 'repo1::/tmp/other'
@@ -88,11 +87,6 @@ describe('publishing a launch tab before its agent exists', () => {
     expect(launchTab()?.viewMode).toBe('chat')
   })
 
-  it('keeps the prompt for the pane to offer if its agent does not start', () => {
-    publishAgentLaunchTab(request({ prompt: 'fix the build' }))
-    expect(agentLaunchPanePrompt(TAB_ID)).toBe('fix the build')
-  })
-
   it('never makes a second tab when a retry names the same one', () => {
     publishAgentLaunchTab(request())
     const again = publishAgentLaunchTab(request({ requestId: 'request-2' }))
@@ -120,27 +114,6 @@ describe('publishing a launch tab before its agent exists', () => {
 
     publishAgentLaunchTab(request({ requestId: 'request-3', operationId: 'op-2' }))
     expect(launchPane()).toEqual({ leafId: LEAF_ID, operationId: 'op-2' })
-  })
-
-  it('hands a tab this window made for the launch to the host, as the launch to take back', async () => {
-    const { holdAgentLaunchPaneSpawn, agentLaunchPaneSpawnHold } =
-      await import('./agent-launch-pane-spawn-hold')
-    holdAgentLaunchPaneSpawn(TAB_ID, LEAF_ID)
-    store.getState().createTab(WT, undefined, undefined, {
-      id: TAB_ID,
-      initialLeafId: LEAF_ID,
-      agentLaunchPane: { leafId: LEAF_ID }
-    })
-    const held = agentLaunchPaneSpawnHold(TAB_ID, LEAF_ID)
-
-    const published = publishAgentLaunchTab(request())
-
-    // The host now owns the pane, so a refused launch takes the tab back rather than leaving a shell.
-    expect(published).toMatchObject({ tabId: TAB_ID, created: true })
-    await expect(held).resolves.toBeUndefined()
-    expect(agentLaunchPaneSpawnHold(TAB_ID, LEAF_ID)).toBeNull()
-    // A retry finds no hold: the tab is no longer only this launch's.
-    expect(publishAgentLaunchTab(request({ requestId: 'request-2' })).created).toBe(false)
   })
 
   it("remounts a pane that showed an earlier launch's outcome, so it spawns for the new launch", () => {
@@ -191,8 +164,7 @@ describe('placement', () => {
     expect(launchTab()?.groupId).toBe(splitGroupId)
   })
 
-  // Activating a workspace with a live tab prunes its empty groups; a CLI's focused launch activates
-  // it, and the split it asked for must still be there to receive the tab.
+  // Activation prunes empty groups; preserve the CLI launch’s requested split until its tab arrives.
   it.each(
     (['none', 'focus-window', 'focus-in-workspace', 'reveal-owner'] as const).flatMap((viewer) => [
       { viewer, focused: 'split' as const },
@@ -287,13 +259,5 @@ describe('whose view moves', () => {
     expect(store.getState().activeWorktreeId).toBe(OTHER_WT)
     expect(store.getState().activeTabIdByWorktree[WT]).toBe(TAB_ID)
     expect(focusTerminalInitiatedTab).not.toHaveBeenCalled()
-  })
-
-  it('focus-in-workspace: the tab is focused when you are still there', () => {
-    publishAgentLaunchTab(request({ viewer: 'focus-in-workspace' }))
-
-    expect(store.getState().activeWorktreeId).toBe(WT)
-    expect(store.getState().activeTabId).toBe(TAB_ID)
-    expect(focusTerminalInitiatedTab).toHaveBeenCalledWith(TAB_ID, LEAF_ID, WT)
   })
 })

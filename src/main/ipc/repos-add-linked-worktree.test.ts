@@ -1,11 +1,5 @@
-/**
- * Regression tests for repos:add + git worktrees.
- *
- * A linked worktree reports itself as its own `--show-toplevel`, so the path-based dedupe in
- * addLocalRepoFromPath cannot see that it belongs to an already-tracked repo. Adding it anyway
- * produced a second ready ProjectHostSetup on the same project and host — a duplicate "Local Mac"
- * run-target row pointing at a transient worktree path.
- */
+import type * as RepoDetectionModule from '../git/repo-detection'
+/** Linked worktrees report their own toplevel; deduplicate by common repo to avoid duplicate run-target rows. */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
@@ -37,6 +31,15 @@ const {
   detectRepoIconAndUpstreamMock: vi.fn()
 }))
 
+vi.mock('../git/repo-detection', async (importOriginal) => {
+  const facade = await vi.importMock<typeof RepoDetectionModule>('../git/repo')
+  return {
+    ...(await importOriginal<typeof RepoDetectionModule>()),
+    isGitRepoAsync: facade.isGitRepoAsync,
+    getGitRepoRootAsync: facade.getGitRepoRootAsync
+  }
+})
+
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
@@ -58,15 +61,15 @@ vi.mock('../git/repo', () => ({
   searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
-vi.mock('../repo-icon-autodetect', () => ({
+vi.mock('../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: detectRepoIconAndUpstreamMock
 }))
 
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
@@ -109,7 +112,7 @@ describe('repos:add with git worktrees', () => {
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
     isGitRepoMock.mockReset().mockReturnValue(true)
-    // A linked worktree is its own toplevel — this is exactly why path dedupe alone misses it.
+    // A linked worktree's own toplevel cannot identify its already-tracked main repo.
     getGitRepoRootMock.mockReset().mockImplementation((path: string) => path)
     getLinkedWorktreeMainRepoRootMock.mockReset().mockReturnValue(null)
     detectRepoIconAndUpstreamMock.mockReset().mockResolvedValue({})

@@ -1,6 +1,6 @@
 /**
  * Which panes main's legacy relay bridge serves, known before those panes mount.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay-bridge/.
+ * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
  */
 import type { LegacyRelayBridgedPane } from '../../../../shared/legacy-relay-bridge-contract'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -14,6 +14,7 @@ const listeners = new Set<() => void>()
 /** Which pane (tab and leaf) holds each bridged PTY; a second pane never drives the same shell. */
 const claims = new Map<string, string>()
 let subscribed = false
+let firstListing: Promise<void> = Promise.resolve()
 
 function ensureSubscribed(): void {
   const api = typeof window === 'undefined' ? undefined : window.api?.legacyRelayBridge
@@ -31,7 +32,13 @@ function ensureSubscribed(): void {
     listeners.forEach((listener) => listener())
   }
   api.onPanes(apply)
-  void api.listPanes().then(apply, () => {})
+  firstListing = api.listPanes().then(apply, () => {})
+}
+
+/** Settles once main's first pane list arrived, so a close never reads the empty initial cache. */
+export function legacyRelayBridgedPanesListed(): Promise<void> {
+  ensureSubscribed()
+  return firstListing
 }
 
 ensureSubscribed()
@@ -72,11 +79,7 @@ function bridgedPaneFor(
   )
 }
 
-/**
- * Whether activating this tab on the managed server could reach a pane the bridge serves, which
- * would start a second shell there that no tab shows. Without a leaf, any bridged pane in the tab
- * counts: the server then picks a pane itself.
- */
+/** Server activation could start a second shell in a bridged pane; without a leaf, any bridged pane in the tab can be chosen. */
 export function isLegacyRelayBridgedTab(tabId: string, leafId?: string | null): boolean {
   const { inTab, leaf } = bridgedPanesInTab(tabId, leafId)
   return leaf === null ? inTab.length > 0 : bridgedPaneFor(tabId, leafId) !== undefined
@@ -87,10 +90,24 @@ export function hasLegacyRelayBridgedPane(tabId: string): boolean {
   return bridgedPanesInTab(tabId, null).inTab.length > 0
 }
 
-/**
- * The relay-era PTY a runtime pane should reattach through the bridge: one main reports serving
- * for this tab and leaf, or the `ssh:` id the pane itself still names from an earlier bridging.
- */
+/** Closing includes main’s bridged panes for the relay-era tab/leaf and any bridged PTY still bound to the tab. */
+export function legacyRelayBridgedPtyIdsForClosingTab(
+  tabId: string,
+  boundPtyIds: readonly string[]
+): string[] {
+  const { inTab, leaf } = bridgedPanesInTab(tabId, null)
+  const named =
+    leaf === null ? inTab : [bridgedPaneFor(tabId, null)].filter((pane) => pane !== undefined)
+  const ids = new Set(named.map((pane) => pane.ptyId))
+  for (const ptyId of boundPtyIds) {
+    if (panes.some((pane) => pane.ptyId === ptyId)) {
+      ids.add(ptyId)
+    }
+  }
+  return [...ids]
+}
+
+/** Reattach main’s bridged tab/leaf PTY, falling back to the pane’s earlier ssh: binding. */
 export function legacyRelayBridgePtyIdForPane(args: {
   tabId: string
   leafId: string | null | undefined
@@ -105,13 +122,34 @@ export function legacyRelayBridgePtyIdForPane(args: {
   if (!candidate) {
     return null
   }
-  const claimant = `${args.tabId}\u0000${args.leafId ?? ''}`
+  const claimant = paneClaimant(args.tabId, args.leafId)
   const holder = claims.get(candidate)
   if (holder && holder !== claimant) {
     return null
   }
   claims.set(candidate, claimant)
   return candidate
+}
+
+function paneClaimant(tabId: string, leafId: string | null | undefined): string {
+  return `${tabId}\u0000${leafId ?? ''}`
+}
+
+/** Lets another pane (a converted row's) take a PTY this unmounting pane held. */
+export function releaseLegacyRelayBridgePaneClaim(
+  ptyId: string,
+  tabId: string,
+  leafId: string | null | undefined
+): void {
+  if (claims.get(ptyId) === paneClaimant(tabId, leafId)) {
+    claims.delete(ptyId)
+  }
+}
+
+/** The relay-era tabs holding a pane the bridge serves for this SSH target. */
+export function legacyRelayBridgedTabIds(targetId: string): string[] {
+  ensureSubscribed()
+  return [...new Set(panes.filter((pane) => pane.targetId === targetId).map((p) => p.tabId))]
 }
 
 export function onLegacyRelayBridgedPanesChanged(listener: () => void): () => void {

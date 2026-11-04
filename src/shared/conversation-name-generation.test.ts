@@ -6,7 +6,7 @@ import {
 } from './conversation-name-generation'
 
 describe('conversation name generation', () => {
-  it('bounds the first prompt in both the built-in prompt and template variable', () => {
+  it('bounds the first prompt and includes it in the built-in prompt', () => {
     const firstPrompt = `Start ${'x'.repeat(5000)}`
     const clamped = clampConversationNameFirstPrompt(firstPrompt)
     expect(clamped).toHaveLength(4000)

@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  type MobileTerminalInventoryRefreshOptions,
   useMobileTerminalInventoryRecovery,
   useMobileTerminalInventoryRecoveryBridge
 } from './use-mobile-terminal-inventory-recovery'
@@ -30,7 +31,9 @@ function deferred<T>() {
 const client = {
   getState: () => 'connected'
 } as unknown as RpcClient
-const fetchTerminals = vi.fn(async () => true)
+const fetchTerminals = vi.fn<(options?: MobileTerminalInventoryRefreshOptions) => Promise<boolean>>(
+  async () => true
+)
 type RecoveryActions = ReturnType<typeof useMobileTerminalInventoryRecovery>
 let actions: RecoveryActions | null = null
 

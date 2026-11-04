@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import {
-  listGitLabMRsForSource,
+  listGitLabWorkItemsForSource,
   lookupGitLabWorkItemByPathForSource
 } from '@/lib/gitlab-work-item-source-lookup'
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
@@ -97,7 +97,6 @@ export function useSmartWorkspaceGitlabSearch({
     shouldQueryGitlab
   ])
 
-  // Why: state chips mirror GitLab's default opened-MR list when no URL is pasted.
   useEffect(() => {
     if (!shouldQueryGitlab || disabled || gitlabEnabled === false) {
       if (!shouldQueryGitlab) {
@@ -123,7 +122,7 @@ export function useSmartWorkspaceGitlabSearch({
     }
     void Promise.all(
       repoBackedSearchTargets.map((target) =>
-        listGitLabMRsForSource({
+        listGitLabWorkItemsForSource({
           repoPath: target.repo.path,
           repoId: target.repo.id,
           sourceContext: target.gitlabSourceContext,

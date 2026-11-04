@@ -91,9 +91,7 @@ test('resumes an agent session after quit when its daemon PTY died while the app
     await execInTerminal(page, firstPtyId, `echo ${marker}`)
     await waitForTerminalOutput(page, marker)
 
-    // Why: a real agent run reports its provider session id over the hook
-    // server; seeding the same store entry keeps this test hermetic (no agent
-    // CLI install or auth) while exercising the identical persistence path.
+    // Seed the real hook-written resume record without requiring an installed/authenticated agent CLI.
     await page.evaluate(
       ({ paneKey, worktreeId: wtId, providerSessionId, transcriptPath }) => {
         window.__store?.getState().setAgentStatus(
@@ -125,9 +123,7 @@ test('resumes an agent session after quit when its daemon PTY died while the app
     firstApp = null
     stubPersistedResumeCommand(session.userDataDir)
 
-    // Why: simulates the daemon (and the agent CLI inside it) dying while the
-    // app is closed — reboot, crash, or update kill. SIGKILL leaves history
-    // checkpoints unclean so the relaunch takes the cold-restore path.
+    // SIGKILL models reboot/crash while closed and leaves unclean checkpoints for cold restore.
     process.kill(daemonPid, 'SIGKILL')
 
     const secondLaunch = await session.launch()

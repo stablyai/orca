@@ -12,10 +12,7 @@ export type MobileHostedReviewCreateReply =
   | MobileHostedReviewCreateOk
   | MobileHostedReviewCreateFailed
 
-/**
- * Eligibility is advisory: when the host cannot answer, mobile fails closed on its own rather
- * than treating the refusal as an error, so refusal is a skip.
- */
+// Eligibility is advisory; skip refusal and let mobile fail closed.
 export const hostedReviewEligibilityRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'hostedReview.creation-eligibility-or-skip',
@@ -26,12 +23,7 @@ export const hostedReviewEligibilityRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * Creation answers in-band too: an accepted reply can carry `ok: false` plus an existing review.
- * Two variants rather than one schema because the host's own result is a discriminated union and
- * the arms require different members; the success arm is declared first so a reply carrying both
- * `ok: true` and a stray `error` reads as the success it is.
- */
+// Accepted creation may fail in-band; put success first so a stray error cannot override ok: true.
 export const hostedReviewCreateRun = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'hostedReview.create',

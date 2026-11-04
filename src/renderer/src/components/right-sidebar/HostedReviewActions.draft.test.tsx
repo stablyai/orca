@@ -1,15 +1,24 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import HostedReviewActions from './HostedReviewActions'
 import type { HostedReviewActionInfo } from './use-hosted-review-actions'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import { gitHubPRToChecksPanelReview } from './checks-panel-review'
 
-const actionMocks = vi.hoisted(() => ({
-  handleMarkReadyForReview: vi.fn(),
-  handleCloseReview: vi.fn()
-}))
+const actionMocks = vi.hoisted(
+  (): {
+    actionError: string | null
+    handleMarkReadyForReview: Mock
+    handleCloseReview: Mock
+  } => ({
+    actionError: null,
+    handleMarkReadyForReview: vi.fn(),
+    handleCloseReview: vi.fn()
+  })
+)
 
 vi.mock('@/store', () => ({ useAppStore: () => false }))
 vi.mock('./use-hosted-review-actions', () => ({
@@ -17,7 +26,7 @@ vi.mock('./use-hosted-review-actions', () => ({
     merging: false,
     readying: false,
     stateUpdating: null,
-    actionError: null,
+    actionError: actionMocks.actionError,
     handleMerge: vi.fn(),
     handleAutoMerge: vi.fn(),
     handleMarkReadyForReview: actionMocks.handleMarkReadyForReview,
@@ -72,4 +81,124 @@ describe('HostedReviewActions draft state', () => {
       expect(renderDraft(provider)).toBe('')
     }
   )
+})
+
+describe('HostedReviewActions GitHub merge selection', () => {
+  it.each([
+    {
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'UNSTABLE',
+      status: 'pending',
+      label: 'Squash and merge',
+      autoMerge: false
+    },
+    {
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'UNSTABLE',
+      status: 'failure',
+      label: 'Squash and merge',
+      autoMerge: false
+    },
+    {
+      mergeable: 'UNKNOWN',
+      mergeStateStatus: 'UNKNOWN',
+      status: 'pending',
+      label: 'Checking',
+      autoMerge: false
+    },
+    { mergeable: 'UNKNOWN', status: 'pending', label: 'Checking', autoMerge: false },
+    {
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'BLOCKED',
+      status: 'pending',
+      label: 'Enable auto-merge',
+      autoMerge: true
+    },
+    {
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'BLOCKED',
+      reviewDecision: 'REVIEW_REQUIRED',
+      status: 'success',
+      label: 'Enable auto-merge',
+      autoMerge: true
+    },
+    {
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'BLOCKED',
+      autoMergeEnabled: true,
+      status: 'pending',
+      label: 'Disable auto-merge',
+      autoMerge: true
+    },
+    {
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'UNSTABLE',
+      mergeQueueRequired: true,
+      status: 'pending',
+      label: 'Merge when ready',
+      autoMerge: false
+    },
+    {
+      mergeable: 'CONFLICTING',
+      mergeStateStatus: 'DIRTY',
+      mergeQueueRequired: true,
+      status: 'pending',
+      label: 'Conflicts',
+      autoMerge: false
+    }
+  ] as const)('renders $label for $mergeStateStatus / $status', (scenario) => {
+    const pr: PRInfo = {
+      number: 31259,
+      title: 'fix(i18n): restore localized editor safety copy',
+      state: 'open',
+      url: 'https://github.com/stablyai/orca/pull/31259',
+      updatedAt: '2026-10-21T16:31:00Z',
+      headSha: 'e4353ead012043474fc723e50aea198a76d32979',
+      autoMergeAllowed: true,
+      checksStatus: scenario.status,
+      ...scenario
+    }
+    const markup = renderToStaticMarkup(
+      <HostedReviewActions
+        review={gitHubPRToChecksPanelReview(pr)}
+        githubPR={pr}
+        repo={repo}
+        worktree={worktree}
+        onRefreshReview={vi.fn().mockResolvedValue(undefined)}
+      />
+    )
+    expect(markup).toContain(scenario.label)
+    expect(markup.includes('Enable auto-merge') || markup.includes('Disable auto-merge')).toBe(
+      scenario.autoMerge
+    )
+    if (scenario.label === 'Checking' || scenario.label === 'Conflicts') {
+      expect(markup).toMatch(/<button[^>]*disabled=""/)
+    }
+  })
+})
+
+describe('HostedReviewActions merged state', () => {
+  it('keeps a failed merge error visible when the reread shows the review merged', () => {
+    actionMocks.actionError = 'Connection lost'
+    try {
+      const markup = renderToStaticMarkup(
+        <HostedReviewActions
+          review={{
+            provider: 'github',
+            number: 42,
+            state: 'merged',
+            status: 'success',
+            mergeable: 'UNKNOWN'
+          }}
+          repo={repo}
+          worktree={worktree}
+          onRefreshReview={vi.fn().mockResolvedValue(undefined)}
+        />
+      )
+      expect(markup).toContain('Delete Workspace')
+      expect(markup).toContain('Connection lost')
+    } finally {
+      actionMocks.actionError = null
+    }
+  })
 })

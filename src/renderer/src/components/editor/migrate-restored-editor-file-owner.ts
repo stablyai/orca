@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import {
   findWorkspaceFileRoute,
   type RuntimeWorkspaceFileRoute
@@ -9,9 +10,49 @@ import {
   type EditorFileOperationProvenance
 } from '@/lib/editor-file-operation-owner'
 import { requestEditorSaveQuiesce } from './editor-autosave'
-import type { RestoredEditorOwnerResult } from '@/store/slices/editor'
+import type { OpenFile, RestoredEditorOwnerResult } from '@/store/slices/editor'
+import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
+import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { AppState } from '@/store'
 
 export type RestoredEditorOwnerMigrationResult = RestoredEditorOwnerResult
+
+export function restoredOwnerMigrationErrorMessage(
+  reason: Extract<RestoredEditorOwnerMigrationResult, { ok: false }>['reason']
+): string {
+  return reason === 'collision'
+    ? translate(
+        'auto.components.editor.EditorPanel.siblingFileAlreadyOpen',
+        'The sibling file is already open; close one tab before restoring it.'
+      )
+    : translate(
+        'auto.components.editor.EditorPanel.siblingFileOwnerChanged',
+        'The sibling file owner changed while the tab was restoring.'
+      )
+}
+
+/** The workspace an absolute-path tab must move to before it can be read, or null to read it in place. */
+export function findAbsoluteTabOwnerRoute(
+  state: AppState,
+  worktreeId: string | null | undefined,
+  tab: Pick<OpenFile, 'worktreeId' | 'filePath'>,
+  executionHostId: ExecutionHostId
+): RuntimeWorkspaceFileRoute | null {
+  // Floating files stay in their panel even when a project also contains the path.
+  if (isFloatingWorkspaceId(worktreeId)) {
+    return null
+  }
+  const route = findWorkspaceFileRoute(state, executionHostId, tab.filePath)
+  // Why: this computer reads any absolute path, so a local tab never moves to another workspace;
+  // that move switched the user away from where they opened it. Servers read only
+  // workspace-relative paths, so their tabs still move to the owner.
+  return route && executionHostId === LOCAL_EXECUTION_HOST_ID && route.worktreeId !== tab.worktreeId
+    ? null
+    : route
+}
 
 export async function migrateRestoredEditorFileOwner(
   fileId: string,
@@ -47,6 +88,10 @@ export async function migrateRestoredEditorFileOwner(
     useAppStore.getState().setRestoredEditorOwnerMigrationPending(fileId, false)
     throw error
   }
+  // Wait for pending opens so main rekeys every tab instead of leaving undrawn tabs on the old ID.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    await pendingTabsOfFileAnswered(source.worktreeId, fileId)
+  }
   const currentState = useAppStore.getState()
   const currentSource = currentState.openFiles.find((file) => file.id === fileId)
   const currentRoute = currentSource
@@ -65,7 +110,7 @@ export async function migrateRestoredEditorFileOwner(
     currentState.setRestoredEditorOwnerMigrationPending(fileId, false)
     return { ok: false, reason: 'owner-changed' }
   }
-  return currentState.reparentRestoredEditorFileOwner({
+  const result = currentState.reparentRestoredEditorFileOwner({
     fileId,
     targetWorktreeId: route.worktreeId,
     targetRelativePath: route.relativePath,
@@ -73,6 +118,28 @@ export async function migrateRestoredEditorFileOwner(
     targetRuntimeEnvironmentId: runtimeEnvironmentId,
     targetOperationProvenance
   })
+  // A successful main-owned move must arrive in its frame before callers use the rekeyed file.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && result.ok && !(await contentRekeyOutcome([result.fileId]))) {
+    return { ok: false, reason: 'owner-changed' }
+  }
+  return result
+}
+
+/** Resolves once main answered every open or close in flight for the file's tabs and its previews'. */
+function pendingTabsOfFileAnswered(worktreeId: string, fileId: string): Promise<void> {
+  const entityIds = [
+    fileId,
+    ...useAppStore
+      .getState()
+      .openFiles.filter((file) => file.markdownPreviewSourceFileId === fileId)
+      .map((file) => file.id)
+  ]
+  return Promise.all(
+    entityIds.map(
+      (entityId) =>
+        new Promise<void>((resolve) => afterPendingEntityTabs(worktreeId, entityId, resolve))
+    )
+  ).then(() => {})
 }
 
 function routesMatch(

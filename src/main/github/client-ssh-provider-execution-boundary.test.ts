@@ -1,3 +1,5 @@
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
+import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
@@ -9,6 +11,16 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync: clientMocks.gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GhExecFileModule>()),
+  ghExecFileAsync: clientMocks.ghExecFileAsyncMock
+}))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -111,9 +123,7 @@ function mockUpstreamOnlyPRLookup(): void {
     })
 }
 
-// The strict execution boundary: for an SSH-hosted repoPath, an unregistered
-// provider means "we could not ask" — it must never degrade into a client-side
-// git run, which on a same-named local path answers for the wrong repository.
+// Missing SSH providers must not probe a same-named local path and report the wrong repository.
 describe('getPRForBranch SSH execution boundary', () => {
   beforeEach(() => {
     resetPRForBranchMocks(clientMocks)
@@ -179,24 +189,6 @@ describe('getPRForBranch SSH execution boundary', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'unknown' })
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports an upstream error when the SSH HEAD probe loses its provider mid-flight', async () => {
-    mockMergedBranchPRLookup()
-
-    const outcome = await getPRForBranchOutcome('/remote/repo', MERGED_BRANCH, null, 'ssh-1')
-
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'unknown' })
-  })
-
-  it('reports an upstream error when the SSH upstream probe loses its provider mid-flight', async () => {
-    mockUpstreamOnlyPRLookup()
-
-    const outcome = await getPRForBranchOutcome('/remote/repo', MERGED_BRANCH, null, 'ssh-1')
-
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'unknown' })
   })
 
   it('reads tracked upstreams through the local runtime for a WSL repository', async () => {

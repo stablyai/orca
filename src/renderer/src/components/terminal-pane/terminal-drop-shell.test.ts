@@ -45,15 +45,4 @@ describe('resolveTerminalDropTargetShell', () => {
       })
     ).toBe('posix')
   })
-
-  it('uses POSIX shell escaping for relay-era SSH targets', () => {
-    expect(
-      resolveTerminalDropTargetShell({
-        activeRuntimeEnvironmentId: null,
-        worktreePath: 'C:\\repo',
-        connectionId: 'ssh-linux',
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-      })
-    ).toBe('posix')
-  })
 })
