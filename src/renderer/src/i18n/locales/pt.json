@@ -5205,14 +5205,6 @@
               "extension": "extensão",
               "chrome": "chrome",
               "password": "gerenciador de senhas"
-            },
-            "orchestrationPanel": {
-              "title": "Painel de orquestração",
-              "description": "Mostra com quais agentes cada agente está trabalhando, ao lado do chat ou terminal dele.",
-              "orchestration": "orquestração",
-              "agents": "agentes",
-              "workers": "agentes executores",
-              "manager": "gerente"
             }
           }
         },
@@ -5707,9 +5699,6 @@
           "browserExtensions": {
             "copy": "Adiciona Configurações › Navegador › Extensões para perfis de navegador locais.",
             "toggleLabel": "Ativar ou desativar extensões de navegador"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Ativar ou desativar o painel de orquestração"
           }
         },
         "RuntimePairingUrlGenerator": {
