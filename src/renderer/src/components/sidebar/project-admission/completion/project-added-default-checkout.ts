@@ -66,6 +66,7 @@ function getDetectedProjectDefaultCheckout(
   return (
     worktrees.find((worktree) => worktree.isMainWorktree && worktree.visible) ??
     worktrees.find((worktree) => worktree.selectedCheckout) ??
+    worktrees.find((worktree) => worktree.isMainWorktree) ??
     null
   )
 }
@@ -85,6 +86,20 @@ async function findDetectedDefaultCheckout(
       worktree: null,
       reason:
         detected?.authoritative === true ? 'no_default_checkout' : 'no_authoritative_detection'
+    }
+  }
+  if (!detectedDefaultCheckout.visible) {
+    // Projects saved through a symlinked path by older builds or hosts don't recognise their own
+    // checkout; show the project as before so the add still opens it.
+    const updated = executionHostId
+      ? await state.updateRepo(
+          repoId,
+          { externalWorktreeVisibility: 'show' },
+          { hostId: executionHostId }
+        )
+      : await state.updateRepo(repoId, { externalWorktreeVisibility: 'show' })
+    if (!updated) {
+      return { worktree: null, reason: 'show_detected_default_failed' }
     }
   }
   const refreshed = await useAppStore
