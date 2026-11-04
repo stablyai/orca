@@ -28,6 +28,11 @@ import {
   getProjectGroupLabelPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT
 } from './indentation'
+import {
+  getSectionHeaderBlockState,
+  PROJECT_BLOCK_HEADER_PADDING_LEFT,
+  type ProjectBlockFrame
+} from './project-block-frames'
 import { SectionHeaderTitle } from './section-header-title'
 import {
   ProjectGroupCreateWorkspaceButton,
@@ -62,11 +67,14 @@ export function renderWorktreeSectionHeaderRow(
     isActiveStickyHeader: boolean
     hasStickyHost: boolean
     hasHeaderTopSpacing: boolean
+    /** Collapsed group label followed by a project outside it (see PROJECT_GROUP_EXIT_GAP). */
+    hasGroupExitGap: boolean
     measureVirtualRowElement: (element: HTMLDivElement | null) => void
+    projectBlock: ProjectBlockFrame | null
   },
   t?: Translate
 ): React.JSX.Element {
-  const { ctx, row, vItem, isActiveStickyHeader } = args
+  const { ctx, row, vItem, isActiveStickyHeader, projectBlock } = args
   const { headerDrag } = ctx
   const isRepoHeader = ctx.groupBy === 'repo' && row.repo !== undefined
   const isProjectGroupHeader = ctx.groupBy === 'repo' && row.projectGroup !== undefined
@@ -174,7 +182,14 @@ export function renderWorktreeSectionHeaderRow(
     row.count > 0 &&
     (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
   const isProjectGroupLabel = isProjectGroupHeader && !row.repo
-  const isCollapsedProject = isRepoHeader && isHeaderCollapsed && row.count > 0
+  const { inProjectBlock, isCollapsedProject, attributes } = getSectionHeaderBlockState({
+    row,
+    projectBlock: isRepoHeader ? projectBlock : null,
+    isHeaderCollapsed,
+    hasGroupExitGap: args.hasGroupExitGap,
+    activeWorktreeId: ctx.activeWorktreeId,
+    transform: isActiveStickyHeader ? undefined : getVirtualRowTransform(vItem.start)
+  })
   return (
     <div
       key={vItem.key}
@@ -189,7 +204,7 @@ export function renderWorktreeSectionHeaderRow(
       className={cn(
         'left-0 right-0',
         // Why: drop the inter-group spacer once the header pins so it sits flush at top (see getActiveStickyHeaderIndexForScroll).
-        args.hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-1',
+        args.hasHeaderTopSpacing && !isActiveStickyHeader && !inProjectBlock && 'pt-1',
         isActiveStickyHeader
           ? cn(
               'sticky z-20 bg-worktree-sidebar',
@@ -198,7 +213,7 @@ export function renderWorktreeSectionHeaderRow(
             )
           : 'absolute top-0'
       )}
-      style={isActiveStickyHeader ? undefined : { transform: getVirtualRowTransform(vItem.start) }}
+      {...attributes}
     >
       <ProjectHeaderHostTooltip label={label} context={hostContext}>
         <div
@@ -239,7 +254,8 @@ export function renderWorktreeSectionHeaderRow(
           data-workspace-status={headerWorkspaceStatus ?? undefined}
           data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
           className={cn(
-            'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
+            'group relative flex w-full items-center gap-1.5 pr-2 text-left transition-all',
+            inProjectBlock ? 'h-full' : 'h-7',
             !(isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'cursor-pointer',
             ctx.highlightedRevealRowKey === row.key &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
@@ -255,8 +271,9 @@ export function renderWorktreeSectionHeaderRow(
           )}
           style={{
             // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
-            paddingLeft:
-              isRepoHeader || isProjectGroupHeader
+            paddingLeft: inProjectBlock
+              ? PROJECT_BLOCK_HEADER_PADDING_LEFT
+              : isRepoHeader || isProjectGroupHeader
                 ? getProjectGroupLabelPaddingLeft(row.projectGroupDepth ?? 0)
                 : WORKTREE_SECTION_HEADER_PADDING_LEFT
           }}
@@ -319,7 +336,7 @@ export function renderWorktreeSectionHeaderRow(
             <SectionHeaderTitle
               row={row}
               label={label}
-              level={isProjectGroupLabel ? 'group-label' : 'section'}
+              level={isProjectGroupLabel ? 'group-label' : inProjectBlock ? 'project' : 'section'}
               headerVisual={headerVisual}
               repoHeaderColor={repoHeaderColor}
               hostContext={hostContext}

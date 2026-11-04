@@ -33,6 +33,7 @@ import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+import { ProjectGroupGuides, useProjectBlockLayout } from '../rows/project-group-guides'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
 
@@ -115,6 +116,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const { markDirectScrollInput, markScrollMovement } = scrollSuppression
 
   const renderRows = useMemo(() => buildRenderableRows(rows), [rows])
+  const { frames: projectBlockFrames, guideSpans } = useProjectBlockLayout(renderRows)
   const firstHeaderIndex = useMemo(
     () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [renderRows]
@@ -339,6 +341,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const rowContext = buildWorktreeVirtualRowContext({
     props: rowProps,
     renderRows,
+    projectBlockFrames,
     firstHeaderIndex,
     virtualization,
     measureVirtualRowElement,
@@ -399,6 +402,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           className="relative w-full"
           style={{ height: `${virtualization.virtualizer.getTotalSize()}px` }}
         >
+          <ProjectGroupGuides spans={guideSpans} virtualItems={virtualItems} />
           {renderWorktreeSidebarDropIndicators({
             headerDrag,
             worktreeDragState: runtime.worktreeDragState

@@ -11,10 +11,13 @@ import { useWorktreeCardLinkedDetails } from '../details/use-worktree-card-linke
 import { useWorktreeCardReviewDetails } from '../details/use-worktree-card-review-details'
 import { useWorktreeCardSecondaryDetails } from '../details/use-worktree-card-secondary-details'
 import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-actions'
+import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const { worktree, repo } = props
   const foundation = useWorktreeCardFoundation({ worktree, repo })
+  // Drives the muted title of idle workspaces.
+  const activityStatus = useWorktreeActivityStatus(worktree.id)
   const review = useWorktreeCardReviewDetails({
     worktree,
     repo,
@@ -164,6 +167,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     detailsHoverControl,
     referenceDetails,
     reviewChecks,
+    activityStatus,
     showStatus,
     showIssue,
     showLinearIssue,

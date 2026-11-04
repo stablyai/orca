@@ -15,6 +15,7 @@ export type SectionHeaderRowContext = {
   groupBy: WorktreeGroupBy
   projectHeaderHostContexts?: ReadonlyMap<string, ProjectHeaderHostContext>
   collapsedGroups: Set<string>
+  activeWorktreeId: string | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   projectGroups: readonly ProjectGroup[]
   highlightedRevealRowKey: string | null

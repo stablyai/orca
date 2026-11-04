@@ -77,6 +77,7 @@ function headerContext(): SectionHeaderRowContext {
   return {
     groupBy: 'repo',
     collapsedGroups: new Set(),
+    activeWorktreeId: null,
     workspaceStatuses: [],
     projectGroups: [],
     highlightedRevealRowKey: null,
@@ -137,6 +138,8 @@ function clickCreate(row: GroupHeaderRow): void {
         isActiveStickyHeader: false,
         hasStickyHost: false,
         hasHeaderTopSpacing: false,
+        hasGroupExitGap: false,
+        projectBlock: null,
         measureVirtualRowElement: vi.fn()
       })}
     </TooltipProvider>

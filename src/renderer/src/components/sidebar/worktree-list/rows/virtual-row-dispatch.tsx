@@ -39,9 +39,15 @@ import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { WorktreeRowDragState } from '../drag/row-state'
 import type { Translate } from '@/i18n/use-translate'
+import {
+  getProjectBlockRowAttributes,
+  hasProjectGroupExitGap,
+  type ProjectBlockFrame
+} from './project-block-frames'
 
 export type WorktreeVirtualRowContext = {
   renderRows: RenderRow[]
+  projectBlockFrames: readonly (ProjectBlockFrame | null)[]
   firstHeaderIndex: number
   activeStickyHeaderIndexRef: React.MutableRefObject<number | null>
   activeStickyHostIndexRef: React.MutableRefObject<number | null>
@@ -122,7 +128,8 @@ function folderLineageToggle(
 function renderLineageGroupVirtualRow(
   ctx: WorktreeVirtualRowContext,
   row: Extract<RenderRow, { type: 'lineage-group' }>,
-  vItem: VirtualItem
+  vItem: VirtualItem,
+  projectBlock: ProjectBlockFrame | null
 ): React.JSX.Element {
   const parent = row.folder ? undefined : row.rows[0]
   const children = row.folder ? row.rows : row.rows.slice(1)
@@ -131,6 +138,9 @@ function renderLineageGroupVirtualRow(
   const parentPreviewOffset = parentKey
     ? (ctx.worktreeDragState.previewOffsetsByWorktreeId.get(parentKey) ?? 0)
     : 0
+  const blockAttributes = getProjectBlockRowAttributes(projectBlock, {
+    transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset)
+  })
   return (
     <div
       key={vItem.key}
@@ -139,6 +149,7 @@ function renderLineageGroupVirtualRow(
       data-worktree-virtual-row-key={String(vItem.key)}
       data-worktree-virtual-row-start={vItem.start}
       data-index={vItem.index}
+      data-project-block={blockAttributes['data-project-block']}
       ref={ctx.measureVirtualRowElement}
       className={cn(
         'absolute left-0 right-0 top-0',
@@ -148,13 +159,14 @@ function renderLineageGroupVirtualRow(
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
-      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset) }}
+      style={blockAttributes.style}
     >
       <div className="overflow-visible">
         {row.folder
           ? renderFolderWorkspaceOption({
               ctx: ctx.folderWorkspace,
               row: row.folder,
+              projectBlock,
               lineage: {
                 onToggle: folderLineageToggle(ctx, row.folder),
                 children: renderWorktreeLineageDescendants(ctx.item, row.folder, children),
@@ -167,7 +179,8 @@ function renderLineageGroupVirtualRow(
                 parent,
                 false,
                 renderWorktreeLineageDescendants(ctx.item, parent, children),
-                childIsActive
+                childIsActive,
+                projectBlock !== null
               )
             : null}
       </div>
@@ -182,6 +195,7 @@ export function renderWorktreeVirtualRow(
   vItem: VirtualItem,
   t?: Translate
 ): React.JSX.Element | null {
+  const projectBlock = ctx.projectBlockFrames[vItem.index] ?? null
   if (row.type === 'host-header') {
     return renderHostHeaderVirtualRow(ctx, row, vItem)
   }
@@ -199,14 +213,16 @@ export function renderWorktreeVirtualRow(
           index: vItem.index,
           firstHeaderIndex: ctx.firstHeaderIndex
         }),
-        measureVirtualRowElement: ctx.measureVirtualRowElement
+        hasGroupExitGap: hasProjectGroupExitGap(ctx.renderRows, vItem.index, null),
+        measureVirtualRowElement: ctx.measureVirtualRowElement,
+        projectBlock
       },
       t
     )
   }
 
   if (row.type === 'lineage-group') {
-    return renderLineageGroupVirtualRow(ctx, row, vItem)
+    return renderLineageGroupVirtualRow(ctx, row, vItem, projectBlock)
   }
 
   if (row.type === 'imported-worktrees-card') {
@@ -214,6 +230,7 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
+      projectBlock,
       actionStateByProjectId: ctx.importedWorktreeCardActionState,
       onShow: ctx.onShowImportedWorktrees,
       onKeepHidden: ctx.onKeepImportedWorktreesHidden
@@ -225,6 +242,7 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
+      projectBlock,
       actionState: ctx.newExternalWorktreeInboxActionState.get(row.repo.id),
       onReview: ctx.onOpenWorktreeVisibility,
       onSuppress: ctx.onOpenSuppressExternalWorktreeInbox
@@ -235,7 +253,8 @@ export function renderWorktreeVirtualRow(
     return renderPendingCreationVirtualRow({
       row,
       vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement
+      measureVirtualRowElement: ctx.measureVirtualRowElement,
+      projectBlock
     })
   }
 
@@ -245,7 +264,8 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
-      lineage: { onToggle: folderLineageToggle(ctx, row) }
+      lineage: { onToggle: folderLineageToggle(ctx, row) },
+      projectBlock
     })
   }
 
@@ -255,6 +275,9 @@ export function renderWorktreeVirtualRow(
       : null
   const itemKey = getWorktreeHostIdentity(row.worktree)
   const itemPreviewOffset = ctx.worktreeDragState.previewOffsetsByWorktreeId.get(itemKey) ?? 0
+  const itemBlockAttributes = getProjectBlockRowAttributes(projectBlock, {
+    transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset)
+  })
 
   return (
     <div
@@ -264,6 +287,7 @@ export function renderWorktreeVirtualRow(
       data-worktree-virtual-row-key={String(vItem.key)}
       data-worktree-virtual-row-start={vItem.start}
       data-index={vItem.index}
+      data-project-block={itemBlockAttributes['data-project-block']}
       ref={ctx.measureVirtualRowElement}
       data-workspace-status-drop-target={itemWorkspaceStatus ? '' : undefined}
       data-workspace-status={itemWorkspaceStatus ?? undefined}
@@ -273,7 +297,7 @@ export function renderWorktreeVirtualRow(
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
-      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset) }}
+      style={itemBlockAttributes.style}
       onDragOver={
         itemWorkspaceStatus
           ? (event) => ctx.onWorkspaceStatusDragOver(event, itemWorkspaceStatus)
@@ -286,7 +310,7 @@ export function renderWorktreeVirtualRow(
           : undefined
       }
     >
-      {renderWorktreeItemRow(ctx.item, row, false)}
+      {renderWorktreeItemRow(ctx.item, row, false, undefined, false, projectBlock !== null)}
     </div>
   )
 }
