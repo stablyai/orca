@@ -18,7 +18,7 @@ import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { readingCheck, readingDetails } from '../reading/check-details-reading-fixture'
 import { StrictMode } from 'react'
 import userEvent from '@testing-library/user-event'
-import * as diagnosticPosition from '@/components/right-sidebar/check-log-initial-diagnostic-position'
+import * as diagnosticPosition from '@/components/right-sidebar/checks-panel/logs/check-log-initial-diagnostic-position'
 import {
   checkDetailsReadingKey,
   checkJobIdentities,
@@ -41,7 +41,7 @@ vi.mock('@/components/sidebar/CommentMarkdown', () => ({
   default: ({ content }: { content: string }) => content
 }))
 
-vi.mock('@/components/right-sidebar/source-control-fix-split-button', () => ({
+vi.mock('@/components/right-sidebar/source-control/panel/source-control-fix-split-button', () => ({
   SourceControlFixSplitButton: () => null
 }))
 

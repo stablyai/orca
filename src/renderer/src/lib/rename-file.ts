@@ -1,12 +1,12 @@
 import { toast } from 'sonner'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { commitFileExplorerOp } from '@/components/right-sidebar/fileExplorerUndoRedo'
+import { commitFileExplorerOp } from '@/components/right-sidebar/file-explorer/mutations/fileExplorerUndoRedo'
 import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
-} from '@/components/right-sidebar/file-explorer-operation-owner'
-import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
+} from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
+import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
 
 /** Strip ipcRenderer.invoke’s remote-method wrapper so toasts show the underlying error. */
 export function extractIpcErrorMessage(err: unknown, fallback: string): string {

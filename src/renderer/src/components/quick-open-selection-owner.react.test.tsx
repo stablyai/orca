@@ -9,7 +9,7 @@ import { useQuickOpenInteraction } from './use-quick-open-interaction'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwnerFromState
-} from './right-sidebar/file-explorer-operation-owner'
+} from './right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 const mocks = vi.hoisted(() => ({ stat: vi.fn(), open: vi.fn(() => 'owner-file') }))
 vi.mock('@/lib/user-opened-local-path', () => ({ statUserOpenedPath: mocks.stat }))
 vi.mock('@/store/slices/editor/focus/editor-focus-reveal', () => ({
