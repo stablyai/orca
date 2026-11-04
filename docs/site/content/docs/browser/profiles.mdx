@@ -20,6 +20,8 @@ The cleaned identity removes Orca and Electron tokens from the browser engine's 
 
 Import cookies from Chrome or Edge (or from a cookie file) into a profile from Settings or the browser toolbar. Orca replaces existing cookies only for domains included in the import, so sign-ins for unrelated sites in the same profile stay intact. Google cookies are excluded — import menus show **Google logins aren't imported** and tell you to **Sign in to Google directly in Orca.** After an import that skipped Google cookies, a separate warning names the host that ran the import: open a browser in Orca on that host with the same profile, then sign in.
 
+The default profile's **Clear default cookies** action remains available after an import has been cleared. You can clear cookies again after signing in or importing another session.
+
 When a site requests a discoverable passkey from a USB security key and the key offers multiple accounts, Orca opens an account picker instead of silently canceling the sign-in. Choose the account you want or cancel the request. Platform passkeys stored by the operating system are not available in Orca yet; this flow is for external FIDO security keys.
 
 ## Use a profile
