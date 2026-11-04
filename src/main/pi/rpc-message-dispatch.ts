@@ -57,36 +57,39 @@ export async function dispatchPiRpcMessage(
     return exited()
   }
   input.onInputPreparation?.()
-  for (const key of ['model', 'effort'] as const) {
-    const value = input.executionOptions?.[key]
-    if (value === undefined || session.optionProof.current.get(key) === value) {
-      continue
-    }
-    try {
-      await applyPiRpcSessionOption(
-        session.connection,
-        session.selected,
-        key,
-        value,
-        { signal: input.signal },
-        session.optionProof
-      )
-    } catch (error) {
-      input.signal?.throwIfAborted()
-      if (session.connection.closed) {
-        return exited()
+  // Pi refuses prompts during a requested compaction. Wait it out, then reapply this send's
+  // options in case a pick changed them meanwhile, until none started during the option RPCs.
+  do {
+    await session.turns.compaction.waitForEnd(input.signal)
+    for (const key of ['model', 'effort'] as const) {
+      const value = input.executionOptions?.[key]
+      if (value === undefined || session.optionProof.current.get(key) === value) {
+        continue
       }
-      if (error instanceof JsonlRpcResponseError) {
-        throw withProviderDiagnostic(
-          new AgentSessionOptionRejectedError(error),
-          providerDiagnostic(error.message, 'person')
+      try {
+        await applyPiRpcSessionOption(
+          session.connection,
+          session.selected,
+          key,
+          value,
+          { signal: input.signal },
+          session.optionProof
         )
+      } catch (error) {
+        input.signal?.throwIfAborted()
+        if (session.connection.closed) {
+          return exited()
+        }
+        if (error instanceof JsonlRpcResponseError) {
+          throw withProviderDiagnostic(
+            new AgentSessionOptionRejectedError(error),
+            providerDiagnostic(error.message, 'person')
+          )
+        }
+        throw new AgentSessionOptionRejectedError(error)
       }
-      throw new AgentSessionOptionRejectedError(error)
     }
-  }
-  // Pi refuses prompts during a requested compaction; waiting after option RPCs leaves only microtasks before the write.
-  await session.turns.compaction.waitForEnd(input.signal)
+  } while (session.turns.compaction.running)
   input.signal?.throwIfAborted()
   if (!isCurrent() || session.connection.closed) {
     return exited()
