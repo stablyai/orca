@@ -4,6 +4,7 @@ import {
   groupResumeCandidates,
   groupResumeCandidatesByHost,
   groupResumeWorkspacesByRepo,
+  nestResumeMachines,
   nestResumeWorkspaces,
   resolveResumeGroupHeader,
   resumeSelectionState,
@@ -56,7 +57,10 @@ describe('arranging the offer the way the sidebar does', () => {
       candidate({ sessionId: 'c', workspaceId: 'repo-1::/w/three' })
     ])
 
-    const repoGroups = groupResumeWorkspacesByRepo(workspaces, (id) => id.split('::')[0] ?? null)
+    const repoGroups = groupResumeWorkspacesByRepo(
+      workspaces,
+      (group) => group.workspaceId.split('::')[0] ?? null
+    )
 
     expect(repoGroups.map((group) => group.repoId)).toEqual(['repo-1', 'repo-2'])
     expect(repoGroups[0]?.workspaces).toHaveLength(2)
@@ -169,6 +173,35 @@ describe('nesting child workspaces', () => {
         ]
       ],
       ['d', []]
+    ])
+  })
+})
+
+describe('nesting across machines', () => {
+  it("puts a server child under its local parent, not the server's same-id workspace", () => {
+    const local = groupResumeCandidates([candidate({ sessionId: 'l', workspaceId: 'p' })])
+    const server = groupResumeCandidates([
+      candidate({ sessionId: 's1', workspaceId: 'p', executionHostId: 'runtime:srv' }),
+      candidate({ sessionId: 's2', workspaceId: 'c', executionHostId: 'runtime:srv' })
+    ])
+    const ancestors: Record<string, string[]> = { 'runtime:srv|c': ['local|p'] }
+    const sections = nestResumeMachines(
+      [
+        { hostId: 'local', workspaces: local },
+        { hostId: 'runtime:srv', workspaces: server }
+      ],
+      (key) => ancestors[key] ?? [],
+      (group) => `${group.candidates[0]?.executionHostId}|${group.workspaceId}`
+    )
+
+    expect(
+      sections.map((section) => [
+        section.hostId,
+        section.roots.map((root) => resumeWorkspaceCandidates(root).map((c) => c.sessionId))
+      ])
+    ).toEqual([
+      ['local', [['l', 's2']]],
+      ['runtime:srv', [['s1']]]
     ])
   })
 })

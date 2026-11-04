@@ -1,4 +1,5 @@
 import { createContext, useState } from 'react'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type {
   ResumeCandidate,
   ResumeFailure,
@@ -52,7 +53,7 @@ export type TreeProps = {
   isExpanded: (key: string) => boolean
   setExpanded: (key: string, expanded: boolean) => void
   repoIdOf: (group: ResumeWorkspaceGroup) => string | null
-  ancestorsOf: (group: ResumeWorkspaceGroup) => readonly string[]
+  hostLabelById: ReadonlyMap<ExecutionHostId, string>
 } & FailureProps
 
 export function chatState(candidate: ResumeCandidate, tree: TreeProps) {

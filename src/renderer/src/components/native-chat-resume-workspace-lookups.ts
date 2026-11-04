@@ -40,14 +40,18 @@ export function useRepoIdByWorkspace(
   }
 }
 
-/** Each workspace's lineage ancestors, nearest first, by the sidebar's own nesting rule. */
-export function useLineageAncestors(
-  workspaces: readonly ResumeWorkspaceGroup[]
-): (group: ResumeWorkspaceGroup) => readonly string[] {
+export type ResumeLineage = {
+  /** Host-qualified so same-id workspaces on two machines stay distinct. */
+  keyOf: (group: ResumeWorkspaceGroup) => string
+  /** Host-qualified ancestor keys, nearest first, by the sidebar's own nesting rule. */
+  ancestorsOf: (key: string) => readonly string[]
+}
+
+export function useResumeLineage(workspaces: readonly ResumeWorkspaceGroup[]): ResumeLineage {
   const worktreesByRepo = useAppStore((store) => selectWorktreesByRepo(store))
   const worktreeLineageById = useAppStore((store) => store.worktreeLineageById)
   const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
-  const ancestors = useMemo(() => {
+  return useMemo(() => {
     const state = { worktreesByRepo }
     // Why: archived rows never render in the sidebar, so nothing nests under them.
     const rows = new Map(
@@ -59,21 +63,28 @@ export function useLineageAncestors(
       worktreeLineageById,
       getWorktreeMapFromState(state)
     )
-    return new Map(
-      workspaces.map((group) => {
-        // Why: a row with no host id (older metadata) is still the chat's workspace.
-        const target =
-          getWorktreeOnHostFromState(
-            state,
-            group.workspaceId,
-            group.candidates[0]?.executionHostId
-          ) ?? rows.get(composeWorktreeHostIdentity(undefined, group.workspaceId))
-        const parents = target
-          ? getSidebarLineageAncestors(target, worktreeLineageById, rows, cyclic, parentIdentities)
-          : []
-        return [group, parents.map((parent) => parent.id)]
-      })
-    )
+    const keys = new Map<ResumeWorkspaceGroup, string>()
+    const ancestors = new Map<string, readonly string[]>()
+    for (const group of workspaces) {
+      const hostId = group.candidates[0]?.executionHostId
+      // Why: a row with no host id (older metadata) is still the chat's workspace.
+      const target =
+        getWorktreeOnHostFromState(state, group.workspaceId, hostId) ??
+        rows.get(composeWorktreeHostIdentity(undefined, group.workspaceId))
+      const key = target
+        ? getWorktreeHostIdentity(target)
+        : composeWorktreeHostIdentity(hostId, group.workspaceId)
+      keys.set(group, key)
+      const parents = target
+        ? getSidebarLineageAncestors(target, worktreeLineageById, rows, cyclic, parentIdentities)
+        : []
+      ancestors.set(key, parents.map(getWorktreeHostIdentity))
+    }
+    return {
+      keyOf: (group) =>
+        keys.get(group) ??
+        composeWorktreeHostIdentity(group.candidates[0]?.executionHostId, group.workspaceId),
+      ancestorsOf: (key) => ancestors.get(key) ?? []
+    }
   }, [workspaces, worktreesByRepo, worktreeLineageById, parentIdentities])
-  return (group) => ancestors.get(group) ?? []
 }

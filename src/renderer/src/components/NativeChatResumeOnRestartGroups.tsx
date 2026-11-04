@@ -15,8 +15,8 @@ import {
 import { useAppStore } from '../store'
 import * as workspaceDisplay from './native-chat-resume-workspace-display'
 import {
-  useLineageAncestors,
   useRepoIdByWorkspace,
+  useResumeLineage,
   useWorkspaceWorktree
 } from './native-chat-resume-workspace-lookups'
 import { ResumeCandidateRow } from './NativeChatResumeOnRestartAgentRow'
@@ -34,20 +34,20 @@ import {
   groupResumeCandidates,
   groupResumeCandidatesByHost,
   groupResumeWorkspacesByRepo,
-  nestResumeWorkspaces,
+  nestResumeMachines,
   resolveResumeGroupHeader,
   resumeSelectionState,
   resumeWorkspaceKind,
   resumeWorkspaceCandidates,
+  resumeWorkspaceHostId,
   toggleResumeSelection,
   type ResumeCandidate,
-  type ResumeWorkspaceGroup,
   type ResumeWorkspaceNode
 } from './native-chat-resume-on-restart-grouping'
 
 export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
 
-/** Group by machine/project/workspace/chat, nesting child workspaces after parent chats. Show machine nodes for remote/multiple hosts; name unknown workspaces by their encoded folder. */
+/** Group by machine/project/workspace/chat, nesting child workspaces (any machine) after parent chats. Show machine nodes for remote/multiple hosts; name unknown workspaces by their encoded folder. */
 
 function GroupNode({
   nodeKey,
@@ -97,18 +97,19 @@ function GroupNode({
 
 function WorkspaceNode({
   node,
-  hostId,
+  parentHostId,
   depth,
   tree,
   fallbackDisplays
 }: {
   node: ResumeWorkspaceNode
-  hostId: ExecutionHostId
+  parentHostId: ExecutionHostId
   depth: number
   tree: TreeProps
   fallbackDisplays?: workspaceDisplay.WorkspaceFallbacks
 }): React.JSX.Element {
   const { group } = node
+  const hostId = resumeWorkspaceHostId(group)
   const first = group.candidates[0]
   const worktree = useWorkspaceWorktree(group.workspaceId, first?.executionHostId)
   const kind = first ? resumeWorkspaceKind(first) : 'git-worktree'
@@ -137,6 +138,11 @@ function WorkspaceNode({
             <span className="min-w-0 shrink-2 truncate text-[11px] text-muted-foreground">
               {branch}
             </span>
+          )}
+          {hostId !== parentHostId && (
+            <WorktreeHostContextBadge
+              label={getHostContextLabel(hostId, { hostLabelById: tree.hostLabelById })}
+            />
           )}
           {!worktree && fallback?.parentPath && (
             <ProjectOptionDetail
@@ -168,9 +174,9 @@ function WorkspaceNode({
       </ResumeTreeDepthContext.Provider>
       {node.children.map((child) => (
         <WorkspaceNode
-          key={child.group.workspaceId}
+          key={`${resumeWorkspaceHostId(child.group)}:${child.group.workspaceId}`}
           node={child}
-          hostId={hostId}
+          parentHostId={hostId}
           depth={depth + 1}
           tree={tree}
           fallbackDisplays={fallbackDisplays}
@@ -229,7 +235,7 @@ function ProjectNode({
         <WorkspaceNode
           key={node.group.workspaceId}
           node={node}
-          hostId={hostId}
+          parentHostId={hostId}
           depth={depth + 1}
           tree={tree}
         />
@@ -241,27 +247,23 @@ function ProjectNode({
 /** A machine's projects, each a node; workspaces the store cannot place sit at project depth. */
 function MachineContents({
   hostId,
-  workspaces,
+  roots,
   depth,
   tree
 }: {
   hostId: ExecutionHostId
-  workspaces: readonly ResumeWorkspaceGroup[]
+  roots: readonly ResumeWorkspaceNode[]
   depth: number
   tree: TreeProps
 }): React.JSX.Element {
-  const byId = new Map(workspaces.map((group) => [group.workspaceId, group]))
-  const lookup =
-    <T,>(read: (group: ResumeWorkspaceGroup) => T, fallback: T) =>
-    (id: string) => {
-      const group = byId.get(id)
-      return group ? read(group) : fallback
-    }
-  const ancestorsOf = lookup(tree.ancestorsOf, [])
+  const repoGroups = groupResumeWorkspacesByRepo(
+    roots.map((root) => root.group),
+    tree.repoIdOf
+  )
   return (
     <>
-      {groupResumeWorkspacesByRepo(workspaces, lookup(tree.repoIdOf, null)).map((repoGroup) => {
-        const nodes = nestResumeWorkspaces(repoGroup.workspaces, ancestorsOf)
+      {repoGroups.map((repoGroup) => {
+        const nodes = roots.filter((root) => repoGroup.workspaces.includes(root.group))
         const fallbackDisplays = workspaceDisplay.deriveFallbacks(repoGroup)
         // A group the store cannot place has no project to name or select; Select all covers it.
         return repoGroup.repoId === null ? (
@@ -269,7 +271,7 @@ function MachineContents({
             <WorkspaceNode
               key={node.group.workspaceId}
               node={node}
-              hostId={hostId}
+              parentHostId={hostId}
               depth={depth}
               tree={tree}
               fallbackDisplays={fallbackDisplays}
@@ -292,18 +294,14 @@ function MachineContents({
 
 function MachineNode({
   hostId,
-  candidates,
-  workspaces,
-  hostLabelById,
+  roots,
   tree
 }: {
   hostId: ExecutionHostId
-  candidates: readonly ResumeCandidate[]
-  workspaces: readonly ResumeWorkspaceGroup[]
-  hostLabelById: ReadonlyMap<ExecutionHostId, string>
+  roots: readonly ResumeWorkspaceNode[]
   tree: TreeProps
 }): React.JSX.Element {
-  const name = getHostContextLabel(hostId, { hostLabelById })
+  const name = getHostContextLabel(hostId, { hostLabelById: tree.hostLabelById })
   return (
     <GroupNode
       nodeKey={`machine:${hostId}`}
@@ -314,7 +312,7 @@ function MachineNode({
         'Select all chats on {{value0}}',
         { value0: name }
       )}
-      covered={coveredKeys(candidates, tree)}
+      covered={coveredKeys(roots.flatMap(resumeWorkspaceCandidates), tree)}
       tree={tree}
       label={
         <>
@@ -328,7 +326,7 @@ function MachineNode({
         </>
       }
     >
-      <MachineContents hostId={hostId} workspaces={workspaces} depth={1} tree={tree} />
+      <MachineContents hostId={hostId} roots={roots} depth={1} tree={tree} />
     </GroupNode>
   )
 }
@@ -363,7 +361,11 @@ export function ResumeOnRestartGroups({
   )
   const allWorkspaces = useMemo(() => machines.flatMap((machine) => machine.workspaces), [machines])
   const repoIdOf = useRepoIdByWorkspace(allWorkspaces)
-  const ancestorsOf = useLineageAncestors(allWorkspaces)
+  const lineage = useResumeLineage(allWorkspaces)
+  const sections = useMemo(
+    () => nestResumeMachines(machines, lineage.ancestorsOf, lineage.keyOf),
+    [machines, lineage]
+  )
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
     () => new Map(hostOptions.map((host) => [host.id, host.label])),
@@ -377,7 +379,7 @@ export function ResumeOnRestartGroups({
     onToggle,
     ...expansion,
     repoIdOf,
-    ancestorsOf,
+    hostLabelById,
     failureFor,
     onFailureAction,
     renderStatus,
@@ -389,21 +391,19 @@ export function ResumeOnRestartGroups({
   return (
     <ResumeTreeSelectingContext.Provider value={selecting}>
       <div className="flex flex-col">
-        {machines.map((machine) =>
+        {sections.map((section) =>
           showMachines ? (
             <MachineNode
-              key={machine.hostId}
-              hostId={machine.hostId}
-              candidates={machine.candidates}
-              workspaces={machine.workspaces}
-              hostLabelById={hostLabelById}
+              key={section.hostId}
+              hostId={section.hostId}
+              roots={section.roots}
               tree={tree}
             />
           ) : (
             <MachineContents
-              key={machine.hostId}
-              hostId={machine.hostId}
-              workspaces={machine.workspaces}
+              key={section.hostId}
+              hostId={section.hostId}
+              roots={section.roots}
               depth={0}
               tree={tree}
             />

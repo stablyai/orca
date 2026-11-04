@@ -77,6 +77,10 @@ export function groupResumeCandidatesByHost(
   return [...groups].map(([hostId, entries]) => ({ hostId, candidates: entries }))
 }
 
+export function resumeWorkspaceHostId(group: ResumeWorkspaceGroup): ExecutionHostId {
+  return group.candidates[0]?.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+}
+
 /** Groups by workspace, preserving the order the host offered them so the list is stable. */
 export function groupResumeCandidates(
   candidates: readonly ResumeCandidate[]
@@ -96,11 +100,11 @@ export function groupResumeCandidates(
 /** Group by owner in first-seen order; unresolved workspaces share one null group. */
 export function groupResumeWorkspacesByRepo(
   workspaces: readonly ResumeWorkspaceGroup[],
-  repoIdFor: (workspaceId: string) => string | null
+  repoIdFor: (group: ResumeWorkspaceGroup) => string | null
 ): ResumeRepoGroup[] {
   const groups = new Map<string, ResumeRepoGroup>()
   for (const workspace of workspaces) {
-    const repoId = repoIdFor(workspace.workspaceId)
+    const repoId = repoIdFor(workspace)
     const key = repoId ?? '\0none'
     const existing = groups.get(key)
     if (existing) {
@@ -120,16 +124,15 @@ export type ResumeWorkspaceNode = {
 /** Nest under the nearest listed ancestor, skipping ancestors without offers and preserving offer order. */
 export function nestResumeWorkspaces(
   workspaces: readonly ResumeWorkspaceGroup[],
-  ancestorsOf: (workspaceId: string) => readonly string[]
+  ancestorsOf: (key: string) => readonly string[],
+  keyOf: (group: ResumeWorkspaceGroup) => string = (group) => group.workspaceId
 ): ResumeWorkspaceNode[] {
   const nodes = new Map<string, ResumeWorkspaceNode>(
-    workspaces.map((group) => [group.workspaceId, { group, children: [] }])
+    workspaces.map((group) => [keyOf(group), { group, children: [] }])
   )
   const parentOf = new Map<ResumeWorkspaceNode, ResumeWorkspaceNode>()
-  for (const node of nodes.values()) {
-    const parentId = ancestorsOf(node.group.workspaceId).find(
-      (id) => id !== node.group.workspaceId && nodes.has(id)
-    )
+  for (const [key, node] of nodes) {
+    const parentId = ancestorsOf(key).find((id) => id !== key && nodes.has(id))
     const parent = parentId === undefined ? undefined : nodes.get(parentId)
     if (parent) {
       parentOf.set(node, parent)
@@ -157,6 +160,25 @@ export function nestResumeWorkspaces(
     }
   }
   return roots
+}
+
+/** Nest over every machine first so a child follows its parent into the parent's machine section. */
+export function nestResumeMachines(
+  machines: readonly { hostId: ExecutionHostId; workspaces: readonly ResumeWorkspaceGroup[] }[],
+  ancestorsOf: (key: string) => readonly string[],
+  keyOf: (group: ResumeWorkspaceGroup) => string
+): { hostId: ExecutionHostId; roots: ResumeWorkspaceNode[] }[] {
+  const roots = nestResumeWorkspaces(
+    machines.flatMap((machine) => machine.workspaces),
+    ancestorsOf,
+    keyOf
+  )
+  return machines
+    .map((machine) => ({
+      hostId: machine.hostId,
+      roots: roots.filter((root) => machine.workspaces.includes(root.group))
+    }))
+    .filter((section) => section.roots.length > 0)
 }
 
 export function resumeWorkspaceCandidates(node: ResumeWorkspaceNode): ResumeCandidate[] {
