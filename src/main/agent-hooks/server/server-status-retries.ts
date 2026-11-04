@@ -24,10 +24,6 @@ import {
   CODEX_SUBAGENT_POLL_MS
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
-import {
-  terminalUsageLimitGuard,
-  type TerminalUsageLimitCut
-} from '../../../shared/agent-hook-listener/terminal-usage-limit-guard'
 
 type TranscriptPoll = {
   source: AgentHookSource
@@ -36,10 +32,6 @@ type TranscriptPoll = {
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
-  prepareTerminalUsageLimitContinuation(paneKey: string, expected: TerminalUsageLimitCut) {
-    return terminalUsageLimitGuard(this.state, paneKey, expected)
-  }
-
   private observedLocalHook?: { accepted: boolean; receivedAt?: number }
   private readonly claudeHelperKills = new ClaudeHelperKillPoller(this.state, {
     current: (paneKey) => this.state.lastStatusByPaneKey.get(paneKey),

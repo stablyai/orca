@@ -12,6 +12,14 @@ export class RelayAgentPresence {
 
   constructor(private readonly state: Pick<HookListenerState, 'lastStatusByPaneKey'>) {}
 
+  checkPane(paneKey: string, publish: (event: AgentHookEventPayload) => void): Promise<void> {
+    return this.check(
+      this.state.lastStatusByPaneKey.get(paneKey),
+      () => this.state.lastStatusByPaneKey.get(paneKey),
+      publish
+    )
+  }
+
   check(
     row: AgentHookEventPayload | undefined,
     current: () => AgentHookEventPayload | undefined,

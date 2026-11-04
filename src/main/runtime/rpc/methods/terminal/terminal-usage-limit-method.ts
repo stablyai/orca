@@ -1,3 +1,4 @@
+import { wslHookRelayManager } from '../../../../agent-hooks/wsl-hook-relay-manager'
 import { defineMethod } from '../../core'
 import { agentHookServer } from '../../../../agent-hooks/server'
 import { TerminalContinueAfterUsageLimit } from '../../../../../shared/rpc-contract/terminal-unary-params'
@@ -14,18 +15,34 @@ export const TERMINAL_USAGE_LIMIT_METHODS = [
       { runtime, caller, signal }
     ): Promise<TerminalUsageLimitContinuationResult> => {
       const paneKey = runtime.getLiveTerminalPaneKey(params.terminal)
-      const isCurrent = paneKey
-        ? agentHookServer.prepareTerminalUsageLimitContinuation(paneKey, params)
+      const binding = runtime.getTerminalPromptRequestBinding(params.terminal)
+      const source = paneKey
+        ? agentHookServer.prepareTerminalUsageLimitSource(paneKey, binding.ptyId, params)
         : null
-      if (!isCurrent) {
+      if (!source) {
         return { status: 'refused', reason: 'changed' }
       }
-      return runtime.continueTerminalUsageLimit(
-        params.terminal,
-        isCurrent,
-        terminalInputSourceForClient(params.client, caller),
-        signal
-      )
+      try {
+        const remote = source.remote
+        const guest = remote
+          ? wslHookRelayManager.captureUsageLimitValidator(remote.connectionId)
+          : null
+        if (remote && !guest) {
+          return { status: 'refused', reason: 'unavailable' }
+        }
+        return await runtime.continueTerminalUsageLimit(
+          params.terminal,
+          () =>
+            source.isCurrent() &&
+            (!guest || guest.isCurrent()) &&
+            runtime.getLiveTerminalPaneKey(params.terminal) === paneKey,
+          terminalInputSourceForClient(params.client, caller),
+          signal,
+          remote && guest ? () => guest.validateSource(remote.request, signal) : undefined
+        )
+      } finally {
+        source.dispose()
+      }
     }
   })
 ]

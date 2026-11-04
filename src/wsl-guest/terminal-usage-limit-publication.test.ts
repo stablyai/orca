@@ -2,6 +2,7 @@ import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import { rememberPaneKeyForPty, ptyPaneKey, paneKeyPtyId } from '../main/ipc/pty/pane/key-state'
 import { AgentHookServer, _internals } from '../main/agent-hooks/server'
 import { RelayAgentHookServer } from './agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
@@ -27,14 +28,20 @@ async function start(kind: 'local' | 'guest') {
   cleanups.push(() => rmSync(directory, { recursive: true, force: true }))
   const path = join(directory, 'transcript.jsonl')
   let latest: AgentHookRelayEnvelope | undefined
+  const local = new AgentHookServer()
   const relay = new RelayAgentHookServer({
     endpointDir: directory,
     forward: (row) => {
       latest = row
+      local.ingestRemote(row, 'wsl:Ubuntu')
     }
   })
-  const local = new AgentHookServer()
   const server = kind === 'guest' ? relay : local
+  if (kind === 'guest') {
+    await local.start({ env: 'production', userDataPath: directory })
+    cleanups.push(() => local.stop())
+    local.beginRemoteRelaySession('wsl:Ubuntu')
+  }
   await (kind === 'guest'
     ? relay.start()
     : local.start({ env: 'production', userDataPath: directory }))
@@ -49,6 +56,8 @@ async function start(kind: 'local' | 'guest') {
         }
   return {
     path,
+    local,
+    validate: (value: unknown) => relay.validateTerminalUsageLimit(value),
     read: () => (kind === 'guest' ? latest : local.getStatusSnapshotForPane(paneKey)[0]),
     post: async (source: 'claude' | 'codex', payload: Record<string, unknown>) => {
       const result = await fetch(`http://127.0.0.1:${port}/hook/${source}`, {
@@ -110,6 +119,32 @@ it.each(['local', 'guest'] as const)(
     if ('payload' in failed) {
       expect(failed.hookEventName).toBeUndefined()
     }
+    if (kind === 'guest') {
+      const ptyId = 'quota-publication-pty'
+      rememberPaneKeyForPty(ptyId, paneKey)
+      cleanups.push(() => {
+        ptyPaneKey.delete(ptyId)
+        paneKeyPtyId.delete(paneKey)
+      })
+      const cut = { sessionId, turnEndedAt: failed.turnEndedAt! }
+      const initial = host.local.prepareTerminalUsageLimitSource(paneKey, ptyId, cut)!
+      cleanups.push(() => initial.dispose())
+      expect(initial.isCurrent()).toBe(true)
+      expect(host.validate(initial.remote!.request)).toEqual({ status: 'current' })
+      const movedPane = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
+      host.local.transferPaneAuthority(paneKey, movedPane, ptyId, Date.now(), {
+        authorityVerified: true
+      })
+      expect(initial.isCurrent()).toBe(false)
+      const moved = host.local.prepareTerminalUsageLimitSource(movedPane, ptyId, cut)!
+      cleanups.push(() => moved.dispose())
+      expect(moved.isCurrent()).toBe(true)
+      expect(moved.remote!.request.paneKey).toBe(paneKey)
+      expect(host.validate(moved.remote!.request)).toEqual({ status: 'current' })
+      host.local.beginRemoteRelaySession('wsl:Ubuntu')
+      expect(moved.isCurrent()).toBe(false)
+    }
+
     await host.post('codex', { hook_event_name: 'Stop', turn_id: 'root' })
     expect(host.read()?.turnEndedAt).toBe(failed.turnEndedAt)
   }
@@ -189,6 +224,22 @@ it.each(['refine', 'new-meta-root', 'new-session'] as const)(
         })
         .toEqual({})
       expect(host.read()?.turnEndedAt).toBe(failed.turnEndedAt)
+      const request = { paneKey, sessionId, turnEndedAt: failed.turnEndedAt, source: 'claude' }
+      expect(host.validate(request)).toEqual({ status: 'current' })
+      expect(host.validate({ ...request, launchToken: 'different-owner' })).toEqual({
+        status: 'changed'
+      })
+      appendFileSync(
+        host.path,
+        jsonl({
+          ...user,
+          uuid: 'next-native-input',
+          promptId: undefined,
+          isMeta: true,
+          parentUuid: 'quota'
+        })
+      )
+      expect(host.validate(request)).toEqual({ status: 'changed' })
     } else {
       await new Promise((resolve) => setTimeout(resolve, 350))
       const row = host.read()!

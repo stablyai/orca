@@ -1,3 +1,5 @@
+import * as guestPaths from './wsl-hook-relay-guest-paths'
+import { captureWslUsageLimitValidator } from './wsl-usage-limit-validator'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
   runWslRelayGuestInstall,
@@ -73,29 +75,27 @@ export class WslHookRelayManager {
   private stateFor(distro: string | null): WslRelayDistroState | undefined {
     return this.states.get(wslHookRelayStateKey(distro ?? this.defaultDistro ?? ''))
   }
+  captureUsageLimitValidator(connectionId: string) {
+    return captureWslUsageLimitValidator(
+      connectionId,
+      this.states,
+      () => !this.disposed && isWslHookRelayAllowed(this.deps)
+    )
+  }
   getGuestEndpointFilePath(distro: string | null): string | null {
-    return this.stateFor(distro)?.connectedAt
-      ? (this.stateFor(distro)?.guestEndpointFilePath ?? null)
-      : null
+    return guestPaths.endpointFile(this.stateFor(distro))
   }
   getClaudeAgentView(distro: string | null): { pluginDir: string; configDir: string } | null {
-    const state = this.stateFor(distro)
-    return state?.claudeAgentViewDir && state.claudeConfigDir
-      ? { pluginDir: state.claudeAgentViewDir, configDir: state.claudeConfigDir }
-      : null
+    return guestPaths.claudeAgentView(this.stateFor(distro))
   }
   getOpenCodeOverlayDir(
     distro: string | null,
     agent: 'opencode' | 'opencode2' = 'opencode'
   ): string | null {
-    const state = this.stateFor(distro)
-    return agent === 'opencode2'
-      ? (state?.opencode2OverlayDir ?? null)
-      : (state?.opencodeOverlayDir ?? null)
+    return guestPaths.openCodeOverlay(this.stateFor(distro), agent)
   }
   getGuestAgentPath(distro: string | null, kind: 'pi' | 'omp'): string | null {
-    const state = this.stateFor(distro)
-    return kind === 'pi' ? (state?.piAgentDir ?? null) : (state?.ompStatusExtension ?? null)
+    return guestPaths.agentPath(this.stateFor(distro), kind)
   }
   /** Nonpermanent disposal allows relays to restart when hooks are re-enabled. */
   disposeAll({ permanent = true }: { permanent?: boolean } = {}): void {

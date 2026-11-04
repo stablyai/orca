@@ -1,13 +1,13 @@
 import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { AgentHookServerAuthorityAliases } from './server-authority-aliases'
+import { AgentHookServerTerminalUsageLimit } from './server-terminal-usage-limit'
 import type {
   EnrichedAgentHookEventPayload,
   RetiredPaneAlias,
   RetiredPaneFence
 } from './server-types'
 
-export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
+export abstract class AgentHookServerAuthorityFences extends AgentHookServerTerminalUsageLimit {
   retirePaneAuthority(paneKey: string, retirementId?: string): void {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     const previousFence = this.retiredPaneFencesByKey.get(ownerPaneKey)

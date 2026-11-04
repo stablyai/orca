@@ -1,3 +1,4 @@
+import type { TerminalUsageLimitSourceResult } from '../../../../shared/terminal-usage-limit-source-validation'
 import { randomUUID } from 'node:crypto'
 import { OrcaRuntimeWithAgentPromptRequestCorrelation } from '../../orca-runtime-agent-prompt-request-correlation'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal-composer-draft'
@@ -23,10 +24,12 @@ export abstract class OrcaRuntimeWithTerminalUsageLimitContinuation extends Orca
     handle: string,
     isCurrent: () => boolean,
     inputSource: TerminalInputSource,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    validateSource?: () => Promise<TerminalUsageLimitSourceResult>
   ): Promise<TerminalUsageLimitContinuationResult> {
     const binding = this.getTerminalPromptRequestBinding(handle)
     const { ptyId } = binding
+    const paneKey = this.getLiveTerminalPaneKey(handle)
     if (this.usageLimitContinuations.has(ptyId)) {
       return { status: 'refused', reason: 'in-progress' }
     }
@@ -42,6 +45,7 @@ export abstract class OrcaRuntimeWithTerminalUsageLimitContinuation extends Orca
       const current = this.getTerminalPromptRequestBinding(handle)
       if (
         signal?.aborted ||
+        this.getLiveTerminalPaneKey(handle) !== paneKey ||
         this.isPtyStopRequested(ptyId) ||
         current.ptyId !== ptyId ||
         current.processIncarnation !== binding.processIncarnation ||
@@ -98,6 +102,15 @@ export abstract class OrcaRuntimeWithTerminalUsageLimitContinuation extends Orca
             preparedPrompt = prompt
           },
           beforeWrite: async () => {
+            assertCurrent()
+            if (validateSource) {
+              const source = await validateSource()
+              if (source.status !== 'current') {
+                throw new ContinuationRefused(
+                  source.status === 'changed' ? 'changed' : 'unavailable'
+                )
+              }
+            }
             const model = this.readWholeScreenModel(ptyId)
             if (model) {
               await model.writeChain

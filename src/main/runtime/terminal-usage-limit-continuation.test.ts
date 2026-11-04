@@ -138,3 +138,45 @@ it('reports proven refusal without claiming ambiguous delivery', async () => {
   })
   expect(write).toHaveBeenCalledTimes(1)
 })
+
+it.each(['before-paste', 'before-enter'] as const)(
+  'refreshes guest source %s and never submits past a changed source',
+  async (phase) => {
+    const { runtime, write } = await setup()
+    let reads = 0
+    const result = runtime.continueTerminalUsageLimit(
+      HANDLE,
+      () => true,
+      'desktop',
+      undefined,
+      async () => {
+        reads += 1
+        return { status: phase === 'before-enter' && reads === 1 ? 'current' : 'changed' }
+      }
+    )
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(await result).toEqual(
+      phase === 'before-paste' ? { status: 'refused', reason: 'changed' } : { status: 'draft' }
+    )
+    expect(write).toHaveBeenCalledTimes(phase === 'before-paste' ? 0 : 1)
+    expect(reads).toBe(phase === 'before-paste' ? 1 : 2)
+  }
+)
+
+it('rechecks owner after an asynchronous guest reply before handing off input', async () => {
+  const { runtime, write } = await setup()
+  let current = true
+  const result = runtime.continueTerminalUsageLimit(
+    HANDLE,
+    () => current,
+    'desktop',
+    undefined,
+    async () => {
+      current = false
+      return { status: 'current' }
+    }
+  )
+  await vi.advanceTimersByTimeAsync(10000)
+  expect(await result).toEqual({ status: 'refused', reason: 'changed' })
+  expect(write).not.toHaveBeenCalled()
+})

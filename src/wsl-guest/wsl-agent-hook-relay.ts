@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Forward guest loopback hooks over framed stdio and expose home-scoped installer operations (STA-1515).
 // Exit with stdin: a lingering listener can let WSL forwarding capture the freed Windows port and blackhole hooks.
+import { TERMINAL_USAGE_LIMIT_SOURCE_METHOD } from '../shared/terminal-usage-limit-source-validation'
 import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-interrupt-reconciliation'
 import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../shared/claude-agent-view'
 import { homedir } from 'node:os'
@@ -76,6 +77,9 @@ async function main(): Promise<void> {
   dispatcher.onRequest(AGENT_HOOK_INFER_INTERRUPT_METHOD, async (params) => ({
     applied: hookServer.inferInterrupt(params)
   }))
+  dispatcher.onRequest(TERMINAL_USAGE_LIMIT_SOURCE_METHOD, async (params) =>
+    hookServer.validateTerminalUsageLimit(params)
+  )
   new PreflightHandler(dispatcher)
 
   dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({

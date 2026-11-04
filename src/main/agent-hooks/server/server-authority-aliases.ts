@@ -1,3 +1,4 @@
+import { ptyPaneKey } from '../../ipc/pty/pane/key-state'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import {
   admitLegacyAgentStatus,
@@ -19,6 +20,32 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
 
   resolvePaneAuthorityOwner(paneKey: string): string {
     return this.resolvePaneKeyAlias(paneKey)
+  }
+
+  protected capturePaneSourceOwner(paneKey: string, ptyId: string) {
+    const owner = this.resolvePaneKeyAlias(paneKey)
+    const spawnPaneKey = ptyPaneKey.get(ptyId)
+    const candidates = Array.from(this.legacyPaneKeyAliases.entries()).filter(
+      ([, alias]) =>
+        alias.authorityVerified && alias.ptyId === ptyId && alias.stablePaneKey === owner
+    )
+    if (candidates.length > 1) {
+      return null
+    }
+    const verified = candidates[0]
+    const physicalPaneKey = verified?.[0] ?? spawnPaneKey
+    if (!physicalPaneKey || this.resolvePaneKeyAlias(physicalPaneKey) !== owner) {
+      return null
+    }
+    return {
+      physicalPaneKey,
+      isCurrent: () =>
+        this.resolvePaneKeyAlias(paneKey) === owner &&
+        this.resolvePaneKeyAlias(physicalPaneKey) === owner &&
+        (verified
+          ? this.legacyPaneKeyAliases.get(physicalPaneKey) === verified[1]
+          : ptyPaneKey.get(ptyId) === spawnPaneKey)
+    }
   }
 
   protected getPersistedPaneKeyAliases(): LegacyPaneKeyAliasEntry[] {
