@@ -8,10 +8,10 @@ import {
 import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
 import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getIndexedReposById } from '@/store/worktree-repo-index'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import { showWorktreeCreationError } from '@/lib/worktree-creation-surface'
+import {
+  isInstantFolderWorktreeCreation,
+  showWorktreeCreationError
+} from '@/lib/worktree-creation-surface'
 import { executeWorktreeCreation } from '@/lib/worktree-creation-flow-execute'
 import {
   getInitialWorktreeCreationPhase,
@@ -69,18 +69,8 @@ function revealPendingCreation(
 ): void {
   const store = useAppStore.getState()
   const indeterminate = getWorktreeCreationIndeterminate(request)
-  const hostId = request.workspaceRunContext?.hostId ?? request.executionHostId
-  const repos = getIndexedReposById(store.repos, request.repoId).filter(
-    (repo) => !hostId || getRepoExecutionHostId(repo) === hostId
-  )
   const loaderVisible = !(
-    request.worktreeCreateProgressMode === 'stepped' &&
-    repos.length === 1 &&
-    isFolderRepo(repos[0]) &&
-    request.agentLaunchRoute !== 'structured-native-chat' &&
-    !request.ephemeralVmRecipe &&
-    !request.ephemeralVmRuntimeId &&
-    !request.ephemeralVmRuntimeEnvironmentId &&
+    isInstantFolderWorktreeCreation(store, request) &&
     phase !== 'preparing' &&
     phase !== 'provisioning-vm'
   )

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { useEffect } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -12,6 +12,7 @@ import {
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 import { executeWorktreeCreation } from '@/lib/worktree-creation-flow-execute'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import { useQuickSubmitAction } from '@/hooks/composer-state/quick-submit-action'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
@@ -71,13 +72,16 @@ vi.mock('../components/Terminal', () => ({
       )
     )
     const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+    const hasTerminal = useAppStore(
+      (s) => (s.tabsByWorktree[s.activeWorktreeId ?? ''] ?? []).length > 0
+    )
     return hasChat ? (
       <div role="log" aria-label="Created chat" />
-    ) : (
+    ) : hasTerminal ? (
       <div role="log" aria-label="Workspace terminal">
         {activeWorktreeId}
       </div>
-    )
+    ) : null
   }
 }))
 
@@ -90,6 +94,8 @@ function WorkspaceShell(): React.JSX.Element {
   )
 }
 
+const expectedFolderWorkspaceId =
+  process.platform === 'win32' ? 'repo-1::\\workspace\\feature' : 'repo-1::/workspace/feature'
 const initialState = useAppStore.getState()
 let main: TabsDrawnFromMain | undefined
 afterEach(() => {
@@ -105,6 +111,8 @@ describe('worktree creation chat handoff', () => {
     const worktree = { ...makeCreatedAgentWorktree(), hostId: 'local' as const }
     const previous = { ...worktree, id: 'previous-workspace', path: '/workspace/previous' }
     seedEmptyActivatableWorktree(worktree, { extraWorktrees: [previous] })
+    useAppStore.getState().createTab(previous.id)
+    vi.spyOn(window.api.pty, 'listSessions').mockReturnValue(new Promise(() => {}))
     const checkout = Promise.withResolvers<{
       worktree: typeof worktree
       startupTerminal: { spawned: boolean }
@@ -144,11 +152,85 @@ describe('worktree creation chat handoff', () => {
     expect(terminal.textContent).toBe('previous-workspace')
 
     await act(async () => {
-      checkout.resolve({ worktree, startupTerminal: { spawned: true } })
+      checkout.resolve({ worktree, startupTerminal: { spawned: false } })
     })
     await waitFor(() =>
       expect(screen.getByRole('log', { name: 'Workspace terminal' }).textContent).toBe(
-        'repo-1::/workspace/feature'
+        expectedFolderWorkspaceId
+      )
+    )
+  })
+
+  it('opens a hidden linked creation from another page through composer re-entry and settlement', async () => {
+    const worktree = { ...makeCreatedAgentWorktree(), hostId: 'local' as const }
+    seedEmptyActivatableWorktree(worktree)
+    const checkout = Promise.withResolvers<{ worktree: typeof worktree }>()
+    useAppStore.setState((state) => ({
+      repos: state.repos.map((repo) => ({ ...repo, kind: 'folder' as const })),
+      activeView: 'tasks',
+      activeWorktreeId: null,
+      pendingWorktreeCreations: {},
+      createWorktree: vi.fn(() => checkout.promise)
+    }))
+    main = await drawTabsFromMain(useAppStore)
+    act(() => {
+      runBackgroundWorktreeCreation({
+        repoId: worktree.repoId,
+        executionHostId: 'local',
+        worktreeCreateProgressMode: 'stepped',
+        name: 'feature',
+        linkedIssue: 42,
+        setupDecision: 'skip',
+        agent: null,
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: '',
+        quickTelemetry: null
+      })
+    })
+    const { result } = renderHook(() =>
+      useQuickSubmitAction({
+        effectiveLinkedPR: null,
+        executeQuickCreation: vi.fn(),
+        fallbackCreatureName: 'feature',
+        isProjectGroupTarget: false,
+        isSubmissionCancelled: () => false,
+        linkedPR: undefined,
+        linkedWorkItem: null,
+        name: 'feature',
+        parsedLinkedIssueNumber: 42,
+        repoId: worktree.repoId,
+        requiresExplicitSetupChoice: false,
+        resolvePendingSmartGitHubSubmit: async () => ({ kind: 'none' }),
+        selectedRepo: useAppStore.getState().repos[0],
+        selectedRepoRequiresConnection: false,
+        selectedWorkspaceTarget: { status: 'unavailable', reason: 'no-eligible-repo' },
+        setCreateError: vi.fn(),
+        setCreating: vi.fn(),
+        setupDecision: 'skip',
+        showProjectRequiredError: vi.fn(),
+        sourceIntentBlocksCreate: false,
+        sparseError: null,
+        submitFolderTarget: vi.fn(),
+        taskSourceContext: null,
+        telemetrySource: undefined
+      })
+    )
+    await act(async () => {
+      await result.current.submitQuick(null)
+    })
+    render(
+      <TooltipProvider>
+        <WorkspaceShell />
+      </TooltipProvider>
+    )
+    await act(async () => {
+      checkout.resolve({ worktree })
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('log', { name: 'Workspace terminal' }).textContent).toBe(
+        expectedFolderWorkspaceId
       )
     )
   })

@@ -31,6 +31,7 @@ import {
   isCreatedWorkspaceInView,
   showWorktreeCreationError
 } from '@/lib/worktree-creation-surface'
+import { prepareCreatedWorktreeActivation } from '@/lib/worktree-creation-initial-tabs'
 import type { UISlice } from '@/store/slices/ui'
 
 export async function executeWorktreeCreation(
@@ -164,18 +165,18 @@ export async function executeWorktreeCreation(
   let primaryTabId: string | null = null
   if (shouldActivateOnCompletion && !structuredLaunch) {
     try {
-      activation = activateAndRevealWorktree(worktree.id, {
-        sidebarRevealBehavior: 'auto',
-        ...onCreationHost,
-        ...(windowStartup.agent !== null ? { agent: windowStartup.agent } : {}),
-        ...(result.setup ? { setup: result.setup } : {}),
-        ...(defaultTabs ? { defaultTabs } : {}),
-        ...(startupOpt ? { startup: startupOpt } : {}),
-        ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
-        ...windowStartup.terminalOptions,
-        ...(setupIsOnlySurface ? { providesInitialSurface: true } : {})
+      const prepared = prepareCreatedWorktreeActivation({
+        creationId,
+        request: preparedRequest,
+        result,
+        windowStartup,
+        defaultTabs,
+        setupIsOnlySurface,
+        executionHostId: creationHostId
       })
-      primaryTabId = activation === false ? null : activation.primaryTabId
+      primaryTabId = prepared.primaryTabId
+      activation = activateAndRevealWorktree(worktree.id, prepared.options)
+      primaryTabId ??= activation === false ? null : activation.primaryTabId
     } catch (error) {
       console.error('worktree create: activate-and-reveal failed', worktree.id, error)
       // Activation can publish then throw; only freshly seeded/stamped startup tabs prove primary ownership, never default order.
@@ -185,11 +186,11 @@ export async function executeWorktreeCreation(
       const verifiedLaunchTabId =
         result.startupTerminal?.tabId ??
         (launchAgent ? existingTabs.find((tab) => tab.launchAgent === launchAgent)?.id : undefined)
-      if (verifiedLaunchTabId) {
+      if (verifiedLaunchTabId && !primaryTabId) {
         // Startup terminal ids and stamped agent tabs are the only safe primary
         // ids when activation returned no result.
         primaryTabId = verifiedLaunchTabId
-      } else if (existingTabs.length === 0 || startupOpt) {
+      } else if (!primaryTabId && (existingTabs.length === 0 || startupOpt)) {
         try {
           primaryTabId = ensureWorktreeHasInitialTerminal(
             useAppStore.getState(),

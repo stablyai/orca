@@ -1,8 +1,32 @@
+import { getIndexedReposById } from '@/store/worktree-repo-index'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { isFolderRepo } from '../../../shared/repo-kind'
 import type { UISlice } from '@/store/slices/ui'
 import { toast } from 'sonner'
 import type { AppState } from '@/store/types'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
+import type {
+  WorktreeCreationRequest,
+  PendingWorktreeCreation
+} from '@/lib/pending-worktree-creation'
+
+export function isInstantFolderWorktreeCreation(
+  state: Pick<AppState, 'repos'>,
+  request: WorktreeCreationRequest
+): boolean {
+  const hostId = request.workspaceRunContext?.hostId ?? request.executionHostId
+  const repos = getIndexedReposById(state.repos, request.repoId).filter(
+    (repo) => !hostId || getRepoExecutionHostId(repo) === hostId
+  )
+  return (
+    request.worktreeCreateProgressMode === 'stepped' &&
+    repos.length === 1 &&
+    isFolderRepo(repos[0]) &&
+    request.agentLaunchRoute !== 'structured-native-chat' &&
+    !request.ephemeralVmRecipe &&
+    !request.ephemeralVmRuntimeId &&
+    !request.ephemeralVmRuntimeEnvironmentId
+  )
+}
 
 export type WorktreeCreationSurfaceInput = {
   activeView: UISlice['activeView']
