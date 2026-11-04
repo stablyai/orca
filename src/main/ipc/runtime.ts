@@ -55,7 +55,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         graph.projectSectionCatalog &&
         publishMobileProjectSections(graph.projectSectionCatalog)
       ) {
-        // Why: reposChanged went out before this window published, so phones re-read a stale catalog (#37067).
+        // Why: phones re-read on main's reposChanged before this publish landed (#37067); every client version handles reposChanged.
         runtime.notifyReposChangedForRemoteClients()
       }
       return result
