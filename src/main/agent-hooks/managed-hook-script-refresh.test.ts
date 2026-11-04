@@ -73,6 +73,7 @@ import {
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS
 } from './managed-agent-hook-registry'
 import { ClaudeHookService } from '../claude/hook-service'
+import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -182,6 +183,7 @@ describe('managed hook script refresh', () => {
               TMPDIR: home,
               CLAUDE_JOB_DIR: '',
               ORCA_AGENT_HOOK_ENDPOINT: '',
+              ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT,
               ORCA_AGENT_HOOK_PORT: '1',
               ORCA_AGENT_HOOK_TOKEN: 'test-token',
               ORCA_PANE_KEY: 'pane-1',
