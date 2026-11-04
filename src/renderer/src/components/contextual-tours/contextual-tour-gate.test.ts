@@ -367,6 +367,18 @@ describe('contextual tour gate', () => {
     ).toBe(2)
   })
 
+  it('resumes after a completed chat split when the + menu and terminal split are absent', () => {
+    expect(
+      getContextualTourStartStepIndex(
+        getContextualTour('workspace-agent-sessions'),
+        (selector) =>
+          selector.includes('chat-pane-split-target') ||
+          selector === '[data-contextual-tour-target="workspace-create-control"]',
+        (step) => step.advanceOnFeatureInteraction === 'tab-splits'
+      )
+    ).toBe(3)
+  })
+
   it('hides the browser cookie step until the Import Cookies menu row is measurable', () => {
     const tour = getContextualTour('browser')
     const cookieTarget = tour.steps[2]!.targetSelector

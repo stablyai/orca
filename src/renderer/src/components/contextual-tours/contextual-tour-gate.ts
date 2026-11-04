@@ -82,7 +82,15 @@ export function getContextualTourStartStepIndex(
   for (const candidate of candidates) {
     let startIndex = candidate
     while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
-      startIndex += 1
+      const nextIndex = getNextVisibleContextualTourStepIndex({
+        tour,
+        currentStepIndex: startIndex,
+        targetExists
+      })
+      if (nextIndex === null) {
+        return null
+      }
+      startIndex = nextIndex
     }
     const step = tour.steps[startIndex]
     if (step && targetExists(step.targetSelector)) {
