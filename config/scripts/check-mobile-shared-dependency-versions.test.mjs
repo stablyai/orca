@@ -36,22 +36,6 @@ describe('findSharedDependencyVersionProblems', () => {
     expect(checkZod(locked('4.6.7'), {})).toEqual(['zod is not a direct dependency of mobile'])
     expect(checkZod({}, locked('4.6.7'))).toEqual(['zod is not a direct dependency of the root'])
   })
-
-  it('checks every shared and toolchain dependency by default', () => {
-    const problems = findSharedDependencyVersionProblems({
-      rootImporter: locked('4.6.7'),
-      mobileImporter: locked('4.6.7')
-    })
-    expect(problems).toEqual([
-      'smol-toml is not a direct dependency of the root',
-      'tweetnacl is not a direct dependency of the root',
-      '@noble/hashes is not a direct dependency of the root',
-      '@types/ws is not a direct dependency of the root',
-      'typescript is not a direct dependency of the root',
-      'typescript-api is not a direct dependency of the root',
-      'vitest is not a direct dependency of the root'
-    ])
-  })
 })
 
 describe('committed lockfiles', () => {

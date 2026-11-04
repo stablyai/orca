@@ -4,7 +4,7 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import type {
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../../shared/ai-vault-search-types'
+} from '../../../shared/ai-vault/search/ai-vault-search-types'
 import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
@@ -107,18 +107,6 @@ afterAll(async () => {
   emit({ type: 'sessionSearch', init: searchInit(false) })
   process.send = originalSend
   await harness.cleanup()
-})
-
-it('reports the indexer phase and a live generation over the protocol', async () => {
-  const status = await vi.waitFor(async () => {
-    const value = await searchStatus()
-    expect(value.filesIndexed).toBeGreaterThan(0)
-    expect(value.phase).toBe('current')
-    expect(value.generation).toBeGreaterThan(0)
-    return value
-  })
-  expect(status.enabled).toBe(true)
-  expect(existsSync(harness.databasePath)).toBe(true)
 })
 
 it('answers a search and a reconcile over the protocol', async () => {

@@ -1,12 +1,12 @@
-import type { AgentHookTarget } from '../../shared/agent-hook-types'
+import type { AgentHookTarget } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   extractExecutableToken,
   isSafeOverrideExecutableToken
 } from '../../shared/managed-agent-command-token'
 import { MANAGED_AGENT_HOOK_TARGETS } from '../../shared/managed-agent-hook-targets'
-import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { TuiAgentDetectionCommand } from '../../shared/tui-agent-detection-commands'
+import type { TuiAgentDetectionCommand } from '../../shared/agent-launch/catalog/tui-agent-detection-commands'
 import { parseClaudeCliVersionOutput } from '../claude/claude-hook-event-versions'
 
 export type ManagedHookDetectionSettings = Partial<

@@ -1,8 +1,8 @@
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+} from '../../agent-status/contracts/agent-status-types'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import { clearPaneTurnCacheState, type HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
@@ -121,6 +121,8 @@ export function normalizePiCompatibleEvent(
     subagents,
     // Why: a compaction row and its settle carry one finish time, so the reply is announced once.
     turnCompletedAt: hookPayload.turn_completed_at,
+    // Why: Pi reports a user-cancelled run as an ordinary end; the extension marks it.
+    interrupted: eventName === 'agent_end' && hookPayload.interrupted === true ? true : undefined,
     // Why: the extension ends a run whose session was replaced; that is not a completed turn.
     ...(eventName === 'agent_end' && hookPayload.session_boundary === true
       ? { sessionBoundary: true }

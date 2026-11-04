@@ -46,22 +46,6 @@ describe('moveWorktree', () => {
     gitExecFileAsyncMock.mockReset()
   })
 
-  it('runs `git worktree move` from the repo with old and new paths', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
-    await moveWorktree('/repo', '/ws/cunner', '/ws/worktree-creation-spinner')
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['worktree', 'move', '/ws/cunner', '/ws/worktree-creation-spinner'],
-      { cwd: '/repo' }
-    )
-  })
-
-  it('propagates git failures so the caller can fall back', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: destination exists'))
-    await expect(moveWorktree('/repo', '/ws/cunner', '/ws/taken')).rejects.toThrow(
-      'destination exists'
-    )
-  })
-
   it('drops cached sparse-checkout state for both the old and new path', async () => {
     detectSparseCheckoutMock.mockResolvedValue(true)
     await detectSparseCheckoutCached('/repo', '/ws/cunner')

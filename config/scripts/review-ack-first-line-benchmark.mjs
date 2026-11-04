@@ -7,7 +7,8 @@ import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
 
 const baseline = process.argv[2] ?? '20ab9950654'
-const file = 'src/renderer/src/components/right-sidebar/pr-comment-fixing-reply-body.ts'
+const file =
+  'src/renderer/src/components/right-sidebar/checks-panel/comments/pr-comment-fixing-reply-body.ts'
 async function load(contents) {
   const result = await build({
     stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(file)) },
@@ -21,7 +22,14 @@ async function load(contents) {
   )
 }
 const before = await load(
-  execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8' })
+  execFileSync(
+    'git',
+    [
+      'show',
+      `${baseline}:src/renderer/src/components/right-sidebar/pr-comment-fixing-reply-body.ts`
+    ],
+    { encoding: 'utf8' }
+  )
 )
 const after = await load(readFileSync(file, 'utf8'))
 const results = []

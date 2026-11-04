@@ -27,7 +27,7 @@ import {
   wslGuestIdentityShellCommand,
   type WslGuestIdentity
 } from '../execution/wsl-guest-process-identity'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import {
   isWindowsRemoteHost,

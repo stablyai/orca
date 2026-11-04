@@ -1,5 +1,5 @@
 import type { Automation, AutomationUpdateInput } from '../../../../shared/automations-types'
-import { hasExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
+import { hasExtraAgentArgs } from '../../../../shared/agent-launch/startup/automation-extra-agent-args'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {

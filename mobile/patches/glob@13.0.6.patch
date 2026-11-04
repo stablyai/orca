@@ -1,0 +1,124 @@
+diff --git a/dist/commonjs/walker.js b/dist/commonjs/walker.js
+--- a/dist/commonjs/walker.js
++++ b/dist/commonjs/walker.js
+@@ -77,8 +77,6 @@ class GlobUtil {
+         }
+     }
+     onResume(fn) {
+-        if (this.signal?.aborted)
+-            return;
+         /* c8 ignore start */
+         if (!this.paused) {
+             fn();
+@@ -185,7 +183,7 @@ class GlobUtil {
+     walkCB(target, patterns, cb) {
+         /* c8 ignore start */
+         if (this.signal?.aborted)
+-            cb();
++            return cb();
+         /* c8 ignore stop */
+         this.walkCB2(target, patterns, new processor_js_1.Processor(this.opts), cb);
+     }
+@@ -193,7 +191,7 @@ class GlobUtil {
+         if (this.#childrenIgnored(target))
+             return cb();
+         if (this.signal?.aborted)
+-            cb();
++            return cb();
+         if (this.paused) {
+             this.onResume(() => this.walkCB2(target, patterns, processor, cb));
+             return;
+@@ -249,7 +247,7 @@ class GlobUtil {
+     walkCBSync(target, patterns, cb) {
+         /* c8 ignore start */
+         if (this.signal?.aborted)
+-            cb();
++            return cb();
+         /* c8 ignore stop */
+         this.walkCB2Sync(target, patterns, new processor_js_1.Processor(this.opts), cb);
+     }
+@@ -257,7 +255,7 @@ class GlobUtil {
+         if (this.#childrenIgnored(target))
+             return cb();
+         if (this.signal?.aborted)
+-            cb();
++            return cb();
+         if (this.paused) {
+             this.onResume(() => this.walkCB2Sync(target, patterns, processor, cb));
+             return;
+diff --git a/dist/esm/walker.js b/dist/esm/walker.js
+--- a/dist/esm/walker.js
++++ b/dist/esm/walker.js
+@@ -74,8 +74,6 @@ export class GlobUtil {
+         }
+     }
+     onResume(fn) {
+-        if (this.signal?.aborted)
+-            return;
+         /* c8 ignore start */
+         if (!this.paused) {
+             fn();
+@@ -182,7 +180,7 @@ export class GlobUtil {
+     walkCB(target, patterns, cb) {
+         /* c8 ignore start */
+         if (this.signal?.aborted)
+-            cb();
++            return cb();
+         /* c8 ignore stop */
+         this.walkCB2(target, patterns, new Processor(this.opts), cb);
+     }
+@@ -190,7 +188,7 @@ export class GlobUtil {
+         if (this.#childrenIgnored(target))
+             return cb();
+         if (this.signal?.aborted)
+-            cb();
++            return cb();
+         if (this.paused) {
+             this.onResume(() => this.walkCB2(target, patterns, processor, cb));
+             return;
+@@ -246,7 +244,7 @@ export class GlobUtil {
+     walkCBSync(target, patterns, cb) {
+         /* c8 ignore start */
+         if (this.signal?.aborted)
+-            cb();
++            return cb();
+         /* c8 ignore stop */
+         this.walkCB2Sync(target, patterns, new Processor(this.opts), cb);
+     }
+@@ -254,7 +252,7 @@ export class GlobUtil {
+         if (this.#childrenIgnored(target))
+             return cb();
+         if (this.signal?.aborted)
+-            cb();
++            return cb();
+         if (this.paused) {
+             this.onResume(() => this.walkCB2Sync(target, patterns, processor, cb));
+             return;
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -20,8 +20,8 @@
+       }
+     }
+   },
+-  "main": "./dist/commonjs/index.min.js",
+-  "module": "./dist/esm/index.min.js",
++  "main": "./dist/commonjs/index.js",
++  "module": "./dist/esm/index.js",
+   "types": "./dist/commonjs/index.d.ts",
+   "exports": {
+     "./package.json": "./package.json",
+@@ -38,11 +38,11 @@
+     ".": {
+       "import": {
+         "types": "./dist/esm/index.d.ts",
+-        "default": "./dist/esm/index.min.js"
++        "default": "./dist/esm/index.js"
+       },
+       "require": {
+         "types": "./dist/commonjs/index.d.ts",
+-        "default": "./dist/commonjs/index.min.js"
++        "default": "./dist/commonjs/index.js"
+       }
+     }
+   },

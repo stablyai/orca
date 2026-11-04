@@ -1,17 +1,17 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
-import { expect, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { expect, vi, type Mock } from 'vitest'
+
 import type * as GitUsernameModule from '../../git/git-username'
 import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
 import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
-import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
+import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
 
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
+import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
 
 type TestMock = Mock
 
@@ -446,7 +446,7 @@ vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
   }
 })
 
-vi.mock('../../ipc/filesystem/filesystem-auth', () => ({
+vi.mock('../../ipc/filesystem/access/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
@@ -459,9 +459,9 @@ vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidati
 }))
 
 // Relay-rebuilt ENOENT errors may retain only the message.
-vi.mock('../../ipc/filesystem/filesystem-path-containment', async () => {
+vi.mock('../../ipc/filesystem/access/filesystem-path-containment', async () => {
   const actual = await vi.importActual<typeof FilesystemPathContainmentModule>(
-    '../../ipc/filesystem/filesystem-path-containment'
+    '../../ipc/filesystem/access/filesystem-path-containment'
   )
   return { isENOENT: actual.isENOENT }
 })

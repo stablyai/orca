@@ -3,8 +3,8 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import type { FolderWorkspace } from '../folder-workspace-types'
-import { projectGroupIdFromRepoId } from '../folder-workspace-worktree'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
+import { projectGroupIdFromRepoId } from '../folder-workspaces/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../workspace-scope'
 import { getExecutionHostIdFromWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../worktree/lineage-types'

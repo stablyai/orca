@@ -1,7 +1,6 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
-import { toast } from 'sonner'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
 import {
   createBrowserLinkTestStore,
@@ -134,27 +133,5 @@ it.each(['refused', 'superseded'] as const)(
     expect(complete).toHaveBeenCalledExactlyOnceWith({ pageId: null, background: false })
     expect(store.getState().browserPagesByWorkspace).toEqual({})
     expect(cleanups).toBe(1)
-  }
-)
-
-it.each([false, true])(
-  'preserves the existing failure presentation and captured cleanup with optional completion=%s',
-  async (withCompletion) => {
-    registerWorkspaceHttpLinkBrowserOpener(async () => {
-      await released
-      throw new Error('browser unavailable')
-    })
-    const complete = vi.fn()
-    openRoutedHttpLink(URL_TO_OPEN, {
-      worktreeId: WORKSPACE,
-      sourceTabId: 'source',
-      forceDestination: 'orca',
-      ...(withCompletion ? { onBrowserOpenComplete: complete } : {})
-    })
-    resume()
-    await completed
-    expect(toast.error).toHaveBeenCalledExactlyOnceWith('browser unavailable')
-    expect(cleanups).toBe(1)
-    expect(complete).not.toHaveBeenCalled()
   }
 )

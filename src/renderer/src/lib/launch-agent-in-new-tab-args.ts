@@ -1,5 +1,5 @@
 import type { AgentSessionLaunchRequest } from '@/lib/agent-session-launch-plan'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import type { LaunchAgentInNewTabRequest } from '@/lib/launch-agent-in-new-tab-host-agents'

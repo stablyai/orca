@@ -1,7 +1,10 @@
 import { useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
-import type { ForkSyncMode, GitForkSyncResult } from '../../../../../../shared/git-fork-sync'
+import type {
+  ForkSyncMode,
+  GitForkSyncResult
+} from '../../../../../../shared/git/remotes/git-fork-sync'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { getRepoMainWorktreeId } from '../../../../../../shared/worktree/id'
 import { Button } from '../../../ui/button'

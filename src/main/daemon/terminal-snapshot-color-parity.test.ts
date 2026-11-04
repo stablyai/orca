@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY,
   SNAPSHOT_REPLAY_PREAMBLE_ALT,
   SNAPSHOT_REPLAY_PREAMBLE_NORMAL,
   buildParityMainBufferSnapshot,
@@ -12,7 +11,8 @@ import {
   visibleRowWraps,
   visibleRows,
   writeChunksToTerminal
-} from '../../shared/terminal-restore-parity-fixture'
+} from '../../shared/terminal/replay/testing/terminal-restore-parity-fixture'
+import { POST_REPLAY_LIVE_SNAPSHOT_RESET as POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 
 type ParityTerminal = ReturnType<typeof createRendererParityTerminal>
 

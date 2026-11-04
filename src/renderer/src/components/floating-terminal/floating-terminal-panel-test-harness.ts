@@ -1,13 +1,13 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
-import type { Mock } from 'vitest'
+
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { clearFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
 import type { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   makeTab,
   removeFloatingTerminalTabFromStore,

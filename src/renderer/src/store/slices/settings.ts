@@ -10,9 +10,9 @@ import {
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
-import { assertTerminalQuickCommandsStorable } from '../../../../shared/terminal-quick-command-prompt-limit'
-import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
+import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
+import { assertTerminalQuickCommandsStorable } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
+import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import {
   normalizeOpenInApplicationId,
@@ -20,16 +20,16 @@ import {
 } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { isRuntimeCatalogListingStale } from './runtime-status-hydration'
-import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
-import { sanitizeAgentLaunchProfileUpdates } from '../../../../shared/tui-agent-launch-defaults'
+import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { sanitizeAgentLaunchProfileUpdates } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
-import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { translate } from '@/i18n/i18n'
 import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
-} from '../../../../shared/mobile-pairing-custom-address'
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 import {
   hydrateOwnerWorktreeVisibilityDefaults,
   type WorktreeVisibilityDefaultsByHost

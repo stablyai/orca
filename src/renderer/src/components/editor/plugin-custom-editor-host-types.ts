@@ -1,9 +1,9 @@
 import type { CustomEditorKeyChord } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
+import type { PluginFrameEditorChannel } from '../plugins/frames/plugin-frame-host'
 import type {
-  PluginFrameEditorChannel,
   PluginFrameMessageContext,
   PluginFrameWindow
-} from '../right-sidebar/plugin-frame-host'
+} from '../plugins/frames/plugin-frame-host-lanes'
 import type { PanelMessageBudget } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 
 export type CustomEditorEditRefusal = 'oversized' | 'rate_limited'

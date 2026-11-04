@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { createPane } from '../pty-connection-test-pane-fixtures'
 import {
   installTerminalTestGlobals,
@@ -93,7 +93,7 @@ describe('reattach payload context', () => {
       applyColdRestoreAgentResumeStartup,
       schedulePendingStartupCommandDelivery,
       showSessionRestoredBanner: vi.fn(),
-      clearSleepingRecordAfterColdRestoreSpawn: vi.fn(),
+      keepResumeRecordAfterColdRestoreSpawn: vi.fn(),
       consumeRestoredViewportBlankingMarker: vi.fn(),
       writeFreshShellViewportBlanking: vi.fn()
     })
@@ -111,7 +111,7 @@ describe('reattach payload context', () => {
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       // Main started the pane and resumed its agent; the window's paint applies no resume.
       expect(applyColdRestoreAgentResumeStartup).toHaveBeenCalledExactlyOnceWith(null)
-      expect(session.clearSleepingRecordAfterColdRestoreSpawn).not.toHaveBeenCalled()
+      expect(session.keepResumeRecordAfterColdRestoreSpawn).not.toHaveBeenCalled()
       expect(session.showSessionRestoredBanner).not.toHaveBeenCalled()
     } else {
       expect(applyColdRestoreAgentResumeStartup).toHaveBeenCalledWith(startup)
@@ -149,7 +149,7 @@ it.each(['missing', 'different', 'admitted'] as const)(
         applyColdRestoreAgentResumeStartup: apply,
         cancelSavedResumeStartup: cancel,
         schedulePendingStartupCommandDelivery: schedule,
-        clearSleepingRecordAfterColdRestoreSpawn: vi.fn(),
+        keepResumeRecordAfterColdRestoreSpawn: vi.fn(),
         showSessionRestoredBanner: vi.fn(),
         consumeRestoredViewportBlankingMarker: vi.fn(),
         writeFreshShellViewportBlanking: vi.fn()
@@ -213,7 +213,7 @@ it.each(['missing', 'admitted', 'prepared'] as const)(
         applyColdRestoreAgentResumeStartup: vi.fn(() => true),
         cancelSavedResumeStartup: vi.fn(),
         schedulePendingStartupCommandDelivery: vi.fn(),
-        clearSleepingRecordAfterColdRestoreSpawn: vi.fn(),
+        keepResumeRecordAfterColdRestoreSpawn: vi.fn(),
         showSessionRestoredBanner: vi.fn(),
         consumeRestoredViewportBlankingMarker: vi.fn(),
         writeFreshShellViewportBlanking: vi.fn()
@@ -255,7 +255,7 @@ it.each(['missing', 'admitted', 'prepared'] as const)(
       expect(session.applyColdRestoreAgentResumeStartup).not.toHaveBeenCalled()
       expect(session.cancelSavedResumeStartup).not.toHaveBeenCalled()
       expect(session.schedulePendingStartupCommandDelivery).not.toHaveBeenCalled()
-      expect(session.clearSleepingRecordAfterColdRestoreSpawn).not.toHaveBeenCalled()
+      expect(session.keepResumeRecordAfterColdRestoreSpawn).not.toHaveBeenCalled()
       expect(session.showSessionRestoredBanner).not.toHaveBeenCalled()
       expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
       expect(window.api.pty.write).not.toHaveBeenCalled()

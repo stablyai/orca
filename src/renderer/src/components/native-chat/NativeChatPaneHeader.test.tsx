@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import * as historyRequest from '../right-sidebar/ai-vault-panel-session-list-request'
+import * as historyRequest from '../right-sidebar/ai-vault/scanning/ai-vault-panel-session-list-request'
 
 const mocks = vi.hoisted(() => ({ launch: vi.fn(), resume: vi.fn(), close: vi.fn() }))
 vi.mock('@/store', async () => {
@@ -60,7 +61,8 @@ it('offers chat actions without a duplicate close button and targets Resume at t
   const source = renderHeader()
   expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
     'Continue with Terminal Agent',
-    'Split Chat Right'
+    'Split Chat Right',
+    'Chat settings'
   ])
   const folder = useAppStore.getState().folderWorkspaces[0]
   act(() => useAppStore.setState({ folderWorkspaces: [{ ...folder, executionHostId: 'ssh:dev' }] }))
@@ -77,6 +79,28 @@ it('offers chat actions without a duplicate close button and targets Resume at t
       }),
       tab: { id: source.id, worktreeId: source.worktreeId },
       agent: 'codex'
+    })
+  )
+})
+
+it('changes the saved chat width from the standalone chat toolbar', async () => {
+  const settings = {
+    ...getDefaultSettings('/tmp'),
+    nativeChatAppearance: { fontSize: 16, width: 'wide' as const }
+  }
+  const updateSettings = vi.fn(async (updates) => {
+    useAppStore.setState({ settings: { ...settings, ...updates } })
+  })
+  useAppStore.setState({ settings, updateSettings })
+  renderHeader()
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Chat settings' }), { key: 'Enter' })
+  expect(screen.getByRole('menuitemradio', { name: 'Wide' }).getAttribute('aria-checked')).toBe(
+    'true'
+  )
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full' }))
+  await waitFor(() =>
+    expect(updateSettings).toHaveBeenCalledWith({
+      nativeChatAppearance: { fontSize: 16, width: 'full' }
     })
   )
 })

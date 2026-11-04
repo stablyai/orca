@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 
-import { ipcMain } from 'electron'
-import type { BrowserWindow } from 'electron'
+import { ipcMain, type BrowserWindow } from 'electron'
+
 import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
-} from '../../shared/terminal-tab-close'
+} from '../../shared/workspace-layout/terminal-tab-close'
 import { addFanoutListener, addFanoutListeners } from '../runtime/events/event-listener-fanout'
 
 const TERMINAL_TAB_CLOSE_TIMEOUT_MS = 20_000

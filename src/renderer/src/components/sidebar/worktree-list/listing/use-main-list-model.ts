@@ -9,15 +9,15 @@ import {
 } from '@/lib/sidebar-pending-layer'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { readEndedCreations, subscribeEndedCreations } from '@/lib/sidebar-ended-creations'
-import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   getLocalExecutionHostLabel,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
-import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/sidebar-feed-domains'
 import { EMPTY_SIDEBAR_FEED_DOMAINS } from '../../../../../../shared/sidebar-feed-client/sidebar-feed-snapshot'
 import {
   planSidebarFeedRows,
@@ -36,8 +36,10 @@ import { mergeDraggedHostSectionOrder } from '../../../../../../shared/sidebar-l
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { sidebarWorkspaceRowFilters } from '../../sidebar-filter-actions'
+import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
 import type { SidebarListModel, SidebarListModelArgs } from './sidebar-list-model'
+import { withWindowCreations } from './window-worktree-creations'
+export { withWindowCreations } from './window-worktree-creations'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
@@ -47,30 +49,6 @@ import { useReusedArrayIdentity } from './use-reused-array-identity'
 
 // The window renders its own collapse, so planning never re-runs on a toggle.
 const PLANNED_UNCOLLAPSED: ReadonlySet<string> = new Set()
-
-/** Combine main’s shared creations with window-only preflight/server work and exclude locally completed requests. */
-export function withWindowCreations(
-  domains: SidebarFeedDomains,
-  pendingCreationKeys: readonly string[],
-  endedCreationIds: ReadonlySet<string>
-): SidebarFeedDomains {
-  let creations: Map<string, { repoId: string }> | null = null
-  for (const creationId of endedCreationIds) {
-    if (domains.creations.has(creationId)) {
-      creations ??= new Map(domains.creations)
-      creations.delete(creationId)
-    }
-  }
-  for (const key of pendingCreationKeys) {
-    const separator = key.indexOf(' ')
-    const creationId = key.slice(0, separator)
-    if (!domains.creations.has(creationId)) {
-      creations ??= new Map(domains.creations)
-      creations.set(creationId, { repoId: key.slice(separator + 1) })
-    }
-  }
-  return creations ? { ...domains, creations } : domains
-}
 
 function folderRecordKey(id: string, hostId: string | null | undefined): string {
   return `${parseExecutionHostId(hostId)?.id ?? ''}\0${id}`
@@ -98,6 +76,9 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const pendingCreationKeys = useAppStore(
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )
+  const hiddenCreationKeys = useAppStore(
+    useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations, 'hidden'))
+  )
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
   const domains = useMemo(
@@ -108,9 +89,18 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
           lineageById: args.worktreeLineageById
         }),
         pendingCreationKeys,
-        endedCreationIds
+        endedCreationIds,
+        hiddenCreationKeys
       ),
-    [feed, pending, pendingCreationKeys, endedCreationIds, repos, args.worktreeLineageById]
+    [
+      feed,
+      pending,
+      pendingCreationKeys,
+      endedCreationIds,
+      hiddenCreationKeys,
+      repos,
+      args.worktreeLineageById
+    ]
   )
   const catalog = useMemo(
     () => ({ repos, projectGroups: args.projectGroups, projectGrouping: args.projectGrouping }),

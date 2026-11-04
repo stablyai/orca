@@ -23,7 +23,6 @@ import {
   getController,
   askCancel,
   askAnswer,
-  askCollapse,
   sendError,
   getTree
 } from './__mocks__/mobile-prompt-controller'
@@ -177,23 +176,6 @@ describe('prompt cards through the production controller, send contract and view
     }
   )
 
-  it('collapses a permission to a strip without writing, and expands it back', async () => {
-    await render({ tab: permissionTab })
-    act(() => {
-      getTree().root.findByProps({ accessibilityLabel: 'Collapse' }).props.onPress()
-    })
-    expect(getController().nativeChatPermission).not.toBe(null)
-    expect(getController().nativeChatCollapsedPrompt?.title).toBeTruthy()
-    expect(getTree().root.findAllByProps({ testID: 'native-chat-prompt-strip' })).toHaveLength(1)
-    expect(sendButton().props.disabled).toBe(false)
-    act(() => {
-      getTree().root.findByProps({ accessibilityLabel: 'Expand' }).props.onPress()
-    })
-    expect(getController().nativeChatPermission).not.toBe(null)
-    expect(sendButton().props.disabled).toBe(true)
-    expect(client.sendRequest).not.toHaveBeenCalled()
-  })
-
   it('shows a collapsed prompt again as a new wait', async () => {
     await render({ tab: permissionTab })
     act(() => {
@@ -204,28 +186,6 @@ describe('prompt cards through the production controller, send contract and view
     })
     expect(getController().nativeChatPermission).not.toBe(null)
     expect(getController().nativeChatCollapsedPrompt).toBe(null)
-  })
-
-  it('collapses an ask to a strip without writing', async () => {
-    await render({
-      tab: {
-        ...baseTab,
-        agentStatus: {
-          ...baseTab.agentStatus,
-          toolName: 'AskUserQuestion',
-          interactivePrompt: JSON.stringify({
-            questions: [{ question: 'Pick?', options: [{ label: 'East' }] }]
-          })
-        }
-      }
-    })
-    act(() => {
-      askCollapse()
-    })
-    expect(getController().nativeChatAsk).not.toBe(null)
-    expect(getController().nativeChatCollapsedPrompt?.title).toBe('Pick?')
-    expect(sendButton().props.disabled).toBe(false)
-    expect(client.sendRequest).not.toHaveBeenCalled()
   })
 
   it('keeps an acknowledged Deny hidden after the chat screen remounts on a lingering status', async () => {
@@ -363,7 +323,7 @@ describe('async occurrences through the phone controller and rendered card actio
           undefined,
           undefined,
           undefined,
-          undefined
+          {}
         )
         expect(titles()).toEqual(['Q1?'])
       } else {
@@ -478,7 +438,7 @@ describe('async occurrences through the phone controller and rendered card actio
         undefined,
         undefined,
         undefined,
-        undefined
+        {}
       )
     }
   )

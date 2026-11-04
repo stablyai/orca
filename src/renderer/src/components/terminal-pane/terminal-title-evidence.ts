@@ -1,13 +1,14 @@
-import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
+import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import {
   isNormalizedAgentTitleStamp,
   normalizeTerminalTitle
-} from '../../../../shared/agent-title-status'
-import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
-import type { AgentType } from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/title/agent-title-status'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   resolvePaneRendererPolicy,
   type RendererPolicyDecision,
+  type ResolvePaneRendererPolicyInput,
   type TerminalGpuAccelerationMode
 } from './terminal-renderer-policy'
 
@@ -28,6 +29,7 @@ export type PaneTitleDecision = {
 }
 
 export type ResolvePaneTitleDecisionInput = {
+  isGeminiTerminalTitle?: ResolvePaneRendererPolicyInput['isGeminiTerminalTitle']
   /** Normalized title from the transport (may already be display-shaped). */
   normalizedTitle: string
   rawTitle: string
@@ -58,6 +60,7 @@ export function resolvePaneTitleDecision(input: ResolvePaneTitleDecisionInput): 
   )
   const rendererPolicy = resolvePaneRendererPolicy({
     rawTitle: input.rawTitle,
+    isGeminiTerminalTitle: input.isGeminiTerminalTitle,
     ownerAgentType: input.rendererOwnerAgentType,
     userGpuMode: input.userGpuMode,
     webglUnavailable: input.webglUnavailable,

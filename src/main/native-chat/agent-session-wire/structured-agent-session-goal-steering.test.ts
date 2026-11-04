@@ -6,9 +6,9 @@ import type { CodexAppServerConnection } from '../../codex/app-server/codex-app-
 import {
   readCodexAppliedInputOptions,
   resolvedCodexMessageOptions
-} from '../../codex/codex-structured-message-options'
-import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
-import { dispatchCodexTurn } from '../../codex/codex-structured-turn-start'
+} from '../../codex/structured/turns/codex-structured-message-options'
+import { optionSession } from '../../codex/structured/catalog/codex-structured-option-session.test-fixture'
+import { dispatchCodexTurn } from '../../codex/structured/turns/codex-structured-turn-start'
 import {
   createQueuedMessageTestRig,
   eventually,

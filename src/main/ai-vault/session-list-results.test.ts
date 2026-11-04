@@ -3,8 +3,8 @@ import type {
   AiVaultListResult,
   AiVaultScanIssue,
   AiVaultSession
-} from '../../shared/ai-vault-types'
-import { truncateAiVaultListResult } from '../../shared/ai-vault-session-depth'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import { truncateAiVaultListResult } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 import { mergeAiVaultListResults } from './session-list-results'
 
 function listResult(issues: AiVaultScanIssue[]): AiVaultListResult {

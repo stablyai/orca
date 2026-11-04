@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE, postHookEvent, RUNNING_SHELL } from './server.test-fixtures'
 import { loadClaudeInterruptCapture } from './claude-terminal-interrupt-capture.test-fixture'
-import { createTerminalTitleTracker } from '../../shared/terminal-output-side-effects'
+import { createTerminalTitleTracker } from '../../shared/terminal/output/terminal-output-side-effects'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))

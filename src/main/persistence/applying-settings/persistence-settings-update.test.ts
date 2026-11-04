@@ -1,4 +1,4 @@
-import { composeAgentLaunchProfile } from '../../../shared/tui-agent-launch-defaults'
+import { composeAgentLaunchProfile } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   closeTestStores,
   testState,

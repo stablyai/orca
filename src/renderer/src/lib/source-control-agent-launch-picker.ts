@@ -1,15 +1,18 @@
 import { shallow } from 'zustand/shallow'
-import { acceptAgentPickerArguments } from '../../../shared/agent-launch-picker-edits'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../shared/agent-launch-picker'
+import { acceptAgentPickerArguments } from '../../../shared/agent-launch/picker/agent-launch-picker-edits'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../shared/agent-launch/picker/agent-launch-picker'
 import {
   selectSourceControlActionRecipe,
   pickSourceControlActionAgent,
   type CurrentActionSelection
-} from '../../../shared/source-control-action-selection'
+} from '../../../shared/source-control/ai/recipes/source-control-action-selection'
 import {
   sourceControlActionExecutionArgs,
   selectedSourceControlActionPreferences
-} from '../../../shared/source-control-action-launch-preferences'
+} from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 
 export function sourceControlPickerDraft(
   selection: CurrentActionSelection,

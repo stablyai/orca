@@ -90,3 +90,19 @@ it('does not re-render while the user types in the name field', async () => {
   expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'release')
   expect(buttonRenderCount()).toBe(rendersAfterMount)
 })
+
+it('stays out of the Tab order when skipTabStop is set', async () => {
+  const user = userEvent.setup()
+  const inputRef = createRef<HTMLInputElement>()
+  render(
+    <TooltipProvider>
+      <input ref={inputRef} />
+      <WorkspaceEmojiPickerButton inputRef={inputRef} onValueChange={vi.fn()} skipTabStop />
+      <button type="button">Next</button>
+    </TooltipProvider>
+  )
+  await user.tab()
+  expect(document.activeElement).toBe(inputRef.current)
+  await user.tab()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Next' }))
+})

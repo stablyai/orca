@@ -7,7 +7,7 @@ import {
   OPENCODE_STARTUP_PROMPT_PLUGIN_DIRECTORY
 } from '../shared/opencode-startup-prompt-install'
 import { resolveOpenCodeConfigDirectory } from '../shared/opencode-config-directory'
-import { materializeOmpFreshConfig } from '../shared/omp-fresh-config'
+import { materializeOmpFreshConfig } from '../shared/agent-launch/startup/omp-fresh-config'
 // Install remotely because host paths and Electron services are unavailable to the relay.
 // Receive plugin source at session-ready: relay and desktop update independently, so bundled copies could stay stale.
 import { createHash } from 'node:crypto'
