@@ -88,7 +88,9 @@ async function buildImage(cell: DockerHostileHostCell, contextDir: string): Prom
   )
   await writeFile(join(contextDir, 'entrypoint.sh'), ENTRYPOINT)
   const image = `orca-ssh-hostile-host:${cell.id}`
+  console.info(`[ssh-hostile-hosts] ${cell.id} build-start`)
   await run('docker', ['build', '-q', '-t', image, contextDir], 900_000)
+  console.info(`[ssh-hostile-hosts] ${cell.id} build-finished`)
   return image
 }
 

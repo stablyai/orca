@@ -47,10 +47,16 @@ describe('SSH hostile-host managed orcad matrix', () => {
         executed += 1
         let target: HostileHostTarget | null = null
         try {
+          console.info(`[ssh-hostile-hosts] ${cell.id} target-start`)
           target = await startHostileHostTarget(cell)
+          console.info(`[ssh-hostile-hosts] ${cell.id} target-finished`)
+          console.info(`[ssh-hostile-hosts] ${cell.id} proof-start`)
           await proveManagedOrcadCell(cell, target, hostileHostSshTarget(target))
+          console.info(`[ssh-hostile-hosts] ${cell.id} proof-finished`)
         } finally {
+          console.info(`[ssh-hostile-hosts] ${cell.id} cleanup-start`)
           await stopHostileHostTarget(target)
+          console.info(`[ssh-hostile-hosts] ${cell.id} cleanup-finished`)
         }
       },
       CELL_TIMEOUT_MS
