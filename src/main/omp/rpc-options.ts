@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
 import type { PiRpcRequester } from '../pi/rpc-options'
+import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 
 const stateSchema = z.object({
   model: z
@@ -46,6 +48,29 @@ export async function readOmpFastOptions(
   options: AgentSessionOptionsResult
 ): Promise<AgentSessionOptionsResult> {
   return projectOmpFastOptions(await rpc.request('get_state'), options)
+}
+
+export async function setOmpFastMode(
+  rpc: PiRpcRequester,
+  enabled: boolean,
+  signal?: AbortSignal
+): Promise<unknown> {
+  signal?.throwIfAborted()
+  const state = stateSchema.parse(await waitForPromiseWithSignal(rpc.request('get_state'), signal))
+  signal?.throwIfAborted()
+  if (state.model && !supportsFastMode(state.model)) {
+    if (enabled) {
+      throw new JsonlRpcResponseError(
+        'set_fast_mode',
+        'Fast mode is unavailable for the current model.'
+      )
+    }
+    // OMP emits a notice even for Fast-off on models with no service-tier control.
+    if (state.fastModeEnabled === false && state.fastModeActive === false) {
+      return { enabled: false, active: false }
+    }
+  }
+  return waitForPromiseWithSignal(rpc.request('set_fast_mode', { enabled }), signal)
 }
 
 export class OmpRpcFastOptions {

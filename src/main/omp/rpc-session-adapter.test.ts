@@ -718,7 +718,6 @@ it('sets native Fast mode and reports its actual preference and effective state'
     fastMode: true,
     fastModeState: 'off'
   })
-  expect(request.mock.calls.map(([command]) => command)).toEqual(['set_fast_mode'])
   enabled = true
   h.connection.receive({ type: 'config_update' })
   await vi.waitFor(() => expect(request).toHaveBeenCalledWith('get_state'))

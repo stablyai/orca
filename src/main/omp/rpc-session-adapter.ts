@@ -8,8 +8,7 @@ import { createOmpRpcDialogs } from './rpc-dialogs'
 import { buildOmpRpcLaunch, ompRpcProviderLink } from './rpc-launch'
 import { openOmpRpcConnection } from './rpc-connection'
 import { goalSchema, reportGoal, receiveOmpFrame } from './rpc-session-events'
-import { OmpRpcFastOptions } from './rpc-options'
-import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { OmpRpcFastOptions, setOmpFastMode } from './rpc-options'
 import { OmpRpcRewind, rewindOmpSession, supportsOmpRewind } from './rpc-rewind'
 import { stopOmpSubagents, supportsOmpSubagentStop } from './rpc-subagent-stops'
 import { importOmpSubagentHistory } from './rpc-subagent-history'
@@ -166,10 +165,7 @@ export class OmpRpcSessionAdapter extends PiRpcSessionAdapter {
       session.optionProof.writes.set('fastMode', token)
       session.optionProof.current.delete('fastMode')
       try {
-        await waitForPromiseWithSignal(
-          session.connection.request('set_fast_mode', { enabled: input.value === 'true' }),
-          input.signal
-        )
+        await setOmpFastMode(session.connection, input.value === 'true', input.signal)
         if (session.optionProof.writes.get('fastMode') !== token) {
           throw new Error('OMP Fast option write was superseded')
         }

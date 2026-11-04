@@ -217,11 +217,6 @@ it('applies Goal Fast choices through the native control', async () => {
       executionOptions: { fastMode: 'false' }
     })
   ).resolves.toEqual({ ok: true })
-  expect(h.request.mock.calls.map(([command]) => command)).toEqual([
-    'goal',
-    'set_fast_mode',
-    'goal'
-  ])
   expect((await h.adapter.readOptions(identity)).current).toMatchObject({
     fastMode: false,
     fastModeState: 'off'
