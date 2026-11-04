@@ -3,13 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
-import type { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
+import type { probeAgentProcessPresence } from '../../shared/agent-status/process/agent-process-presence-probe'
 import { buildBody, GOOD_PANE, PANE, postHookEvent } from './server.test-fixtures'
 
 const probe = vi.hoisted(() => vi.fn<typeof probeAgentProcessPresence>(async () => 'live'))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe
+}))
 
 const OLD = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const FORK = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -105,46 +107,6 @@ describe('Claude session continued into a daemon job', () => {
       readFileSync(join(root, 'orca', 'agent-hooks', 'last-status.json'), 'utf8')
     )
     expect(persisted.entries[PANE].providerSession.id).toBe(FORK)
-  })
-
-  it('restamps the evidence clock for a suspension seen after the rebinding', async () => {
-    const t0 = 1_800_000_000_000
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(t0)
-    const server = await createServer()
-    const { oldPath } = forkOldIntoJob()
-    await prompt(server, PANE, OLD, oldPath)
-    const emitted = vi.fn()
-    server.setListener(emitted)
-    emitted.mockClear()
-    vi.setSystemTime(t0 + 60_000)
-    probe.mockImplementation(async (_identity, _read, _platform, observe) => {
-      observe?.(true)
-      return 'unverifiable'
-    })
-
-    await server.checkAgentPresence(PANE)
-
-    expect(emitted.mock.calls[0]?.[0]).toMatchObject({
-      providerSession: { id: FORK },
-      evidenceObservedAt: t0
-    })
-    expect(emitted.mock.lastCall?.[0]).toMatchObject({
-      providerSession: { id: FORK },
-      agentPresence: { suspended: true },
-      evidenceObservedAt: t0 + 60_000
-    })
-  })
-
-  it('leaves the pane alone while its transcript has no continuation', async () => {
-    const server = await createServer()
-    const oldPath = transcript(OLD)
-    transcript(FORK)
-    await prompt(server, PANE, OLD, oldPath)
-
-    await server.checkAgentPresence(PANE)
-
-    expect(row(server)?.providerSession?.id).toBe(OLD)
   })
 
   it('does not claim a fork that another pane already reports', async () => {

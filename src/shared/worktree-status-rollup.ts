@@ -1,5 +1,5 @@
-import type { AgentStatusEntry } from './agent-status-types'
-import { agentVerdictDisplayMark } from './agent-main-agent-verdict'
+import type { AgentStatusEntry } from './agent-status/contracts/agent-status-types'
+import { agentVerdictDisplayMark } from './agent-status/lifecycle/agent-main-agent-verdict'
 
 export type WorktreeStatus =
   | 'active'

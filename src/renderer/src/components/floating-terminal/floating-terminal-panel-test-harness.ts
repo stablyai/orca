@@ -1,13 +1,13 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
-import type { Mock } from 'vitest'
+
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { clearFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
 import type { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   makeTab,
   removeFloatingTerminalTabFromStore,
@@ -248,11 +248,20 @@ export function setupFloatingTerminalPanelTest(): void {
   })
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   vi.stubGlobal('HTMLElement', class {})
+  vi.stubGlobal(
+    'MutationObserver',
+    class {
+      observe = vi.fn()
+      disconnect = vi.fn()
+    }
+  )
   vi.stubGlobal('localStorage', localStorage)
   // Provide focus/listener defaults; tests may replace activeElement while retaining effect-safe listeners.
   vi.stubGlobal('document', {
     activeElement: null,
     addEventListener: vi.fn(),
+    documentElement: {},
+    querySelectorAll: vi.fn(() => []),
     removeEventListener: vi.fn()
   })
 }

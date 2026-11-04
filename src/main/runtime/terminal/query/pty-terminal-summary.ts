@@ -11,8 +11,12 @@ import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
 import {
   ptyHoldsRecordedSurface,
   type PtySurfaceTopology

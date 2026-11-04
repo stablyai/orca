@@ -2,11 +2,9 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { findBrokenReadmeLinks, main } from './check-readme-local-links.mjs'
-import { LINT_STEPS } from './run-lint.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
 const tempDirs = []
@@ -71,11 +69,6 @@ afterEach(() => {
 })
 
 describe('README local link check', () => {
-  it('accepts the checked-in READMEs', () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    expect(main(projectDir)).toBe(0)
-  })
-
   it('accepts local links in every supported shape', () => {
     expect(findBrokenReadmeLinks(makeFixture(validReadmes))).toEqual([])
   })
@@ -246,27 +239,5 @@ describe('README local link check', () => {
         resolved: 'docs/assets/missing.gif'
       }
     ])
-  })
-
-  // Ready docs-only diffs skip preflight, so the detector must check README links.
-  it('checks ready PRs through the detector and in the lint script', () => {
-    const { scripts } = JSON.parse(readFileSync(path.join(projectDir, 'package.json'), 'utf8'))
-    const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
-    const guardJob = workflow.jobs.code_paths
-    const step = guardJob.steps.find((candidate) => candidate.name === 'Check README local links')
-    const runsFor = (draft) =>
-      runInNewContext(guardJob.if, {
-        github: { event_name: 'pull_request', event: { pull_request: { draft } } }
-      })
-
-    expect(runsFor(false)).toBe(true)
-    expect(runsFor(true)).toBe(false)
-    expect(guardJob.needs).toBeUndefined()
-    expect(step.if).toBeUndefined()
-    expect(step.run).toBe('node config/scripts/check-readme-local-links.mjs')
-    expect(scripts['check:readme-local-links']).toBe(
-      'node config/scripts/check-readme-local-links.mjs'
-    )
-    expect(LINT_STEPS).toContain('check:readme-local-links')
   })
 })

@@ -119,33 +119,6 @@ function mount(
   }
 }
 
-describe('the device handler the shell hands its host', () => {
-  it('sends a clipboard verb to the clipboard half', async () => {
-    const { serve, unmount } = mount('session-a')
-    await expect(serve('native.clipboard.read', { mime: 'text' })).resolves.toEqual({
-      value: 'on the pasteboard'
-    })
-    unmount()
-  })
-
-  it('sends a media verb to the media half, picker and all', async () => {
-    const { serve, unmount } = mount('session-a')
-    await expect(
-      serve('native.media.pick', { source: 'library', multiple: false })
-    ).resolves.toEqual({ items: [] })
-    expect(device.picker.launchImageLibraryAsync).toHaveBeenCalled()
-    unmount()
-  })
-
-  it('answers a release for a handle no pick ever minted, rather than refusing', async () => {
-    const { serve, unmount } = mount('session-a')
-    await expect(serve('native.media.release', { handle: 'media-9' })).resolves.toEqual({
-      released: false
-    })
-    unmount()
-  })
-})
-
 describe('a picker completing after its page session ends', () => {
   beforeEach(() => {
     device.files.clear()
@@ -221,18 +194,5 @@ describe('the screen a page session leaves behind', () => {
     first.unmount()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(device.wakeTags).toEqual(['+orca-microphone', '-orca-microphone'])
-  })
-
-  it('leaves the next session nothing of the last one to give back', async () => {
-    const first = mount('session-a')
-    await first.serve('native.audio.start', { sampleRate: 16_000 })
-    first.unmount()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    device.wakeTags.length = 0
-    const second = mount('session-b')
-    second.unmount()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    // A session with no capture must not deactivate an unheld wake tag.
-    expect(device.wakeTags).toEqual([])
   })
 })

@@ -1,13 +1,14 @@
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { collectTabPtyIds } from '../terminal/running-terminal-close-guard'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { toHostSessionPaneKey } from '../../../../shared/terminal-surface-id'
+import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   captureTerminalSurfaceIdentity,
   isRetainedTerminalSurfaceIdentity
-} from '../../../../shared/terminal-tab-close'
+} from '../../../../shared/workspace-layout/terminal-tab-close'
 import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalWait
@@ -23,6 +24,20 @@ export type CliChatResumeCloseHooks = {
   refused: () => void
 }
 
+/** The panes the close takes, as the host names them: the source's and every bound pane of its tab. */
+export function cliChatResumeClosingPaneKeys(
+  state: AppState,
+  source: CliChatResumeSource
+): string[] {
+  return closingLeaves(state, source).map((leaf) => toHostSessionPaneKey(`${source.tabId}:${leaf}`))
+}
+
+function closingLeaves(state: AppState, source: CliChatResumeSource): string[] {
+  const leafId = source.paneKey.slice(source.tabId.length + 1)
+  const bindings = state.terminalLayoutsByTabId[source.tabId]?.ptyIdsByLeafId ?? {}
+  return [...new Set([leafId, ...Object.keys(bindings).filter((leaf) => bindings[leaf])])]
+}
+
 export async function closeCliChatResumeTerminal(
   source: CliChatResumeSource,
   isCurrent: () => boolean,
@@ -36,8 +51,8 @@ export async function closeCliChatResumeTerminal(
   const state = useAppStore.getState()
   const ptyIds = collectTabPtyIds(state, source.tabId)
   const bindings = state.terminalLayoutsByTabId[source.tabId]?.ptyIdsByLeafId ?? {}
-  const leaves = new Set([leafId, ...Object.keys(bindings).filter((leaf) => bindings[leaf])])
-  const originals = [...leaves].map((leaf) =>
+  const leaves = closingLeaves(state, source)
+  const originals = leaves.map((leaf) =>
     captureTerminalSurfaceIdentity(state, source.workspaceId, source.tabId, leaf)
   )
   if (
@@ -48,7 +63,7 @@ export async function closeCliChatResumeTerminal(
     throw new Error('terminal unavailable')
   }
   const terminals = await Promise.all(
-    [...leaves].map(async (leaf) => {
+    leaves.map(async (leaf) => {
       const { terminal } = await callRuntimeRpc<{ terminal: RuntimeTerminalResolvePane }>(
         target,
         'terminal.resolvePane',

@@ -2,7 +2,7 @@
  * Reuse worker readiness and sendTerminalAgentPrompt for serialized, generation-fenced bracketed paste and per-agent Enter timing across local, WSL and SSH. */
 
 import { randomUUID } from 'node:crypto'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
 import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
 import {

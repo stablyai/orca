@@ -1,12 +1,12 @@
 import { toast } from 'sonner'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type {
   WorkspaceCleanupFailure,
   WorkspaceCleanupRemoveOptions,
   WorkspaceCleanupRemoveResult
 } from '@/store/slices/workspace-cleanup'
 import { translate } from '@/i18n/i18n'
-import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
   getSkippedAncestorMessage,
   isStrictWorkspaceCleanupDescendant,

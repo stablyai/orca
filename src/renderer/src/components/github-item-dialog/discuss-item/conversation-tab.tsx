@@ -5,9 +5,9 @@ import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../../shared/pr-comment-audience'
+} from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
-import { groupPRComments } from '../../../../../shared/pr-comment-groups'
+import { groupPRComments } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import {
   getCommentReplyTargetCandidates,
   resolveCommentReplyTarget
@@ -15,8 +15,8 @@ import {
 import {
   attachPRReviewReplyParent,
   canPostPRReviewThreadReply
-} from '@/components/right-sidebar/pr-comments-ai-launch-ack'
-import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/pr-comment-fixing-reply-body'
+} from '@/components/right-sidebar/checks-panel/comments/pr-comments-ai-launch-ack'
+import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/checks-panel/comments/pr-comment-fixing-reply-body'
 import { useAppStore } from '@/store'
 import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
 import {

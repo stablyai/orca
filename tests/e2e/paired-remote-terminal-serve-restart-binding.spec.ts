@@ -9,7 +9,7 @@ import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {
   launchHeadlessPairedRuntimeHost,

@@ -6,7 +6,9 @@ import { resolveAppImageExtractedRoot } from '../cli/appimage-extracted-root'
 import { resolveAppImageGenerationDaemonLaunch } from './daemon-appimage-generation-launch'
 
 const { resolveIdentity } = vi.hoisted(() => ({ resolveIdentity: vi.fn() }))
-vi.mock('../appimage-runtime-identity', () => ({ resolveAppImageRuntimeIdentity: resolveIdentity }))
+vi.mock('../updater/linux-package/appimage-runtime-identity', () => ({
+  resolveAppImageRuntimeIdentity: resolveIdentity
+}))
 
 const APPDIR = '/tmp/.mount_orcaAbC'
 const ENTRY_IN_APPDIR = 'resources/app.asar.unpacked/out/main/daemon-entry.js'

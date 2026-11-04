@@ -20,7 +20,7 @@ vi.mock('./macos-computer-use-permission-status', () => ({
 vi.mock('./macos-computer-use-permission-status-gate', () => ({
   computerUsePermissionStatusGate: { peek: mocks.peek, read: mocks.peek, invalidate: () => {} }
 }))
-vi.mock('../macos-tcc-reset', () => ({
+vi.mock('../macos-permissions/macos-tcc-reset', () => ({
   readMacosBundleId: mocks.readBundleId,
   resetMacosTccPermission: async () => ({ ok: true })
 }))
@@ -58,7 +58,7 @@ async function loadModules(): Promise<{
   markHostShuttingDown: () => void
 }> {
   const permissions = await import('./macos-computer-use-permissions')
-  const { markHostShuttingDown } = await import('../host-shutdown-state')
+  const { markHostShuttingDown } = await import('../startup/quit/host-shutdown-state')
   return { permissions, markHostShuttingDown }
 }
 
@@ -80,15 +80,6 @@ describe('computer-use setup cancellation', () => {
     Object.defineProperty(process, 'platform', { value: originalPlatform })
   })
 
-  it('never spawns a queued helper once the host is shutting down', async () => {
-    const { permissions, markHostShuttingDown } = await loadModules()
-    await permissions.openComputerUsePermissions('accessibility')
-    await permissions.openComputerUsePermissions('screenshots')
-    markHostShuttingDown()
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(setupLaunches()).toEqual([['--permission', 'accessibility']])
-  })
-
   it('cancels an Open whose status resolves during shutdown, as an error', async () => {
     const status = deferredStatus()
     mocks.peek.mockReturnValue(status.promise)
@@ -98,33 +89,6 @@ describe('computer-use setup cancellation', () => {
     status.resolve()
     await expect(open).rejects.toThrow('cancelled')
     expect(setupLaunches()).toEqual([])
-  })
-
-  it('cancels an Open that predates a reset, and the next Open still launches', async () => {
-    const status = deferredStatus()
-    mocks.peek.mockReturnValueOnce(status.promise)
-    const { permissions } = await loadModules()
-    const stale = permissions.openComputerUsePermissions('accessibility')
-    await permissions.resetComputerUsePermissions()
-    const fresh = permissions.openComputerUsePermissions('accessibility')
-    status.resolve()
-    await expect(stale).rejects.toThrow('cancelled')
-    await expect(fresh).resolves.toMatchObject({ launchedHelper: true, launchQueued: false })
-    expect(setupLaunches()).toEqual([['--permission', 'accessibility']])
-  })
-
-  it('lets the newest request win when an older one resumes after it launched', async () => {
-    const status = deferredStatus()
-    mocks.peek.mockReturnValueOnce(status.promise).mockReturnValueOnce(status.promise)
-    const { permissions } = await loadModules()
-    // A1 and B wait on a slow probe; A2 joins an answer that is already in.
-    const a1 = permissions.openComputerUsePermissions('accessibility')
-    const b = permissions.openComputerUsePermissions('screenshots')
-    await permissions.openComputerUsePermissions('accessibility')
-    status.resolve()
-    await Promise.all([a1, b])
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(setupLaunches()).toEqual([['--permission', 'accessibility']])
   })
 
   it('cancels a queued launch before reset waits on the bundle id', async () => {

@@ -1,3 +1,4 @@
+import { verifyPreloadOutput } from './preload-output-contract.mjs'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
@@ -21,7 +22,7 @@ const child = spawn(process.execPath, [electronViteCli, 'build', ...process.argv
   }
 })
 
-child.on('exit', (code, signal) => {
+child.on('exit', async (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal)
     return
@@ -35,5 +36,13 @@ child.on('exit', (code, signal) => {
   const target = process.env.ORCA_ELECTRON_VITE_TARGET
   const builtRenderer =
     (!target || target === 'renderer') && fs.existsSync(path.join(RENDERER_BUILD_DIR, 'index.html'))
+  if (!target || target === 'preload') {
+    try {
+      await verifyPreloadOutput()
+    } catch (error) {
+      console.error(error)
+      process.exit(1)
+    }
+  }
   process.exit(builtRenderer ? verifyRendererBootGraph() : 0)
 })

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -10,10 +10,10 @@ import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-r
 import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/sidebar-feed-index'
 import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace-statuses'
-import { INITIAL_REPO_DRAG_STATE } from '../../project-header-drag-contract'
-import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../../project-group-header-drag-contract'
-import { openHeaderCreateComposer } from '../../header-create-workspace-target'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
+import { INITIAL_REPO_DRAG_STATE } from '../drag/project-header-drag-contract'
+import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../drag/project-group-header-drag-contract'
+import { openHeaderCreateComposer } from './header-create-workspace-target'
+import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
 import { renderWorktreeSectionHeaderRow, type SectionHeaderRowContext } from './SectionHeader'
 
 const initial = useAppStore.getInitialState()
@@ -34,6 +34,7 @@ function localOnlyViewHeader(
   const repoMap = new Map([[keptRegistration.id, keptRegistration]])
   const rows = planSidebarRows({
     groupBy: 'repo',
+    sortBy: 'smart',
     worktrees,
     repoMap,
     repoOfWorktree: createHostScopedRepoOf([localTwin, serverTwin], repoMap),

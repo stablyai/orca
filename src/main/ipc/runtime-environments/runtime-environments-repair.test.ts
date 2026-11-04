@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as environmentStore from '../../../shared/runtime-environment-store'
+import * as environmentStore from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 
 const { handleMock, getPathMock, sendRemoteRuntimeRequestMock } = vi.hoisted(() => ({

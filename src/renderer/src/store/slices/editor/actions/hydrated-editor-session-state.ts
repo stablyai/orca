@@ -1,6 +1,6 @@
 import { detectLanguage } from '@/lib/language-detect'
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { reconcileEditorBufferMembership } from '../buffers/editor-buffer-record'

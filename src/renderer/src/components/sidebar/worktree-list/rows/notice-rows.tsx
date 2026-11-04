@@ -2,11 +2,11 @@ import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
-import { PendingWorktreeRow } from '../../PendingWorktreeRow'
-import ImportedWorktreesVisibilityLine from '../../ImportedWorktreesVisibilityLine'
-import NewExternalWorktreesInboxLine from '../../NewExternalWorktreesInboxLine'
-import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
-import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
+import { PendingWorktreeRow } from './PendingWorktreeRow'
+import ImportedWorktreesVisibilityLine from '../listing/ImportedWorktreesVisibilityLine'
+import NewExternalWorktreesInboxLine from '../listing/NewExternalWorktreesInboxLine'
+import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
+import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 
 export function canKeepImportedWorktreesHidden(
   row: Extract<Row, { type: 'imported-worktrees-card' }>,

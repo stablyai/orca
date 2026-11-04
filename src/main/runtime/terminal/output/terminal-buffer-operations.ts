@@ -6,7 +6,7 @@ import type {
 } from '../../runtime-terminal-state-records'
 import type { OrcaRuntimeWithSerializeTerminalBufferFromAvailableState } from './terminal-buffer-selection'
 import { OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged } from '../layout/terminal-view-presence'
-import type { TerminalOscLinkRange } from '../../../../shared/terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import {
   applyRestoredTerminalTailSeed,
   buildRestoredTerminalTailSeed,

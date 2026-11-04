@@ -2,7 +2,7 @@ import { observeAutomationChatRun } from './runtime-chat-run-observer'
 import { readAutomationRunReceipt } from './automation-run-receipt'
 import { publishedLaunchTarget } from './automation-agent-run-result'
 import { launchAutomationChatAgent } from './automation-chat-agent-launch'
-import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { Store } from '../persistence/loading-store/store'
@@ -13,7 +13,7 @@ import {
   getTuiAgentDetectCommands,
   isTuiAgent,
   TUI_AGENT_CONFIG
-} from '../../shared/tui-agent-config'
+} from '../../shared/agent-launch/catalog/tui-agent-config'
 import { launchHeadlessAutomationAgent, runOwnHandle } from './headless-automation-agent-launch'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,

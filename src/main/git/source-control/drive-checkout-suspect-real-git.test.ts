@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CheckoutGitConfig from '../wsl-windows-checkout-git-config'
-import type * as GitRunner from '../runner'
+import type * as GitRunner from '../command-runner/git-stream-stdout'
 import { runProcess } from '@orca/process-host'
 import { createDebouncedBatch } from '../../ipc/filesystem/watchers/filesystem-watcher-batch-control'
 import { watcherLifecycleState } from '../../ipc/filesystem/watchers/filesystem-watcher-lifecycle-state'
@@ -31,7 +31,7 @@ vi.mock('../wsl-windows-checkout-git-config', async (importOriginal) => {
   }
 })
 
-vi.mock('../runner', async (importOriginal) => {
+vi.mock('../command-runner/git-stream-stdout', async (importOriginal) => {
   const actual = await importOriginal<typeof GitRunner>()
   return {
     ...actual,

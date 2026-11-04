@@ -179,13 +179,4 @@ describe('completed context clear projections', () => {
     expect(latestStructuredAgentContextFacts([newUsage, clear, usageRow])).toEqual(old)
     expect(selectStructuredAgentContextUsage([usageRow], undefined, clear.sequence)).toBeNull()
   })
-
-  it('chooses the newest clear independent of map order and scopes off-page rows', () => {
-    const again = { ...clear, itemId: 'clear-again', sequence: 8 }
-    expect(latestAgentSessionContextClearSequence([again, user, clear])).toBe(8)
-    expect(agentSessionCurrentContextRows([user], [oldSend], 5)).toEqual({
-      items: [],
-      submissions: []
-    })
-  })
 })

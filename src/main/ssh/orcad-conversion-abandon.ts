@@ -1,7 +1,7 @@
 /** Registered destinations must abort/prove empty, then unregister before fence release so later starts cannot reclaim the host. Never-registered destinations held nothing. */
-import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments } from '../../shared/runtime-environment-store'
-import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import { removeManagedOrcadEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import type { KnownRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { closeOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
 import {
   abortOrcadMigrationCutover,

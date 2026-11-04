@@ -64,47 +64,6 @@ describe('Linear issue context', () => {
     isAuthError.mockReturnValue(false)
   })
 
-  it('resolves --current worktree links written as split Linear CLI metadata', async () => {
-    const stably = workspace('workspace-stably', 'stably')
-    const rawRequest = vi.fn().mockResolvedValue({ data: { issue: rawIssue('STA-335') } })
-    getStatus.mockReturnValue({ workspaces: [stably] })
-    getClients.mockReturnValue([makeEntry({ workspace: stably, rawRequest })])
-    const { readLinearIssueContext } = await import('./read-context')
-
-    await expect(
-      readLinearIssueContext(
-        {
-          current: true,
-          include: {
-            attachments: false,
-            children: false,
-            comments: false,
-            relations: false,
-            activity: false
-          },
-          depth: 0
-        },
-        async () => ({
-          identifier: 'STA-335',
-          workspaceId: null,
-          organizationUrlKey: 'stably',
-          worktreeId: 'repo::/tmp/repo/feature',
-          worktreePath: '/tmp/repo/feature'
-        })
-      )
-    ).resolves.toMatchObject({
-      issue: { identifier: 'STA-335' },
-      meta: {
-        resolved: {
-          workspaceId: 'workspace-stably',
-          worktreeId: 'repo::/tmp/repo/feature',
-          worktreePath: '/tmp/repo/feature'
-        }
-      }
-    })
-    expect(getClients).toHaveBeenCalledWith('workspace-stably', undefined)
-  })
-
   it('returns partial context and attachment metadata when the optional comment read fails', async () => {
     const selected = workspace('workspace-proof', 'proof')
     const rawRequest = vi

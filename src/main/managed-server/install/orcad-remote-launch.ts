@@ -4,7 +4,7 @@ import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME
 } from '../../../shared/orcad-artifacts'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,

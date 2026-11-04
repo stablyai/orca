@@ -8,7 +8,7 @@ import {
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { getVirtualizedScrollAnchorForOffset } from '@/hooks/virtualized-scroll-anchor-recording'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import {
   rememberCombinedDiffView,
   type CombinedDiffViewLease

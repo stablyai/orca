@@ -5,6 +5,12 @@ import type {
 import { translate } from '../i18n/mobile-i18n'
 
 export const SEND_FAILURE_COPY = {
+  unconfirmed: (values) =>
+    translate(
+      'session.failure.unconfirmed',
+      "Couldn't confirm whether this was sent. It hasn't been resent.",
+      values
+    ),
   providerExitedRow: (values) =>
     translate(
       'session.failure.providerExitedRow',
@@ -109,6 +115,8 @@ export const SEND_FAILURE_COPY = {
       "An attachment on this message can't be sent to the agent.",
       values
     ),
+  attachmentsExpired: (values) =>
+    translate('session.failure.attachmentsExpired', '{{names}} expired.', values),
   attachmentUnreadable: (values) =>
     translate(
       'session.failure.attachmentUnreadable',

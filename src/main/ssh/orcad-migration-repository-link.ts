@@ -1,7 +1,7 @@
 /** Link same-host-path checkouts to existing server rows without overwriting their newer state; retain desktop source copies. Re-journal under the same id only after proving the prior manifest absent, preventing duplicate imports. */
 import { getAutomationRunRepoId } from '../../shared/automation-run-identity'
 import type { Automation } from '../../shared/automations-types'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { isRepoOnCatalogHost } from '../../shared/execution-host'
 import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'

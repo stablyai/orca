@@ -6,7 +6,7 @@ import {
   WslHostMark,
   wslHostRunsOnLabel
 } from '@/components/wsl-host-mark/WslHostMark'
-import { isRepoHeaderActionTarget } from '../../project-header-drag-contract'
+import { isRepoHeaderActionTarget } from '../drag/project-header-drag-contract'
 import type { ProjectHeaderHostContext } from './project-header-host-context'
 
 export function ProjectHeaderHostLabel({

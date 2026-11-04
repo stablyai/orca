@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Automation, AutomationCreateInput } from '../../../shared/automations-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { SshTarget } from '../../../shared/ssh-types'
@@ -21,7 +21,7 @@ import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owne
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
-import { resetRetirementCollisionKeyCacheForTests } from '../../worktree-name-retirement'
+import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'
 
 let hasCreatedStoreInCase = false
 

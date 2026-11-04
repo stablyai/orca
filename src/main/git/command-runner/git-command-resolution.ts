@@ -2,7 +2,7 @@ import { wslDistroForCommand } from '../../../shared/wsl-paths'
 export { wslDistroForCommand } from '../../../shared/wsl-paths'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
-import { isWslDirectGitReadCommand } from '../wsl-direct-git-read-commands'
+import { isWslDirectGitReadCommand } from '../../../shared/git/commands/git-command-classification'
 import {
   disableWslGitReadEnvironment,
   getWslGitReadEnvironment,
@@ -11,7 +11,7 @@ import {
   peekWslGitReadEnvironment,
   WSL_GIT_READ_ENVIRONMENT_WAIT_MS
 } from '../wsl-git-read-environment'
-import { usesHostGitForWslLinkedWorktree } from '../wsl-linked-worktree-git-routing'
+import { usesHostGitForWslLinkedWorktree } from './wsl-linked-worktree-git-routing'
 import { withWslWindowsCheckoutGitConfig } from '../wsl-windows-checkout-git-config'
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import type { GitExecOptions } from './git-exec-options'

@@ -1,18 +1,23 @@
 import { getRepoDialableSshTargetId } from '../../shared/execution-host'
 import { createHash } from 'node:crypto'
-import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
+import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
-import { getEffectiveHooks, hasHooksFile, hasUnrecognizedOrcaYamlKeys, loadHooks } from '../hooks'
-import { getEffectiveSetupRunPolicy } from '../effective-hook-config'
+import {
+  getEffectiveHooks,
+  hasHooksFile,
+  hasUnrecognizedOrcaYamlKeys,
+  loadHooks
+} from '../workspace-hooks/hooks'
+import { getEffectiveSetupRunPolicy } from '../workspace-hooks/effective-hook-config'
 import { resolveHookCommandSourcePolicy } from '../../shared/hook-command-source-policy'
 import { getSetupConfig, getSetupTrustContent } from '../../shared/orca-hook-setup-config'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
+import { inspectSetupScriptImportCandidates } from '../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
-import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 type RuntimeRepositoryHooksCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
