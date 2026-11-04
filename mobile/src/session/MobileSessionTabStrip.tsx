@@ -1,11 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { View, ScrollView, StyleSheet } from 'react-native'
-import { History, Plus } from 'lucide-react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
+import { File, FileText, Globe, History, Plus, SquareTerminal } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
-import type { AgentDotState } from '../worktree/agent-row-display'
+import { agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
 import {
   clearLatchedUnreadTabKeys,
   getMobileTerminalTabHostAgentIdentity,
@@ -18,7 +19,7 @@ import {
   seedUnreadWorktreeSessionTabs,
   subscribeCatalogWorktreesForTabStatus
 } from './mobile-terminal-tab-agent'
-import { spacing } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import {
@@ -31,20 +32,15 @@ import { styles } from './mobile-session-styles'
 import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
-import { MobileSessionTab } from './MobileSessionTab'
-import type { SessionTitleCard } from './use-session-title-card'
-
 const DOUBLE_TAP_RENAME_MS = 300
 
-export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
+export function MobileSessionTabStrip({
   controller,
   inTopBar,
-  details,
   actionsCollapsed = false
 }: {
   controller: MobileSessionController
   inTopBar: boolean
-  details: SessionTitleCard['tabDetails']
   actionsCollapsed?: boolean
 }) {
   useMobileColorScheme()
@@ -73,17 +69,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     visibleTabs,
     terminals
   } = controller
-  const stripBarRef = useRef<View>(null)
-  const tabBarRef = inTopBar ? details.barRef : stripBarRef
-  const { dismiss, toggleSource, refreshSource } = details
   const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
-  const attachTabBar = useCallback(
-    (view: View | null) => {
-      stripBarRef.current = view
-      tabBarKeepsKeyboard(view)
-    },
-    [tabBarKeepsKeyboard]
-  )
   const lastTabTapRef = useRef<{ id: string; at: number } | null>(null)
   const visitUnreadRef = useRef<{
     worktreeId: string | null | undefined
@@ -211,7 +197,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
   const leftHint = resolveTabStripEdgeHint(hiddenTabs.left, tabStates)
   const rightHint = resolveTabStripEdgeHint(hiddenTabs.right, tabStates)
   const pressTab = useCallback(
-    (t: (typeof visibleTabs)[number], source: Parameters<typeof toggleSource>[0]) => {
+    (t: (typeof visibleTabs)[number]) => {
       visitUnreadRef.current.userSwitchedTab = true
       visitUnreadRef.current.latchedUnreadTabId = null
       clearLatchedUnreadTabKeys()
@@ -226,7 +212,6 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
         typeof t.terminal === 'string'
       ) {
         lastTabTapRef.current = null
-        dismiss()
         triggerMediumImpact()
         setRenameTarget({
           handle: t.terminal,
@@ -249,12 +234,9 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
         holdTabStripReveal(nextOffset, DOUBLE_TAP_RENAME_MS)
       }
       switchSessionTab(t)
-      toggleSource(source)
     },
     [
       activeHandleRef,
-      dismiss,
-      toggleSource,
       cancelHeldTabStripReveal,
       holdTabStripReveal,
       setRenameTarget,
@@ -286,11 +268,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     ]
   )
   return (
-    <View
-      ref={attachTabBar}
-      onLayout={() => refreshSource()}
-      style={inTopBar ? styles.tabBarInTopBar : styles.tabBar}
-    >
+    <View ref={tabBarKeepsKeyboard} style={inTopBar ? styles.tabBarInTopBar : styles.tabBar}>
       {/* Why: tab taps must register on first press with the keyboard open instead of being eaten by dismissal (#5106). */}
       <View style={styles.tabScrollFrame}>
         <ScrollView
@@ -301,42 +279,34 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
           contentContainerStyle={[styles.tabContent, inTopBar && styles.tabContentInTopBar]}
           keyboardShouldPersistTaps="handled"
           scrollEventThrottle={16}
-          onScrollBeginDrag={() => {
-            cancelHeldTabStripReveal()
-            dismiss()
-          }}
+          onScrollBeginDrag={cancelHeldTabStripReveal}
           onScroll={(e) => {
             tabStripOffsetRef.current = e.nativeEvent.contentOffset.x
             refreshHiddenTabs()
-            refreshSource()
           }}
           onLayout={(e) => {
             tabStripViewportWidthRef.current = e.nativeEvent.layout.width
             scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
             refreshHiddenTabs()
-            refreshSource()
           }}
           onContentSizeChange={(width) => {
             tabStripContentWidthRef.current = width
             scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
             refreshHiddenTabs()
-            refreshSource()
           }}
         >
           {visibleTabs.map((tab, index) => {
             const tabState = tabStates.get(tab.id)
             const { title, agentId } = tabLabels[index]
             return (
-              <MobileSessionTab
+              <Pressable
                 key={tab.id}
-                tab={tab}
-                first={index === 0 && !inTopBar}
-                active={tab.id === activeSessionTabId}
-                title={title}
-                tabState={tabState}
-                agentId={agentId}
-                details={details}
-                barRef={tabBarRef}
+                style={({ pressed }) => [
+                  styles.tab,
+                  index === 0 && !inTopBar && styles.tabFirst,
+                  tab.id === activeSessionTabId && styles.tabActive,
+                  pressed && styles.tabPressed
+                ]}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout
                   tabLayoutsRef.current.set(tab.id, { x, width })
@@ -345,13 +315,57 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
                   }
                   refreshHiddenTabs()
                 }}
-                onPress={(source) => pressTab(tab, source)}
+                onPress={() => pressTab(tab)}
+                accessibilityRole="tab"
+                accessibilityLabel={
+                  tabState && tabState !== 'idle'
+                    ? t('session.tabStrip.tabStatus', '{{title}}, {{status}}', {
+                        title,
+                        status: agentStateLabel(tabState)
+                      })
+                    : title
+                }
+                accessibilityState={{ selected: tab.id === activeSessionTabId }}
                 onLongPress={() => {
-                  dismiss()
                   triggerMediumImpact()
                   openSessionTabActionSheetAfterKeyboardDismiss(tab)
                 }}
-              />
+                delayLongPress={400}
+              >
+                <View style={styles.tabLabelRow}>
+                  {tabState && tabState !== 'idle' ? <AgentStateDot state={tabState} /> : null}
+                  <View style={styles.tabIcon}>
+                    {tab.type === 'browser' && (
+                      <Globe size={13} color={colors.textSecondary} strokeWidth={2.1} />
+                    )}
+                    {tab.type === 'markdown' && (
+                      <FileText size={13} color={colors.textSecondary} strokeWidth={2.1} />
+                    )}
+                    {tab.type === 'file' && (
+                      <File size={13} color={colors.textSecondary} strokeWidth={2.1} />
+                    )}
+                    {tab.type === 'agent-session' && agentId ? (
+                      <MobileAgentIcon agentId={agentId} size={13} />
+                    ) : null}
+                    {tab.type === 'terminal' &&
+                      (agentId ? (
+                        <MobileAgentIcon agentId={agentId} size={13} />
+                      ) : (
+                        <SquareTerminal
+                          size={13}
+                          color={colors.textSecondary}
+                          strokeWidth={2.1}
+                        />
+                      ))}
+                  </View>
+                  <Text
+                    style={[styles.tabText, tab.id === activeSessionTabId && styles.tabTextActive]}
+                    numberOfLines={1}
+                  >
+                    {title}
+                  </Text>
+                </View>
+              </Pressable>
             )
           })}
         </ScrollView>
@@ -378,10 +392,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
           {showRecentSessionCardsAction ? (
             <NavBarButton
               active={Boolean(showRecentSessionCards)}
-              onPress={() => {
-                dismiss()
-                setShowRecentSessionCards(true)
-              }}
+              onPress={() => setShowRecentSessionCards(true)}
               accessibilityLabel={t('recentSessionCardsSectionTitle', 'Recently Used')}
               icon={History}
             />
@@ -390,7 +401,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
       ) : null}
     </View>
   )
-})
+}
 
 // The right inset matches the nav bar's, so the + lines up with the ⋯ above it.
 const newTabStyles = StyleSheet.create({

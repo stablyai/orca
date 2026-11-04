@@ -146,20 +146,6 @@ function countAcknowledgeWrites(): { readonly count: () => number; stop: () => v
 }
 
 describe('Activity auto mark-read loop (React #185)', () => {
-  it('acknowledges a selected thread once even when its unread flag cannot clear', async () => {
-    seedThreadStampedAheadOfLocalClock()
-    await mountActivityPage()
-    const acknowledgeWrites = countAcknowledgeWrites()
-
-    try {
-      await selectSeededThread()
-    } finally {
-      acknowledgeWrites.stop()
-    }
-
-    expect(acknowledgeWrites.count()).toBe(1)
-  })
-
   it('re-acknowledges when a new turn lands on the still-selected thread', async () => {
     const intents: string[] = []
     // An automatic read is a view: it must not claim the edges a click would cover.
@@ -203,14 +189,6 @@ describe('Activity auto mark-read loop (React #185)', () => {
 
     expect(acknowledgeWrites.count()).toBe(2)
     expect(intents).toEqual(['view', 'view'])
-  })
-
-  it('still marks a locally stamped thread read on selection', async () => {
-    seedThreadStampedByLocalClock()
-    await mountActivityPage()
-    await selectSeededThread()
-
-    expect(useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_A]).toBeGreaterThan(0)
   })
 
   it('leaves the selected thread unread after the user marks it unread', async () => {

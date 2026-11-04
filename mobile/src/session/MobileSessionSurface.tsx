@@ -1,4 +1,4 @@
-import { useContext, useMemo } from 'react'
+import { useContext } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { styles } from './mobile-session-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -15,10 +15,6 @@ import { useResponsiveLayout } from '../layout/responsive-layout'
 import { WorkspaceServerContext } from '../transport/use-workspace-client'
 import { useSessionTitleCard } from './use-session-title-card'
 import { useDetailCardScope } from '../components/use-detail-card-scope'
-import { useNow } from '../hooks/use-now'
-import { getMobileTerminalTabHostAgentIdentity } from './mobile-terminal-tab-agent'
-import { mobileSessionTabCardContent } from './mobile-session-tab-card-content'
-import { MobileSessionTabCardFooter } from './MobileSessionTabCardFooter'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
@@ -32,7 +28,9 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   const besideTabs = (layout.isLandscapePhone || sideRail) && hasTabs
   const titleVisible =
     !sideRail || !hasTabs || controller.showConnectionRetry || controller.connectionEscalated
+  // The compact Duo header removes the opener, so its card must yield with it.
   const obscured = Boolean(
+    !titleVisible ||
     controller.showHeaderMoreActions ||
     controller.showRecentSessionCards ||
     controller.showCreateTabDrawer ||
@@ -53,38 +51,8 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     controller.showDictationSetup ||
     controller.deleteKeyTarget != null
   )
-  const details = useSessionTitleCard(besideTabs, obscured, controller.visibleTabs, titleVisible)
-  const missingSource = details.missingTab || details.missingTitle
-  const tab = useMemo(
-    () =>
-      details.tabId
-        ? controller.visibleTabs.find((candidate) => candidate.id === details.tabId)
-        : undefined,
-    [controller.visibleTabs, details.tabId]
-  )
-  const hostAgentIdentity = useMemo(
-    () => (tab ? getMobileTerminalTabHostAgentIdentity(tab, controller.terminals) : undefined),
-    [tab, controller.terminals]
-  )
-  const now = useNow(60_000, details.active && tab != null)
-  const tabContent = useMemo(
-    () => (tab ? mobileSessionTabCardContent(tab, hostAgentIdentity, now) : null),
-    [tab, hostAgentIdentity, now, t]
-  )
-  const footer = useMemo(
-    () => (tabContent ? <MobileSessionTabCardFooter content={tabContent} /> : null),
-    [tabContent]
-  )
-  const contentRow = useMemo(
-    () => <MobileSessionContentRow controller={controller} />,
-    [controller]
-  )
-  useDetailCardScope({
-    ...details,
-    openerRef: details.scopeOpenerRef,
-    active: details.active && !missingSource,
-    obscured: obscured || missingSource
-  })
+  const details = useSessionTitleCard(besideTabs, obscured)
+  useDetailCardScope({ ...details, obscured })
   // Only a proven local record belongs to this route's desktop or server.
   const hostName =
     controller.worktreeHostId === 'local' ? (server ? server.name : controller.hostName) : null
@@ -93,7 +61,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
       <View style={styles.kavInner}>
         <MobileSessionHeader controller={controller} details={details} />
         <MobileWorkerAutoCloseStrip controller={controller} />
-        {contentRow}
+        <MobileSessionContentRow controller={controller} />
       </View>
       <DetailCardLayer>
         <View
@@ -109,18 +77,13 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
               bounds={details.bounds}
               contentRef={details.contentRef}
               boundaryRefs={details.boundaryRefs}
-              active={details.active && !missingSource}
-              obscured={obscured || missingSource}
+              active={details.active}
+              obscured={obscured}
               onSettled={details.onSettled}
-              title={
-                tabContent?.title ??
-                (controller.worktreeName || t('session.header.terminalTitle', 'Terminal'))
-              }
-              detail={tabContent ? tabContent.detail : controller.worktreePath}
+              title={controller.worktreeName || t('session.header.terminalTitle', 'Terminal')}
+              detail={controller.worktreePath}
               footer={
-                tabContent ? (
-                  footer
-                ) : hostName ? (
+                hostName ? (
                   <>
                     <StatusDot state={controller.connState} />
                     <Text style={styles.sessionMetaText}>{hostName}</Text>

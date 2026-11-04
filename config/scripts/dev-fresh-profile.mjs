@@ -6,7 +6,7 @@ import path from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { getDefaultSeedSource, seedDevProfile } from './dev-profile-seed.mjs'
 
-const USAGE = `Usage: pnpm dev:fresh [--keep] [--seed-from[=<profile dir>]] [-- <pnpm dev args>]
+const USAGE = `Usage: pnpm dev:fresh [--] [--keep] [--seed-from[=<profile dir>]] [-- <pnpm dev args>]
 
   --keep                 keep the temporary profile after exit
   --seed-from[=<dir>]    start from a slim copy of a profile (projects, workspaces, settings,
@@ -38,7 +38,8 @@ function parseArgs(argv) {
   return options
 }
 
-const options = parseArgs(process.argv.slice(2))
+const argv = process.argv.slice(2)
+const options = parseArgs(argv[0] === '--' ? argv.slice(1) : argv)
 if (options.help) {
   console.log(USAGE)
   process.exit(0)

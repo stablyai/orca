@@ -112,6 +112,8 @@ export function runNativeChatSplitTarget(
   }
   // Settlement cleanup preserves any pane that currently contains a tab.
   void result.structuredSettlement?.then(closePane, closePane)
+  // Every chat split path lands here, so this is the one place it counts (and advances the tour).
+  useAppStore.getState().recordFeatureInteraction('tab-splits')
   return true
 }
 
