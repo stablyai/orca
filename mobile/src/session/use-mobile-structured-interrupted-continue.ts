@@ -12,6 +12,8 @@ import {
 } from '../../../src/shared/native-chat/native-chat-interrupted-continue'
 import type { RpcClient } from '../transport/rpc-client'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import { useRouteRelaysCapability } from '../transport/workspace-server-context'
+import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 
 export type MobileStructuredInterruptedContinue = {
@@ -43,11 +45,15 @@ export function useMobileStructuredInterruptedContinue(
   })
   const attempt =
     held.sessionKey === sessionKey ? held.attempt : NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT
+  // An older paired desktop relaying to a newer server refuses the method from a phone.
+  const relayed = useRouteRelaysCapability(
+    AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
+  )
   const cut = useMemo(() => latestNativeChatOrcaStopCut(items, submissions), [items, submissions])
   const { continueAvailable, offeredTurnItemId, failed } = nativeChatInterruptedContinueState({
     capability: !input.hostSupport
       ? 'unknown'
-      : input.hostSupport.continueInterrupted
+      : input.hostSupport.continueInterrupted && relayed
         ? 'supported'
         : 'unsupported',
     cut,

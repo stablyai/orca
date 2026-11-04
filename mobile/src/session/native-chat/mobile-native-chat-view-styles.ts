@@ -29,6 +29,7 @@ export const styles = themedStyleSheet(() => ({
     gap: spacing.sm
   },
   sendErrorText: {
+    flexShrink: 1,
     color: colors.statusRed,
     fontSize: typography.metaSize,
     fontWeight: '600'
