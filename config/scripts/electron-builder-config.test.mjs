@@ -15,6 +15,16 @@ const electronBuilderConfig = require('../electron-builder.config.cjs')
 const { copyFiles, FileMatcher } = require('app-builder-lib/out/fileMatcher')
 
 describe('electron-builder config', () => {
+  it('offers text language formats on macOS without compiled or compressed variants', () => {
+    const extensions = electronBuilderConfig.mac.fileAssociations.flatMap(({ ext }) => ext)
+    expect(extensions).toEqual(
+      expect.arrayContaining(['rs', 'svg', 'json', 'ts', 'py', 'yaml', 'txt', 'md', 'csv', 'tsv'])
+    )
+    for (const extension of ['rlib', 'svgz']) {
+      expect(extensions).not.toContain(extension)
+    }
+  })
+
   it.each(['file', 'directory'])('keeps a root notes %s out of app.asar', async (kind) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-packaging-notes-'))
     const source = join(root, 'app')

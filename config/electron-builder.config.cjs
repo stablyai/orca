@@ -207,7 +207,8 @@ const EDITOR_FILE_EXTENSIONS = [
 ]
   .map((extension) => extension.slice(1))
   .filter(
-    (extension) => ![...MARKDOWN_FILE_EXTENSIONS, ...TABULAR_FILE_EXTENSIONS].includes(extension)
+    (extension) =>
+      ![...MARKDOWN_FILE_EXTENSIONS, ...TABULAR_FILE_EXTENSIONS, 'rlib', 'svgz'].includes(extension)
   )
   .sort()
 

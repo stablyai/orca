@@ -97,7 +97,11 @@ print(String(data: try JSONSerialization.data(withJSONObject: rows), encoding: .
     )
   )
   const extensions = documentTypes.flatMap((type) => type.CFBundleTypeExtensions ?? [])
-  assert.ok(!extensions.some((extension) => ['*', 'bin', 'png', 'pdf', 'exe'].includes(extension)))
+  assert.ok(
+    !extensions.some((extension) =>
+      ['*', 'bin', 'png', 'pdf', 'exe', 'rlib', 'svgz'].includes(extension)
+    )
+  )
   assert.equal(plist.CFBundleIdentifier, bundleId)
   console.log(execFileSync(lsregister, ['-f', '-v', bundle], { encoding: 'utf8' }).trim())
   registered = true
@@ -107,14 +111,26 @@ print(String(data: try JSONSerialization.data(withJSONObject: rows), encoding: .
     candidate: row.candidates.includes(bundleId),
     defaultUnchanged: row.default === before[index].default
   }))
-  console.log(JSON.stringify({ bundleId, extensionCount: extensions.length, checks }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        scope: 'temporary-bundle-registration',
+        installationAndLaunchChecked: false,
+        bundleId,
+        extensionCount: extensions.length,
+        checks
+      },
+      null,
+      2
+    )
+  )
   assert.ok(
     checks.every((check) => check.candidate),
     'The built app must be a native Open With candidate for every sample.'
   )
   assert.ok(
     checks.every((check) => check.defaultUnchanged),
-    'Existing default applications must remain unchanged.'
+    'Registering the temporary bundle must preserve current defaults; installation and launch are not checked.'
   )
 } finally {
   if (registered) {

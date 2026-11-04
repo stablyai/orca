@@ -2,18 +2,18 @@
 
 ## Purpose
 
-让 macOS 用户从 Finder 为代码、配置和文本文件选择 Orca，并在不要求添加项目的情况下直接编辑原文件。系统请求在冷启动、运行中和多文件场景下进入本机独立文件区，保留默认应用选择及原有文件访问保护。
+让 macOS 用户从 Finder 为代码、配置和文本文件选择 Orca，并在不要求添加项目的情况下直接编辑原文件。系统请求在冷启动、运行中和多文件场景下进入本机独立文件区，不主动设置系统默认应用，并保留原有文件访问保护。
 
 ## ADDED Requirements
 
 ### Requirement: 代码配置与文本的可选打开应用
 
-macOS 安装包 SHALL 为已有语言识别支持的代码后缀、常见配置后缀和纯文本后缀声明可选编辑器，并保留已有文档关联。声明 MUST 使用 Alternate 级别，不主动设置系统默认应用，不使用通用二进制文件或星号关联。
+macOS 安装包 SHALL 为已有语言识别支持的代码后缀、常见配置后缀和纯文本后缀声明可选编辑器，并保留已有文档关联。声明 MUST 使用 Alternate 级别，不主动设置系统默认应用，不使用通用二进制文件或星号关联；MUST NOT 将 rlib、svgz 等编译或压缩格式声明为文本编辑关联。
 
 #### Scenario: 常见代码文件可选择 Orca
 
-- **WHEN** 用户查看 package.json、source.ts、script.py、config.yaml 或 notes.txt 的系统候选打开应用
-- **THEN** 注册后的 macOS 测试包出现在候选列表，原默认应用保持不变
+- **WHEN** 注册独立测试包后，查询 package.json、source.ts、script.py、config.yaml 或 notes.txt 的系统候选打开应用
+- **THEN** macOS 测试包出现在候选列表，临时注册前后的默认应用保持不变；真实安装和启动的默认应用结果须另行验证并报告
 
 ### Requirement: 显式文件请求进入本机独立文件区
 
