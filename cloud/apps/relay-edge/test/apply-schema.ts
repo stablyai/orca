@@ -1,6 +1,6 @@
 // Applies the relay's own Postgres schema (unchanged DDL from cloud/apps/relay) to a local test
 // database, so the edge runs the credential store against the same tables as production.
-//   tsx test/apply-schema.ts postgres://relay@127.0.0.1:55432/relay
+//   tsx test/apply-schema.ts postgres://relay@127.0.0.1:55433/relay
 import pg from 'pg'
 import { relayPostgresSchemaStatements } from '../../relay/src/database'
 

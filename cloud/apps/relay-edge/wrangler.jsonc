@@ -27,7 +27,7 @@
     {
       "binding": "HYPERDRIVE",
       "id": "00000000000000000000000000000000",
-      "localConnectionString": "postgres://relay:local-test@127.0.0.1:55432/relay"
+      "localConnectionString": "postgres://relay:local-test@127.0.0.1:55433/relay"
     }
   ],
   "vars": {
