@@ -94,11 +94,13 @@ export function journalWith(items: AgentJournalRenderItem[]) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the settle reads only these journal members.
   const journal = {
     snapshot: () => ({ items }),
+    statusRead: () => ({ items }),
     itemFence: () => 1,
     lastProviderActivityAt: () => undefined,
     stopMarks: { latest: () => null },
     cursor: () => ({ epoch: 'epoch-1', sequence: 8 }),
     submissions: () => [],
+    inputOrder: { recoverableSubmissions: () => [] },
     appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
   } as unknown as AgentSessionJournal
   return { journal, appendLifecycleBatch }

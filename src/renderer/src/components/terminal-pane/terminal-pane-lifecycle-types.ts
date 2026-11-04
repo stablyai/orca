@@ -5,7 +5,7 @@ import type { IDisposable } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   PaneExternalDropHandler,
   PaneExternalDropResolver,

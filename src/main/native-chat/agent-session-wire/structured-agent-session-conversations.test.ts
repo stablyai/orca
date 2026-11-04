@@ -60,6 +60,31 @@ function appendStatus(journal: AgentSessionJournal, text: string) {
 }
 
 describe('a conversation delivers what its journal commits', () => {
+  it('coalesces output causes without losing an input change', async () => {
+    const journal = await openJournal('causes')
+    let commit!: Parameters<AgentSessionJournal['observeCommits']>[0]
+    vi.spyOn(journal, 'observeCommits').mockImplementation((listener) => {
+      commit = listener
+      return () => {}
+    })
+    const deliver = vi.fn()
+    const conversations = new StructuredAgentSessionConversations({
+      deliver,
+      logger: recordingStructuredAgentSessionLogger().logger,
+      now: () => 0
+    })
+    conversations.set('session-1', session(journal))
+    commit([], true)
+    commit([], false)
+    await Promise.resolve()
+    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal, true)
+    deliver.mockClear()
+    commit([], false)
+    commit([], false)
+    await Promise.resolve()
+    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal, false)
+  })
+
   it('delivers an append that no writer published', async () => {
     const deliver = vi.fn()
     const conversations = new StructuredAgentSessionConversations({
@@ -73,7 +98,7 @@ describe('a conversation delivers what its journal commits', () => {
     await appendStatus(journal, 'written')
 
     expect(deliver).toHaveBeenCalledOnce()
-    expect(deliver).toHaveBeenCalledWith('session-1', journal)
+    expect(deliver).toHaveBeenCalledWith('session-1', journal, true)
   })
 
   it('binds a handle set through a plain map reference', async () => {
@@ -90,7 +115,7 @@ describe('a conversation delivers what its journal commits', () => {
 
     await appendStatus(journal, 'through the plain map')
 
-    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal)
+    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal, true)
   })
 
   it('delivers an epoch replacement, which readers must reload from', async () => {
@@ -105,7 +130,7 @@ describe('a conversation delivers what its journal commits', () => {
 
     await journal.replaceEpochItems('handle_forked', 0, [])
 
-    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal)
+    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal, true)
   })
 
   it('delivers nothing for a handle the conversation has replaced', async () => {
@@ -124,7 +149,7 @@ describe('a conversation delivers what its journal commits', () => {
     expect(deliver).not.toHaveBeenCalled()
 
     await appendStatus(current, 'live')
-    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', current)
+    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', current, true)
   })
 
   it('delivers nothing once the conversation is dropped', async () => {
@@ -315,8 +340,28 @@ describe('internal publication lifetime, independently of presentation', () => {
       // Old journal is closed and its slots are detached.
       first.stopMarks.settled({ settling: true }, 'old')
       expect(events).toHaveLength(oldEvents)
+      const priorCursor = second.cursor()
       await second.replaceEpochItems('handle_forked', 1, [])
-      expect(events.at(-1)?.kind).toBe('reset')
+      const replacedCursor = second.cursor()
+      expect(events.at(-1)).toMatchObject({
+        kind: 'commit',
+        journal: second,
+        cursor: replacedCursor
+      })
+      expect(events.at(-1)?.rows?.[0]).toMatchObject({
+        kind: 'epoch',
+        reason: 'handle_forked',
+        fence: 1,
+        seq: priorCursor.sequence + 1
+      })
+      expect(replacedCursor.epoch).not.toBe(priorCursor.epoch)
+      expect(second.readSince(priorCursor)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(second.readSince(replacedCursor)).toEqual({
+        ok: true,
+        rows: [],
+        through: replacedCursor.sequence,
+        cursor: replacedCursor
+      })
       const plain: Map<string, StructuredAgentSessionHostSession> = sessions
       plain.clear()
       expect(events.at(-1)).toMatchObject({ kind: 'detach', journal: null })

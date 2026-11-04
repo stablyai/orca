@@ -7,7 +7,7 @@ import {
 } from './sync-runtime-graph'
 import { registerRuntimeTerminalTab } from './mounted-terminal-tab-registry'
 import type { AppState } from '../store/types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
   return {

@@ -7,7 +7,8 @@ import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from './first-work-structured-session-rename'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
+import '../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 const {
   gitExecFileAsyncMock,
@@ -124,6 +125,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
       const journal = {
         snapshot: () => ({ items, submissions: [] }),
+        statusRead: () => ({ items, submissions: [] }),
+        inputOrder: {
+          inputCount: () => 0,
+          inputOrdinal: () => Infinity,
+          recoverableSubmissions: () => []
+        },
         context: { floor: () => null },
         item: ((itemId) =>
           items.find((item) => item.itemId === itemId) ??
@@ -245,6 +252,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       stopMarks: { latest: () => null, revision: () => 0 },
       cursor: () => ({ epoch: 1, sequence: 1 }),
       snapshot: () => ({ items, submissions: [] }),
+      statusRead: () => ({ items, submissions: [] }),
+      inputOrder: {
+        inputCount: () => 0,
+        inputOrdinal: () => Infinity,
+        recoverableSubmissions: () => []
+      },
       item: ((itemId) =>
         items.find((item) => item.itemId === itemId) ?? null) satisfies AgentSessionJournal['item'],
       itemFence: () => undefined,

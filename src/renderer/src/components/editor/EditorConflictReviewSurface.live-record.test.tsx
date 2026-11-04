@@ -7,9 +7,9 @@ import type { AppState } from '@/store'
 import type { OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { createEditorStore } from './editor-autosave-controller-test-fixture'
+import { createEditorStore } from './autosave/editor-autosave-controller-test-fixture'
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
-import { editorTabModelUri } from './editor-save-disk-precondition'
+import { editorTabModelUri } from './save/queue/editor-save-disk-precondition'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 
 type MonacoProps = {

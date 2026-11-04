@@ -11,8 +11,8 @@ import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
-} from '../../../shared/terminal-surface-id'
-import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
+} from '../../../shared/workspace-layout/terminal-surface-id'
+import { ownedEditorFileId } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 import type {
   PublishedEditorFile,
   PublishedPane,

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type React from 'react'
-import { getWorktreeSidebarDragAutoscroll } from '../../worktree-sidebar-drag-autoscroll'
+import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { getPointerDropStatusTarget } from './status-target'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import type { WorktreeDragRuntime } from './use-runtime'

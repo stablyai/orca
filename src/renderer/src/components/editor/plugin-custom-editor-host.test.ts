@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { CUSTOM_EDITOR_DOCUMENT_MAX_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { isPluginJsonObject } from '../../../../shared/plugins/manifest/plugin-json-object'
 import { createPanelMessageBudget } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
-import { createPluginFrameMessageHandler } from '../right-sidebar/plugin-frame-host'
+import { createPluginFrameMessageHandler } from '../plugins/frames/plugin-frame-host'
 import { createCustomEditorHost } from './plugin-custom-editor-host'
 import type { CustomEditorHostOptions } from './plugin-custom-editor-host-types'
 
-vi.mock('../right-sidebar/plugin-panel-design-token-css', () => ({
+vi.mock('../plugins/frames/plugin-panel-design-token-css', () => ({
   currentPluginFrameTheme: () => ({ colorScheme: 'light', tokens: '' })
 }))
 

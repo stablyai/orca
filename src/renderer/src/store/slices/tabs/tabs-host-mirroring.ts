@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { findTabAndWorktree } from '../tab-group-state'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { locateTerminalTab } from '../../terminals/terminal-tab-location'

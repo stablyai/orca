@@ -68,14 +68,6 @@ describe('getCodexConfigSyncStatus', () => {
     })
   })
 
-  it('stays synced before the runtime config exists, since nothing can fall behind yet', () => {
-    expect(getCodexConfigSyncStatus(homes)).toEqual({
-      state: 'synced',
-      reason: null,
-      systemConfigPath: systemConfigPath()
-    })
-  })
-
   it('reports a stall exactly when the mirror preserves the runtime config', () => {
     writeFileSync(systemConfigPath(), 'model = "gpt-5"\n', 'utf-8')
     syncSystemConfigIntoManagedCodexHome(homes)

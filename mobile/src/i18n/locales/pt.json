@@ -5,10 +5,13 @@
       "connecting": "Conectando ao host…",
       "connectingTo": "Conectando a {{name}}…",
       "default": "Padrão do sistema",
+      "fableWindow": "Fable",
       "hostNotFound": "Host não encontrado",
       "invalidSnapshot": "Snapshot de contas inválido recebido do host",
       "loadingAccounts": "Carregando contas…",
       "manageAccountsHint": "Adicione contas ou autentique-as novamente em Configurações → Contas no desktop.",
+      "mcpWindow": "MCP",
+      "otherAgents": "Outros agentes",
       "refreshAccounts": "Atualizar contas",
       "sessionWindow": "5h",
       "switchFailed": "Não foi possível trocar de conta",
@@ -112,13 +115,8 @@
       "tryAgain": "Tentar novamente"
     },
     "terminalSettings": {
-      "autocomplete": "Preenchimento e correção automáticos",
-      "autocompleteOff": "Desativados",
-      "autocompleteOn": "Ativados",
       "defaultText": "Padrão (100%)",
       "keepPhoneSize": "Manter no tamanho do celular (padrão)",
-      "keyboardInputDescription": "O preenchimento automático, a correção automática e as sugestões ortográficas só se aplicam à entrada de comandos em buffer. Use o botão com seta dupla acima do teclado para sair da entrada em tempo real e editar seu comando antes de tocar em Enviar. Desativados por padrão para evitar alterações em comandos, opções ou caminhos.",
-      "keyboardInputHeading": "ENTRADA PELO TECLADO",
       "largeText": "Grande (125%)",
       "largerText": "Maior (150%)",
       "largestText": "Máximo (200%)",
@@ -1738,15 +1736,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Ocultar teclado",
       "sendKey": "Enviar {{label}}",
-      "modifierHint": "Aplica-se à próxima tecla. Toque duas vezes para mantê-la ativa.",
       "typeCharacter": "Digitar {{character}}",
       "interrupt": "Interromper terminal",
       "keysModeLabel": "Modo de teclas: a digitação vai direto para o terminal. Mudar para o modo de mensagem",
       "messageModeLabel": "Modo de mensagem: escreva e depois envie. Mudar para o modo de teclas",
-      "keysMode": "Teclas",
-      "messageMode": "Mensagem",
       "moreKeys": "Mais teclas e ações",
-      "showKeyboard": "Mostrar teclado"
+      "showKeyboard": "Mostrar teclado",
+      "dismissKeyboardHint": "Oculta o teclado virtual e mantém a sessão atual do terminal aberta.",
+      "switchToDesktopMode": "Alternar para o modo desktop",
+      "switchToPhoneMode": "Mudar para o modo celular",
+      "pasteFromClipboard": "Colar da área de transferência",
+      "paste": "Colar",
+      "addCustomShortcut": "Adicionar atalho personalizado"
     },
     "activeContent": {
       "createTab": "Criar Aba",
@@ -1873,11 +1874,7 @@
     },
     "commandDock": {
       "liveInputHint": "O texto digitado é enviado diretamente ao terminal ativo.",
-      "liveInputLabel": "Entrada em tempo real no terminal",
-      "sendCommand": "Enviar comando",
-      "messageAgentPlaceholder": "Mensagem para {{agent}}",
-      "writeCommandPlaceholder": "Escreva um comando e envie",
-      "theAgent": "o agente"
+      "liveInputLabel": "Entrada em tempo real no terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Dispensar aviso de criação do espaço de trabalho"
@@ -2561,14 +2558,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "Não foi possível salvar o layout",
       "saveFailedMessage": "Este layout está aplicado por enquanto. Selecione-o novamente para tentar salvar."
-    },
-    "terminalArrowPad": {
-      "label": "Teclas de direção",
-      "hint": "Toque em um lado para pressionar uma seta ou mantenha pressionado e arraste para repetir",
-      "up": "Para cima",
-      "down": "Para baixo",
-      "left": "Esquerda",
-      "right": "Direita"
     },
     "terminalMoreKeys": {
       "sendKey": "Enviar {{label}}",

@@ -78,6 +78,7 @@ describe('the line under each of the chat own messages', () => {
     const echo = pending('a', 'sending')
     const recordedEcho = pending('a', 'recorded')
     const hostPending = row('a', 'pending')
+    expect(texts(notices({ pending: [pending('a', 'unconfirmed')] }))).toEqual({})
     for (const input of [
       { pending: [echo] },
       { pending: [recordedEcho] },

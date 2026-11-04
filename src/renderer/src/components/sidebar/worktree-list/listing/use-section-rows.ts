@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
@@ -35,7 +35,7 @@ import {
   buildSidebarHostOptions,
   sidebarHostSemantics,
   createSidebarHostLabelsSelector
-} from '../../sidebar-host-options'
+} from '../controls/sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 

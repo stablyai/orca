@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { getSleepingRecordTabId } from '@/lib/sleeping-agent-wake-requests'
 import { resolveParkedTerminalPaneCandidates } from '../terminal-pane/terminal-parked-tab-watchers'
 

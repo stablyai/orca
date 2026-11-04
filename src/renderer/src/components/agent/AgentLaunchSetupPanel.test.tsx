@@ -552,13 +552,14 @@ it('uses the shared permission menu without its inheritance row and couples raw,
     target: { value: '--permission-mode acceptEdits --add-dir "keep spaces"' }
   })
   fireEvent.blur(input)
-  expect(permission().textContent).toBe('Accept edits')
-  expect(input.value).toBe('--add-dir "keep spaces"')
+  expect(input.value).toBe('--permission-mode acceptEdits --add-dir "keep spaces"')
   for (const way of ['Launch chat', 'Launch terminal']) {
     onUse.mockClear()
     fireEvent.click(getByRole<HTMLButtonElement>(host, 'button', { name: way }))
     expect(onUse).toHaveBeenCalledOnce()
     const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], entry)
+    expect(permission().textContent).toBe('Accept edits')
+    expect(input.value).toBe('--add-dir "keep spaces"')
     expect(launch.sessionOptions?.permissionMode).toBe('accept-edits')
     if (way === 'Launch terminal') {
       expect(launch.agentArgs).toContain('--permission-mode acceptEdits')
@@ -622,10 +623,11 @@ it.each(['chat', 'terminal'] as const)(
       target: { value: '--settings \'{"fastMode":true,"theme":"light"}\' --add-dir src' }
     })
     fireEvent.blur(input)
-    expect(fast.getAttribute('aria-checked')).toBe('true')
+    expect(input.value).toBe('--settings \'{"fastMode":true,"theme":"light"}\' --add-dir src')
     onUse.mockClear()
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onUse).toHaveBeenCalledOnce()
+    expect(fast.getAttribute('aria-checked')).toBe('true')
     expect(onUse.mock.calls[0][0].surface).toBe(surface)
     const rawLaunch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
     expect(rawLaunch.chatSessionOptions?.fastMode).toBe('true')

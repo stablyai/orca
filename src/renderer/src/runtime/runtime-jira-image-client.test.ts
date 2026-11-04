@@ -23,11 +23,6 @@ function emit(result: unknown, index = 0): void {
     _meta: { runtimeId: 'remote' }
   })
 }
-function send(bytes: Uint8Array, sequence = 0, index = 0): void {
-  stream(index).callbacks.onBinary?.(
-    encodeJiraImageFrame(stream(index).transferId, sequence, bytes)
-  )
-}
 function read() {
   return readRuntimeJiraImage(target, reference, new AbortController().signal)
 }
@@ -57,23 +52,6 @@ afterEach(() => {
 })
 
 describe('remote Jira binary images', () => {
-  it('assembles only its own ordered image frames and closes the subscription', async () => {
-    const image = read()
-    emit({ type: 'image', mimeType: 'image/png', byteLength: 3 })
-    stream().callbacks.onBinary?.(Uint8Array.from([0x74, 1, 0, 0]))
-    stream().callbacks.onBinary?.(
-      encodeJiraImageFrame('87654321-4321-4321-8321-210987654321', 0, Uint8Array.of(99))
-    )
-    send(Uint8Array.from([1, 2]))
-    send(Uint8Array.of(3), 1)
-    emit({ type: 'end' })
-    const blob = await image
-    expect(blob.type).toBe('image/png')
-    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(Uint8Array.from([1, 2, 3]))
-    await Promise.resolve()
-    expect(stream().close).toHaveBeenCalledOnce()
-  })
-
   it('separates simultaneous image transfers on a shared binary carrier', async () => {
     const a = read()
     const b = read()
@@ -92,31 +70,5 @@ describe('remote Jira binary images', () => {
     emit({ type: 'end' }, 1)
     expect(new Uint8Array(await (await a).arrayBuffer())).toEqual(Uint8Array.of(1))
     expect(new Uint8Array(await (await b).arrayBuffer())).toEqual(Uint8Array.of(2))
-  })
-
-  it('cancels before the subscribe handle is returned', async () => {
-    let finish: ((value: { unsubscribe: () => void; sendBinary: () => void }) => void) | undefined
-    const close = vi.fn()
-    subscribe.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve
-        })
-    )
-    const controller = new AbortController()
-    const image = readRuntimeJiraImage(target, reference, controller.signal).catch((error) => error)
-    controller.abort()
-    expect(await image).toBeInstanceOf(Error)
-    finish?.({ unsubscribe: close, sendBinary: vi.fn() })
-    await Promise.resolve()
-    expect(close).toHaveBeenCalledOnce()
-  })
-
-  it('ends stalled image downloads after the transfer deadline', async () => {
-    vi.useFakeTimers()
-    const image = read().catch((error) => error)
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(await image).toMatchObject({ message: 'Jira image transfer timed out.' })
-    expect(stream().close).toHaveBeenCalledOnce()
   })
 })

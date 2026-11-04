@@ -5,6 +5,7 @@ import {
   type FeatureInteractionState
 } from '../../../../shared/feature-interactions'
 import { useAppStore } from '@/store'
+import { isContextualTourSessionConsumed } from '@/store/slices/ui/ui-slice-tour-actions'
 
 const TOUR_SOURCES = {
   'workspace-board': 'workspace_board_visible',
@@ -81,7 +82,7 @@ export function useContextualTour(
     (s) => s.pendingContextualTourContinuation?.tourId === id
   )
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
-  const contextualTourShownThisSession = useAppStore((s) => s.contextualTourShownThisSession)
+  const contextualToursStartedThisSession = useAppStore((s) => s.contextualToursStartedThisSession)
   const contextualToursOnboardingVisible = useAppStore((s) => s.contextualToursOnboardingVisible)
   const contextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.contextualToursBlockingSurfaceVisible
@@ -175,7 +176,11 @@ export function useContextualTour(
       contextualToursBlockingSurfaceVisible ||
       activeContextualTourId !== null ||
       (!hasPendingContinuation &&
-        (contextualTourShownThisSession || contextualToursSeenIds.includes(id)))
+        (contextualToursSeenIds.includes(id) ||
+          isContextualTourSessionConsumed(
+            { contextualToursSeenIds, contextualToursStartedThisSession },
+            id
+          )))
     ) {
       return
     }
@@ -260,7 +265,7 @@ export function useContextualTour(
     contextualToursBlockingSurfaceVisible,
     activeModal,
     contextualToursAutoEligible,
-    contextualTourShownThisSession,
+    contextualToursStartedThisSession,
     contextualToursOnboardingVisible,
     contextualToursSeenIds,
     hasPendingContinuation,

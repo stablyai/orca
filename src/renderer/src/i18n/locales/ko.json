@@ -4047,7 +4047,6 @@
             "5c938d39ac": "주간",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "다른 계정 없음",
             "d450654fa2": "Claude 계정",
             "11e2354daf": "Claude 사용 런타임",
             "3dd7ddfae1": "Claude 세부정보 및 계정 전환 도구 열기",
@@ -7320,9 +7319,6 @@
           "browserExtensions": {
             "copy": "로컬 브라우저 프로필에 설정 › 브라우저 › 확장 프로그램을 추가합니다.",
             "toggleLabel": "브라우저 확장 프로그램 켜기/끄기"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "오케스트레이션 패널 전환"
           }
         },
         "FloatingWorkspacePane": {
@@ -9476,14 +9472,6 @@
               "extension": "확장 프로그램",
               "chrome": "크롬",
               "password": "비밀번호 관리자"
-            },
-            "orchestrationPanel": {
-              "title": "오케스트레이션 패널",
-              "description": "각 에이전트와 함께 작업하는 에이전트를 채팅 또는 터미널 옆에 표시합니다.",
-              "orchestration": "오케스트레이션",
-              "agents": "에이전트",
-              "workers": "워커",
-              "manager": "관리자"
             }
           }
         },
@@ -14413,7 +14401,6 @@
           "ae3b00ca82": "GitHub 작업 설정",
           "ff92d15436": "agents 작업이 완료되거나 도움이 필요할 때 Orca가 알려 드립니다.",
           "b054332836": "알림 설정",
-          "04ae28d8ca": "몇 시간 내내 보고 싶은 테마를 선택하세요.",
           "f396db9f20": "집처럼 느껴지도록 하세요",
           "322fc50a18": "Orca는 모든 CLI agent와 함께 작동합니다. 가장 자주 사용할 agent를 선택하세요. 언제든지 전환할 수 있습니다.",
           "198b148b3c": "기본 agent를 선택하세요",
@@ -17332,6 +17319,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "저장된 실행 호스트가 더 이상 이 프로젝트 설정과 일치하지 않습니다."
+        },
+        "launchSettings": {
+          "needsFreshSession": "에이전트 시작 설정을 사용하려면 실행할 때마다 새 세션이 필요합니다."
         }
       },
       "agent": {
@@ -18431,7 +18421,32 @@
           "system": "OS 설정에 맞춤",
           "dark": "눈이 편안한 화면",
           "light": "밝고 선명한 화면"
-        }
+        },
+        "looks": {
+          "activeNow": "현재",
+          "browsePlugins": "플러그인 둘러보기",
+          "browseThemePlugins": "테마 플러그인 둘러보기",
+          "colorMode": "색상 모드",
+          "colorModeCaption": "라이트, 다크 또는 OS 설정 따르기.",
+          "darkLook": "다크 룩",
+          "darkLooks": "다크 룩",
+          "lightLook": "라이트 룩",
+          "lightLooks": "라이트 룩",
+          "moreThemes": "더 많은 테마",
+          "next": "더 많은 룩",
+          "orcaDark": "Orca 다크",
+          "orcaLight": "Orca 라이트",
+          "pluginsHint": "더 많은 테마를 플러그인으로 사용할 수 있습니다.",
+          "previous": "이전 룩",
+          "showsWhenDark": "시스템이 다크 모드일 때 표시",
+          "showsWhenLight": "시스템이 라이트 모드일 때 표시",
+          "slotLabel": "편집할 룩",
+          "sourceBuiltIn": "기본 제공",
+          "sourceCommunity": "터미널 팔레트",
+          "themes": "테마",
+          "themesCaption": "선택 사항. 앱 테마와 터미널 팔레트로 더 꾸며 보세요."
+        },
+        "subtitle": "라이트 또는 다크를 고르고, 원하면 테마도 선택하세요. 둘 다 설정에서 언제든 바꿀 수 있습니다."
       },
       "integrations": {
         "capabilities": {
@@ -19105,7 +19120,6 @@
       "dismissDeliveryNotice": "닫기",
       "addSelectionToChat": "채팅에 추가",
       "messageNotSent": "메시지가 전송되지 않음",
-      "deliveryUnconfirmed": "전달 확인 안 됨 — 다시 시도하기 전에 채팅을 확인하세요",
       "messageSending": "전송 중…",
       "userMessage": {
         "showFull": "전체 메시지 표시",
@@ -19168,7 +19182,6 @@
         "continue": "계속",
         "failed": "이 채팅을 계속할 수 없습니다. 다시 시도하거나 메시지를 보내세요.",
         "explanation": "계속하면 에이전트가 먼저 마지막 단계가 완료되었는지 확인합니다.",
-        "unconfirmed": "{{agent}}에 계속 요청이 전달되었는지 확인할 수 없습니다. 다시 시도하기 전에 채팅을 확인하세요.",
         "usageLimitExplanation": "중단한 곳부터 계속하도록 에이전트에 요청합니다. 한도가 초기화된 후 사용하세요."
       },
       "rewind": {
@@ -19776,6 +19789,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "후속 메시지를 대기열에 추가",
+        "scrollToLatestOnSendTitle": "보낼 때 최신 메시지로 스크롤",
+        "scrollToLatestOnSendCopy": "위로 스크롤한 상태에서 보내면 최신 메시지로 이동하고 답장을 따라갑니다. 끄면 현재 위치가 유지됩니다.",
+        "scrollToLatestOnSendSearchPosition": "위치",
         "followUpBehaviorCopy": "Agent가 작업하는 동안 보낸 메시지는 진행 중인 턴에 들어가지 않고 턴이 끝날 때까지 카드로 대기합니다. Cmd/Ctrl+Enter를 누르면 메시지 하나에 대해 반대로 동작합니다.",
         "inlineVisualsTitle": "인라인 시각 자료",
         "inlineVisualsCopy": "에이전트가 답변 안에 차트, 다이어그램, 목업을 표시하도록 합니다. 새로 시작한 채팅에 적용됩니다.",
@@ -19792,7 +19808,13 @@
         "usageLimitContinueCopy": "한도가 재설정되면 Orca가 \"Continue where you left off.\"를 보냅니다. 재설정 시간을 알 수 있는 모든 채팅에 적용됩니다.",
         "usageLimitContinueSearchLimit": "사용 한도",
         "usageLimitContinueSearchReset": "재설정",
-        "usageLimitContinueToggleLabel": "사용 한도 재설정 시 채팅 계속하기 전환"
+        "usageLimitContinueToggleLabel": "사용 한도 재설정 시 채팅 계속하기 전환",
+        "idleStopTitle": "유휴 에이전트 중지 시간",
+        "idleStopCopy": "채팅이 이 시간 동안 유휴 상태이면 메모리를 확보하기 위해 해당 채팅의 에이전트를 종료합니다. 채팅은 유지되며, 다음 메시지를 보내면 에이전트가 다시 시작됩니다. 턴 사이에도 백그라운드에서 계속 작업하는 에이전트라면 사용 안 함을 선택하세요.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "시간 제한",
+        "idleStopSearchKeepAlive": "연결 유지",
+        "idleStopNever": "사용 안 함"
       }
     },
     "agentChildRow": {

@@ -11,7 +11,7 @@ import {
   orphanInstallLockCommand,
   probeInstallLockExistsCommand
 } from '../install/remote-install-lock-commands'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   ORCAD_FENCE_OWNER_FILENAME,
   posixOrcadFenceOwnedTest,

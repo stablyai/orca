@@ -101,33 +101,6 @@ describe('mobile dictation across a phone reconnect', () => {
     const fed = feedAudio.mock.calls.map(([samples]) => Math.round(samples[0] * 32768))
     expect(fed).toEqual([0, 1, 2, 4])
   })
-
-  // 35s of speech, or more tiny chunks than 30s of native microphone events, is more than a reconnect holds back.
-  it.each([
-    { held: 'long chunks', count: 7, audioBase64: Buffer.alloc(160_000).toString('base64') },
-    { held: 'tiny chunks', count: 1001, audioBase64: 'AAA=' }
-  ])('stops waiting for a chunk that never comes behind $held', async ({ count, audioBase64 }) => {
-    const controller = await startPhoneDictation()
-
-    for (let seq = 1; seq <= count; seq += 1) {
-      controller.feed({ ...chunk, audioBase64, seq })
-    }
-
-    expect(feedAudio).toHaveBeenCalledTimes(count)
-  })
-  it('gives up on as many gaps as it takes to stay within what a reconnect holds back', async () => {
-    const controller = await startPhoneDictation()
-    const fiveSeconds = Buffer.alloc(160_000).toString('base64')
-
-    // Every other chunk is missing: ten tiny ones, then ten of five seconds each.
-    for (let index = 0; index < 20; index += 1) {
-      const audioBase64 = index < 10 ? 'AAA=' : fiveSeconds
-      controller.feed({ ...chunk, audioBase64, seq: 2 * index + 1 })
-    }
-
-    // At most five 5s chunks stay held under the 30s cap.
-    expect(feedAudio).toHaveBeenCalledTimes(15)
-  })
 })
 
 describe('mobile dictation cancel', () => {

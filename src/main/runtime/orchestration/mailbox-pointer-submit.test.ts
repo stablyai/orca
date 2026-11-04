@@ -9,7 +9,7 @@ import { resumePendingOrchestrationMailboxPointer } from './mailbox-pointer-resu
 import { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
 import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
 import { settledWriteStub, stubWriteSettlement } from '../../providers/settled-pty-write-stub'
-import type { WriteSettlement } from '../../../shared/pty-write-settlement'
+import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 describe('orchestration mailbox pointer submit', () => {
   it('does not settle a replacement reservation after an old Enter write resolves', async () => {

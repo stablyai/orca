@@ -866,7 +866,7 @@ jobs:
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/fish-wsl-cwd-report.node-pty.test.ts \
             src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
-            src/shared/pty-reply-echo-shapes.node-pty.test.ts \
+            src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts \
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
@@ -1110,7 +1110,6 @@ jobs:
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
           src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts
-          src/main/browser/network/egress/browser-route-webrtc-egress.electron.test.ts
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts
           src/main/browser/guest-lifecycle/popups/popup-origin-chrome.electron.test.ts

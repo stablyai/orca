@@ -15,7 +15,7 @@ import {
 } from './orcad-migration-client-state-parsing'
 import { isWorkspaceHostId } from './orcad-migration-client-state-value-validation'
 import { isRecord } from './orcad-migration-manifest-fields'
-import type { ClientHostedBrowserCloseIntent } from '../client-hosted-browser-close-intent'
+import type { ClientHostedBrowserCloseIntent } from '../workspace-session/client-hosted-browser-close-intent'
 
 export type OrcadMigrationUiRoutingState = {
   lastActiveRepoId?: string | null

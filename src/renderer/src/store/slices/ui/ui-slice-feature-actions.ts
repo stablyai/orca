@@ -75,6 +75,15 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
             activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
           }
         }
+        if (tourProgression === 'reveal-sidebar') {
+          return { featureInteractions: next, sidebarOpen: true }
+        }
+        if (tourProgression === 'advance-to-next-step') {
+          return {
+            featureInteractions: next,
+            activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
+          }
+        }
         return { featureInteractions: next }
       })
       if (tourProgression === 'complete') {

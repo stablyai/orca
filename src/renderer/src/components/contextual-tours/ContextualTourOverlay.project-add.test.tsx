@@ -7,11 +7,13 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT } from '@/constants/terminal'
 import { SidebarHeaderActions } from '../sidebar/sidebar-header-actions'
-import { AddRepoDialogChrome } from '../sidebar/AddRepoDialogChrome'
+import { AddRepoDialogChrome } from '../sidebar/project-admission/dialog/AddRepoDialogChrome'
 import { ContextualTourOverlay } from './ContextualTourOverlay'
 import { useContextualTour } from './use-contextual-tour'
 
-vi.mock('../sidebar/SidebarWorkspaceOptionsMenu', () => ({ default: () => null }))
+vi.mock('../sidebar/worktree-list/controls/SidebarWorkspaceOptionsMenu', () => ({
+  default: () => null
+}))
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackContextualTourShown: vi.fn(),
   trackContextualTourOutcome: vi.fn()

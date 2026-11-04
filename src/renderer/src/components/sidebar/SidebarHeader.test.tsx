@@ -4,9 +4,12 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SidebarHeader from './SidebarHeader'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { makeFolderWorkspace, makeProjectGroup } from './folder-workspace-composer-submit-fixtures'
+import {
+  makeFolderWorkspace,
+  makeProjectGroup
+} from './workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -72,11 +75,11 @@ vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
   useAgentBucketCounts: () => mocks.bucketCounts
 }))
 
-vi.mock('./SidebarWorkspaceOptionsMenu', () => ({
+vi.mock('./worktree-list/controls/SidebarWorkspaceOptionsMenu', () => ({
   default: () => <button aria-label="Workspace options" type="button" />
 }))
 
-vi.mock('./workspace-options-menu-items', () => ({
+vi.mock('./worktree-list/controls/workspace-options-menu-items', () => ({
   useWorkspaceOptionsFilterBadge: () => ({
     hasAnyFilter: false,
     activeFilterCount: 0

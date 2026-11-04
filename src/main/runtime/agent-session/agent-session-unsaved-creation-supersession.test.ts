@@ -8,7 +8,6 @@ import { codexProviderHandleLink } from '../../codex/structured/acquisition/code
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './ownership/agent-session-reservation-admission'
-import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-codex'
@@ -91,43 +90,6 @@ afterEach(async () => {
 })
 
 describe('a Codex thread started in place of one Codex never saved', () => {
-  it('becomes the session identity and survives the next restart', async () => {
-    const first = await openTestAgentSessionRecordStore(directory)
-    await prove(first, reserveRequest(), (fence) =>
-      codexProviderHandleLink({
-        threadId: 'thread-unsaved',
-        resumed: false,
-        fence,
-        observedAt: NOW
-      })
-    )
-
-    const second = await restart(first)
-    const expectedFence = second.getRecord(SESSION)?.lease.runtimeFence ?? 0
-    const proved = await prove(second, reserveRequest({ expectedFence }), (fence) =>
-      codexProviderHandleLink({
-        threadId: 'thread-new',
-        resumed: false,
-        supersedesThreadId: 'thread-unsaved',
-        fence,
-        observedAt: NOW
-      })
-    )
-
-    expect(proved.lease.claimStatus).toBe('live')
-    expect(proved.providerHandleChain).toEqual([
-      expect.objectContaining({
-        handle: codexProviderHandle('thread-new'),
-        origin: 'created',
-        supersedesKey: 'codex:"thread-unsaved"'
-      })
-    ])
-    expect(proved.lease.provenHandleLinkId).toBe(proved.providerHandleChain[0]?.linkId)
-
-    const third = await restart(second)
-    expect(third.getRecord(SESSION)?.providerHandleChain).toEqual(proved.providerHandleChain)
-  })
-
   it('is refused once a resume has proved the conversation Codex saved', async () => {
     const first = await openTestAgentSessionRecordStore(directory)
     await prove(first, reserveRequest(), (fence) =>

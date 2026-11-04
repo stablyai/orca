@@ -23,12 +23,12 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getSuggestedCreatureName } from './worktree-name-suggestions'
-import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
+import { getSuggestedCreatureName } from './workspace-creation/naming/worktree-name-suggestions'
+import { submitFolderWorkspaceCreate } from './workspace-creation/folder/folder-workspace-composer-submit'
 import {
   getHeaderCreateWorkspaceTarget,
   openHeaderCreateComposer
-} from './header-create-workspace-target'
+} from './worktree-list/rows/header-create-workspace-target'
 
 type FolderCreateSource = {
   folderPath?: string

@@ -6,16 +6,10 @@ import {
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
 } from './structured-agent-session-current-requests'
 import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
-// Require structured.v1 from remote callers before exposing journals/mutations; legacy mobile may receive session-tab metadata placeholders.
-
 import {
   projectBackgroundTaskEvent,
   projectBackgroundTaskHistory
 } from './structured-agent-session-background-task-capability'
-import {
-  projectQueuedImageCardPublication,
-  projectQueuedImageCardHistory
-} from './structured-agent-session-queued-image-capability'
 import {
   projectTurnItemEvent,
   projectTurnItemHistory
@@ -72,6 +66,7 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { refusingStructuredAgentSessionCreatesClosedFirst } from './structured-agent-session-close-before-create'
+import * as queuedImages from './structured-agent-session-queued-image-capability'
 import {
   projectReceiptDeviceEvent,
   projectReceiptDeviceHistory
@@ -212,11 +207,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       const host = await requireInstalledHost(ctx, params.sessionId)
       return projectReceiptDeviceHistory(
         projectTurnItemHistory(
-          projectQueuedImageCardHistory(
+          queuedImages.projectQueuedImageCardHistory(
             projectBackgroundTaskHistory(
               await host.history(
                 params,
                 undefined,
+                queuedImages.queuedImageHistoryReader(ctx),
                 clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
               ),
               ctx
@@ -249,8 +245,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
         id: subscriptionId,
         sessionId: params.sessionId,
+        ...queuedImages.queuedImageSubscriber(ctx),
         projectQueuePublication: (publication) =>
-          projectQueuedImageCardPublication(publication, ctx),
+          queuedImages.projectQueuedImageCardPublication(publication, ctx),
         emit: (event) =>
           emit(
             projectReceiptDeviceEvent(
