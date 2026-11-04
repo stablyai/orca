@@ -10,7 +10,8 @@ import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
   deriveValidatedClonePath,
-  getClonePathComparisonKey
+  getClonePathComparisonKey,
+  resolveExistingParentSymlinks
 } from '../git/repo-clone-path'
 import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../git/runner'
 import { reuseSavedCloneTarget } from '../git/saved-clone-target'
@@ -49,7 +50,12 @@ export class RuntimeRepositoryCloneController {
     if (!trimmedDestination) {
       throw new Error('Clone destination is required')
     }
-    const clonePath = deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
+    // Validate the typed destination before resolving it.
+    deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
+    const clonePath = deriveValidatedClonePath({
+      url: trimmedUrl,
+      destination: await resolveExistingParentSymlinks(trimmedDestination)
+    })
     await refuseWslHostWindowsDrivePath(trimmedDestination)
     const clonePathKey = getClonePathComparisonKey(clonePath)
     const previous = this.inFlightByPath.get(clonePathKey) ?? Promise.resolve()

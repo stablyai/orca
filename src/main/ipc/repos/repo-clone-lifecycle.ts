@@ -16,7 +16,8 @@ import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
   deriveValidatedClonePath,
-  getClonePathComparisonKey
+  getClonePathComparisonKey,
+  resolveExistingParentSymlinks
 } from '../../git/repo-clone-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
@@ -117,7 +118,12 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
   ipcMain.handle(
     'repos:clone',
     async (_event, args: { url: string; destination: string }): Promise<Repo> => {
-      const clonePath = deriveValidatedClonePath(args)
+      // Validate the typed destination before resolving it.
+      deriveValidatedClonePath(args)
+      const clonePath = deriveValidatedClonePath({
+        ...args,
+        destination: await resolveExistingParentSymlinks(args.destination)
+      })
       const clonePathKey = getClonePathComparisonKey(clonePath)
       // Remote projects can share this path string without belonging to this clone host.
       const findSaved = (): Repo | undefined =>

@@ -10,6 +10,7 @@ import {
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
+import { resolveExistingParentSymlinks } from '../git/repo-clone-path'
 import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../workspaces/catalog/project-realpath-identity'
@@ -169,7 +170,7 @@ export class RuntimeRepositoryRegistrationController {
         ? { error: error.message, windowsDriveRefusal: error.data }
         : { error: error instanceof Error ? error.message : String(error) }
     }
-    const targetPath = join(trimmedParentPath, trimmedName)
+    const targetPath = join(await resolveExistingParentSymlinks(trimmedParentPath), trimmedName)
     // Qualify by host: identical SSH paths name another machine's directory.
     const findLocalAtTarget = (): Repo | undefined =>
       store

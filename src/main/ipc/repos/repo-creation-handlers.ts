@@ -12,6 +12,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
 import { probeGitAvailability } from '../../git/git-availability'
 import { gitExecFileAsync } from '../../git/runner'
+import { resolveExistingParentSymlinks } from '../../git/repo-clone-path'
 import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
@@ -100,7 +101,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         return repoCreateFailure('parentNotAbsolute')
       }
 
-      const targetPath = join(parentPath, name)
+      const targetPath = join(await resolveExistingParentSymlinks(parentPath), name)
 
       // Repeated Create requests must share one registration.
       const existing = store.getRepos().find((r) => r.path === targetPath)

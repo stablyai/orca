@@ -2,7 +2,7 @@ import type * as RepoDetectionModule from '../git/repo-detection'
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as GitRunner from '../git/runner'
@@ -110,7 +110,8 @@ describe('repos:add + repos:clone', () => {
   const tempRoots: string[] = []
 
   const createTempRoot = async (): Promise<string> => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-repos-clone-'))
+    // Clone registers the resolved destination (macOS tmpdir is a /var symlink).
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-repos-clone-')))
     tempRoots.push(root)
     return root
   }
