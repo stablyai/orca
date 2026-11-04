@@ -39,6 +39,10 @@ export function syncClaudeProfileSettings(
   }
   const defaults = input.kind === 'present' ? input.value : {}
   const current = readClaudeProfileObject(target)
+  // Replace a copy that does not parse, but never one that could not be read.
+  if (current.kind === 'unavailable' && !(current.error instanceof SyntaxError)) {
+    throw new ClaudeProfileSurfaceError('unreadable', 'Profile Claude settings are unreadable')
+  }
   const synced = readClaudeProfileObject(record)
   // Without a record the default home wins whole, as every sync did before records.
   const last = current.kind === 'present' && synced.kind === 'present' ? synced.value : null
@@ -58,7 +62,7 @@ export function syncClaudeProfileSettings(
   if (
     current.kind === 'present'
       ? JSON.stringify(settings) !== JSON.stringify(current.value)
-      : input.kind === 'present'
+      : current.kind === 'unavailable' || input.kind === 'present'
   ) {
     writeFileAtomically(target, `${JSON.stringify(settings, null, 2)}\n`, {
       mode: input.kind === 'present' ? statSync(source).mode & 0o777 : 0o600
