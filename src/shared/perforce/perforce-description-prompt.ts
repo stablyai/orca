@@ -1,5 +1,5 @@
-import type { CommitMessageDraftContext } from '../commit-message-generation'
-import { truncateDiffForPrompt } from '../commit-message-prompt'
+import type { CommitMessageDraftContext } from '../source-control/ai/generation/commit-message-generation'
+import { truncateDiffForPrompt } from '../source-control/ai/generation/commit-message-prompt'
 
 /** Prompt for a Perforce changelist description: a title line followed by one bullet per relevant change. */
 export function buildPerforceDescriptionPrompt(

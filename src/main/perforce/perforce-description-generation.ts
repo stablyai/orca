@@ -1,4 +1,4 @@
-import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { CommitMessageDraftContext } from '../../shared/source-control/ai/generation/commit-message-generation'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { resolvePerforceAiParams } from '../../shared/perforce/perforce-ai-params'
 import { requireRelativePaths } from '../../shared/perforce/perforce-arguments'

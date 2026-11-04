@@ -1,7 +1,7 @@
 import {
   CUSTOM_AGENT_ID,
   listCommitMessageAgentCapabilities
-} from '../../../../shared/commit-message-agent-spec'
+} from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { PerforceSettings } from '../../../../shared/perforce/perforce-settings'
 import { translate } from '@/i18n/i18n'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'

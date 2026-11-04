@@ -1,4 +1,4 @@
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import { perforceTargetForFile } from '@/lib/perforce-workspace-target'
 import type { RuntimeGitContext } from './runtime-git-client-context'
 import { getRuntimeGitDiff } from './runtime-git-diff-client'

@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
-import type { GitDiffResult } from '../git-diff-compare-types'
+import type { GitDiffResult } from '../git/diff/git-diff-compare-types'
 import type { PerforceHistoryEntry } from './perforce-types'
 import { escapeP4FileArg, runP4, runP4OrThrow } from './p4-command'
 import { currentPerforceSettings } from './p4-settings-context'

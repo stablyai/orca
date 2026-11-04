@@ -1,4 +1,4 @@
-import type { GitDiffResult } from '../git-diff-compare-types'
+import type { GitDiffResult } from '../git/diff/git-diff-compare-types'
 import { detectPerforceWorkspace } from './perforce-detection'
 import {
   createChangelistWithFiles,

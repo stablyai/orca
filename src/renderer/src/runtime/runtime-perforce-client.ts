@@ -21,7 +21,7 @@ import {
   PERFORCE_RUNTIME_CAPABILITY,
   PERFORCE_UPDATE_REQUIRED_MESSAGE
 } from '../../../shared/perforce/perforce-runtime-capability'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   getRuntimeGitScope,

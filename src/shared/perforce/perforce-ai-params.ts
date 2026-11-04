@@ -3,10 +3,10 @@ import {
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   resolveCommitMessageAgentChoice
-} from '../commit-message-agent-spec'
+} from '../source-control/ai/generation/commit-message-agent-spec'
 import type { GlobalSettings } from '../global-settings-types'
-import type { ResolvedSourceControlAiGenerationParams } from '../source-control-ai'
-import { isTuiAgent } from '../tui-agent-config'
+import type { ResolvedSourceControlAiGenerationParams } from '../source-control/ai/source-control-ai-operation-resolution'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import type { PerforceSettings } from './perforce-settings'
 
 type Input = {

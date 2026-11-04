@@ -1,5 +1,6 @@
 import type { Repo } from '../repo-types'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId, WORKTREE_ID_SEPARATOR } from './id'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from './id'
+import { WORKTREE_ID_SEPARATOR } from '../terminal/pty/lifecycle/pty-session-id-format'
 
 // A Perforce workspace copy lives in its own folder, `<workspace>.wt\<name>` beside the source, and is
 // listed as a worktree of the source's folder project with a git-style `${repoId}::${path}` id.
