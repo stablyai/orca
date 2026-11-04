@@ -98,7 +98,7 @@ export class StructuredAgentSessionIdleSweep {
     }
     this.running = true
     try {
-      const agentIdleMs = this.deps.idleMs ? this.deps.idleMs() : STRUCTURED_AGENT_SESSION_IDLE_MS
+      const agentIdleMs = this.idleWindow()
       await Promise.allSettled(
         [...this.deps.sessions.keys()].map((sessionId) =>
           this.sweepSession(sessionId, agentIdleMs).catch((error: unknown) =>
@@ -115,6 +115,10 @@ export class StructuredAgentSessionIdleSweep {
     }
   }
 
+  private idleWindow(): number | null {
+    return this.deps.idleMs ? this.deps.idleMs() : STRUCTURED_AGENT_SESSION_IDLE_MS
+  }
+
   /** Ask outside serialization so a slow provider never delays user actions; recheck before stopping. */
   private async sweepSession(sessionId: string, agentIdleMs: number | null): Promise<void> {
     const unconfirmed = await this.deps.serialize(sessionId, () =>
@@ -129,7 +133,8 @@ export class StructuredAgentSessionIdleSweep {
     }
     await this.deps.serialize(sessionId, async () => {
       if (answer === 'idle') {
-        await this.tickUnderSerialize(sessionId, agentIdleMs, unconfirmed)
+        // The answer can take seconds; a window changed meanwhile (to Never, say) still applies.
+        await this.tickUnderSerialize(sessionId, this.idleWindow(), unconfirmed)
       } else if (this.deps.sessions.get(sessionId)?.child === unconfirmed) {
         this.deps.sessions.touch(sessionId)
       }
