@@ -1,5 +1,5 @@
 import { basename, dirname, extname, join, resolve } from 'node:path'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   isAiVaultDeletableAgent,
   isAiVaultSyntheticSessionPath,
@@ -7,7 +7,7 @@ import {
   type AiVaultSessionDeleteRejectionCode,
   type AiVaultSessionDeleteRemoval,
   type AiVaultSessionDeleteValidationResult
-} from '../../shared/ai-vault-session-deletion'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,

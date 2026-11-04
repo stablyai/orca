@@ -8,7 +8,7 @@ import {
   getRepoSshConnectionId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host'
-import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'

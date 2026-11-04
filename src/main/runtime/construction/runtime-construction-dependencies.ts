@@ -15,7 +15,7 @@ import type { AgentHookAuthorityAttestation } from '../../agent-hooks/server/ser
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault-resume-preparation'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-types'
 import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'

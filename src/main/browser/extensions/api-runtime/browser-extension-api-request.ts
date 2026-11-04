@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { BrowserExtensionInvokeResult } from '../../../../shared/browser-extension-channels'
+import type { BrowserExtensionInvokeResult } from '../../../../shared/browser/extensions/browser-extension-channels'
 import {
   BrowserExtensionApiError,
   extensionHasNamespacePermission,

@@ -56,17 +56,17 @@ vi.mock('node:fs/promises', async () => {
   }
 })
 
-vi.mock('../codex/codex-home-paths', () => ({
+vi.mock('../codex/configuration/homes/codex-home-paths', () => ({
   getOrcaManagedCodexHomePath: () => join(fixture.root, 'runtime'),
   getSystemCodexHomePath: () => join(fixture.root, 'system')
 }))
 
-vi.mock('../codex/codex-account-home-discovery', () => ({
+vi.mock('../codex/history/rollouts/codex-account-home-discovery', () => ({
   getCodexAccountHomeSessionSources: () => [],
   getCodexAccountHomeSessionDirectories: () => []
 }))
 
-vi.mock('../codex/codex-session-bridge', () => ({
+vi.mock('../codex/history/bridges/codex-session-bridge', () => ({
   getLegacyCopiedCodexSessionBridgeScanPreference: () => null
 }))
 

@@ -23,7 +23,7 @@ import { orcadAutomationsKeepHostBusy, startOrcadAutomations } from './orcad-aut
 import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
-} from '../../shared/ai-vault-search-settings'
+} from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import { adoptWslHostLoginEnvironmentLogged } from './orcad-wsl-host-login-environment'
 import { installOrcadProcessErrorGuards } from './orcad-process-error-guards'

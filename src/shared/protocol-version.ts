@@ -5,13 +5,13 @@ import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AGENT_SESSION_RUNTIME_CAPABILITIES
 } from './agent-session/agent-session-runtime-capabilities'
-import { AI_VAULT_RUNTIME_CAPABILITIES } from './ai-vault-runtime-capabilities'
+import { AI_VAULT_RUNTIME_CAPABILITIES } from './ai-vault/contracts/ai-vault-runtime-capabilities'
 import {
   AUTOMATION_RUNTIME_CAPABILITIES,
   AUTOMATION_RUNTIME_CLIENT_CAPABILITIES
 } from './automation-runtime-capabilities'
 import { BROWSER_RUNTIME_CAPABILITIES } from './browser-runtime-capabilities'
-import { DEVICE_KEY_RUNTIME_CAPABILITIES } from './device-key-capability'
+import { DEVICE_KEY_RUNTIME_CAPABILITIES } from './remote-runtime/pairing/device-key-capability'
 import { FILES_RUNTIME_CAPABILITIES } from './files-runtime-capabilities'
 import { HOST_RUNTIME_CAPABILITIES } from './host-runtime-capabilities'
 import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
@@ -44,7 +44,7 @@ export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 2
 export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 
 // Why stars: importers keep reading every capability from here while each area owns its module.
-export * from './ai-vault-runtime-capabilities'
+
 export * from './browser-runtime-capabilities'
 export * from './files-runtime-capabilities'
 export * from './host-runtime-capabilities'

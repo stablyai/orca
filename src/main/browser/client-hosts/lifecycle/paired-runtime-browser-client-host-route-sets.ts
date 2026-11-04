@@ -1,4 +1,4 @@
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserClientPageNetworkRoute } from '../../client-pages/lifecycle/browser-client-page-cleanup'
 import { sameBrowserClientHostLeaseAuthority } from '../commands/browser-client-host-command-authority'
 

@@ -18,10 +18,10 @@ const { TEST_WORKTREE_PATH, makeHeadlessTerminalLayout, makeRuntimeStoreWithWork
 const { makeWorkspaceSessionWithHeadlessTerminal, store } = fixtures
 
 import type {
-  BrowserClientHostCommandEvent,
   RuntimeBrowserClientPlacement,
   WorkspaceSessionState
 } from './orca-runtime-test-mocks.spec'
+import type { BrowserClientHostCommandEvent } from '../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
 import type { OrchestrationDb } from './orchestration/db'
 

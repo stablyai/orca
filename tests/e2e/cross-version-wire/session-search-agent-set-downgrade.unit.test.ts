@@ -7,13 +7,13 @@ import { afterEach, expect, test, vi } from 'vitest'
 import {
   createSessionSearchClient,
   unavailableSessionSearchStatus
-} from '../../../src/shared/ai-vault-search-client'
-import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault/search/ai-vault-search-client'
+import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   searchHit,
   searchResults,
   fakeSearchService
-} from '../../../src/shared/ai-vault-search-test-fixture'
+} from '../../../src/shared/ai-vault/search/ai-vault-search-test-fixture'
 import {
   searchSessionService,
   sessionSearchServiceStatus,

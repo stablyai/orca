@@ -4,8 +4,8 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES } from '../../../shared/browser-client-hosting-eligibility'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES } from '../../../shared/browser/client-hosting/browser-client-hosting-eligibility'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   LOCAL_BROWSER_UNAVAILABLE_MESSAGE,
   MANAGED_BROWSER_UNAVAILABLE_MESSAGE,

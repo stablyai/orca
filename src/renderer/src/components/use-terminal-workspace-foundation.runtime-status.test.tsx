@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { useTerminalWorkspaceFoundation } from './use-terminal-workspace-foundation'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import '../../../shared/protocol-version'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 

@@ -6,7 +6,8 @@ import {
   makeWorktree,
   makeFolderWorkspace
 } from '../worktree-jump/worktree-jump-palette-test-fixtures'
-import { getFolderWorkspaceWorktree } from '@/store/workspace-record-selectors'
+import '@/store/workspace-record-selectors'
+import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 const initial = useAppStore.getInitialState()
 afterEach(() => useAppStore.setState(initial, true))

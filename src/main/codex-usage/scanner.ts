@@ -8,7 +8,7 @@ import type { CodexUsageWorktreeRef } from './codex-usage-event-attribution'
 import { codexUsageAggregation } from './codex-usage-aggregation'
 import { getProcessedFileInfo, parseCodexUsageFile } from './codex-rollout-file-parse'
 import { resolveCodexRolloutResume } from './codex-rollout-resume-state'
-import { getCodexAccountHomeSessionSources } from '../codex/codex-account-home-discovery'
+import { getCodexAccountHomeSessionSources } from '../codex/history/rollouts/codex-account-home-discovery'
 import {
   createUsageAccountAttribution,
   createUsageAccountRootResolver

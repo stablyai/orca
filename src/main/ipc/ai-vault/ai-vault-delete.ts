@@ -7,7 +7,7 @@ import { parseRoutableExecutionHostId } from '../../../shared/execution-host'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
-} from '../../../shared/ai-vault-session-deletion'
+} from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 
 export type RuntimeAiVaultSessionDeleter = (
   environmentId: string,

@@ -8,7 +8,7 @@ import type { LegacyWorkerRecoveryCandidate } from '../runtime-legacy-worker-ter
 import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/orchestration-legacy-worker-terminal-recovery'
 
 import { OrcaRuntimeWithAgentProviderSessionRows } from './runtime-agent-provider-session-rows'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from '../run-terminal-client-use'
 import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../shared/execution-host'

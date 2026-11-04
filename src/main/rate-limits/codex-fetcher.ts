@@ -10,11 +10,11 @@ import {
   resolveCodexHomeProcessLockKey,
   withCodexHomeProcessLock
 } from '../codex-cli/codex-home-process-lock'
-import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
+import { isCodexStateDbBackfillPending } from '../codex/history/index/codex-state-db'
 import {
   hasCodexStateDbBackfillRecoveryGivenUp,
   startCodexStateDbBackfillRecoveryInBackground
-} from '../codex/codex-state-db-backfill-recovery'
+} from '../codex/history/index/codex-state-db-backfill-recovery'
 import { spawnProcessOnWorkerThread } from '../worker-thread-child-process/worker-thread-child-process'
 import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
 import { getMainHttpClient } from '../network/http-client'

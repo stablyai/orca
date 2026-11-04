@@ -44,7 +44,7 @@ const profile = vi.hoisted(() => {
   return value
 })
 // Reconciliation writes user-global agent configs; isolate it from the real home.
-vi.mock('../codex/codex-hook-reconcile', async (importOriginal) => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   startCodexHooks: state.startCodexHooks
 }))
