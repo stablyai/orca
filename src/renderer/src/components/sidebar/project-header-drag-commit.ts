@@ -1,4 +1,5 @@
 import { getLogicalRepoOrderRankById } from '../../../../shared/project-section-order'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   applyAllRepoInsertAt,
   getProjectHeaderDragBucketKey,
@@ -7,6 +8,10 @@ import {
   mapSidebarRepoDropIndexToAllRepoInsertAt
 } from './project-header-drop'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
+import {
+  applyRootSlotOrderUpdates,
+  getRootSlotOrderUpdatesForSidebarDrop
+} from './sidebar-root-slot-order'
 import type { Repo } from '../../../../shared/repo-types'
 import { isSameRepoRow } from '@/store/slices/repo-host-identity'
 
@@ -15,14 +20,56 @@ export function commitProjectHeaderDragDrop(args: {
   sidebarDropIndex: number
   orderedRepoIds: readonly string[]
   repoById: ReadonlyMap<string, Repo>
+  projectGroupById?: ReadonlyMap<string, ProjectGroup>
   liveRepos: readonly Repo[]
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
   onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupTabOrder?: (groupId: string, tabOrder: number) => void
 }): void {
   const draggedRepo = args.liveRepos.find((repo) => isSameRepoRow(repo, args.session.repo))
   // Why: a group change mid-drag (another window or client) moved the row out of this bucket.
   if (!draggedRepo || getProjectHeaderDragBucketKey(draggedRepo) !== args.session.bucketKey) {
+    return
+  }
+
+  const orderedRootSlots = args.session.orderedRootSlots
+  if (
+    orderedRootSlots &&
+    orderedRootSlots.length > 0 &&
+    args.projectGroupById &&
+    args.onCommitProjectGroupTabOrder
+  ) {
+    const sourceIndex = orderedRootSlots.findIndex(
+      (slot) => slot.kind === 'repo' && slot.id === draggedRepo.id
+    )
+    // Both slots beside the dragged header are no-ops.
+    if (
+      sourceIndex === -1 ||
+      args.sidebarDropIndex === sourceIndex ||
+      args.sidebarDropIndex === sourceIndex + 1
+    ) {
+      return
+    }
+    const updates = getRootSlotOrderUpdatesForSidebarDrop({
+      orderedRootSlots,
+      dragged: { kind: 'repo', id: draggedRepo.id },
+      sidebarDropIndex: args.sidebarDropIndex,
+      projectGroupById: args.projectGroupById,
+      repoById: args.repoById
+    })
+    const onCommitProjectGroupTabOrder = args.onCommitProjectGroupTabOrder
+    applyRootSlotOrderUpdates({
+      updates,
+      onCommitProjectGroupTabOrder,
+      onCommitProjectGroupOrder: (repoId, projectGroupId, order) => {
+        const repo = args.repoById.get(repoId)
+        if (!repo) {
+          return
+        }
+        args.onCommitProjectGroupOrder(repo, projectGroupId, order)
+      }
+    })
     return
   }
 

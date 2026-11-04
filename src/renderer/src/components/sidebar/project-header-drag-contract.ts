@@ -1,6 +1,8 @@
 import type { PointerEvent } from 'react'
 
 import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
+import type { SidebarRootSlot, SidebarRootSlotDragRect } from './sidebar-root-slot-order'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 export type RepoDragState = {
@@ -18,11 +20,14 @@ export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
 export type UseRepoHeaderDragArgs = {
   orderedRepoIds: string[]
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
+  sidebarRootSlots?: readonly SidebarRootSlot[]
   repoById: ReadonlyMap<string, Repo>
+  projectGroupById?: ReadonlyMap<string, ProjectGroup>
   getLiveRepos: () => readonly Repo[]
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
   onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupTabOrder?: (groupId: string, tabOrder: number) => void
   getScrollContainer: () => HTMLElement | null
 }
 
@@ -36,8 +41,10 @@ export type ProjectHeaderDragSession = {
   repo: Repo
   bucketKey: ProjectHeaderDragBucketKey
   sidebarRepoHeaderIds: readonly string[]
+  /** When set, ungrouped root drop renumbers groups + projects as one list. */
+  orderedRootSlots?: readonly SidebarRootSlot[] | null
   pointerId: number
-  headerRects: ProjectHeaderDragRect[]
+  headerRects: (ProjectHeaderDragRect | SidebarRootSlotDragRect)[]
   handleEl: HTMLElement
   startX: number
   startY: number

@@ -128,19 +128,22 @@ export function renderWorktreeSectionHeaderRow(args: {
     projectGroupDragIdForHeader !== undefined
       ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupDragIdForHeader)
       : undefined
+  const rootSlotCount = headerDrag.sidebarRootSlots.length
   const isDraggableRepoHeader = Boolean(
     headerDrag.canReorderRepoHeaders &&
     isRepoHeader &&
     projectIdForHeader &&
     repoHeaderBucketKey &&
-    (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1
+    ((repoHeaderBucketKey === 'ungrouped' && rootSlotCount > 1) ||
+      (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)
   )
   const isDraggableProjectGroupHeader = Boolean(
     headerDrag.canReorderProjectGroupHeaders &&
     projectGroupDragIdForHeader &&
     projectGroupHeaderBucketKey &&
-    (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-      0) > 1
+    ((projectGroupHeaderBucketKey === 'root' && rootSlotCount > 1) ||
+      (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
+        0) > 1)
   )
   const isDraggingThis =
     headerDrag.canReorderRepoHeaders &&

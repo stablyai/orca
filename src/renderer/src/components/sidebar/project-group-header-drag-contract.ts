@@ -5,7 +5,9 @@ import type {
   ProjectGroupHeaderDragRect
 } from './project-group-header-drop'
 import { REPO_HEADER_ACTION_SELECTOR } from './project-header-drag-contract'
+import type { SidebarRootSlot, SidebarRootSlotDragRect } from './sidebar-root-slot-order'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 export type ProjectGroupDragState = {
   draggingGroupId: string | null
@@ -24,8 +26,11 @@ export type UseProjectGroupHeaderDragArgs = {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
+  sidebarRootSlots?: readonly SidebarRootSlot[]
   projectGroupById: ReadonlyMap<string, ProjectGroup>
+  repoById?: ReadonlyMap<string, Repo>
   onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
+  onCommitProjectGroupOrder?: (project: Repo, projectGroupId: string | null, order: number) => void
   getScrollContainer: () => HTMLElement | null
 }
 
@@ -38,8 +43,10 @@ export type ProjectGroupHeaderDragSession = {
   groupId: string
   bucketKey: ProjectGroupHeaderDragBucketKey
   sidebarProjectGroupHeaderIds: readonly string[]
+  /** When set, root drop renumbers groups + ungrouped projects as one list. */
+  orderedRootSlots?: readonly SidebarRootSlot[] | null
   pointerId: number
-  headerRects: ProjectGroupHeaderDragRect[]
+  headerRects: (ProjectGroupHeaderDragRect | SidebarRootSlotDragRect)[]
   handleEl: HTMLElement
   startX: number
   startY: number

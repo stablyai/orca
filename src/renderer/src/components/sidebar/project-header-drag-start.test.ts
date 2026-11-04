@@ -38,6 +38,8 @@ describe('createProjectHeaderDragSession', () => {
       } as unknown as React.PointerEvent<HTMLElement>,
       repo: createRepo('repo-a'),
       sidebarRepoHeaderIdsByBucket,
+      sidebarRootSlots: [],
+      usesProjectGroupOrdering: false,
       getScrollContainer: () => scrollContainer
     })
 
@@ -68,6 +70,8 @@ describe('createProjectHeaderDragSession', () => {
       } as unknown as React.PointerEvent<HTMLElement>,
       repo: createRepo('repo-a'),
       sidebarRepoHeaderIdsByBucket,
+      sidebarRootSlots: [],
+      usesProjectGroupOrdering: false,
       getScrollContainer: () => scrollContainer
     })
 
