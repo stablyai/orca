@@ -1,7 +1,8 @@
 /** Commands that act only on this machine: dispatch ignores --environment / --pairing-code for them, and help does not offer them. */
 export function ignoresRemoteSelection(commandPath: readonly string[]): boolean {
   return (
-    commandPath[0] === 'account' ||
+    // add signs in on this machine; list and select are plain RPCs a paired server can answer.
+    (commandPath[0] === 'account' && !['list', 'select'].includes(commandPath[1] ?? '')) ||
     commandPath[0] === 'artifacts' ||
     commandPath[0] === 'environment' ||
     // Paired servers come from the local store; routing SSH lookup would mix two machines in one list.

@@ -376,9 +376,10 @@ On a headless host running Orca (`orca serve` or the desktop app), add managed C
 orca account list
 orca account add                 # Claude by default
 orca account add --agent codex
+orca account select --agent claude --account <id|system>
 ```
 
-`account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.
+`account list` and `account select` also take `--environment` or `--pairing-code` to act on a paired Orca server. `account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.
 
 ## Artifacts
 

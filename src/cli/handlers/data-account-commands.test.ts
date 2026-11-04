@@ -6,7 +6,7 @@ import { parseArgs, REPEATED_FLAG_SEPARATOR, specPaths } from '../args'
 import { ACCOUNT_COMMAND_SPECS } from '../specs/account'
 import { RuntimeClient } from '../runtime-client'
 import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
-import { addDataAccount } from './data-account-commands'
+import { addDataAccount, mutateDataAccount } from './data-account-commands'
 
 const client = new RuntimeClient(join(tmpdir(), 'orca-login-test'), 1000, null, null)
 const context = {
@@ -127,4 +127,21 @@ describe('managed data account enrollment', () => {
       expect(login).not.toHaveBeenCalled()
     }
   )
+})
+
+describe('managed account selection', () => {
+  it('selects System default for Claude through the existing Claude RPC', async () => {
+    const call = vi.spyOn(client, 'call').mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: { accounts: [], activeAccountId: null },
+      _meta: { runtimeId: 'test' }
+    })
+    const flags = new Map([
+      ['agent', 'claude'],
+      ['account', 'system']
+    ])
+    await mutateDataAccount({ ...context, flags }, 'select')
+    expect(call).toHaveBeenCalledExactlyOnceWith('accounts.selectClaude', { accountId: null })
+  })
 })

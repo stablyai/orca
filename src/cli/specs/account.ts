@@ -1,4 +1,4 @@
-import { LOCAL_COMMAND_FLAGS, type CommandSpec } from '../args'
+import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS, type CommandSpec } from '../args'
 
 // Terminal login lets headless hosts manage accounts without the desktop login UI.
 export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
@@ -27,19 +27,21 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['account', 'list'],
-    summary: 'List managed agent accounts on this Orca host',
+    summary: 'List managed agent accounts on an Orca host',
     usage: 'orca account list [--agent opencode|devin] [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent'],
-    notes: [
-      'Lists the accounts on this machine. `--environment` / `--pairing-code` are rejected rather than ignored; run it on the host whose accounts you want to see.'
-    ],
-    examples: ['orca account list']
+    allowedFlags: [...GLOBAL_FLAGS, 'agent'],
+    examples: ['orca account list', 'orca account list --environment homelab']
   },
   {
     path: ['account', 'select'],
-    summary: 'Select an OpenCode or Devin profile for new agent launches',
-    usage: 'orca account select --agent opencode|devin --account <id|system> [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent', 'account']
+    summary: 'Select a Claude account or an OpenCode or Devin profile for new agent launches',
+    usage: 'orca account select --agent claude|opencode|devin --account <id|system> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'account'],
+    notes: [
+      'Account IDs come from `orca account list --json`. `system` selects System default instead of a managed account.',
+      'For Claude, an open Orca window on that host handles running sessions with its "When you switch accounts while Claude is running in terminals" setting.'
+    ],
+    examples: ['orca account select --agent claude --account system']
   },
   {
     path: ['account', 'rm'],

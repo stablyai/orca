@@ -8,6 +8,7 @@ import { RuntimeClientError } from '../runtime-client'
 import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
+  ClaudeRateLimitAccountsState,
   ManagedDataAccountProvider,
   ManagedDataAccountsState
 } from '../../shared/managed-account-types'
@@ -16,7 +17,7 @@ import {
   type InteractiveLoginSession
 } from './interactive-login-interruption'
 import { getWslAccountTarget } from './account-wsl-location'
-import { formatDataAccounts } from './account-list-format'
+import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
 
 export async function assertDataAccountsSupported(ctx: HandlerContext): Promise<void> {
   const status = await ctx.client.call<RuntimeStatus>('status.get')
@@ -189,16 +190,29 @@ export async function mutateDataAccount(
 ): Promise<void> {
   const provider = ctx.flags.get('agent')
   const id = ctx.flags.get('account')
-  if ((provider !== 'opencode' && provider !== 'devin') || typeof id !== 'string' || !id) {
+  const claude = action === 'select' && provider === 'claude'
+  if (
+    (!claude && provider !== 'opencode' && provider !== 'devin') ||
+    typeof id !== 'string' ||
+    !id
+  ) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Use --agent opencode|devin and --account <id> (system for the default selection).'
+      `Use --agent ${action === 'select' ? 'claude|' : ''}opencode|devin and --account <id> (system for the default selection).`
     )
+  }
+  const accountId = action === 'select' && id === 'system' ? null : id
+  if (claude) {
+    const result = await ctx.client.call<ClaudeRateLimitAccountsState>('accounts.selectClaude', {
+      accountId
+    })
+    printResult(result, ctx.json, (state) => formatAccountsBlock('Claude', state))
+    return
   }
   await assertDataAccountsSupported(ctx)
   const result = await ctx.client.call<ManagedDataAccountsState>(`accounts.${action}Data`, {
     provider,
-    accountId: action === 'select' && id === 'system' ? null : id
+    accountId
   })
   printResult(result, ctx.json, (state) => formatDataAccounts(provider, state))
 }

@@ -626,19 +626,6 @@ describe('account CLI handlers', () => {
     }
   )
 
-  it.each(['environment', 'pairing-code'])(
-    'rejects --%s on `account list` instead of listing the local host',
-    async (flag) => {
-      await expect(
-        ACCOUNT_HANDLERS['account list']({
-          ...context('claude'),
-          flags: new Map<string, string | boolean>([[flag, 'homelab']])
-        })
-      ).rejects.toThrow(`\`--${flag}\` does not retarget`)
-      expect(callMock).not.toHaveBeenCalled()
-    }
-  )
-
   it('keeps the original add error when cleanup also fails', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     rmSyncMock.mockImplementationOnce(() => {

@@ -251,6 +251,43 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it('routes `account list` and `account select` to the server --environment names', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
+    queueFixtures(
+      callMock,
+      okFixture('req_accounts', { claude: { accounts: [] }, codex: { accounts: [] } }),
+      okFixture('req_select', { accounts: [], activeAccountId: null })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    runtimeClientConstructorMock.mockClear()
+
+    await main(['account', 'list', '--environment', 'm4air', '--json'], '/tmp/repo')
+    await main(
+      [
+        'account',
+        'select',
+        '--agent',
+        'claude',
+        '--account',
+        'system',
+        '--environment',
+        'm4air',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(logSpy.mock.calls.map(([output]) => JSON.parse(String(output)).ok)).toEqual([true, true])
+    expect(runtimeClientConstructorMock.mock.calls).toEqual([
+      [undefined, 'm4air'],
+      [undefined, 'm4air']
+    ])
+    expect(callMock.mock.calls).toEqual([
+      ['accounts.list', { refreshUsage: false }],
+      ['accounts.selectClaude', { accountId: null }]
+    ])
+  })
+
   it('rejects `host list --environment` instead of answering with a half-routed listing', async () => {
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
