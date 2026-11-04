@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import type { AutomationRun } from '../../shared/automations-types'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { AGENT_START_GRACE_MS } from './automation-run-agent-evidence'
 import {
   createRuntimeAutomationRunTerminalObserver,
@@ -25,12 +26,14 @@ function createPane(initial: {
   idleEdgeOnly?: boolean
   /** Model status cleanup landing while the observer reads the screen. */
   clearRowsOnRead?: boolean
+  exitCause?: TerminalExitCause
 }) {
   let idle = initial.idle
   // Model runtimes that satisfy tui-idle only once per idle edge.
   let edgeSpent = false
   let tail = initial.tail
   let rows: StatusRow[] = []
+  const acceptedReplies = new Map<number, string>()
   const waiters = new Set<() => void>()
   const runtime: AutomationRunTerminalHost = {
     getTerminalHandleForPaneKey: () => HANDLE,
@@ -43,6 +46,11 @@ function createPane(initial: {
     waitForTerminal: (_handle, options) => {
       if (options?.signal?.aborted) {
         return Promise.reject(new Error('request_aborted'))
+      }
+      if (initial.exitCause) {
+        return Promise.reject(
+          Object.assign(new Error('terminal_exited'), { terminalExitCause: initial.exitCause })
+        )
       }
       if (idle && !(initial.idleEdgeOnly && edgeSpent)) {
         edgeSpent = true
@@ -69,6 +77,7 @@ function createPane(initial: {
   return {
     runtime,
     agentRows: () => rows,
+    acceptedReplies,
     report: (row: Partial<StatusRow> = {}) =>
       (rows = [{ state: 'done', receivedAt: Date.now(), stateStartedAt: Date.now(), ...row }]),
     setTail: (next: string[]) => (tail = next),
@@ -95,6 +104,8 @@ function observe(
 ) {
   const observer = createRuntimeAutomationRunTerminalObserver(pane.runtime, {
     getAgentStatusRowsForPane: (paneKey) => (paneKey === PANE_KEY ? pane.agentRows() : []),
+    getAcceptedReply: (paneKey, leadTurnKey) =>
+      paneKey === PANE_KEY ? pane.acceptedReplies.get(leadTurnKey) : undefined,
     agentCommandsForRun: () => ['goose']
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the observer reads only these run fields.
@@ -313,6 +324,37 @@ describe('observing a run with agent evidence', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     await run.promise
     expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }))
+  })
+
+  it("records the agent's accepted full reply as the run output, not its screen", async () => {
+    const pane = createPane({ idle: false, tail: ['TUI chrome'] })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(1_000)
+    const doneAt = Date.now()
+    pane.report({ stateStartedAt: doneAt })
+    pane.acceptedReplies.set(doneAt, 'the full final reply')
+    pane.becomeIdle()
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'completed',
+        outputSnapshot: expect.objectContaining({
+          content: 'the full final reply',
+          truncated: false
+        })
+      })
+    )
+  })
+
+  it.each([
+    { exitCode: 0, status: 'completed' },
+    { exitCode: 3, status: 'dispatch_failed' }
+  ])('settles a proven agent exit $exitCode as $status', async ({ exitCode, status }) => {
+    const run = observe(
+      createPane({ idle: false, tail: ['bye'], exitCause: { kind: 'exited', exitCode } })
+    )
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(expect.objectContaining({ status }))
   })
 
   it('stops on cancellation without recording any result', async () => {

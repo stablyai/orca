@@ -36,6 +36,7 @@ export function createRuntimeAutomationService(input: {
   const launchedHandles = new Map<string, string>()
   const observer = createRuntimeAutomationRunTerminalObserver(runtime, {
     getAgentStatusRowsForPane: (paneKey) => runtime.getAgentStatusRowsForPane(paneKey),
+    getAcceptedReply: (paneKey, leadTurnKey) => runtime.getAcceptedAgentReply(paneKey, leadTurnKey),
     agentCommandsForRun: (run) =>
       automationAgentCommands(
         store.listAutomations().find((entry) => entry.id === run.automationId)?.agentId

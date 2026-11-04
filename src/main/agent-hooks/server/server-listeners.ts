@@ -265,6 +265,15 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     return rows
   }
 
+  /** The lead's full final reply for the finished turn `leadTurnKey` names, when this runtime admitted one. */
+  getAcceptedReply(paneKey: string, leadTurnKey: number): string | undefined {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+    const row = this.state.lastStatusByPaneKey.get(paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    return row?.acceptedReply?.leadTurnKey === leadTurnKey ? row.acceptedReply.text : undefined
+  }
+
   getHydratedAuthorityCommitments(): readonly AgentHookAuthorityEvidence[] {
     return this.hydratedAuthorityCommitments
   }

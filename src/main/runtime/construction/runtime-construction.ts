@@ -121,6 +121,9 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null
 
+  /** The agent's full final reply for that finished lead turn; status rows carry only a capped preview. */
+  readonly getAcceptedAgentReply: RuntimeConstructionBindings['getAcceptedAgentReply']
+
   protected readonly machineName = new RuntimeMachineName(
     () => this.store?.getSettings?.().machineName
   )
@@ -246,6 +249,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.getAgentProviderSessionSnapshotFn =
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionRowsForPaneFn = deps?.getAgentProviderSessionRowsForPane ?? null
+    this.getAcceptedAgentReply = deps?.getAcceptedAgentReply ?? (() => undefined)
     this.attestAgentHookCompatibilityAuthorityFn =
       deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =

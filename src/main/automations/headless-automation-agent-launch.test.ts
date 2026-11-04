@@ -4,6 +4,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { launchHeadlessAutomationAgent } from './headless-automation-agent-launch'
+import { AutomationRunLaunchError } from './headless-dispatch'
 
 const { deliverTerminalAgentLaunchPrompt } = vi.hoisted(() => ({
   deliverTerminalAgentLaunchPrompt: vi.fn(async (_args: Record<string, unknown>) => true)
@@ -320,12 +321,8 @@ describe('headless automation agent launch', () => {
     }
   )
 
-  it('starts a post-start agent bare and delivers its prompt once, after the terminal is recorded', async () => {
+  it('starts a post-start agent bare and delivers its prompt once', async () => {
     const runtime = harness()
-    let finishDelivery: (delivered: boolean) => void = () => {}
-    runtime.deliverStartupFollowup.mockImplementation(
-      () => new Promise<boolean>((resolve) => (finishDelivery = resolve))
-    )
 
     const launched = await launch(runtime, { agentId: 'aider' })
 
@@ -344,7 +341,6 @@ describe('headless automation agent launch', () => {
       },
       { terminalCreation: await runtime.launchAgentTerminal.mock.results[0].value }
     )
-    finishDelivery(true)
   })
 
   it('creates a new-per-run workspace agent-first with the argv prompt', async () => {
@@ -418,21 +414,24 @@ describe('headless automation agent launch', () => {
     expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
   })
 
-  it('logs a failure after the terminal was recorded instead of dropping it', async () => {
+  it.each([
+    ['is refused', async () => false],
+    [
+      'throws',
+      async () => {
+        throw new Error('writer broke')
+      }
+    ]
+  ])('fails the run and keeps its terminal when prompt delivery %s', async (_, deliver) => {
     const runtime = harness()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    runtime.deliverStartupFollowup.mockRejectedValue(new Error('writer broke'))
+    runtime.deliverStartupFollowup.mockImplementation(deliver)
 
-    const launched = await launch(runtime, { agentId: 'aider' })
-    await vi.waitFor(() =>
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('after its terminal was published'),
-        expect.objectContaining({ message: 'writer broke' })
-      )
-    )
+    const failure = await launch(runtime, { agentId: 'aider' }).catch((error: unknown) => error)
 
-    expect(launched.terminalHandle).toBe('term_existing')
-    warn.mockRestore()
+    expect(failure).toBeInstanceOf(AutomationRunLaunchError)
+    expect(failure).toMatchObject({
+      target: { terminalHandle: 'term_existing', terminalPaneKey: 'tab-1:leaf-1' }
+    })
   })
 
   it('refuses an existing-workspace run whose workspace is gone', async () => {
