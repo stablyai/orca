@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft, Copy, Check, Send } from 'lucide-react-native'
-import { colors, pressedStyle } from '../theme/mobile-theme'
+import { Copy, Check, Send } from 'lucide-react-native'
+import { colors, pressedStyle, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { ConnectionLog } from '../components/ConnectionLog'
 import { connectionDiagnosticsScreenStyles as styles } from './connection-diagnostics-screen-styles'
@@ -10,8 +10,7 @@ import type { ConnectionLogEntry, ConnectionState } from '../transport/types'
 import type { ConnectionDiagnosis } from './connection-diagnostics-analysis'
 import type { DiagnosticsSubmissionState } from './connection-diagnostics-screen-data'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { NavBar } from '../components/nav-bar/NavBar'
-import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { SettingsNavBar } from '../settings/settings-screen-frame'
 
 export function ConnectionDiagnosticsView({
   hostPicker,
@@ -53,18 +52,12 @@ export function ConnectionDiagnosticsView({
   }
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            accessibilityLabel={t('common.back', 'Back')}
-            onPress={onBack}
-          />
-        }
+      <SettingsNavBar
         title={t('diagnostics.connectionDiagnosticsView.title', 'Network diagnostics')}
+        onBack={onBack}
       />
 
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
         {hostPicker}
         {hasHost || entries.length > 0 ? (
           <>

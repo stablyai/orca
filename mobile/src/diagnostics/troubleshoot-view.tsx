@@ -2,7 +2,6 @@ import { useCallback, useState, type ReactNode } from 'react'
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
-  ChevronLeft,
   ChevronDown,
   ChevronUp,
   Activity,
@@ -16,8 +15,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { NavBar } from '../components/nav-bar/NavBar'
-import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { SettingsNavBar } from '../settings/settings-screen-frame'
 import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -69,20 +67,17 @@ export function TroubleshootView({
   )
   return (
     <View ref={rootRef} style={[styles.container, { paddingTop: insets.top }]}>
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            accessibilityLabel={t('common.back', 'Back')}
-            onPress={onBack}
-          />
-        }
+      <SettingsNavBar
         title={t('diagnostics.troubleshootView.title', 'Troubleshooting')}
+        onBack={onBack}
       />
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + spacing.xl }
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Pressable

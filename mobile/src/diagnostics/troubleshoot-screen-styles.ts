@@ -5,16 +5,14 @@ import { LIST_LEADING_INSET, LIST_ROW_PADDING } from '../components/list/ListGro
 export const troubleshootScreenStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
-    backgroundColor: colors.bgBase,
-    paddingBottom: spacing.lg
+    backgroundColor: colors.bgBase
   },
   scroll: {
     flex: 1
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl
+    paddingTop: spacing.lg
   },
   diagnosticButton: {
     flexDirection: 'row',
