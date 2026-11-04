@@ -7302,9 +7302,6 @@
           "browserExtensions": {
             "copy": "ローカルブラウザプロファイル向けに 設定 › ブラウザ › 拡張機能 を追加します。",
             "toggleLabel": "ブラウザ拡張機能を切り替え"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "オーケストレーションパネルを切り替え"
           }
         },
         "FloatingWorkspacePane": {
@@ -9495,14 +9492,6 @@
               "extension": "拡張機能",
               "chrome": "クローム",
               "password": "パスワードマネージャー"
-            },
-            "orchestrationPanel": {
-              "title": "オーケストレーションパネル",
-              "description": "各 Agent と連携している Agent を、チャットまたはターミナルの横に表示します。",
-              "orchestration": "オーケストレーション",
-              "agents": "Agent",
-              "workers": "ワーカー",
-              "manager": "マネージャー"
             }
           }
         },
@@ -18827,8 +18816,6 @@
         "toggleDetails": "ターンの詳細を切り替えます"
       },
       "jumpToLatest": "最新にジャンプ",
-      "newRowsAnnouncement": "離れている間に新しいメッセージが届きました",
-      "newRowsMarker": "新着",
       "find": {
         "label": "チャット内を検索",
         "noResults": "結果はありません",

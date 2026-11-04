@@ -7593,9 +7593,6 @@
           "browserExtensions": {
             "copy": "Añade Ajustes › Navegador › Extensiones para los perfiles de navegador locales.",
             "toggleLabel": "Activar o desactivar extensiones del navegador"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Activar o desactivar el panel de orquestación"
           }
         },
         "FloatingWorkspacePane": {
@@ -9751,14 +9748,6 @@
               "extension": "extensión",
               "chrome": "chrome",
               "password": "gestor de contraseñas"
-            },
-            "orchestrationPanel": {
-              "title": "Panel de orquestación",
-              "description": "Muestra con qué agentes trabaja cada agente, junto a su chat o terminal.",
-              "orchestration": "orquestación",
-              "agents": "agentes",
-              "workers": "trabajadores",
-              "manager": "gestor"
             }
           }
         },
@@ -19314,8 +19303,6 @@
         "toggleDetails": "Alternar detalles del turno"
       },
       "jumpToLatest": "Saltar a lo último",
-      "newRowsAnnouncement": "Llegaron mensajes nuevos mientras no estabas",
-      "newRowsMarker": "Nuevo",
       "find": {
         "label": "Buscar en el chat",
         "noResults": "Sin resultados",

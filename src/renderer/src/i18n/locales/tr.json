@@ -7933,9 +7933,6 @@
           "browserExtensions": {
             "copy": "Yerel tarayıcı profilleri için Ayarlar › Tarayıcı › Uzantılar bölümünü ekler.",
             "toggleLabel": "Tarayıcı uzantılarını aç/kapat"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Orkestrasyon panelini aç veya kapat"
           }
         },
         "FloatingWorkspacePane": {
@@ -10136,14 +10133,6 @@
               "extension": "eklenti",
               "chrome": "chrome",
               "password": "parola yöneticisi"
-            },
-            "orchestrationPanel": {
-              "title": "Orkestrasyon paneli",
-              "description": "Her ajanın birlikte çalıştığı ajanları sohbetinin veya terminalinin yanında gösterir.",
-              "orchestration": "orkestrasyon",
-              "agents": "ajanlar",
-              "workers": "çalışanlar",
-              "manager": "yönetici"
             }
           }
         },
@@ -19613,8 +19602,6 @@
         "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}"
       },
       "jumpToLatest": "En son öğeye git",
-      "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
-      "newRowsMarker": "Yeni",
       "find": {
         "label": "Sohbette bul",
         "noResults": "Sonuç yok",

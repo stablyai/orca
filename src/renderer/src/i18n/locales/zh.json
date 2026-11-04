@@ -7302,9 +7302,6 @@
           "browserExtensions": {
             "copy": "为本地浏览器配置文件添加“设置 › 浏览器 › 扩展程序”。",
             "toggleLabel": "切换浏览器扩展程序"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "切换编排面板"
           }
         },
         "FloatingWorkspacePane": {
@@ -9458,14 +9455,6 @@
               "extension": "扩展程序",
               "chrome": "chrome",
               "password": "密码管理器"
-            },
-            "orchestrationPanel": {
-              "title": "编排面板",
-              "description": "在聊天或终端旁显示每个智能体与哪些智能体协作。",
-              "orchestration": "编排",
-              "agents": "智能体",
-              "workers": "工作智能体",
-              "manager": "管理器"
             }
           }
         },
@@ -18793,8 +18782,6 @@
         "toggleDetails": "切换回合详情"
       },
       "jumpToLatest": "跳到最新消息",
-      "newRowsAnnouncement": "你离开期间有新消息",
-      "newRowsMarker": "新消息",
       "find": {
         "label": "在聊天中查找",
         "noResults": "没有结果",

@@ -10147,14 +10147,6 @@
               "extension": "Erweiterung",
               "chrome": "chrome",
               "password": "Passwortmanager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestrierungs-Panel",
-              "description": "Zeigt neben dem Chat oder Terminal jedes Agenten, mit welchen Agenten er zusammenarbeitet.",
-              "orchestration": "Orchestrierung",
-              "agents": "Agenten",
-              "workers": "Worker",
-              "manager": "Manager"
             }
           }
         },
@@ -19623,8 +19615,6 @@
         "stateUnverifiableCount_other": "{{value0}} mit nicht verfügbarem Status"
       },
       "jumpToLatest": "Zur neuesten Nachricht springen",
-      "newRowsAnnouncement": "Während der Abwesenheit sind neue Nachrichten eingegangen",
-      "newRowsMarker": "Neu",
       "find": {
         "label": "Im Chat suchen",
         "noResults": "Keine Ergebnisse",

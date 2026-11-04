@@ -54,7 +54,6 @@ function mountDocuments(readReply: () => Promise<RpcResponse>) {
         setSessionTabs: () => {},
         setFileDocs: () => {},
         setMarkdownDocs: setDocs,
-        reconcileBufferedDraftsRef: { current: () => {} },
         closedTabTombstonesRef: { current: new Map() },
         activeSessionTabIdRef: { current: null },
         selectedSessionTabIdRef: { current: null },

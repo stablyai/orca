@@ -7771,9 +7771,6 @@
           "browserExtensions": {
             "copy": "為本機瀏覽器設定檔新增「設定 › 瀏覽器 › 擴充功能」。",
             "toggleLabel": "切換瀏覽器擴充功能"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "切換協作編排面板"
           }
         },
         "FloatingWorkspacePane": {
@@ -9974,14 +9971,6 @@
               "extension": "擴充功能",
               "chrome": "chrome",
               "password": "密碼管理工具"
-            },
-            "orchestrationPanel": {
-              "title": "協作編排面板",
-              "description": "在聊天或終端機旁顯示各代理程式與哪些代理程式協作。",
-              "orchestration": "協作編排",
-              "agents": "代理程式",
-              "workers": "工作代理程式",
-              "manager": "管理員"
             }
           }
         },
@@ -19331,8 +19320,6 @@
         "stateUnverifiableCount_other": "狀態不可用：{{value0}}"
       },
       "jumpToLatest": "跳到最新訊息",
-      "newRowsAnnouncement": "你離開期間有新訊息",
-      "newRowsMarker": "新訊息",
       "find": {
         "label": "在聊天中查詢",
         "noResults": "沒有結果",

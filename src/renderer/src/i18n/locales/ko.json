@@ -7302,9 +7302,6 @@
           "browserExtensions": {
             "copy": "로컬 브라우저 프로필에 설정 › 브라우저 › 확장 프로그램을 추가합니다.",
             "toggleLabel": "브라우저 확장 프로그램 켜기/끄기"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "오케스트레이션 패널 전환"
           }
         },
         "FloatingWorkspacePane": {
@@ -9458,14 +9455,6 @@
               "extension": "확장 프로그램",
               "chrome": "크롬",
               "password": "비밀번호 관리자"
-            },
-            "orchestrationPanel": {
-              "title": "오케스트레이션 패널",
-              "description": "각 에이전트와 함께 작업하는 에이전트를 채팅 또는 터미널 옆에 표시합니다.",
-              "orchestration": "오케스트레이션",
-              "agents": "에이전트",
-              "workers": "워커",
-              "manager": "관리자"
             }
           }
         },
@@ -18827,8 +18816,6 @@
         "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
-      "newRowsAnnouncement": "자리를 비운 동안 새 메시지가 도착했습니다",
-      "newRowsMarker": "새 메시지",
       "find": {
         "label": "채팅에서 찾기",
         "noResults": "결과 없음",
