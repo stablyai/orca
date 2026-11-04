@@ -393,7 +393,7 @@ describe('MobileSessionTabStrip edge taps', () => {
     const labels = recent
       .parent!.children.filter((child) => typeof child !== 'string')
       .map((child) => child.props.accessibilityLabel)
-    expect(labels).toEqual(['Recently Used', 'New tab'])
+    expect(labels).toEqual(['New tab', 'Recently Used'])
     act(() => recent.props.onPress())
     expect(setShowRecentSessionCards).toHaveBeenCalledExactlyOnceWith(true)
     strip.unmount()

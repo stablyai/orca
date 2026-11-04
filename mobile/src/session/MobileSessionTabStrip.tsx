@@ -287,6 +287,12 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
       {/* Terminal layout and Quick commands live in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
         <View style={newTabStyles.slot}>
+          <NavBarButton
+            disabled={createTabBusy || connState !== 'connected'}
+            onPress={handleOpenNewTab}
+            accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
+            icon={Plus}
+          />
           {showRecentSessionCardsAction ? (
             <NavBarButton
               active={Boolean(showRecentSessionCards)}
@@ -298,12 +304,6 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
               icon={History}
             />
           ) : null}
-          <NavBarButton
-            disabled={createTabBusy || connState !== 'connected'}
-            onPress={handleOpenNewTab}
-            accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
-            icon={Plus}
-          />
         </View>
       ) : null}
     </View>
