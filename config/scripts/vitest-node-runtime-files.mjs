@@ -51,7 +51,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
   'src/main/ai-vault-search/session-search-dependent-transcripts.test.ts',
   'src/main/ai-vault-search/session-search-list-reparse.test.ts',
-  'src/main/ai-vault-search/session-search-transcript-dependencies.test.ts',
   'src/main/native-chat/structured-agent-cli-conversation-adoption.test.ts',
   'src/main/runtime/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration-mailbox-delivery.test.ts',

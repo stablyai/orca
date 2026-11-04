@@ -23,7 +23,10 @@ import type { JournalWriteBody } from './journal-write-queue'
 import { journalInputClaimsReceipt, type JournalAttachmentClaim } from './journal-submission-hook'
 import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
-import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
+import {
+  isJournalOutputRevision,
+  isJournalStreamedTextRevision
+} from './journal-streamed-text-revision'
 
 export type JournalStoreHost = {
   /** Notify readers of durable draft-only transactions that append no journal row. */
@@ -38,7 +41,7 @@ export type JournalStoreHost = {
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
   prepare: NonNullable<ConstructorParameters<typeof JournalRowWriter>[0]['prepare']>
-  commit: (rows: readonly JournalRow[], savedAt: number) => void
+  commit: ConstructorParameters<typeof JournalRowWriter>[0]['commit']
   journal: () => AgentSessionJournal
   enqueue: JournalRowWriter['enqueue']
 }
@@ -102,7 +105,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     nextSequence: () => host.state().lastSequence + 1,
     prepare: host.prepare,
     commit: host.commit,
-    streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
+    streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row),
+    outputRevision: (row) => isJournalOutputRevision(host.state(), row)
   })
   const inputReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) =>
     journalInputClaimsReceipt(claimAttachments, (id) => goalAttachments.isLive(id), rows, receipt)

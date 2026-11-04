@@ -39,7 +39,7 @@ export class StructuredAgentSessionConversations extends Map<
         rows?: readonly JournalRow[]
       ) => void
       forget?: (sessionId: string) => void
-      deliver: (sessionId: string, journal: AgentSessionJournal) => void
+      deliver: (sessionId: string, journal: AgentSessionJournal, inputChanged?: boolean) => void
       /** Settle edges write no row and renew no activity clock. */
       deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
@@ -68,6 +68,7 @@ export class StructuredAgentSessionConversations extends Map<
     }
     this.attachments.get(sessionId)?.release()
     let queued = false
+    let inputChanged = false
     const source = {
       journal,
       release: () => {
@@ -76,7 +77,7 @@ export class StructuredAgentSessionConversations extends Map<
       }
     }
     const current = () => this.attachments.get(sessionId) === source
-    const releaseCommit = journal.observeCommits((rows) => {
+    const releaseCommit = journal.observeCommits((rows, affectsInput = true) => {
       if (!current()) {
         return
       }
@@ -91,17 +92,20 @@ export class StructuredAgentSessionConversations extends Map<
           error
         })
       }
+      inputChanged ||= affectsInput
       if (queued) {
         return
       }
       queued = true
       queueMicrotask(() => {
         queued = false
+        const affectsInput = inputChanged
+        inputChanged = false
         if (!current()) {
           return
         }
         try {
-          this.delivery.deliver(sessionId, journal)
+          this.delivery.deliver(sessionId, journal, affectsInput)
         } catch (error) {
           this.delivery.logger.warn('delivering a journal commit failed', {
             scope: 'journal-delivery',

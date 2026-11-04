@@ -24,6 +24,8 @@ type WorkspaceEmojiPickerButtonProps = {
   onOpenChange?: (open: boolean) => void
   onValueChange: (value: string) => void
   portalContainer?: HTMLElement | null
+  /** Keep the button out of the Tab order when the field already supports `:` shortcodes. */
+  skipTabStop?: boolean
 }
 
 /**
@@ -36,7 +38,8 @@ export const WorkspaceEmojiPickerButton = memo(function WorkspaceEmojiPickerButt
   inputRef,
   onOpenChange,
   onValueChange,
-  portalContainer
+  portalContainer,
+  skipTabStop = false
 }: WorkspaceEmojiPickerButtonProps): React.JSX.Element {
   // Why: memo would otherwise keep the label and tooltip in the previous UI language.
   useUiLanguageRevision()
@@ -85,6 +88,7 @@ export const WorkspaceEmojiPickerButton = memo(function WorkspaceEmojiPickerButt
               type="button"
               aria-label={label}
               disabled={disabled}
+              tabIndex={skipTabStop ? -1 : undefined}
               onPointerEnter={WorkspaceEmojiPickerPanel.preload}
               onFocus={WorkspaceEmojiPickerPanel.preload}
               onKeyDown={(event) => event.stopPropagation()}
