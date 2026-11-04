@@ -7,7 +7,7 @@ import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { PairedRuntimeConnection } from '../../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
   subscribeRemoteRuntimeRequest,

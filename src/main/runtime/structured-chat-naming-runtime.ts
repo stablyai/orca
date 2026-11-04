@@ -1,12 +1,10 @@
-import {
-  normalizeSourceControlAiSettings,
-  resolveSourceControlActionRecipe
-} from '../../shared/source-control-ai'
-import { normalizeSourceControlActionRecipe } from '../../shared/source-control-ai-actions'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
+import { resolveSourceControlActionRecipe } from '../../shared/source-control/ai/source-control-ai-operation-policy'
+import { normalizeSourceControlActionRecipe } from '../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   renderConversationNamePrompt,
   sanitizeGeneratedConversationName
-} from '../../shared/conversation-name-generation'
+} from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { chatNamingAgentTarget } from './structured-chat-naming-agent-launch'
 import type { AgentLaunchProfileSettings } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
@@ -18,7 +16,7 @@ import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { firstStructuredChatNamingPrompt } from '../../shared/structured-chat-naming-eligibility'
 import { firstStructuredAgentSessionPrompt } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
-import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
+import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/source-control/ai/generation/commit-message-host-key'
 import {
   generateConversationNameFromContext,
   resolveTextGenerationParams

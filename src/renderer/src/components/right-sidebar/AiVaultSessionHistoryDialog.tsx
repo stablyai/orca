@@ -7,7 +7,10 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import { AI_VAULT_AGENTS, aiVaultHistoryAgents } from '../../../../shared/ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  aiVaultHistoryAgents
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import AiVaultPanel from './AiVaultPanel'
 import type { AiVaultPanelHandle } from './ai-vault-panel-handle'
 import { readAgentSessionHistoryModalRequest } from './agent-session-history-modal'

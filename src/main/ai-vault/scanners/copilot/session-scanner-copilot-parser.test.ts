@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseCopilotSessionFile } from './session-scanner-copilot-parser'
 
 const DATETIME = '<current_datetime>2026-10-19T18:40:06.682-03:00</current_datetime>'

@@ -1,6 +1,6 @@
-import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
-import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
-import { createFixedKeyLegacyHandshakeForTest } from '../../paired-e2ee-fixed-key-test-fixture'
+import { pairedRuntimeConnectionFromOffer } from '../pairing/paired-runtime-connection'
+import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
+import { createFixedKeyLegacyHandshakeForTest } from '../e2ee/paired-e2ee-fixed-key-test-fixture'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {

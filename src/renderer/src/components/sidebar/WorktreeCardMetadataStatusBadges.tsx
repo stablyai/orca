@@ -1,4 +1,4 @@
-import { getProviderChecksOutcome } from '../../../../shared/provider-check-summary'
+import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
 import React from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getReviewChecksTone } from './worktree-review-helpers'

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { sourceControlActionRecipeEntry } from '../../../../../shared/source-control-action-selection'
+import { sourceControlActionRecipeEntry } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'

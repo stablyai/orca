@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   getTerminalQuickCommandPromptMessageBytes,
   MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES,
   MAX_TERMINAL_QUICK_COMMANDS_SERIALIZED_BYTES
-} from '../../../shared/terminal-quick-command-prompt-limit'
+} from '../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../shared/remote-rpc-content-budget'
 import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { updateSettings, type SettingsMutationOperations } from './settings-update'

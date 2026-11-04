@@ -5,18 +5,18 @@ import {
   editSourceControlActionArguments,
   selectSourceControlActionRecipe,
   type CurrentActionSelection
-} from '../../source-control-action-selection'
+} from '../../source-control/ai/recipes/source-control-action-selection'
 import {
   selectedSourceControlActionPreferences,
   sourceControlActionExecutionArgs,
   demoteDisplacedActionArgumentChoices
-} from '../../source-control-action-launch-preferences'
+} from '../../source-control/ai/recipes/source-control-action-launch-preferences'
 import {
   editActionArgumentChoices,
   reconcileActionArgumentDocumentTransaction
-} from '../../source-control-action-argument-choices'
-import { editActionArgumentChoicePreferences } from '../../source-control-action-choice-preferences'
-import { trimActionArgumentDocument } from '../../source-control-action-argument-document'
+} from '../../source-control/ai/recipes/source-control-action-argument-choices'
+import { editActionArgumentChoicePreferences } from '../../source-control/ai/recipes/source-control-action-choice-preferences'
+import { trimActionArgumentDocument } from '../../source-control/ai/recipes/source-control-action-argument-document'
 
 type AcceptedChoices = ReturnType<typeof reconcileAgentChoiceArgsDetailed>
 

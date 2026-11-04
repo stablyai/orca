@@ -2,12 +2,12 @@
 import {
   createTerminalTitleTracker,
   type TerminalTitleTracker
-} from '../../shared/terminal-output-side-effects'
+} from '../../shared/terminal/output/terminal-output-side-effects'
 import {
   INITIAL_MODE_2031_REPLY_SCAN_STATE,
   scanMode2031ReplyDecision,
   type Mode2031ReplyScanState
-} from '../../shared/terminal-color-scheme-protocol'
+} from '../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import type { DaemonTransientFact } from './types'
 
 export const BACKGROUND_STREAM_DROP_ENABLED = process.env.ORCA_DAEMON_BACKGROUND_STREAM_DROP !== '0'

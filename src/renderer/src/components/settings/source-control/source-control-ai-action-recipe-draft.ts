@@ -1,16 +1,16 @@
 import type {
   SourceControlAiSettings,
   SourceControlAiModelChoice
-} from '../../../../../shared/source-control-ai-types'
-import { readActionModelSelection } from '../../../../../shared/source-control-action-model-selection'
-import type { SourceControlAiModelEdits } from '../../../../../shared/source-control-ai-action-model-edits'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { readActionModelSelection } from '../../../../../shared/source-control/ai/recipes/source-control-action-model-selection'
+import type { SourceControlAiModelEdits } from '../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_ACTION_IDS,
   type SourceControlActionLaunchPreferences,
   type SourceControlActionRecipe,
   type SourceControlActionId
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 export type ActionRecipeDraftValue = {
   modelChoice?: SourceControlAiModelChoice

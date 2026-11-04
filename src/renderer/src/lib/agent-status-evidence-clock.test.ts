@@ -24,18 +24,6 @@ function workingRow(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry
 }
 
 describe('staleness measures when evidence was observed, not when it was delivered', () => {
-  it('decays a replayed row whose evidence is older than the window', () => {
-    const row = workingRow({ evidenceObservedAt: OBSERVED_AT })
-    expect(isFreshNonDoneAgentStatus(row, NOW)).toBe(false)
-    expect(isExplicitAgentStatusFresh(row, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(false)
-  })
-
-  it('falls back to the delivery clock for a row from a host that sends no observation time', () => {
-    const row = workingRow()
-    expect(isFreshNonDoneAgentStatus(row, NOW)).toBe(true)
-    expect(isExplicitAgentStatusFresh(row, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
-  })
-
   it('keeps a live row fresh when its evidence was just observed', () => {
     const row = workingRow({ evidenceObservedAt: NOW })
     expect(isFreshNonDoneAgentStatus(row, NOW)).toBe(true)

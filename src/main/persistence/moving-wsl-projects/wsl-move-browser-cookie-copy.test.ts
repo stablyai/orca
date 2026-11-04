@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   KnownRuntimeEnvironment,
   OrcadDeploymentLink
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   emptyWslMoveBrowserCookieCopyCounts,
   WSL_MOVE_BROWSER_COOKIES_STORE_ID
@@ -18,8 +18,9 @@ import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-s
 import { deriveBrowserRoutePartitionStorageScope } from '../../browser/routing/partitions/browser-route-identity'
 import { wslHostBrowserRouteStorage } from '../../browser/routing/local-host-partitions/wsl-host-browser-route-partition'
 import { listWslMoveCutovers } from './wsl-move-cutover-journal'
-import type { WslMoveBrowserCookieCopyDependencies } from './wsl-move-browser-cookie-copy'
+
 import {
+  type WslMoveBrowserCookieCopyDependencies,
   ensureWslMoveDestinationBrowserLogins,
   previewWslMoveBrowserCookieCopy
 } from './wsl-move-browser-cookie-copy'

@@ -2,7 +2,7 @@ import type { IBufferRange, ILinkHandler, Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/terminal-link-provider-guard'
 import { isTerminalHttpLinkActivation } from '@/components/terminal-pane/terminal-http-link-activation'
-import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal-http-url-extraction'
+import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal/links/terminal-http-url-extraction'
 
 export type PreviewTerminalLinkHandler = Omit<ILinkHandler, 'activate' | 'leave'> & {
   activate(event: MouseEvent, uri: string, range?: IBufferRange): void

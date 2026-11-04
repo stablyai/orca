@@ -5,7 +5,7 @@ import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type {
   WorkspaceCleanupScanError,
   WorkspaceCleanupScanResult
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
   createWorkspaceCleanupScanError,

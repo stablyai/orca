@@ -1,26 +1,33 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../../shared/pairing'
+import {
+  encodePairingOffer,
+  parsePairingCode
+} from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
   markEnvironmentUsed
-} from '../../../shared/runtime-environment-store'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
 import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
 import { verifyManagedOrcadTunnelIdentity } from './orcad-managed-tunnel-identity'
-import { getPreferredPairingOffer } from '../../../shared/runtime-environments'
+import {
+  type KnownRuntimeEnvironment,
+  getPreferredPairingOffer
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   addWslHostEnvironment,
   refreshWslHostPairing
-} from '../../../shared/runtime-environment-wsl-host-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import { buildServePairingReadiness } from '../../server/serve-pairing-readiness'
 import { WslOrcadConnectionManager } from '../../wsl/orcad/wsl-orcad-connection'
 

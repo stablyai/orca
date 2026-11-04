@@ -1,8 +1,8 @@
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView } from './ConflictComponents'
 import {

@@ -1,6 +1,6 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { PairingOffer } from '../../../shared/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   advanceRuntimeEnvironmentCapabilityIncarnation,
   applyRuntimeEnvironmentCapabilityVerdict,

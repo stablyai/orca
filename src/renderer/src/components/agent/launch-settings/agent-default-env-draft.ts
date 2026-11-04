@@ -1,5 +1,5 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
-import { tokenizeCustomCommandTemplate } from '../../../../../shared/commit-message-prompt'
+import { tokenizeCustomCommandTemplate } from '../../../../../shared/source-control/ai/generation/commit-message-prompt'
 import { quotePosixShellDoubleQuotedApostrophe } from '../../../../../shared/shell-argument-quoting'
 
 // Reject oversized pasted overrides before tokenization.

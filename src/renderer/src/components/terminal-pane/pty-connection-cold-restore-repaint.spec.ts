@@ -4,10 +4,10 @@ import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION,
   RELEASE_SYNCHRONIZED_OUTPUT
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { Terminal } from '@xterm/headless'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { buildFreshShellViewportBlankingSequence } from '../../../../shared/terminal-fresh-shell-viewport'
+import { buildFreshShellViewportBlankingSequence } from '../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 import {
   flushAsyncTicks,
   writeHeadlessTerminal,
@@ -19,9 +19,11 @@ import {
   LEAF_1,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type ConnectCallbacks,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
+
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,

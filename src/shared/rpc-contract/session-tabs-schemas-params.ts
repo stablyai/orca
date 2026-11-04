@@ -5,7 +5,7 @@ import { OptionalBoolean } from './rpc-param-primitives'
 import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-agents'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
-import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal-quick-command-prompt-limit'
+import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { ResumeProviderSessionParam, WindowsShellOverrideParam } from './terminal-unary-params'
 
 export const WorktreeTabSelector = z.object({

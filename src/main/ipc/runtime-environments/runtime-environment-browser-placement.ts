@@ -1,5 +1,5 @@
-import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import type { BrowserClientHostPlacementPreference } from '../../../shared/browser/client-hosting/browser-client-host-placement'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   closePairedRuntimeBrowserClientHostEnvironment,
   startPairedRuntimeBrowserClientHost

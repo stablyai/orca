@@ -15,12 +15,12 @@ import { dropInheritedOrcaHistFile } from '../../pty/history/worktree-history-fi
 import {
   gitCredentialPromptGuardEnv,
   mergeGitConfigEnvProtocol
-} from '../../../shared/git-credential-prompt-env'
+} from '../../../shared/git/commands/git-credential-prompt-env'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/terminal-git-credential-guard'
 import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
-} from '../../../shared/terminal-image-protocol'
+} from '../../../shared/terminal/images/terminal-image-protocol'
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables

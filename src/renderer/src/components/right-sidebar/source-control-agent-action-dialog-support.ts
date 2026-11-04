@@ -3,7 +3,7 @@ import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-in
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
+import type { SourceControlAiWriteTarget } from '../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { translate } from '@/i18n/i18n'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'

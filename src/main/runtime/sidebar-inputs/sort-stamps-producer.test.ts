@@ -4,7 +4,7 @@ import type { AgentStatusStoreView } from './workspace-activity-facts-producer'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import type { TerminalSideEffectFact } from '../../../shared/terminal-side-effect-facts'
+import type { TerminalSideEffectFact } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import {

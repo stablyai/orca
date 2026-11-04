@@ -5,8 +5,8 @@ import {
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
 import { dirname } from 'node:path'
 import { createInterface } from 'node:readline'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { grokTranscriptPathForMetadata } from '../../../../shared/ai-vault-session-log-resource'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { grokTranscriptPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import {

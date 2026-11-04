@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { act, render, cleanup } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ReviewChecksIndicator } from '@/components/sidebar/WorktreeCardMetadataStatusBadges'
-import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
+import { summarizeProviderChecks } from '../../../../shared/source-control/checks/provider-check-summary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { prChecksCacheSuffix } from '../github/cache-identity'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
@@ -14,7 +14,7 @@ import {
   resetRemoteRuntimeMocks
 } from './github-slice-test-harness'
 import type { AppState } from '../types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 
 describe('createGitHubSlice.fetchPRForBranch', () => {

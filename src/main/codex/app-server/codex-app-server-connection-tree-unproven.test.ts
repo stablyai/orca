@@ -6,7 +6,7 @@ import type { DescendantTreeVerdict } from '../../pty/process-retirement/pty-des
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
-import { codexTurnLifecycleRig } from '../codex-structured-dispatch-test-support'
+import { codexTurnLifecycleRig } from '../structured/turns/codex-structured-dispatch-test-support'
 
 const teardown = vi.hoisted(() => {
   const state: { verdict: DescendantTreeVerdict; rootExits: () => void } = {
