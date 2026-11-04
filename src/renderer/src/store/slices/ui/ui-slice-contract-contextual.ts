@@ -74,6 +74,8 @@ export type UISliceContextual = {
   activeContextualTourWasFeaturePreviouslyInteracted: boolean
   contextualTourNavigationInteractionSnapshot: Partial<Record<ContextualTourId, boolean>>
   activeContextualTourSuppressed: boolean
+  // This activation resumes a tour already started this session; it must not take focus again.
+  activeContextualTourResumed: boolean
   // The one tour this app session may show; a paused tour keeps it until the user finishes or closes it.
   contextualTourSessionTourId: ContextualTourId | null
   contextualToursOnboardingVisible: boolean

@@ -16,12 +16,18 @@ function TourSurfaces({ terminal, tasks }: { terminal: boolean; tasks: boolean }
   return null
 }
 
+// Mounted only while a tour is active, as the app root does, so nothing survives a pause in the overlay.
+function ActiveTourOverlay(): React.JSX.Element | null {
+  const activeTourId = useAppStore((s) => s.activeContextualTourId)
+  return activeTourId ? <ContextualTourOverlay /> : null
+}
+
 function renderSurfaces(surfaces: { terminal: boolean; tasks: boolean }): void {
   act(() => {
     root.render(
       <>
         <TourSurfaces {...surfaces} />
-        <ContextualTourOverlay />
+        <ActiveTourOverlay />
       </>
     )
   })
@@ -237,6 +243,7 @@ describe('Split a terminal pane tip lifecycle', () => {
     })
     await settle()
     browserTarget.remove()
+    terminalInput.focus()
 
     addTourTarget('workspace-create-control', 40)
     renderSurfaces({ terminal: true, tasks: false })

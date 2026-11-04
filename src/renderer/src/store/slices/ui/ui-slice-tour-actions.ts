@@ -36,6 +36,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     activeContextualTourWasFeaturePreviouslyInteracted: false,
     contextualTourNavigationInteractionSnapshot: {},
     activeContextualTourSuppressed: false,
+    activeContextualTourResumed: false,
     contextualTourSessionTourId: null,
     contextualToursOnboardingVisible: false,
     contextualToursBlockingSurfaceVisible: false,
@@ -105,6 +106,8 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
             hasFeatureInteraction(s.featureInteractions, id),
           contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot,
           activeContextualTourSuppressed: false,
+          activeContextualTourResumed:
+            options?.force !== true && s.contextualTourSessionTourId === id,
           // A forced tour may show over a paused action tour, but must not take its session.
           contextualTourSessionTourId: isPausedActionTour(s, s.contextualTourSessionTourId)
             ? s.contextualTourSessionTourId
@@ -190,6 +193,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           activeContextualTourSourceDetached: false,
           activeContextualTourWasFeaturePreviouslyInteracted: false,
           activeContextualTourSuppressed: false,
+          activeContextualTourResumed: false,
           lastCompletedContextualTourId: null
         }
       })
@@ -214,6 +218,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           activeContextualTourSourceDetached: false,
           activeContextualTourWasFeaturePreviouslyInteracted: false,
           activeContextualTourSuppressed: false,
+          activeContextualTourResumed: false,
           lastCompletedContextualTourId: tourId ?? null
         }
       })
@@ -237,6 +242,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           activeContextualTourSourceDetached: false,
           activeContextualTourWasFeaturePreviouslyInteracted: false,
           activeContextualTourSuppressed: false,
+          activeContextualTourResumed: false,
           lastCompletedContextualTourId: null,
           contextualTourSessionTourId:
             s.contextualTourSessionTourId === tourId && !keepsSession

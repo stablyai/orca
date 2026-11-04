@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { useAppStore } from '@/store'
-import { isContextualTourId, type ContextualTourId } from '../../../../shared/contextual-tours'
+import type { ContextualTourId } from '../../../../shared/contextual-tours'
 import { getContextualTourFocusableElements } from './ContextualTourOverlaySurface'
 
 // Moves focus into a newly shown tour step and gives it back when the tour ends.
@@ -17,7 +17,7 @@ export function useContextualTourFocus({
 }): void {
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const focusedStepRef = useRef<string | null>(null)
-  const pausedTourIdRef = useRef<ContextualTourId | null>(null)
+  const resumed = useAppStore((s) => s.activeContextualTourResumed)
 
   useEffect(() => {
     if (!activeTourId || !rendered) {
@@ -27,9 +27,11 @@ export function useContextualTourFocus({
     if (focusedStepRef.current === focusKey) {
       return
     }
+    const firstStepOfActivation = focusedStepRef.current === null
     focusedStepRef.current = focusKey
-    if (pausedTourIdRef.current === activeTourId) {
-      pausedTourIdRef.current = null
+    // A paused tour that comes back, at any step, must not take focus again: a keystroke meant for
+    // the terminal would land on its dismiss button.
+    if (firstStepOfActivation && resumed) {
       return
     }
 
@@ -48,21 +50,11 @@ export function useContextualTourFocus({
       ;(firstFocusable ?? panel)?.focus({ preventScroll: true })
     }, 0)
     return () => window.clearTimeout(timeout)
-  }, [activeStepIndex, activeTourId, panelRef, rendered])
+  }, [activeStepIndex, activeTourId, panelRef, rendered, resumed])
 
   useEffect(() => {
     if (activeTourId) {
       return
-    }
-    // A paused tour that comes back, at any step, must not take focus again: a keystroke meant for
-    // the terminal would land on its dismiss button. A tour that ended for good is not paused.
-    // Another tour showing in between, or an activation that never painted, keeps the earlier pause.
-    const seenIds = useAppStore.getState().contextualToursSeenIds
-    const focusedTourId = focusedStepRef.current?.split(':')[0]
-    if (isContextualTourId(focusedTourId) && !seenIds.includes(focusedTourId)) {
-      pausedTourIdRef.current = focusedTourId
-    } else if (pausedTourIdRef.current && seenIds.includes(pausedTourIdRef.current)) {
-      pausedTourIdRef.current = null
     }
     focusedStepRef.current = null
     const previousFocus = previousFocusRef.current

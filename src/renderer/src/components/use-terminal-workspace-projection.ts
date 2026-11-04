@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '../store'
+import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import { setForegroundTerminalTabIds } from '@/lib/foreground-terminal-tabs'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { useTerminalProviderSnapshotCapability } from './terminal/use-terminal-provider-snapshot-capability'
@@ -79,6 +80,11 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
   const activeContextualTourId = useAppStore((state) => state.activeContextualTourId)
+  // After a split the owed tip points into the sidebar; don't watch the page for it while it's closed.
+  const nextTourTipReachable = useAppStore(
+    (state) =>
+      state.sidebarOpen || !hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split')
+  )
 
   useContextualTour(
     'workspace-agent-sessions',
@@ -87,7 +93,8 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
       activeView === 'terminal' &&
       workspaceSessionReady &&
       activeTabType === 'terminal' &&
-      Boolean(activeTabId)
+      Boolean(activeTabId) &&
+      nextTourTipReachable
     ),
     'workspace_agent_sessions_visible'
   )
