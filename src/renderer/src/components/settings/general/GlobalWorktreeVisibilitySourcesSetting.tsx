@@ -13,10 +13,10 @@ import {
   buildDefaultWorktreeSourcePreferenceUpdate,
   removeDefaultCustomWorktreeSourcePreference
 } from '../../../../../shared/worktree/visibility-source-preferences'
-import type { WorktreeVisibilitySourceAddResult } from '../../sidebar/WorktreeVisibilitySourceAddForm'
+import type { WorktreeVisibilitySourceAddResult } from '../../sidebar/workspace-visibility/sources/WorktreeVisibilitySourceAddForm'
 import WorktreeVisibilitySourceList, {
   type WorktreeVisibilitySourceRow
-} from '../../sidebar/WorktreeVisibilitySourceList'
+} from '../../sidebar/workspace-visibility/sources/WorktreeVisibilitySourceList'
 import { translate } from '@/i18n/i18n'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 

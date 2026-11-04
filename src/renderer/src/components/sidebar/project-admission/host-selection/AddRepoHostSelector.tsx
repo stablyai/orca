@@ -7,8 +7,11 @@ import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { searchHostsLabel } from '../../../host-picker/host-picker-copy'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import type { SidebarHostOption } from '../../sidebar-host-options'
-import { getSidebarHostHealthLabel, shouldShowHostScopeControls } from '../../sidebar-host-options'
+import type { SidebarHostOption } from '../../worktree-list/controls/sidebar-host-options'
+import {
+  getSidebarHostHealthLabel,
+  shouldShowHostScopeControls
+} from '../../worktree-list/controls/sidebar-host-options'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'

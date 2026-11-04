@@ -62,7 +62,9 @@ vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en', on: () => {}, off: () => {} }
 }))
 
-vi.mock('../../ProjectGroupNameDialog', () => ({ ProjectGroupNameDialog: () => null }))
+vi.mock('../../worktree-list/rows/ProjectGroupNameDialog', () => ({
+  ProjectGroupNameDialog: () => null
+}))
 vi.mock('../parenting/WorktreeParentPickerPopover', () => ({
   WorktreeParentPickerPopover: () => null
 }))
@@ -78,7 +80,7 @@ const statusMenu = vi.hoisted(() => {
   const capture: { current: StatusMenuCapture | null } = { current: null }
   return capture
 })
-vi.mock('../../WorktreeStatusMenuItems', () => ({
+vi.mock('../../workspace-status/presentation/WorktreeStatusMenuItems', () => ({
   WorktreeStatusMenuItems: (props: StatusMenuCapture) => {
     statusMenu.current = props
     return null
