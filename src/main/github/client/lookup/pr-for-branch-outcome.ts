@@ -4,7 +4,7 @@ import {
   hostedReviewRepoScope,
   scopeGeneration
 } from '../../../source-control/hosted-review-scope-generations'
-import { runCoalescedProbe, type CoalescedProbes } from '../../../git/coalesced-probe'
+import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
 import { acquire, release, ghRepoExecOptions, githubRepoContext } from '../../gh-utils'

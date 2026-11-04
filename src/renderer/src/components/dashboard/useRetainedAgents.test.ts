@@ -4,8 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildWorktreeAgentRows } from '../sidebar/worktree-agent-rows'
 import { useAppStore } from '@/store'
 import { resetAgentPaneAuthorityAliasesForTests } from '@/store/slices/agent-pane-authority'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import {
   ENV,
@@ -15,7 +18,7 @@ import {
   resetWebSessionTabsSyncTestState
 } from '@/runtime/web-session-tabs-sync-test-harness'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   buildRetainedAgentsSyncSnapshot,

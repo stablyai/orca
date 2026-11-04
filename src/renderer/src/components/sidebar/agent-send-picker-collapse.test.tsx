@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { makeRepo, makeWorktree } from './worktree-list-lineage-card-test-fixtures'
 import { useEffectiveCollapsedGroups } from './worktree-list/listing/use-collapsed-groups'
 import { useSidebarSectionRows } from './worktree-list/listing/use-section-rows'
@@ -54,6 +54,7 @@ function sections(
   return renderHook(() =>
     useSidebarSectionRows({
       groupBy,
+      sortBy: 'smart',
       projectOrderBy: 'manual',
       pinnedDisplayPolicy: 'single-location',
       defaultHostId: 'local',

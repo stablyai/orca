@@ -6,7 +6,7 @@ import {
   createBotAuthorOverrideSet,
   MAX_PR_BOT_AUTHOR_OVERRIDES,
   normalizePRCommentAuthorLogin
-} from '../../../shared/pr-bot-author-overrides'
+} from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 
 let overrideUpdateQueue = Promise.resolve()
 

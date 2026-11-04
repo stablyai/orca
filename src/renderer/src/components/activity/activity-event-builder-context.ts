@@ -1,6 +1,6 @@
 import { findIndexedRepoOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   getConnectionExecutionHostId,
   toRuntimeExecutionHostId,
@@ -10,7 +10,7 @@ import {
 import type { Repo } from '../../../../shared/repo-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames

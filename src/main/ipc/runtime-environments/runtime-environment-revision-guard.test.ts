@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeEnvironmentRevisionFailure } from './runtime-environment-revision-guard'
 
 const environment = {

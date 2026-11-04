@@ -1,4 +1,4 @@
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
 import { unreadableArgvName, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
@@ -12,7 +12,7 @@ import {
   shouldInspectWindowsAgentForeground,
   type AgentForegroundResolutionOptions
 } from './windows-agent-foreground-process'
-import { isShellProcess } from '../../shared/shell-process-detection'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import {
   selectForegroundProcessCandidate,
   type SelectedForegroundProcess

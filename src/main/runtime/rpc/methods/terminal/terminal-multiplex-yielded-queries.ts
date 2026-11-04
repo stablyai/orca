@@ -1,13 +1,13 @@
-import { isStatelessRendererReplyCsiQuery } from '../../../../../shared/terminal-reply-query-extraction'
+import { isStatelessRendererReplyCsiQuery } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences
-} from '../../../../../shared/terminal-reply-query-scan'
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import type { RuntimeTerminalDataMeta } from '../../../orca-runtime'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream, TerminalOutputChunk } from './terminal-stream-types'
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
-import { encodeTerminalStreamText } from '../../../../../shared/terminal-stream-protocol'
+import { encodeTerminalStreamText } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
 
 // Why: half of fish's 10s DA1 wait (fish-shell src/input/decode.rs LONG_READ_TIMEOUT); older replies risk landing at a prompt as junk.

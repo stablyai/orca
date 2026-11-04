@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
-import { parseWorkspaceSession } from '../../../../../shared/workspace-session-schema'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { parseWorkspaceSession } from '../../../../../shared/workspace-session/workspace-session-schema'
 import { buildPaneActivityEvents } from '@/components/activity/activity-pane-events'
 import { makeTab, makeWorktree } from '@/components/activity/ActivityPrototypePage-test-fixtures'
 import type { AppState } from '../../types'
 import { agentMeta, agentTitle } from '@/components/activity/activity-thread-presentation'
 import '@/lib/sleeping-agent-pane-ownership'
-import { resolveAgentStatusLiveEntryStateHistory } from '../../../../../shared/agent-status-live-entry-state-history'
+import { resolveAgentStatusLiveEntryStateHistory } from '../../../../../shared/agent-status/lifecycle/agent-status-live-entry-state-history'
 import './agent-status-live-facts'
-import '../../../../../shared/agent-resume-record-equivalence'
+import '../../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
 
 // Every copy of a row's verdict carries it: history, sleep records and their equality checks.

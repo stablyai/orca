@@ -1,9 +1,7 @@
 import { switchBrowserHostClientProfile } from './browser-host-client-profile-switch'
 import { randomUUID } from 'node:crypto'
-import type {
-  BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult
-} from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { BrowserHostCommandResultParams } from './browser-host-command-state'
 import {
   assertBrowserHostLeaseAdmission,

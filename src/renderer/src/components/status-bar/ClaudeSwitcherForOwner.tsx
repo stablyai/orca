@@ -3,7 +3,6 @@ import type { ClaudeSwitcherMenuProps } from './ClaudeSwitcherMenu'
 import { useProviderAccountList } from './use-provider-account-list'
 import { providerChatAccountControl } from './ProviderAccountChatButton'
 import React, { useCallback, useRef, useState } from 'react'
-import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import type { AccountOwner } from '@/lib/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
@@ -12,7 +11,7 @@ import {
   emptyClaudeAccountsState
 } from '@/runtime/runtime-provider-accounts-client'
 import { toast } from 'sonner'
-import { getClaudeAccountErrorDescription } from '../settings/accounts-pane-action-errors'
+import { getClaudeAccountErrorDescription } from '../settings/accounts/accounts-pane-action-errors'
 import { translate } from '@/i18n/i18n'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -40,7 +39,7 @@ import {
   InlineUsageSignInAction,
   InlineUsageSkeleton
 } from './InlineProviderUsage'
-import { AccountSwitchList } from './AccountSwitchList'
+import { AccountSwitchSection, AccountSwitchSignedOutHeading } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
@@ -241,6 +240,55 @@ export function ClaudeSwitcherForOwner({
     return runtimeTarget.kind === 'local' ? accountControl.button : null
   }
 
+  const rows = (selectedGroup?.targets ?? []).map((target) => ({
+    target,
+    inactiveUsage: target.id ? inactiveClaudeAccounts.find((a) => a.accountId === target.id) : null,
+    // Why local only: the hidden sign-in runs on this device, not a remote server.
+    signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
+  }))
+  const signedOutRows = rows.filter((row) => row.signInId)
+  const renderRow = ({
+    target,
+    inactiveUsage,
+    signInId
+  }: (typeof rows)[number]): React.JSX.Element => (
+    <AccountSwitchRowItem
+      label={target.label}
+      detail={target.hint}
+      active={target.active}
+      key={`${selectedGroup?.key}:${target.id ?? 'system'}`}
+      disabled={
+        isSwitching ||
+        signingInId !== null ||
+        (signInId === null && (target.active || target.disabled))
+      }
+      onSelect={(event) => {
+        event.preventDefault()
+        if (signInId) {
+          void handleSignIn(signInId)
+        } else if (!target.active) {
+          void handleSelectAccount(target.id, target.runtimeTarget)
+        }
+      }}
+      action={
+        signInId ? (
+          <InlineUsageSignInAction
+            accountLabel={target.label}
+            isSigningIn={signingInId === signInId}
+            disabled={isSwitching || signingInId !== null}
+            onSignIn={() => void handleSignIn(signInId)}
+          />
+        ) : undefined
+      }
+    >
+      {signInId ? null : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+        <InlineUsageSkeleton />
+      ) : inactiveUsage?.rateLimits ? (
+        <InlineUsageBars limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
+      ) : null}
+    </AccountSwitchRowItem>
+  )
+
   return (
     <ProviderDetailsMenu
       provider={claude}
@@ -276,74 +324,11 @@ export function ClaudeSwitcherForOwner({
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <AccountSwitchList
+      <AccountSwitchSection
         heading={translate('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
-      >
-        {selectedGroup?.targets.length === 0 ? (
-          <div className="px-2 py-1.5 text-2xs text-muted-foreground">
-            {translate('auto.components.status.bar.StatusBar.c98ea88392', 'No other accounts')}
-          </div>
-        ) : null}
-        {selectedGroup?.targets.map((target) => {
-          const inactiveUsage = target.id
-            ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
-            : null
-          // Why local only: the hidden sign-in runs on this device, not a remote server.
-          const signInId = target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
-
-          return (
-            <AccountSwitchRowItem
-              label={target.label}
-              active={target.active}
-              key={`${selectedGroup.key}:${target.id ?? 'system'}`}
-              disabled={
-                isSwitching ||
-                signingInId !== null ||
-                (signInId === null && (target.active || target.disabled))
-              }
-              onSelect={(event) => {
-                event.preventDefault()
-                if (signInId) {
-                  void handleSignIn(signInId)
-                } else if (!target.active) {
-                  void handleSelectAccount(target.id, target.runtimeTarget)
-                }
-              }}
-              action={
-                signInId ? (
-                  <InlineUsageSignInAction
-                    accountLabel={target.label}
-                    isFetching={false}
-                    isSigningIn={signingInId === signInId}
-                    disabled={isSwitching || signingInId !== null}
-                    reason={target.hint ?? undefined}
-                    onSignIn={() => void handleSignIn(signInId)}
-                  />
-                ) : undefined
-              }
-            >
-              {!signInId ? (
-                <div className="flex w-full flex-col gap-0.5">
-                  {target.hint ? (
-                    <span className="text-3xs leading-4 text-muted-foreground">{target.hint}</span>
-                  ) : null}
-                  {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
-                    <InlineUsageSkeleton />
-                  ) : inactiveUsage?.rateLimits ? (
-                    <InlineUsageBars
-                      limits={inactiveUsage.rateLimits}
-                      isFetching={inactiveUsage.isFetching}
-                    />
-                  ) : null}
-                </div>
-              ) : null}
-            </AccountSwitchRowItem>
-          )
-        })}
-      </AccountSwitchList>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        onSelect={() => {
+        targets={selectedGroup?.targets ?? []}
+        panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
+        onOpenSettings={() => {
           openSettingsTarget({
             pane: 'accounts',
             repoId: null,
@@ -353,8 +338,14 @@ export function ClaudeSwitcherForOwner({
           openSettingsPage()
         }}
       >
-        {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
-      </DropdownMenuItem>
+        {rows.filter((row) => !row.signInId).map(renderRow)}
+        {signedOutRows.length > 0 ? (
+          <>
+            <AccountSwitchSignedOutHeading />
+            {signedOutRows.map(renderRow)}
+          </>
+        ) : null}
+      </AccountSwitchSection>
     </ProviderDetailsMenu>
   )
 }

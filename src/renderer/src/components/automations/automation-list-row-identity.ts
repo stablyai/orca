@@ -16,16 +16,17 @@ import {
 import {
   resolveQualifiedFolderWorkspaceResult,
   type QualifiedFolderHostState
-} from '../../../../shared/folder-workspace-execution-host'
+} from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
 } from '../../../../shared/worktree-execution-host-resolution'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getFolderWorkspaceWorktree } from '../../store/workspace-record-selectors'
+import '../../store/workspace-record-selectors'
+import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 export type AutomationListRow = {
   /** Authority-qualified and incarnation-free; see the module note. */

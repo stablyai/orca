@@ -4,7 +4,7 @@ import {
   buildLocalBlockerHostedReviewCreationEligibility,
   resolveHostedReviewCreationProviderForTarget
 } from './source-control/review/hosted-review-creation-eligibility-snapshot'
-import { resolveCreatePrIntentEligibility } from './source-control/review/create-pr-intent-state'
+import { resolveCreateReviewIntentEligibility as resolveCreatePrIntentEligibility } from '../../../../shared/source-control/decisions/source-control-create-review-intent'
 
 const featureBranch = { branch: 'feature/create-pr', baseRef: 'main' }
 

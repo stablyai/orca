@@ -3,7 +3,7 @@
 import React from 'react'
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { useCombinedDiffTreeNavigation } from './use-combined-diff-tree-navigation'
 
 function makeSection(key: string, viewed: boolean): DiffSection {

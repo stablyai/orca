@@ -1,7 +1,7 @@
-import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../shared/ai-vault-types'
-import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
+import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultScanWork } from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import { AiVaultScanWorkload } from './ai-vault-scan-workload'
-import { sessionFileExecutionNamespace } from './codex-session-root-dedup'
+import { sessionFileExecutionNamespace } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 
 type AgentTally = {
   files: Set<string>

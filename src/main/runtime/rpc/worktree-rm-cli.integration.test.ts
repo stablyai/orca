@@ -20,7 +20,7 @@ import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-
 import { writeOrcadMigrationSourceCutover } from '../../ssh/orcad-migration-cutover-journal'
 import { removalPtyProvider } from './worktree-rm-pty.test-fixture'
 import { pairedRemovalReceiver } from './worktree-rm-paired.test-fixture'
-import { addManagedOrcadEnvironment } from '../../../shared/runtime-environment-managed-orcad-store'
+import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import { WorktreeRemove } from '../../../shared/rpc-contract/worktree-params'
 import { UnixSocketTransport } from './unix-socket-transport'

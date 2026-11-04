@@ -4,7 +4,10 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { claudeRoutedHomeAsync } from '../claude-accounts/claude-profile-routed-home'
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
-import { resolveOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
+import {
+  resolveOrcaManagedCodexHomePath,
+  getSystemCodexHomePath
+} from '../codex/configuration/homes/codex-home-paths'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import { homedir } from 'node:os'
 import { join } from 'node:path'

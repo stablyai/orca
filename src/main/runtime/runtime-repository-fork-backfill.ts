@@ -9,7 +9,7 @@ import { getRepoUpstream } from '../github/client'
 import { detectGitHubAvatarIcon } from '../repository-icons/repo-icon-autodetect'
 import type { RuntimeStore } from './runtime-store-contract'
 import { isWslMoveRepoBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
-import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 export class RuntimeRepositoryForkBackfill {
   private started = false

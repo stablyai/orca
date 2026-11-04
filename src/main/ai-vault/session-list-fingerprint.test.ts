@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { conditionalAiVaultListResult } from './session-list-fingerprint'
 
 const result: AiVaultListResult = { sessions: [], issues: [], scannedAt: 'first' }

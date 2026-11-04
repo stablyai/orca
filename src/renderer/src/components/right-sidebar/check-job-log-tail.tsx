@@ -5,8 +5,8 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { PRCheckJob } from '../../../../shared/github/check-types'
-import type { CheckDetailsReadingOwner } from '@/components/editor/check-details-reading-owner'
-import { resolveStepOutcome } from '../../../../shared/pr-check-step-status'
+import type { CheckDetailsReadingOwner } from '@/components/editor/check-details/reading/check-details-reading-owner'
+import { resolveStepOutcome } from '../../../../shared/source-control/checks/pr-check-step-status'
 import { useCheckLogReadingPosition } from './use-check-log-reading-position'
 
 const LOG_EXCERPT_ERROR_LINE_PATTERN =

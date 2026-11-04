@@ -12,7 +12,7 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 // Untagged resync resets live high-water, so trim buffered bytes covered by its seq or render them twice.
 // Tagged requestId snapshots feed side consumers; live view still needs every buffered chunk.

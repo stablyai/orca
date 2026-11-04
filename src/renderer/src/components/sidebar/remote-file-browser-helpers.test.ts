@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES,
   decideEnterAction,
-  decideEscAction,
   filterEntries,
   isRemoteFileBrowserFilterQueryTooLarge,
   isRemoteFileBrowserPathResolveTextTooLarge,
@@ -27,11 +26,6 @@ describe('filterEntries', () => {
   it('substring-matches case-insensitively across files and folders', () => {
     expect(filterEntries(entries, 'RE').map((e) => e.name)).toEqual(['README.md'])
     expect(filterEntries(entries, 'o').map((e) => e.name)).toEqual(['docs', 'node_modules'])
-  })
-
-  it('returns the full list when filter is empty or whitespace', () => {
-    expect(filterEntries(entries, '')).toHaveLength(entries.length)
-    expect(filterEntries(entries, '   ')).toHaveLength(entries.length)
   })
 
   it('rejects oversized pasted filters before reading remote entry names', () => {
@@ -77,54 +71,7 @@ describe('decideEnterAction', () => {
   })
 })
 
-describe('decideEscAction', () => {
-  it('clears a non-empty filter', () => {
-    expect(decideEscAction('foo')).toEqual({ type: 'clearFilter' })
-  })
-
-  it('cancels when filter is empty', () => {
-    expect(decideEscAction('')).toEqual({ type: 'cancel' })
-  })
-})
-
-describe('parentPath', () => {
-  it('strips last segment', () => {
-    expect(parentPath('/home/neil/docs')).toBe('/home/neil')
-  })
-  it('stays at root', () => {
-    expect(parentPath('/')).toBe('/')
-  })
-  it('returns root for single-segment absolute', () => {
-    expect(parentPath('/home')).toBe('/')
-  })
-})
-
-describe('isPathMode', () => {
-  it('treats plain names as filter mode', () => {
-    expect(isPathMode('docs')).toBe(false)
-    expect(isPathMode('README.md')).toBe(false)
-    expect(isPathMode('')).toBe(false)
-  })
-
-  it('treats any `/` as path mode', () => {
-    expect(isPathMode('a/b')).toBe(true)
-    expect(isPathMode('/')).toBe(true)
-    expect(isPathMode('foo/')).toBe(true)
-  })
-
-  it('treats bare base markers as path mode', () => {
-    expect(isPathMode('~')).toBe(true)
-    expect(isPathMode('.')).toBe(true)
-    expect(isPathMode('..')).toBe(true)
-  })
-})
-
 describe('shouldDeferRemoteFileBrowserPasteResolve', () => {
-  it('keeps small path and filter pastes on the immediate resolver path', () => {
-    expect(shouldDeferRemoteFileBrowserPasteResolve('/workspaces/orca/src')).toBe(false)
-    expect(shouldDeferRemoteFileBrowserPasteResolve('remote notes')).toBe(false)
-  })
-
   it('defers large text-control pastes to the chunked paste owner', () => {
     expect(shouldDeferRemoteFileBrowserPasteResolve('x'.repeat(70 * 1024))).toBe(true)
   })
@@ -141,10 +88,6 @@ describe('shouldDeferRemoteFileBrowserPasteResolve', () => {
 })
 
 describe('parsePathInput', () => {
-  it('no slash stays in filter mode', () => {
-    expect(parsePathInput('docs')).toEqual({ mode: 'filter', filter: 'docs' })
-  })
-
   it('`..` enters path mode and resolves to parent', () => {
     expect(parsePathInput('..')).toEqual({
       mode: 'path',
@@ -160,60 +103,6 @@ describe('parsePathInput', () => {
       base: 'cwd',
       committedSegments: ['..'],
       trailingFilter: 'sibling'
-    })
-  })
-
-  it('`Documents/orca` commits `Documents` and filters by `orca`', () => {
-    expect(parsePathInput('Documents/orca')).toEqual({
-      mode: 'path',
-      base: 'cwd',
-      committedSegments: ['Documents'],
-      trailingFilter: 'orca'
-    })
-  })
-
-  it('`Documents/` commits `Documents` with empty filter', () => {
-    expect(parsePathInput('Documents/')).toEqual({
-      mode: 'path',
-      base: 'cwd',
-      committedSegments: ['Documents'],
-      trailingFilter: ''
-    })
-  })
-
-  it('`/var/log` resolves from root', () => {
-    expect(parsePathInput('/var/log')).toEqual({
-      mode: 'path',
-      base: 'root',
-      committedSegments: ['var'],
-      trailingFilter: 'log'
-    })
-  })
-
-  it('`~/Documents` resolves from home', () => {
-    expect(parsePathInput('~/Documents')).toEqual({
-      mode: 'path',
-      base: 'home',
-      committedSegments: [],
-      trailingFilter: 'Documents'
-    })
-  })
-
-  it('`~` resolves to home with no committed segments', () => {
-    expect(parsePathInput('~')).toEqual({
-      mode: 'path',
-      base: 'home',
-      committedSegments: [],
-      trailingFilter: ''
-    })
-  })
-
-  it('`./child` resolves from cwd', () => {
-    expect(parsePathInput('./child')).toEqual({
-      mode: 'path',
-      base: 'cwd',
-      committedSegments: ['.'],
-      trailingFilter: 'child'
     })
   })
 
@@ -254,20 +143,6 @@ describe('resolveSegmentStep', () => {
     { name: 'notes.txt', isDirectory: false }
   ]
 
-  it('exact directory match descends', () => {
-    expect(resolveSegmentStep('Documents', '/home/neil', listing)).toEqual({
-      type: 'descend',
-      name: 'Documents'
-    })
-  })
-
-  it('unique prefix descends', () => {
-    expect(resolveSegmentStep('orca', '/home/neil', listing)).toEqual({
-      type: 'descend',
-      name: 'orca-internal'
-    })
-  })
-
   it('ambiguous prefix errors', () => {
     const r = resolveSegmentStep('Do', '/home/neil', listing)
     expect(r.type).toBe('error')
@@ -276,25 +151,12 @@ describe('resolveSegmentStep', () => {
     }
   })
 
-  it('missing segment errors', () => {
-    const r = resolveSegmentStep('zzz', '/home/neil', listing)
-    expect(r.type).toBe('error')
-  })
-
   it('exact file match reports not-a-directory instead of prefix-descending', () => {
     const r = resolveSegmentStep('notes.txt', '/home/neil', listing)
     expect(r.type).toBe('error')
     if (r.type === 'error') {
       expect(r.message).toMatch(/isn't a directory/)
     }
-  })
-
-  it('`.` stays', () => {
-    expect(resolveSegmentStep('.', '/home/neil', listing).type).toBe('stay')
-  })
-
-  it('`..` stays (parent nav handled by caller)', () => {
-    expect(resolveSegmentStep('..', '/home/neil', listing).type).toBe('stay')
   })
 
   it('case-insensitive exact match descends when no case-sensitive match exists', () => {

@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import { normalizeHookEventName } from '../../shared/agent-hook-listener/provider-event-names'
 import { parseAgentHookJson } from '../../shared/agent-hook-listener/request-body'

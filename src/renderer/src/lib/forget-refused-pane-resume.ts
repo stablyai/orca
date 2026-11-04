@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { RefusedPaneResume } from '../../../shared/agent-status-types'
+import type { RefusedPaneResume } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata

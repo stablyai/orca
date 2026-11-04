@@ -21,7 +21,7 @@ import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import {
   gitLabPipelineJobsToPRChecks,
   gitLabPipelineToPRCheck
-} from '../../../../../shared/gitlab-pipeline-checks'
+} from '../../../../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 import { i18n } from '@/i18n/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
 

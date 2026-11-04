@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAppStore } from '@/store'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
 import { resolveCliChatResumeSource } from './cli-chat-resume-source'
 import { runCliChatResume, useCliChatResumePending } from './cli-chat-resume-run'

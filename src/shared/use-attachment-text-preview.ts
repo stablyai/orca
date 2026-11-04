@@ -28,7 +28,6 @@ export function createAttachmentTextPreviewHook({
       readError: ''
     }))
     const demand = useCallback((source: AttachmentTextSource, window: AttachmentTextWindow) => {
-      setPreview((state) => (state.source === source ? { ...state, readError: '' } : state))
       source.requestViewport(window, (cause) => {
         setPreview((state) =>
           state.source === source && !source.disposed

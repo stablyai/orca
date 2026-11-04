@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
-  MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES
-} from '../../../src/shared/terminal-quick-command-prompt-limit'
-import { terminalQuickCommandAgentPromptMaxLength } from '../terminal/quick-commands'
-import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from '../../../src/shared/terminal-quick-command-capabilities'
+  MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES,
+  terminalQuickCommandAgentPromptMaxLength
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
+import '../terminal/quick-commands'
+
+import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-capabilities'
 import {
   createEmptyQuickCommandDraft,
   draftToQuickCommand,

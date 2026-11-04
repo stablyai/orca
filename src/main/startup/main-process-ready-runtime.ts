@@ -6,16 +6,17 @@ import { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridg
 import { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { browserManager } from '../browser/browser-manager'
-import { configureBrowserClientPageAutomationRuntime } from '../browser/browser-client-page-automation-runtime'
-import { BrowserExpectedUrlMismatch } from '../../shared/browser-expected-url'
-import { BrowserClientPageCommandError } from '../browser/browser-client-page-command-failure'
+import { configureBrowserClientPageAutomationRuntime } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
+import { BrowserExpectedUrlMismatch } from '../../shared/browser/client-hosting/browser-expected-url'
+import { BrowserClientPageCommandError } from '../browser/client-pages/execution/browser-client-page-command-failure'
 import { startPreGoneCrashSampling } from '../crash-reporting/process-gone-diagnostics'
+import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-realtime-scheduling-guard'
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
-import { startCodexHooks } from '../codex/codex-hook-reconcile'
+import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
 import { hydrateAgentCliShellPath } from '../agent-hooks/local-agent-cli-presence'
-import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/managed-agent-hook-startup'
 import { shouldInstallManagedHooks } from './configure-process'
 import { mainProcessState as state } from './main-process-state'
@@ -50,6 +51,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   if (!store) {
     throw new Error('Store must be initialized before ready services')
   }
+  // Renderers fork from zygotes that exist already, so this must land before the first window.
+  await refuseRealtimeSchedulingUnderZeroRtTime()
   // Load interrupted deletion records before listings so first paint shows Deleting.
   await loadWorktreeRemovalRecordsForStore(store)
   initializeMainProcessObservers()

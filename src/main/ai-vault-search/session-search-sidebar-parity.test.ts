@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { filterAiVaultSessions } from '../../shared/ai-vault-session-filters'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
+import { filterAiVaultSessions } from '../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
   addSyntheticSession,
   openSessionSearchHarness,

@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { attachmentTextSegments } from './attachment-text-segments'
+export { attachmentTextSegments } from './attachment-text-segments'
 import { waitForPromiseWithSignal } from './abort-signal-reason'
 import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from './agent-session/agent-session-attachments'
 import { MAX_FILE_RANGE_READ_BYTES, validateFileRangeRequest } from './file-range-read'
@@ -39,25 +41,6 @@ export function attachmentTextBytes(contentBase64: string): Uint8Array {
     throw new Error('Unreadable attachment reply. Try again.')
   }
   return Uint8Array.from(atob(contentBase64), (char) => char.charCodeAt(0))
-}
-
-export function attachmentTextSegments(text: string): string[] {
-  const segments: string[] = []
-  let line = ''
-  let columns = 0
-  for (const character of text) {
-    line += character
-    columns++
-    if (character === '\n' || columns === 256) {
-      segments.push(line)
-      line = ''
-      columns = 0
-    }
-  }
-  if (line || !segments.length) {
-    segments.push(line)
-  }
-  return segments
 }
 
 export class AttachmentTextSource {
@@ -260,6 +243,7 @@ export class AttachmentTextSource {
   }
   private async drainViewport(): Promise<void> {
     this.reading = true
+    let changed = false
     try {
       while (this.demand && !this.disposed) {
         const demand = this.demand
@@ -267,13 +251,18 @@ export class AttachmentTextSource {
           const next = this.windowBlocks(demand.window).find((index) => !this.cachedBlock(index))
           if (next === undefined) {
             this.demand = null
-            demand.publish()
+            if (changed) {
+              changed = false
+              demand.publish()
+            }
             continue
           }
           await this.block(next)
+          changed = true
         } catch (error) {
           if (this.demand === demand && !this.disposed) {
             this.demand = null
+            changed = false
             demand.publish(error)
           }
         }

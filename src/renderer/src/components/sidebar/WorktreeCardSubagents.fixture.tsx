@@ -2,9 +2,9 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { clearWorktreeAgentExpansionStateForTests } from './worktree-card-agents-expansion-state'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 const now = Date.now()
 const HOUR = 3_600_000

@@ -1,7 +1,14 @@
 import type { CatalogModel, CatalogOption } from './agent-session-option-catalog-types'
 import type { AgentSessionOptionChoice } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
+
+export function structuredModelEfforts(
+  model: AgentSessionOptionsResult['models'][number]
+): AgentSessionOptionChoice[] {
+  return [...model.efforts, ...(model.chatEfforts ?? [])]
+}
 
 function effortOption(
   model: AgentSessionOptionsResult['models'][number],
@@ -17,7 +24,7 @@ function effortOption(
     category: 'thought_level',
     kind: {
       type: 'select',
-      choices: model.efforts,
+      choices: structuredModelEfforts(model),
       defaultValue: model.defaultEffort ?? model.efforts[0]!.value,
       ...(model.defaultEffort ? { defaultIsCliDefault: true as const } : {})
     },
@@ -58,6 +65,9 @@ export function discoveredModel(
   const effort = effortOption(model, agent)
   const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null
   return {
+    ...(usesModelSpecificAcpEfforts(agent) && model.effortsKnown === false
+      ? { effortsKnown: false as const }
+      : {}),
     ...(model.declaredDefaultEffort !== undefined
       ? { declaredDefaultEffort: model.declaredDefaultEffort }
       : {}),

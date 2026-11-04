@@ -2,7 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { release } from 'node:os'
 import { isWslUncPath, uncRouteKey } from '../../shared/wsl-paths'
-import { wslUncDirectoryExistsAsync } from '../wsl'
+import { wslUncDirectoryExistsAsync } from '../wsl/filesystem/unc-path-access'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 
 const pendingWorkingDirectoryValidations = new Map<string, Promise<void>>()

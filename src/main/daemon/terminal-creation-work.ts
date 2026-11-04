@@ -1,6 +1,6 @@
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
-import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
+import type { PtyCreationDisposition } from '../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import type { TerminalSpawnGate, TerminalSpawnLease } from './terminal-spawn-gate'
 
 export type PendingTerminalCreation = {

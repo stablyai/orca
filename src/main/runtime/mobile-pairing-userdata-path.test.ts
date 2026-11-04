@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import type * as NodeFs from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
+import { E2EE_KEYPAIR_FILENAME } from '../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 // Simulate app.setName changing userData; distinct directories work even on case-insensitive filesystems.

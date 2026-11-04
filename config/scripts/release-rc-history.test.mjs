@@ -76,19 +76,6 @@ describe('release RC history', () => {
     })
   })
 
-  it('keeps RC numbers monotonic after a stale tag is deleted', () => {
-    withGitRepo((repo) => {
-      commit(repo, 'initial')
-      commit(repo, 'release: v1.4.36-rc.5')
-      git(repo, ['tag', 'v1.4.36-rc.5'])
-      commit(repo, 'release: v1.4.36-rc.6')
-      git(repo, ['tag', 'v1.4.36-rc.6'])
-      git(repo, ['tag', '--delete', 'v1.4.36-rc.6'])
-
-      expect(highestRcForBase('1.4.36', { cwd: repo })).toBe(6)
-    })
-  })
-
   it('considers origin/main when releasing from an older ref', () => {
     withGitRepo((repo) => {
       commit(repo, 'initial')

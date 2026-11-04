@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { VerifiedCodexResumeSource } from '../codex/codex-session-resume-preparation'
+import type { VerifiedCodexResumeSource } from '../codex/history/resume/codex-session-resume-preparation'
 
 /** Launch/resume must honor the hook opt-out or they reinstall the entry just removed by settings. */
 const SYSTEM_HOME = '/home/user/.codex'
@@ -24,30 +24,31 @@ vi.mock('electron', () => ({ app: { getPath: vi.fn(() => '/tmp/orca-user-data') 
 vi.mock('../agent-launch/trust/agent-trust-presets', () => ({
   markCodexProjectTrusted: vi.fn(async () => {})
 }))
-vi.mock('../codex/hook-service', () => ({
+vi.mock('../codex/hooks/installation/hook-service', () => ({
   codexHookService: {
     prepareRuntimeHomeForLaunch: mocks.prepareRuntimeHomeForLaunch,
     installForLaunchPrep: mocks.installForLaunchPrep,
     refreshRuntimeUserHooksForLaunchPrep: mocks.refreshRuntimeUserHooksForLaunchPrep
   }
 }))
-vi.mock('../codex/codex-hook-reconcile', () => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', () => ({
   reconcileCodexHooksForLaunch: mocks.reconcileCodexHooksForLaunch
 }))
 // Keep the real predicate without importing every agent hook service.
 vi.mock(
   '../agent-hooks/managed-agent-hook-controls',
-  async () => await import('../../shared/agent-status-hooks-setting')
+  async () =>
+    await import('../../shared/agent-hook-listener/configuration/agent-status-hooks-setting')
 )
-vi.mock('../wsl', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
-vi.mock('../codex/codex-home-paths', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
+vi.mock('../codex/configuration/homes/codex-home-paths', () => ({
   getSystemCodexHomePath: () => SYSTEM_HOME,
   getOrcaManagedCodexHomePath: () => '/managed/.codex'
 }))
-vi.mock('../codex/codex-session-resume-preparation', () => ({
+vi.mock('../codex/history/resume/codex-session-resume-preparation', () => ({
   prepareCodexSessionResume: mocks.prepareCodexSessionResume
 }))
-vi.mock('../codex/codex-legacy-session-resume', () => ({
+vi.mock('../codex/history/resume/codex-legacy-session-resume', () => ({
   prepareLegacySharedCodexSessionResume: vi.fn(async () => ({ useRealCodexHome: false }))
 }))
 vi.mock('./main-process-state', () => ({

@@ -4,6 +4,9 @@ import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { NativeChatQuestionText } from './NativeChatQuestionText'
+import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import type { AskAnswerSelection } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
@@ -37,6 +40,7 @@ export type NativeChatQuestionCardProps = {
   shouldFocus?: boolean
   /** Paste target while the card replaces the composer. */
   answerInputRef?: RefObject<HTMLInputElement | null>
+  onLinkClick?: CommentMarkdownLinkClickHandler
 }
 
 // Reserve a non-option index so single-select holds either an option or typed text.
@@ -59,10 +63,11 @@ export function NativeChatQuestionCard({
   onCancel,
   onCollapse,
   shouldFocus = false,
-  answerInputRef
+  answerInputRef,
+  onLinkClick
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
-  const autoAdvance = useNativeChatQuestionAutoAdvance()
+  const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
   const [index, setIndex] = useState(0)
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
   // Use indices because labels can repeat and the agent commits numbered rows.
@@ -248,12 +253,12 @@ export function NativeChatQuestionCard({
 
         <div className="overflow-hidden rounded-lg border border-input bg-card shadow-xs">
           <div className="flex items-start gap-2 px-3.5 py-2.5">
-            <p
+            <NativeChatQuestionText
               data-testid="native-chat-question-card-title"
-              className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm font-semibold text-foreground"
-            >
-              {q.question}
-            </p>
+              content={q.question}
+              onLinkClick={onLinkClick}
+              className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground [&_p]:my-0 [&_p+p]:mt-2"
+            />
             {collapse ? (
               <NativeChatPromptCollapseToggle
                 expanded
@@ -274,7 +279,7 @@ export function NativeChatQuestionCard({
 
           <div className="max-h-[50vh] divide-y divide-border/60 overflow-y-auto border-t border-border scrollbar-sleek">
             {q.options.map((opt, i) => (
-              <OptionRow
+              <NativeChatQuestionOption
                 key={`${i}:${opt.label}`}
                 badge={String(i + 1)}
                 initialFocus={i === 0}
@@ -372,63 +377,5 @@ export function NativeChatQuestionCard({
         ) : null}
       </div>
     </div>
-  )
-}
-
-function OptionRow({
-  badge,
-  initialFocus,
-  label,
-  description,
-  selected,
-  disabled,
-  onSelect
-}: {
-  badge: string
-  initialFocus: boolean
-  label: string
-  description?: string
-  selected: boolean
-  disabled: boolean
-  onSelect: () => void
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onSelect}
-      aria-pressed={selected}
-      data-native-chat-prompt-card-focus-target={initialFocus || undefined}
-      className={cn(
-        'group/option flex w-full items-start gap-3 px-3.5 py-2.5 text-left text-foreground transition-colors focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none',
-        selected
-          ? 'bg-accent text-accent-foreground'
-          : 'hover:bg-accent hover:text-accent-foreground'
-      )}
-    >
-      <span
-        className={cn(
-          'flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-medium',
-          selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-        )}
-      >
-        {selected ? <Check className="size-3.5" strokeWidth={3} /> : badge}
-      </span>
-      <span className="min-w-0">
-        <span className="block break-words text-sm">{label}</span>
-        {description ? (
-          <span
-            className={cn(
-              'block whitespace-pre-wrap break-words text-xs',
-              selected
-                ? 'text-accent-foreground'
-                : 'text-muted-foreground group-hover/option:text-accent-foreground group-focus/option:text-accent-foreground'
-            )}
-          >
-            {description}
-          </span>
-        ) : null}
-      </span>
-    </button>
   )
 }

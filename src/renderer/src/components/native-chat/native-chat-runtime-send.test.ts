@@ -25,8 +25,9 @@ import {
 import { NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT } from './native-chat-input-clear'
 import {
   AGENT_TUI_CLEAR_INPUT_MAX,
+  AGENT_TUI_CLEAR_INPUT_LINE,
   buildAgentTuiClearInputForText
-} from '../../../../shared/agent-tui-input-clear'
+} from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 import {
   NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   sendNativeChatMessageWithImageAttachments
@@ -268,7 +269,7 @@ describe('typeNativeChatCommand', () => {
 
     await expect(result).resolves.toBe(true)
     expectWriteOrder(sendRuntimePtyInputVerified.mock.calls, [
-      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      AGENT_TUI_CLEAR_INPUT_LINE,
       '/',
       'm',
       'o',
@@ -285,7 +286,7 @@ describe('typeNativeChatCommand', () => {
     await handle.settled
 
     expectWriteOrder(sendRuntimePtyInputVerified.mock.calls, [
-      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      AGENT_TUI_CLEAR_INPUT_LINE,
       '/',
       's',
       't',
@@ -307,7 +308,7 @@ describe('typeNativeChatCommand', () => {
     expect(confirmCleared).toHaveBeenCalledTimes(1)
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [clearInput, AGENT_TUI_CLEAR_INPUT_MAX])
     expectWriteOrder(sendRuntimePtyInputVerified.mock.calls, [
-      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      AGENT_TUI_CLEAR_INPUT_LINE,
       '/',
       's',
       NATIVE_CHAT_SUBMIT

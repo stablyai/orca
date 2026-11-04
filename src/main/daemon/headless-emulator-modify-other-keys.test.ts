@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HeadlessEmulator } from './headless-emulator'
-import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 
 const PI_TRANSCRIPT = readFileSync(
   join(__dirname, '..', 'runtime', '__fixtures__', 'pi-0-74-modify-other-keys-esc-cr.txt'),

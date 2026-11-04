@@ -9,6 +9,8 @@ import { TERMINAL_DOCUMENT_MARKUP } from '../terminal/terminal-webview-html'
 import { dispatchTerminalWebViewNotification } from '../terminal/terminal-webview-notification-dispatch'
 import { terminalPaneViewport, type TerminalPaneViewport } from './mobile-terminal-pane-layout'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
 import { useMobileSessionTerminalInput } from './use-mobile-session-terminal-input'
 import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
 
@@ -42,13 +44,18 @@ it.each(['touch', 'wheel', 'mouse', 'tap'] as const)(
     const geometry = { current: new Map<string, TerminalPaneViewport>() }
     const focus = vi.fn()
     const unsubscribe = vi.fn()
-    const send = vi.fn(async (_handle: string, _bytes: string) => true)
+    const send = vi.fn(async (_handle: string, _bytes: string, _origin?: string) => true)
     const request = vi.fn(async (_method: string, _params?: unknown) => ({
       id: 'test',
       ok: true as const,
       result: { send: { accepted: true } }
     }))
-    const client = { sendRequest: request }
+    const client = {
+      sendRequest: request,
+      getState: () => 'connected' as const,
+      getLastConnectedAt: () => null,
+      onStateChange: () => () => {}
+    }
     const modes = {
       bracketedPasteMode: false,
       altScreen: true,
@@ -60,7 +67,6 @@ it.each(['touch', 'wheel', 'mouse', 'tap'] as const)(
       modifyOtherKeys: 0
     }
     const pointerModes = { ...modes, mouseTrackingMode: 'vt200' as const, sgrMouseMode: true }
-    const liveHandles = { current: new Set<string>() }
     let receive!: (handle: string, message: Record<string, unknown>) => void
     let tap!: (handle: string) => void
     function Probe() {
@@ -88,7 +94,6 @@ it.each(['touch', 'wheel', 'mouse', 'tap'] as const)(
         setActiveSessionTabId: vi.fn(),
         pendingSelectionRef: { current: null },
         terminalDiagnosticsRef: { current: { tabSwitch: vi.fn() } },
-        defaultTerminalHandlesToLiveInput: vi.fn(),
         switchSessionTabRef: { current: null },
         connState: 'connected',
         connStateRef: { current: 'connected' },
@@ -112,7 +117,8 @@ it.each(['touch', 'wheel', 'mouse', 'tap'] as const)(
         terminalGestureInputBucketsRef: { current: new Map() },
         terminalGestureInputQueuesRef: { current: new Map() },
         terminalGestureInputInFlightRef: { current: new Set() },
-        liveInputTerminalHandlesRef: liveHandles,
+        // Every terminal has the live field, so its clicks queue behind the field's text.
+        sendLiveInputClick: async (handle: string, bytes: string) => send(handle, bytes, 'pointer'),
         sendLiveTerminalInputRef: { current: send }
       })
       const switching = useMobileSessionTabSwitching(scope)

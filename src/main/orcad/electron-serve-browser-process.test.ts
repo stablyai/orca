@@ -60,7 +60,7 @@ vi.mock('../browser/cookies/browser-cookie-import', () => ({
   detectInstalledBrowsers: () => [{ family: 'chrome', profiles: [], selectedProfile: 'Default' }],
   importCookiesFromBrowser: async () => ({ ok: true, summary: {} })
 }))
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
 import { browserProfileRpcFixture } from '../runtime/browser/browser-profile-rpc-test-fixture'
 
 const actual = await vi.importActual<typeof OrcadBrowserProviderModule>('./orcad-browser-provider')

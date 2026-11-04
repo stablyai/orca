@@ -46,7 +46,7 @@ on:
       - 'src/main/ssh/connection/**'
       - 'src/main/ssh/ssh-reconnect-error-classification.ts'
       - 'src/main/ssh/ssh-posix-command-wrapper.ts'
-      - 'src/shared/shell-argument-quoting.ts'
+      - 'src/shared/shell/launch/shell-argument-quoting.ts'
       - '!src/**/*.test.ts'
       - 'src/main/managed-server/host-state/orcad-windows-host-lane.test.ts'
       - 'tests/e2e/ssh-orcad-auto-convert.spec.ts'

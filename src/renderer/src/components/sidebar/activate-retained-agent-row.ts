@@ -8,8 +8,8 @@ import {
   structuredAgentSessionTargetForTab
 } from '@/runtime/structured-agent-session-owner'
 import { stablePaneHasLivePty } from '@/lib/sleeping-agent-pane-ownership'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 
 export function activateRetainedAgentRow(worktreeId: string, tabId: string, paneKey: string): void {
   const parsed = parsePaneKey(paneKey)

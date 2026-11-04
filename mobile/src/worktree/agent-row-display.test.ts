@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
-import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
+import type { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-status/lifecycle/agent-turn-outcome'
+import { isAgentStatusFresh } from '../../../src/shared/agent-status/contracts/agent-status-freshness'
 import {
   agentDisplayLabel,
   agentStateLabel,

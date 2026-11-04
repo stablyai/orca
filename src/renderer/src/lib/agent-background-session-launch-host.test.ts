@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { resolveAgentBackgroundLaunchHost } from './agent-background-session-launch-host'
 
 function sshState(remotePlatform: 'linux' | 'win32') {

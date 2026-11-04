@@ -8,10 +8,7 @@ import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
-import {
-  findWorkspaceFileRoute,
-  type RuntimeWorkspaceFileRoute
-} from '@/lib/runtime-workspace-file-route'
+import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
@@ -22,23 +19,23 @@ import {
   type EditorPanelFileContentLoader,
   type UseEditorPanelFileContentLoaderParams
 } from './editor-panel-content-types'
-import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
+import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
 import {
+  findAbsoluteTabOwnerRoute,
   migrateRestoredEditorFileOwner,
   restoredOwnerMigrationErrorMessage
 } from './migrate-restored-editor-file-owner'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
 import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
-import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { grantRestoredHostFile } from './restored-host-file-grant'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
 import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
-import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
+import { stampCleanTabDiskBaseline } from './external-changes/editor-clean-tab-disk-baseline'
 import {
   applyEditorFileLoadFailure,
   getEditorFileLoadFailureContent
-} from './editor-deleted-file-reload'
+} from './external-changes/editor-deleted-file-reload'
 export type { EditorPanelFileContentLoader } from './editor-panel-content-types'
 import {
   acquireEditorFileOperation,
@@ -177,10 +174,12 @@ export function useEditorPanelFileContentLoader({
               : runtimeEnvironmentId
                 ? toRuntimeExecutionHostId(runtimeEnvironmentId)
                 : LOCAL_EXECUTION_HOST_ID
-            // Floating files stay in their panel even when a project also contains the path.
-            const route = isFloatingWorkspaceId(worktreeId)
-              ? null
-              : findWorkspaceFileRoute(currentState, executionHostId, filePath)
+            const route = findAbsoluteTabOwnerRoute(
+              currentState,
+              worktreeId,
+              restoredOpenFile,
+              executionHostId
+            )
             if (route && route.worktreeId !== worktreeId) {
               await reownRestoredFile(route, runtimeEnvironmentId ?? null)
               return

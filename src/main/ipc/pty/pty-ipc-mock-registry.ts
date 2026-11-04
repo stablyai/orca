@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type * as Wsl from '../../wsl'
+import type * as Wsl from '../../wsl/filesystem/unc-path-access'
 import type * as FsPromises from 'node:fs/promises'
 
 // vi.mock hoists per file; shared factories keep every split suite on the same spy instances.

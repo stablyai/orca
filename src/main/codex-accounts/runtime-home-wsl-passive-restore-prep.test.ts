@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
-import type * as CodexConfigMirror from '../codex/codex-config-mirror'
-import type * as CodexHomePaths from '../codex/codex-home-paths'
+import type * as CodexConfigMirror from '../codex/configuration/settings/codex-config-mirror'
+import type * as CodexHomePaths from '../codex/configuration/homes/codex-home-paths'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
@@ -13,8 +13,8 @@ import {
 } from './runtime-home-service-test-harness'
 
 // The real rule: a stopped distro blocks, except for a user act on it.
-vi.mock('../wsl/wsl-background-exec-gate', async () => {
-  const { isWslUserActFor, runAsWslUserAct } = await import('../wsl/wsl-user-act-scope')
+vi.mock('../wsl/discovery/wsl-background-exec-gate', async () => {
+  const { isWslUserActFor, runAsWslUserAct } = await import('../wsl/discovery/wsl-user-act-scope')
   return {
     blockedWslDistroForExec: async (distro: string | null | undefined) =>
       distro && !isWslUserActFor(distro) ? { distro, state: 'stopped' } : null,
@@ -39,7 +39,7 @@ function wslMocks() {
     syncInstructions: vi.fn(),
     syncConfig: vi.fn()
   }
-  vi.doMock('../wsl', () => ({
+  vi.doMock('../wsl/discovery/distro-catalog', () => ({
     getDefaultWslDistro: () => 'Ubuntu',
     getWslHome: mocks.getWslHome,
     getWslHomeAsync: mocks.getWslHomeAsync
@@ -47,14 +47,14 @@ function wslMocks() {
   vi.doMock('./legacy-wsl-runtime-auth-drain', () => ({
     startLegacyWslRuntimeAuthDrain: mocks.drain
   }))
-  vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+  vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
     startWslCodexSessionBridgeInBackground: mocks.bridge
   }))
-  vi.doMock('../codex/codex-home-paths', async (importOriginal) => ({
+  vi.doMock('../codex/configuration/homes/codex-home-paths', async (importOriginal) => ({
     ...(await importOriginal<typeof CodexHomePaths>()),
     syncCodexGlobalInstructionsIntoManagedHome: mocks.syncInstructions
   }))
-  vi.doMock('../codex/codex-config-mirror', async (importOriginal) => ({
+  vi.doMock('../codex/configuration/settings/codex-config-mirror', async (importOriginal) => ({
     ...(await importOriginal<typeof CodexConfigMirror>()),
     syncSystemConfigIntoManagedCodexHome: mocks.syncConfig
   }))
@@ -129,7 +129,7 @@ describe('Codex launch prep for a stopped WSL distro', () => {
   it('the same launch as a user act warms the home off the main thread and drains', async () => {
     const mocks = wslMocks()
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const { runAsWslExecUserAct } = await import('../wsl/wsl-background-exec-gate')
+    const { runAsWslExecUserAct } = await import('../wsl/discovery/wsl-background-exec-gate')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements the Store methods the runtime home service reads.
     const service = new CodexRuntimeHomeService(accountStore(true) as never)
 

@@ -7,8 +7,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
-} from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+} from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import SourceControl from './SourceControl'
 
 const mocks = vi.hoisted(() => {
@@ -91,7 +91,7 @@ vi.mock('@/runtime/runtime-git-working-tree-client', async (importOriginal) => {
   }
 })
 
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorSaveQuiesce: mocks.calls.requestEditorSaveQuiesce,
   notifyEditorExternalFileChange: mocks.calls.notifyEditorExternalFileChange
 }))

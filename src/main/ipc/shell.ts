@@ -7,7 +7,7 @@ import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
-} from '../../shared/shell-open-types'
+} from '../../shared/shell/opening/shell-open-types'
 import { MAX_REPO_ICON_SOURCE_BYTES } from '../../shared/repo-icon'
 import { IMAGE_FILE_MIME_TYPES } from '../../shared/image-file-extensions'
 import {

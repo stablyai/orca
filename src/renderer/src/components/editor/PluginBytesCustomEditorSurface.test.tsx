@@ -34,7 +34,7 @@ vi.mock('@/store', () => ({
     getState: () => store
   }
 }))
-vi.mock('./ExternalFileChangeBanner', () => ({
+vi.mock('./external-changes/ExternalFileChangeBanner', () => ({
   ExternalFileChangeBanner: () => <div data-testid="banner" />
 }))
 

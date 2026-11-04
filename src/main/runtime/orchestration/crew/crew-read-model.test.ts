@@ -1,4 +1,4 @@
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 
 import { createCrewHostDerivation, refreshCrewStatuses } from './crew-host-derivation'
 import { createCrewPartyRegistry } from './crew-parties'

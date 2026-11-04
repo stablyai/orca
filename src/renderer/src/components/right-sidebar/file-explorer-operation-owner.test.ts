@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 
 import { makeWorktree, TEST_REPO } from '../../store/slices/worktrees-slice-test-fixtures'

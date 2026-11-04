@@ -1,11 +1,11 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { RpcDispatcher } from '../dispatcher'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { AI_VAULT_METHODS } from './ai-vault'
-import { fakeSearchService } from '../../../../shared/ai-vault-search-test-fixture'
-import { createSessionSearchClient } from '../../../../shared/ai-vault-search-client'
+import { fakeSearchService } from '../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
+import { createSessionSearchClient } from '../../../../shared/ai-vault/search/ai-vault-search-client'
 import { setSessionSearchService } from '../../../ai-vault-search/session-search-service-registry'
 
 afterEach(() => setSessionSearchService(null))

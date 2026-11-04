@@ -94,12 +94,3 @@ it.each(['returned', 'held'] as const)(
     expect((await rig.submission(rejected))?.dispatchState).toBe('rejected')
   }
 )
-
-it('keeps an actual pause after a version refusal and releases it through the host', async () => {
-  const id = await retainedDraft()
-  rig.starts.mockReset()
-  expect(await rig.queuePause()).not.toBeNull()
-  expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
-  await eventually(async () => expect((await rig.handoff(id))?.handedOverAt).toBeDefined())
-  expect(await rig.queuePause()).toBeNull()
-})

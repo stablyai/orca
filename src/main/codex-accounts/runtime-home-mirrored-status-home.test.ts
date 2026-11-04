@@ -90,7 +90,8 @@ describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
   it('returns the shared runtime home when a custom CODEX_HOME keeps the mirror lane', async () => {
     process.env.CODEX_HOME = join(testState.home, 'custom-codex-home')
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const { getOrcaManagedCodexHomePath } = await import('../codex/codex-home-paths')
+    const { getOrcaManagedCodexHomePath } =
+      await import('../codex/configuration/homes/codex-home-paths')
     const service = new CodexRuntimeHomeService(createStore([], null) as never)
 
     expect(service.getMirroredHostHomePathForStatus()).toEqual({

@@ -12,7 +12,7 @@ import {
   type AiVaultListArgs,
   type AiVaultListResult,
   type AiVaultSession
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -24,16 +24,14 @@ import {
   cliConversationRowsShareAgent,
   type CliConversationRowAgent
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { agentForksConversations } from '../../../../shared/agent-resume-argv'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import { agentForksConversations } from '../../../../shared/agent-launch/startup/agent-resume-argv'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { resolveAiVaultSessionSurfaceSwitchTargets } from '../right-sidebar/ai-vault-session-surface-switch'
 import { resolveAiVaultHistoryRowResume } from '../right-sidebar/ai-vault-session-resume-in-chat-workspace'
 import { resolveAiVaultTargetWorkspacePath } from '../right-sidebar/ai-vault-session-launch-target'
-import {
-  aiVaultSessionOwnerWorkspaces,
-  resolveAiVaultSessionWorktreeDisplay
-} from '../right-sidebar/ai-vault-session-worktree'
+import { aiVaultSessionOwnerWorkspaces } from '../right-sidebar/ai-vault-session-worktree'
+import { resolveAiVaultSessionWorktreeDisplay } from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 import {
   aiVaultSessionListArgs,
   type AiVaultSessionListRequest

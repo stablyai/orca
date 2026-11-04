@@ -13,10 +13,10 @@ type ComposerStoreState = { settings: Partial<AppState['settings']> }
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: ComposerStoreState) => unknown) => selector({ settings: {} })
 }))
-vi.mock('@/components/editor/RichMarkdownToolbar', () => ({
+vi.mock('@/components/editor/rich-markdown/commands/RichMarkdownToolbar', () => ({
   RichMarkdownToolbar: () => null
 }))
-vi.mock('@/components/editor/RichMarkdownTableControls', () => ({
+vi.mock('@/components/editor/rich-markdown/tables/RichMarkdownTableControls', () => ({
   RichMarkdownTableControls: () => null
 }))
 vi.mock('@/components/github/github-markdown-composer-preview-pane', () => ({
