@@ -327,18 +327,11 @@ describe('browserManager', () => {
     })
     const beforeMouseEvent = guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-mouse-event'
-    )?.[1] as ((event: Electron.Event, mouse: Electron.MouseInputEvent) => void) | undefined
+    )?.[1]
     const preventDefault = vi.fn()
     beforeMouseEvent?.(
-      { preventDefault } as unknown as Electron.Event,
-      {
-        type: 'mouseWheel',
-        x: 0,
-        y: 0,
-        modifiers: [],
-        deltaX: 40,
-        deltaY: 0
-      } as Electron.MouseWheelInputEvent
+      { preventDefault },
+      { type: 'mouseWheel', x: 0, y: 0, modifiers: [], deltaX: 40, deltaY: 0 }
     )
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(renderer.send).toHaveBeenCalledWith('ui:scrollBrowserPage', {
