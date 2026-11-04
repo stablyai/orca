@@ -1,7 +1,7 @@
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { rememberPaneKeyForPty, ptyPaneKey, paneKeyPtyId } from '../main/ipc/pty/pane/key-state'
 import { AgentHookServer, _internals } from '../main/agent-hooks/server'
 import { RelayAgentHookServer } from './agent-hook-server'
@@ -16,10 +16,17 @@ const promptId = '22222222-2222-4222-8222-222222222222'
 const jsonl = (...records: unknown[]) => records.map((row) => `${JSON.stringify(row)}\n`).join('')
 const event = (payload: Record<string, unknown>) => ({ type: 'event_msg', payload })
 const cleanups: (() => void)[] = []
+beforeEach(() => {
+  vi.useFakeTimers({
+    toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']
+  })
+  vi.setSystemTime(1_793_751_000_000)
+})
 afterEach(() => {
   for (const cleanup of cleanups.splice(0).toReversed()) {
     cleanup()
   }
+  vi.useRealTimers()
 })
 
 async function start(kind: 'local' | 'guest') {
@@ -111,7 +118,8 @@ it.each(['local', 'guest'] as const)(
         })
       )
     )
-    await expect.poll(() => host.read()?.turnEndedAt, { timeout: 4000 }).toBeTypeOf('number')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(host.read()?.turnEndedAt).toBeTypeOf('number')
     const failed = host.read()!
     const main = 'payload' in failed ? failed.payload.mainAgent : failed.mainAgent
     expect(main).toMatchObject({ state: 'done', outcome: 'failure', usageLimit: {} })
@@ -132,7 +140,7 @@ it.each(['local', 'guest'] as const)(
       expect(initial.isCurrent()).toBe(true)
       expect(host.validate(initial.remote!.request)).toEqual({ status: 'current' })
       const movedPane = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
-      host.local.transferPaneAuthority(paneKey, movedPane, ptyId, Date.now(), {
+      host.local.transferPaneAuthority(paneKey, movedPane, ptyId, 1_793_751_001_000, {
         authorityVerified: true
       })
       expect(initial.isCurrent()).toBe(false)
@@ -217,12 +225,9 @@ it.each(['refine', 'new-meta-root', 'new-session'] as const)(
       appendFileSync(host.path, jsonl(quota))
     }
     if (mode === 'refine') {
-      await expect
-        .poll(() => {
-          const row = host.read()
-          return row && 'payload' in row ? row.payload.mainAgent?.usageLimit : undefined
-        })
-        .toEqual({})
+      await vi.advanceTimersByTimeAsync(300)
+      const refined = host.read()!
+      expect('payload' in refined && refined.payload.mainAgent?.usageLimit).toEqual({})
       expect(host.read()?.turnEndedAt).toBe(failed.turnEndedAt)
       const request = { paneKey, sessionId, turnEndedAt: failed.turnEndedAt, source: 'claude' }
       expect(host.validate(request)).toEqual({ status: 'current' })
@@ -241,7 +246,7 @@ it.each(['refine', 'new-meta-root', 'new-session'] as const)(
       )
       expect(host.validate(request)).toEqual({ status: 'changed' })
     } else {
-      await new Promise((resolve) => setTimeout(resolve, 350))
+      await vi.advanceTimersByTimeAsync(300)
       const row = host.read()!
       expect('payload' in row && row.payload.mainAgent?.usageLimit).toBeUndefined()
     }
