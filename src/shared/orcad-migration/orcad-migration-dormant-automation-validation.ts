@@ -1,3 +1,5 @@
+import { AutomationCanonicalLaunchSetup } from '../rpc-contract/automation-params'
+import { automationCanonicalDefinition } from '../automation-launch-setup'
 import { assertAutomationExtraAgentArgs } from '../automation-extra-agent-args-record'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import type { Automation, AutomationRun } from '../automations-types'
@@ -87,7 +89,7 @@ function parseAutomation(value: unknown): Automation {
   } catch {
     throw new Error('orcad_migration_dormant_automation_extra_agent_args_invalid')
   }
-  return copy
+  return automationCanonicalDefinition(copy)
 }
 
 /** Throws the specific field error; narrowing only follows these checks. */
@@ -105,6 +107,15 @@ function isMigratedAutomation(value: unknown): value is Automation {
   }
   if (record.extraAgentArgs !== undefined && typeof record.extraAgentArgs !== 'string') {
     throw new Error('orcad_migration_dormant_automation_extra_agent_args_invalid')
+  }
+  AutomationCanonicalLaunchSetup.parse({
+    ...(record.launchPreferences !== undefined
+      ? { launchPreferences: record.launchPreferences }
+      : {}),
+    ...(record.agentArgs !== undefined ? { agentArgs: record.agentArgs } : {})
+  })
+  if (record.launchSetup !== undefined) {
+    AutomationCanonicalLaunchSetup.parse(record.launchSetup)
   }
   parseContext(record.runContext, 'workspace-run')
   parseContext(record.sourceContext, 'task-source')
@@ -162,6 +173,12 @@ function isMigratedAutomationRun(value: unknown): value is AutomationRun {
   const record = requiredRecord(value, 'orcad_migration_dormant_automation_run_invalid')
   requiredString(record.id, 'orcad_migration_dormant_automation_run_id_invalid')
   requiredString(record.automationId, 'orcad_migration_dormant_automation_run_owner_invalid')
+  AutomationCanonicalLaunchSetup.parse({
+    ...(record.launchPreferences !== undefined
+      ? { launchPreferences: record.launchPreferences }
+      : {}),
+    ...(record.agentArgs !== undefined ? { agentArgs: record.agentArgs } : {})
+  })
   parseContext(record.runContext, 'workspace-run')
   parseContext(record.sourceContext, 'task-source')
   requiredString(record.title, 'orcad_migration_dormant_automation_run_title_invalid')

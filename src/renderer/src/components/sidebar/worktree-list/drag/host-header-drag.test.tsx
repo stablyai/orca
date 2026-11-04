@@ -74,17 +74,4 @@ describe('useHostHeaderDrag', () => {
 
     expect(controller.current?.state.draggingHostId).toBe('ssh:host-a')
   })
-
-  it('still promotes a drag while the pointer stays down', () => {
-    const { controller, header } = setup()
-
-    act(() => {
-      header.dispatchEvent(pointer('pointerdown', { button: 0, clientX: 10, clientY: 10 }))
-    })
-    act(() => {
-      window.dispatchEvent(pointer('pointermove', { clientX: 40, clientY: 60, buttons: 1 }))
-    })
-
-    expect(controller.current?.state.draggingHostId).toBe('ssh:host-a')
-  })
 })

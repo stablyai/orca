@@ -9,7 +9,11 @@ import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-a
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
 import { translate } from '@/i18n/i18n'
 import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
-import { getDraftExtraAgentArgsError, parseDraftTime } from './automation-draft-model'
+import {
+  draftExtraAgentArgsNeedFreshSession,
+  getDraftExtraAgentArgsError,
+  parseDraftTime
+} from './automation-draft-model'
 import { saveOrcaAutomation } from './automation-orca-save'
 import type { AutomationSaveContext } from './automation-save-context'
 
@@ -30,6 +34,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
     const extrasEdited =
       editingAutomationId === null ||
       !draftAtOpen ||
+      draft.launchSetupPatch !== undefined ||
       draft.surface !== draftAtOpen.surface ||
       draft.extraAgentArgs !== draftAtOpen.extraAgentArgs ||
       draft.agentId !== draftAtOpen.agentId ||
@@ -101,7 +106,17 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       return
     }
     const effectiveDraft = { ...draft, surface }
-    const extrasError = getDraftExtraAgentArgsError(effectiveDraft)
+    const extrasError = draftExtraAgentArgsNeedFreshSession(effectiveDraft)
+      ? draft.launchPreferences !== undefined || draft.agentArgs !== undefined
+        ? translate(
+            'auto.components.automations.launchSettings.needsFreshSession',
+            'Agent launch settings require a fresh session for every run.'
+          )
+        : translate(
+            'auto.components.automations.extraAgentArgs.needsFreshSession',
+            'Extra arguments require a fresh session for every run.'
+          )
+      : getDraftExtraAgentArgsError(effectiveDraft)
     if (extrasEdited && extrasError) {
       toast.error(extrasError)
       return

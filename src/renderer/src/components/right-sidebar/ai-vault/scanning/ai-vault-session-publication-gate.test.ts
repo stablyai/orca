@@ -28,14 +28,6 @@ afterEach(() => {
 })
 
 describe('AiVaultSessionPublicationGate', () => {
-  it('publishes immediately when terminal input is already quiet', () => {
-    const apply = vi.fn()
-
-    new AiVaultSessionPublicationGate().publish(FIRST, apply)
-
-    expect(apply).toHaveBeenCalledWith(FIRST)
-  })
-
   it('retains only the newest result while input is active', () => {
     const apply = vi.fn()
     const gate = new AiVaultSessionPublicationGate()

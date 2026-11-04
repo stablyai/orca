@@ -343,6 +343,32 @@ describe('headless automation agent launch', () => {
     })
   })
 
+  it.each(['existing', 'new_per_run'] as const)(
+    'carries canonical full setup on the %s fresh path',
+    async (workspaceMode) => {
+      const runtime = harness()
+      await launch(runtime, {
+        workspaceMode,
+        agentArgs: null,
+        launchPreferences: { options: { fastMode: 'true' } }
+      })
+      if (workspaceMode === 'existing') {
+        expect(runtime.launchAgentTerminal).toHaveBeenCalledWith(
+          'id:wt-1',
+          expect.objectContaining({ agentArgs: null, sessionOptions: { fastMode: 'true' } }),
+          expect.anything()
+        )
+      } else {
+        expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+          expect.objectContaining({
+            startupAgentArgs: null,
+            startupSessionOptions: { fastMode: 'true' }
+          })
+        )
+      }
+    }
+  )
+
   it('starts a post-start agent bare and delivers its prompt once, after the terminal is recorded', async () => {
     const runtime = harness()
     let finishDelivery: (delivered: boolean) => void = () => {}

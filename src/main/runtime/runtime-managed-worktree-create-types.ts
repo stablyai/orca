@@ -1,3 +1,4 @@
+import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
@@ -69,6 +70,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   beforeTerminalSpawn?: () => void
   startupAgent?: TuiAgent
   terminalImageViewerSupported?: boolean
+  startupSessionOptions?: Readonly<Record<string, SessionOptionValue>>
   startupLaunchPreferences?: AgentLaunchPreferences
   startupPrompt?: string
   /** Main-only: caller delivers any uncarried startupPrompt through a compatible typed line and receives delivery status. */

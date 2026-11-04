@@ -14708,6 +14708,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "O host de execução salvo não corresponde mais a esta configuração do projeto."
+        },
+        "launchSettings": {
+          "needsFreshSession": "As configurações de inicialização do agente exigem uma nova sessão a cada execução."
         }
       },
       "TaskPage": {
@@ -21454,6 +21457,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Colocar mensagens de acompanhamento na fila",
+        "scrollToLatestOnSendTitle": "Rolar até o mais recente ao enviar",
+        "scrollToLatestOnSendCopy": "Enviar com o chat rolado para cima leva à mensagem mais recente e acompanha a resposta. Desative para manter sua posição.",
+        "scrollToLatestOnSendSearchPosition": "posição",
         "inlineVisualsTitle": "Visualizações nas respostas",
         "inlineVisualsCopy": "Permitir que o agente mostre gráficos, diagramas e mockups nas respostas. Aplica-se a novos chats.",
         "inlineVisualsToggleLabel": "Ativar ou desativar visualizações nas respostas",
@@ -21465,7 +21471,13 @@
         "queueSearchSteer": "orientar",
         "shellEnvSearchVariables": "variáveis de ambiente",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "idleStopTitle": "Parar agentes inativos após",
+        "idleStopCopy": "Encerra o agente de um chat quando o chat fica inativo por esse tempo, para liberar memória. O chat continua e sua próxima mensagem inicia o agente de novo. Escolha Nunca para agentes que continuam trabalhando em segundo plano entre os turnos.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "tempo limite",
+        "idleStopSearchKeepAlive": "manter ativo",
+        "idleStopNever": "Nunca"
       }
     },
     "jiraIssueAssigneeField": {

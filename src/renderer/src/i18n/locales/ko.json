@@ -17318,6 +17318,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "저장된 실행 호스트가 더 이상 이 프로젝트 설정과 일치하지 않습니다."
+        },
+        "launchSettings": {
+          "needsFreshSession": "에이전트 시작 설정을 사용하려면 실행할 때마다 새 세션이 필요합니다."
         }
       },
       "agent": {
@@ -19785,6 +19788,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "후속 메시지를 대기열에 추가",
+        "scrollToLatestOnSendTitle": "보낼 때 최신 메시지로 스크롤",
+        "scrollToLatestOnSendCopy": "위로 스크롤한 상태에서 보내면 최신 메시지로 이동하고 답장을 따라갑니다. 끄면 현재 위치가 유지됩니다.",
+        "scrollToLatestOnSendSearchPosition": "위치",
         "followUpBehaviorCopy": "Agent가 작업하는 동안 보낸 메시지는 진행 중인 턴에 들어가지 않고 턴이 끝날 때까지 카드로 대기합니다. Cmd/Ctrl+Enter를 누르면 메시지 하나에 대해 반대로 동작합니다.",
         "inlineVisualsTitle": "인라인 시각 자료",
         "inlineVisualsCopy": "에이전트가 답변 안에 차트, 다이어그램, 목업을 표시하도록 합니다. 새로 시작한 채팅에 적용됩니다.",
@@ -19801,7 +19807,13 @@
         "usageLimitContinueCopy": "한도가 재설정되면 Orca가 \"Continue where you left off.\"를 보냅니다. 재설정 시간을 알 수 있는 모든 채팅에 적용됩니다.",
         "usageLimitContinueSearchLimit": "사용 한도",
         "usageLimitContinueSearchReset": "재설정",
-        "usageLimitContinueToggleLabel": "사용 한도 재설정 시 채팅 계속하기 전환"
+        "usageLimitContinueToggleLabel": "사용 한도 재설정 시 채팅 계속하기 전환",
+        "idleStopTitle": "유휴 에이전트 중지 시간",
+        "idleStopCopy": "채팅이 이 시간 동안 유휴 상태이면 메모리를 확보하기 위해 해당 채팅의 에이전트를 종료합니다. 채팅은 유지되며, 다음 메시지를 보내면 에이전트가 다시 시작됩니다. 턴 사이에도 백그라운드에서 계속 작업하는 에이전트라면 사용 안 함을 선택하세요.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "시간 제한",
+        "idleStopSearchKeepAlive": "연결 유지",
+        "idleStopNever": "사용 안 함"
       }
     },
     "agentChildRow": {

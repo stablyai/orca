@@ -426,11 +426,7 @@ describe('qualified discovery at the runtime RPC boundary', () => {
           kill: () => true,
           getForegroundProcess: async () => null
         })
-        const startup = vi.fn(() => ({
-          agent: 'codex',
-          startup: { command: 'codex', env: {}, startupCommandDelivery: 'none', telemetry: {} }
-        }))
-        Object.defineProperty(runtime, 'buildStartupForAgent', { value: startup })
+        const startup = vi.spyOn(runtime, 'resolveAgentTerminalCreateOptions')
         const selected = await runtime.resolveManagedTerminalWorkspaceTarget(
           'id:folder:dup',
           'local',
@@ -449,16 +445,15 @@ describe('qualified discovery at the runtime RPC boundary', () => {
           }
         )
         expect(startup).toHaveBeenCalledWith(
-          expect.anything(),
-          'codex',
-          'Review',
-          undefined,
           expect.objectContaining({
-            launchScope: expect.objectContaining({
-              path,
-              connectionId: null,
-              folderWorkspace: expect.objectContaining({ folderPath: path })
-            })
+            path,
+            connectionId: null,
+            folderWorkspace: expect.objectContaining({ folderPath: path })
+          }),
+          expect.objectContaining({
+            startupAgent: 'codex',
+            startupPrompt: 'Review',
+            startupPromptCarry: 'force-line'
           })
         )
         expect(spawn).toHaveBeenCalledWith(

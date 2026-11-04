@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import { within } from '@testing-library/react'
+import '@testing-library/jest-dom/vitest'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import {
@@ -14,6 +15,9 @@ import {
   settleHostQueries
 } from './automations-page-test-harness'
 import { makeAutomation, makeRun } from './automations-page-fixtures'
+import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
+import { getAutomationRunViewState } from './automation-run-view-state'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 
 vi.mock('@tanstack/react-virtual', async () => {
   const { createVirtualizerStub } = await import('./virtualizer-test-stub')
@@ -57,6 +61,58 @@ async function openDashboardRun(
 }
 
 describe('AutomationsPage run navigation', () => {
+  it('renders the real Chat action from normally loaded Spanish resources', async () => {
+    const previous = i18n.language
+    const hadSpanish = i18n.hasResourceBundle('es', 'translation')
+    try {
+      await loadRendererUiLanguage('es')
+      await i18n.changeLanguage('es')
+      const chat: AutomationRun = {
+        ...makeRun({ workspaceId: 'wt-1' }),
+        status: 'dispatched',
+        sessionKind: 'chat',
+        chatSessionId: 'pi_saved_chat'
+      }
+      const viewState = getAutomationRunViewState({
+        run: chat,
+        workspaceExists: true,
+        terminalTargetExists: false
+      })
+      expect(viewState).toEqual({
+        availability: 'chat',
+        actionLabel: 'Ver ejecución',
+        statusLabel: 'La ejecución está abierta',
+        canOpen: true
+      })
+      const open = vi.fn()
+      const view = render(
+        <AutomationRunDetailsPage
+          automation={null}
+          run={chat}
+          relativeNow={1}
+          workspaceDisplay={null}
+          viewState={viewState}
+          canRerun={false}
+          isRerunPending={false}
+          onRerun={() => {}}
+          onOpenWorkspace={open}
+          onBack={() => {}}
+        />
+      )
+      expect(screen.getByText('Enviado')).toBeInTheDocument()
+      expect(screen.queryByText('Done')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Ver ejecución' }))
+      expect(open).toHaveBeenCalledOnce()
+      expect(chat.chatSessionId).toBe('pi_saved_chat')
+      view.unmount()
+    } finally {
+      await i18n.changeLanguage(previous)
+      if (!hadSpanish) {
+        i18n.removeResourceBundle('es', 'translation')
+      }
+    }
+  })
+
   it('opens the automation overview without rereading its cached history', async () => {
     const { container, rerender, automation, oldRun } = await loadCachedHistory()
     const fresh = Promise.withResolvers<AutomationRun[]>()

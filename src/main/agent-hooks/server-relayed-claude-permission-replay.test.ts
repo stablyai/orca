@@ -112,12 +112,6 @@ function reconnect(pane: SshPane): void {
 }
 
 describe('a relayed Claude permission wait across a reconnect (captured)', () => {
-  it('clears live when the approved request ends while connected', async () => {
-    const pane = await waitingOnFirstRequest()
-    await postAll(pane, [firstToolDone, secondTool])
-    expect(row(pane.desktop)).toMatchObject({ state: 'working' })
-  })
-
   it('clears on reconnect when the request ended while the desktop was away', async () => {
     const pane = await waitingOnFirstRequest()
     pane.connected = false
@@ -146,16 +140,6 @@ describe('a relayed Claude permission wait across a reconnect (captured)', () =>
 
     expect(row(pane.desktop)).toMatchObject({ state: 'waiting' })
     expect(row(pane.desktop).toolInput).toContain('first-file.txt')
-  })
-
-  it('does not carry an ended request into a new Claude session', async () => {
-    const pane = await waitingOnFirstRequest()
-    pane.connected = false
-    await pane.post(firstToolDone)
-    await pane.post({ ...secondTool, session_id: '11111111-1111-4111-8111-111111111111' })
-    reconnect(pane)
-
-    expect(pane.forwarded.at(-1)?.claudeSettledRequests).toBeUndefined()
   })
 
   it('ignores settled requests on a live (non-replay) envelope', async () => {

@@ -186,6 +186,8 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
       .optional(),
     promptDelivery: PromptDelivery.optional(),
     agentArgs: AgentArgs.optional(),
+    sessionOptions: z.record(z.string(), z.string()).optional(),
+    extraAgentArgs: z.string().optional(),
     launchPreferences: LaunchPreferences.optional(),
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),

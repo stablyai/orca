@@ -115,7 +115,7 @@ export function AgentLaunchPickerMenu({
   } | null>(null)
   const openSetup = activeSetup?.id ?? null
   const root = useRef<HTMLDivElement>(null)
-  const setups = searchAgentPickerSetups(entries, query)
+  const setups = setupDisabled ? [] : searchAgentPickerSetups(entries, query)
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const visible = entries.filter((entry) =>
     words.every((word) => `${entry.agent} ${entry.label}`.toLowerCase().includes(word))
@@ -311,6 +311,21 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     : undefined
   const closeMenu = useDropdownMenuClose()
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
+  if (setupDisabled) {
+    return (
+      <DropdownMenuItem
+        disabled={disabled || !entry.surfaces.length}
+        onSelect={() => {
+          onSelectAgent?.(entry.agent)
+          runLaunch(pickerLaunchRow(entry, selected?.surface ?? entry.defaultSurface))
+        }}
+      >
+        <AgentIcon agent={entry.agent} size={14} />
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+      </DropdownMenuItem>
+    )
+  }
   return (
     <AgentLaunchSetupButton
       submenu

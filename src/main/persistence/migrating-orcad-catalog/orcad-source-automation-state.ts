@@ -1,3 +1,4 @@
+import { automationCanonicalDefinition } from '../../../shared/automation-launch-setup'
 import { isAutomationRunHistory } from '../../../shared/automation-run-retention'
 import type { Automation, AutomationRun } from '../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
@@ -187,7 +188,7 @@ function contextCanTransfer(
 
 function projectAutomationToDestination(source: Automation): Automation {
   const destination: Automation = {
-    ...structuredClone(source),
+    ...structuredClone(automationCanonicalDefinition(source)),
     runContext: projectContextToDestination(source.runContext),
     sourceContext: projectContextToDestination(source.sourceContext),
     executionTargetType: 'local',

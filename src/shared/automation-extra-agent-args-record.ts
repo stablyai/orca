@@ -1,3 +1,5 @@
+import { automationCanonicalLaunchSetup } from './automation-launch-setup'
+import { automationLaunchInputs } from './automation-launch-setup-source'
 import type { Automation } from './automations-types'
 import {
   hasExtraAgentArgs,
@@ -17,14 +19,32 @@ export function storedExtraAgentArgs(value: unknown): string | undefined {
 
 /** Validates launch arguments even when a patch leaves stored extras unchanged. */
 export function assertAutomationExtraAgentArgs(
-  automation: Pick<Automation, 'agentId' | 'extraAgentArgs' | 'reuseSession' | 'surface'>
+  automation: Pick<
+    Automation,
+    | 'agentId'
+    | 'extraAgentArgs'
+    | 'reuseSession'
+    | 'surface'
+    | 'launchPreferences'
+    | 'agentArgs'
+    | 'launchSetup'
+  >
 ): void {
-  if (automation.surface === 'chat' || !hasExtraAgentArgs(automation.extraAgentArgs)) {
+  const setup = automationCanonicalLaunchSetup(automation)
+  const views = automationLaunchInputs(automation.agentId, setup)
+  const consumed =
+    setup.surface === 'chat'
+      ? Object.keys(views.chatSessionOptions ?? {}).length > 0
+      : setup.agentArgs !== undefined || Object.keys(views.sessionOptions ?? {}).length > 0
+  if (automation.reuseSession && consumed) {
+    throw new Error('Agent launch settings require a fresh session for every run.')
+  }
+  if (setup.surface === 'chat' || !hasExtraAgentArgs(setup.extraAgentArgs)) {
     return
   }
   const parsed = parseExtraAgentArgs({
     agent: automation.agentId,
-    extraAgentArgs: automation.extraAgentArgs
+    extraAgentArgs: setup.extraAgentArgs
   })
   if (!parsed.ok) {
     throw new Error(parsed.error)

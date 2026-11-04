@@ -1,3 +1,4 @@
+import { automationTerminalLaunchInputs } from '../../shared/automation-launch-setup'
 import type { AgentLaunchResult as AgentLaunchPublishedSurface } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
@@ -113,7 +114,7 @@ export async function launchOrdinaryTerminalAgent(
             prompt: startupPrompt ?? '',
             title: run.title,
             suppressStartupUpdatePrompt: true,
-            ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
+            ...automationTerminalLaunchInputs(automation),
             // Run now is the user's act and may start a stopped WSL distro; a scheduled run never does.
             ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const })
           },

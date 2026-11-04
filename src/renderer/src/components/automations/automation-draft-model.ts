@@ -1,3 +1,5 @@
+import { buildAutomationRrule } from '../../../../shared/automation-schedule-occurrences'
+import { automationLaunchInputs } from '../../../../shared/automation-launch-setup-source'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { AutomationPrecheck } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -54,4 +56,43 @@ export function getDraftExtraAgentArgsError(
     extraAgentArgs: draft.extraAgentArgs
   })
   return parsed.ok ? null : extraAgentArgsErrorText(parsed)
+}
+
+/** Authored launch settings need a fresh session; legacy extras apply only on fresh launch. */
+export function draftExtraAgentArgsNeedFreshSession(
+  draft: Pick<
+    AutomationDraft,
+    | 'agentId'
+    | 'extraAgentArgs'
+    | 'reuseSession'
+    | 'workspaceMode'
+    | 'surface'
+    | 'launchPreferences'
+    | 'agentArgs'
+  >
+): boolean {
+  const views = automationLaunchInputs(draft.agentId, draft)
+  const choices = draft.surface === 'chat' ? views.chatSessionOptions : views.sessionOptions
+  const consumed =
+    Object.keys(choices ?? {}).length > 0 ||
+    (draft.surface !== 'chat' && draft.agentArgs !== undefined)
+  return consumed && draft.workspaceMode === 'existing' && draft.reuseSession
+}
+
+export function buildDraftSchedule(
+  draft: AutomationDraft,
+  time: { hour: number; minute: number }
+): { rrule: string; missedRunGraceMinutes: number } {
+  const rrule =
+    draft.preset === 'custom'
+      ? draft.customSchedule.trim()
+      : buildAutomationRrule({
+          preset: draft.preset,
+          hour: time.hour,
+          minute: time.minute,
+          dayOfWeek: Number(draft.dayOfWeek)
+        })
+  const rawGrace = Number(draft.missedRunGraceMinutes)
+  const missedRunGraceMinutes = Number.isFinite(rawGrace) ? Math.max(0, rawGrace) : 720
+  return { rrule, missedRunGraceMinutes }
 }
