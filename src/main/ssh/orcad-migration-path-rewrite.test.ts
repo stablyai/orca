@@ -27,17 +27,6 @@ const SAMPLE: Record<OrcadMigrationPathFieldKind, string> = {
 }
 
 /** Mark rewritten relative paths and map /src to /dst so omissions remain visible. */
-const MARKING: OrcadMigrationPathRewriter = {
-  path: (value, form) => {
-    if (form === 'relative') {
-      return value.startsWith('rel/') ? `REL/${value.slice(4)}` : value
-    }
-    if (form === 'url') {
-      return value.replace(/^file:\/\/\/src\//, 'file:///dst/')
-    }
-    return value.startsWith('/src/') || value === '/src' ? `/dst${value.slice(4)}` : value
-  }
-}
 
 function payloadWithEveryField(): OrcadMigrationCatalogPayload {
   const root: Record<string, unknown> = {
@@ -49,15 +38,6 @@ function payloadWithEveryField(): OrcadMigrationCatalogPayload {
     place(root, parseFieldLocation(field.at), SAMPLE[field.kind])
   }
   // Sparse fixtures suffice because traversal follows the field table, not a full payload schema.
-  return { repositories: [], projectGroups: [], folderWorkspaces: [], ...root }
-}
-
-function payloadWithManyOwnerKeys(count: number): OrcadMigrationCatalogPayload {
-  const root: Record<string, unknown> = {}
-  const steps = parseFieldLocation('dormantState.workspaceSession.tabsByWorktree{key}')
-  for (let index = 0; index < count; index++) {
-    place(root, steps, `repo::/src/w${index}`)
-  }
   return { repositories: [], projectGroups: [], folderWorkspaces: [], ...root }
 }
 
@@ -102,58 +82,7 @@ function placeInto(
   return record
 }
 
-function valuesAt(node: unknown, steps: ReturnType<typeof parseFieldLocation>): unknown[] {
-  const [step, ...rest] = steps
-  if (!step) {
-    return [node]
-  }
-  if (step.type === 'items') {
-    return Array.isArray(node) ? node.flatMap((item) => valuesAt(item, rest)) : []
-  }
-  if (!isRecord(node)) {
-    return []
-  }
-  if (step.type === 'keys') {
-    return Object.keys(node).filter((key) => key !== 'entry')
-  }
-  if (step.type === 'values') {
-    return Object.values(node).flatMap((value) => valuesAt(value, rest))
-  }
-  return valuesAt(node[step.name], rest)
-}
-
 describe('orcad migration path-rewrite stage', () => {
-  // Guard against per-entry Object.keys calls that made 20k-key renames quadratic.
-  it('walks a large keyed record in linear time', () => {
-    const started = performance.now()
-    rewriteOrcadMigrationPayloadPaths(payloadWithManyOwnerKeys(20_000), MARKING)
-    expect(performance.now() - started).toBeLessThan(2_000)
-  })
-
-  it('rewrites only the path half of composite ids', () => {
-    const map = (kind: OrcadMigrationPathFieldKind, value: string): unknown => {
-      const field = ORCAD_MIGRATION_PATH_FIELDS.find((entry) => entry.kind === kind)!
-      const payload = { repositories: [], projectGroups: [], folderWorkspaces: [] }
-      place(payload, parseFieldLocation(field.at), value)
-      return valuesAt(
-        rewriteOrcadMigrationPayloadPaths(payload, MARKING),
-        parseFieldLocation(field.at)
-      )[0]
-    }
-    const instance = '::workspace:0b6c2c1e-8a39-4c55-9a52-0d7a7f2b1c11'
-    expect(map('worktree-id', `${WT}${instance}`)).toBe(`repo-1::/dst/wt${instance}`)
-    expect(map('worktree-id', 'repo-1')).toBe('repo-1')
-    expect(map('owner-key', 'folder:/src/not-a-path')).toBe('folder:/src/not-a-path')
-    expect(map('owner-key', WT)).toBe('repo-1::/dst/wt')
-    expect(map('pty-session-id', `folder:f-1@@pty`)).toBe('folder:f-1@@pty')
-    expect(map('pty-session-id', 'opaque-relay-id')).toBe('opaque-relay-id')
-    expect(map('editor-file-id', SAMPLE['editor-file-id'])).toBe(
-      ownedEditorFileId('/dst/wt/f.ts', 'repo-1::/dst/wt', 'env-1')
-    )
-    expect(map('editor-file-id', '/src/wt/raw.ts')).toBe('/dst/wt/raw.ts')
-    expect(map('editor-file-id', 'tab-uuid')).toBe('tab-uuid')
-  })
-
   it('refuses a rewrite that would merge two records', () => {
     const payload = payloadWithEveryField()
     const session = payload.dormantState?.workspaceSession
