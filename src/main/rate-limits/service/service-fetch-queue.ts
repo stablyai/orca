@@ -52,6 +52,17 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
     return this.runFetchQueue((signal) => this.runFetchGrokOnlyCycle(signal))
   }
 
+  protected async ollamaOnlyFetch(options?: { force?: boolean }): Promise<void> {
+    if (this.isFetching) {
+      if (options?.force) {
+        this.ollamaOnlyFetchQueued = true
+        return this.waitForFetchIdle()
+      }
+      return
+    }
+    return this.runFetchQueue((signal) => this.runFetchOllamaOnlyCycle(signal))
+  }
+
   private async runFetchQueue(first: FetchCycle): Promise<void> {
     this.isFetching = true
     try {
@@ -86,6 +97,10 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
     if (this.grokOnlyFetchQueued) {
       this.grokOnlyFetchQueued = false
       return (signal) => this.runFetchGrokOnlyCycle(signal)
+    }
+    if (this.ollamaOnlyFetchQueued) {
+      this.ollamaOnlyFetchQueued = false
+      return (signal) => this.runFetchOllamaOnlyCycle(signal)
     }
     return null
   }

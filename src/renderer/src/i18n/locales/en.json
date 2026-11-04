@@ -6397,7 +6397,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "ollamaUsageTab": "Ollama"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Providers",
@@ -6532,6 +6533,20 @@
           "remoteCaption": "Stats and usage recorded on {{value0}}. Enable and Refresh act on {{value0}}.",
           "tooOldTitle": "{{value0}} can't report usage yet",
           "tooOldBody": "It runs an older version of Orca. Update Orca on {{value0}} to see its token usage here."
+        },
+        "OllamaUsagePane": {
+          "title": "Ollama cloud usage",
+          "notConfiguredDescription": "Cloud subscription usage from ollama.com (API key from ollama.com/settings/keys). Same source as the status bar.",
+          "setupButton": "Set up in Accounts",
+          "description": "Cloud credits and 30-day usage from ollama.com. Same source as the status bar.",
+          "refreshLabel": "Refresh Ollama usage",
+          "refresh": "Refresh",
+          "includedCredits": "Included credits left",
+          "purchasedCredits": "Purchased credits",
+          "monthSpend": "30-day spend",
+          "periodReset": "Plan period resets",
+          "tokenTotals": "30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out across {{value3}} requests",
+          "accountSettings": "Ollama cloud account settings"
         }
       },
       "sparse": {

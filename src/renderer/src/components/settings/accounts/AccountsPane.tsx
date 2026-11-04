@@ -27,7 +27,6 @@ import {
   getAccountsAntigravitySearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
-  getAccountsOllamaSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsZcodePlanSearchEntries
 } from './accounts-search'
@@ -49,6 +48,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
 import { OllamaCloudAccountsSection } from '../OllamaCloudAccountsSection'
+import { getAccountsOllamaSearchEntries } from '../ollama-cloud-accounts-search'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
