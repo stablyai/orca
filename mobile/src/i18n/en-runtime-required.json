@@ -269,7 +269,9 @@
       "stateWaitingCount_one": "{{value0}} waiting",
       "stateWaitingCount_other": "{{value0}} waiting",
       "stateWorkingCount_one": "{{value0}} working",
-      "stateWorkingCount_other": "{{value0}} working"
+      "stateWorkingCount_other": "{{value0}} working",
+      "commandExit": "Exit {{code}}",
+      "commandSignal": "Signal {{signal}}"
     },
     "diffReviewScreenModel": {
       "commitFiles_one": "{{count}} file",

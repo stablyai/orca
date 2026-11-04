@@ -34,8 +34,8 @@ export function MobileNativeChatMailMessage({
       {result ? (
         <Text style={styles.agentAttribution}>
           {result.type === 'exit'
-            ? t('chat.backgroundTask.commandExit', 'Exit {{code}}', { code: result.code })
-            : t('chat.backgroundTask.commandSignal', 'Signal {{signal}}', {
+            ? t('session.backgroundTask.commandExit', 'Exit {{code}}', { code: result.code })
+            : t('session.backgroundTask.commandSignal', 'Signal {{signal}}', {
                 signal: result.signal
               })}
         </Text>
