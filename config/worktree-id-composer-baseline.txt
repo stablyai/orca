@@ -16,4 +16,4 @@
 1 src/main/runtime/runtime-provisioned-root-adoption.ts
 1 src/main/workspaces/space-analysis/workspace-space-repo-scan.ts
 1 src/main/workspaces/catalog/worktree-lineage-pruning.ts
-1 src/renderer/src/components/sidebar/DeleteNestedWorktreesDialog.tsx
+1 src/renderer/src/components/sidebar/workspace-actions/deletion/DeleteNestedWorktreesDialog.tsx

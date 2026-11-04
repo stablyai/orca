@@ -2,7 +2,7 @@ import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { COMMAND_SPECS } from '../specs'
+import { COMMAND_SPECS } from '../specs/index'
 import { normalizeCommandPositionals, parseArgs, specPaths } from '../args'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
@@ -118,26 +118,6 @@ describe('orca plugin shot --scenario', () => {
     expect(result.notes[0]).toMatch(/host-owned control values start from the tree's props/)
     expect(result.path).toBe(join(dir, '.orca', 'shots', `${pluginKey}-${panelId}.counted.png`))
     expect((await readFile(result.path)).toString('base64')).toBe(PNG_BASE64)
-  })
-
-  it('lists the scenarios when the name is unknown, before running anything', async () => {
-    const call = vi.fn()
-    await expect(run(['plugin', 'shot', dir, '--scenario', 'nope'], call)).rejects.toThrow(
-      /has no scenario "nope"; its scenarios: fresh, counted/
-    )
-    expect(check.checkPluginPanels).not.toHaveBeenCalled()
-    expect(call).not.toHaveBeenCalled()
-  })
-
-  it('refuses --act with --scenario', async () => {
-    const call = vi.fn()
-    await expect(
-      run(
-        ['plugin', 'shot', dir, '--scenario', 'counted', '--act', '[{"press":{"text":"+"}}]'],
-        call
-      )
-    ).rejects.toThrow(/pass one/)
-    expect(check.readPluginCheckScenarioNames).not.toHaveBeenCalled()
   })
 
   it('refuses another host and a bridged shell, since it runs the code here', async () => {

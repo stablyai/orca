@@ -1,7 +1,7 @@
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
-import { terminalSessionOptionInputs } from '../../../../shared/tui-agent-launch-command'
-import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
-import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
+import { terminalSessionOptionInputs } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
+import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   SourceControlAgentActionDialog,
@@ -9,13 +9,13 @@ import {
 } from './SourceControlAgentActionDialog'
 import type { RunSourceControlAgentActionStartArgs } from './runSourceControlAgentActionStart'
 import type { Repo } from '../../../../shared/repo-types'
-import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
+import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { saveSourceControlAiActionRecipeForTarget } from './source-control/ai/recipe-persistence'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY as SURFACE } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY as SURFACE } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT
@@ -23,7 +23,7 @@ import {
 import {
   type SourceControlActionRecipe,
   normalizeSourceControlActionRecipe
-} from '../../../../shared/source-control-ai-actions'
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { useSourceControlAgentActionDialog } from './useSourceControlAgentActionDialog'
 import * as dialogController from './useSourceControlAgentActionDialog'
 import {

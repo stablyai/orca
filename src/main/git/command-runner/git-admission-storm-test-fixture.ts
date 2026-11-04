@@ -6,11 +6,13 @@ import { afterEach, expect } from 'vitest'
 import { gitExecFileAsync } from './git-exec-file'
 import {
   GIT_ADMISSION_AGING_MS,
-  GitAdmissionScheduler,
   MAX_GIT_CHILDREN,
-  _gitAdmissionSnapshotForTests,
-  _resetGitAdmissionForTests,
   type GitAdmissionEvent
+} from '../../../shared/git/admission/git-admission-state'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
+import {
+  _gitAdmissionSnapshotForTests,
+  _resetGitAdmissionForTests
 } from './git-subprocess-admission'
 
 type StormMeasurement = {

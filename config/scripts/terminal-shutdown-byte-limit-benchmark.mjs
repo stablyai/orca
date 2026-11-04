@@ -18,7 +18,7 @@ const layoutFunctions = layoutAst.statements.filter(
   (node) => ts.isFunctionDeclaration(node) && layoutNames.includes(node.name?.text)
 )
 assert.equal(layoutFunctions.length, layoutNames.length)
-const layoutSubset = `import { isTerminalLeafId } from '../../../../shared/stable-pane-id';
+const layoutSubset = `import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id';
 import { readSplitRatio, SPLIT_RATIO_TOLERANCE } from '@/lib/pane-manager/pane-split-ratio';
 ${layoutFunctions.map((node) => node.getText(layoutAst)).join('\n')}`
 

@@ -11,7 +11,7 @@ import {
 import type {
   TerminalViewAttributes,
   TerminalViewRgb
-} from '../../../../../shared/terminal-view-attributes'
+} from '../../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 
 function appearance(background: TerminalViewRgb): TerminalViewAttributes {
   return {

@@ -1,4 +1,4 @@
-import { sleepingRecordsEquivalentIgnoringCaptureTime } from '../../../../shared/agent-resume-record-equivalence'
+import { sleepingRecordsEquivalentIgnoringCaptureTime } from '../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { OrcaRuntimeWithStopTerminalsForWorktree } from './worktree-terminal-stop'
 import {
   applyWorktreeSleepResumeRecords,
@@ -11,21 +11,22 @@ import {
   resumeStatusFromHookRow,
   type PaneLaunchConfigOf
 } from './hook-status-resume-records'
-import type { ResumeRecordStatus } from '../../../../shared/agent-resume-record-from-status'
+import type { ResumeRecordStatus } from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 import { applyWindowLayoutCommand } from '../../runtime-layout-apply'
 import type {
   AgentStatusClearIpcPayload,
-  AgentStatusIpcPayload
-} from '../../../../shared/agent-status-ipc-payload'
+  AgentStatusIpcPayload,
+  RefusedPaneResume
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { RefusedPaneResume } from '../../../../shared/agent-status-types'
+
 import { type ExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRuntimeWithStopTerminalsForWorktree {
   /** Capture after earlier status writes so their saved copy participates in exact cleanup. */

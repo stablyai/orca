@@ -5,7 +5,7 @@ import { runningStructuredAgentSessionTurnId } from '../../../src/shared/agent-s
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import { structuredSessionBackgroundTasksView } from '../../../src/shared/structured-session-background-tasks-view'
 import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session/failures/agent-session-visible-failures'
-import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { pendingPromptsAllUnanswerableHere } from '../../../src/shared/agent-session/agent-session-approval-subject'
 import {
   SkillRefLimitError,
@@ -214,6 +214,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         queuedAt: Date.now(),
         ...(stopping ? { sentWhileStopping: true as const } : {})
       }
+      intent?.onCreated?.(send.clientMessageId)
       const outcome = await sendsOut.trackSend(sendMobileStructuredAgentSessionMessage)({
         client,
         sessionId,

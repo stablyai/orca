@@ -24,8 +24,8 @@ import {
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
-import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 
 /** Forms own selection and dispatch; rows and setup remain the same as the new-tab menu. */
 export const AgentLaunchPicker = memo(
@@ -79,6 +79,15 @@ export const AgentLaunchPicker = memo(
     const ownDraftScope = useAgentPickerDraftScope()
     const [settingsOpen, setSettingsOpen] = useState(false)
     const trigger = useRef<HTMLButtonElement>(null)
+    const [open, setOpenState] = useState(false)
+    // Why: typing on the closed trigger opens the menu with that key already in the search field.
+    const [initialQuery, setInitialQuery] = useState('')
+    const setOpen = useCallback((next: boolean) => {
+      if (!next) {
+        setInitialQuery('')
+      }
+      setOpenState(next)
+    }, [])
     const openAgentSettings = useCallback(() => {
       setOpen(false)
       if (onOpenAgentSettings) {
@@ -86,8 +95,7 @@ export const AgentLaunchPicker = memo(
       } else {
         setSettingsOpen(true)
       }
-    }, [onOpenAgentSettings])
-    const [open, setOpen] = useState(false)
+    }, [onOpenAgentSettings, setOpen])
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
     const observedEntries = useAgentLaunchPickerInventory(
       worktreeId,
@@ -131,10 +139,26 @@ export const AgentLaunchPicker = memo(
               className="w-full min-w-0"
               disabled={disabled || model.state !== 'settled'}
               onKeyDown={(event) => {
-                if (!open && event.key === 'Enter' && onTriggerEnter) {
+                if (open) {
+                  return
+                }
+                if (event.key === 'Enter' && onTriggerEnter) {
                   event.preventDefault()
                   event.stopPropagation()
                   onTriggerEnter()
+                  return
+                }
+                if (
+                  model.state === 'settled' &&
+                  !event.metaKey &&
+                  !event.ctrlKey &&
+                  !event.altKey &&
+                  event.key.length === 1 &&
+                  /\S/.test(event.key)
+                ) {
+                  event.preventDefault()
+                  setInitialQuery(event.key)
+                  setOpen(true)
                 }
               }}
             >
@@ -162,6 +186,7 @@ export const AgentLaunchPicker = memo(
                 draftScope={draftScope ?? ownDraftScope}
                 model={model}
                 entries={entries}
+                initialQuery={initialQuery}
                 value={value}
                 draftForEntry={draftForEntry}
                 mode="select"

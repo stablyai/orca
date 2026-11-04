@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import '../../../shared/terminal-surface-id'
-import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
+import '../../../shared/workspace-layout/terminal-surface-id'
+import { ownedEditorFileId } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 import type {
   PublishedTab,
   PublishedWorkspaceLayout

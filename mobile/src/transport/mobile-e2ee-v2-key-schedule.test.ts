@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake
-} from '../../../src/shared/mobile-e2ee-v2-contract'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
 import {
   createMobileE2EEV2Fixture,
   MOBILE_E2EE_V2_VECTOR
-} from '../../../src/shared/mobile-e2ee-v2-fixtures'
-import { derivePairedE2EEV2KeySchedule as deriveMobileE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-fixtures'
+import { derivePairedE2EEV2KeySchedule as deriveMobileE2EEV2KeySchedule } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-key-schedule'
 
 function hex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')

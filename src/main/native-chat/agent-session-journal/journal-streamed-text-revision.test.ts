@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexImageItemBody } from '../../codex/codex-image-item-translation'
+import { codexImageItemBody } from '../../codex/structured/items/codex-image-item-translation'
 import { journalPragmaNumber } from './journal-database'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 import { openAgentSessionJournal } from './journal-store-factory'

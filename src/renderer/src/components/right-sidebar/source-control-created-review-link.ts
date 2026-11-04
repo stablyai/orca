@@ -1,4 +1,4 @@
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 type WorktreeReviewLink = Partial<{
   linkedPR: number

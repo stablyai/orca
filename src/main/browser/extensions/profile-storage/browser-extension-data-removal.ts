@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import {
   getChromeExtensionOrigin,
   isChromeExtensionId
-} from '../../../../shared/browser-extension-url'
+} from '../../../../shared/browser/extensions/browser-extension-url'
 import { runBrowserExtensionNativePage } from '../api-runtime/browser-extension-native-page'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'

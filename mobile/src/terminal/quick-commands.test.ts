@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   TerminalCommandQuickCommand,
   TerminalAgentQuickCommand
-} from '../../../src/shared/terminal-quick-command-types'
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   buildMobileQuickCommandLaunch,
   getQuickCommandDisplayPreview,

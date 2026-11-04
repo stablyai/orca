@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import type { HostedReviewProvider } from '../../../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useAppStore } from '@/store'
 import { latestLookupGeneration } from '@/store/lookup-generation-sequence'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'

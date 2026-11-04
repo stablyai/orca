@@ -3,7 +3,7 @@ import { compilePickerTerminalLaunch } from './agent-launch-picker-menu-test-fix
 import {
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import {
   AgentLaunchSetupPanel,
   entry,

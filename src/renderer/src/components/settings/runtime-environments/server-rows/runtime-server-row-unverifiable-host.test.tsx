@@ -10,8 +10,8 @@ import {
 import type {
   RuntimeEnvironmentStatus,
   RuntimeHostStatusSnapshot
-} from '../../../../../../shared/runtime-host-status'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/runtime-environments'
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { useAppStore } from '@/store/index'

@@ -3,7 +3,7 @@ import type { AgentSessionModelCatalogResult } from '../../../shared/agent-sessi
 import { decodeStructuredAgentSessionOptionValue } from '../../../shared/agent-session/options/structured-agent-session-option-codec'
 import { finishedListingIds } from '../../../shared/agent-session/options/structured-agent-session-listing-verified-ids'
 import { savedEffectiveServiceTier } from '../../../shared/agent-session/options/structured-agent-session-effective-tier'
-import { independentAgentModelCatalog } from '../agent-model-catalog/agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../agent-model-catalog/agent-model-catalog-listing-waiters'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {

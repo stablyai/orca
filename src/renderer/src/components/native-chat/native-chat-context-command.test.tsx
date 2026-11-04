@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   sendNativeChatMessageWithImageAttachments: vi.fn(() => ({ id: 'image-send' }))
 }))
 
-vi.mock('../../store', () => {
+vi.mock('../../store/index', () => {
   const state = { clearNativeChatLaunchDraft: vi.fn() }
   return { useAppStore: { getState: () => state } }
 })

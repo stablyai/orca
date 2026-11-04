@@ -24,7 +24,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   canQueueWorkspaceCleanupCandidate,
   type WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupGitState,
   type WorkspaceCleanupReviewInfo

@@ -2,14 +2,14 @@ import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../sha
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
-} from '../../../../shared/agent-launch-settings'
+} from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import {
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
   AGENT_LAUNCH_CHOICES_CAPABILITY
-} from '../../../../shared/agent-launch-runtime-capability'
+} from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 
 export type AgentLaunchSettingsOwner = {

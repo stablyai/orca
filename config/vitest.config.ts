@@ -18,9 +18,7 @@ const nodeRuntimeInclude = process.versions.bun
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
-const paletteMeasurementFile =
-  'src/renderer/src/lib/palette-match/palette-match-performance.test.ts'
-const measurementFiles = [measurementFile, paletteMeasurementFile]
+const measurementFiles = [measurementFile]
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {
   // Auto-discovery climbs past the repo for files no in-repo tsconfig owns, into an enclosing checkout.
@@ -122,7 +120,6 @@ const bunProject = {
     sequence: { groupOrder: 1 }
   }
 }
-const paletteRuntimeProject = process.versions.bun ? bunProject : nodeProject
 const projects = [
   ...(process.versions.bun ? [bunProject] : []),
   nodeProject,
@@ -136,18 +133,6 @@ const projects = [
       exclude: testOptions.exclude,
       maxWorkers: 1,
       sequence: { groupOrder: 2 }
-    }
-  },
-  // Preserve the palette test's runtime and budgets while keeping other suites off its CPU.
-  {
-    ...paletteRuntimeProject,
-    test: {
-      ...paletteRuntimeProject.test,
-      name: 'palette-measurement',
-      include: [paletteMeasurementFile],
-      exclude: testOptions.exclude,
-      maxWorkers: 1,
-      sequence: { groupOrder: 3 }
     }
   }
 ]

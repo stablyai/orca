@@ -16,7 +16,7 @@ import {
   encodeTerminalStreamText,
   decodeTerminalInputAck,
   type TerminalInputAckKind
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { makeRequest, stubRuntime } from './terminal-multiplex-test-harness'
 
 vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {

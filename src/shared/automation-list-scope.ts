@@ -2,7 +2,7 @@
 
 import type { Automation } from './automations-types'
 import type { AutomationUsageSummary } from './automation-usage-summary'
-import type { FolderWorkspaceHost } from './folder-workspace-execution-host'
+import type { FolderWorkspaceHost } from './folder-workspaces/folder-workspace-execution-host'
 import { getAutomationRunRepoId } from './automation-run-identity'
 import { parseExecutionHostId } from './execution-host'
 import { sanitizeSshTargetGeneration } from './ssh-target-generation'

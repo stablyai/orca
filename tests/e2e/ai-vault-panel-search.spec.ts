@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
-import type { AiVaultSearchResponse } from '../../src/shared/ai-vault-search-types'
+import type { AiVaultSearchResponse } from '../../src/shared/ai-vault/search/ai-vault-search-types'
 
 test('search excerpts keep matches visible after long leading context', async ({
   electronApp,

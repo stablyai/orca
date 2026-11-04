@@ -647,7 +647,7 @@ const ORCA_CLI_AUTOMATIONS_REFERENCE_MARKDOWN = [
   "",
   "On a plain folder project, `new_per_run` creates separate Orca workspace entries pointing to the same folder. Removing the automation leaves these entries available. To remove one, copy its full `id` from `ORCA worktree list --json`, then run `ORCA worktree rm --worktree \"id:<full-instance-id>\"`. This removes that entry and stops its sessions without deleting the folder or touching Git. Select by instance ID rather than the shared path; the folder project root cannot be removed with this command.",
   "",
-  "Use `--extra-agent-args=\"--model opus --effort high --add-dir docs\"` to add arguments after the host's default agent Arguments on every fresh run (always pass it with `=`, since the value starts with `--`). Only model and effort options, plus Claude's `--add-dir`, are accepted, for `claude`, `codex`, `codebuddy`, `cursor`, `grok`, and `omp`. Model or effort in the extras replaces the default's. Extras can't be combined with `--reuse-session`. `--extra-agent-args=` on edit clears them.",
+  "Use `--extra-agent-args=\"--model opus --effort high --add-dir docs\"` to add arguments after the host's default agent Arguments on every fresh run (always pass it with `=`, since the value starts with `--`). Only model and effort options, plus Claude's `--add-dir`, are accepted, for `claude`, `codex`, `codebuddy`, `cursor`, `grok`, `omp`, and `pi` (`--model`, `--thinking`). Model or effort in the extras replaces the default's; a default Pi `--provider` stays and scopes the model. Extras can't be combined with `--reuse-session`. `--extra-agent-args=` on edit clears them.",
   "",
 ].join('\n')
 
@@ -729,7 +729,7 @@ const ORCA_CLI_BROWSER_REFERENCE_MARKDOWN = [
   "- A popup window a page opens (sign-in, payment) is listed in `ORCA tab list --json` as a `popup-<n>` page with `openerBrowserPageId`. If a click seems to do nothing, check `tab list`, then drive the popup with `--page popup-<n>`. When it closes, continue on the opener page.",
   "- Browser commands default to the current worktree. `--page` reaches the page in any worktree unless you also pass `--worktree <selector>`. Use `--worktree all` only intentionally.",
   "- `tab list` shows every tab in the tab bar. After a restart, tabs the user has not opened report `loaded: false`; `tab switch` or any `--page` command loads one in the background without changing the user's visible tab.",
-  "- `tab create --split <right|left|down|up>` opens the page in a new pane beside the calling terminal instead of as another tab; focus stays in the terminal.",
+  "- `tab create --split <right|left|down|up>` opens the page in a new pane beside the calling terminal instead of as another tab; focus stays in the terminal. When a browser pane is already open beside it, the page opens as that pane's visible tab instead of adding another pane.",
   "- Use typed tab commands (`ORCA tab list/create/close/switch`), not `ORCA exec --command \"tab ...\"`, so Orca keeps UI state synchronized.",
   "- Use `ORCA set device` or `ORCA viewport --mobile`, not `ORCA exec --command \"set device ...\"`, so the page also gets touch input and `pointer: coarse`. Each page load (reload, `goto`, link click) resets it, so run it again after navigating.",
   "- Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts. Avoid `--load networkidle` except on pages known to go quiet: polling, websockets and streaming keep it from ever resolving.",
@@ -3912,14 +3912,13 @@ const ORCHESTRATION_MARKDOWN = [
   "",
   "`ORCA skills get orchestration --reference references/<file>.md`",
   "",
-  "| Situation                                      | Reference                                 |",
-  "| ---------------------------------------------- | ----------------------------------------- |",
-  "| Task DAGs, several Runs                        | `references/coordinator-loop.md`          |",
-  "| Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md`      |",
-  "| Group messages                                 | `references/messaging-and-gates.md`       |",
-  "| A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md`      |",
-  "| Custom argv or terminal layout                 | `references/low-level-topology.md`        |",
-  "| Legacy labels, adopted Runs, takeover          | `references/legacy-contract-migration.md` |",
+  "| Situation                                      | Reference                            |",
+  "| ---------------------------------------------- | ------------------------------------ |",
+  "| Task DAGs, several Runs                        | `references/coordinator-loop.md`     |",
+  "| Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |",
+  "| Group messages                                 | `references/messaging-and-gates.md`  |",
+  "| A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |",
+  "| Custom argv or terminal layout                 | `references/low-level-topology.md`   |",
   "",
 ].join('\n')
 
@@ -3946,25 +3945,6 @@ const ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN = [
   "A later `run-create` keeps your earlier Runs: their mail still wakes you, but",
   "commands without `--run` use the newest Run, so pass `--run <id>` for an earlier",
   "one. `run-use` keeps only the Run it names.",
-  "",
-].join('\n')
-
-// oxfmt-ignore
-const ORCHESTRATION_LEGACY_CONTRACT_MIGRATION_REFERENCE_MARKDOWN = [
-  "# Legacy contract migration",
-  "",
-  "Follow a legacy label's printed command exactly, with the same executable.",
-  "",
-  "Only if the original coordinator is gone or cannot prove ownership, take over",
-  "from your own terminal:",
-  "",
-  "```text",
-  "ORCA orchestration run-use --id <adopted_run_id> --takeover-legacy",
-  "ORCA orchestration check --run <adopted_run_id>",
-  "```",
-  "",
-  "Never take over from an active coordinator, and never start a second editor",
-  "just because Orca updated.",
   "",
 ].join('\n')
 
@@ -4194,6 +4174,6 @@ export const BUNDLED_SKILL_GUIDES = [
     description: "Run work in separate Orca worker agents and get their results back. Use when the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply, decision gates), or when the work needs something your own subagents cannot give: a different agent (such as Codex from Claude) or its own Orca workspace. \"Have Codex (or Claude) review this and report back\" means an Orca worker of that agent, even when you have your own model subagents. Also use when you are a dispatched worker (a prompt with Task and Dispatch IDs: ask, worker_done). Otherwise prefer your own subagents, including for long or parallel work. Use `orca-cli` to hand work off with nothing expected back (\"hand off\", \"handover\", \"give this to another agent\", \"another worktree\"), and for terminal control, shell commands, worktree management, and reading or waiting on terminals.",
     markdown: ORCHESTRATION_MARKDOWN,
     aliases: [],
-    references: [{ name: "coordinator-loop", markdown: ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN }, { name: "legacy-contract-migration", markdown: ORCHESTRATION_LEGACY_CONTRACT_MIGRATION_REFERENCE_MARKDOWN }, { name: "low-level-topology", markdown: ORCHESTRATION_LOW_LEVEL_TOPOLOGY_REFERENCE_MARKDOWN }, { name: "messaging-and-gates", markdown: ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN }, { name: "placement-and-remote", markdown: ORCHESTRATION_PLACEMENT_AND_REMOTE_REFERENCE_MARKDOWN }, { name: "recovery-and-cleanup", markdown: ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN }]
+    references: [{ name: "coordinator-loop", markdown: ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN }, { name: "low-level-topology", markdown: ORCHESTRATION_LOW_LEVEL_TOPOLOGY_REFERENCE_MARKDOWN }, { name: "messaging-and-gates", markdown: ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN }, { name: "placement-and-remote", markdown: ORCHESTRATION_PLACEMENT_AND_REMOTE_REFERENCE_MARKDOWN }, { name: "recovery-and-cleanup", markdown: ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN }]
   }
 ] as const satisfies readonly BundledSkillGuide[]

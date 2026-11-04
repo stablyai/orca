@@ -1,4 +1,4 @@
-import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
+import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { claudeText } from './structured/journal/claude-structured-item-translation'
 
 /** User stops are error results too; abort reasons distinguish cancellation from failure. */

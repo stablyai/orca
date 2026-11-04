@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserClientHostedPageInventory,
-  BrowserClientHostCommandEvent,
-  BrowserClientHostLeaseAuthority
-} from '../../../../shared/browser-client-host-protocol'
+
 import { BrowserClientHostAuthorityReplacementWait } from './browser-client-host-authority-replacement-wait'
-import { BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE } from '../../../../shared/browser-client-host-protocol'
+import {
+  type BrowserClientHostedPageInventory,
+  type BrowserClientHostCommandEvent,
+  type BrowserClientHostLeaseAuthority,
+  BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { PairedRuntimeBrowserClientHostComposition } from './paired-runtime-browser-client-host-composition'
 
 const authority: BrowserClientHostLeaseAuthority = {

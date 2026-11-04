@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
+import type * as EditorAutosaveModule from '@/components/editor/autosave/editor-autosave'
 import type * as CrossPlatformPathModule from '../../../shared/cross-platform-path'
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
@@ -10,7 +10,7 @@ const pathOperationCounts = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
   return { ...actual, notifyEditorExternalFileChange: vi.fn() }
 })
@@ -44,7 +44,7 @@ import { useAppStore } from '@/store'
 import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
-} from '@/components/editor/editor-autosave'
+} from '@/components/editor/autosave/editor-autosave'
 import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
 
 const EVENT_COUNT = 5_000

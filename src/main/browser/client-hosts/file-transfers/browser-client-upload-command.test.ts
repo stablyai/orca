@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 import { executeBrowserClientUploadCommand } from './browser-client-upload-command'
 import { BrowserClientUploadStaging } from './browser-client-upload-staging'

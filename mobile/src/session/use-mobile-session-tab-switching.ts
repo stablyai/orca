@@ -14,7 +14,6 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     worktreeId,
     client,
     sessionTabs,
-    defaultTerminalHandlesToLiveInput,
     setActiveHandle,
     setSplitTerminalHandles,
     setActiveSessionTabId,
@@ -61,7 +60,6 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       if (selectedSessionTabIdRef) {
         selectedSessionTabIdRef.current = matchingTab?.id ?? null
       }
-      defaultTerminalHandlesToLiveInput([handle])
       setActiveSessionTabId(matchingTab?.id ?? null)
       const visible = visibleTerminalHandlesRef?.current
       if (visible?.length === 2 && !visible.includes(handle)) {
@@ -101,7 +99,6 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     },
     [
       client,
-      defaultTerminalHandlesToLiveInput,
       reportActivation,
       sessionTabs,
       setSplitTerminalHandles,

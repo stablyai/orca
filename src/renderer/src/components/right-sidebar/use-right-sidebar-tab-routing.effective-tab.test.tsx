@@ -16,7 +16,7 @@ const store = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector(store.state)
 }))
-vi.mock('./use-installed-plugin-route-reconciliation', () => ({
+vi.mock('./plugin-panels/use-installed-plugin-route-reconciliation', () => ({
   useInstalledPluginRouteReconciliation: () => {}
 }))
 

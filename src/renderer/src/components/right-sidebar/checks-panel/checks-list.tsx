@@ -15,7 +15,7 @@ import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
-import { getCheckStatusLabel } from '../../../../../shared/pr-check-status-label'
+import { getCheckStatusLabel } from '../../../../../shared/source-control/checks/pr-check-status-label'
 import { getCheckStatusLabel as getLocalizedCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { type ChecksListProps, useChecksListState } from './use-checks-list-state'
 import { openAppHttpLink, openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
@@ -44,6 +44,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
     rows,
     passingCount,
     failingCount,
+    cancelledCount,
     pendingCount,
     neutralCount,
     toggleCheckExpanded,
@@ -80,6 +81,13 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                 '{{count}} failing',
                 { count: failingCount, defaultValue_one: '{{count}} failing' }
               )}
+            </span>
+          )}
+          {cancelledCount > 0 && (
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <CircleDashed className="size-3" />
+              {cancelledCount}{' '}
+              {translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}
             </span>
           )}
           {pendingCount > 0 && (

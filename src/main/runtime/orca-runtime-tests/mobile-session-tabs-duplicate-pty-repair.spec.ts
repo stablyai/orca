@@ -9,7 +9,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 import { planDuplicatePtyPaneRepair } from '../../persistence/terminal-topology/duplicate-pty-pane-repair'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 // Windowless listing reads stored layout; duplicate PTY bindings need durable repair to avoid duplicate tabs.
 const duplicate = makeWorkspaceSessionWithHeadlessTerminal({

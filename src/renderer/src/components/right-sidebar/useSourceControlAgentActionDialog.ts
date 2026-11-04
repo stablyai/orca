@@ -1,4 +1,7 @@
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { applySourceControlPickerDraft } from '../../lib/source-control-agent-launch-picker'
 import {
   canonicalSourceControlActionSelection,
@@ -7,14 +10,14 @@ import {
   pickSourceControlActionAgent,
   selectSourceControlActionRecipe,
   type CurrentActionSelection
-} from '../../../../shared/source-control-action-selection'
-import { captureSourceControlActionSelection } from '../../../../shared/source-control-ai-operation-policy'
+} from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import { captureSourceControlActionSelection } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { useCallback, useMemo, useState } from 'react'
-import { resolveSourceControlLaunchAgentScope } from '../../../../shared/source-control-launch-agent-selection'
+import { resolveSourceControlLaunchAgentScope } from '../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
-import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import { savedSurfaceForPick } from '@/lib/source-control-agent-picker'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'

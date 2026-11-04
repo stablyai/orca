@@ -8,7 +8,7 @@ import type {
   MobileSessionTabType,
   Terminal
 } from '../../../session/mobile-session-route-types'
-import type { TuiAgent } from '../../../../../src/shared/tui-agent'
+import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 
 const PREVIOUS_HANDLE = 'terminal-0'
@@ -82,8 +82,6 @@ export function sessionTerminalCreateMountAdapters(
             setSessionTabs: (update) => {
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
-            defaultTerminalHandlesToLiveInput: (handles: readonly string[]) =>
-              effect('default-live-input', { handles: [...handles] }),
             setActiveHandle: (update) => {
               activeHandle = typeof update === 'function' ? update(activeHandle) : update
             },

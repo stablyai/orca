@@ -4,7 +4,7 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { InitialTerminalOptions } from '@/lib/worktree-activation-store-contract'
 import type {
   CreatedWorktreeResult,

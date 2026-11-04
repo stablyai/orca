@@ -21,7 +21,9 @@ vi.mock('../../editor/combined-diff/browse-files/combined-diff-file-tree', () =>
   }
 }))
 
-vi.mock('@/components/editor/DiffSectionItem', () => ({ DiffSectionItem: () => null }))
+vi.mock('@/components/editor/diff/sections/DiffSectionItem', () => ({
+  DiffSectionItem: () => null
+}))
 vi.mock('./toolbar', () => ({ PRFilesDiffToolbar: () => null }))
 vi.mock('./view-restore', () => ({ usePRFilesDiffViewPersistence: () => {} }))
 

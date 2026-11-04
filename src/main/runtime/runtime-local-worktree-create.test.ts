@@ -6,9 +6,9 @@ import { getDefaultRepoHookSettings } from '../../shared/constants'
 import type { AddWorktreeOptions } from '../git/worktrees/worktree-operation-options'
 import {
   acquireGitAdmission,
-  GitAdmissionScheduler,
   _resetGitAdmissionForTests
 } from '../git/command-runner/git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../shared/git/admission/git-admission-scheduler'
 
 const {
   runtimeCreateMocks: mocks,
