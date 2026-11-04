@@ -476,7 +476,7 @@ it('retires an old header, rejects stale preprocessing, and gives a same-key req
   drain()
   expect(store.getState().pendingRevealWorktree).toBeNull()
   expectVisible(child, 1020)
-  expect(list.scrollTop).toBe(866)
+  expect(list.scrollTop).toBe(862)
   expect(toastError).not.toHaveBeenCalled()
 })
 

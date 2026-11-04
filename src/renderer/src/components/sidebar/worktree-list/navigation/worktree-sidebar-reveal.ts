@@ -1,9 +1,10 @@
 import { GROUP_HEADER_ROW_HEIGHT } from '../viewport/virtual-rows'
+import { PROJECT_BLOCK_HEADER_ROW_HEIGHT } from '../rows/project-block-frames'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 const WORKTREE_REVEAL_TOP_CLEARANCE = 6
 export const WORKTREE_SIDEBAR_REVEAL_TOP_INSET =
-  GROUP_HEADER_ROW_HEIGHT + WORKTREE_REVEAL_TOP_CLEARANCE
+  Math.max(GROUP_HEADER_ROW_HEIGHT, PROJECT_BLOCK_HEADER_ROW_HEIGHT) + WORKTREE_REVEAL_TOP_CLEARANCE
 
 type SidebarRevealBounds = {
   start: number

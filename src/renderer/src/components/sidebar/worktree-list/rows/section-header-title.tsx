@@ -14,8 +14,8 @@ import { CollapsedProjectSummary } from './CollapsedProjectSummary'
 
 const EMPTY_WORKTREE_IDS: readonly string[] = []
 
-/** Hierarchy: group = category label, other sections = compact label. */
-export type SectionHeaderTitleLevel = 'group-label' | 'section'
+/** Hierarchy: group = category label, project = block title, other sections = compact label. */
+export type SectionHeaderTitleLevel = 'group-label' | 'project' | 'section'
 
 export function SectionHeaderTitle({
   row,
@@ -70,7 +70,9 @@ export function SectionHeaderTitle({
               'min-w-0 truncate font-semibold',
               isGroupLabel
                 ? 'text-[11px] uppercase leading-4 tracking-wider text-muted-foreground'
-                : 'text-[13px] leading-4'
+                : level === 'project'
+                  ? 'text-sm leading-5'
+                  : 'text-[13px] leading-4'
             )}
           >
             {label}

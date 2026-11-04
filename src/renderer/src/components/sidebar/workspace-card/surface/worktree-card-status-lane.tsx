@@ -25,6 +25,7 @@ export function WorktreeCardStatusLane({
     >
       <WorktreeCardStatusSlot
         worktreeId={card.worktree.id}
+        status={card.activityStatus}
         showStatus={card.showStatus}
         showUnreadAction={showUnreadAction}
         isUnread={card.worktree.isUnread}

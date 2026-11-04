@@ -109,6 +109,7 @@
   --color-worktree-sidebar-accent-foreground: var(--worktree-sidebar-accent-foreground);
   --color-worktree-sidebar-border: var(--worktree-sidebar-border);
   --color-worktree-sidebar-ring: var(--worktree-sidebar-ring);
+  --color-worktree-sidebar-project: var(--worktree-sidebar-project);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
@@ -271,6 +272,8 @@
   --worktree-sidebar-accent-foreground: #171717;
   --worktree-sidebar-border: #e5e5e5;
   --worktree-sidebar-ring: #a1a1a1;
+  /* Project block surface: one step lighter than the sidebar. */
+  --worktree-sidebar-project: color-mix(in srgb, var(--background) 70%, var(--worktree-sidebar));
   --sidebar: #fafafa;
   --sidebar-foreground: #0a0a0a;
   --sidebar-primary: #171717;
@@ -389,6 +392,11 @@
      aren't brighter than the rest of the UI in dark mode (#5906). */
   --worktree-sidebar-border: rgb(255 255 255 / 0.07);
   --worktree-sidebar-ring: #737373;
+  --worktree-sidebar-project: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 4%,
+    var(--worktree-sidebar)
+  );
   --sidebar: #171717;
   --sidebar-foreground: #f0f0f0;
   --sidebar-primary: #1447e6;
@@ -1535,6 +1543,82 @@ html.native-shell .app-layout {
   border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
+}
+
+/* Project blocks: a project header and its workspaces read as one level-1 surface
+   (border hairline, no shadow). Virtual rows are positioned independently, so each
+   row paints its own slice and bridges the 6px virtual gap (WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP)
+   to the next row of the same block. */
+[data-project-block] {
+  isolation: isolate;
+}
+
+[data-project-block]::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  bottom: -6px;
+  left: var(--project-block-left, 0px);
+  right: var(--project-block-right, 0px);
+  pointer-events: none;
+  background: var(--worktree-sidebar-project);
+  border: 1px solid var(--worktree-sidebar-border);
+  border-block-width: 0;
+}
+
+[data-project-block='start']::before {
+  border-top-width: 1px;
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+}
+
+[data-project-block='end']::before {
+  bottom: var(--project-block-bottom, 0px);
+  border-bottom-width: 1px;
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}
+
+[data-project-block='single']::before {
+  bottom: var(--project-block-bottom, 0px);
+  border-block-width: 1px;
+  border-radius: var(--radius-lg);
+}
+
+/* Hover actions overlay the title; match the block, not the sidebar. */
+[data-project-block] [data-repo-header-actions] {
+  background-color: var(--worktree-sidebar-project);
+}
+
+/* A collapsed project that holds the open workspace borrows the active card recipe. */
+[data-project-block][data-project-block-current] {
+  --project-block-current-bg: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 8%,
+    var(--worktree-sidebar-project)
+  );
+}
+
+.dark [data-project-block][data-project-block-current] {
+  --project-block-current-bg: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 10%,
+    var(--worktree-sidebar-project)
+  );
+}
+
+[data-project-block][data-project-block-current]::before {
+  background: var(--project-block-current-bg);
+  border-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 18%,
+    var(--worktree-sidebar-border)
+  );
+}
+
+[data-project-block][data-project-block-current] [data-repo-header-actions] {
+  background-color: var(--project-block-current-bg);
 }
 
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */

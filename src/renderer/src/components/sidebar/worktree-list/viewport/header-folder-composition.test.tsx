@@ -136,6 +136,7 @@ it('composes real dispatched headers, current repo gates and folder cache refres
     const header: SectionHeaderRowContext = {
       groupBy: 'repo',
       collapsedGroups: new Set(),
+      activeWorktreeId: null,
       workspaceStatuses: [],
       projectGroups,
       highlightedRevealRowKey: null,
@@ -184,6 +185,7 @@ it('composes real dispatched headers, current repo gates and folder cache refres
     }
     const ctx: WorktreeVirtualRowContext = {
       renderRows: rows,
+      projectBlockFrames: [],
       firstHeaderIndex: 0,
       activeStickyHeaderIndexRef: { current: 0 },
       activeStickyHostIndexRef: { current: null },

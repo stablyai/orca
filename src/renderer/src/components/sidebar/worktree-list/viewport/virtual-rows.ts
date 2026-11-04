@@ -6,6 +6,12 @@ import {
 } from '../../../../../../shared/sidebar-list/group-keys'
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
+import {
+  hasProjectGroupExitGap,
+  isProjectBlockHeaderRow,
+  PROJECT_BLOCK_HEADER_ROW_HEIGHT,
+  PROJECT_GROUP_EXIT_GAP
+} from '../rows/project-block-frames'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
 // Why: HostSectionHeader wraps its h-8 (32px) card in pt-1 (4px), so the row is 36px.
@@ -69,6 +75,13 @@ export function estimateRenderRowSize(
         : 0)
     )
   }
+  if (row?.type === 'header' && isProjectBlockHeaderRow(row)) {
+    // Project blocks own their spacing: the virtual gap separates blocks, so no header top margin.
+    return (
+      PROJECT_BLOCK_HEADER_ROW_HEIGHT +
+      (hasProjectGroupExitGap(rows, index, row.projectGroupDepth ?? 0) ? PROJECT_GROUP_EXIT_GAP : 0)
+    )
+  }
   if (row?.type === 'header') {
     return (
       GROUP_HEADER_ROW_HEIGHT +
@@ -78,7 +91,8 @@ export function estimateRenderRowSize(
         firstHeaderIndex
       })
         ? SECONDARY_GROUP_HEADER_TOP_MARGIN
-        : 0)
+        : 0) +
+      (hasProjectGroupExitGap(rows, index, null) ? PROJECT_GROUP_EXIT_GAP : 0)
     )
   }
   if (row?.type === 'lineage-group') {
