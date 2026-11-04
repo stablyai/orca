@@ -12,19 +12,26 @@ vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () 
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
 }))
+const setPresetSize = vi.hoisted(() => vi.fn())
+vi.mock('@/components/browser-pane/host-guest/browser-page-viewport', () => ({
+  setBrowserPageViewportPresetSize: setPresetSize
+}))
 
 import { isBrowserAutomationVisible } from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 
 type CapturePaintHoldEvent = { browserPageId: string; held: boolean }
 type AgentActivityEvent = { browserPageId: string; worktreeId: string | null; active: boolean }
+type AgentViewportEvent = { browserPageId: string; width: number; height: number }
 
 function registerBridge(unsubs: (() => void)[] = []): {
   onHold: (event: CapturePaintHoldEvent) => void
   onAgentActivity: (event: AgentActivityEvent) => void
+  onAgentViewport: (event: AgentViewportEvent) => void
 } {
   let onHold: ((event: CapturePaintHoldEvent) => void) | null = null
   let onAgentActivity: ((event: AgentActivityEvent) => void) | null = null
+  let onAgentViewport: ((event: AgentViewportEvent) => void) | null = null
   const subscribe = vi.fn(() => () => {})
   vi.stubGlobal('window', {
     api: {
@@ -43,16 +50,22 @@ function registerBridge(unsubs: (() => void)[] = []): {
         onAgentActivity: (callback: (event: AgentActivityEvent) => void) => {
           onAgentActivity = callback
           return () => {}
+        },
+        onAgentViewportApplied: (callback: (event: AgentViewportEvent) => void) => {
+          onAgentViewport = callback
+          return () => {}
         }
       }
     }
   })
 
   registerBrowserStateIpcBridge(unsubs, () => false)
-  if (!onHold || !onAgentActivity) {
-    throw new Error('Expected the bridge to subscribe to capture holds and agent activity')
+  if (!onHold || !onAgentActivity || !onAgentViewport) {
+    throw new Error(
+      'Expected the bridge to subscribe to capture holds, agent activity and viewports'
+    )
   }
-  return { onHold, onAgentActivity }
+  return { onHold, onAgentActivity, onAgentViewport }
 }
 
 afterEach(() => {
@@ -99,5 +112,15 @@ describe('agent activity from main', () => {
 
     onAgentActivity({ browserPageId: 'page-3', worktreeId: 'wt-agent', active: false })
     expect(isBrowserAutomationVisible('page-3')).toBe(false)
+  })
+})
+
+describe('agent viewports from main', () => {
+  it("sizes the page's box to the viewport an agent set", () => {
+    const { onAgentViewport } = registerBridge()
+
+    onAgentViewport({ browserPageId: 'page-4', width: 1280, height: 900 })
+
+    expect(setPresetSize).toHaveBeenCalledWith('page-4', { width: 1280, height: 900 })
   })
 })

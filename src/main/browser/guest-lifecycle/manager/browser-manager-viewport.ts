@@ -5,6 +5,7 @@ import {
   type BrowserAnnotationViewportBridgeOptions
 } from '../../../../shared/browser-annotation-viewport-bridge'
 import type { BrowserViewportOverride } from '../../../../shared/browser-workspace-types'
+import { BROWSER_AGENT_VIEWPORT_CHANNEL } from '../../../../shared/browser-agent-activity-contract'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
 import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
 import { touchEmulationParams } from '../../cdp/input/guest-touch-emulation'
@@ -125,6 +126,23 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     }
     // Offscreen DevTools would open on the server desktop without a route back to the client.
     return this.offscreenGuestIds.has(webContentsId) ? null : guest
+  }
+
+  /** Sizes the pane's page box to an agent's viewport as a preset does: wider pages scroll, not crop. */
+  showAgentViewportInPane(
+    guestWebContentsId: number,
+    size: { width: number; height: number }
+  ): void {
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    const renderer = browserPageId ? this.resolveRendererForBrowserTab(browserPageId) : null
+    if (!browserPageId || !renderer || renderer.isDestroyed()) {
+      return
+    }
+    try {
+      renderer.send(BROWSER_AGENT_VIEWPORT_CHANNEL, { browserPageId, ...size })
+    } catch {
+      // A sizing hint must not fail the command; disposed frames throw.
+    }
   }
 
   // Never detach here: other CDP clients, including the agent bridge, would lose their state.

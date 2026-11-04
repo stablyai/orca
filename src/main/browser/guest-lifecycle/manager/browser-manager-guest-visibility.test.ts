@@ -283,4 +283,37 @@ describe('browserManager', () => {
     expect(newGuest.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
     expect(newRenderer.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
   })
+  it("tells the page's pane the size of an agent's viewport, and nothing for an unknown guest", () => {
+    const guest = {
+      id: 1811,
+      isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const renderer = { id: rendererWebContentsId, isDestroyed: vi.fn(() => false), send: vi.fn() }
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === guest.id ? guest : id === rendererWebContentsId ? renderer : null
+    )
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'page-viewport',
+      workspaceId: 'workspace-1',
+      worktreeId: 'wt-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    renderer.send.mockClear()
+
+    browserManager.showAgentViewportInPane(guest.id, { width: 1280, height: 900 })
+    browserManager.showAgentViewportInPane(9999, { width: 1280, height: 900 })
+
+    expect(renderer.send.mock.calls).toEqual([
+      ['browser:agentViewportApplied', { browserPageId: 'page-viewport', width: 1280, height: 900 }]
+    ])
+  })
 })
