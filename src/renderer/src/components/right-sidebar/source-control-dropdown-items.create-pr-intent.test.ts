@@ -3,7 +3,7 @@ import { resolveDropdownItems } from './source-control-dropdown-items'
 import type {
   DropdownActionInputs,
   DropdownItem
-} from '../../../../shared/source-control-dropdown-item-types'
+} from '../../../../shared/source-control/dropdown/source-control-dropdown-item-types'
 
 function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionInputs {
   return {

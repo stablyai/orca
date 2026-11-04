@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { makeTab } from '@/store/slices/store-test-helpers'
@@ -180,6 +180,7 @@ export const commandSource = defineFixture({
     )
   }
 })
+export const medium = defineFixture({ width: 440, store, render: cards })
 export const mail = defineFixture({
   width: 720,
   render: () => {
@@ -206,7 +207,7 @@ export const expanded = defineFixture({
   render: cards,
   interact: (frame) => {
     for (const button of frame.querySelectorAll('button')) {
-      if (button.textContent === 'Show more') {
+      if (button.getAttribute('aria-expanded') === 'false') {
         button.click()
       }
     }

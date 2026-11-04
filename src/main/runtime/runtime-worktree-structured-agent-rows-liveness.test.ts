@@ -1,5 +1,5 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

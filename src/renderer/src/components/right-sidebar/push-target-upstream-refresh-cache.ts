@@ -1,4 +1,7 @@
-import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type {
+  GitStatusResult,
+  GitUpstreamStatus
+} from '../../../../shared/git/status/git-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 

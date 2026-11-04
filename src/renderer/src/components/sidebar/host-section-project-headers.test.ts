@@ -37,6 +37,7 @@ function hostSectionRows(collapsedGroups: Set<string>): HostSectionRow[] {
   const worktrees = [worktree, otherWorktree, remoteWorktree]
   const rows = planSidebarRows({
     groupBy: 'repo',
+    sortBy: 'smart',
     worktrees,
     repoMap: new Map([repo, otherRepo, remoteRepo].map((entry) => [entry.id, entry])),
     prGroupOf: () => 'in-progress',
@@ -142,6 +143,7 @@ describe('one repo id registered on two hosts, in host sections', () => {
     const repoMap = new Map(repoMapOrder.map((entry) => [entry.id, entry]))
     const rows = planSidebarRows({
       groupBy: 'repo',
+      sortBy: 'smart',
       worktrees,
       repoMap,
       repoOfWorktree: createHostScopedRepoOf([localTwin, sshTwin, runtimeRepo], repoMap),

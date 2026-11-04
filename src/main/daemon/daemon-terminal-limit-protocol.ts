@@ -1,7 +1,7 @@
 import {
   isConfiguredTerminalLimit,
   type TerminalLimitStatus
-} from '../../shared/terminal-limit-policy'
+} from '../../shared/terminal/runtime-policy/terminal-limit-policy'
 import type { HostTerminalPolicy } from './host-terminal-policy'
 
 /** New requests remain unknown on older daemons; no protocol-generation change or replacement. */

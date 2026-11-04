@@ -20,7 +20,7 @@ import type {
 } from '../../agent-session/agent-session-wire'
 import { orderAgentLaunchPickerAgents, type NewTabAgentMenuRow } from './agent-launch-picker-rows'
 import type { TuiAgent } from '../catalog/tui-agent'
-import type { CurrentActionSelection } from '../../source-control-action-selection'
+import type { CurrentActionSelection } from '../../source-control/ai/recipes/source-control-action-selection'
 
 export type AgentPickerSurface = 'chat' | 'terminal'
 export type AgentPickerDraftOwner = object

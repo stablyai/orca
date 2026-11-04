@@ -1,13 +1,14 @@
 import { OrcaRuntimeWithAgentPromptRequestCorrelation } from '../../orca-runtime-agent-prompt-request-correlation'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
-import type { AgentStatus } from '../../../../shared/agent-detection'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
 import {
   detectExplicitIdleStatusFromTitle,
   detectTerminalWaitBlockedReason
 } from '../../terminal-wait-detection'
-import { isOpenCodeNativeTitle } from '../../../../shared/agent-detection'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/providers/opencode-terminal-title'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeVisibleTerminalState

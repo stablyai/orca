@@ -2,7 +2,7 @@ import type {
   CreateHostedReviewResult,
   CreateStackedHostedReviewResult,
   HostedReviewProvider
-} from '../../../../shared/hosted-review'
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { translate } from '@/i18n/i18n'
 import {
   localizedHostedReviewCopy,

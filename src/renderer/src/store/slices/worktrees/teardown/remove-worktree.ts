@@ -25,7 +25,7 @@ import {
   getLockedWorktreeRemovalReason,
   isLockedWorktreeRemovalError
 } from '../../../../../../shared/worktree/removal'
-import { preservedBranchCleanupKey } from '../../../../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupKey } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'

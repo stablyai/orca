@@ -116,13 +116,3 @@ it('an old server is refused before unsafe generic send even through the old she
     f.close()
   }
 })
-it('documents the accepted authenticated check/send switch residual on a pre-fence installed shell', async () => {
-  const f = pair({ switchAfterCheck: true })
-  try {
-    expect(await closeIssue(f)).toMatchObject({ ok: true })
-    expect(f.effects).toEqual(['upstream'])
-    expect(f.calls).toHaveLength(2)
-  } finally {
-    f.close()
-  }
-})

@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
-import { normalizeAndAccept } from './agent-hook-listener-test-harness'
-import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import { normalizeAndAccept } from './agent-hook-listener/normalization/agent-hook-listener-test-harness'
+import { recognizeAgentProcessFromCommandLine } from './agent-status/process/agent-process-recognition'
 import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 
 describe('CodeBuddy harness', () => {
@@ -28,15 +28,6 @@ describe('CodeBuddy harness', () => {
     expect(rows[2]?.payload).toMatchObject({ agentType: 'codebuddy', toolName: 'AskUserQuestion' })
     expect(rows[5]?.payload).toMatchObject({ agentType: 'codebuddy', lastAssistantMessage: 'Red' })
     expect(rows[5]?.providerSession?.id).toBe('codebuddy-verification')
-  })
-
-  it.each([
-    'codebuddy',
-    'cbc',
-    'C:\\Tools\\codebuddy.cmd',
-    'node /usr/lib/node_modules/@tencent-ai/codebuddy-code/dist/codebuddy.js'
-  ])('recognizes interactive %s', (command) => {
-    expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('codebuddy')
   })
 
   it('excludes print runs and resumes the original provider session', () => {

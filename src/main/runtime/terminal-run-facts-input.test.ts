@@ -1,7 +1,7 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import { writePtyFromRuntimeController } from '../ipc/pty/runtime/operations'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import type { IPtyProvider } from '../providers/pty-provider-contract'

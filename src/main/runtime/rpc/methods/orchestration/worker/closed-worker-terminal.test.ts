@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
 import { chooseWorkerFollowUpPlacement } from './worker-follow-up-choice'
 

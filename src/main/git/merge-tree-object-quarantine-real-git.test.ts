@@ -2,11 +2,11 @@ import { existsSync, readdirSync, writeFileSync } from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { GIT_OBJECT_QUARANTINE_DIR_PREFIX } from '../../shared/git-object-quarantine'
+import { GIT_OBJECT_QUARANTINE_DIR_PREFIX } from '../../shared/git/objects/git-object-quarantine'
 import {
   createDivergentRepoFixture,
   type DivergentRepoFixture
-} from '../../shared/git-object-quarantine-real-git.test-fixture'
+} from '../../shared/git/objects/git-object-quarantine-real-git.test-fixture'
 import {
   __resetPRConflictSummaryCachesForTests,
   getPRConflictSummary

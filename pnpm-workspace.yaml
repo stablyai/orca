@@ -135,3 +135,7 @@ patchedDependencies:
   vitest@5.0.5: config/patches/vitest@5.0.5.patch
   pdfjs-dist@6.3.289: config/patches/pdfjs-dist@6.3.289.patch
   prosemirror-view@1.42.3: config/patches/prosemirror-view@1.42.3.patch
+  glob@13.0.6: config/patches/glob@13.0.6.patch
+  minimatch@9.0.9: config/patches/minimatch@9.0.9.patch
+  minimatch@10.2.5: config/patches/minimatch@10.2.5.patch
+  minimatch@10.2.6: config/patches/minimatch@10.2.6.patch

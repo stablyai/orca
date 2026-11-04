@@ -21,7 +21,8 @@ import {
   findFolderWorkspaceOwner,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
-import { getFolderWorkspaceHostId } from '../../../shared/folder-workspace-execution-host'
+import '../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../shared/folder-workspaces/folder-workspace-host-id'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import {
   ensureFolderWorkspaceInitialTerminal,

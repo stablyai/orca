@@ -10,7 +10,7 @@ import {
 } from './browser-manager-guest-popup-policy'
 import { allowPageUnload } from '../browser-guest-unload-policy'
 import { initiatingFrameUrl } from '../prompts/browser-external-app-launch'
-import { isSameExtensionNavigation } from '../../../../shared/browser-extension-url'
+import { isSameExtensionNavigation } from '../../../../shared/browser/extensions/browser-extension-url'
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
   protected installGuestNavigationPolicy(guest: Electron.WebContents): () => void {

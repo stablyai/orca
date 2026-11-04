@@ -1,4 +1,4 @@
-import type { BrowserExtensionAccessLists } from '../../../../shared/browser-extension-permission-warnings'
+import type { BrowserExtensionAccessLists } from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
 import { notifyBrowserExtensionListChanged } from '../installation/browser-extension-list-changes'
 
 /** A store update that would show new install warnings, kept until the user reviews it in Settings. */

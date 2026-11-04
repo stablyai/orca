@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 // The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
 vi.mock('react-native', () => ({}))
-import type { MobileRelayHost } from '../../../src/shared/mobile-relay-hosts-contract'
+import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   applyServerWorkspaces,
   fetchServerWorkspaces,
@@ -13,7 +13,7 @@ import {
   type ServerWorkspaces
 } from './server-workspaces'
 import { relayHostsListRead } from './server-workspace-operations'
-import { applyWorktreeHostContextLabels } from './worktree-host-context-labels'
+import { buildWorktreeHostContextOf } from './worktree-host-context-labels'
 import type { Worktree } from './workspace-list-types'
 import type { RpcClient } from '../transport/rpc-client'
 
@@ -158,8 +158,17 @@ describe("the desktop's own WSL host", () => {
     expect(serverHostHealthLabel({ ...host, relay: 'unavailable' })).toBeUndefined()
   })
 
+  // The row with the host context the list draws beside it.
+  const drawnWithContext = (
+    rows: Worktree[],
+    sources: Parameters<typeof buildWorktreeHostContextOf>[1]
+  ) => {
+    const hostContextOf = buildWorktreeHostContextOf(rows, sources)
+    return rows.map((entry) => ({ ...entry, ...hostContextOf(entry) }))
+  }
+
   it("puts the words on that host's rows, over its health", () => {
-    const [drawn] = applyWorktreeHostContextLabels([{ ...row('a'), hostId: wslHost.hostId }], {
+    const [drawn] = drawnWithContext([{ ...row('a'), hostId: wslHost.hostId }], {
       repoHostIdByRepoId: new Map(),
       hostLabelById: new Map([[wslHost.hostId, wslHost.label]]),
       hostPlatform: 'win32',
@@ -176,7 +185,7 @@ describe("the desktop's own WSL host", () => {
     const listed = listReply([{ ...host, health: 'disconnected', relay: 'unavailable' }])
     const hosts = listed.accepted ? listed.value : []
     expect(serverHostHealthLabels(hosts).size).toBe(0)
-    const [drawn] = applyWorktreeHostContextLabels([row('a')], {
+    const [drawn] = drawnWithContext([row('a')], {
       repoHostIdByRepoId: new Map(),
       hostLabelById: new Map([[host.hostId, host.label]]),
       hostPlatform: 'win32',

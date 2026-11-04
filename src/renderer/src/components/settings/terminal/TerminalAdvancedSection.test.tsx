@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../../shared/terminal-word-separator'
+import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../../shared/terminal/input/terminal-word-separator'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 
 vi.mock('@/i18n/i18n', () => ({

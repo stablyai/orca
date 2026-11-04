@@ -282,7 +282,18 @@
         "searchAgents": "agents",
         "searchCli": "CLI"
       },
-      "permissionsDescriptionOwnAgents": "Les nouveaux chats suivent l’autorisation de chaque agent dans Paramètres → Agents."
+      "permissionsDescriptionOwnAgents": "Les nouveaux chats suivent l’autorisation de chaque agent dans Paramètres → Agents.",
+      "launch": {
+        "on": "L’interface de chat est activée",
+        "off": "L’interface de chat est désactivée",
+        "agents": "Mode de lancement par défaut par agent",
+        "agentsDescription": "Choisissez si chaque agent s’ouvre dans l’interface de chat ou dans son CLI.",
+        "chatDescription": "Les nouveaux agents s’ouvriront par défaut en mode chat.",
+        "cliDescription": "Les nouveaux agents s’ouvriront par défaut en mode CLI.",
+        "turnOn": "Activer",
+        "turnOff": "Désactiver",
+        "toggle": "Utiliser l’interface de chat par défaut"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC ou U.S. — Option envoie des séquences Alt/Esc",
@@ -746,6 +757,28 @@
         "notPng": "Les icônes de dépôt doivent être des fichiers PNG.",
         "tooLarge": "L’image de l’icône du dépôt doit faire 256 Ko maximum."
       }
+    },
+    "editorFormatOnSave": {
+      "title": "Formater à l’enregistrement",
+      "description": "Formate le texte avant les enregistrements manuels et automatiques. Configurez une commande de formatage dans Paramètres > Projets. Désactivé par défaut.",
+      "keywords": "formateur formatage enregistrer prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "Insérer un saut de ligne final",
+      "description": "Ajoute un saut de ligne à l’enregistrement d’un fichier de code non vide qui n’en possède pas à la fin. Désactivé par défaut.",
+      "keywordNewline": "saut de ligne",
+      "keywordEndOfFile": "fin de fichier"
+    },
+    "repositoryFormatter": {
+      "title": "Commande de formatage",
+      "description": "Utilise le formateur de ce projet pour formater à l’enregistrement.",
+      "saveFailed": "Impossible d’enregistrer les paramètres du formateur.",
+      "command": "Commande",
+      "commandHelp": "S’exécute sur l’hôte du fichier, à la racine de l’espace de travail. Lit le contenu du tampon depuis stdin et doit afficher uniquement le texte formaté sur stdout. Utilisez ${file} ou ${relativeFile} pour le chemin. Les arguments sont transmis directement, sans shell. N’utilisez pas --write. Laissez vide pour désactiver pour ce projet.",
+      "include": "Motifs glob à inclure (un par ligne)",
+      "includeHelp": "Compare les chemins relatifs à la racine de l’espace de travail. Sans motif correspondant, aucun formatage n’est effectué. * et ** ignorent les noms commençant par un point ; indiquez-les explicitement, par exemple .github/**/*.yml. Activez Formater à l’enregistrement dans Général > Éditeur pour utiliser cette commande.",
+      "saving": "Enregistrement…",
+      "save": "Enregistrer le formateur"
     }
   },
   "menu": {
@@ -1896,7 +1929,6 @@
         "9c3ba11a05": "Statut :",
         "934d87ab96": "Chargement des détails de la vérification…",
         "71c11aff84": "Relancer toutes les vérifications",
-        "e31651a224": "Relancer les vérifications échouées",
         "1b56e28faa": "Relancer",
         "f4b1292569": "Démarrer l'agent IA par défaut sur ces vérifications",
         "9a1004fc76": "Actualiser les vérifications",
@@ -2405,7 +2437,6 @@
         "662bc2998d": "Statut :",
         "d8e82b7f15": "Chargement des détails de la vérification…",
         "54cddd1858": "Relancer toutes les vérifications",
-        "68605516dd": "Relancer les vérifications échouées",
         "522d9353e1": "Relancer",
         "0fa8b8faec": "Démarrer l'agent IA par défaut sur ces vérifications",
         "5d0f42766d": "Actualiser les vérifications",
@@ -7806,6 +7837,9 @@
           "browserExtensions": {
             "copy": "Ajoute Paramètres › Navigateur › Extensions pour les profils de navigateur locaux.",
             "toggleLabel": "Activer ou désactiver les extensions de navigateur"
+          },
+          "orchestrationPanel": {
+            "toggleLabel": "Activer ou désactiver le panneau d’orchestration"
           }
         },
         "FloatingWorkspacePane": {
@@ -10007,6 +10041,14 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "gestionnaire de mots de passe"
+            },
+            "orchestrationPanel": {
+              "title": "Panneau d’orchestration",
+              "description": "Affiche les agents avec lesquels chaque agent travaille, à côté de son chat ou de son terminal.",
+              "orchestration": "orchestration",
+              "agents": "agents",
+              "workers": "agents exécutants",
+              "manager": "gestionnaire"
             }
           }
         },
@@ -11133,7 +11175,8 @@
                   "supportedAgents": "Agents pris en charge pour cette recette : {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} ne peut pas exécuter cette recette de génération de texte. Choisissez l'un des agents pris en charge ci-dessous.",
                   "resolveComments": "Démarre un agent à partir des commentaires PR ou MR non résolus sélectionnés.",
-                  "fixPushFailure": "Démarre un agent lorsqu'un hook pre-push ou un git push échoue."
+                  "fixPushFailure": "Démarre un agent lorsqu'un hook pre-push ou un git push échoue.",
+                  "commitMessageSharedModel": "Les détails de la pull request, le nom de branche et le nom du chat peuvent aussi utiliser ce modèle s’ils n’en choisissent pas un autre ; leur option « Identique au modèle par défaut » indique le modèle utilisé."
                 }
               }
             }
@@ -12900,13 +12943,16 @@
         "AppearanceThemeControl": {
           "useTerminalTheme": "Utiliser ses couleurs de terminal",
           "matchTerminal": "Comme le terminal",
-          "dynamic": "dynamique"
+          "dynamic": "dynamique",
+          "searchThemes": "Rechercher des thèmes…",
+          "noThemes": "Aucun thème ne correspond à votre recherche."
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "Thème d’icônes",
             "description": "Icônes de fichiers et dossiers d’un plugin activé.",
-            "builtIn": "Intégré"
+            "builtIn": "Intégré",
+            "search": "Rechercher des thèmes d’icônes…"
           },
           "lightTheme": "Thème clair",
           "darkTheme": "Thème sombre",
@@ -13242,6 +13288,9 @@
         },
         "PluginContributionActionNewFile": {
           "create": "Créer"
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "Aucun résultat."
         }
       },
       "right": {
@@ -19613,8 +19662,11 @@
         "emptyAnswer": "Réponse vide",
         "cancelled": "Annulé",
         "resolved": "Résolu",
-        "resolver": "Répondu le {{device}}",
-        "cancelledBy": "Annulé le {{device}}"
+        "resolver": "Répondu sur {{device}}",
+        "cancelledBy": "Annulé sur {{device}}",
+        "thisComputer": "cet ordinateur",
+        "computer": "l’ordinateur",
+        "otherDevice": "un autre appareil"
       },
       "notices": {
         "contextCleared": "Contexte effacé",
@@ -19776,7 +19828,11 @@
         "handedOffToAgent": "Confié à un agent",
         "startedAgent": "Agent démarré",
         "taskFromCoordinator": "Tâche du coordinateur",
-        "updateFromWorker": "Nouvelles du worker"
+        "updateFromWorker": "Nouvelles du worker",
+        "senderReplaced": "{{name}} ne s’exécute plus dans son terminal ; un autre agent s’y exécute maintenant. Ouvrez ce terminal depuis la barre latérale si nécessaire.",
+        "senderAmbiguous": "Orca ne peut pas déterminer dans quel terminal {{name}} s’exécute. Ouvrez-le depuis la barre latérale.",
+        "senderNotRunning": "{{name}} ne s’exécute plus. Démarrez un nouvel agent depuis la barre latérale pour poursuivre son travail.",
+        "unnamedSenderSubject": "Un agent"
       },
       "goal": {
         "placeholder": "Décrivez votre objectif, définissez des résultats mesurables pour de meilleurs résultats",
@@ -20066,7 +20122,24 @@
         "scheduled": "Orca reprendra ce chat à {{time}}.",
         "cancel": "Ne pas reprendre"
       },
-      "settings": "Paramètres du chat"
+      "settings": "Paramètres du chat",
+      "textAttachmentPreview": {
+        "copiedContents": "Contenu copié",
+        "textAttachment": "Pièce jointe texte",
+        "byteSize": "{{size}} octets",
+        "copyContents": "Copier le contenu",
+        "saveFile": "Enregistrer le fichier",
+        "copyTooLarge": "Ce fichier est trop volumineux pour être copié. Enregistrez-le plutôt.",
+        "exportError": "Impossible d’exporter la pièce jointe. Réessayez.",
+        "unreadableReply": "Réponse de la pièce jointe illisible. Réessayez.",
+        "incompleteReply": "La pièce jointe a changé ou sa réponse était incomplète. Fermez-la et réessayez.",
+        "notText": "Ce fichier ne peut pas être prévisualisé comme texte. Enregistrez-le pour l’ouvrir dans une autre application.",
+        "openFailed": "Impossible d’ouvrir la pièce jointe. Réessayez.",
+        "hostUpdate": "Cet hôte ne peut pas encore ouvrir les pièces jointes texte. Mettez Orca à jour sur cet hôte, puis réessayez.",
+        "hostUnavailable": "L’hôte de la pièce jointe est indisponible. Reconnectez-vous et réessayez.",
+        "connectionChanged": "La connexion a changé. Fermez cette pièce jointe et rouvrez-la.",
+        "readFailed": "Impossible de lire cette pièce jointe sur son hôte. Reconnectez-vous et réessayez. Le fichier a peut-être été supprimé ou modifié."
+      }
     },
     "tab": {
       "bar": {
@@ -20674,6 +20747,11 @@
     },
     "wslHostMark": {
       "runsOn": "S’exécute dans WSL : {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "Impossible de formater {{file}}. Enregistrement sans formatage : {{reason}}"
+      }
     }
   },
   "dashboardPopout": {
@@ -21747,7 +21825,10 @@
         "reviewBody_many": "{{count}} autres sessions Claude n’ont pas été déplacées vers {{next}}.",
         "body_one": "{{count}} session Claude est toujours active sur {{previous}}. Le redémarrage poursuit la conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
         "body_other": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
-        "body_many": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer."
+        "body_many": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
+        "reasonSharedSession": "Également ouverte dans un autre volet",
+        "sharedOne": "1 session Claude reste sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
+        "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet."
       }
     },
     "hostSignIn": {
@@ -23029,7 +23110,11 @@
     "use": "Utiliser",
     "select": "Choisir un agent",
     "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",
-    "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers"
+    "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers",
+    "workspaceStartupFailed": "Impossible de démarrer {{agent}}. Vérifiez les arguments de cette configuration et réessayez.",
+    "sameAsTextDefault": "Identique au modèle par défaut · {{value0}}",
+    "chatChoicesNote": "Les choix de modèle ou d’effort de {{agent}} sans option CLI s’appliquent aux chats.",
+    "composedChoicesNote": "Les choix d’effort et de vitesse de {{agent}} sont inclus dans l’argument du modèle."
   },
   "wslMove": {
     "entry": {

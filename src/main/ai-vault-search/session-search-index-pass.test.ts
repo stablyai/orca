@@ -1,7 +1,7 @@
 import { appendFile, rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
+import { isAiVaultScanCancelledError } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import {
   registerTranscriptConsumer,

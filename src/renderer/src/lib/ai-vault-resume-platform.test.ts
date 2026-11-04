@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getDefaultSettings } from '../../../shared/constants'
 import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'

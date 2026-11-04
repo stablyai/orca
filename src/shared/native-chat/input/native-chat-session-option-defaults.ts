@@ -1,6 +1,6 @@
 import { resolveAgentChoiceLayers } from '../../agent-launch/choices/agent-choice-layers'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   isAgentChatPermissionChoice,

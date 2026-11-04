@@ -1,6 +1,6 @@
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalLaunchResult } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'

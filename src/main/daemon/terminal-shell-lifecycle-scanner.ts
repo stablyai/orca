@@ -1,5 +1,5 @@
-import { buildProcessBoundaryGround } from '../../shared/terminal-mode-reset-profiles'
-import { closesAppOsc133Zone } from '../../shared/terminal-osc133-command-finished'
+import { buildProcessBoundaryGround } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { closesAppOsc133Zone } from '../../shared/terminal/output/terminal-osc133-command-finished'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import { TerminalArmedInputModes } from './terminal-armed-input-modes'
 import { TerminalShellPromptPhase } from './terminal-shell-prompt-phase'

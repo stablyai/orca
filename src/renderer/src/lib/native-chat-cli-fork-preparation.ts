@@ -1,11 +1,15 @@
 import { createBrowserUuid } from './browser-uuid'
-import type { AiVaultAgent, AiVaultListResult } from '../../../shared/ai-vault-types'
-import { isAiVaultSessionResumableContent } from '../../../shared/ai-vault-types'
+
+import {
+  type AiVaultAgent,
+  type AiVaultListResult,
+  isAiVaultSessionResumableContent
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   AI_VAULT_CHAT_FORK_SOURCE_CAPABILITY,
   type AiVaultPrepareSessionResumeRequest,
   type AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault-resume-preparation'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -15,7 +19,7 @@ import {
   findTabSessionHistoryRow,
   type TabSessionHistorySubject
 } from '@/components/tab-bar/tab-session-history-switch'
-import type { AiVaultResumeCommandSession } from './ai-vault-resume-command'
+import type { AiVaultResumeCommandSession } from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 
 export type NativeChatCliForkSubject = Extract<TabSessionHistorySubject, { kind: 'chat' }>

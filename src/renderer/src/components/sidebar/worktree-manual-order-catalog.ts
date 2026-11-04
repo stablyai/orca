@@ -1,5 +1,5 @@
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {

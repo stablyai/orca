@@ -1,4 +1,4 @@
-import type { BrowserClientHostCommandEvent } from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserHostCommandPageState } from './browser-host-command-state'
 
 export function replayOutstandingBrowserHostCommands(

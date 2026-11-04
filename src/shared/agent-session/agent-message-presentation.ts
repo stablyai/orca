@@ -1,12 +1,20 @@
 import {
   agentMessageSenderName,
+  orchestrationMailNotice,
   type AgentMessageSender,
   type AgentMessageSource
 } from './agent-session-message-source'
 import { isOrcaTerminalHandle, parseOrcaSessionAddress } from '../orca-session-address'
-import type { AgentStatusEntry } from '../agent-status-types'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { agentMessageTranscriptText } from './agent-message-display-text'
+
+export function agentMessageIsCompact(
+  message: Pick<NativeChatMessage, 'agentStart' | 'from'>,
+  from = message.from
+): boolean {
+  return message.agentStart === true || orchestrationMailNotice(from) !== null
+}
 
 export const AGENT_MESSAGE_FOLDED_LINES = 3
 export type AgentMessageHeading =

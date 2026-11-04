@@ -69,10 +69,10 @@ vi.mock('./main-process-state', () => ({ mainProcessState: state }))
 vi.mock('../providers/accounts/agent-auth-restart-preservation', () => ({
   preserveAgentAuthBeforeRestart: preserveAgentAuthBeforeRestartMock
 }))
-vi.mock('../codex/codex-ai-vault-session-resume', () => ({
+vi.mock('../codex/history/resume/codex-ai-vault-session-resume', () => ({
   prepareCodexAiVaultSessionResume: vi.fn()
 }))
-vi.mock('../codex/codex-session-source-home', () => ({
+vi.mock('../codex/history/rollouts/codex-session-source-home', () => ({
   resolveHostCodexSessionSourceHome: vi.fn()
 }))
 vi.mock('./main-process-pty-startup', () => ({

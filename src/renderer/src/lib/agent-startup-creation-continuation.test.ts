@@ -7,7 +7,7 @@ import {
   buildAiVaultLocalResumeStartup,
   buildAiVaultForkStartup,
   resolveAiVaultCopiedSessionAgentArgs
-} from '../../../shared/ai-vault-resume-startup'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
 vi.mock('@/lib/telemetry', () => ({ tuiAgentToAgentKind: (agent: string) => agent }))
 
 it.each(['claude', 'codex'] as const)(

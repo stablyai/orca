@@ -6,7 +6,7 @@ import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-pro
 import { useAppStore } from '@/store/index'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import { evaluateHostDetails, type RuntimeHostDetails } from './runtime-environment-host-details'
 import { LOCAL_RUNTIME_VALUE, NO_RUNTIME_VALUE } from './runtime-environment-selection'

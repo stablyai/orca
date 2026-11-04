@@ -3,7 +3,7 @@ import type {
   BrowserExtensionActionResult,
   BrowserExtensionListResult,
   InstalledBrowserExtension
-} from '../../../shared/browser-extension-types'
+} from '../../../shared/browser/extensions/browser-extension-types'
 import { browserSessionRegistry } from '../sessions/browser-session-registry'
 import { openBrowserExtensionOptionsPage } from './api/runtime'
 import { getBrowserExtensionInstallStore } from './installation/browser-extension-install-store'

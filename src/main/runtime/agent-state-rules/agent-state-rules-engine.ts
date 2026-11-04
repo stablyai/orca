@@ -1,4 +1,4 @@
-import type { AgentStatus } from '../../../shared/agent-detection'
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { compileScreenCondition } from './agent-state-rule-matchers'
 import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'

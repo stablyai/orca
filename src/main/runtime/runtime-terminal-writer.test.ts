@@ -8,7 +8,7 @@ import {
   writeUnverifiable,
   type WriteSettlement
 } from '../../shared/pty-write-settlement'
-import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../shared/terminal-input'
+import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../shared/terminal/input/terminal-input'
 
 afterEach(() => vi.useRealTimers())
 

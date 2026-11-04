@@ -51,8 +51,8 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/cli/runtime/client.ts',
   'src/shared/remote-runtime/remote-runtime-client.ts',
   'src/shared/remote-runtime/requests/remote-runtime-subscription-transport.ts',
-  'src/shared/paired-runtime-connection.ts',
-  'src/shared/pairing.ts',
+  'src/shared/remote-runtime/pairing/paired-runtime-connection.ts',
+  'src/shared/remote-runtime/pairing/pairing.ts',
   // The harness: the oracle imports most of the shared e2e helpers, not just its own.
   'tests/e2e/workspace-layout-oracle',
   'tests/e2e/terminal-probe-input-sequence.ts',

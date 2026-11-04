@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { createCheckRunDetailsRequestId } from '@/components/editor/check-run-details-tab'
+import { createCheckRunDetailsRequestId } from '@/components/editor/check-details/actions/check-run-details-tab'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'

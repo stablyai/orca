@@ -6,9 +6,9 @@ import {
 import {
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES,
   type BrowserClientHostedPageInventory,
-  type BrowserClientHostCommandEvent,
-  type BrowserClientHostCommandResult
-} from '../../../../shared/browser-client-host-protocol'
+  type BrowserClientHostCommandEvent
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   cleanupRetainedBrowserClientPage,
   type BrowserClientPageRendererIdentity

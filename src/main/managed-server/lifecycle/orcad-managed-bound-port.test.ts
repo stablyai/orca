@@ -7,7 +7,7 @@ const resolveOrcadRemoteContext = vi.hoisted(() => vi.fn())
 vi.mock('../install/orcad-remote-context', () => ({ resolveOrcadRemoteContext }))
 
 import { resolveManagedOrcadTunnelPort } from './orcad-managed-bound-port'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 

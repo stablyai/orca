@@ -15,7 +15,7 @@ import {
   OPENCODE_SQLITE_REQUEST_MAX_BYTES,
   OPENCODE_SQLITE_RESPONSE_MAX_BYTES
 } from './session-scanner-opencode-sqlite-process-framing'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 
 const executable = process.execPath
 const directory = mkdtempSync(join(tmpdir(), 'orca-opencode-process-'))

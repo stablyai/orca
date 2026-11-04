@@ -4,7 +4,10 @@ import { createAcpAgentConnection } from '../../acp/acp-agent-connection'
 import { openAcpAdapterRig } from '../../acp/acp-structured-adapter.test-support'
 import { readAntigravitySignInLine } from '../../antigravity/antigravity-sign-in-url'
 import { CodexAppServerExitError } from '../../codex/app-server/codex-app-server-exit-error'
-import { adapterFor, fakeCodex } from '../../codex/codex-structured-session-adapter-fixture'
+import {
+  adapterFor,
+  fakeCodex
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import { createFakePipedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import { closeProviderTimelineRigs } from '../agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'

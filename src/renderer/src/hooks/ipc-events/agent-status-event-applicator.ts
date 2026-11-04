@@ -1,7 +1,8 @@
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
-import { AgentHookAttributionDiagnostics } from '../../../../shared/agent-hook-attribution-diagnostics'
-import { pickHostTurnEnd, type AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
+import { AgentHookAttributionDiagnostics } from '../../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
+import { pickHostTurnEnd } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { normalizeProgramStatusFacet } from '../../../../shared/program-status/facet'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
@@ -9,7 +10,7 @@ import { track } from '@/lib/telemetry'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import type { AgentStatusUpdate } from '@/store/slices/agent-status/agent-status-contract'
 import { observeAgentHookCompletionForNotification } from '../agent-hook-completion-notifications'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import {
   applyResolvedAgentTerminalTitleToTab,
   hasRuntimeBackedWorktreeAttribution,

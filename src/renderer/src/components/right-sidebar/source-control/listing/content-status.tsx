@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
+import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
 import { EmptyState } from './empty-state'
 import { StatusRetryButton } from './status-retry-button'

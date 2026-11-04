@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import { fetchPRChecks, type GitHubPrReadOutcome } from './github-pr-rpc'
 import {
   classifyPrSidebarFailure,

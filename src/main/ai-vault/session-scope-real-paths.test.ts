@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   attachAiVaultScopeCwdAliases,
   resolveAiVaultScopeRealPaths

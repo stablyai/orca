@@ -14,7 +14,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { finishAcceptedWorktreeRemoval } from '../../workspaces/removal/worktree-background-removal'
-import { preservedBranchCleanupScopeKey } from '../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupScopeKey } from '../../../shared/git/branches/preserved-branch-cleanup'
 import {
   getRuntimeWorktreeRemovalOptionsKey,
   type RemoveManagedWorktreeOptions,

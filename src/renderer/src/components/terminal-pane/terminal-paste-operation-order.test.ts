@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
+import './terminal-bracketed-paste'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
   wrapTerminalBracketedPasteText
-} from './terminal-bracketed-paste'
+} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { executeTerminalPastePlan } from './terminal-paste-executor'
 import { planTerminalPaste } from './terminal-paste-coordinator'
 import { runTerminalPtyInputTransaction } from './terminal-pty-input-transaction'

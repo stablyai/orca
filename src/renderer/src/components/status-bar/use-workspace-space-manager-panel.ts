@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget

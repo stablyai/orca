@@ -1,5 +1,5 @@
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
-import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+import { isExpectedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
