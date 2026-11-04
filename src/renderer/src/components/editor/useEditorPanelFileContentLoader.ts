@@ -21,15 +21,12 @@ import {
 } from './editor-panel-content-types'
 import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
 import {
-  findAbsoluteTabOwnerRoute,
   migrateRestoredEditorFileOwner,
   restoredOwnerMigrationErrorMessage
 } from './migrate-restored-editor-file-owner'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
 import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
-import { grantRestoredHostFile } from './restored-host-file-grant'
-import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
-import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
+import { placeAbsoluteTab } from './absolute-tab-placement'
 import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
 import { stampCleanTabDiskBaseline } from './external-changes/editor-clean-tab-disk-baseline'
 import {
@@ -168,41 +165,28 @@ export function useEditorPanelFileContentLoader({
           if (isClientLocalTab) {
             readConnectionId = undefined
           } else {
-            const currentState = useAppStore.getState()
             const executionHostId = externalSshOwnerId
               ? toSshExecutionHostId(externalSshOwnerId)
               : runtimeEnvironmentId
                 ? toRuntimeExecutionHostId(runtimeEnvironmentId)
                 : LOCAL_EXECUTION_HOST_ID
-            const route = findAbsoluteTabOwnerRoute(
-              currentState,
+            const placement = await placeAbsoluteTab({
+              state: useAppStore.getState(),
               worktreeId,
-              restoredOpenFile,
-              executionHostId
-            )
-            if (route && route.worktreeId !== worktreeId) {
-              await reownRestoredFile(route, runtimeEnvironmentId ?? null)
+              tab: { ...restoredOpenFile, terminalArtifactGrantId: readGrantId },
+              executionHostId,
+              readTarget,
+              runtimeEnvironmentId
+            })
+            if (placement.kind === 'move') {
+              await reownRestoredFile(placement.route, runtimeEnvironmentId ?? null)
               return
             }
-            if (
-              runtimeEnvironmentId &&
-              !route &&
-              !readGrantId &&
-              !chatScratchFileAddress(filePath)
-            ) {
-              readGrantPairing =
-                readTarget.kind === 'environment'
-                  ? captureRuntimeEnvironmentRequestRevision(readTarget.environmentId)
-                  : undefined
-              const restored = await grantRestoredHostFile(
-                readTarget,
-                worktreeId,
-                filePath,
-                readGrantPairing
-              )
-              readGrantId = restored.grantId
+            if (placement.kind === 'grant') {
+              readGrantId = placement.grantId
+              readGrantPairing = placement.pairing
               // Why: a read-only grant stays off the tab, so its save asks the host again and is refused.
-              if (!restored.readOnly) {
+              if (!placement.readOnly) {
                 useAppStore.getState().setTerminalArtifactGrant(id, readGrantId)
               }
             }
