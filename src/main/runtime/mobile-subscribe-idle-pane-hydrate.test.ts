@@ -10,7 +10,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
   decodeTerminalStreamText
-} from '../../shared/terminal-stream-protocol'
+} from '../../shared/terminal/stream/terminal-stream-protocol'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'

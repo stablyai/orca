@@ -6,14 +6,14 @@ import type {
   PlainSshTerminalEvent,
   PlainSshTerminalOpenResult
 } from '../../../../shared/plain-ssh-terminal'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
-import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
+import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-themes/terminal-contrast-correction'
 import { syncPreviewTerminalLigatures } from '@/components/dashboard-popout/preview-terminal-ligatures'
 import {
   buildPreviewAppearanceOptions,

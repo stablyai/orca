@@ -5,7 +5,7 @@ import type {
   WorktreeStartupLaunch
 } from './worktree/launch-types'
 import type { SshConnectionState } from './ssh-types'
-import type { TerminalSideEffectBatch } from './terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from './terminal/output/terminal-side-effect-facts'
 import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
 import type { RuntimeNavigationTarget } from './runtime-navigation'
 import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'

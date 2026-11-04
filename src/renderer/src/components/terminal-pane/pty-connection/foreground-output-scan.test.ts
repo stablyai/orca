@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { scanSynchronizedForegroundOutput } from './foreground-output-scan'
 import {
-  scanSynchronizedForegroundOutput,
   SYNCHRONIZED_OUTPUT_START_SEQUENCE as start,
   SYNCHRONIZED_OUTPUT_END_SEQUENCE as end
-} from './foreground-output-scan'
+} from '../../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 
 afterEach(() => vi.restoreAllMocks())
 

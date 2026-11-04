@@ -1,4 +1,4 @@
-import { createTerminalEscapeScanner } from './terminal-escape-scanner'
+import { createTerminalEscapeScanner } from './terminal/protocol/escape/terminal-escape-scanner'
 
 /** The fullscreen loading frame has a composer too; only the live chat paints its footer. */
 export function createCodexComposerReadyScanner(): {

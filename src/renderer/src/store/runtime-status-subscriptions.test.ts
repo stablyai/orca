@@ -4,7 +4,8 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimeHostStatusSnapshot
 } from '../../../shared/runtime-host-status'
-import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import '../../../shared/protocol-version'
+import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import * as connectionState from '@/runtime/runtime-host-connection-state'
 import { createRuntimeStatusSubscriptions } from './runtime-status-subscriptions'
 

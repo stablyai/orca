@@ -14,7 +14,7 @@ import {
   normalizeOsc52ClipboardDefaultOn,
   osc52ClipboardDefaultOnOverridesPersistedOff
 } from '../../../shared/osc52-clipboard-settings'
-import { splitLegacyTerminalColorOverrides } from '../../../shared/terminal-color-overrides'
+import { splitLegacyTerminalColorOverrides } from '../../../shared/terminal-themes/terminal-color-overrides'
 import {
   migrateTerminalScrollbackRows,
   migrateTerminalTuiScrollSensitivityDefault
