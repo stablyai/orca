@@ -67,7 +67,19 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   // Keep dialog targets outside the list so filtering/refresh cannot remove their context.
   const [gitlabDialogItem, setGitlabDialogItem] = useState<GitLabWorkItem | null>(null)
 
-  const [gitlabView, setGitlabView] = useState<'issues' | 'mrs' | 'todos'>('mrs')
+  // Why: GitLab tab has two sub-views — the project MR/issue list and the user's cross-project Todos (a separate stream).
+  const [gitlabView, setGitlabView] = useState<'issues' | 'mrs' | 'todos'>(() =>
+    pageData.openGitLabWorkItem?.type === 'issue' ? 'issues' : 'mrs'
+  )
+  const openedGitLabItem = pageData.openGitLabWorkItem
+  const [lastOpenedGitLabItem, setLastOpenedGitLabItem] = useState(openedGitLabItem)
+  // Why: an item opened from outside the list (quick tasks, Cmd+J) should land on the tab that lists it.
+  if (openedGitLabItem !== lastOpenedGitLabItem) {
+    setLastOpenedGitLabItem(openedGitLabItem)
+    if (openedGitLabItem) {
+      setGitlabView(openedGitLabItem.type === 'issue' ? 'issues' : 'mrs')
+    }
+  }
   const [gitlabTodos, setGitlabTodos] = useState<GitLabTodo[]>([])
   const [gitlabTodosLoading, setGitlabTodosLoading] = useState(false)
   const gitlabEmptyState = useMemo(

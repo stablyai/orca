@@ -10,6 +10,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { i18n } from '../../i18n/i18n'
 import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
+  checkJiraConnection: vi.fn(),
   hasPairedMobileDevice: false,
   agentBucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
   getAgentBucketCounts: vi.fn(),
@@ -138,7 +140,12 @@ function setSidebarState({
     refreshPreflightStatus: mocks.refreshPreflightStatus,
     linearStatus: { connected: false },
     linearStatusChecked: true,
+    linearStatusContextKey: getProviderRuntimeContextKey(settings),
     checkLinearConnection: mocks.checkLinearConnection,
+    jiraStatus: { connected: false },
+    jiraStatusChecked: true,
+    jiraStatusContextKey: getProviderRuntimeContextKey(settings),
+    checkJiraConnection: mocks.checkJiraConnection,
     prefetchWorkItems: vi.fn(),
     activeRepoId: null,
     persistedUIReady: true,
@@ -261,6 +268,24 @@ describe('SidebarNav', () => {
     expect(working?.querySelector('svg')).toBeNull()
     expect(done?.querySelector('svg')).toBeNull()
     expect(idle?.querySelector('svg')).toBeNull()
+  })
+
+  it('hides the Jira shortcut once Jira settles as disconnected', async () => {
+    const container = await renderSidebarNav()
+
+    expect(container.querySelector('[aria-label="Open Jira tasks"]')).toBeNull()
+    expect(mocks.checkJiraConnection).not.toHaveBeenCalled()
+  })
+
+  it('rechecks Linear and Jira after a runtime switch', async () => {
+    mocks.state = {
+      ...mocks.state,
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' }
+    }
+    await renderSidebarNav()
+
+    expect(mocks.checkLinearConnection).toHaveBeenCalled()
+    expect(mocks.checkJiraConnection).toHaveBeenCalled()
   })
 
   it('shows the Mobile entry by default for older settings', () => {
