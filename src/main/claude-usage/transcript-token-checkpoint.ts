@@ -16,6 +16,7 @@ export type ClaudeUsageTokenCorrection = {
 type ClaudeUsageTokenCheckpoint = {
   ownedDedupeKeys: string[]
   find: (key: string) => Readonly<ClaudeUsageTokenMaxima> | undefined
+  /** Null when any key lacks a maxima row. */
   digest: (keys?: readonly string[]) => string | null
   increase: (key: string, turn: ClaudeUsageTokenTotals) => ClaudeUsageTokenCorrection | null
   append: (

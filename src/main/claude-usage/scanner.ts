@@ -74,6 +74,7 @@ async function yieldToEventLoop(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve))
 }
 
+/** Scans transcripts, counting each request once with its fullest per-category tokens across files. */
 export async function scanClaudeUsageFiles(
   worktrees: ClaudeUsageWorktreeRef[],
   previousProcessedFiles: ClaudeUsagePersistedFile[] = [],

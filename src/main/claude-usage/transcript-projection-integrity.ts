@@ -4,6 +4,7 @@ import type { ClaudeUsagePersistedFile } from './types'
 const HASH_CHUNK_CHARACTERS = 16_384
 export const CLAUDE_USAGE_VALIDATION_BATCH_ROWS = 1024
 
+/** Yields between batches while hashing a projection so tampered or stale caches reparse. */
 export function* iterateClaudeUsageProjectionIntegrity(
   file: ClaudeUsagePersistedFile
 ): Generator<void, string> {

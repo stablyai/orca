@@ -114,6 +114,7 @@ function restoreEncounterOrder(
   return ordered
 }
 
+/** Projects one transcript; onProjected exposes its reconciler and whether prior maxima survived. */
 export async function projectClaudeUsageScanFile(
   read: ClaudeUsageScanFile,
   worktreeLookup: Map<string, ClaudeUsageWorktreeRef>,
@@ -210,6 +211,7 @@ export async function projectClaudeUsageScanFile(
 
 export type ClaudeUsageTokenReconciler = (turns: ClaudeUsageParsedSourceTurn[]) => void
 
+/** Raises an owner's maxima from another file's copies of its turns and re-totals the projection. */
 export function createClaudeUsageTokenReconciler(
   file: ClaudeUsagePersistedFile,
   owned = createClaudeUsageTokenCheckpoint(file)
