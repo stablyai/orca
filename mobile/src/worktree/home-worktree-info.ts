@@ -1,4 +1,5 @@
 import type { AgentWorkingMode } from '../../../src/shared/agent-status/contracts/agent-status-types'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 
 export type HomeWorktreeSummary = {
@@ -15,13 +16,19 @@ export type HomeWorktreeSummary = {
   lastOutputAt?: number
   sidebarStatus?: string
   workingMode?: AgentWorkingMode
+  agents?: RuntimeWorktreeAgentRow[]
 }
 
 /** A workspace whose agents Home surfaces under "Jump back in", with the list's dot status. */
 export type HomeAttentionWorktree = Pick<
   HomeWorktreeSummary,
   'worktreeId' | 'repo' | 'branch' | 'displayName' | 'lastOutputAt' | 'workingMode'
-> & { dotStatus: WorktreeStatus }
+> & {
+  dotStatus: WorktreeStatus
+  /** The conversation behind the dot and its pane; older hosts send no names. */
+  conversationName?: string
+  paneKey?: string
+}
 
 export type HostWorktreeInfo = {
   hostId: string

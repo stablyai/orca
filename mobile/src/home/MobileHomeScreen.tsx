@@ -64,7 +64,8 @@ export function MobileHomeScreen() {
       openMobileSession({
         hostId: row.hostId,
         worktreeId: row.worktree.worktreeId,
-        name: row.worktree.displayName || row.worktree.repo
+        name: row.worktree.displayName || row.worktree.repo,
+        paneKey: row.worktree.paneKey
       })
     },
     [data.router, openMobileSession]
