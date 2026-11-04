@@ -41,6 +41,20 @@ export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as co
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
 const CLAUDE_ARTIFACT_ENV = 'CLAUDE_CODE_ARTIFACT'
 
+// SDK entrypoints hide Claude's Artifact tools unless this is set; a user value still wins,
+// matched case-insensitively on Windows, where claude_code_artifact=0 is the same opt-out.
+export function withClaudeArtifactDefault(
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform
+): Record<string, string> {
+  const chosen = Object.keys(env).some(
+    (key) =>
+      key === CLAUDE_ARTIFACT_ENV ||
+      (platform === 'win32' && key.toUpperCase() === CLAUDE_ARTIFACT_ENV)
+  )
+  return chosen ? env : { ...env, [CLAUDE_ARTIFACT_ENV]: '1' }
+}
+
 type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'> & {
   resolvePermissionModeInCli?: true
 }
@@ -241,11 +255,9 @@ export function claudeStructuredLaunchPart(
       (base) =>
         withNativeChatVisualsEnv(
           {
-            ...base,
+            ...withClaudeArtifactDefault(base),
             // The turn translator relies on Claude's authoritative idle frame when no result arrives.
-            [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1',
-            // SDK entrypoints hide Claude's Artifact tools unless this is set; a user value still wins.
-            [CLAUDE_ARTIFACT_ENV]: base[CLAUDE_ARTIFACT_ENV] ?? '1'
+            [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
           },
           visuals?.visuals ?? null
         ),

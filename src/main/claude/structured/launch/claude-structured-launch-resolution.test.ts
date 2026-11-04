@@ -10,7 +10,8 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   CLAUDE_SESSION_STATE_EVENTS_ENV,
-  CLAUDE_STRUCTURED_BASE_OPTIONS
+  CLAUDE_STRUCTURED_BASE_OPTIONS,
+  withClaudeArtifactDefault
 } from './claude-structured-launch-resolution'
 import { claudeSessionIdForOrcaSession } from '../claude-structured-session-id'
 import {
@@ -219,6 +220,12 @@ describe('claude structured launch resolution', () => {
     })
 
     expect(launch.env).toMatchObject({ CLAUDE_CODE_ARTIFACT: '0' })
+  })
+
+  it('keeps a Windows Artifact tools opt-out spelled in any case', () => {
+    expect(withClaudeArtifactDefault({ claude_code_artifact: '0' }, 'win32')).toEqual({
+      claude_code_artifact: '0'
+    })
   })
 
   it('launches when only the bookkeeping leaf moved, and refuses a changed session', async () => {
