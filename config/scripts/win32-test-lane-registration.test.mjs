@@ -3,8 +3,8 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { scanSourceTree, stripComments } from '../../src/shared/source-scan/source-tree-scan'
-import { classifyPrJobs } from './pr-code-change-scope.mjs'
-import { WINDOWS_BOUNDARY_TESTS } from './pr-package-test-paths.mjs'
+import { classifyPrJobs } from './workflow/source-routing/pr-code-change-scope.mjs'
+import { WINDOWS_BOUNDARY_TESTS } from './workflow/source-routing/pr-package-test-paths.mjs'
 
 // Register every Windows-named or suite-gated file in sole Windows lane’s curated list; otherwise Ubuntu self-skips can pass without execution.
 // Follow suite/describe gates, nested aliases, local boolean polarity and narrowing &&; do not follow case-level gates, imported/function flags, broad OR/skipIf conjunctions.
@@ -156,7 +156,7 @@ function readWindowsWorkflow() {
     }
     return run
   })
-  if (!runs[0].includes('config/scripts/pr-package-test-paths.mjs')) {
+  if (!runs[0].includes('config/scripts/workflow/source-routing/pr-package-test-paths.mjs')) {
     throw new Error(`The "${WINDOWS_LANE_STEPS[0]}" step no longer reads WINDOWS_BOUNDARY_TESTS.`)
   }
   const run = runs.join(' ')
@@ -187,12 +187,12 @@ function registrationFailure(path) {
   const missing = []
   if (!laneFiles.includes(path)) {
     missing.push(
-      `add '${path}' to WINDOWS_BOUNDARY_TESTS in config/scripts/pr-package-test-paths.mjs`
+      `add '${path}' to WINDOWS_BOUNDARY_TESTS in config/scripts/workflow/source-routing/pr-package-test-paths.mjs`
     )
   }
   if (!isInClassifier(path)) {
     missing.push(
-      `add '${path}' to WINDOWS_PACKAGE_TESTS in config/scripts/pr-package-test-paths.mjs`
+      `add '${path}' to WINDOWS_PACKAGE_TESTS in config/scripts/workflow/source-routing/pr-package-test-paths.mjs`
     )
   }
   return missing.length === 0 ? null : `${path}: ${missing.join('; and ')}`

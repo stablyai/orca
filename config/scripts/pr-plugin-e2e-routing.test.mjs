@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { classifyE2eJobs, generalE2eShards } from './ci-e2e-job-selection.mjs'
+import { classifyE2eJobs, generalE2eShards } from './ci/e2e-selection/ci-e2e-job-selection.mjs'
 import { testImportClosure } from './e2e-test-import-closure.mjs'
-import { selectPrE2eSpecs } from './pr-e2e-source-routing.mjs'
+import { selectPrE2eSpecs } from './workflow/source-routing/pr-e2e-source-routing.mjs'
 import {
   PLUGIN_SYSTEM_SOURCE,
   PR_PLUGIN_E2E_SOURCE_ROUTES
-} from './pr-plugin-e2e-source-routes.mjs'
+} from './workflow/source-routing/pr-plugin-e2e-source-routes.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 

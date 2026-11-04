@@ -8,7 +8,7 @@ import {
   MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
   mobileWebAppBuildOptions
-} from '../build-mobile-web-app-bundle.mjs'
+} from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { createBundleServer, readShellCsp } from './preview/mobile-web-app-render-harness.mjs'
 

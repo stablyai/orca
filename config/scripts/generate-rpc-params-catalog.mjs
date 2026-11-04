@@ -13,7 +13,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import * as esbuild from 'esbuild'
-import { resolveOxcCliInvocation } from './oxc-cli-invocation.mjs'
+import { resolveOxcCliInvocation } from './tool-invocation/oxc-cli-invocation.mjs'
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 const SHARED_DIR = path.join(REPO_ROOT, 'src', 'shared')

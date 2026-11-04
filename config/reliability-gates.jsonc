@@ -89,7 +89,7 @@
       "invariant": "The relocated Windows daemon must retain the registry package root JS and native binary independently of its install tree, reject incomplete source or mirror files, and preserve an existing mirror while repairing it.",
       "oracle": "Run the real package JS from the relocated entry after deleting the install tree, reach its native loader, refuse each missing source file before staging, and replace each incomplete mirror without deleting its sentinel. Pin the real package name against the Windows packaging allowlist. On Windows, read ProductName through the built native addon from the mirror.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/workflow/source-routing/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs"
       ],
       "testFiles": [
         "src/main/daemon/daemon-host-process-package.test.ts",
@@ -112,6 +112,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/workflow/source-routing/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 1.1,
           "summary": "Gate files and packaging scope contracts: 76 tests passed in four files, one Windows native-read test skipped. Full daemon-host suite also passed 94 tests in eight files. Original implementation fails seven new registry regressions."
@@ -9989,7 +9990,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/claimed-agent-pty-owner.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime-agent-session-operation.test.ts src/main/runtime/remote-agent-session-host-authority.integration.test.ts src/main/runtime/orca-runtime-terminal-retirement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
         "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/remote-agent-session-authority-repro.mjs",
-        "node --check config/scripts/remote-agent-session-process-cleanup.mjs && node config/scripts/remote-agent-session-authority-repro.mjs",
+        "node --check config/scripts/development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs && node config/scripts/remote-agent-session-authority-repro.mjs",
         "pnpm exec electron-vite build --mode e2e",
         "VITE_EXPOSE_STORE=true pnpm run build:web",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-agent-session-focus-authority.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -10022,7 +10023,7 @@
         "src/renderer/src/runtime/web-runtime-session.test.ts",
         "tests/e2e/remote-agent-session-focus-authority.spec.ts",
         "config/scripts/remote-agent-session-authority-repro.mjs",
-        "config/scripts/remote-agent-session-process-cleanup.mjs",
+        "config/scripts/development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs",
         "tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/terminal-orphan-owner.test.ts",
@@ -10128,7 +10129,7 @@
           ]
         },
         {
-          "file": "config/scripts/remote-agent-session-process-cleanup.mjs",
+          "file": "config/scripts/development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs",
           "assertions": [
             "isolated daemon roots and captured descendants are verified dead before profile PID records are removed"
           ]
@@ -19156,13 +19157,13 @@
       "commands": [
         "gh workflow run windows-wsl-e2e.yml",
         "pnpm exec playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts tests/e2e/terminal-windows-shell-paste-ownership.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/wsl-e2e-lane-contract.test.mjs config/scripts/verify-wsl-e2e-participation.test.mjs",
+        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs config/scripts/verify-wsl-e2e-participation.test.mjs",
         "gh run view 34031806291 --log"
       ],
       "testFiles": [
         "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
         "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
-        "config/scripts/wsl-e2e-lane-contract.test.mjs",
+        "config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs",
         "config/scripts/verify-wsl-e2e-participation.test.mjs"
       ],
       "assertionRefs": [
@@ -19241,11 +19242,11 @@
         "gh workflow run packaged-browser-e2e.yml",
         "pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3 --retries=0",
         "gh run view 34069063016 --log",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot"
       ],
       "testFiles": [
         "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
-        "config/scripts/verify-packaged-browser-participation.test.mjs"
+        "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -19256,7 +19257,7 @@
           ]
         },
         {
-          "file": "config/scripts/verify-packaged-browser-participation.test.mjs",
+          "file": "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs",
           "assertions": ["reject missing, substituted, skipped and retried scenarios"]
         }
       ],

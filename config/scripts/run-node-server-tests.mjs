@@ -13,17 +13,17 @@ import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   parseOrcadProfilePreflight
 } from '../../src/shared/orcad-profile-preflight.ts'
-import { packagedNodeRuntimePath } from './build-orcad-node.mjs'
-import { ensurePinnedNodeExecutable } from './pinned-node-downloads.mjs'
-import { currentTarget } from './server-build-target.mjs'
-import { UNIT_INCLUDE } from './ci-unit-files.mjs'
+import { packagedNodeRuntimePath } from './orcad-distribution/prebuilds/build-orcad-node.mjs'
+import { ensurePinnedNodeExecutable } from './orcad-distribution/prebuilds/pinned-node-downloads.mjs'
+import { currentTarget } from './orcad-distribution/prebuilds/server-build-target.mjs'
+import { UNIT_INCLUDE } from './ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 import { runProcessSync } from '@orca/process-host'
-import { describeProcessFailure } from './process-failure-message.mjs'
+import { describeProcessFailure } from './tool-invocation/process-failure-message.mjs'
 import {
   CROSS_RUNTIME_TEST_PATHS,
   nodeServerTestPaths,
   REQUIRED_TEST_INPUTS_ENV
-} from './node-server-test-paths.mjs'
+} from './node-server/qualification/node-server-test-paths.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const target = currentTarget()

@@ -5,8 +5,8 @@ import { createReadStream, readFileSync, statSync, mkdtempSync, rmSync } from 'n
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
-import { summarizeBenchmarkSamples } from './benchmark-sample-summary.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
+import { summarizeBenchmarkSamples } from './performance/measurement/benchmark-sample-summary.mjs'
 import { JSON_PARSER_CASES, writeJsonParserFixtures } from './json-parser-benchmark-fixtures.mjs'
 
 // Bundle each revision's two consumers as {baseline,candidate}-{rg,session}.mjs first.

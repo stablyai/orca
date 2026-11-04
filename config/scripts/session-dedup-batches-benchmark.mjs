@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
 
 const bundled = await build({
   stdin: {

@@ -73,7 +73,7 @@ vi.mock('../../orca-profiles/profile-cloud-capability-refresh', async (importOri
 }))
 
 import { registerOrcaProfileHandlers } from './orca-profiles'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 describe('registerOrcaProfileHandlers auth channels', () => {
   beforeEach(() => {
