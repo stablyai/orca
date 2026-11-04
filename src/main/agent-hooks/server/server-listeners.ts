@@ -24,7 +24,7 @@ import { serializeAgentStatusSubject } from '../../../shared/agent-status/contra
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { PaneTimers } from './program-status/pane-timers'
 import { ProgramStatusFacetStore } from './program-status/facet-store'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 // Unassigned rows sort after the listing counter, which starts at 1.
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER

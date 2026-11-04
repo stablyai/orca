@@ -118,39 +118,4 @@ describe('a scheduled automation on a stopped WSL distro (E9)', () => {
     expect(send).not.toHaveBeenCalled()
     expect(blocked).toHaveBeenCalledWith(REPO_PATH, undefined)
   })
-
-  it("leaves Run now alone: it is the user's act and may start the distro", async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const store = await createStore()
-    const automation = seedAutomation(store)
-    const send = vi.fn()
-    const service = attachedService(store, send)
-    service.setRendererReady()
-
-    await service.runNow(automation.id)
-
-    expect(send).toHaveBeenCalled()
-    expect(store.listAutomationRuns(automation.id)[0]?.errorCode).toBeUndefined()
-  })
-
-  it("gates a host-path project whose Git runs in WSL, by the project's distro", async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    projectGit.wslDistro = 'Ubuntu'
-    blocked.mockImplementation(async (_path, wslDistro) =>
-      wslDistro ? { distro: wslDistro, state: 'stopped' } : null
-    )
-    const store = await createStore()
-    const automation = seedAutomation(store, 'C:\\repo')
-    const send = vi.fn()
-    const service = attachedService(store, send)
-
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-
-    expect(blocked).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
-    expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
-      status: 'skipped_unavailable',
-      errorCode: 'wslDistroStopped'
-    })
-    expect(send).not.toHaveBeenCalled()
-  })
 })

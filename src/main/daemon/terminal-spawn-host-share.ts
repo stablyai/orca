@@ -4,7 +4,7 @@ import type {
   SpawnRequestFacts
 } from '../../shared/host-spawn-admission'
 import { recentAutomaticAdmits } from '../../shared/host-automatic-work-budget'
-import { TERMINAL_HOST_CAP_HINT } from '../../shared/terminal-spawn-error-copy'
+import { TERMINAL_HOST_CAP_HINT } from '../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 import type { HostTerminalLedger, OtherDaemonsShare } from './host-terminal-ledger'
 import type { HostTerminalShare } from './host-terminal-ledger-entry'
 import { TerminalSpawnDeferredError } from './terminal-spawn-deferred-error'

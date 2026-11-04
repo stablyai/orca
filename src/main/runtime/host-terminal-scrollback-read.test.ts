@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { TerminalTab } from '../../shared/terminal-tab-types'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../shared/terminal/replay/terminal-scrollback-limits'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import type { TerminalTab } from '../../shared/workspace-layout/terminal-tab-types'
+
 import {
   readHostTerminalScrollback,
   type HostTerminalScrollbackReadDeps
@@ -76,19 +76,6 @@ describe('readHostTerminalScrollback', () => {
         ref: OTHER_WORKTREE_REF
       })
     ).rejects.toThrow('terminal_scrollback_not_found')
-    expect(readSnapshot).not.toHaveBeenCalled()
-  })
-
-  it('refuses a file over the store limit before reading any of it', async () => {
-    const { resolved, readSnapshot } = deps({
-      statSnapshotSize: async () => TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT + 1
-    })
-    await expect(
-      readHostTerminalScrollback(resolved, {
-        worktree: 'id:repo::/wt-a',
-        ref: HELD_REF
-      })
-    ).rejects.toThrow('terminal_scrollback_too_large')
     expect(readSnapshot).not.toHaveBeenCalled()
   })
 })

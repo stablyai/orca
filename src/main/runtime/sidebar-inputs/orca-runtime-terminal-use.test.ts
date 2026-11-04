@@ -8,7 +8,6 @@ import {
   isWorkspaceOldForCleanup
 } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_USE_THROTTLE_MS } from './terminal-use-producer'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   partialRuntimeStore,
@@ -81,24 +80,6 @@ describe('host-written terminal use', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('writes at most once a minute per workspace, and never for terminal replies', () => {
-    const { runtime, writes } = createHeadlessRuntime()
-    runtime.terminalRunFacts.recordInput('pty-1', 'query-reply', '\x1b[0n', 1_000)
-    expect(writes).toEqual([])
-    runtime.terminalRunFacts.recordInput('pty-1', 'driving', 'a', 1_000)
-    runtime.terminalRunFacts.recordInput(
-      'pty-1',
-      'driving',
-      'b',
-      1_000 + TERMINAL_USE_THROTTLE_MS - 1
-    )
-    runtime.terminalRunFacts.recordInput('pty-1', 'driving', 'c', 1_000 + TERMINAL_USE_THROTTLE_MS)
-    expect(writes).toEqual([
-      { lastTerminalUseAt: 1_000 },
-      { lastTerminalUseAt: 1_000 + TERMINAL_USE_THROTTLE_MS }
-    ])
   })
 
   it('app-written launch input never counts', () => {

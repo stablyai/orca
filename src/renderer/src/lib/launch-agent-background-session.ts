@@ -11,7 +11,7 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { requireTuiAgentConfig } from '../../../shared/require-tui-agent-config'
 import { resolveAgentBackgroundLaunchContext } from '@/lib/agent-background-session-launch-host'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   registerEagerPtyBuffer,
   subscribeToPtyExit,

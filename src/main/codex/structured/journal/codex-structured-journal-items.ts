@@ -1,3 +1,4 @@
+import { CodexTurnOrdinals } from './codex-turn-ordinals'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRowAttribution } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { requiresTerminalSettlement } from '../../../native-chat/agent-session-journal/journal-terminal-settlement'
@@ -7,7 +8,6 @@ import {
   readCodexThreadItem,
   type CodexThreadItem
 } from '../items/codex-thread-item-identity'
-import { CodexTurnOrdinals } from './codex-turn-ordinals'
 import { createCodexStructuredItemStreams } from '../items/codex-structured-item-streams'
 import type { CodexHelperName } from '../items/codex-collab-agent-item-translation'
 import {
@@ -15,13 +15,13 @@ import {
   codexStructuredItemKey
 } from '../items/codex-structured-item-stream-bounds'
 import { codexCommandOutlivesTurn } from '../items/codex-command-lifecycle'
-import type {
-  CodexActiveJournalItem,
-  CodexItemTranslation,
-  CodexJournalTranslationAdmission,
-  CodexJournalTranslatorDeps
+import {
+  type CodexActiveJournalItem,
+  type CodexItemTranslation,
+  type CodexJournalTranslationAdmission,
+  type CodexJournalTranslatorDeps,
+  CODEX_JOURNAL_ADMITTED
 } from './codex-structured-journal-contracts'
-import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
 import {
   MAX_CODEX_ACTIVE_ITEMS,
   MAX_CODEX_DETAIL_BYTES,
@@ -54,7 +54,14 @@ export class CodexJournalItems {
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule' | 'now' | 'historyImport'
+      | 'sink'
+      | 'coalesceMs'
+      | 'maxRetainedBytes'
+      | 'schedule'
+      | 'now'
+      | 'historyImport'
+      | 'dispatchEchoes'
+      | 'onUserMessageEcho'
     > & { attributionFor: CodexRowAttribution },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void,
@@ -91,7 +98,7 @@ export class CodexJournalItems {
     const identity = this.identityFor(event.threadId, turnId, item)
     // Count echoes for stable resume ordinals, but user bubbles come from submissions.
     if (source === 'live' && item.type === 'userMessage') {
-      const echo = readCodexDispatchEcho(item, identity)
+      const echo = readCodexDispatchEcho(item, identity, this.deps.dispatchEchoes)
       return {
         handled: true,
         admission: CODEX_JOURNAL_ADMITTED,

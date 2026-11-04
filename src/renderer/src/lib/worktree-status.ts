@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
+import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import {
@@ -13,7 +13,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../shared/terminal-tab-types'
+} from '../../../shared/workspace-layout/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 import { rankWorktreeStatus, type WorktreeStatus } from '../../../shared/worktree-status-rollup'

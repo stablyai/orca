@@ -8,4 +8,4 @@ export const fields = {
   ...outcomeFormat1Fields,
   inputEntries: z.array(z.tuple([z.string().min(1), inputEntrySchema])),
   inputCards: z.array(z.tuple([z.string().min(1), inputCardSchema]))
-} satisfies Record<keyof JournalReducerState, z.ZodType>
+} satisfies Record<Exclude<keyof JournalReducerState, 'inputs'>, z.ZodType>

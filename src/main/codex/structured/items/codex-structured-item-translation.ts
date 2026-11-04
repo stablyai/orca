@@ -1,4 +1,10 @@
 import {
+  codexCommandOutput,
+  codexReasoningText,
+  mcpToolArguments,
+  mcpToolOutput
+} from './codex-item-result-readers'
+import {
   toolExecutionMetadata,
   toolWebSearchResults
 } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
@@ -14,14 +20,8 @@ import {
   type CodexHelperName
 } from './codex-collab-agent-item-translation'
 import { codexItemRunState } from './codex-item-run-state'
-import {
-  readFirstString,
-  readRecord,
-  readString,
-  readTextContent
-} from '../../app-server/codex-item-field-readers'
+import { readRecord, readString, readTextContent } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
-
 import { journalReasoningBody } from '../../../native-chat/agent-session-journal/journal-reasoning-row'
 
 export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
@@ -75,7 +75,7 @@ export type CodexJournalItem = {
 }
 
 function commandItem(item: CodexThreadItem): CodexJournalItem {
-  const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
+  const output = codexCommandOutput(item)
   const parsed = commandActionFacts(item)
   return {
     body: {
@@ -132,18 +132,11 @@ function mcpToolCallName(item: CodexThreadItem): string {
 }
 
 /** Labels read top-level keys; wrap non-object arguments and omit empty objects. */
-function mcpToolArguments(value: unknown): unknown {
-  if (typeof value !== 'object' || value === null) {
-    return value === null || value === undefined ? null : { arguments: value }
-  }
-  return Array.isArray(value) ? { arguments: value } : Object.keys(value).length > 0 ? value : null
-}
-
 function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
   const server = readString(item, 'server')
   const tool = readString(item, 'tool')
   const failure = readString(readRecord(item.error), 'message')
-  const text = failure ?? readTextContent(readRecord(item.result), 'content')
+  const text = mcpToolOutput(item)
   return {
     body: {
       kind: 'tool-call',
@@ -244,10 +237,7 @@ export function codexJournalItem(
     }
   }
   if (item.type === 'reasoning') {
-    const text =
-      readTextContent(item, 'text') ??
-      readTextContent(item, 'summary') ??
-      readTextContent(item, 'content')
+    const text = codexReasoningText(item)
     return { body: journalReasoningBody(text), handled: true }
   }
   const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item)

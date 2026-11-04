@@ -13,7 +13,8 @@ function restingJournal() {
   return {
     threadGoal: () => null,
     visitItems: () => {},
-    submissions: () => [],
+    inputOrder: { hasInputs: () => false },
+    statusRead: () => ({ items: [], submissions: [] }),
     contextUsage: () => null,
     context: { floor: () => null }
   }

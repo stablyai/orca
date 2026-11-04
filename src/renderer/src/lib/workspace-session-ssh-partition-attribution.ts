@@ -1,12 +1,12 @@
 import type { Repo } from '../../../shared/repo-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
 } from '../../../shared/worktree-execution-host-resolution'
-import { workspaceIdsNamedByPartition } from '../../../shared/workspace-session-stranded-partition-adoption'
+import { workspaceIdsNamedByPartition } from '../../../shared/workspace-session/workspace-session-stranded-partition-adoption'
 
 /** Contested SSH adoption may gap-fill, never replace: evidence is prior local/runtime rivalry, duplicate SSH partitions, or catalog multi-host repo IDs. Mere local/ssh co-presence is the repair’s input, not collision proof. Foreign means positive catalog reattribution; unknown catalogs prove neither, so unhydrated boot still reunites rows. */
 export function sshPartitionCatalogAttribution(

@@ -5,7 +5,7 @@ import type { DiffContent, FileContent } from './editor-panel-content-types'
 import {
   useEditorPanelExternalContentEvents,
   usePruneClosedEditorContent
-} from './useEditorPanelExternalContentEvents'
+} from './external-changes/useEditorPanelExternalContentEvents'
 import { useEditorPanelFileLoadRetry } from './useEditorPanelFileLoadRetry'
 import { useLocalLogTail } from './useLocalLogTail'
 import { useEditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'

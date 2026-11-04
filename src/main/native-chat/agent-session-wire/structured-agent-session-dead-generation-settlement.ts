@@ -42,7 +42,6 @@ import {
   hasUnfinishedStructuredAgentSessionWork,
   type DeadGenerationJournal
 } from './structured-agent-session-unfinished-work'
-import { codexUnopenedSendResolutions } from './structured-agent-session-unopened-send-withdrawal'
 
 export { settleStaleStructuredAgentSessionState } from './structured-agent-session-stale-state-settlement'
 
@@ -81,22 +80,21 @@ export function planStructuredAgentSessionDeadGeneration(
   const closed = input.unrunRejection
   const unrun =
     startupFailure ?? (closed && agentSessionFailureWords(closed, { surface: 'rejection' }))
-  const withdrawn = unrun ? [] : codexUnopenedSendResolutions(input.journal, input.fence)
-  if (!showUnexpectedExitOutcome && !hasUnfinishedWork && withdrawn.length === 0) {
-    return { mutations: [], dispatches: [] }
-  }
-  const withdrawnIds = new Set(withdrawn.map((entry) => entry.clientMessageId))
   const dispatches = [
-    ...withdrawn,
     ...journalPendingSubmissionResolutions(
-      (input.journal.submissions?.() ?? input.journal.pendingSubmissions?.() ?? []).filter(
-        (entry) => !withdrawnIds.has(entry.clientMessageId) && owns(entry.fence)
-      ),
+      (
+        input.journal.inputOrder?.recoverableSubmissions() ??
+        input.journal.submissions?.() ??
+        input.journal.pendingSubmissions?.() ??
+        []
+      ).filter((entry) => owns(entry.fence)),
       input.fence,
       unrun ? { rejection: unrun } : { reason: input.pendingSubmissionReason }
     )
   ]
-  const allItems = providerTimelineExecutionItems(input.journal.snapshot().items)
+  const allItems = providerTimelineExecutionItems(
+    (input.journal.statusRead?.() ?? input.journal.snapshot()).items
+  )
   const items = allItems.filter((item) => owns(input.journal.itemFence(item.itemId)))
   const proven = watchedExitRevisions(items, input.exit, input.journal)
   const mutations: JournalLifecycleMutationInput[] = []
@@ -106,7 +104,9 @@ export function planStructuredAgentSessionDeadGeneration(
     // Existing rejection wording is terminal and must remain unchanged.
     const recordedByDeliveryLoop =
       input.exitedDuringStartup.owned ||
-      input.journal.submissions?.().some(isQueuedAgentJournalSubmission) ||
+      (input.journal.inputOrder?.recoverableSubmissions() ?? input.journal.submissions?.())?.some(
+        isQueuedAgentJournalSubmission
+      ) ||
       hasStructuredAgentSessionStartFailureRow(allItems, startKey)
     if (!recordedByDeliveryLoop) {
       mutations.push(structuredAgentSessionStartFailureRow(startKey, startupFailure))

@@ -17,10 +17,10 @@ import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
 import { createTerminalInputReservation } from '../../terminal-input-admission'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
-import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
+import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import { hasExplicitIdleTitle } from '../../tui-idle-evidence'
 import {
