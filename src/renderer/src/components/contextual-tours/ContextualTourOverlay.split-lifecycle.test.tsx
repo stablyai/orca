@@ -147,12 +147,17 @@ describe('Split a terminal pane tip lifecycle', () => {
     await settle()
     await interruptWithDialog()
 
+    const terminalInput = document.createElement('textarea')
+    document.body.appendChild(terminalInput)
+    terminalInput.focus()
     act(() => {
       void useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
     })
     await closeDialog()
     expect(shownTip()).toBe('Start another task in parallel')
+    expect(document.activeElement).toBe(terminalInput)
     expect(useAppStore.getState().contextualToursSeenIds).toContain('workspace-agent-sessions')
+    terminalInput.remove()
   })
 
   it('keeps the next tip owed when its target is missing right after the split', async () => {

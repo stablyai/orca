@@ -21,13 +21,13 @@ import {
 } from './contextual-tour-overlay-measurement'
 import {
   ContextualTourOverlaySurface,
-  getContextualTourFocusableElements,
   handleContextualTourOverlayKeyDown,
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
+import { useContextualTourFocus } from './use-contextual-tour-focus'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
 import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 
@@ -70,8 +70,6 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const measuredTargetRef = useRef<MeasuredContextualTourTarget | null>(null)
   const markedTourIdRef = useRef<string | null>(null)
   const renderedStepIndexRef = useRef<number | null>(null)
-  const previousFocusRef = useRef<HTMLElement | null>(null)
-  const focusedStepRef = useRef<string | null>(null)
   const telemetryTourIdRef = useRef<ContextualTourId | null>(null)
   const telemetryOutcomeSentRef = useRef(false)
   const telemetryStepsSeenRef = useRef<Set<number>>(new Set())
@@ -322,49 +320,12 @@ export function ContextualTourOverlay(): JSX.Element | null {
     }
   }, [activeTourId, emitContextualTourOutcome])
 
-  useEffect(() => {
-    if (!activeTourId || !renderState) {
-      return
-    }
-    const focusKey = `${activeTourId}:${activeStepIndex}`
-    if (focusedStepRef.current === focusKey) {
-      return
-    }
-    focusedStepRef.current = focusKey
-
-    const currentFocus = document.activeElement
-    if (
-      !previousFocusRef.current &&
-      currentFocus instanceof HTMLElement &&
-      !panelRef.current?.contains(currentFocus)
-    ) {
-      previousFocusRef.current = currentFocus
-    }
-
-    const timeout = window.setTimeout(() => {
-      const panel = panelRef.current
-      const firstFocusable = panel ? getContextualTourFocusableElements(panel)[0] : null
-      ;(firstFocusable ?? panel)?.focus({ preventScroll: true })
-    }, 0)
-    return () => window.clearTimeout(timeout)
-  }, [activeStepIndex, activeTourId, renderState])
-
-  useEffect(() => {
-    if (activeTourId) {
-      return
-    }
-    // A paused tour that comes back must not take focus again: a keystroke meant for the terminal
-    // would land on its dismiss button. Only a tour that ended for good resets the focus memory.
-    const focusedTourId = focusedStepRef.current?.split(':')[0]
-    if (!focusedTourId || useAppStore.getState().contextualToursSeenIds.includes(focusedTourId)) {
-      focusedStepRef.current = null
-    }
-    const previousFocus = previousFocusRef.current
-    previousFocusRef.current = null
-    if (previousFocus?.isConnected) {
-      previousFocus.focus({ preventScroll: true })
-    }
-  }, [activeTourId])
+  useContextualTourFocus({
+    activeTourId,
+    activeStepIndex,
+    rendered: renderState !== null,
+    panelRef
+  })
 
   if (!activeTourId || !renderState) {
     return null
