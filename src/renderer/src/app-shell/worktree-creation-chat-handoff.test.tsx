@@ -211,6 +211,7 @@ describe('worktree creation chat handoff', () => {
         linkedPR: null,
         linkedWorkItem: null,
         name: 'feature',
+        onCreated: vi.fn(),
         parsedLinkedIssueNumber: 42,
         repoId: worktree.repoId,
         requiresExplicitSetupChoice: false,
