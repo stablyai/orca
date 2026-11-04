@@ -11,8 +11,9 @@ import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { getManagedCommand } from '../../main/codex/codex-hook-definition'
-import { _internals as grantInternals } from '../../main/codex/codex-hook-trust-grant'
+import '../../main/codex/hooks/definitions/codex-hook-definition'
+import { buildCodexHookCommand as getManagedCommand } from '../../main/codex/hooks/definitions/codex-hook-command-form'
+import { _internals as grantInternals } from '../../main/codex/trust/grants/codex-hook-trust-grant'
 
 const { homes, call } = vi.hoisted(() => ({
   homes: { current: '' },

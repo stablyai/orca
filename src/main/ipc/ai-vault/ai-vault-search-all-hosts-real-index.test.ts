@@ -9,7 +9,7 @@ import {
   openSessionSearchIndexerHarness,
   type SessionSearchIndexerHarness
 } from '../../ai-vault-search/session-search-indexer-test-fixture'
-import type { AiVaultSearchResponse } from '../../../shared/ai-vault-search-types'
+import type { AiVaultSearchResponse } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 

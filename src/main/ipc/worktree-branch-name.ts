@@ -4,7 +4,7 @@ import {
   normalizeBranchPrefix,
   selectBranchPrefixInput,
   type BranchPrefixSettings
-} from '../../shared/branch-prefix'
+} from '../../shared/git/branches/branch-prefix'
 
 /** Expose a normalized prefix so callers avoid double-prefixing and invalid slash combinations. */
 export function getConfiguredBranchPrefix(

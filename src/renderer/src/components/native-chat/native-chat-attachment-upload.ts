@@ -1,7 +1,7 @@
 import {
   lastVerifiedRuntimeStatus,
   isRuntimeHostContactRevoked
-} from '../../../../shared/runtime-host-status'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '@/store'
 // Upload structured-chat client paths to their paired host; other remote chats cannot read client-local files.
 

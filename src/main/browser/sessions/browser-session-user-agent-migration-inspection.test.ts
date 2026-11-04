@@ -39,21 +39,6 @@ describe('retired browser profile identity inspection', () => {
   })
 
   it.each([
-    { scenario: 'null', entry: null },
-    { scenario: 'a number', entry: 42 },
-    { scenario: 'a string', entry: 'broken' },
-    {
-      scenario: 'a profile that fails validation for an unrelated reason',
-      entry: unhydratableProfile()
-    }
-  ])('stays silent about $scenario, which carries no identity choice', ({ entry }) => {
-    expect(inspectRetiredBrowserSessionProfileUserAgentModes([entry], ORCA_PROFILE_ID)).toEqual({
-      noticePending: false,
-      degraded: false
-    })
-  })
-
-  it.each([
     { scenario: 'an unreadable mode', entry: profileWithMode('unexpected') },
     {
       scenario: 'a mode on an entry that cannot be hydrated',

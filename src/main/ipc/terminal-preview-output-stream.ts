@@ -1,9 +1,9 @@
 import type { WebContents } from 'electron'
-import { iterateTerminalInputChunks } from '../../shared/terminal-input'
+import { iterateTerminalInputChunks } from '../../shared/terminal/input/terminal-input'
 import type {
   TerminalPreviewDataPayload,
   TerminalPreviewReplayChunk
-} from '../../shared/terminal-preview'
+} from '../../shared/terminal/replay/terminal-preview'
 
 const OUTPUT_BATCH_MS = 5
 export const TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES = 64 * 1024

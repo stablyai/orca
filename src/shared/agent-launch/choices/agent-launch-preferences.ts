@@ -1,6 +1,6 @@
 import { YOLO_TUI_AGENT_ENV } from '../permissions/tui-agent-permissions'
 import type { AgentLaunchPreferences } from '../../agent-session/agent-session-host-authority'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import {
   readLaunchPermissionChoice,
   agentPermissionHasTerminalChoice
@@ -21,7 +21,9 @@ export function toAgentLaunchPreferences(
   }
   const model = composeAgentLaunchModel(agent, sessionOptions)
   const effort =
-    typeof sessionOptions.effort === 'string' && sessionOptions.effort.trim()
+    typeof sessionOptions.effort === 'string' &&
+    sessionOptions.effort.trim() &&
+    !(agent === 'claude' && sessionOptions.effort.trim() === 'ultracode')
       ? sessionOptions.effort.trim()
       : undefined
   const mode = readLaunchPermissionChoice(sessionOptions)

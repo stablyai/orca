@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type * as FilePromises from 'node:fs/promises'
 import type * as PreparationLock from './worktree-preparation-lock'
-import { isUnsupportedWorktreeAddLockReasonError } from '../../../../shared/git-worktree-command-capabilities'
+import { isUnsupportedWorktreeAddLockReasonError } from '../../../../shared/git/worktrees/git-worktree-command-capabilities'
 
 const mocks = vi.hoisted(() => ({
   git: vi.fn(),

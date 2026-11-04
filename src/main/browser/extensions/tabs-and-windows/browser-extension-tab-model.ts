@@ -1,6 +1,6 @@
 /// <reference types="chrome" />
 import { webContents } from 'electron'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import { browserManager } from '../../browser-manager'
 import { createBrowserTabInRenderer } from '../../../runtime/browser/browser-tab-renderer-create'
 import { closeBrowserTabInRenderer } from '../../../runtime/browser/browser-tab-renderer-close'

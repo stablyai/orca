@@ -8,8 +8,8 @@ import {
   clearGrokSessionPathLookupCacheForTests,
   grokEncodedCwdDirName
 } from '../../shared/grok-session-paths'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServer } from '../agent-hooks/server'
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
 import * as statusIdentity from '../agent-hooks/server/server-status-identity'

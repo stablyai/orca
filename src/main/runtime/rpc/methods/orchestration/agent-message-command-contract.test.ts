@@ -38,7 +38,7 @@ import {
   projectStructuredItemToNativeChat
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { latestStructuredAgentSessionPrompt } from '../../../../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { isOrcaDispatchPrompt } from '../../../../../shared/agent-row-primary-text'
+import { isOrcaDispatchPrompt } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import * as placement from './worker/worker-start-agent-placement'
 import * as topology from './worker/worker-topology'
 import {

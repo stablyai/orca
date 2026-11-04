@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../../../shared/setup-agent-sequencing'
 import './worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
-import type { AppStoreState } from './worktree-activation.test-fixture'
+
 import {
+  type AppStoreState,
   createMockStore,
   registerWorktreeActivationReset
 } from './worktree-activation.test-fixture'
@@ -25,7 +26,7 @@ import {
   makeFolderWorkspace,
   makeProjectGroup
 } from '../components/sidebar/folder-workspace-composer-submit-fixtures'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 registerWorktreeActivationReset()
 const originalCreateTab = useAppStore.getState().createTab

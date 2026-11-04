@@ -6,12 +6,12 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   REMOTE_TERMINAL_COMMAND_RESPONSE_TIMEOUT_MS,
   REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS
 } from './remote-terminal-stream-watchdog'
-import { TERMINAL_MULTIPLEX_ACK_FLUSH_MS } from '../../../shared/terminal-multiplex-flow-control'
+import { TERMINAL_MULTIPLEX_ACK_FLUSH_MS } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 
 describe('remote terminal stalled stream recovery', () => {
   const sendBinary = vi.fn()

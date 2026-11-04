@@ -3,7 +3,8 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 import { ResourceSessionInventoryCache } from './resource-session-inventory-cache'
-import type { DaemonSession, UnifiedSessionRow } from './resource-usage-merge-types'
+import type { UnifiedSessionRow } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
 const mocks = vi.hoisted(() => ({
   activateAndRevealWorkspace: vi.fn(),

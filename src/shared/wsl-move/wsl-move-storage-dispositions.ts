@@ -10,7 +10,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     disposition: 'rewrite-desktop',
     item: 42
   },
-  'src/renderer/src/components/editor/ipynb-kernel-store.ts': {
+  'src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-store.ts': {
     disposition: 'rewrite-desktop',
     item: 43
   },
@@ -137,7 +137,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
     'test-fixture',
   'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
-  'src/main/codex/codex-state-db-test-fixture.ts': 'test-fixture',
+  'src/main/codex/history/index/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'
 }
 

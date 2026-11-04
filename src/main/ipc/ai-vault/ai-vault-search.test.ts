@@ -26,13 +26,13 @@ vi.mock('../ssh/ssh', () => ({
 import { registerAiVaultSearchHandlers } from './ai-vault-search'
 import { aiVaultApi } from '../../../preload/api/ai-vault-bridge'
 import { setSessionSearchService } from '../../ai-vault-search/session-search-service-registry'
-import { unavailableSessionSearchStatus } from '../../../shared/ai-vault-search-client'
-import { AI_VAULT_AGENTS } from '../../../shared/ai-vault-types'
+import { unavailableSessionSearchStatus } from '../../../shared/ai-vault/search/ai-vault-search-client'
+import { AI_VAULT_AGENTS } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   fakeSearchService,
   searchHit,
   searchResults
-} from '../../../shared/ai-vault-search-test-fixture'
+} from '../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'

@@ -4,8 +4,8 @@ import {
   type VisibleOrchestrationState
 } from '@/runtime/visible-agent-orchestration'
 import type { AppState } from '@/store/types'
-import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 type OrchestrationIndexState = Pick<
   AppState,

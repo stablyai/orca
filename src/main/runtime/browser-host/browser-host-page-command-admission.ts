@@ -1,16 +1,16 @@
-import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../shared/browser-client-profile-switch-protocol'
-import type { BrowserClientHostCommandEvent } from '../../../shared/browser-client-host-protocol'
+import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
   BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY
-} from '../../../shared/browser-client-automation-protocol'
-import { BROWSER_EXPECT_URL_UNSUPPORTED_CODE } from '../../../shared/browser-expected-url'
+} from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BROWSER_EXPECT_URL_UNSUPPORTED_CODE } from '../../../shared/browser/client-hosting/browser-expected-url'
 import { BrowserError } from '../../browser/browser-error'
-import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../shared/browser-client-file-channel-protocol'
+import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import {
   BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR,
   requiresBrowserClientFileChannel
-} from '../../../shared/browser-client-file-channel-methods'
+} from '../../../shared/browser/client-hosting/browser-client-file-channel-methods'
 import type { BrowserHostLease } from './browser-host-lease-records'
 
 export function assertBrowserHostPageCommandAdmission(

@@ -3,7 +3,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
-import { normalizeAndAccept, PANE_KEY } from '../../agent-hook-listener-test-harness'
+import { normalizeAndAccept, PANE_KEY } from '../normalization/agent-hook-listener-test-harness'
 
 const SESSION_ID = '01a0caa3-0e77-7d41-bad7-46283a45633d'
 const TURN_ID = 'e495d1a5-59aa-47b4-8efb-a1bd75509afc'

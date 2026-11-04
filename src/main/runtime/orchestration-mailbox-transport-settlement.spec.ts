@@ -4,7 +4,7 @@ import {
   writeRefused,
   writeUnverifiable,
   type WriteSettlement
-} from '../../shared/pty-write-settlement'
+} from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createBoundRun,

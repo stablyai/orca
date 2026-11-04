@@ -3,7 +3,7 @@ import { createRef } from 'react'
 import { cleanup, renderHook } from '@testing-library/react'
 import { Virtualizer } from '@tanstack/react-virtual'
 import { afterEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { makeRepo, makeWorktree } from './worktree-list-lineage-card-test-fixtures'
 import { useSidebarSectionRows } from './worktree-list/listing/use-section-rows'
 import { expandGroupsForWorktreeReveal } from './worktree-list/navigation/pending-reveal-inputs'
@@ -65,6 +65,7 @@ function sections(
   return renderHook(() =>
     useSidebarSectionRows({
       groupBy,
+      sortBy: 'smart',
       projectOrderBy: 'manual',
       pinnedDisplayPolicy: 'single-location',
       defaultHostId: 'local',

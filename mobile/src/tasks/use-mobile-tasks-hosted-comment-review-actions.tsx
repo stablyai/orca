@@ -284,6 +284,8 @@ export function useMobileTasksHostedCommentReviewActions<
     }
     setError('')
     const isCurrent = claimPublication(item, detailPayload)
+    const requestedHeadSha =
+      detailPayload?.provider === 'github' ? detailPayload.headSha : undefined
     try {
       const reply = await githubPullRequestChecksRead.request(
         client,
@@ -291,7 +293,7 @@ export function useMobileTasksHostedCommentReviewActions<
           repo: `id:${item.source.repoId}`,
           prNumber: item.source.number,
           prRepo: requireGitHubTaskTarget(item.source).repository,
-          headSha: detailPayload?.provider === 'github' ? detailPayload.headSha : undefined,
+          headSha: requestedHeadSha,
           noCache: true
         },
         { timeoutMs: 30_000 }
@@ -301,6 +303,12 @@ export function useMobileTasksHostedCommentReviewActions<
         return
       }
       const checksSummary = buildGitHubCheckSummary(checks)
+      const summaryFor = (source: typeof item.source) =>
+        requestedHeadSha !== undefined &&
+        source.headSha === requestedHeadSha &&
+        source.checksSummary?.state === checksSummary.state
+          ? source.checksSummary
+          : checksSummary
       setDetailPayload((current) =>
         current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
           ? { ...current, checks }
@@ -310,7 +318,7 @@ export function useMobileTasksHostedCommentReviewActions<
         sameGitHubTask(current, item)
           ? {
               ...current,
-              source: { ...current.source, checksSummary }
+              source: { ...current.source, checksSummary: summaryFor(current.source) }
             }
           : current
       )
@@ -319,7 +327,7 @@ export function useMobileTasksHostedCommentReviewActions<
           sameGitHubTask(candidate, item)
             ? {
                 ...candidate,
-                source: { ...candidate.source, checksSummary }
+                source: { ...candidate.source, checksSummary: summaryFor(candidate.source) }
               }
             : candidate
         )

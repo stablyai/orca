@@ -40,6 +40,7 @@ export function useMobileStructuredAgentOptions(args: {
     | 'permissionModes'
     | 'permissionOwn'
     | 'coherentModelCatalog'
+    | 'modelEffortDiscovery'
     | 'statusFeed'
     | 'sendSelection'
     | 'sendOptions'
@@ -84,19 +85,6 @@ export function useMobileStructuredAgentOptions(args: {
     worktree: createdHere?.worktree,
     coherentCatalog: hostSupport?.coherentModelCatalog === true
   })
-  const demandModelCatalog = useMobileHostModelCatalogUpgrade({
-    agent,
-    client,
-    sessionId,
-    enabled,
-    fence,
-    newLaunch: createdHere !== undefined,
-    ...(createdHere ? { worktree: createdHere.worktree } : {}),
-    optionCatalog,
-    activeOptionRecordRef,
-    updateOptionState,
-    receiveCatalog
-  })
 
   // Pre-1.4.225 hosts lack per-chat modes; show their actual global agent mode.
   const legacyHostPermissions =
@@ -125,6 +113,25 @@ export function useMobileStructuredAgentOptions(args: {
     return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
   }, [acceptsPicks, legacyHostPermissions, readOptionState])
   const optionSnapshot = readOptionSnapshot()
+
+  const modelOption = optionSnapshot.find((row) => row.id === 'model')
+  const demandModelCatalog = useMobileHostModelCatalogUpgrade({
+    agent,
+    selectedModel:
+      hostSupport?.modelEffortDiscovery && modelOption?.kind.type === 'select'
+        ? modelOption.kind.currentValue
+        : undefined,
+    client,
+    sessionId,
+    enabled,
+    fence,
+    newLaunch: createdHere !== undefined,
+    ...(createdHere ? { worktree: createdHere.worktree } : {}),
+    optionCatalog,
+    activeOptionRecordRef,
+    updateOptionState,
+    receiveCatalog
+  })
 
   const readWriteContext = () => {
     const currentState = projectRuntimeReports({

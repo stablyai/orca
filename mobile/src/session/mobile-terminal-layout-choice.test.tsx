@@ -270,7 +270,6 @@ it('keeps C paired with A after replacing B and focusing A by its first terminal
       activeSessionTabTypeRef: useRef(null),
       switchSessionTabRef: useRef(null),
       setActiveSessionTabId: vi.fn(),
-      defaultTerminalHandlesToLiveInput: vi.fn(),
       subscribeToTerminal: vi.fn(),
       unsubscribeTerminal: vi.fn(),
       handleTerminalTap: focus

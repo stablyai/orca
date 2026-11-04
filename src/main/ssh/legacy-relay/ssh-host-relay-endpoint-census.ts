@@ -1,6 +1,6 @@
 /** Census all account-owned relays, including other desktops, before a session exists. Failed/truncated listings and unknown endpoints stay unverifiable; lost contact never proves exit (docs/reference/ssh-execution-boundary.md). */
 import type { SshConnection } from '../connection/ssh-connection'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../remote-exec/remote-frame-protocol'
 import { SHORT_RELAY_SOCKET_DIR_PREFIX } from '../relay-socket-path-limit'
 import { execCommand } from '../remote-exec/remote-exec-command'

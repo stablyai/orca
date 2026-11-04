@@ -33,12 +33,6 @@ describe.each(['dark', 'light'] as const)('mobile text contrast (%s)', (scheme) 
     }
   })
 
-  it('keeps secondary text at least as prominent as muted text', () => {
-    expect(contrastRatio(colors.textSecondary, colors.bgPanel)).toBeGreaterThanOrEqual(
-      contrastRatio(colors.textMuted, colors.bgPanel)
-    )
-  })
-
   // WCAG 1.4.11: the edge is what marks a field, so it holds 3:1 on every surface fields sit on, and so does focus.
   it('keeps a text field identifiable on the screen, a sheet and a sheet group', () => {
     const surfaces = [

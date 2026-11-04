@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { invalidateGitBranchLineTotalInFlight } from '../../../shared/git-branch-line-total'
+import { invalidateGitBranchLineTotalInFlight } from '../../../shared/git/status/git-branch-line-total'
 import { getStatus } from './status-read'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 

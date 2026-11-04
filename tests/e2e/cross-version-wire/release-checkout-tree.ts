@@ -9,7 +9,7 @@ import {
 } from './release-missing-packages.ts'
 
 import { CHECKOUT_PROCESS_TIMEOUT_MS, runCheckoutProcess } from './release-checkout-process.ts'
-import { prefetchReleaseBlobs } from './release-checkout-prefetch.ts'
+import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
 
 // Extract runtime, renderer, codecs and the phone row reader; omit CLI to bound cold-CI extraction.
 // Add source workspace packages from each release’s own policy.
@@ -229,11 +229,11 @@ export async function extractReleaseCheckoutTree(
   sourceOnly = false
 ): Promise<PackageImports> {
   const archive = join(staging, '.release-checkout.tar')
+  await prepareReleaseSnapshotSource(repoRoot, commit)
   const deadline = Date.now() + CHECKOUT_PROCESS_TIMEOUT_MS
   const workspacePaths = await releaseWorkspaceArchivePaths(repoRoot, commit, deadline)
   const optionalPaths = await listReleasePaths(repoRoot, commit, OPTIONAL_ARCHIVE_PATHS, deadline)
   const paths = [...ARCHIVE_PATHS, ...optionalPaths, ...workspacePaths]
-  await prefetchReleaseBlobs(repoRoot, commit, paths, deadline)
   try {
     await runCheckoutProcess(
       repoRoot,

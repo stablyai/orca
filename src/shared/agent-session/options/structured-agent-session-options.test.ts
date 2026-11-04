@@ -13,6 +13,7 @@ import {
   commitStructuredAgentSessionOption,
   createStructuredAgentSessionOptionState,
   settleStructuredAgentSessionBuiltinCatalog,
+  structuredAgentSessionOptionCatalog,
   type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
 import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
@@ -33,6 +34,46 @@ function viewModel(
 }
 
 describe('structured agent session options', () => {
+  it('fills unknown OpenCode menus without changing choices or replacing a live known-empty menu', () => {
+    const seed = structuredAgentSessionSeedCatalog('opencode2')
+    const row = { id: 'provider/model', label: 'Live label', isDefault: false, efforts: [] }
+    const current = {
+      model: row.id,
+      effort: 'high',
+      acceptedInputSources: { model: 'saved' as const, effort: 'saved' as const }
+    }
+    const unknown = { models: [{ ...row, effortsKnown: false as const }], current }
+    let state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('opencode2', seed),
+      seed,
+      unknown
+    )
+    const catalog = {
+      origin: 'probe' as const,
+      fetchedAt: 1,
+      models: [
+        {
+          ...row,
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'high', label: 'High' }
+          ]
+        }
+      ]
+    }
+    state = applyStructuredAgentSessionModelCatalog(state, seed, catalog, { newLaunch: false })
+    expect(
+      state.catalog?.models[0]?.options.find((row) => row.id === 'effort')?.kind
+    ).toMatchObject({ choices: catalog.models[0]!.efforts })
+    state = applyStructuredAgentSessionOptions(state, seed, unknown)
+    expect(state.catalog?.models[0]?.options.find((row) => row.id === 'effort')).toBeDefined()
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: row.id, effort: 'high' })
+    state = applyStructuredAgentSessionOptions(state, seed, { models: [row], current })
+    state = applyStructuredAgentSessionModelCatalog(state, seed, catalog, { newLaunch: false })
+    expect(state.catalog?.models[0]?.options.find((row) => row.id === 'effort')).toBeUndefined()
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: row.id, effort: 'high' })
+  })
+
   it('accepts a later catalog after a live answer becomes unknown', () => {
     const seed = structuredAgentSessionSeedCatalog('pi')
     const unknown = { models: [], modelsKnown: false as const, current: { defaulted: [] } }
@@ -375,5 +416,26 @@ it('rederives unanswered catalog policy while preserving stronger input and quer
     model: 'opus',
     effort: 'low',
     fastMode: 'false'
+  })
+})
+
+it('uses the host chat-only effort declaration on both structured-chat clients and keeps old hosts ordinary', () => {
+  const model = {
+    id: 'opus',
+    label: 'Opus',
+    isDefault: true,
+    efforts: [{ value: 'xhigh', label: 'Extra high' }]
+  }
+  const catalog = (chatEfforts?: { value: string; label: string }[]) =>
+    structuredAgentSessionOptionCatalog(
+      CLAUDE_SESSION_OPTION_CATALOG,
+      { models: [{ ...model, ...(chatEfforts ? { chatEfforts } : {}) }], current: {} },
+      'claude'
+    )
+  const effort = (chatEfforts?: { value: string; label: string }[]) =>
+    catalog(chatEfforts).models[0]?.options.find(({ id }) => id === 'effort')?.kind
+  expect(effort()).toMatchObject({ choices: [{ value: 'xhigh' }] })
+  expect(effort([{ value: 'ultracode', label: 'Ultracode' }])).toMatchObject({
+    choices: [{ value: 'xhigh' }, { value: 'ultracode' }]
   })
 })

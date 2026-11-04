@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
-import { buildFreshShellViewportBlankingSequence } from '../../shared/terminal-fresh-shell-viewport'
-import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import type { PtyOwnerBackend } from '../../shared/terminal/pty/lifecycle/pty-owner-backend'
+import { buildFreshShellViewportBlankingSequence } from '../../shared/terminal/viewport/terminal-fresh-shell-viewport'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { Session } from './session'
 
 const COLS = 119

@@ -1,8 +1,8 @@
 import { agentEntrySessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status-worktree-attribution'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export function effectiveWorktreeAgentRowStartedAt(entry: AgentStatusEntry): number {
   return agentEntrySessionStartedAt(entry)

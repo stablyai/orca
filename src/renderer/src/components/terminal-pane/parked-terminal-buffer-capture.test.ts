@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RepoConnection } from '../../../../shared/workspace-session-terminal-buffers'
+import type { RepoConnection } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import { captureParkedTerminalBuffers } from './parked-terminal-buffer-capture'
 import { shutdownBufferCaptures } from './shutdown-buffer-captures'
 

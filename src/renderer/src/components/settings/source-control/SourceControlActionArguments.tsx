@@ -3,20 +3,20 @@ import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
 } from '../../../../../shared/agent-session/options/agent-session-option-catalog'
-import { sourceControlActionOptions } from '../../../../../shared/source-control-action-options'
+import { sourceControlActionOptions } from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
 import { agentModelChoiceChips } from '../../agent/launch-settings/agent-model-choice-chips'
 import type {
   SourceControlActionLaunchPreferences,
   SourceControlActionRecipe
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   agentPermissionArgs,
   agentPermissionChoices,
   resolveAgentPermission
 } from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { agentArgsSetPermission } from '../../../../../shared/agent-launch/permissions/agent-permission-args'
-import { editActionArgumentChoices } from '../../../../../shared/source-control-action-argument-choices'
-import type { ActionArgumentChoices } from '../../../../../shared/source-control-action-argument-document'
+import { editActionArgumentChoices } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-choices'
+import type { ActionArgumentChoices } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import type {
   AgentChoicePatch,
   AgentLaunchChoices

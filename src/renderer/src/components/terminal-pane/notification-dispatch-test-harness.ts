@@ -1,10 +1,10 @@
-import { vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { vi, type Mock } from 'vitest'
+
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 // Hoisted mock factories reach this state through lazy imports because they cannot capture imports.

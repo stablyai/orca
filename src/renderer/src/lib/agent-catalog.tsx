@@ -1,8 +1,8 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
-import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
+import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import {
   AgentLetterIcon,
   AiderIcon,

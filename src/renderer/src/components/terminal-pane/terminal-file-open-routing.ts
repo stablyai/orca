@@ -1,6 +1,10 @@
+import type { FileOpenFailure } from './terminal-file-open-failure'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../shared/terminal-links'
+import {
+  isPathInsideWorktree,
+  toWorktreeRelativePath
+} from '../../../../shared/terminal/links/terminal-links'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -48,12 +52,6 @@ import {
   type HttpLinkDestination
 } from '@/lib/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
-
-export type FileOpenFailure = {
-  /** `missing` is a verified absence; `unverifiable` means the host could not answer (dropped SSH, timeout, denied path). */
-  verdict: 'missing' | 'unverifiable'
-  error: unknown
-}
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -281,6 +279,9 @@ export function openDetectedFilePath(
     } else if (
       hostGrant === null &&
       !isFloatingWorkspaceId(worktreeId) &&
+      // Why: a local file opens in the workspace it was clicked in, even if another holds it open;
+      // owner-scoped tab ids keep both tabs, and the editor reads local absolute paths directly.
+      targetExecutionHostId !== LOCAL_EXECUTION_HOST_ID &&
       store.openFiles.some(
         (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
       )

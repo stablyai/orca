@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { buildStoreState, type StoreLike } from '../ipc-events-agent-status-store-test-fixtures'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

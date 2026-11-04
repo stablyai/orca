@@ -37,7 +37,7 @@ import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browse
 import {
   formatBrowserClientHostIdArgument,
   readBrowserClientHostIdArgument
-} from '../../shared/browser-client-host-id-argument'
+} from '../../shared/browser/client-hosting/browser-client-host-id-argument'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import {
   attachGuestPoliciesMock,

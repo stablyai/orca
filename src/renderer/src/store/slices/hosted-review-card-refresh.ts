@@ -1,4 +1,4 @@
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { LinkedReviewHints } from './hosted-review-cache-identity'
 import type { HostedReviewFetchOptions } from './hosted-review-cache-state'
 

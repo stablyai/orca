@@ -15,19 +15,23 @@ import {
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
-import { normalizeContextualTourIds } from '../../../../shared/contextual-tours'
-import type { ContextualTourId } from '../../../../shared/contextual-tours'
-import { normalizeFeatureInteractions } from '../../../../shared/feature-interactions'
-import type {
-  FeatureInteractionId,
-  FeatureInteractionState
+import {
+  normalizeContextualTourIds,
+  type ContextualTourId
+} from '../../../../shared/contextual-tours'
+
+import {
+  normalizeFeatureInteractions,
+  type FeatureInteractionId,
+  type FeatureInteractionState
 } from '../../../../shared/feature-interactions'
+
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
-import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
-import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-color-overrides'
+import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
+import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-themes/terminal-color-overrides'
 import {
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
@@ -37,12 +41,12 @@ import {
 import { hasTypedAgentPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import { normalizeOsc52ClipboardDefaultOn } from '../../../../shared/osc52-clipboard-settings'
-import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
+import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
-import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup-ui-state'
+import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 
 export function mergeWebUIState(
   base: PersistedUIState,

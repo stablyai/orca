@@ -55,7 +55,7 @@ import {
   updateMRReviewers
 } from './client'
 import { resetGitLabMrMocks } from './client-mr-test-harness'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   __resetHostedReviewBranchCacheForTests,
   withHostedReviewBranchCache

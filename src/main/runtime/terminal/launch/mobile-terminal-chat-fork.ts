@@ -1,4 +1,4 @@
-import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
+import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { MobileTerminalCommand } from './mobile-terminal-startup'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
@@ -18,7 +18,7 @@ import {
   buildAiVaultLocalResumeStartup,
   getAiVaultResumeCodexHome,
   resolveAiVaultCopiedSessionAgentArgs
-} from '../../../../shared/ai-vault-resume-startup'
+} from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 
 /** One native execution fact builds the line and chooses the shell that receives it. */
 export function buildMobileTerminalChatFork(args: {
