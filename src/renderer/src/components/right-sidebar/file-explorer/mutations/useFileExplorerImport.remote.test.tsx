@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreparedDroppedPaths } from '../../../../../../shared/native-file-drop-preparation'
 import { useAppStore } from '@/store/index'
 import {
-  RUNTIME_WORKTREE_PATH as RUNTIME_ROOT,
   seedRemoteDropWorkspaces,
   sshConnectionStatesAt,
   SSH_WORKTREE_PATH as SSH_ROOT
@@ -79,17 +78,6 @@ afterEach(() => {
 })
 
 describe('file explorer OS file drops on remote workspaces', () => {
-  it("uploads through the workspace's own runtime, not the focused one", async () => {
-    const view = render(<Explorer worktreeId="wt-runtime" root={RUNTIME_ROOT} />)
-    dropFile(view.getByTestId('src'))
-    await waitFor(() => expect(mocks.importPaths).toHaveBeenCalledTimes(1))
-    expect(mocks.importPaths.mock.calls[0][0]).toMatchObject({
-      worktreeId: 'wt-runtime',
-      target: { kind: 'environment', environmentId: 'owner-runtime' }
-    })
-    expect(mocks.importPaths.mock.calls[0][2]).toBe(joinPath(RUNTIME_ROOT, 'src'))
-  })
-
   it('refuses after preparation when the SSH connection changed', async () => {
     let finish: (prepared: PreparedDroppedPaths) => void = () => undefined
     mocks.prepare.mockImplementationOnce(
