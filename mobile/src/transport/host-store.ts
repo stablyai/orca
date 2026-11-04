@@ -1,5 +1,6 @@
 import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { HostProfileSchema } from './types'
+export { reorderHosts } from './host-list-order-store'
 import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './types'
 
 import { getNextHostNameFromHosts } from './host-names'

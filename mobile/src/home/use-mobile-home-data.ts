@@ -11,7 +11,8 @@ import {
   selectConnectableHostProfiles,
   sortHostsByLastConnected
 } from '../transport/host-catalog-selection'
-import { loadHostCatalog } from '../transport/host-store'
+import { loadHostCatalog, reorderHosts } from '../transport/host-store'
+import { orderHostsByIds } from '../transport/host-list-order'
 import type { HostCatalogEntry } from '../transport/types'
 import { fetchHomeHostWorktreeInfo } from '../worktree/home-host-worktree-fetch'
 import {
@@ -39,6 +40,8 @@ export function useMobileHomeData() {
   )
   const onboardingCheckedRef = useRef(false)
   const hydratedRef = useRef(false)
+  const catalogEditRevisionRef = useRef(0)
+  const catalogReadRevisionRef = useRef(0)
   const focusedRef = useRef(false)
   const isHomeFocused = useCallback(() => focusedRef.current, [])
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
@@ -91,11 +94,27 @@ export function useMobileHomeData() {
     allClientsRef.current = connections.allClients
   }, [connections.allClients])
 
+  // Every catalog read uses the same fence, including pairing rechecks and removal refreshes.
+  const refreshHostCatalog = useCallback(async (isStale: () => boolean = () => false) => {
+    const editRevision = catalogEditRevisionRef.current
+    const readRevision = ++catalogReadRevisionRef.current
+    const catalog = await loadHostCatalog()
+    if (
+      isStale() ||
+      catalogEditRevisionRef.current !== editRevision ||
+      catalogReadRevisionRef.current !== readRevision
+    ) {
+      return null
+    }
+    setHostCatalog(catalog)
+    return catalog
+  }, [])
+
   useFocusEffect(
     useCallback(() => {
       let stale = false
       focusedRef.current = true
-      void loadHostCatalog()
+      void refreshHostCatalog(() => stale)
         // A failed read proves nothing about the desktops; keep the ones already shown.
         .catch((): HostCatalogEntry[] | null => null)
         .then(async (catalog) => {
@@ -103,11 +122,7 @@ export function useMobileHomeData() {
             return
           }
           setHostCatalogLoaded(true)
-          if (!catalog) {
-            return
-          }
-          setHostCatalog(catalog)
-          if (catalog.length === 0 || onboardingCheckedRef.current) {
+          if (!catalog || catalog.length === 0 || onboardingCheckedRef.current) {
             return
           }
           onboardingCheckedRef.current = true
@@ -130,11 +145,30 @@ export function useMobileHomeData() {
         stale = true
         focusedRef.current = false
       }
-    }, [router])
+    }, [router, refreshHostCatalog])
   )
 
+  // Jump back in stays recency-ordered. The desktop list keeps the saved order.
   const sortedHosts = useMemo(() => sortHostsByLastConnected(hosts), [hosts])
-  const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
+  const sortedHostCatalog = hostCatalog
+  const reorderHostCatalog = useCallback(
+    async (orderedIds: string[]) => {
+      const revision = ++catalogEditRevisionRef.current
+      setHostCatalog((current) => orderHostsByIds(current, orderedIds))
+      try {
+        await reorderHosts(orderedIds)
+      } catch (error) {
+        if (catalogEditRevisionRef.current === revision) {
+          await refreshHostCatalog()
+        }
+        throw error
+      }
+      if (catalogEditRevisionRef.current === revision) {
+        await refreshHostCatalog()
+      }
+    },
+    [refreshHostCatalog]
+  )
   const resumeCard = useMemo(
     () =>
       selectHomeResumeCard({
@@ -178,6 +212,8 @@ export function useMobileHomeData() {
     hostConnections,
     hostsConnecting,
     jumpBackInRows,
+    refreshHostCatalog,
+    reorderHostCatalog,
     router,
     setHostCatalog,
     sortedHostCatalog,

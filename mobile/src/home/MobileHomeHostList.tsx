@@ -31,6 +31,7 @@ type MobileHomeHostListProps = {
   onOpen: (host: HostCatalogEntry) => void
   onOpenActions: (host: HostCatalogEntry) => void
   onPairDesktop: () => void
+  onReorder: () => void
 }
 
 export function MobileHomeHostList(props: MobileHomeHostListProps) {
@@ -49,12 +50,26 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
       ]}
     >
       {props.header}
-      <Text
-        style={[homeListStyles.sectionHeading, !props.header && homeListStyles.firstSectionHeading]}
-        accessibilityRole="header"
+      <View
+        style={[styles.sectionHeader, !props.header && styles.firstSectionHeader]}
       >
-        {t('home.listHeader.desktopsHeading', 'Desktops')}
-      </Text>
+        <Text
+          style={[homeListStyles.sectionHeading, styles.headingFlush]}
+          accessibilityRole="header"
+        >
+          {t('home.listHeader.desktopsHeading', 'Desktops')}
+        </Text>
+        {props.hosts.length > 1 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('home.listHeader.reorderDesktops', 'Reorder desktops')}
+            hitSlop={8}
+            onPress={props.onReorder}
+          >
+            <Text style={styles.reorder}>{t('home.listHeader.reorder', 'Reorder')}</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <View style={homeListStyles.group}>
         {props.hosts.map((host, index) => (
           <Fragment key={host.id}>
@@ -141,5 +156,15 @@ const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostR
 })
 
 const styles = themedStyleSheet(() => ({
-  content: { paddingHorizontal: spacing.lg }
+  content: { paddingHorizontal: spacing.lg },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 26,
+    marginBottom: 9
+  },
+  firstSectionHeader: { marginTop: spacing.sm },
+  headingFlush: { flex: 1, marginTop: 0, marginBottom: 0 },
+  reorder: { color: colors.textSecondary, fontSize: 15, paddingHorizontal: spacing.xs }
 }))
