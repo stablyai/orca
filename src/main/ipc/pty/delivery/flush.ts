@@ -2,6 +2,7 @@ import {
   recordHiddenRendererPtyDataDrop,
   shouldDropHiddenRendererPtyData
 } from './pty-hidden-delivery-gate'
+import { advanceEscapeBoundary } from './pty-escape-boundary'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import { activeRendererPtys } from './visibility-state'
 import {
@@ -10,7 +11,7 @@ import {
   PTY_BATCH_FLUSH_MAX_WRITES,
   PTY_DISPATCHER_READY_WATCHDOG_MS
 } from './constants'
-import { getDroppedMode2031RendererData, getDroppedSynchronizedOutputRendererData } from './pending'
+import { makeDroppedOutputPayload } from './pending'
 import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import { makePtyDataPayload, sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
@@ -129,17 +130,8 @@ export function flushPendingData(session: PtyIpcSession): void {
         session.pendingData.remove(selection)
         session.updateProducerFlowControl(id)
         // A pending-cap gap requires snapshot repaint; only salvaged query bytes remain in data.
-        if (
-          !sendPtyDataToRenderer(session, id, {
-            id,
-            // Release DEC 2026 before salvaged partial mode-2031 CSI so a later ESC cannot abort it.
-            data:
-              pending.data +
-              getDroppedSynchronizedOutputRendererData(pending) +
-              getDroppedMode2031RendererData(pending),
-            droppedOutput: true
-          })
-        ) {
+        // Release DEC 2026 before salvaged partial mode-2031 CSI so a later ESC cannot abort it.
+        if (!sendPtyDataToRenderer(session, id, makeDroppedOutputPayload(id, pending))) {
           sendFailed = true
           break
         }
@@ -162,6 +154,13 @@ export function flushPendingData(session: PtyIpcSession): void {
         if (pending.containsBackgroundOutput === true) {
           nextPending.containsBackgroundOutput = true
         }
+        const remainderEscapeState = advanceEscapeBoundary(
+          pending.startEscapeState === undefined ? '' : pending.startEscapeState,
+          chunk
+        )
+        if (remainderEscapeState !== '') {
+          nextPending.startEscapeState = remainderEscapeState
+        }
         session.pendingData.replaceWithRemainder(selection, nextPending)
       } else {
         session.pendingData.remove(selection)
@@ -178,7 +177,7 @@ export function flushPendingData(session: PtyIpcSession): void {
           pending.containsBackgroundOutput,
           pending.rawLength,
           pending.transformed,
-          pending.gapEscapeState
+          pending.startEscapeState
         )
       )
       if (!sent) {
