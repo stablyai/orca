@@ -1,6 +1,9 @@
-import { planAgentCliArgsSuffix } from './tui-agent-startup'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
+import {
+  planAgentCliArgsSuffix,
+  type AgentStartupShell
+} from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+
+import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { useAppStore, type AppState } from '@/store'
 import {
   ensureDetectedAgentsForRepo,
@@ -10,10 +13,10 @@ import { toast } from 'sonner'
 import { CLIENT_PLATFORM } from './new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from './local-preflight-context'
 import { refineLocalLaunchPlatform, resolveRepoExecutionHostPlatform } from './execution-host-facts'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveDefaultAgentForWorkspace } from './agent-tab-shortcuts'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { ProjectLaunchContext } from '../../../shared/rpc-contract/preflight-params'
 import type { AgentLaunchRequestId } from './agent-launch-request-id'
 import {

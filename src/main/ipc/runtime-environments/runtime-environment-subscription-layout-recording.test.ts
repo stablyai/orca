@@ -3,7 +3,7 @@ import type { subscribeRuntimeEnvironment } from './runtime-environment-transpor
 
 const mocks = vi.hoisted(() => ({ handle: vi.fn(), on: vi.fn(), subscribe: vi.fn() }))
 vi.mock('electron', () => ({ ipcMain: { handle: mocks.handle, on: mocks.on } }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: () => ({ id: 'env', pairingRevision: 1, createdAt: 1 })
 }))
 vi.mock('./runtime-environment-transport-routing', () => ({

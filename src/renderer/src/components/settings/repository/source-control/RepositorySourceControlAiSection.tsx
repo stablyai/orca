@@ -2,8 +2,9 @@ import { useShallow } from 'zustand/react/shallow'
 import { useMemo } from 'react'
 import type React from 'react'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control-ai-settings'
-import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control-ai-recipe-save'
+import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
+import type { SourceControlAiSettingsPatch } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { useAppStore } from '../../../../store/index'
 import { getRepositorySourceControlAiSectionId } from '../repository-settings-targets'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
@@ -12,18 +13,21 @@ import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAi
 import { RepositorySourceControlAiHostedReviewDefaults } from './RepositorySourceControlAiHostedReviewDefaults'
 import { normalizeRepoAiDraft } from './repository-source-control-ai-draft'
 import { useRepositorySourceControlAiGlobalUx } from './repository-source-control-ai-global-ux'
-import { getSettingOwnershipSummary } from '../../setting-ownership'
+import { getSettingOwnershipSummary } from '../../page/setting-ownership'
 import { translate } from '@/i18n/i18n'
 
 type RepositorySourceControlAiSectionProps = {
   repo: Repo
   updateRepo: (repoId: string, updates: SourceControlAiRepoUpdate) => void | Promise<boolean>
+  /** Lets the text pickers save model lists the repository's host reports. */
+  writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
 /** Persist simple controls immediately; draft CLI args/templates until per-action Save, matching global recipes. */
 export function RepositorySourceControlAiSection({
   repo,
-  updateRepo
+  updateRepo,
+  writeSourceControlAiSettings
 }: RepositorySourceControlAiSectionProps): React.JSX.Element {
   const settings = useAppStore(
     useShallow(
@@ -46,6 +50,7 @@ export function RepositorySourceControlAiSection({
   )
   const {
     displayRepoAi,
+    actionTextDrafts,
     saveError,
     actionDirtyById,
     savingActionIds,
@@ -54,6 +59,7 @@ export function RepositorySourceControlAiSection({
     updateHostedReviewDefault,
     updateActionMode,
     updateActionAgent,
+    updateActionTextModelChoice,
     updateActionLaunchPreferences,
     updateActionTemplate,
     updateActionAgentArgs,
@@ -100,12 +106,15 @@ export function RepositorySourceControlAiSection({
       <RepositorySourceControlAiActionRows
         repoId={repo.id}
         repoAi={displayRepoAi}
+        actionTextDrafts={actionTextDrafts}
         source={source}
         defaultTuiAgent={settings?.defaultTuiAgent}
         savingActionIds={savingActionIds}
         actionDirtyById={actionDirtyById}
         onActionModeChange={updateActionMode}
         onActionAgentChange={updateActionAgent}
+        onActionTextModelChoice={updateActionTextModelChoice}
+        writeSourceControlAiSettings={writeSourceControlAiSettings}
         onActionLaunchPreferencesChange={updateActionLaunchPreferences}
         onActionTemplateChange={updateActionTemplate}
         onActionAgentArgsChange={updateActionAgentArgs}

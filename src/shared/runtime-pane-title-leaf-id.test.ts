@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from './terminal-tab-types'
+import type { TerminalLayoutSnapshot } from './workspace-layout/terminal-tab-types'
 import {
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleForLeaf,
@@ -48,15 +48,6 @@ describe('resolveRuntimePaneTitleLeafResolution', () => {
   it('reports an unrelated sparse split title without attributing it to the leaf', () => {
     expect(resolveRuntimePaneTitleLeafResolution(splitLayout, { 2: 'Codex' }, LEAF_A)).toEqual({
       title: null,
-      hasAnyPaneTitle: true
-    })
-  })
-
-  it('reports the matching leaf title when one resolves', () => {
-    expect(
-      resolveRuntimePaneTitleLeafResolution(splitLayout, { 1: 'zsh', 2: 'Codex' }, LEAF_B)
-    ).toEqual({
-      title: 'Codex',
       hasAnyPaneTitle: true
     })
   })

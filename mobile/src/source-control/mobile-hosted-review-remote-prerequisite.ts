@@ -1,5 +1,5 @@
 import { translate } from '../i18n/mobile-i18n'
-import { resolveCreatePrIntentRemoteStep } from '../../../src/shared/source-control-create-review-intent'
+import { resolveCreatePrIntentRemoteStep } from '../../../src/shared/source-control/decisions/source-control-create-review-intent'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { MobileHostedReviewCreateIntentProgress } from './mobile-hosted-review-create-intent'
 import type { MobilePrPrefill } from './mobile-pr-create'

@@ -23,7 +23,7 @@ vi.mock('../../command-runner/wsl-path-translation', async (importOriginal) => (
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
-import { parseWorktreeList } from '../../../../shared/git-worktree-porcelain-parser'
+import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import { registerWorktreeSuiteHooks } from '../testing/worktree-test-harness'
 
 registerWorktreeSuiteHooks()

@@ -1,10 +1,10 @@
-import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
-import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import { getDefaultSettings } from '../../../shared/constants'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { projectAgentLaunchSettings } from '../../../shared/agent-launch-settings'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecutionHostFactsModule from '@/lib/execution-host-facts'
 import type * as HostChatProgramAcquisitionModule from './host-chat-program-acquisition'
@@ -117,7 +117,7 @@ vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
 
-vi.mock('../../../shared/source-control-launch-agent-selection', () => ({
+vi.mock('../../../shared/source-control/ai/source-control-launch-agent-selection', () => ({
   pickSourceControlLaunchAgent: mocks.pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId: mocks.readSourceControlLaunchRecipeAgentId
 }))
@@ -136,9 +136,13 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
-vi.mock('../../../shared/source-control-ai', () => ({
-  resolveSourceControlActionRecipe: mocks.resolveSourceControlActionRecipe
-}))
+vi.mock(
+  '../../../shared/source-control/ai/source-control-ai-operation-policy',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    resolveSourceControlActionRecipe: mocks.resolveSourceControlActionRecipe
+  })
+)
 
 describe('startFixChecksAgent', () => {
   beforeEach(() => {

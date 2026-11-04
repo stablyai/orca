@@ -3,7 +3,7 @@ import type { AppState } from '../types'
 import {
   createDefaultWorkspaceCleanupBrowseState,
   type WorkspaceCleanupBrowseState
-} from '../../../../shared/workspace-cleanup-browse-state'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 
 // Why debounced: filter/query edits fire per keystroke and every ui.set
 // schedules a durable-state save in main.

@@ -7,10 +7,12 @@ import {
 } from 'lucide-react'
 import { useRef, type SyntheticEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/body-overlay-attributes'
-import { NOTIFICATION_CARD_STACK_HEIGHT_VAR } from '@/lib/notification-card-stack-height'
-import { NOTIFICATION_CARD_STACK_BOTTOM } from '@/lib/notification-card-composer-clearance'
+import {
+  NOTIFICATION_CARD_STACK_BOTTOM,
+  NOTIFICATION_CARD_STACK_HEIGHT_VAR
+} from '@/lib/notification-card-stack-height'
 import { useNotificationCardLayoutVarReader } from '@/lib/notification-card-layout-vars'
 import { useToasterModalLayer } from './toaster-modal-layer'
 

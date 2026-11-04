@@ -1,5 +1,5 @@
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
+import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { isCurrentPtyExit, ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
 import {
   getProviderForPty,

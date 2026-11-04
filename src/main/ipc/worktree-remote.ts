@@ -62,8 +62,8 @@ import {
   getEffectiveHooksFromConfig,
   shouldRunSetupForCreate
 } from '../workspace-hooks/effective-hook-config'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { runWorktreeChangeInvalidators } from './worktrees/listing/worktree-change-invalidators'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -91,7 +91,7 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import type { BranchPrefixSettings } from '../../shared/branch-prefix'
+import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import {
@@ -99,20 +99,20 @@ import {
   sameGitHubRemoteUrl,
   type GitRemoteExec,
   type WorktreePushTargetStore
-} from './worktree-push-target-cleanup'
-import { reconcileOrphanedPrRemotes } from './worktree-push-target-reconciliation'
+} from '../git/remotes/worktree-push-target-cleanup'
+import { reconcileOrphanedPrRemotes } from '../git/remotes/worktree-push-target-reconciliation'
 import {
   configureCreatedWorktreePushTargetWithExec,
   prepareWorktreePushTargetWithExec,
   remoteAlreadyMatchesUrl,
   restoreUpstreamAfterMaterialize
-} from './worktree-push-target-setup'
+} from '../git/remotes/worktree-push-target-setup'
 import {
   buildNarrowForkFetchRefspec,
   ensureRemoteTracksBranchNarrowly,
   forkRemoteTrackingRefExists
 } from '../git/refs/fork-remotes/fork-remote-refspec'
-import { migrateForkRemoteRefspecs } from './worktree-push-target-refspec-migration'
+import { migrateForkRemoteRefspecs } from '../git/remotes/worktree-push-target-refspec-migration'
 import {
   registerCreatedWorktreeRoot,
   registerWorktreeRootsForRepo

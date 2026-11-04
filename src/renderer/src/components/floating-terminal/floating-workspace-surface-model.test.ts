@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveFloatingWorkspaceSurfaceModel } from './floating-workspace-surface-model'
 
 const FLOATING = FLOATING_TERMINAL_WORKTREE_ID

@@ -4,8 +4,8 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault-search-client'
-import type { AiVaultSearchStatus } from '../../../../shared/ai-vault-search-types'
+import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-client'
+import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import {
   useSessionSearchTipSetup,
   type SessionSearchTipSetup
@@ -38,7 +38,7 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-vi.mock('@/components/settings/use-session-search-status', () => ({
+vi.mock('@/components/settings/session-history/use-session-search-status', () => ({
   useSessionSearchStatus: () => ({
     status: mocks.status,
     failed: false,

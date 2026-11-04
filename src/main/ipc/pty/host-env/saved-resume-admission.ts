@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   normalizeAgentProviderSession,
   agentProviderSessionsEqual,
@@ -9,7 +9,7 @@ import {
 import type {
   AgentStatusIpcPayload,
   RefusedPaneResume
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeasePossiblyWriting,
@@ -17,7 +17,7 @@ import {
 } from '../../../native-chat/agent-session-wire/structured-provider-session-ownership'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   keysMayMatch,
   terminalConversationKey

@@ -7,7 +7,7 @@ import { useAiVaultPanelSessions } from './ai-vault-session-filters'
 import {
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
-} from '../../../../shared/ai-vault-scope-paths'
+} from '../../../../shared/ai-vault/scanning/ai-vault-scope-paths'
 import { countAiVaultViewAdjustments } from './ai-vault-view-defaults'
 import {
   buildAiVaultProjectContext,
@@ -41,7 +41,7 @@ import { AiVaultPanelSearch } from './AiVaultPanelSearch'
 import { useAiVaultPanelSessionResume } from './use-ai-vault-panel-session-resume'
 import { AiVaultScanProgressStrip } from './AiVaultScanProgressStrip'
 import { useAiVaultScanProgress } from './ai-vault-scan-progress-store'
-import { aiVaultLocalScanKey } from '../../../../shared/ai-vault-local-scan-key'
+import { aiVaultLocalScanKey } from '../../../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import { useAiVaultPanelWorkspace } from './use-ai-vault-panel-workspace'
 import { useAiVaultPanelQuery } from './use-ai-vault-panel-query'
 import {

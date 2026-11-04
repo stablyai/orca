@@ -1,13 +1,15 @@
-import { RuntimeAgentSenderAssociations } from '../runtime-agent-sender-associations'
+import {
+  RuntimeAgentSenderAssociations,
+  type AgentSenderHandleReads
+} from '../runtime-agent-sender-associations'
 import { fingerprintOrchestrationPeer } from '../orchestration/environment-transport'
 import {
   RuntimeAgentOrchestrationProjection,
   type RuntimeAgentOrchestrationDependencies
 } from '../runtime-agent-orchestration-projection'
 import type { RuntimeConstructionServices } from './runtime-construction-services'
-import { environmentStoreWriteCount } from '../../../shared/runtime-environment-store-file'
+import { environmentStoreWriteCount } from '../../../shared/remote-runtime/host-store/runtime-environment-store-file'
 import type { AgentSenderPrincipal } from '../runtime-agent-sender-history'
-import type { AgentSenderHandleReads } from '../runtime-agent-sender-associations'
 
 type SenderHost = Pick<
   RuntimeConstructionServices,

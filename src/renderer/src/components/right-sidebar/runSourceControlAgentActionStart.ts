@@ -2,31 +2,31 @@ import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
 import {
   sourceControlActionRecipeEntry,
   type SelectedSourceControlActionRecipe
-} from '../../../../shared/source-control-action-selection'
-import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+} from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {
   normalizeSourceControlActionRecipe,
   type SourceControlActionRecipe,
   type SourceControlLaunchActionId
-} from '../../../../shared/source-control-ai-actions'
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   saveSourceControlActionRecipe,
   type SourceControlAiWriteTarget
-} from '../../../../shared/source-control-ai-recipe-save'
+} from '../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import { resolveSourceControlAgentSaveTarget } from './source-control-agent-action-dialog-support'
-import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
+import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { admitSourceControlRecovery } from './source-control-recovery-admission'
 
 export type RunSourceControlAgentActionStartArgs = {

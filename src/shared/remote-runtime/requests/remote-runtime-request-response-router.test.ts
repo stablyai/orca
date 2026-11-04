@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { encrypt } from '../../e2ee-crypto'
+import { encrypt } from '../e2ee/node/e2ee-crypto'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
-import { createFixedKeyLegacyHandshakeForTest } from '../../paired-e2ee-fixed-key-test-fixture'
+import { createFixedKeyLegacyHandshakeForTest } from '../e2ee/paired-e2ee-fixed-key-test-fixture'
 
 const SHARED_KEY = new Uint8Array(32).fill(7)
 

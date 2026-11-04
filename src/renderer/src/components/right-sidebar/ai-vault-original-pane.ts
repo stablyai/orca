@@ -2,12 +2,15 @@ import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import type { AppState } from '@/store/types'
 import { resolveRuntimePaneTitleLeafId } from '../../../../shared/runtime-pane-title-leaf-id'
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export type AiVaultOriginalPaneTarget = {
   paneKey: string

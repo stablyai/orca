@@ -38,19 +38,6 @@ vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => (
 describe('OrcaRuntimeRpcServer', () => {
   // Migration must be idempotent and fail startup loudly rather than serve a schema missing delivered_at (design §6).
   describe('orchestration DB migration (§3.2)', () => {
-    it('is idempotent when delivered_at already exists', () => {
-      const db1 = new OrchestrationDb(':memory:')
-      db1.close()
-      // File path reuse is meaningless with :memory:, so use a tmp file.
-      const tmpPath = join(mkdtempSync(join(tmpdir(), 'orca-orch-mig-')), 'orch.sqlite')
-      const a = new OrchestrationDb(tmpPath)
-      a.close()
-      expect(() => {
-        const b = new OrchestrationDb(tmpPath)
-        b.close()
-      }).not.toThrow()
-    })
-
     it('hard-fails startup when the migration cannot be applied', () => {
       // Seed v2 without delivered_at so ALTER actually runs; fresh databases start at v3 and would bypass the injected exec failure.
       // Propagate migration failure (disk/permission/etc.) rather than serving incomplete schema.

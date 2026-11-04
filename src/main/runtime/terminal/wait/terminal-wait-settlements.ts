@@ -5,7 +5,7 @@ import {
   buildPtyTerminalWaitExitError,
   buildPtyTerminalWaitResult
 } from '../../terminal-wait-results'
-import type { AgentStatus } from '../../../../shared/agent-detection'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { detectExplicitIdleStatusFromTitle } from '../../terminal-wait-detection'
 import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
 import {
@@ -16,7 +16,7 @@ import {
 import { ptyTuiIdleEvidence } from '../../tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
 import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
-import { detectTerminalComposerDraft } from '../../../../shared/terminal-composer-draft'
+import { detectTerminalComposerDraft } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'

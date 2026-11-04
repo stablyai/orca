@@ -8,7 +8,11 @@ import {
   createPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -95,11 +99,15 @@ describe('connectPanePty split cwd resolution', () => {
     const cwd = createDeferred<string>()
     const transport = createMockTransport('pty-1')
     transportFactoryQueue.push(transport)
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
     const binding = connectPanePty(
       createPane(1) as never,
       createManager(1) as never,
-      buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never
+      bindPaneAgentTitleMocks(
+        buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never,
+        agentTitleMocks
+      )
     )
     await flushAsyncTicks(20)
 
@@ -118,11 +126,15 @@ describe('connectPanePty split cwd resolution', () => {
     const cwd = createDeferred<string>()
     const transport = createMockTransport('pty-1')
     transportFactoryQueue.push(transport)
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
     const binding = connectPanePty(
       createPane(1) as never,
       createManager(1) as never,
-      buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never
+      bindPaneAgentTitleMocks(
+        buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never,
+        agentTitleMocks2
+      )
     )
     await flushAsyncTicks(20)
     binding.dispose()

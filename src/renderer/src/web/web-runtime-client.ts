@@ -4,27 +4,27 @@ import {
   enrollWebRuntimeSubscription,
   type WebRuntimeCrewSetupOutcome
 } from './web-runtime-dedicated-subscription'
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
-import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
-import type { RuntimeEnvironmentSetupFailure } from '../../../shared/runtime-environment-subscription-setup'
-import { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
+import type { RuntimeEnvironmentSetupFailure } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
+import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import type {
   RuntimeHostStatusSnapshot,
   RuntimeHostStatusResponse
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from './web-runtime-request-registry'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { WebRuntimeConnectionTransport } from './web-runtime-connection-transport'
 import type { WebRuntimeCredentialSource } from './web-runtime-credential-source'
 import { subscribeWebRuntimeFileWatch } from './web-runtime-file-watch-subscription'
 import type { WebRuntimeConnectionState } from './web-runtime-connection-frame-router'
-import { pinWebRuntimeSubscription } from './web-runtime-subscription-contract'
-import type {
-  WebRuntimeSubscribeOptions,
-  WebRuntimeSubscriptionCallbacks,
-  WebRuntimeTransportSubscription,
-  WebRuntimeTransportSubscriptionHandle
+import {
+  pinWebRuntimeSubscription,
+  type WebRuntimeSubscribeOptions,
+  type WebRuntimeSubscriptionCallbacks,
+  type WebRuntimeTransportSubscription,
+  type WebRuntimeTransportSubscriptionHandle
 } from './web-runtime-subscription-contract'
 
 export type WebRuntimeSubscriptionHandle = WebRuntimeTransportSubscriptionHandle

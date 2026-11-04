@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendRetiredTerminalSurfaceProofs } from '../../shared/terminal-retirement-proof-ledger'
+import { appendRetiredTerminalSurfaceProofs } from '../../shared/workspace-layout/terminal-retirement-proof-ledger'
 import {
   attachRetirementProofsToSnapshot,
   preserveTerminalRetirementProofs

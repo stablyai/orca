@@ -1,11 +1,8 @@
 import { createHash } from 'node:crypto'
 
 import { isValidPaneKey } from './server-status-identity'
-import {
-  HYDRATE_MAX_AGE_MS,
-  LAST_STATUS_FILE_VERSION,
-  STATUS_PERSIST_MIN_INTERVAL_MS
-} from './server-constants'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS as HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import { LAST_STATUS_FILE_VERSION, STATUS_PERSIST_MIN_INTERVAL_MS } from './server-constants'
 import type {
   EnrichedAgentHookEventPayload,
   LastStatusFile,

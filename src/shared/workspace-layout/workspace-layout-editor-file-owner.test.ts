@@ -4,8 +4,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
-import { ownedEditorFileId } from '../workspace-session-pane-ownership'
-import type { PersistedOpenFile, WorkspaceSessionState } from '../workspace-session-state-types'
+import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-ownership'
+import type {
+  PersistedOpenFile,
+  WorkspaceSessionState
+} from '../workspace-session/workspace-session-state-types'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import type { CommandOf } from './workspace-layout-command-types'
 import { build, testContext } from './workspace-layout-command.test-fixture'

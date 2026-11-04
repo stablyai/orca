@@ -1,8 +1,11 @@
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { getPRCommentGroupRoot, type PRCommentGroup } from '../../../../shared/pr-comment-groups'
-import { isResolvablePRCommentGroup } from '../../../../shared/github/pr-comments-resolution-prompt'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import {
+  getPRCommentGroupRoot,
+  type PRCommentGroup
+} from '../../../../shared/source-control/review-comments/pr-comment-groups'
+import { isResolvablePRCommentGroup } from '../../../../shared/source-control/review-comments/pr-comments-resolution-prompt'
 import {
   buildPRCommentBatchConversationReplyBody,
   PR_COMMENT_AI_FIXING_REPLY

@@ -21,7 +21,7 @@ import { Terminal } from '@xterm/xterm'
 import { toast } from 'sonner'
 import { runtimeStatuses } from '@/store/slices/browser-slice-test-harness'
 import { openStandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
 import {
@@ -340,7 +340,7 @@ it.each([false, true])(
     pointer(screen, 'mousedown')
     pointer(screen, 'mouseup')
     const system = await view.findByRole('button', { name: /System Browser/ })
-    expect(view.queryByRole('button', { name: /Orca Browser|Open in this group/ })).toBeNull()
+    expect(view.queryByRole('button', { name: /Orca Browser|Open in new tab/ })).toBeNull()
     fireEvent.click(view.getByRole('button', { name: 'Copy link' }))
     await waitFor(() => expect(window.api.ui.writeClipboardText).toHaveBeenCalledWith(URL_TO_OPEN))
     fireEvent.click(system)

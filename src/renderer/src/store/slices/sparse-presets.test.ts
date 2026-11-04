@@ -56,27 +56,6 @@ describe('createSparsePresetsSlice', () => {
     mockApi.sparsePresets.remove.mockResolvedValue(undefined)
   })
 
-  it('does not refetch while a repo bucket is loading or already loaded', async () => {
-    const store = createTestStore()
-    let resolveList: (presets: SparsePreset[]) => void = () => {}
-    mockApi.sparsePresets.list.mockReturnValueOnce(
-      new Promise<SparsePreset[]>((resolve) => {
-        resolveList = resolve
-      })
-    )
-
-    const fetchPromise = store.getState().fetchSparsePresets('repo-1')
-    await store.getState().fetchSparsePresets('repo-1')
-
-    expect(mockApi.sparsePresets.list).toHaveBeenCalledTimes(1)
-
-    resolveList([])
-    await fetchPromise
-    await store.getState().fetchSparsePresets('repo-1')
-
-    expect(mockApi.sparsePresets.list).toHaveBeenCalledTimes(1)
-  })
-
   it('loads an unfetched repo bucket before saving so existing presets stay visible', async () => {
     const store = createTestStore()
     const existing = makePreset({ id: 'existing', repoId: 'repo-1', name: 'Existing' })

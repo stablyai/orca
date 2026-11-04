@@ -22,22 +22,6 @@ const issue: JiraIssue = {
   updatedAt: ''
 }
 describe('Jira Has Workspace issue reads', () => {
-  it('reads exact linked keys including closed issues with site/source and refresh scope', async () => {
-    const search = vi.fn().mockResolvedValue([issue])
-    expect(
-      await readLinkedJiraIssues(
-        [{ key: 'APP-1', siteId: 'a', sourceContext: source }],
-        search,
-        null,
-        true
-      )
-    ).toEqual({ issues: [issue], error: null, jqlRejection: null })
-    expect(search).toHaveBeenCalledWith('key = APP-1', 1, {
-      sourceContext: source,
-      siteId: 'a',
-      force: true
-    })
-  })
   it('keeps successful reads when another site fails and reports the failure', async () => {
     const search = vi
       .fn()

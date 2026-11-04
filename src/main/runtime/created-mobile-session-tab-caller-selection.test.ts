@@ -1,6 +1,6 @@
 /** Create selects only its caller; shared selection stays put and no tap-style PTY respawn runs. */
 import { expect, it, vi } from 'vitest'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.

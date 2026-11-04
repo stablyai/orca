@@ -16,8 +16,8 @@ import {
   buildCombinedDiffBranchTreeRoots,
   getViewedCombinedDiffTreeVisibility
 } from './combined-diff-file-tree-model'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 
 describe('CombinedDiffFileTree navigation mapping', () => {
   it('disambiguates uncommitted entries with the same path by area', () => {

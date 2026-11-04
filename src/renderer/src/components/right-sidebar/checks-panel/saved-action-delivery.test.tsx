@@ -1,6 +1,6 @@
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch-settings'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch/choices/agent-launch-settings'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { useChecksPanelCommentResolution } from './use-checks-panel-comment-resolution'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 // @vitest-environment happy-dom
@@ -10,12 +10,16 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import type { HostedReviewInfo } from '../../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import { toast } from 'sonner'
-import type { PendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
-import { clearPendingPRCommentAiAck, takePendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
+import {
+  type PendingPRCommentAiAck,
+  clearPendingPRCommentAiAck,
+  takePendingPRCommentAiAck
+} from '../pr-comments-ai-launch-ack'
+
 import type { ChecksAgentComposerState } from './panel-state-types'
 import { useChecksPanelAiQueue } from './use-checks-panel-ai-queue'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'

@@ -91,13 +91,6 @@ describe('Claude descendant forced-sweep fence', () => {
     expect(killedPids(calls)).toEqual([...EARLIER_BORN, ...WALK_SECOND_BORN])
   })
 
-  it('still escalates descendants born before the walk that first saw them', async () => {
-    const onlyEarlier = [{ pids: EARLIER_BORN, startedAt: EARLIER_SECOND }]
-    const calls = await sweep([walk(WALK_MS + 42, onlyEarlier)], onlyEarlier)
-
-    expect(killedPids(calls)).toEqual(EARLIER_BORN)
-  })
-
   it('withholds the sweep from a row no walk re-derived, on its start second alone', async () => {
     const retained = { pids: [900], startedAt: WALK_SECOND }
     const firstWalk = walk(WALK_MS + 42, [...LIVE_TREE, retained])

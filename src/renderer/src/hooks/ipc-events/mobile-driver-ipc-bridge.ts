@@ -2,10 +2,7 @@ import {
   hydrateBrowserDrivers,
   setDriverForBrowserPage
 } from '@/lib/pane-manager/browser-mobile-driver-state'
-import {
-  hydrateBrowserRemoteViewerPages,
-  setRemoteViewersForBrowserPage
-} from '@/lib/pane-manager/browser-remote-viewer-state'
+import { registerBrowserRemoteViewerIpcBridge } from './browser-remote-viewer-ipc-bridge'
 import {
   applyClientHostedBrowserRows,
   hydrateClientHostedBrowserRows
@@ -18,7 +15,7 @@ import type {
   RuntimeBrowserDriverState,
   RuntimeTerminalDriverState
 } from '../../../../shared/runtime-types'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
 
@@ -36,10 +33,6 @@ type PendingMobileStateEvent =
   | {
       kind: 'browser-driver'
       event: { browserPageId: string; driver: RuntimeBrowserDriverState }
-    }
-  | {
-      kind: 'browser-remote-viewers'
-      event: { browserPageId: string; hasRemoteViewers: boolean }
     }
 
 export function registerMobileDriverIpcBridge(
@@ -59,8 +52,6 @@ export function registerMobileDriverIpcBridge(
         setDriverForPty(pending.event.ptyId, pending.event.driver)
       } else if (pending.kind === 'browser-driver') {
         setDriverForBrowserPage(pending.event.browserPageId, pending.event.driver)
-      } else {
-        setRemoteViewersForBrowserPage(pending.event.browserPageId, pending.event.hasRemoteViewers)
       }
     }
     pendingMobileStateEvents.length = 0
@@ -120,21 +111,7 @@ export function registerMobileDriverIpcBridge(
     })
   )
 
-  const unsubscribeBrowserRemoteViewers = window.api.runtime.onBrowserRemoteViewersChanged?.(
-    (event) => {
-      if (isRuntimeEnvironmentActive()) {
-        return
-      }
-      if (!mobileStateHydrated) {
-        enqueue({ kind: 'browser-remote-viewers', event })
-        return
-      }
-      setRemoteViewersForBrowserPage(event.browserPageId, event.hasRemoteViewers)
-    }
-  )
-  if (unsubscribeBrowserRemoteViewers) {
-    unsubs.push(unsubscribeBrowserRemoteViewers)
-  }
+  unsubs.push(registerBrowserRemoteViewerIpcBridge())
 
   // These pages are paired-client renders of this runtime’s own workspaces; remote focus must not drop them or their unguarded hydration.
   let clientHostedRowsHydrated = false
@@ -181,17 +158,15 @@ export function registerMobileDriverIpcBridge(
     void Promise.all([
       window.api.runtime.getTerminalFitOverrides(),
       window.api.runtime.getTerminalDrivers(),
-      window.api.runtime.getBrowserDrivers(),
-      window.api.runtime.getBrowserRemoteViewerPages?.() ?? []
+      window.api.runtime.getBrowserDrivers()
     ])
-      .then(([overrides, drivers, browserDrivers, remoteViewerPages]) => {
+      .then(([overrides, drivers, browserDrivers]) => {
         if (disposed) {
           return
         }
         hydrateOverrides(overrides)
         hydrateDrivers(drivers)
         hydrateBrowserDrivers(browserDrivers)
-        hydrateBrowserRemoteViewerPages(remoteViewerPages)
         mobileStateHydrated = true
         applyPendingMobileStateEvents()
       })

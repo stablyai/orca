@@ -1,5 +1,5 @@
 import type { IBuffer, IBufferCell, IBufferLine, Terminal } from '@xterm/headless'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
 
 type TerminalWithOscLinks = Terminal & {
   _core?: {

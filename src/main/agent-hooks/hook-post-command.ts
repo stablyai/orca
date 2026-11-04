@@ -1,5 +1,5 @@
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-types'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 
 // Older curl needs C numeric parsing; keep the parent script's UTF-8 locale unchanged.
 export function posixCurlCommand(curlCommand = 'curl'): string {

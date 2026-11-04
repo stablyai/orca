@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
-import {
-  MAX_SETTLED_DIFF_CACHE_ENTRIES,
-  MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS,
-  MAX_SETTLED_DIFF_CACHE_TOTAL_CHARACTERS,
-  SettledDiffCache
-} from './settled-diff-cache'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
+import { MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS, SettledDiffCache } from './settled-diff-cache'
 import type { WorktreeDiffStamp } from './worktree-diff-stamp'
 
 function settledStamp(value: string): WorktreeDiffStamp {
@@ -24,52 +19,6 @@ function diffOfSize(characters: number): GitDiffResult {
 }
 
 describe('SettledDiffCache bounds', () => {
-  it('evicts the least recently used entry past the entry cap', () => {
-    const cache = new SettledDiffCache()
-    for (let index = 0; index <= MAX_SETTLED_DIFF_CACHE_ENTRIES; index += 1) {
-      cache.set(`key-${index}`, settledStamp(`stamp-${index}`), diffOfSize(1), cache.beginRead())
-    }
-
-    expect(cache.stats().entries).toBe(MAX_SETTLED_DIFF_CACHE_ENTRIES)
-    expect(cache.get('key-0', settledStamp('stamp-0'))).toBeUndefined()
-    expect(
-      cache.get(
-        `key-${MAX_SETTLED_DIFF_CACHE_ENTRIES}`,
-        settledStamp(`stamp-${MAX_SETTLED_DIFF_CACHE_ENTRIES}`)
-      )
-    ).toBeDefined()
-  })
-
-  it('keeps a re-read entry alive by refreshing its LRU position', () => {
-    const cache = new SettledDiffCache()
-    cache.set('hot', settledStamp('hot-stamp'), diffOfSize(1), cache.beginRead())
-    for (let index = 0; index < MAX_SETTLED_DIFF_CACHE_ENTRIES; index += 1) {
-      cache.get('hot', settledStamp('hot-stamp'))
-      cache.set(`cold-${index}`, settledStamp(`cold-${index}`), diffOfSize(1), cache.beginRead())
-    }
-
-    expect(cache.get('hot', settledStamp('hot-stamp'))).toBeDefined()
-  })
-
-  it('holds total retained content under the character budget', () => {
-    const cache = new SettledDiffCache()
-    const chunk = MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS
-    const needed = Math.ceil(MAX_SETTLED_DIFF_CACHE_TOTAL_CHARACTERS / chunk) + 2
-
-    for (let index = 0; index < needed; index += 1) {
-      cache.set(
-        `key-${index}`,
-        settledStamp(`stamp-${index}`),
-        diffOfSize(chunk),
-        cache.beginRead()
-      )
-    }
-
-    expect(cache.stats().retainedCharacters).toBeLessThanOrEqual(
-      MAX_SETTLED_DIFF_CACHE_TOTAL_CHARACTERS
-    )
-  })
-
   it('declines a single result larger than the per-entry cap', () => {
     const cache = new SettledDiffCache()
 

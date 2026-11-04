@@ -9,11 +9,11 @@ import type {
   LayoutApplyReply,
   LayoutCommand
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
-import { createEditorSaveQueue } from '@/components/editor/editor-save-queue'
+import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
 import {

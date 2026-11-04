@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
 import { resolveCreatedHostedReviewLink } from '../source-control-created-review-link'
-import type { HostedReviewProvider } from '../../../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelPollingState } from './use-checks-panel-polling'

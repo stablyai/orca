@@ -11,7 +11,8 @@ import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
 import { useNewWorkspaceComposerFileDrop } from '../new-workspace/use-new-workspace-composer-file-drop'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 import { toast } from 'sonner'
-import { resetLocalImageSrcStateForTests } from '../editor/useLocalImageSrc'
+import '../editor/document-images/useLocalImageSrc'
+import { resetLocalImageCacheState as resetLocalImageSrcStateForTests } from '../editor/document-images/local-image-src-cache'
 import {
   clearNativeChatAttachmentCacheForTests,
   readNativeChatAttachmentCache,

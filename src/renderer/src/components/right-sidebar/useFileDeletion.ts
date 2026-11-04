@@ -23,7 +23,7 @@ import {
 import {
   requestEditorFileSave,
   requestEditorSaveQuiesce
-} from '@/components/editor/editor-autosave'
+} from '@/components/editor/autosave/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import { deleteRuntimePath, writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
 import {

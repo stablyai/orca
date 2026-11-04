@@ -1,24 +1,24 @@
 // Unparsed mirrored rows can carry newer verdict arms. Preserve them and legacy done fallback while known arms render their mark; exercise real mirror/store/sidebar builder.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { AgentTurnOutcome } from '../../../shared/agent-turn-outcome'
-import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import type { AgentTurnOutcome } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
+import { agentVerdictDisplayMark } from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
-import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
+import { buildWorktreeAgentRows } from '../components/sidebar/workspace-card/activity/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree
-} from '../components/sidebar/worktree-agent-row-selectors'
+} from '../components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
-} from '../components/sidebar/worktree-card-status-inputs'
+} from '../components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 
 // Why: web-session-tabs-sync imports the app-level store singleton; this drives a test store.
 vi.mock('../store', () => ({

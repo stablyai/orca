@@ -15,9 +15,12 @@ vi.mock('./runtime-client', async () => {
 })
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: mocks.addEnvironmentFromPairingCodeMock,
-  listEnvironments: mocks.listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: mocks.listEnvironmentsMock
 }))
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')

@@ -1,9 +1,9 @@
-import { normalizeGitErrorMessage } from '../../shared/git-remote-error'
+import { normalizeGitErrorMessage } from '../../shared/git/remotes/git-remote-error'
 import {
   syncForkDefaultBranch,
   type GitForkSyncExpectedUpstream,
   type GitForkSyncResult
-} from '../../shared/git-fork-sync'
+} from '../../shared/git/remotes/git-fork-sync'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'

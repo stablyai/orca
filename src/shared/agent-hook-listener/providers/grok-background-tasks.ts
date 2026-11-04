@@ -1,9 +1,9 @@
-import type { AgentChildWorkKind } from '../../agent-status-child-work'
+import type { AgentChildWorkKind } from '../../agent-status/child-work/agent-status-child-work'
 import {
   agentChildWorkLiveness,
   type AgentChildWorkLiveness
-} from '../../agent-status-child-work-liveness'
-import { isRecord } from '../../agent-status-child-work-value-guards'
+} from '../../agent-status/child-work/agent-status-child-work-liveness'
+import { isRecord } from '../../agent-status/child-work/agent-status-child-work-value-guards'
 import type { HookListenerState } from '../listener-state'
 import { isGrokEvent } from '../provider-event-names'
 import { readString } from '../tool-input-preview'

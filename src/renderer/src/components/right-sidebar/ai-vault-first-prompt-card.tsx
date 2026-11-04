@@ -4,9 +4,9 @@ import { Check, Copy, LoaderCircle, TextCursorInput } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { AiVaultSessionPromptPreview } from './ai-vault-session-display'
+import type { AiVaultSessionPromptPreview } from '../../../../shared/ai-vault/session-display/ai-vault-session-display'
 
 // Main-process reparsing has no deadline; cap loading for huge or stalled transcripts.
 const FULL_FIRST_PROMPT_LOAD_TIMEOUT_MS = 15_000

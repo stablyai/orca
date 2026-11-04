@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-paste-draft'
 import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-followup-delivery'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import {
   beginAgentStartupDeliveryAttempt,
@@ -10,7 +10,7 @@ import {
   queuePendingAgentStartupDelivery,
   resolveAgentStartupTabId
 } from '@/lib/agent-startup-delayed-delivery'
-import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
+import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../../../shared/worktree/types'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'

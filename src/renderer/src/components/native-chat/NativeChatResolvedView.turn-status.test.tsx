@@ -4,7 +4,10 @@ import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
-import type { AgentStatusEntry, AgentStatusPayload } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentStatusPayload
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 

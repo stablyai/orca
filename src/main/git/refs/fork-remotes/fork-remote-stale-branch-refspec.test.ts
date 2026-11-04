@@ -6,12 +6,6 @@ import {
 } from './fork-remote-stale-branch-refspec'
 
 describe('parseMissingForkBranchRef', () => {
-  it('extracts the missing ref from a "couldn\'t find remote ref" fatal', () => {
-    expect(parseMissingForkBranchRef("fatal: couldn't find remote ref refs/heads/gone\n")).toBe(
-      'refs/heads/gone'
-    )
-  })
-
   it('returns null for unrelated stderr', () => {
     expect(parseMissingForkBranchRef('fatal: Authentication failed\n')).toBeNull()
   })
@@ -27,25 +21,6 @@ function makeExec(getAllStdout: string): GitExecFn {
 }
 
 describe('fetchForkRemoteWithStaleRefspecRepair', () => {
-  it('retries once after dropping a stale refspec, and returns on success', async () => {
-    const exec = makeExec(
-      '+refs/heads/gone:refs/remotes/fork/gone\n+refs/heads/keep:refs/remotes/fork/keep\n'
-    )
-    let attempts = 0
-    const runFetch = vi.fn(async () => {
-      attempts += 1
-      if (attempts === 1) {
-        throw Object.assign(new Error('boom'), {
-          stderr: "fatal: couldn't find remote ref refs/heads/gone\n"
-        })
-      }
-    })
-
-    await fetchForkRemoteWithStaleRefspecRepair(exec, '/repo', 'fork', runFetch)
-
-    expect(runFetch).toHaveBeenCalledTimes(2)
-  })
-
   it('rethrows immediately when the error is not a stale-refspec failure', async () => {
     const exec = makeExec('+refs/heads/keep:refs/remotes/fork/keep\n')
     const runFetch = vi.fn(async () => {

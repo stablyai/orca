@@ -1,5 +1,5 @@
-import { decodeAgentChildWorkViews } from '../../../src/shared/agent-status-child-work-view-wire'
-import { decodeAgentSubagentsField } from '../../../src/shared/agent-status-subagent-snapshot'
+import { decodeAgentChildWorkViews } from '../../../src/shared/agent-status/child-work/agent-status-child-work-view-wire'
+import { decodeAgentSubagentsField } from '../../../src/shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { buildRunningAgentChildRowModels } from '../../../src/shared/running-agent-child-rows'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 

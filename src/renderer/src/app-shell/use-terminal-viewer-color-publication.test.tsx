@@ -2,7 +2,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import { terminalViewColorQueryReplyColors } from '../../../shared/terminal-view-attributes'
+import { terminalViewColorQueryReplyColors } from '../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import { _resetTerminalViewAttributesPublisherForTest } from '../components/terminal-pane/terminal-view-attributes-publisher'
 import { useAppStore } from '../store'
 

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
+import type { PtyOwnerBackend } from '../../shared/terminal/pty/lifecycle/pty-owner-backend'
 import { Session } from './session'
 
 const FIXTURES = join(__dirname, '../runtime/__fixtures__')
