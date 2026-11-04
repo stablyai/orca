@@ -5,8 +5,6 @@ import { computeRenderedSidebarRows } from './rendered-sidebar-worktree-order'
 import { computeVisibleWorktrees } from './compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 
-const NO_COLLAPSED_GROUPS: ReadonlySet<string> = new Set()
-
 function getProjectHeaderCollapseKeys(
   state: AppState,
   collapsedGroups: ReadonlySet<string>
@@ -40,7 +38,11 @@ export function resolveProjectCollapseAllToggleKeys(state: AppState): string[] {
   const anyExpanded = getProjectHeaderCollapseKeys(state, collapsedGroups).some(
     (key) => !collapsedGroups.has(key)
   )
-  return getProjectHeaderCollapseKeys(state, NO_COLLAPSED_GROUPS).filter(
+  // Keep host sections collapsed so projects hidden under a collapsed host stay untouched.
+  const hostOnlyCollapsedGroups = new Set(
+    [...collapsedGroups].filter((key) => key.startsWith('host:'))
+  )
+  return getProjectHeaderCollapseKeys(state, hostOnlyCollapsedGroups).filter(
     (key) => collapsedGroups.has(key) !== anyExpanded
   )
 }

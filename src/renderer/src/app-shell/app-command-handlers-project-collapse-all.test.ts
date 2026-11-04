@@ -139,6 +139,27 @@ describe('collapse / expand all projects app command', () => {
     expect(renderedWorktreeIds()).toEqual([])
   })
 
+  it('leaves projects under a collapsed host section alone', () => {
+    const sshRepos = [repo, { ...otherRepo, connectionId: 'box' }]
+    seed({
+      repos: sshRepos,
+      sshTargetLabels: new Map([['box', 'Box']]),
+      visibleWorkspaceHostIds: ['local', 'ssh:box'],
+      collapsedGroups: new Set(['host:ssh:box'])
+    })
+    expect(renderedWorktreeIds()).toEqual([worktree.id])
+
+    expect(runToggle(shortcutInput())).toBe(true)
+    const collapsed = useAppStore.getState().collapsedGroups
+    expect(renderedWorktreeIds()).toEqual([])
+    expect(collapsed.has('host:ssh:box')).toBe(true)
+    expect(collapsed.size).toBe(2)
+
+    expect(runToggle(shortcutInput())).toBe(true)
+    expect(useAppStore.getState().collapsedGroups).toEqual(new Set(['host:ssh:box']))
+    expect(renderedWorktreeIds()).toEqual([worktree.id])
+  })
+
   it('lets the chord through when the sidebar is not grouped by project', () => {
     seed({ groupBy: 'none' })
     const input = shortcutInput()
