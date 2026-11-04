@@ -5,10 +5,46 @@ import { PINNED_GROUP_KEY } from './group-keys'
 import { placeImportedWorktreeLines } from './imported-worktree-lines'
 import type { ImportedWorktreesCardCandidate, Row } from './row-types'
 
-const repoA = { id: 'repo-a', displayName: 'alpha', path: '/a' } as Repo
-const repoB = { id: 'repo-b', displayName: 'beta', path: '/b' } as Repo
-const remoteA = { ...repoA, executionHostId: 'runtime:env-1' } as Repo
-const hidden = [{ path: '/a/hidden' } as DetectedWorktree]
+const repoA: Repo = {
+  id: 'repo-a',
+  displayName: 'alpha',
+  path: '/a',
+  badgeColor: '#000',
+  addedAt: 0
+}
+const repoB: Repo = { ...repoA, id: 'repo-b', displayName: 'beta', path: '/b' }
+const remoteA: Repo = { ...repoA, executionHostId: 'runtime:env-1' }
+
+function makeWorktree(id: string, repoId: string): Worktree {
+  return {
+    id,
+    repoId,
+    path: `/wt/${id}`,
+    branch: `refs/heads/${id}`,
+    head: 'abc123',
+    isBare: false,
+    isMainWorktree: false,
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    comment: '',
+    isUnread: false,
+    isPinned: false,
+    displayName: id,
+    sortOrder: 0,
+    lastActivityAt: 0
+  }
+}
+
+const hidden: DetectedWorktree[] = [
+  {
+    ...makeWorktree('hidden', repoA.id),
+    visible: false,
+    selectedCheckout: false,
+    ownership: 'external'
+  }
+]
 
 function header(key: string): Row {
   return { type: 'header', key, count: 0, icon: { kind: 'all' } }
@@ -19,7 +55,7 @@ function item(id: string, repo: Repo, sectionKey: string, depth = 0): Row {
     type: 'item',
     rowKey: id,
     sectionKey,
-    worktree: { id, repoId: repo.id } as Worktree,
+    worktree: makeWorktree(id, repo.id),
     repo,
     depth,
     groupDepth: 0,
@@ -132,7 +168,7 @@ describe('placeImportedWorktreeLines', () => {
       header('in-progress'),
       item('b-1', repoB, 'in-progress')
     ]
-    const pinned = [{ id: 'a-pinned', repoId: repoA.id } as Worktree]
+    const pinned = [makeWorktree('a-pinned', repoA.id)]
     expect(place(rows, [repoA], { pinned, collapsed: [PINNED_GROUP_KEY] })).toEqual([
       `header:${PINNED_GROUP_KEY}`,
       'line:repo-a',
@@ -159,10 +195,10 @@ describe('placeImportedWorktreeLines', () => {
 
   it('visits each row a bounded number of times', () => {
     const readsFor = (projects: number): number => {
-      const repos = Array.from(
-        { length: projects },
-        (_, index) => ({ ...repoA, id: `repo-${index}` }) as Repo
-      )
+      const repos = Array.from({ length: projects }, (_, index): Repo => ({
+        ...repoA,
+        id: `repo-${index}`
+      }))
       const rows = [header('all'), ...repos.map((repo) => item(`wt-${repo.id}`, repo, 'all'))]
       let reads = 0
       // Every visit to a row reads its type first, so counting those reads counts the visits.
