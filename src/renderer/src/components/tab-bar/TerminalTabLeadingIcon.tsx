@@ -3,7 +3,8 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
-import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
+import '../sidebar/workspace-card/activity/worktree-card-empty-inputs'
+import { FilledBellIcon } from '../sidebar/workspace-card/identity/worktree-card-glyphs'
 import { ShellIcon } from './shell-icons'
 import {
   terminalTabActivityToAgentDotState,

@@ -145,9 +145,8 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   const close = child.close
   const failedClose =
     close?.failure?.kind === 'hostFault' || close?.failure?.kind === 'pluginInputRequired'
-  const personallyStoppedPlugin =
-    exit.failure?.kind === 'pluginInputRequired' && close?.cause === 'user-stop'
-  const expected = (exit.expected || personallyStoppedPlugin) && !failedClose
+  const stoppedPlugin = exit.failure?.kind === 'pluginInputRequired' && close?.cause === 'user-stop'
+  const expected = (exit.expected || stoppedPlugin) && !failedClose
   const failure = failedClose ? close?.failure : exit.failure
   // Use the first death observation when settling the running turn.
   const observation = child.exitObservation?.()
@@ -204,7 +203,9 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   const wakeQueuedDelivery = (): void => {
     if (
       !session.journal.submissions ||
-      session.journal.submissions().some(isQueuedAgentJournalSubmission)
+      (session.journal.inputOrder?.recoverableSubmissions() ?? session.journal.submissions()).some(
+        isQueuedAgentJournalSubmission
+      )
     ) {
       context.wakeDelivery?.(sessionId)
     }
@@ -238,12 +239,11 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       (!expected || (startClose === 'host-stop' && unfinishedWork.hadUnsettledSubmissions))
     // Fold Stop before fallback turn-end classification.
     await close?.recorded
-    const generation = child.generation ?? 'unknown'
     // Proven exit can refine earlier unverifiable rows.
     const watched = { ownerFence: child.fence, observedAt }
     settlement = {
       ownerFence: child.fence,
-      settlementId: `${expected ? 'expected-close:' : PROVIDER_EXIT_ROW_PREFIX}${sessionId}:${child.fence}:${generation}`,
+      settlementId: `${expected ? 'expected-close:' : PROVIDER_EXIT_ROW_PREFIX}${sessionId}:${child.fence}:${child.generation ?? 'unknown'}`,
       pendingSubmissionReason: expected
         ? 'provider_closed_before_acknowledgement'
         : 'provider_exited_before_acknowledgement',

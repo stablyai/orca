@@ -84,7 +84,8 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      (file === 'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts' ||
+      (file ===
+        'src/renderer/src/components/right-sidebar/file-explorer/watching/useFileExplorerWatch.ts' ||
         file === 'src/renderer/src/hooks/worktree-file-change-event.ts')
   },
   {
@@ -101,12 +102,16 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-explorer-selected-host.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      (file === 'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts' ||
-        file === 'src/renderer/src/components/right-sidebar/file-explorer-operation-owner.ts' ||
-        file === 'src/renderer/src/components/right-sidebar/FileExplorer.tsx' ||
+      (file ===
+        'src/renderer/src/components/right-sidebar/file-explorer/watching/useFileExplorerWatch.ts' ||
+        file ===
+          'src/renderer/src/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner.ts' ||
+        file === 'src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorer.tsx' ||
         file === 'src/renderer/src/hooks/editor-external-watch-targets.ts' ||
-        file === 'src/renderer/src/components/right-sidebar/useFileExplorerTree.ts' ||
-        file === 'src/renderer/src/components/right-sidebar/use-file-explorer-tree-load-effects.ts')
+        file ===
+          'src/renderer/src/components/right-sidebar/file-explorer/tree/useFileExplorerTree.ts' ||
+        file ===
+          'src/renderer/src/components/right-sidebar/file-explorer/tree/use-file-explorer-tree-load-effects.ts')
   },
   {
     // A paired client refuses project setup on its server's SSH host with a clear reason (#33124).
@@ -144,7 +149,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/file-explorer-copy-file-windows.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/window\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer-row-file-transfer)\.ts$/.test(
+      /^src\/(?:main\/window\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer\/panel\/file-explorer-row-file-transfer)\.ts$/.test(
         file
       )
   },
@@ -254,7 +259,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       MANAGED_SSH_HARNESS.test(file) ||
       /^tests\/e2e\/helpers\/browser-split-(?:guest-probes|page-server)\.ts$/.test(file) ||
       (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:lib\/(?:file-preview|workspace-file-drag|worktree-runtime-owner|connection-context)\.ts|components\/(?:right-sidebar\/FileExplorer(?:Row|VirtualRows)\.tsx|browser-pane\/(?:navigate\/use-browser-page-navigation-downloads\.ts|host-guest\/attach-browser-page-webview\.ts)))$/.test(
+        /^src\/renderer\/src\/(?:lib\/(?:file-preview|workspace-file-drag|worktree-runtime-owner|connection-context)\.ts|components\/(?:right-sidebar\/file-explorer\/panel\/FileExplorer(?:Row|VirtualRows)\.tsx|browser-pane\/(?:navigate\/use-browser-page-navigation-downloads\.ts|host-guest\/attach-browser-page-webview\.ts)))$/.test(
           file
         ))
   },
@@ -264,7 +269,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:lib\/(?:local-path-open-guard|external-editor-open-capability|worktree-runtime-owner)\.ts|components\/(?:sidebar\/(?:WorktreeOpenInMenu|WorktreeContextMenuView)\.tsx|right-sidebar\/(?:FileExplorer(?:Toolbar)?\.tsx|source-control\/listing\/entry-context-menu\.tsx)))$/.test(
+        /^src\/renderer\/src\/(?:lib\/(?:local-path-open-guard|external-editor-open-capability|worktree-runtime-owner)\.ts|components\/(?:sidebar\/workspace-actions\/(?:open\/WorktreeOpenInMenu|context-menu\/WorktreeContextMenuView)\.tsx|right-sidebar\/(?:file-explorer\/panel\/FileExplorer(?:Toolbar)?\.tsx|source-control\/listing\/entry-context-menu\.tsx)))$/.test(
           file
         ))
   },
@@ -285,7 +290,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
-        /^src\/(?:main\/runtime\/(?:workspaces\/(?:workspace-sleep-|remote-workspace-terminal-sleep)|terminal\/stop\/worktree-terminal-sleep)|renderer\/src\/components\/sidebar\/(?:sleep-|workspace-sleep-))/.test(
+        /^src\/(?:main\/runtime\/(?:workspaces\/(?:workspace-sleep-|remote-workspace-terminal-sleep)|terminal\/stop\/worktree-terminal-sleep)|renderer\/src\/components\/sidebar\/workspace-actions\/sleep\/(?:sleep-|workspace-sleep-))/.test(
           file
         ))
   },
@@ -375,7 +380,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     ],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/(?:ssh|orcad|managed-server)\/|main\/ipc\/(?:ssh|runtime-environment|orcad-)|cli\/runtime\/(?:launch-)?serve|shared\/(?:remote-runtime|orcad-|protocol-version\.ts$|runtime-capability)|renderer\/src\/store\/repos\/(?:repo-removal|runtime-project-terminal-stop)|renderer\/src\/components\/sidebar\/(?:sleep-|SleepTwin|WorkspaceSleep|use-worktree-sleep|ssh-host-remove|host-rename-remove|HostRemove)|renderer\/src\/components\/terminal-pane\/(?:TerminalRemoteRuntimeReconnectBanner|use-managed-pairing-refused|TerminalPaneRuntimePortals))/.test(
+      /^src\/(?:main\/(?:ssh|orcad|managed-server)\/|main\/ipc\/(?:ssh|runtime-environment|orcad-)|cli\/runtime\/(?:launch-)?serve|shared\/(?:remote-runtime|orcad-|protocol-version\.ts$|runtime-capability)|renderer\/src\/store\/repos\/(?:repo-removal|runtime-project-terminal-stop)|renderer\/src\/components\/sidebar\/(?:workspace-actions\/sleep\/(?:sleep-|SleepTwin|WorkspaceSleep|use-worktree-sleep)|ssh-host-remove|host-rename-remove|HostRemove)|renderer\/src\/components\/terminal-pane\/(?:TerminalRemoteRuntimeReconnectBanner|use-managed-pairing-refused|TerminalPaneRuntimePortals))/.test(
         file
       )
   },

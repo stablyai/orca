@@ -14,7 +14,7 @@ import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { prepareAiVaultSessionForFork } from './ai-vault-session-resume-preparation'
-import { aiVaultSessionListArgs } from '@/components/right-sidebar/ai-vault-session-list-request'
+import { aiVaultSessionListArgs } from '@/components/right-sidebar/ai-vault/scanning/ai-vault-session-list-request'
 import {
   findTabSessionHistoryRow,
   type TabSessionHistorySubject

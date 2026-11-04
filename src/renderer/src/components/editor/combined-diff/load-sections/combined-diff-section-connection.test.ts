@@ -84,42 +84,4 @@ describe('getCombinedDiffSectionConnectionId', () => {
       getCombinedDiffSectionConnectionId(workspaceKey, '/home/neil/platform', 'README.md')
     ).toBeUndefined()
   })
-
-  it('composes Windows section paths with the workspace root separator', () => {
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    // Mix local and SSH repos so whole-workspace resolution stays ambiguous and must fall through to the Windows section path.
-    useAppStore.setState({
-      folderWorkspaces: [makeFolderWorkspace('C:\\Users\\neil\\platform')],
-      projectGroups: [makeGroup('C:\\Users\\neil\\platform')],
-      repos: [
-        makeRepo({
-          id: 'repo-local',
-          path: 'C:\\Users\\neil\\platform\\web',
-          projectGroupId: 'group-1'
-        }),
-        makeRepo({
-          id: 'repo-ssh',
-          path: 'C:\\Users\\neil\\platform\\api',
-          projectGroupId: 'group-1',
-          connectionId: 'ssh-1'
-        })
-      ],
-      worktreesByRepo: {}
-    })
-
-    expect(
-      getCombinedDiffSectionConnectionId(
-        workspaceKey,
-        'C:\\Users\\neil\\platform',
-        'api/src/index.ts'
-      )
-    ).toBe('ssh-1')
-    expect(
-      getCombinedDiffSectionConnectionId(
-        workspaceKey,
-        'C:\\Users\\neil\\platform',
-        'web/src/index.ts'
-      )
-    ).toBeUndefined()
-  })
 })

@@ -18,7 +18,7 @@ import {
   shouldPreserveCleanupInspection
 } from './workspace-cleanup-local-evidence'
 import { getWorkspaceCleanupAgentEvidence } from './workspace-cleanup-agent-evidence'
-import { selectRetainedAgentEntriesForWorktree } from '@/components/sidebar/worktree-agent-row-selectors'
+import { selectRetainedAgentEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 
 export type WorkspaceCleanupEnrichOptions = {
   applyDismissals?: boolean

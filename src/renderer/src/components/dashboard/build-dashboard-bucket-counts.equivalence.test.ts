@@ -8,7 +8,8 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/worktree-agent-orchestration-batch'
+import '../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
+import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 import type { DashboardSnapshotState } from './build-dashboard-snapshot'
 import {
   buildDashboardBucketCounts,

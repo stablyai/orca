@@ -1,5 +1,3 @@
-// Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
-
 import {
   isSubmissionRejectionFact,
   type AgentSessionFailureFact,
@@ -33,6 +31,7 @@ import {
   DISPATCH_REJECTED_QUEUE_FULL,
   DISPATCH_REJECTED_WRITE_FAILED
 } from '../requests/structured-agent-session-dispatch-rejection'
+// Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
 
 declare const failureSentence: unique symbol
 
@@ -223,6 +222,7 @@ const FAILURE_SENTENCES = {
   writeFailed: (_context, _fact, _surface, say) => say('writeFailed'),
   cancelled: (_context, _fact, _surface, say) => say('cancelled'),
   chatClosed: (_context, _fact, _surface, say) => say('chatClosed'),
+  unconfirmed: (_context, _fact, _surface, say) => say('unconfirmed'),
   hostRestarted: (_context, _fact, _surface, say) => say('hostRestarted'),
   notDelivered: ({ retryControl }, _fact, _surface, say) =>
     say(retryControl ? 'notDelivered' : 'notDeliveredSendAgain'),

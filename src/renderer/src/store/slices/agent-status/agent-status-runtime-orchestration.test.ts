@@ -9,8 +9,9 @@ import { createTestStore } from '../store-test-helpers'
 import { makeTab } from '../store-session-test-harness'
 import type { AgentStatusObservation } from '../../../../../shared/agent-status/contracts/agent-status-observation'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { buildWorktreeAgentRows } from '@/components/sidebar/worktree-agent-rows'
-import { getAgentDotState } from '@/components/sidebar/worktree-card-agent-summary'
+import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
+import '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary'
+import { agentRowDisplayDotState as getAgentDotState } from '@/lib/agent-row-dot-state'
 import { resolveAttention } from '../../../../../shared/sidebar-list/smart-attention'
 
 {

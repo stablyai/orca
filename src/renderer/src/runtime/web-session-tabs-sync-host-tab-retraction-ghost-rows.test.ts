@@ -23,15 +23,15 @@ import {
   buildRetainedAgentsSyncSnapshot,
   collectRetainedAgentsOnDisappear
 } from '../components/dashboard/useRetainedAgents'
-import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
+import { buildWorktreeAgentRows } from '../components/sidebar/workspace-card/activity/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree
-} from '../components/sidebar/worktree-agent-row-selectors'
+} from '../components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
-} from '../components/sidebar/worktree-card-status-inputs'
+} from '../components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 
 // Mirror imports app store singleton; redirect it to this createTestStore harness.
 vi.mock('../store', () => ({

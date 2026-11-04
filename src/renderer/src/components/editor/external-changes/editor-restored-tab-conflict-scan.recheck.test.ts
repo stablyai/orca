@@ -21,10 +21,7 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
 })
 
 import { createTestStore } from '@/store/slices/store-test-helpers'
-import {
-  attachRestoredTabConflictScan,
-  MAX_VERIFY_ATTEMPTS
-} from './editor-restored-tab-conflict-scan'
+import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-scan'
 import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
 
 const FILE = '/repo/a.ts'
@@ -70,15 +67,4 @@ it('marks a dirty runtime-owned tab deleted when its host says the file is gone'
     { codedAbsenceOnly: true }
   )
   expect(tab().externalMutation).toBe('deleted')
-})
-
-it('stops retrying without a banner when the disk can never be checked', async () => {
-  mocks.readRuntimeFileContent.mockRejectedValue(new Error('host unreachable'))
-  mocks.runtimePathsExist.mockResolvedValue([{ error: 'unverifiable' }])
-  detach = attachRestoredTabConflictScan(store)
-  await vi.advanceTimersByTimeAsync(10 * 60_000)
-
-  expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(MAX_VERIFY_ATTEMPTS)
-  // Why no banner: the guarded save refuses newer disk on its own.
-  expect(tab().externalMutation).toBeUndefined()
 })

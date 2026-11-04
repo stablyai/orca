@@ -258,7 +258,7 @@ describe('native chat Markdown image preview', () => {
     }
   )
 
-  it('loads only visible nearby images and releases their bytes when they leave the viewport', async () => {
+  it('loads only visible nearby images and keeps their bytes when they leave the viewport', async () => {
     vi.stubGlobal('IntersectionObserver', ImageVisibilityObserver)
     const { rerender } = render(<Transcript owner={{ ...localOwner, isVisible: false }} />)
     const trigger = screen.getByRole('button', { name: 'View image: Chart' })
@@ -270,21 +270,18 @@ describe('native chat Markdown image preview', () => {
     act(() => ImageVisibilityObserver.current.emit(trigger, false))
     expect(screen.queryByRole('img')).toBeNull()
     expect(trigger).toHaveStyle({ width: '640px', aspectRatio: '640 / 360' })
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:image-1')
     act(() => ImageVisibilityObserver.current.emit(trigger, true))
-    const reloaded = await screen.findByRole('img')
-    expect(reloaded).toHaveAttribute('src', 'blob:image-2')
-    expect(trigger).toHaveStyle({ aspectRatio: '640 / 360' })
-    fireEvent.load(reloaded)
+    const returned = await screen.findByRole('img')
+    expect(returned).toHaveAttribute('src', 'blob:image-1')
+    fireEvent.load(returned)
     expect(trigger.style.width).toBe('')
-    expect(trigger.style.aspectRatio).toBe('')
     rerender(<Transcript owner={{ ...localOwner, isVisible: false }} />)
     expect(screen.queryByRole('img')).toBeNull()
     expect(trigger).toHaveStyle({ width: '640px', aspectRatio: '640 / 360' })
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:image-2')
     rerender(<Transcript />)
-    expect(await screen.findByRole('img')).toHaveAttribute('src', 'blob:image-3')
-    expect(trigger).toHaveStyle({ aspectRatio: '640 / 360' })
+    expect(await screen.findByRole('img')).toHaveAttribute('src', 'blob:image-1')
+    expect(mocks.readRuntimeFilePreview).toHaveBeenCalledOnce()
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
   })
 
   it('retries a cache-byte-budget rejection on open after another image releases its lease', async () => {
@@ -315,7 +312,6 @@ describe('native chat Markdown image preview', () => {
     })
     expect(container.querySelectorAll('img')).toHaveLength(0)
     imageCache.unpinLocalImageCache('reserved')
-    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(4)
   })
 
   it.each([false, true])(

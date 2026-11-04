@@ -8185,7 +8185,9 @@
           "7ddd66fede": "Editor Word Wrap",
           "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
           "collapseUnchangedTitle": "Collapse Unchanged Regions",
-          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way."
+          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
+          "markdownDefaultView": "Default Markdown View",
+          "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -10522,7 +10524,11 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "markdownDefaultView": "Default Markdown View",
+            "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.",
+            "markdownSourceKw": "source",
+            "markdownRichKw": "rich"
           }
         },
         "git": {
@@ -17137,6 +17143,9 @@
           "isolationOff": "{{value0}} runs only in an isolated frame, and isolated plugin frames are turned off.",
           "heading": "This editor needs the Orca desktop app",
           "openSource": "Open Source"
+        },
+        "MarkdownDefaultViewContextMenu": {
+          "label": "Default Markdown View"
         }
       },
       "diff": {
@@ -19512,6 +19521,7 @@
         "cancelled": "This message was withdrawn before the agent started it.",
         "chatClosed": "The chat closed before this message was sent.",
         "hostRestarted": "Orca restarted before this message was sent.",
+        "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "commandRefused": "This command didn't run.",
@@ -20183,9 +20193,9 @@
         "orcaSessionIdTooltip": "Orca's ID for this chat, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca."
       },
       "dismissDeliveryNotice": "Dismiss",
+      "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
       "messageNotSent": "Message not sent",
-      "deliveryUnconfirmed": "Delivery unconfirmed — check chat before retrying",
       "messageSending": "Sending…",
       "userMessage": {
         "showFull": "Show full message",
@@ -20259,7 +20269,6 @@
         "continue": "Continue",
         "failed": "Couldn't continue this chat. Try again, or send a message.",
         "explanation": "Continue, and the agent first checks whether its last step finished.",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
         "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
       "antigravitySignIn": {
@@ -20836,7 +20845,7 @@
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message.",
+        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message. Messages with images wait as cards too.",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",

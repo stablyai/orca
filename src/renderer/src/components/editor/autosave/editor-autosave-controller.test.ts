@@ -1,4 +1,3 @@
-import { registerEditorAutosaveAcquisitionBudgetTests } from './editor-autosave-acquisition-budget.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import '@/store/slices/editor'
@@ -24,14 +23,11 @@ import { getDefaultSettings } from '../../../../../shared/constants'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { emptyTabLayoutState } from '../../../store/slices/editor-slice-test-harness'
-import {
-  stubEditorWindowWithDisk,
-  withLoadedBaselines
-} from './editor-autosave-controller-test-fixture'
+import { withLoadedBaselines } from './editor-autosave-controller-test-fixture'
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 const mocks = vi.hoisted(() => ({
   getConnectionIdForFile: vi.fn()
@@ -698,12 +694,6 @@ describe('attachEditorAutosaveController', () => {
     } finally {
       cleanup()
     }
-  })
-
-  registerEditorAutosaveAcquisitionBudgetTests(() => {
-    const disk = stubEditorWindowWithDisk()
-    const store = createEditorStore()
-    return { store, disk, stampBaselines: () => withLoadedBaselines(store, disk) }
   })
 
   it('skips the open-file scan for unrelated store mutations', () => {

@@ -45,7 +45,19 @@ function mail(text: string) {
     sessionId: SESSION,
     callerKey: structuredSessionPointerCallerKey(SESSION),
     turn: {
-      body: { ...hostTestMessage(text), from: { kind: 'agent', senders: [], orchestration: null } },
+      body: {
+        ...hostTestMessage(text),
+        from: {
+          kind: 'agent',
+          senders: [],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'run:coordinator',
+            dispatchId: null,
+            messages: [{ messageId: id, runId: 'coordinator', from: 'term_worker' }]
+          }
+        }
+      },
       delivery: 'queue',
       operationId: id,
       expectedRuntimeFence: 1,

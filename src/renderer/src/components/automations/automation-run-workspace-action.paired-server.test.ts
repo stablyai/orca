@@ -23,7 +23,7 @@ import {
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '../sidebar/folder-workspace-composer-submit-fixtures'
+} from '../sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { getRuntimeEnvironmentIdForFolderWorkspace } from '@/lib/folder-workspace-runtime-owner'

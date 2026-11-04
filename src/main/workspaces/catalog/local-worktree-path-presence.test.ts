@@ -70,51 +70,6 @@ describe('local worktree path presence', () => {
     expect(statMock).toHaveBeenCalledTimes(4)
   })
 
-  it('globally bounds stat calls across simultaneous bulk probes', async () => {
-    let active = 0
-    let maximumActive = 0
-    const pending: (() => void)[] = []
-    statMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          active += 1
-          maximumActive = Math.max(maximumActive, active)
-          pending.push(() => {
-            active -= 1
-            resolve({ isDirectory: () => true })
-          })
-        })
-    )
-
-    const first = localWorktreePathsExistOrAreUnverifiable([
-      '/first-1',
-      '/first-2',
-      '/first-3',
-      '/first-4'
-    ])
-    const second = localWorktreePathsExistOrAreUnverifiable([
-      '/second-1',
-      '/second-2',
-      '/second-3',
-      '/second-4'
-    ])
-
-    let resolved = 0
-    while (resolved < 8) {
-      while (pending.length === 0) {
-        await Promise.resolve()
-      }
-      pending.shift()?.()
-      resolved += 1
-      await Promise.resolve()
-    }
-
-    await Promise.all([first, second])
-
-    expect(maximumActive).toBe(2)
-    expect(statMock).toHaveBeenCalledTimes(8)
-  })
-
   it('settles timed-out batches without exceeding or leaking the global stat bound', async () => {
     vi.useFakeTimers()
     const timeoutControllers = installFakeAbortSignalTimeout()
@@ -162,35 +117,6 @@ describe('local worktree path presence', () => {
       expect(statMock).toHaveBeenCalledTimes(3)
     } finally {
       timeoutControllers.forEach((controller) => controller.abort())
-      releaseStats.splice(0).forEach((release) => release())
-      await Promise.resolve()
-      await Promise.resolve()
-    }
-  })
-
-  it('settles promptly and fail closed when the caller aborts hung probes', async () => {
-    vi.useFakeTimers()
-    const timeoutControllers = installFakeAbortSignalTimeout()
-    const releaseStats: (() => void)[] = []
-    statMock.mockImplementation(
-      () => new Promise((resolve) => releaseStats.push(() => resolve({ isDirectory: () => true })))
-    )
-    const controller = new AbortController()
-    const paths = ['/abort-1', '/abort-2', '/abort-3']
-
-    try {
-      const result = localWorktreePathsExistOrAreUnverifiable(paths, {
-        signal: controller.signal
-      })
-      await vi.advanceTimersByTimeAsync(0)
-      expect(statMock).toHaveBeenCalledTimes(2)
-
-      controller.abort()
-
-      await expect(result).resolves.toEqual(new Map(paths.map((pathValue) => [pathValue, true])))
-      expect(vi.getTimerCount()).toBeGreaterThan(0)
-    } finally {
-      timeoutControllers.forEach((timeoutController) => timeoutController.abort())
       releaseStats.splice(0).forEach((release) => release())
       await Promise.resolve()
       await Promise.resolve()

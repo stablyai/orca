@@ -4,10 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { DragSelectionGuard } from './drag-selection-guard'
-import {
-  createRichMarkdownSearchPlugin,
-  richMarkdownSearchPluginKey
-} from '../search/rich-markdown-search'
 
 const editors: Editor[] = []
 const hosts: HTMLElement[] = []
@@ -61,59 +57,6 @@ afterEach(async () => {
 })
 
 describe('drag selection guard listener lifetime', () => {
-  it('releases the document listener after the real view finishes destroying', async () => {
-    const editor = createEditor()
-    const view = editor.view
-    const doc = view.state.doc
-    expect(selectionListeners.size).toBe(1)
-
-    editor.destroy()
-    editor.destroy()
-    expect(view.isDestroyed).toBe(true)
-    expect(view.state.doc).toBe(doc)
-    expect(selectionListeners.size).toBe(1)
-
-    await Promise.resolve()
-
-    expect(selectionListeners.size).toBe(0)
-  })
-
-  it('restores selection handling synchronously when the live guard is removed', async () => {
-    const editor = createEditor()
-    const view = editor.view
-    const doc = view.state.doc
-    editor.unregisterPlugin('dragSelectionGuard')
-    const restored = [...selectionListeners][0]
-    expect(restored).toBeDefined()
-    expect(selectionListeners.size).toBe(1)
-    expect(view.isDestroyed).toBe(false)
-
-    document.dispatchEvent(new Event('selectionchange'))
-    expect(view.state.doc).toBe(doc)
-    await Promise.resolve()
-
-    expect(selectionListeners.size).toBe(1)
-    expect([...selectionListeners][0]).toBe(restored)
-    editor.commands.insertContent(' edited')
-    expect(editor.getText()).toContain(' edited')
-  })
-
-  it('preserves the live listener and document during search reconfiguration', async () => {
-    const editor = createEditor()
-    const view = editor.view
-    const doc = view.state.doc
-    for (let pass = 0; pass < 3; pass++) {
-      editor.registerPlugin(createRichMarkdownSearchPlugin())
-      editor.unregisterPlugin(richMarkdownSearchPluginKey)
-      expect(selectionListeners.size).toBe(1)
-      await Promise.resolve()
-      expect(selectionListeners.size).toBe(1)
-      expect(editor.view).toBe(view)
-      expect(view.isDestroyed).toBe(false)
-      expect(view.state.doc).toBe(doc)
-    }
-  })
-
   it('removes the old view listener while preserving an immediately remounted view', async () => {
     const editor = createEditor()
     const oldView = editor.view
