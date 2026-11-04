@@ -111,7 +111,10 @@ test('shows two workspaces side by side and moves focus between them', async ({ 
   await expect(orcaPage.locator('[data-workspace-grid-view-cell]')).toHaveCount(0)
 })
 
-test('shows workspaces from different projects side by side', async ({ orcaPage }) => {
+test('shows workspaces from different projects side by side', async ({
+  orcaPage,
+  registerPostElectronShutdownCleanup
+}) => {
   // Creates and registers a second git project, then opens its worktree's first terminal.
   test.setTimeout(120_000)
   await waitForSessionReady(orcaPage)
@@ -121,38 +124,36 @@ test('shows workspaces from different projects side by side', async ({ orcaPage 
   // Why from the id: activeRepoId stays null until a navigation stamps it.
   const firstRepoId = firstWorktreeId.split('::')[0]
   const repoPath = await createGitRepo()
-  try {
-    const [secondRepoId, secondWorktreeId] = await addRepoWorktree(orcaPage, repoPath)
-    expect(secondRepoId).not.toBe(firstRepoId)
-
-    await orcaPage
-      .locator(`[role="option"][data-worktree-id="${secondWorktreeId}"]`)
-      .click({ button: 'right' })
-    await orcaPage.getByRole('menuitem', { name: 'Add to Grid View', exact: true }).click()
-    await expect.poll(() => gridViewMembers(orcaPage)).toEqual([firstWorktreeId, secondWorktreeId])
-    await expect(orcaPage.locator('[data-workspace-grid-view-cell]')).toHaveCount(2)
-    // Each header names its own project, so same-named branches stay distinguishable.
-    await expect(
-      gridViewCell(orcaPage, secondWorktreeId).locator('[data-workspace-grid-view-cell-header]')
-    ).toContainText(path.basename(repoPath))
-
-    await gridViewCell(orcaPage, secondWorktreeId)
-      .getByRole('button', { name: 'Open Workspace' })
-      .click()
-    await expect
-      .poll(() => getActiveWorktreeId(orcaPage), { timeout: 20_000 })
-      .toBe(secondWorktreeId)
-    await expect.poll(() => getStoreState<string>(orcaPage, 'activeRepoId')).toBe(secondRepoId)
-    await expect(orcaPage.locator('[data-workspace-grid-view-cell]')).toHaveCount(2)
-
-    await gridViewCell(orcaPage, firstWorktreeId)
-      .locator('[data-workspace-grid-view-cell-header]')
-      .click()
-    await expect.poll(() => getActiveWorktreeId(orcaPage)).toBe(firstWorktreeId)
-    await expect.poll(() => getStoreState<string>(orcaPage, 'activeRepoId')).toBe(firstRepoId)
-    await expect(orcaPage.locator('[data-workspace-grid-view-cell]')).toHaveCount(2)
-    await orcaPage.screenshot({ path: test.info().outputPath('cross-project-grid-view.png') })
-  } finally {
+  // Why after shutdown: Electron keeps the added worktree open, and Windows refuses to remove it.
+  registerPostElectronShutdownCleanup(async () => {
     rmSync(repoPath, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 })
-  }
+  })
+  const [secondRepoId, secondWorktreeId] = await addRepoWorktree(orcaPage, repoPath)
+  expect(secondRepoId).not.toBe(firstRepoId)
+
+  await orcaPage
+    .locator(`[role="option"][data-worktree-id="${secondWorktreeId}"]`)
+    .click({ button: 'right' })
+  await orcaPage.getByRole('menuitem', { name: 'Add to Grid View', exact: true }).click()
+  await expect.poll(() => gridViewMembers(orcaPage)).toEqual([firstWorktreeId, secondWorktreeId])
+  await expect(orcaPage.locator('[data-workspace-grid-view-cell]')).toHaveCount(2)
+  // Each header names its own project, so same-named branches stay distinguishable.
+  await expect(
+    gridViewCell(orcaPage, secondWorktreeId).locator('[data-workspace-grid-view-cell-header]')
+  ).toContainText(path.basename(repoPath))
+
+  await gridViewCell(orcaPage, secondWorktreeId)
+    .getByRole('button', { name: 'Open Workspace' })
+    .click()
+  await expect.poll(() => getActiveWorktreeId(orcaPage), { timeout: 20_000 }).toBe(secondWorktreeId)
+  await expect.poll(() => getStoreState<string>(orcaPage, 'activeRepoId')).toBe(secondRepoId)
+  await expect(orcaPage.locator('[data-workspace-grid-view-cell]')).toHaveCount(2)
+
+  await gridViewCell(orcaPage, firstWorktreeId)
+    .locator('[data-workspace-grid-view-cell-header]')
+    .click()
+  await expect.poll(() => getActiveWorktreeId(orcaPage)).toBe(firstWorktreeId)
+  await expect.poll(() => getStoreState<string>(orcaPage, 'activeRepoId')).toBe(firstRepoId)
+  await expect(orcaPage.locator('[data-workspace-grid-view-cell]')).toHaveCount(2)
+  await orcaPage.screenshot({ path: test.info().outputPath('cross-project-grid-view.png') })
 })

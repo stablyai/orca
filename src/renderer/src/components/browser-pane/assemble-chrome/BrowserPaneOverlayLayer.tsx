@@ -3,6 +3,7 @@ import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-v
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store'
 import { resolveBrowserWorkspaceOwner } from '@/lib/browser-workspace-source-resolution'
+import { focusWorkspaceGridViewMember } from '@/lib/workspace-grid-view-actions'
 import type { BrowserTab as BrowserTabState } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import BrowserPane from './browser-workspace-pane'
@@ -193,10 +194,15 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
           )?.groupId
         : undefined
       if (groupId) {
+        // Why: the cell's own pointer handler misses this press too, so an unfocused grid view
+        // cell must take workspace focus here or its page never owns the chrome chords.
+        if (!isWorktreeFocused) {
+          focusWorkspaceGridViewMember(worktreeId)
+        }
         focusOwningGroup(groupId)
       }
     })
-  }, [focusOwningGroup, isWorktreeActive, worktreeId])
+  }, [focusOwningGroup, isWorktreeActive, isWorktreeFocused, worktreeId])
 
   return (
     <>

@@ -22,7 +22,12 @@ const mocks = vi.hoisted(() => ({
   mobileDrivenPageIds: new Set<string>(),
   remotelyViewedPageIds: new Set<string>(),
   focusGroup: vi.fn(),
+  focusGridViewMember: vi.fn(),
   pagePointerDown: vi.fn<(target: { browserPageId: string }) => void>()
+}))
+
+vi.mock('@/lib/workspace-grid-view-actions', () => ({
+  focusWorkspaceGridViewMember: mocks.focusGridViewMember
 }))
 
 vi.mock('../../../store', () => {
@@ -101,6 +106,7 @@ describe('BrowserPaneOverlayLayer', () => {
     mocks.mobileDrivenPageIds.clear()
     mocks.remotelyViewedPageIds.clear()
     mocks.focusGroup.mockClear()
+    mocks.focusGridViewMember.mockClear()
     mocks.state = createState()
     vi.stubGlobal('api', {
       ui: {
@@ -513,6 +519,16 @@ describe('BrowserPaneOverlayLayer', () => {
     act(() => mocks.pagePointerDown({ browserPageId: 'page-b' }))
 
     expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-2')
+    expect(mocks.focusGridViewMember).not.toHaveBeenCalled()
+  })
+
+  it('moves workspace focus to an unfocused grid view cell whose page was pressed', () => {
+    render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive isWorktreeFocused={false} />)
+
+    act(() => mocks.pagePointerDown({ browserPageId: 'page-a' }))
+
+    expect(mocks.focusGridViewMember).toHaveBeenCalledWith('wt-1')
+    expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
   })
 
   // The host-row pane shares an absolute anchor with guests; only last-in-DOM order keeps it visible above them.
