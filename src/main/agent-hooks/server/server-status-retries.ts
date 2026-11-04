@@ -243,7 +243,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       )
       return
     }
-    const normalized = this.normalizeLocalHookPayload(source, body)
+    let quotaScanCompleted = false
+    const normalized = this.normalizeLocalHookPayload(source, body, false, () => {
+      quotaScanCompleted = true
+    })
+    const negativeSignature = quotaScanCompleted ? signature : undefined
     const event = normalized.event
     const newText = !current.payload.lastAssistantMessage && event?.payload.lastAssistantMessage
     const newQuota = quotaPending && event?.payload.mainAgent?.usageLimit
@@ -254,7 +258,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
         original,
         nextAttempt,
         requireExactOriginal,
-        signature
+        negativeSignature
       )
       return
     }
@@ -273,7 +277,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
         next,
         nextAttempt,
         requireExactOriginal,
-        signature
+        negativeSignature
       )
     }
   }

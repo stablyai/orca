@@ -42,6 +42,7 @@ export function normalizeHookPayload(
   options: {
     deferCompactOwnershipToClient?: boolean
     previousOpenCodeMainAgent?: AgentMainAgentStatus
+    onClaudeUsageLimitScanComplete?: () => void
     bindingStatusByPaneKey?: ReadonlyMap<string, AgentHookEventPayload>
     admitOpenCodeTui?: (
       identity: Pick<
@@ -238,7 +239,8 @@ export function normalizeHookPayload(
     hookPayload: hookPayloadRecord,
     envelope: record,
     extractedPrompt,
-    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
+    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent,
+    onClaudeUsageLimitScanComplete: options.onClaudeUsageLimitScanComplete
   })
   const providerSessionOnly =
     (source === 'pi' || source === 'prime-agent' || source === 'jcode') &&

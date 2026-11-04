@@ -111,7 +111,8 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   protected normalizeLocalHookPayload(
     source: AgentHookSource,
     body: unknown,
-    isReplay = false
+    isReplay = false,
+    onClaudeUsageLimitScanComplete?: () => void
   ): NormalizedLocalHook {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
       const event = normalizeHookPayload(this.state, source, body, this.env, {
@@ -148,7 +149,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    const event = normalizeHookPayload(this.state, source, body, this.env)
+    const event = normalizeHookPayload(this.state, source, body, this.env, {
+      onClaudeUsageLimitScanComplete
+    })
     const transcriptPath = event?.providerSession?.transcriptPath
     if (transcriptPath) {
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).

@@ -17,7 +17,7 @@ import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 
 vi.mock('../../main/telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../main/telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
-const quotaReads = vi.hoisted(() => ({ bytes: 0 }))
+const quotaReads = vi.hoisted(() => ({ bytes: 0, failNext: false, failAlways: false, failures: 0 }))
 vi.mock('node:fs', async (importOriginal) => {
   const fs = await importOriginal<typeof NodeFs>()
   return {
@@ -30,6 +30,14 @@ vi.mock('node:fs', async (importOriginal) => {
         length?: number,
         position?: number | null
       ) => {
+        const quotaRead = new Error('quota reader operation counter').stack?.includes(
+          'readClaudeTerminalUsageLimit'
+        )
+        if (quotaRead && (quotaReads.failNext || quotaReads.failAlways)) {
+          quotaReads.failNext = false
+          quotaReads.failures += 1
+          throw Object.assign(new Error('transient quota read failure'), { code: 'EIO' })
+        }
         const bytes =
           typeof offset === 'number'
             ? fs.readSync(
@@ -40,11 +48,7 @@ vi.mock('node:fs', async (importOriginal) => {
                 position ?? null
               )
             : fs.readSync(fd, buffer, offset)
-        if (
-          new Error('quota reader operation counter').stack?.includes(
-            'readClaudeTerminalUsageLimit'
-          )
-        ) {
+        if (quotaRead) {
           quotaReads.bytes += bytes
         }
         return bytes
@@ -53,15 +57,25 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 afterEach(() => {
+  quotaReads.failNext = false
+  quotaReads.failAlways = false
+  quotaReads.failures = 0
   vi.useRealTimers()
   vi.clearAllMocks()
 })
 
-const scenarios = (['local', 'guest'] as const).flatMap((kind) =>
-  [64, 640].flatMap((rows) =>
-    (['append', 'replace', 'truncate'] as const).map((change) => ({ kind, rows, change }))
-  )
-)
+const scenarios = [
+  ...(['local', 'guest'] as const).flatMap((kind) =>
+    [64, 640].flatMap((rows) =>
+      (['append', 'replace', 'truncate', 'read-error'] as const).map((change) => ({
+        kind,
+        rows,
+        change
+      }))
+    )
+  ),
+  { kind: 'local' as const, rows: 64, change: 'persistent-read-error' as const }
+]
 it.each(scenarios)(
   '$kind refines $change after $rows unchanged metadata rows',
   async ({ kind, rows, change }) => {
@@ -156,7 +170,7 @@ it.each(scenarios)(
         isSidechain: false,
         apiError: 'usage_limit_reached'
       })}\n`
-      if (change === 'append') {
+      if (change === 'append' || change === 'read-error' || change === 'persistent-read-error') {
         appendFileSync(path, quota)
       } else if (change === 'replace') {
         const length = statSync(path).size
@@ -170,6 +184,23 @@ it.each(scenarios)(
       } else {
         writeFileSync(path, `${prefix}${quota}`)
         expect(readFileSync(path, 'utf8')).toBe(`${prefix}${quota}`)
+      }
+      if (change === 'persistent-read-error') {
+        quotaReads.failAlways = true
+        vi.advanceTimersByTime(500)
+        expect(quotaReads.failures).toBe(2)
+        expect(current()?.payload.mainAgent?.usageLimit).toBeUndefined()
+        expect(local['assistantMessageRetryTimers'].size).toBe(0)
+        vi.advanceTimersByTime(500)
+        expect(quotaReads.failures).toBe(2)
+        return
+      }
+      if (change === 'read-error') {
+        quotaReads.failNext = true
+        vi.advanceTimersByTime(50)
+        expect(quotaReads.failNext).toBe(false)
+        expect(quotaReads.failures).toBe(1)
+        expect(current()?.payload.mainAgent?.usageLimit).toBeUndefined()
       }
       vi.advanceTimersByTime(50)
       expect(current()?.payload.mainAgent?.usageLimit).toEqual({})

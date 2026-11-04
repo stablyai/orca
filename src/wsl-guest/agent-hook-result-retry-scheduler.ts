@@ -272,7 +272,13 @@ export class AgentHookResultRetryScheduler {
       )
       return
     }
-    const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
+    let quotaScanCompleted = false
+    const event = normalizeHookPayload(this.host.state, source, body, this.host.env, {
+      onClaudeUsageLimitScanComplete: () => {
+        quotaScanCompleted = true
+      }
+    })
+    const negativeSignature = quotaScanCompleted ? signature : undefined
     const newText = !current.payload.lastAssistantMessage && event?.payload.lastAssistantMessage
     const newQuota = quotaPending && event?.payload.mainAgent?.usageLimit
     if (!newText && !newQuota) {
@@ -284,7 +290,7 @@ export class AgentHookResultRetryScheduler {
         version,
         nextAttempt,
         requireExactOriginal,
-        signature
+        negativeSignature
       )
       return
     }
@@ -307,7 +313,7 @@ export class AgentHookResultRetryScheduler {
         version,
         nextAttempt,
         requireExactOriginal,
-        signature
+        negativeSignature
       )
     }
   }

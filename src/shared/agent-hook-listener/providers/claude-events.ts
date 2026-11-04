@@ -45,7 +45,8 @@ export function normalizeClaudeEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  onUsageLimitScanComplete?: () => void
 ): ParsedAgentStatusPayload | null {
   const eventAgentId = readString(hookPayload, 'agent_id')
   if (
@@ -287,7 +288,7 @@ export function normalizeClaudeEvent(
     ...(outcome ? { outcome } : {}),
     usageLimit:
       outcome === 'failure'
-        ? readClaudeTerminalUsageLimitForHook(eventName, hookPayload)
+        ? readClaudeTerminalUsageLimitForHook(eventName, hookPayload, onUsageLimitScanComplete)
         : undefined,
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),

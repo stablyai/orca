@@ -23,7 +23,8 @@ export type ClaudeTerminalUsageLimit = {
 
 export function readClaudeTerminalUsageLimitForHook(
   eventName: unknown,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  onScanComplete?: () => void
 ): AgentSessionUsageLimit | undefined {
   if (
     eventName !== 'StopFailure' ||
@@ -36,7 +37,12 @@ export function readClaudeTerminalUsageLimitForHook(
   const promptId = readString(payload, 'prompt_id')
   const transcriptPath = readString(payload, 'transcript_path')
   return sessionId && promptId && transcriptPath
-    ? readClaudeTerminalUsageLimit(transcriptPath, { sessionId, promptId })?.usageLimit
+    ? readClaudeTerminalUsageLimit(
+        transcriptPath,
+        { sessionId, promptId },
+        undefined,
+        onScanComplete
+      )?.usageLimit
     : undefined
 }
 
@@ -62,7 +68,8 @@ function limitOfMessage(message: JsonRecord, now: number): AgentSessionUsageLimi
 export function readClaudeTerminalUsageLimit(
   transcriptPath: string,
   expected: { sessionId: string; promptId: string },
-  now = Date.now()
+  now = Date.now(),
+  onScanComplete?: () => void
 ): ClaudeTerminalUsageLimit | undefined {
   let candidate: ClaudeTerminalUsageLimit | undefined
   let parentUuid: string | undefined
@@ -118,7 +125,8 @@ export function readClaudeTerminalUsageLimit(
           }
         }
         return undefined
-      }
+      },
+      onScanComplete
     ) ?? undefined
   )
 }
