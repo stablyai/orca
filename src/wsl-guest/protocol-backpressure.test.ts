@@ -200,9 +200,7 @@ describe('relay FrameDecoder bounded turns', () => {
     expect(seen).toEqual([1, 4])
   })
 
-  // feed() runs straight from a socket 'data' handler. A frame owner that threw on the first
-  // turn used to escape feed() and reach uncaughtException, which in the relay daemon means every
-  // PTY and agent session it holds dies with it. The continuation path was already contained.
+  // Contain synchronous frame-owner throws: escaping a socket data callback would kill every relay-held PTY/session.
   it('contains a frame owner that throws on the synchronous turn and reports one typed error', () => {
     const seen: number[] = []
     const onError = vi.fn()
@@ -226,7 +224,6 @@ describe('relay FrameDecoder bounded turns', () => {
     expect(onError.mock.calls[0]?.[0]).toMatchObject({
       cause: expect.objectContaining({ message: 'frame owner failed' })
     })
-    // Residue after the bad frame is dropped rather than replayed, and no pause epoch is leaked.
     expect(decoder.drain()).toHaveLength(0)
     expect(pause).not.toHaveBeenCalled()
     expect(resume).not.toHaveBeenCalled()

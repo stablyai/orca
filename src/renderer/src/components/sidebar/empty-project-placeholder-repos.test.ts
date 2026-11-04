@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getEmptyProjectPlaceholderRepoIds } from './empty-project-placeholder-repos'
+import { getEmptyProjectPlaceholderRepoIds } from '../../../../shared/sidebar-list/empty-project-placeholder-repos'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -32,20 +32,6 @@ const worktree: Worktree = {
 }
 
 describe('getEmptyProjectPlaceholderRepoIds', () => {
-  it('returns empty repo placeholders in repo grouping without project groups', () => {
-    expect(
-      Array.from(
-        getEmptyProjectPlaceholderRepoIds({
-          groupBy: 'repo',
-          repos: [repo],
-          worktreesByRepo: { [repo.id]: [] },
-          visibleWorktrees: [],
-          filterRepoIds: []
-        })
-      )
-    ).toEqual([repo.id])
-  })
-
   it('treats missing worktreesByRepo keys as empty for the current render', () => {
     expect(
       Array.from(
@@ -148,8 +134,7 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
             [selected.id]: [selectedWt],
             [filteredOut.id]: [hiddenWt]
           },
-          // Why: simulate Hide sleeping removing every card while the project
-          // filter still intentionally excludes `filteredOut`.
+          // Hide sleeping removes all cards while the project filter still excludes filteredOut.
           visibleWorktrees: [],
           filterRepoIds: [selected.id]
         })

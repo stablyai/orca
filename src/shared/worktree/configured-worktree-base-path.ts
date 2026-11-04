@@ -21,11 +21,7 @@ export function resolveWorkspaceLayoutPath(repoPath: string, layoutPath: string)
     : resolveRuntimePath(repoPath, layoutPath)
 }
 
-/**
- * Why: the per-project worktree base (#1846) is an explicit statement that a
- * directory holds this project's workspaces, so it outranks the path
- * heuristics that classify directories on their name alone (#15232).
- */
+/** An explicitly configured project base outranks name-based directory heuristics (#1846, #15232). */
 export function resolveConfiguredWorktreeBasePaths(
   repo: Pick<Repo, 'path' | 'worktreeBasePath'> | undefined
 ): string[] {

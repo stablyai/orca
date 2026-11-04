@@ -43,8 +43,7 @@ function findDuplicateDictKeys(xml) {
   const problems = []
   const lineStarts = buildLineStarts(xml)
   const dictStack = []
-  // Why: `plutil -lint` accepts duplicate keys, but `codesign` rejects
-  // duplicate entitlements during release signing.
+  // Reject duplicate keys: plutil -lint accepts them but codesign refuses duplicate entitlements.
   const tokenPattern =
     /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<key\b[^>]*>([\s\S]*?)<\/key>|<(\/?)dict\b[^>]*>/g
 

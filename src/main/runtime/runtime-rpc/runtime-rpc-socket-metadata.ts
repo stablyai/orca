@@ -2,7 +2,7 @@ import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 
-/** Why: MUST stay in lockstep with createRuntimeTransportMetadata()'s `o-${pid}-${suffix}.sock` shape (unit-test enforced). */
+// MUST match createRuntimeTransportMetadata's o-${pid}-${suffix}.sock naming; unit tests enforce parity.
 export const RUNTIME_SOCKET_NAME_REGEX = /^o-(\d+)-[A-Za-z0-9_-]+\.sock$/
 
 export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number): void {
@@ -10,7 +10,7 @@ export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number
   try {
     entries = readdirSync(userDataPath)
   } catch {
-    // Why: first-launch userData may not exist yet; nothing to sweep.
+    // First launch may have no userData to sweep.
     return
   }
   for (const entry of entries) {
@@ -22,19 +22,19 @@ export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number
     if (!Number.isFinite(pid)) {
       continue
     }
-    // Why: never delete our own socket — a bug here would rmSync one we're about to bind.
+    // Never sweep our own socket before binding it.
     if (pid === ownPid) {
       continue
     }
     try {
-      // Why: signal 0 is the POSIX liveness probe (sends nothing); ESRCH = dead pid, EPERM = foreign owner (left alone).
+      // Signal zero only probes liveness: ESRCH is dead; EPERM is a foreign owner and must remain.
       process.kill(pid, 0)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
         try {
           rmSync(join(userDataPath, entry), { force: true })
         } catch {
-          // Why: best-effort sweep; a later start() or OS reboot cleans any socket we can't unlink.
+          // Sweep best-effort; later startup or reboot handles unlink failures.
         }
       }
     }
@@ -51,7 +51,7 @@ export function createRuntimeTransportMetadata(
   if (platform === 'win32') {
     return {
       kind: 'named-pipe',
-      // Why: named pipes lack the chmod hardening of Unix sockets; a per-runtime suffix avoids a stable, guessable endpoint name.
+      // Named pipes lack Unix chmod; use per-runtime suffixes to avoid stable, guessable endpoints.
       endpoint: `\\\\.\\pipe\\orca-${pid}-${endpointSuffix}`
     }
   }

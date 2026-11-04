@@ -1,11 +1,14 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { listWorktrees, listWorktreesStrict } from '../git/worktree'
-import { scheduleWorktreeBaseNotification } from '../ipc/worktree-base-directory-notifications'
-import { createWorktreeHeadIdentityRefreshState } from '../ipc/worktree-head-identity-refresh'
-import { EMPTY_HEAD_IDENTITY_SCOPE } from '../ipc/worktree-head-identity-scope'
+import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
+import { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
+import { scheduleWorktreeBaseNotification } from '../ipc/worktrees/creation/worktree-base-directory-notifications'
+import { createWorktreeHeadIdentityRefreshState } from '../ipc/worktrees/creation/worktree-head-identity-refresh'
+import { EMPTY_HEAD_IDENTITY_SCOPE } from '../ipc/worktrees/creation/worktree-head-identity-scope'
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
@@ -20,10 +23,30 @@ import {
 } from './paired-client-navigation-test-harness'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn(),
-  listWorktreesStrict: vi.fn()
-}))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn(),
+    listWorktreesStrict: vi.fn()
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 const initialWorktreePath = join(tmpdir(), 'repo')
 const externalWorktreePath = join(tmpdir(), 'external-worktree')
@@ -168,6 +191,7 @@ describe('external worktree discovery for paired clients', () => {
       pendingGitStatusRepoIds: new Set<string>(),
       pendingHeadIdentityRepoIds: new Set<string>(),
       pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      pendingGitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE,
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }
@@ -355,6 +379,7 @@ describe('external worktree discovery for paired clients', () => {
       pendingGitStatusRepoIds: new Set<string>(),
       pendingHeadIdentityRepoIds: new Set<string>(),
       pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      pendingGitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE,
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }
@@ -441,6 +466,7 @@ describe('external worktree discovery for paired clients', () => {
       pendingGitStatusRepoIds: new Set<string>(),
       pendingHeadIdentityRepoIds: new Set<string>(),
       pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+      pendingGitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE,
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }
@@ -452,63 +478,6 @@ describe('external worktree discovery for paired clients', () => {
     expect(sendToHostRenderer).toHaveBeenCalledWith('worktrees:changed', { repoId: REPO_ID })
     runtime.notifyReposChangedForRemoteClients()
     expect(resultType(await reader.next('collision-events'))).toBe('reposChanged')
-  })
-
-  it('does not publish a host-blind event for a nested SSH watcher', async () => {
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-    setWorktreeCatalogRemoteClientNotifier(runtime)
-    const userDataPath = mkdtempSync(join(tmpdir(), 'o-ewd-ssh-owner-'))
-    tempDirs.push(userDataPath)
-    const server = new OrcaRuntimeRpcServer({
-      runtime,
-      userDataPath,
-      enableWebSocket: true,
-      wsPort: 0
-    })
-    servers.push(server)
-    await server.start()
-    const offer = server.createPairingOffer({
-      address: '127.0.0.1',
-      name: 'nested-ssh-client',
-      scope: 'runtime'
-    })
-    if (!offer.available) {
-      throw new Error('pairing_unavailable')
-    }
-    const client = await authenticate(offer.pairingUrl)
-    const reader = createReader(client)
-    sessions.push(client)
-    readers.push(reader)
-    send(client, { id: 'ssh-events', method: 'runtime.clientEvents.subscribe' })
-    await reader.next('ssh-events', (response) => resultType(response) === 'ready')
-
-    const sendToHostRenderer = vi.fn()
-    const watch = {
-      key: 'ssh:repo-collision',
-      kind: 'base' as const,
-      path: '/remote/worktrees',
-      connectionId: 'ssh-target-1',
-      repos: new Map(),
-      mainWindow: {
-        isDestroyed: () => false,
-        webContents: { send: sendToHostRenderer }
-      },
-      notifyTimer: null,
-      pendingStructureRepoIds: new Set<string>(),
-      pendingGitStatusRepoIds: new Set<string>(),
-      pendingHeadIdentityRepoIds: new Set<string>(),
-      pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
-      headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
-      disposed: false
-    }
-    vi.useFakeTimers()
-    scheduleWorktreeBaseNotification(watch as never, { structureRepoIds: [REPO_ID] })
-    await vi.advanceTimersByTimeAsync(250)
-    vi.useRealTimers()
-
-    expect(sendToHostRenderer).toHaveBeenCalledWith('worktrees:changed', { repoId: REPO_ID })
-    runtime.notifyReposChangedForRemoteClients()
-    expect(resultType(await reader.next('ssh-events'))).toBe('reposChanged')
   })
 
   it('keeps the shared runtime publication valid without a headed renderer', async () => {

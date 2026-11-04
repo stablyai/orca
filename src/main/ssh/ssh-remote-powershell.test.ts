@@ -11,27 +11,20 @@ function decodePayload(command: string): string {
   return Buffer.from(encoded, 'base64').toString('utf16le')
 }
 
-/**
- * This one helper builds the command line for every remote-Windows SSH call site
- * (relay deploy, install locks, upload staging, GC claim, browse, CLI launch), so
- * its switches are worth pinning.
- */
+/** Remote Windows callers share these switches; preserve encoding while avoiding ineffective policy-bypass flags. */
 describe('powerShellCommand', () => {
   it('spells no -ExecutionPolicy switch', () => {
     const command = powerShellCommand('exit 0')
     const switches = command.replace(/ -EncodedCommand \S+$/, '')
 
-    // Why: `-EncodedCommand` is not execution-policy gated — only `-File` is — so the switch
-    // was a no-op, and `-ExecutionPolicy Bypass` beside base64 is among the most heavily
-    // EDR-flagged PowerShell command lines there is.
+    // Encoded inline code is not execution-policy gated; Bypass adds EDR risk without changing execution.
     expect(switches).not.toMatch(/-ExecutionPolicy/i)
     expect(switches).not.toMatch(/Bypass/i)
     expect(switches).toBe('powershell.exe -NoProfile -NonInteractive')
   })
 
   it('keeps the base64 payload the remote shell cannot rewrite', () => {
-    // Why: this string is re-parsed by the remote host's sshd DefaultShell, which is
-    // cmd.exe on a stock Windows OpenSSH install. Base64 is load-bearing here.
+    // sshd reparses through DefaultShell, often cmd.exe; encoded payload protects arbitrary shell characters.
     const command = powerShellCommand("Write-Output 'a & b' | Out-String")
 
     expect(command).toMatch(
@@ -43,25 +36,7 @@ describe('powerShellCommand', () => {
 
 const MAIN_DIR = join(import.meta.dirname, '..')
 
-// Why: execution policy gates loading script FILES and nothing else, so dropping
-// `-ExecutionPolicy Bypass` is a no-op exactly while no remote payload loads one. That
-// invariant is what makes the switch safe to omit, and it was previously guarded by nothing:
-// a future payload that dot-sourced or used `-File` would fail only on a remote host whose
-// LocalMachine policy is Restricted/AllSigned. See the invariant note on `powerShellCommand`.
-// Every pattern is case-insensitive: PowerShell switches and cmdlet names are, and Windows
-// paths are, so `-file`, `import-module` and `DEPLOY.PS1` are all legitimate spellings that a
-// case-sensitive pattern would wave through. Verified to add no false positive across the real
-// importers. Each entry carries the fixtures it must catch AND the near-misses it must not, so
-// a future tightening cannot quietly trade one for the other.
-//
-// Limit: this is a source-text scan, so a script file reached only through a variable
-// (`& $scriptPath`) never appears in source and no pattern here can catch it — this narrows
-// the hole rather than sealing it. The invariant note on `powerShellCommand` covers the rest.
-//
-// Matched against `stripComments`, the shared quote-tracking stripper, so a construct named in
-// prose is not counted as code. A line-anchored regex pair cannot do this job: it either eats
-// live code by pairing a `/*` inside a glob string with a later comment close, or — anchoring
-// to avoid that — skips every trailing comment. Quote state is the only fix.
+// Scan code with quote-aware stripComments for policy-gated file loading. Match case-insensitively with violation/near-miss fixtures; variable-only script paths remain outside source-scan coverage.
 const POLICY_GATED_CONSTRUCTS = [
   {
     label: 'a PowerShell script file (.ps1/.psm1)',
@@ -83,8 +58,7 @@ const POLICY_GATED_CONSTRUCTS = [
     ignores: [`const name = 'Import-ModuleList'`]
   },
   {
-    // Anchored to a token boundary: a bare /-File\b/i also matches `--credential-file`,
-    // `--log-file` and `--body-file`, which are real arguments in three of these importers.
+    // Token-bound -File must not match real --credential-file/--log-file/--body-file arguments.
     label: 'the -File switch',
     pattern: /(^|[\s'"`([{,])-File\b/i,
     catches: [
@@ -95,8 +69,7 @@ const POLICY_GATED_CONSTRUCTS = [
     ignores: [`fetchWith("--credential-file", path)`, `run("--log-file $p --body-file $b")`]
   },
   {
-    // The quote/backtick prefixes matter: a dot-source in a generated payload usually sits at
-    // the very start of a TS string literal — `powerShellCommand(". '$x'")` — not after a `;`.
+    // Generated dot-source payloads can begin at a TS quote/backtick, not only after semicolon.
     label: 'dot-sourcing',
     pattern: /(^|[;{'"`]|\n)[ \t]*\.[ \t]+['"$]/,
     catches: [
@@ -112,17 +85,13 @@ const POLICY_GATED_CONSTRUCTS = [
 ] as const
 
 describe('remote PowerShell payload invariant', () => {
-  // `scanSourceTree` is the shared walk: it skips node_modules/dist/out/build/.git,
-  // dot-directories and `__fixtures__`, and excludes tests by the shared `isTestFile` (which
-  // also covers `.spec.ts`, `__tests__/` and `-test-harness.ts`). A hand-rolled walk that got
-  // any of those wrong would move the floor below, which is this guard's own goalpost.
+  // Reuse scanSourceTree exclusions so the ratchet's inventory cannot drift under a second walker.
   const importers = scanSourceTree(MAIN_DIR).filter((file) =>
     file.source.includes('ssh-remote-powershell')
   )
 
   it('finds the modules that build remote payloads', () => {
-    // Guards the scan itself: a resolution change that emptied this list would make every
-    // assertion below vacuously pass. 15 importers today, re-derived against the shared walk.
+    // Require real importers so resolution changes cannot make every assertion vacuous.
     expect(importers.length).toBeGreaterThan(10)
   })
 
@@ -143,12 +112,7 @@ describe('remote PowerShell payload invariant', () => {
     }
   )
 
-  // Why: these patterns only earn trust if they fire on a real violation spelled the way a
-  // generated payload spells it — inside a TS string literal — and stay quiet on the near
-  // misses. Both halves are load-bearing: an earlier dot-source pattern passed a `;`-prefixed
-  // sample but missed `powerShellCommand(". '$x'")`, and the obvious case-insensitive fix for
-  // `-File` matches `--credential-file` in three real importers. A fixture written from the
-  // pattern confirms the pattern; these are written from the requirement.
+  // Use real generated spellings and near misses; pattern-shaped fixtures previously missed dot-source and overmatched --*-file.
   it.each(POLICY_GATED_CONSTRUCTS)(
     'detects $label wherever it is spelled',
     ({ pattern, catches, ignores }) => {

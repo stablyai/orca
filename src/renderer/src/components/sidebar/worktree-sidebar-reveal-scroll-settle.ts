@@ -1,11 +1,4 @@
-/**
- * Tracks a smooth reveal scroll the sidebar issued itself.
- *
- * A smooth scroll animates across many frames, and any other scrollTop write
- * during that window silently cancels it. The sidebar's scroll-anchor restore
- * writes exactly that, so without this the reveal stops a couple of pixels in
- * and the user has to click the reveal button repeatedly.
- */
+/** Suppress anchor restoration during smooth reveals because any competing scrollTop write cancels their animation. */
 export type PendingRevealScroll = {
   targetTop: number
   expiresAt: number

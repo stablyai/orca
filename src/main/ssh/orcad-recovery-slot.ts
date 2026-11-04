@@ -1,27 +1,30 @@
-/**
- * Slot-level verdicts shared by activation, rollback and their crash recovery.
- *
- * Every verdict here is the execution host's: `exited` only on positive proof, and a probe
- * that could not answer is `unverifiable` — never a reason to start a second slot.
- */
+/** Only positive host evidence proves slot exit. Unanswered probes stay unverifiable and never authorize starting a second slot. */
 import type { ServeReadiness } from '../server/serve-readiness'
-import type { OrcadActivationExpectation } from './orcad-activation-gate'
-import { ORCAD_INSTALL_MODEL } from './remote-install-model'
-import { computeRemoteInstallDir } from './remote-versioned-install'
-import { readRemoteOrcadBuildHash } from './orcad-remote-build-hash'
+import type { OrcadActivationExpectation } from '../managed-server/activation/orcad-activation-gate'
+import { ORCAD_INSTALL_MODEL } from '../managed-server/install/remote-install-model'
+import { computeRemoteInstallDir } from '../managed-server/install/remote-versioned-install'
+import { readRemoteOrcadBuildHash } from '../managed-server/install/orcad-remote-build-hash'
 import {
   launchOrcadSlotAndAwaitReadiness,
   OrcadActiveReadinessError,
   probeActiveOrcadReadiness
 } from './orcad-active-readiness'
-import { orcadLivenessProbeCommand, parseOrcadLiveness } from './orcad-remote-launch'
+import {
+  orcadLivenessProbeCommand,
+  orcadLivenessProvenExited,
+  parseOrcadLiveness,
+  type OrcadLiveness
+} from '../managed-server/install/orcad-remote-launch'
 import {
   parseOrcadStopOutcome,
   stopOrcadCommand,
   type OrcadStopOutcome
-} from './orcad-remote-process-control'
-import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
-import { orcadActivationTransactionRoot } from './orcad-activation-transaction'
+} from '../managed-server/install/orcad-remote-process-control'
+import {
+  execOrcadRemote,
+  type OrcadRemoteExecTarget
+} from '../managed-server/install/orcad-remote-runtime-control'
+import { orcadActivationTransactionRoot } from '../managed-server/activation/orcad-activation-transaction'
 import {
   initialOrcadActivationAdmissionCommand,
   parseInitialOrcadActivationAdmission
@@ -50,7 +53,7 @@ export function orcadSlotDir(options: OrcadSlotOptions, version: string): string
   return computeRemoteInstallDir(ORCAD_INSTALL_MODEL, options.remoteHome, version)
 }
 
-/** Reads the installed bytes' hash, so a later readiness payload can be matched to them. */
+/** Hash installed bytes so readiness must prove the same build. */
 export async function resolveOrcadSlotIdentity(
   options: OrcadSlotOptions,
   version: string
@@ -93,7 +96,7 @@ export async function ensureOrcadSlotServing(
       expectation(identity)
     )
   }
-  if (liveness === 'UNKNOWN') {
+  if (!orcadLivenessProvenExited(liveness)) {
     throw new OrcadActiveReadinessError(
       'unverifiable',
       `orcad ${identity.version} process state is unverifiable.`
@@ -122,15 +125,9 @@ export async function stopOrcadSlot(
   )
 }
 
-export type OrcadSlotQuiescence = 'exited' | 'other-slot-serving'
+type OrcadSlotQuiescence = 'exited' | 'other-slot-serving'
 
-/**
- * Before an interrupted run's state is replaced: the slot it started must be proven exited and
- * the slot being restored must not be running, or must already be serving (nothing to undo).
- *
- * A missing PID file is not proof of exit: an SSH drop can kill the launcher after `nohup`
- * but before it records `$!`, so the data root's owner records decide.
- */
+/** Prove candidate exit before replacing state and rule out another running slot, unless it already serves. Missing PID files prove nothing: SSH may drop after nohup but before $! is recorded, so inspect data-root ownership. */
 export async function quiesceInterruptedOrcadSlot(
   options: OrcadSlotOptions,
   /** `null` when nothing was launched, so only `otherSlot` needs ruling out. */
@@ -143,7 +140,7 @@ export async function quiesceInterruptedOrcadSlot(
   let exited = stopped === 'stopped' || stopped === 'already-exited'
   if ((stopped === 'unknown' || stopped === 'unconfirmed') && remoteDir !== null) {
     // No verified answer, e.g. the slot died before readiness; liveness decides.
-    exited = (await slotLiveness(options, remoteDir)) === 'DEAD'
+    exited = orcadLivenessProvenExited(await slotLiveness(options, remoteDir))
   }
   if (otherSlot) {
     const other = await slotLiveness(options, otherSlot.remoteDir)
@@ -155,7 +152,7 @@ export async function quiesceInterruptedOrcadSlot(
       )
       return 'other-slot-serving'
     }
-    if (other !== 'DEAD') {
+    if (!orcadLivenessProvenExited(other)) {
       throw new OrcadActiveReadinessError(
         'unverifiable',
         `orcad ${version ?? 'candidate'} (${stopped}) and ${otherSlot.version} (${other}) cannot both be ` +
@@ -189,7 +186,7 @@ export async function quiesceInterruptedOrcadSlot(
 export async function slotLiveness(
   options: OrcadSlotOptions,
   remoteDir: string
-): Promise<'LIVE' | 'DEAD' | 'UNKNOWN'> {
+): Promise<OrcadLiveness> {
   return parseOrcadLiveness(
     await execOrcadRemote(options, orcadLivenessProbeCommand(options.host, remoteDir))
   )

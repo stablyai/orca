@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { getConnectionId } from '@/lib/connection-context'
+import { useAppStore } from '@/store'
+import { resolveNotebookExecutionHost, type NotebookExecutionHost } from './ipynb-execution-host'
 import { clearIpynbOutputs, updateIpynbCellRuns, withIpynbCellIds } from './ipynb-cell-mutations'
 import { toStoredOutputs } from './ipynb-kernel-outputs'
 import {
@@ -18,6 +19,28 @@ import {
 } from './ipynb-kernel-store'
 import { parseIpynb } from './ipynb-parse'
 import { getIpynbCellKey } from './useIpynbDocumentEditing'
+
+function executionRefusal(host: NotebookExecutionHost, language: string): string | null {
+  switch (host) {
+    case 'remote':
+      return translate(
+        'auto.components.editor.IpynbViewer.localOnly',
+        'Notebook cells can only run for files on this computer.'
+      )
+    case 'unresolved':
+      return translate(
+        'auto.components.editor.IpynbViewer.ownerUnresolved',
+        "Orca can't tell which computer this notebook is on yet, so its cells can't run."
+      )
+    case 'local':
+      return language === 'python'
+        ? null
+        : translate(
+            'auto.components.editor.IpynbViewer.pythonOnly',
+            'Only Python notebooks can run in Orca.'
+          )
+  }
+}
 
 type UseIpynbCellExecutionArgs = {
   filePath: string
@@ -38,8 +61,7 @@ export function useIpynbCellExecution({
   const uncommittedRunKeys = useUncommittedRunKeys(filePath)
   const [pendingRun, setPendingRun] = useState<QueuedCell[] | null>(null)
 
-  // Why: runs can finish while this notebook is not the visible tab, so outputs wait in the kernel
-  // session until the open document takes them in.
+  // Keep completed outputs in the kernel session until the notebook document mounts to consume them.
   useEffect(() => {
     if (uncommittedRunKeys.length === 0) {
       return
@@ -83,18 +105,12 @@ export function useIpynbCellExecution({
     if (codeIndexes.length === 0) {
       return
     }
-    if (getConnectionId(worktreeId) || notebook.language !== 'python') {
-      toast.error(
-        getConnectionId(worktreeId)
-          ? translate(
-              'auto.components.editor.IpynbViewer.localOnly',
-              'Notebook cells can only run for files on this computer.'
-            )
-          : translate(
-              'auto.components.editor.IpynbViewer.pythonOnly',
-              'Only Python notebooks can run in Orca.'
-            )
-      )
+    const refusal = executionRefusal(
+      resolveNotebookExecutionHost(useAppStore.getState(), worktreeId),
+      notebook.language
+    )
+    if (refusal) {
+      toast.error(refusal)
       return
     }
     // Why: id-less (nbformat 4.4) cells are keyed by index, so a move mid-run would misroute output.

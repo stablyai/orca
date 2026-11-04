@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { gitStatusHostPayloadSchema } from './git-status-reply-schema'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
@@ -15,13 +16,13 @@ function fail(message: string): RpcFailure {
 }
 
 function status(entries: unknown[], upstreamStatus = { hasUpstream: true, ahead: 0, behind: 0 }) {
-  return {
+  return gitStatusHostPayloadSchema.parse({
     entries,
     conflictOperation: 'unknown',
     branch: 'feature/x',
     head: 'sha',
     upstreamStatus
-  }
+  })
 }
 
 function entry(area: 'unstaged' | 'staged') {
@@ -35,7 +36,6 @@ function eligibility(overrides: Record<string, unknown>) {
     defaultBaseRef: 'main',
     title: 'Ship mobile PR create',
     body: 'Generated body',
-    // Accepted no-review lookup so Create / Push & Create is allowed unless overridden.
     reviewLookupOutcome: 'not_found',
     ...overrides
   }

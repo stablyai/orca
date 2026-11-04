@@ -1,7 +1,6 @@
 import type { PairedE2EEFraming, PairedE2EELegacyGate } from './paired-e2ee-client-handshake'
 
-// Per-host record of hosts that completed a v2 handshake, keyed by the pinned
-// host public key (not a secret). Persistence is the platform's concern.
+// Persist per-host v2 success by pinned public key; platform adapters own storage.
 export type PairedE2EEV2LatchStore = {
   hydrate: () => Promise<void>
   // null = not hydrated yet; callers must then treat the host as latched.
@@ -25,8 +24,7 @@ export function createPairedE2EEFramingPolicy(
   let helloRefused = false
   const mayUseLegacy = (): boolean => store.isLatched(hostPublicKeyB64) === false
   return {
-    // Why: only a host never seen speaking v2 that refused a v2 hello predates
-    // direct v2; anything else falling back would be a downgrade.
+    // Legacy fallback is allowed only for never-v2 hosts refusing direct v2; otherwise it is a downgrade.
     framingForNextDial: () => (helloRefused && mayUseLegacy() ? 'legacy' : 'v2'),
     mayUseLegacy,
     helloRefusalIsAuthFailure: () => store.isLatched(hostPublicKeyB64) === true,

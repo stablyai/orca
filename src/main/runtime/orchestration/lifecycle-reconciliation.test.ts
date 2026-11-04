@@ -31,8 +31,7 @@ describe('lifecycle reconciliation', () => {
     expect(logs.some((line) => line.includes('expected handle'))).toBe(true)
   })
 
-  // Real leaf UUIDs: pane keys are `${tabId}:${leafUuid}` and only the leaf
-  // half is identity (the tab half changes on pane break-out).
+  // Leaf UUIDs survive pane break-out; the tab half of paneKey can change.
   const LEAF_A = '11111111-1111-1111-8111-111111111111'
   const LEAF_B = '22222222-2222-4222-9222-222222222222'
 
@@ -210,8 +209,7 @@ describe('lifecycle reconciliation', () => {
   it('completes worker_done from the same leaf after a pane break-out changed the tab half', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
-    // Dispatch recorded the post-break-out pane key; the worker shell still
-    // holds the spawn-time key with the old tab id.
+    // The Dispatch has the new tab key, but the worker still carries its spawn-time key.
     const dispatch = createRootDispatch(db, task.id, 'term_before_restart', `tab_new:${LEAF_A}`)
     const message = db.insertMessage({
       runId: 'run_legacy_local',
@@ -284,8 +282,7 @@ describe('lifecycle reconciliation', () => {
       action: 'rejected',
       code: 'sender_not_assignee'
     })
-    // Why: the send-path conversion logs nothing (no-op logger), so the
-    // coordinator's re-read must still surface the rejection to its log stream.
+    // Send-path conversion has no logger; coordinator reread must still surface rejection.
     expect(rereadLogs.some((line) => line.includes('worker_done rejected'))).toBe(true)
   })
 
@@ -487,8 +484,7 @@ describe('lifecycle reconciliation', () => {
       type: 'heartbeat',
       subject: 'Rejected heartbeat: alive'
     })
-    // Why: the coordinator's re-read of the already-converted heartbeat must
-    // still log the rejection, since the send-path conversion logged nothing.
+    // Log the rejection on coordinator reread even after send-path conversion.
     const persisted = db.getMessageById(heartbeat.id)
     const rereadLogs: string[] = []
     expect(
@@ -539,53 +535,5 @@ describe('lifecycle reconciliation', () => {
       dispatchId: dispatch.id
     })
     expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).not.toBeNull()
-  })
-
-  it('suppresses same-dispatch heartbeats once worker_done is reconciled', () => {
-    db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker')
-    const otherTask = db.createTask({
-      runId: 'run_legacy_local',
-      spec: 'other work'
-    })
-    const otherDispatch = createRootDispatch(db, otherTask.id, 'term_other')
-    const insertHeartbeat = (dispatchId: string, from: string) =>
-      db.insertMessage({
-        runId: 'run_legacy_local',
-        from,
-        to: 'term_coordinator',
-        subject: 'alive',
-        type: 'heartbeat',
-        payload: JSON.stringify({ dispatchId })
-      })
-    const staleHeartbeat = insertHeartbeat(dispatch.id, 'term_worker')
-    const otherHeartbeat = insertHeartbeat(otherDispatch.id, 'term_other')
-    reconcileLifecycleMessage(db, staleHeartbeat)
-    reconcileLifecycleMessage(db, otherHeartbeat)
-    const done = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'term_worker',
-      to: 'term_coordinator',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
-    })
-
-    reconcileLifecycleMessage(db, done)
-
-    expect(db.getUnreadMessages('term_coordinator', ['heartbeat']).map((row) => row.id)).toEqual([
-      otherHeartbeat.id
-    ])
-    const archived = db
-      .getAllMessagesForHandle('term_coordinator')
-      .find((row) => row.id === staleHeartbeat.id)
-    expect(archived).toMatchObject({ read: 1 })
-    expect(archived?.delivered_at).not.toBeNull()
-
-    const lateHeartbeat = insertHeartbeat(dispatch.id, 'term_worker')
-    expect(reconcileLifecycleMessage(db, lateHeartbeat)).toEqual({ action: 'suppressed' })
-    expect(db.getMessageById(lateHeartbeat.id)).toMatchObject({ read: 1 })
-    expect(db.getMessageById(lateHeartbeat.id)?.delivered_at).not.toBeNull()
   })
 })

@@ -5,12 +5,7 @@ import {
   type BrowserClientPageVisibleAttachment
 } from './browser-client-page-retained-registry'
 
-/**
- * A real client-hosted retained page — registry, body-level host, attached guest — for suites
- * that assert what a drag does to the host's pointer-events. Everything below the fake guest is
- * the shipping code: the registry creates and enrols the host, and the visible attachment is the
- * one the pane's attach effect uses.
- */
+/** Use shipping registry, retained host and visible attachment around a fake guest to test drag passthrough. */
 export const RETAINED_FIXTURE_PAGE: BrowserClientPageRendererIdentity = {
   partition: 'persist:route-a',
   browserPageId: 'page-a',
@@ -56,6 +51,7 @@ export function createRetainedHostFixture(): RetainedHostFixture {
   })
   openFixtures.push(registry)
   const container = document.createElement('div')
+  vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 800, 600))
   document.body.appendChild(container)
   return {
     registry,

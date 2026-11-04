@@ -4,8 +4,7 @@ export type CheckOutcome = 'passed' | 'failed' | 'pending' | 'neutral'
 
 export type CheckOutcomeInput = { status?: string | null; conclusion?: string | null }
 
-// Why: a skipped job is a deliberate "not applicable", not an unresolved signal — every surface
-// must count it as passing or the same PR reads green on desktop and grey on mobile.
+// Skipped means not applicable; count it passing everywhere so desktop/mobile agree on the same PR.
 const PASSED_CONCLUSIONS = new Set(['success', 'skipped'])
 
 // Why: these block the merge. GitLab `manual` is deliberately absent — it waits on a human.
@@ -81,10 +80,21 @@ export function summarizeProviderChecks(
   }
 }
 
+const PIPELINE_CHECKS_LABEL: Record<ProviderCheckSummary['state'], string> = {
+  success: 'Pipeline passed',
+  failure: 'Pipeline failed',
+  pending: 'Pipeline pending',
+  neutral: 'Pipeline unresolved',
+  none: 'No checks'
+}
+
 /** The one checks-pill label; it keys off `state` so the text can never contradict the pill's tone or icon. */
 export function getProviderChecksLabel(summary: ProviderCheckSummary | undefined): string {
   if (!summary) {
     return 'Checks'
+  }
+  if (summary.scope === 'pipeline') {
+    return PIPELINE_CHECKS_LABEL[summary.state]
   }
   if (summary.total === 0) {
     return 'No checks'

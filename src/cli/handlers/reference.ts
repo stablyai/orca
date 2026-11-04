@@ -16,11 +16,15 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { printResult } from '../format'
-import { assertReferenceWritesSupported, parseReferenceUrls } from '../reference-input'
+import {
+  assertReferenceWritesSupported,
+  parseReferenceInputs,
+  parseReferenceUrls,
+  resolveReferenceInputs
+} from '../reference-input'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 
-// Why: hosts from before reference.* still advertise the linked-items delta capability, so the
-// raw method_not_found would read as an Orca bug rather than a version gap.
+// Older hosts may advertise linked-item deltas without supporting reference.*.
 async function callReference<TResult>(
   client: HandlerContext['client'],
   method: 'reference.list' | 'reference.find',
@@ -89,12 +93,18 @@ function formatFind(result: RuntimeReferenceFindResult): string {
 async function mutateReferences(context: HandlerContext, operation: 'add' | 'remove') {
   const { flags, client, json } = context
   const target = workspaceTarget(context)
-  const input = parseReferenceUrls(getRepeatedStringFlag(flags, 'url'))
+  const values = getRepeatedStringFlag(flags, 'url')
+  const input =
+    operation === 'add'
+      ? await resolveReferenceInputs(context, parseReferenceInputs(values))
+      : parseReferenceUrls(values)
   const keys = operation === 'remove' ? getRepeatedStringFlag(flags, 'key') : []
   if (input.length === 0 && keys.length === 0) {
     throw new RuntimeClientError(
       'invalid_argument',
-      operation === 'add' ? 'Pass at least one full URL.' : 'Pass at least one full URL or --key.'
+      operation === 'add'
+        ? 'Pass at least one full URL or Jira issue key.'
+        : 'Pass at least one full URL or --key.'
     )
   }
   await assertReferenceWritesSupported(client)
@@ -105,7 +115,7 @@ async function mutateReferences(context: HandlerContext, operation: 'add' | 'rem
     : `id:${workspace.id}`
   const stored = before.result.references.map(({ key, selected: _selected, ...item }) => ({
     item,
-    // Why: --key values come from the host's `reference list`; the CLI may be a different build.
+    // Reference keys come from the host, which may run a different build.
     keys: new Set([key, getWorkspaceReferenceIdentity(item)])
   }))
   const base = stored.map(({ item }) => item)
@@ -121,9 +131,7 @@ async function mutateReferences(context: HandlerContext, operation: 'add' | 'rem
     }
   })
   if (changes.some((change) => change.changed)) {
-    // Why: storage may hold same-URL twins with different source contexts; derive from `base`
-    // so the host's delta merge never sees an unrequested twin as removed.
-    // parseReferenceUrls already dedupes input by identity.
+    // Preserve same-URL twins with distinct source contexts when preparing the host's delta merge.
     const linkedItems =
       operation === 'add'
         ? [...base, ...input.filter((item) => !isLinked(getWorkspaceReferenceIdentity(item)))]

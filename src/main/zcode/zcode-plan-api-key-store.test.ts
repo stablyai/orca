@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setSecretStore } from '../../shared/secret-store'
 import type * as ZcodePlanApiKeyStore from './zcode-plan-api-key-store'
 
 const safeStorageMock = vi.hoisted(() => ({
@@ -7,11 +8,7 @@ const safeStorageMock = vi.hoisted(() => ({
   decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
 }))
 
-const electronMock = vi.hoisted(() => ({
-  safeStorage: safeStorageMock
-}))
-
-vi.mock('electron', () => electronMock)
+beforeEach(() => setSecretStore({ ...safeStorageMock, describeProtectionGap: () => null }))
 
 const existsSyncMock = vi.fn()
 const readFileSyncMock = vi.fn()
@@ -166,8 +163,7 @@ describe('zcode-plan-api-key-store', () => {
     expect(() => store.saveZcodePlanApiKey('new-key')).toThrow(
       'could not be stored securely on this device'
     )
-    // First write publishes the unrestricted replacement; the second restores
-    // the previous envelope so the user's old key survives the failed replace.
+    // Reject unrestricted replacement but restore the old envelope so the previous key survives failure.
     expect(writeSecureFileMock).toHaveBeenCalledTimes(2)
     expect(writeSecureFileMock).toHaveBeenLastCalledWith(storePath, previous.toString('utf8'), {
       shouldPublish: expect.any(Function)

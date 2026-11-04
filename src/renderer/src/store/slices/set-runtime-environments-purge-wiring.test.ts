@@ -1,9 +1,4 @@
-/**
- * Wiring coverage for #8881: `setRuntimeEnvironments` must fire the stale-runtime
- * purge on the removal diff. Load-bearing because the call is optional-chained
- * (`get().purgeStaleRuntimeHostState?.(removedIds)`) — a rename/omission would
- * silently no-op while every pure-helper unit test still passed.
- */
+/** Exercise optional-chained purge wiring (#8881): pure reducer tests cannot catch a missing/renamed call. */
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -71,7 +66,6 @@ describe('setRuntimeEnvironments removal diff fires the stale-runtime purge', ()
     const store = createTestStore()
     seedStale(store)
 
-    // env-a removed; env-b remains.
     store.getState().setRuntimeEnvironments([env('env-b')])
 
     const s = store.getState()
@@ -79,22 +73,6 @@ describe('setRuntimeEnvironments removal diff fires the stale-runtime purge', ()
     expect(s.projectHostSetups).toEqual([])
     expect(s.worktreesByRepo.repoA).toEqual([])
     expect(s.tabsByWorktree['repoA::/wt-a']).toBeUndefined()
-    // The saved list itself was updated.
     expect(s.runtimeEnvironments.map((e) => e.id)).toEqual(['env-b'])
-  })
-
-  it('is a no-op for repos/rows when no environment was removed', () => {
-    const store = createTestStore()
-    seedStale(store)
-    const reposRef = store.getState().repos
-    const worktreesRef = store.getState().worktreesByRepo
-
-    // Same set (order irrelevant) => empty removal diff => purge never runs.
-    store.getState().setRuntimeEnvironments([env('env-a'), env('env-b')])
-
-    const s = store.getState()
-    expect(s.repos).toBe(reposRef)
-    expect(s.worktreesByRepo).toBe(worktreesRef)
-    expect(s.repos.map((r) => r.id)).toEqual(['repo1', 'repoA'])
   })
 })

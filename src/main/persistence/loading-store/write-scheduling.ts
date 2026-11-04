@@ -1,7 +1,17 @@
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
-import { notifyWorkspaceSessionWritten } from './workspace-session-write-listeners'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import {
+  notifyWorkspaceSessionWritten,
+  type WorkspaceSessionOperationListener,
+  type WorkspaceSessionWriteListener
+} from './workspace-session-write-listeners'
+import { ptyBindingGenerationOf } from './pty-binding-generations'
+import type { PartitionEditorViews } from './layout-editor-views'
+
+/** Undefined means any domain may have changed. */
+export type StateWriteListener = (dirtyDomains: readonly string[] | undefined) => void
 
 const SAVE_DEBOUNCE_MS = 1_000
 const SAVE_MAX_WAIT_MS = 5_000
@@ -19,6 +29,11 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'writeTimer'
   | 'writesFrozen'
   | 'workspaceSessionWriteListeners'
+  | 'workspaceSessionOperationListeners'
+  | 'stateWriteListeners'
+  | 'ptyBindingGenerations'
+  | 'layoutEditorViews'
+  | 'state'
 >
 
 const writeSchedulingOperationsContext = Symbol('WriteSchedulingOperations')
@@ -39,22 +54,52 @@ export class WriteSchedulingOperations {
     await Promise.all([runtime.pendingWrite, runtime.activeViewPreference.waitForPendingWrite()])
   }
 
-  /** Called after each in-memory workspace-session write; listeners must not throw or block. */
-  onWorkspaceSessionWritten(listener: () => void): () => void {
+  /** Observe in-memory session writes; callbacks must not throw or block. */
+  onWorkspaceSessionWritten(listener: WorkspaceSessionWriteListener): () => void {
     const { runtime } = this[writeSchedulingOperationsContext]
     runtime.workspaceSessionWriteListeners.add(listener)
     return () => {
       runtime.workspaceSessionWriteListeners.delete(listener)
     }
   }
+
+  /** Main-owned layouts notify once after all declared partitions; callbacks must not throw or block. */
+  onWorkspaceSessionOperationEnded(listener: WorkspaceSessionOperationListener): () => void {
+    const { runtime } = this[writeSchedulingOperationsContext]
+    runtime.workspaceSessionOperationListeners.add(listener)
+    return () => {
+      runtime.workspaceSessionOperationListeners.delete(listener)
+    }
+  }
+
+  getPtyBindingGeneration(hostId: ExecutionHostId, leafId: string): number | undefined {
+    return ptyBindingGenerationOf(this[writeSchedulingOperationsContext].runtime, hostId, leafId)
+  }
+
+  getLayoutEditorViews(hostId: ExecutionHostId): PartitionEditorViews | undefined {
+    return this[writeSchedulingOperationsContext].runtime.layoutEditorViews.get(hostId)
+  }
+
+  /** Observe save-scheduling writes; callbacks must not throw or block. */
+  onStateWritten(listener: StateWriteListener): () => void {
+    const { runtime } = this[writeSchedulingOperationsContext]
+    runtime.stateWriteListeners.add(listener)
+    return () => {
+      runtime.stateWriteListeners.delete(listener)
+    }
+  }
 }
 
 export function scheduleSave(
   owner: WriteSchedulingOperations,
-  dirtyDomains?: readonly string[]
+  dirtyDomains?: readonly string[],
+  writtenHostId?: ExecutionHostId
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
-  notifyWorkspaceSessionWritten(runtime, dirtyDomains)
+  notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
+  for (const listener of runtime.stateWriteListeners) {
+    listener(dirtyDomains)
+  }
   runtime.automationListProjectionCache = null
   const trackedDomains = runtime.dirtyProfileStateDomains
   if (dirtyDomains === undefined) {

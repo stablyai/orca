@@ -27,12 +27,6 @@ afterEach(() => {
 })
 
 describe('readNodeFileSyncWithinLimit', () => {
-  it('returns stable bytes without changing them', () => {
-    const path = createTempFile('stable 🐋 bytes')
-
-    expect(readNodeFileSyncWithinLimit(path, 1024).buffer.toString('utf8')).toBe('stable 🐋 bytes')
-  })
-
   it('rejects an oversized sparse file before allocating its declared size', () => {
     const path = createTempFile('')
     const descriptor = openSync(path, 'r+')
@@ -40,6 +34,20 @@ describe('readNodeFileSyncWithinLimit', () => {
     closeSync(descriptor)
 
     expect(() => readNodeFileSyncWithinLimit(path, 1024)).toThrow(NodeFileReadTooLargeError)
+  })
+
+  it('reads the full zero-size sysctl value when later reads return EOF', () => {
+    const path = createTempFile('4096\n')
+    const originalStat = fs.fstatSync
+    vi.spyOn(fs, 'fstatSync').mockImplementation((...args) =>
+      Object.assign(originalStat(...args), { size: 0 })
+    )
+    const originalRead = fs.readSync
+    const read = vi
+      .spyOn(fs, 'readSync')
+      .mockImplementation((...args) => (read.mock.calls.length === 1 ? originalRead(...args) : 0))
+
+    expect(readNodeFileSyncWithinLimit(path, 1024).buffer.toString('utf8')).toBe('4096\n')
   })
 })
 

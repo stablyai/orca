@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEnvironmentFromPairingOffer } from '../../shared/runtime-environments'
 import { RUNTIME_PROTOCOL_VERSION } from '../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { verifyRuntimeEnvironmentSshTunnel } from './runtime-ssh-access-verification'
 
 const send = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/remote-runtime-client', () => ({ sendRemoteRuntimeRequest: send }))
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
+  sendRemoteRuntimeRequest: send
+}))
 
 const pairing = {
   v: 2 as const,

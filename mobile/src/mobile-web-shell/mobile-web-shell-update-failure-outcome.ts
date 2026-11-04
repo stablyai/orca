@@ -4,7 +4,6 @@ import {
   type MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 
-/** What went on screen instead, read off the state the decision produced rather than decided twice. */
 export function updateFailureOutcomeOf(
   state: MobileWebShellSessionState
 ): Pick<MobileWebShellUpdateFailureFacts, 'outcome' | 'wall'> {
@@ -12,8 +11,8 @@ export function updateFailureOutcomeOf(
     case 'activating':
     case 'ready':
       return { outcome: 'opened-cached', wall: null }
-    case 'native-route':
-      return { outcome: 'native-route', wall: null }
+    case 'route-unavailable':
+      return { outcome: 'route-unavailable', wall: null }
     case 'wall':
       return { outcome: 'wall', wall: updateFailureWallOf(state.verdict) }
     case 'failed':

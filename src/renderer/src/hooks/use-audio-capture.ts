@@ -7,7 +7,7 @@ import {
   dictationMeterStatesEqual,
   toPublicDictationMeterState,
   type DictationMeterState
-} from '@/components/dictation/dictation-audio-meter'
+} from '../../../shared/dictation-audio-meter'
 
 type BufferedAudioChunk = {
   samples: Float32Array
@@ -107,8 +107,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
       bufferedAudioBytesRef.current += chunk.samples.byteLength
       bufferedAudioSecondsRef.current += chunk.samples.length / chunk.sampleRate
 
-      // Why: worker/model startup can hang; keep only a bounded recent window
-      // so renderer memory cannot grow forever while buffering is enabled.
+      // Bound recent buffering while worker/model startup hangs to prevent unlimited renderer memory growth.
       while (
         bufferedAudioRef.current.length > 0 &&
         (bufferedAudioBytesRef.current > MAX_BUFFERED_AUDIO_BYTES ||
@@ -154,14 +153,11 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
       let source: MediaStreamAudioSourceNode | null = null
       let processor: ScriptProcessorNode | null = null
       try {
-        // Why: requesting a specific sampleRate (e.g. 16kHz) in the AudioContext
-        // can produce silence on macOS because the hardware mic runs at 44.1/48kHz.
-        // Use the system default rate and let sherpa-onnx resample internally.
+        // Use hardware sample rate and let sherpa resample; forcing 16kHz can produce macOS microphone silence.
         context = new AudioContext()
         contextRef.current = context
 
-        // Why: some Chromium builds suspend the AudioContext until a user gesture.
-        // Resume it explicitly to ensure audio processing starts.
+        // Explicitly resume AudioContext because Chromium may suspend it pending a user gesture.
         if (context.state === 'suspended') {
           await context.resume()
         }
@@ -181,10 +177,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
 
         source = context.createMediaStreamSource(stream)
 
-        // Why: ScriptProcessorNode is deprecated but AudioWorklet requires a
-        // separate module file which complicates the Vite build pipeline. For
-        // the initial implementation, ScriptProcessorNode is simpler and the
-        // performance difference is negligible for speech capture.
+        // ScriptProcessorNode avoids a separate AudioWorklet module in the Vite build.
         processor = context.createScriptProcessor(4096, 1, 1)
 
         const actualRate = context.sampleRate
@@ -236,8 +229,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
         sourceRef.current = source
         isCapturingRef.current = true
 
-        // Why: unplugging the input ends the track without ending the graph — the
-        // processor keeps feeding zeros, so dictation looks live while capturing nothing.
+        // Device loss ends the track but leaves zero-filled processing alive; stop capture so dictation cannot appear healthy.
         const onCaptureLost = options.onCaptureLost
         const audioTrack = stream.getAudioTracks()[0]
         if (onCaptureLost && audioTrack) {
@@ -294,8 +286,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
   const flushBufferedAudio = useCallback(async () => {
     const flushGeneration = bufferedAudioGenerationRef.current
     try {
-      // Why: keep buffering enabled while draining so live audio appends behind
-      // startup audio instead of overtaking it through direct IPC sends.
+      // Keep buffering through drain so live samples queue behind startup audio instead of overtaking it.
       while (
         bufferedAudioGenerationRef.current === flushGeneration &&
         bufferedAudioRef.current.length > 0

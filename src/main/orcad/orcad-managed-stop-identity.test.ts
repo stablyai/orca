@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -27,17 +27,17 @@ const RECORDED: OrcadProcessIncarnation = {
   linuxStartTicks: '4242',
   bootId: 'boot-a'
 }
-// The WSL2 smoke saw btime move by 157 s against a 1.5 s tolerance.
+// WSL2 btime drift exceeded the 1.5-second wall-clock tolerance.
 const DRIFTED_STARTED_AT_MS = 5_000 + 157_000
 
 function running(
   recorded: OrcadProcessIncarnation | null,
-  { requestCarriesIncarnation = false } = {}
+  { requestCarriesIncarnation = false, identity = 'uid-1000' } = {}
 ): OrcadManagedStopRequest {
   const root = mkdtempSync(join(tmpdir(), 'orcad-stop-identity-'))
   roots.push(root)
   const lock = acquireOrcadInstanceLock(root, {
-    identity: () => 'uid-1000',
+    identity: () => identity,
     startedAtMs: () => 5_000,
     incarnation: () => recorded
   })
@@ -57,7 +57,6 @@ function running(
   }
 }
 
-/** Alive for `aliveFor` observations, then gone. */
 function linuxHost(
   actual: OrcadProcessIncarnation | null,
   aliveFor = Number.POSITIVE_INFINITY
@@ -112,9 +111,32 @@ describe('managed stop instance identity', () => {
     expect(existsSync(orcadStopReceiptPath(request, 'completed'))).toBe(false)
   })
 
+  it.each([
+    ['another non-root uid', 1001, 'exited'],
+    ['root', 0, 'unverifiable'],
+    ['the same uid', 1000, 'unverifiable']
+  ] as const)(
+    'for an older lock whose wall-clock time disagrees, a PID owned by %s is %s',
+    async (_owner, ownerUid, verdict) => {
+      const request = running(null, { identity: '1000' })
+      const host = { ...linuxHost(RECORDED), ownerUid: () => ownerUid }
+      expect(await completeOrcadManagedStop(request, host)).toBe(verdict)
+      expect(existsSync(orcadStopReceiptPath(request, 'completed'))).toBe(verdict === 'exited')
+      expect(requestWritten(request)).toBe(false)
+    }
+  )
+
+  it('takes no owner proof from a lock that no longer names the instance', async () => {
+    const request = running(null, { identity: '1000' })
+    const lock = JSON.parse(readFileSync(request.instance.lockPath, 'utf8'))
+    writeFileSync(request.instance.lockPath, JSON.stringify({ ...lock, nonce: 'successor' }))
+    const host = { ...linuxHost(RECORDED), ownerUid: () => 1001 }
+    expect(await completeOrcadManagedStop(request, host)).toBe('unverifiable')
+  })
+
   it('stays readable by peers on either side of the change', async () => {
     const request = running(RECORDED, { requestCarriesIncarnation: true })
-    // The instance shape slots before this change parse: the incarnation is dropped, not refused.
+    // Older readers strip the added incarnation fields.
     const olderInstance = z.object({
       pid: z.number().int().positive(),
       startedAtMs: z.number().finite().nonnegative().nullable(),
@@ -123,7 +145,7 @@ describe('managed stop instance identity', () => {
     })
     const { linuxStartTicks: _ticks, bootId: _boot, ...withoutIncarnation } = request.instance
     expect(olderInstance.parse(request.instance)).toEqual(withoutIncarnation)
-    // And a newer slot reads what an older client wrote, taking the incarnation from the lock.
+    // New readers recover the missing incarnation from the lock.
     const fromOlderClient = OrcadManagedStopRequestSchema.parse({
       ...request,
       instance: withoutIncarnation

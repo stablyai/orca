@@ -1,17 +1,14 @@
-// Transitional: remove once no supported release lacks AGENT_SESSION_TURN_ITEM_CAPABILITY.
-//
-// A client that predates the `turn` item renders the unknown kind as a text bubble, so the
-// host publishes the legacy status form to it at the RPC boundary only. The journal, the
-// status feed, and every in-process reader keep the canonical body.
+// Remove when every supported release has AGENT_SESSION_TURN_ITEM_CAPABILITY.
+// Downgrade turn items to legacy status only at RPC; canonical journal/status/in-process readers keep the body.
 
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { legacyAgentJournalTurnStatusBody } from '../../../../shared/agent-session-turn-record'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { legacyAgentJournalTurnStatusBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../../../shared/agent-session-wire'
-import { AGENT_SESSION_TURN_ITEM_CAPABILITY } from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-wire'
+import { AGENT_SESSION_TURN_ITEM_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RpcContext } from '../core'
 
 type TurnItemReader = Pick<RpcContext, 'clientKind' | 'clientCapabilities'>

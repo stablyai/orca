@@ -9,10 +9,7 @@ import { detectRepositoryMergeMetadata } from './../detect/repository-merge-meta
 import type { PullRequestLookupData } from './../lookup/pull-request-lookup-data'
 import { getRestPRByNumber, getPRByNumber } from './../lookup/pr-number-lookup'
 import { STACK_METADATA_UNAVAILABLE_ERROR } from './../lookup/pr-stack-summary-cache'
-/**
- * Merge a PR by number using gh CLI.
- * method: 'merge' | 'squash' | 'rebase' (default: 'squash')
- */
+import { codeHostFailure } from '../../../../shared/code-host-failure-copy'
 export async function mergePR(
   repoPath: string,
   prNumber: number,
@@ -28,7 +25,7 @@ export async function mergePR(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
   await acquire()
   let concurrencySlotHeld = true
@@ -68,9 +65,6 @@ export async function mergePR(
         headSha: restData.headRefOid,
         ghOptions
       })
-      if (result.ok) {
-        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
-      }
       return result
     }
     const mergeBlocker = await getPRMergeBlocker(
@@ -85,7 +79,7 @@ export async function mergePR(
       return { ok: false, error: mergeBlocker }
     }
 
-    // Don't use --delete-branch: it deletes the local branch, which fails while the worktree is checked out on it.
+    // Deleting the local branch fails while its worktree still has it checked out.
     const args = ['pr', 'merge', String(prNumber), `--${method}`]
     if (ownerRepo) {
       args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
@@ -94,13 +88,13 @@ export async function mergePR(
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return { ok: false, error: message }
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     if (concurrencySlotHeld) {
       release()
     }
@@ -138,7 +132,7 @@ export async function getPRMergeBlocker(
     if (pr.mergeQueueRequired === true) {
       return 'This pull request must be merged through GitHub merge queue. Use Merge when ready instead.'
     }
-    // Why: conflict summaries shell out to local git; skip for SSH repos until that helper routes through the SSH provider.
+    // Conflict derivation uses local Git and cannot inspect SSH-backed repositories.
     if (
       connectionId ||
       pr.mergeable !== 'CONFLICTING' ||
@@ -158,7 +152,7 @@ export async function getPRMergeBlocker(
     )
     return formatMergeConflictBlocker(pr.baseRefName, summary)
   } catch {
-    // Why: conflict preflight should improve stale UI diagnostics, not block merge on a transient lookup failure.
+    // Advisory conflict diagnostics must not block merging on transient failures.
     return null
   }
 }

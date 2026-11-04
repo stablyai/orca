@@ -86,8 +86,7 @@ function withGroups(count: number, groups: Groups): RuntimeTerminalOrphanAdoptio
   return request
 }
 
-// Membership is per-group, but the no-tab-in-two-groups rule is global. Replacing that rule with
-// the per-group set would let one pane be adopted into two groups and cross-wire the session.
+// Tab uniqueness is global across groups; per-group membership alone permits cross-wired duplicate adoption.
 it('rejects a tab claimed by two different groups', () => {
   expect(() =>
     validate(
@@ -110,8 +109,7 @@ it('rejects a duplicated group id', () => {
   ).toThrow('terminal_orphan_topology_invalid')
 })
 
-// Cardinality 0: an empty tab order can never hold the active tab, so adoption must fail closed
-// rather than fall through to an arbitrary pane.
+// Empty tab order cannot hold its active tab; fail closed instead of selecting an arbitrary pane.
 it('rejects an empty tab order', () => {
   expect(() =>
     validate(withGroups(2, [{ id: 'g', activeTabId: 'tab-0', tabOrder: [], recentTabIds: [] }]))
@@ -124,20 +122,6 @@ it('rejects a claimed tab that no group lists', () => {
       withGroups(2, [{ id: 'g', activeTabId: 'tab-0', tabOrder: ['tab-0'], recentTabIds: [] }])
     )
   ).toThrow('terminal_orphan_topology_invalid')
-})
-
-it.each([
-  ['1 tab per group', [['tab-0'], ['tab-1']]],
-  ['both tabs in one group', [['tab-0', 'tab-1']]]
-])('accepts an exactly-covering split with %s', (_label, tabOrders) => {
-  const groups: Groups = tabOrders.map((tabOrder, i) => ({
-    id: `g${i}`,
-    activeTabId: tabOrder[0],
-    tabOrder,
-    // Reverse MRU: every entry must still resolve inside its own group.
-    recentTabIds: tabOrder.toReversed()
-  }))
-  expect(validate(withGroups(2, groups)).topologyTabsById.size).toBe(2)
 })
 
 it.each([

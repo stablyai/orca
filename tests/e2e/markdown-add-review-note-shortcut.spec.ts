@@ -58,9 +58,7 @@ test.describe('Markdown add-review-note shortcut', () => {
       await openMarkdownFixture(orcaPage, context, filePath)
       await waitForRichMarkdownEditor(orcaPage)
       await orcaPage.evaluate(() => {
-        // Why: switch to source mode through the store — the toolbar toggle is
-        // an icon menu that is brittle to locate; the store action is what it
-        // dispatches anyway, and the shortcut under test is mode-independent.
+        // Set source mode through the production store action; the tested shortcut is independent of the toolbar menu.
         const store = window.__store
         if (!store) {
           throw new Error('window.__store is not available')
@@ -102,9 +100,7 @@ test.describe('Markdown add-review-note shortcut', () => {
       await openMarkdownFixture(orcaPage, context, filePath)
       await waitForRichMarkdownEditor(orcaPage)
       await orcaPage.evaluate(() => {
-        // Why: open the real markdown-preview tab through the store — preview
-        // is a separate file mode, not a view mode of the edit tab, and the
-        // toolbar entry point is an icon menu that is brittle to locate.
+        // Open the separate markdown-preview file mode through its production action.
         const store = window.__store
         if (!store) {
           throw new Error('window.__store is not available')
@@ -130,8 +126,7 @@ test.describe('Markdown add-review-note shortcut', () => {
       })
 
       await orcaPage.evaluate(() => {
-        // Why: mirror a reader selecting rendered text — focus lands on the
-        // preview's tabIndex=0 root and the DOM selection covers the block.
+        // Model reader selection in the focusable preview root and its rendered block.
         const block = document.querySelector<HTMLElement>('[data-annotation-block-key]')
         if (!block) {
           throw new Error('No annotation block found in preview')

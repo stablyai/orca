@@ -32,8 +32,7 @@ function elementWithRect(
   })
   Object.defineProperty(element, 'offsetWidth', { value: rect.width })
   Object.defineProperty(element, 'offsetHeight', { value: rect.height })
-  // Why: happy-dom does no layout, so client dimensions default to 0 and a
-  // collision boundary element would otherwise read as zero-sized.
+  // happy-dom has no layout; seed dimensions so collision boundaries are not zero-sized.
   Object.defineProperty(element, 'clientWidth', { value: rect.width })
   Object.defineProperty(element, 'clientHeight', { value: rect.height })
   document.body.appendChild(element)
@@ -94,13 +93,11 @@ describe('contextual tour floating position', () => {
 
     expect(Number.isFinite(Number(position.panelPosition.left))).toBe(true)
     expect(Number.isFinite(Number(position.panelPosition.top))).toBe(true)
-    // Why: the arrow starts just outside the panel border so the card outline
-    // remains visually clean.
+    // Keep the arrow outside the panel border for a continuous outline.
     expect(position.arrowPosition[expectedStaticArrowSide(position.panelPlacement)]).toBe(-8)
   })
 
-  // Regression: a tall step panel inside a small dialog host fit no placement,
-  // so it overflowed the host and overflow-hidden clipped its buttons.
+  // Overlap is preferable to overflow clipping a tall hosted panel’s buttons.
   it('keeps the panel inside the host when no placement fits, overlapping the target', async () => {
     const host = elementWithRect({
       left: 300,
@@ -223,9 +220,7 @@ describe('contextual tour floating position', () => {
     }
   )
 
-  // Regression: computePosition already returns coordinates relative to the
-  // panel's offsetParent (the host). Subtracting the host rect again sent
-  // hosted panels (e.g. the workspace-creation dialog tour) off-screen.
+  // computePosition already returns host-local coordinates; subtracting the host again sends panels offscreen.
   it('positions hosted panels in host-local coordinates without double offset subtraction', async () => {
     const host = elementWithRect({
       left: 300,
@@ -265,8 +260,7 @@ describe('contextual tour floating position', () => {
       targetElement: target
     })
 
-    // Host-local: target is at (100, 80) inside the host, so a bottom-placed
-    // panel sits at target bottom (120) + 12px gap, shifted to stay inside.
+    // Target bottom 120 plus 12px gap gives host-local top 132; collision shifting retains containment.
     expect(position.panelPosition.top).toBe(132)
     expect(position.panelPosition.left).toBeGreaterThanOrEqual(0)
     expect(Number(position.panelPosition.left)).toBeLessThanOrEqual(520 - 320)

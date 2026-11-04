@@ -1,7 +1,7 @@
 import {
   parsePtyProcessCeilingState,
   type PtyProcessCeilingState
-} from './pty-process-ceiling-state'
+} from '../../shared/pty-process-ceiling-state'
 export type ParsedDaemonPid = {
   pid: number
   startedAtMs: number | null
@@ -11,24 +11,13 @@ export type ParsedDaemonPid = {
   linuxStartTicks: string | null
   bootId: string | null
   spawnerExecPath: string | null
-  /** Self-detected systemd scope unit (see daemon-cgroup-scope.ts); null when the daemon ran
-   *  unscoped or predates this field. */
+  /** Self-detected systemd scope; null for unscoped or older daemons. */
   cgroupUnit: string | null
   /** Null when the daemon predates the ceiling report. */
   processCeiling?: PtyProcessCeilingState | null
 }
 
-/**
- * Best-effort pid recovery from a record parseDaemonPidFile rejected. The pid is the first key
- * JSON.stringify writes, so a torn write usually preserves it; it gates whether a corrupt record
- * may be quarantined (a process still answering for this pid keeps its conservative veto).
- *
- * The digit run must be terminated by a following non-digit byte: a torn write can cut inside
- * the digits, and a truncated prefix is a different pid — probing it attributes an unrelated
- * process's liveness to this record (a dead prefix would quarantine on false evidence; an
- * immortal one, e.g. Windows System pid 4, would veto forever). Digits at end-of-bytes are
- * therefore unsalvageable; the writer of such a prefix died mid-write, so no probe is needed.
- */
+/** Require a byte after the PID digits: a torn prefix can name an unrelated process and misdirect quarantine. */
 export function salvagePidFromCorruptDaemonRecord(contents: string): number | null {
   const match = /"pid"\s*:\s*(\d+)(?=\D)/.exec(contents)
   if (!match) {

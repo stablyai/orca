@@ -1,14 +1,29 @@
-/**
- * #13071: a project id can exist on several hosts. Removing one host's project must
- * never resolve the bare id to another host's row (the unique-candidate or
- * focused-host fallback), or the other host's live project is destroyed.
- */
+// Require exact host row on removal: unique-candidate/focused fallbacks can destroy the other host’s same-ID project (#13071).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from './store-test-helpers'
+import {
+  createTestStore,
+  makeLayout,
+  makeOpenFile,
+  makeTab,
+  makeUnifiedTab,
+  makeWorktree
+} from './store-test-helpers'
 import { purgeOrphanedRuntimeSshProjects } from './worktrees/teardown/orphaned-runtime-ssh-project-purge'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const baseRepo: Repo = {
   id: 'same-repo',
@@ -129,29 +144,6 @@ describe('project removal stays on its owner host (#13071)', () => {
     expect(runtimeCall).not.toHaveBeenCalled()
   })
 
-  it('keeps a same-id row on another host that sits outside the deleted group', async () => {
-    const store = createTestStore()
-    const otherGroup: ProjectGroup = { ...group, id: 'group-2', name: 'Other' }
-    const outsideSshRow: Repo = { ...sshRow, projectGroupId: otherGroup.id }
-    store.setState({
-      projectGroups: [group, otherGroup],
-      repos: [{ ...localRow, projectGroupId: group.id }, outsideSshRow]
-    })
-
-    const result = await store.getState().deleteProjectGroupWithContainedProjects(group.id, {
-      removeContainedProjects: true,
-      hostId: 'local'
-    })
-
-    expect(result).toMatchObject({
-      removedProjectIds: ['same-repo'],
-      failedProjectRemovals: []
-    })
-    expect(store.getState().repos).toEqual([outsideSshRow])
-    expect(reposRemoveForHost).toHaveBeenCalledTimes(1)
-    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
-  })
-
   it('removes only the member row of an unstamped group, not the focused-host non-member', async () => {
     const store = createTestStore()
     const unstampedGroup: ProjectGroup = { ...group, executionHostId: undefined }
@@ -170,69 +162,60 @@ describe('project removal stays on its owner host (#13071)', () => {
     expect(reposRemoveForHost).toHaveBeenCalledTimes(1)
     expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'ssh:target-1' })
   })
-})
 
-describe('removal stays host-scoped when this catalog is stale (#13071)', () => {
-  type MainRow = { id: string; hostId: string; kind: 'git' | 'folder' }
-
-  // Mirrors the main catalog: id-only removal drops every host's row, removeForHost one row.
-  function stubMainCatalog(rows: MainRow[]): { current: MainRow[] } {
-    const main = { current: rows }
-    reposRemove.mockImplementation(async ({ repoId }: { repoId: string }) => {
-      main.current = main.current.filter((row) => row.id !== repoId)
-    })
-    reposRemoveForHost.mockImplementation(
-      async ({ repoId, hostId }: { repoId: string; hostId: string }) => {
-        main.current = main.current.filter((row) => !(row.id === repoId && row.hostId === hostId))
-      }
-    )
-    return main
-  }
-
-  it.each(['git', 'folder'] as const)(
-    'keeps an unseen same-id SSH %s project when removing the local one',
-    async (kind) => {
-      const main = stubMainCatalog([
-        { id: 'same-repo', hostId: 'local', kind },
-        { id: 'same-repo', hostId: 'ssh:target-1', kind }
-      ])
-      const store = createTestStore()
-      // Another window added the SSH twin; this renderer has not refreshed yet.
-      store.setState({ repos: [{ ...localRow, kind }] })
-
-      await store.getState().removeProject('same-repo', { hostId: 'local' })
-
-      expect(reposRemove).not.toHaveBeenCalled()
-      expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
-      expect(main.current).toEqual([{ id: 'same-repo', hostId: 'ssh:target-1', kind }])
-    }
-  )
-
-  it.each(['git', 'folder'] as const)(
-    'removes a direct SSH %s project without touching an unseen local twin',
-    async (kind) => {
-      const main = stubMainCatalog([
-        { id: 'same-repo', hostId: 'local', kind },
-        { id: 'same-repo', hostId: 'ssh:target-1', kind }
-      ])
-      const store = createTestStore()
-      store.setState({ repos: [{ ...sshRow, kind }] })
-
-      await store.getState().removeProject('same-repo', { hostId: 'ssh:target-1' })
-
-      expect(reposRemove).not.toHaveBeenCalled()
-      expect(main.current).toEqual([{ id: 'same-repo', hostId: 'local', kind }])
-    }
-  )
-
-  it('never falls back to id-only removal when the selected row is already gone in main', async () => {
-    const main = stubMainCatalog([{ id: 'same-repo', hostId: 'ssh:target-1', kind: 'git' }])
+  // Why: the twin id's state is shared, so only the tabs stamped with the removed host go.
+  it('drops the removed host’s terminal and editor state under a worktree id the other host also publishes', async () => {
     const store = createTestStore()
-    store.setState({ repos: [localRow] })
+    const worktreeId = 'same-repo::/work/same'
+    const sshTwin = makeWorktree({ id: worktreeId, repoId: 'same-repo', hostId: 'ssh:target-1' })
+    store.setState({
+      repos: [localRow, sshRow],
+      worktreesByRepo: {
+        'same-repo': [
+          makeWorktree({ id: worktreeId, repoId: 'same-repo', hostId: 'local' }),
+          sshTwin
+        ]
+      },
+      tabsByWorktree: { [worktreeId]: [makeTab({ id: 'tab-1', worktreeId })] },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          makeUnifiedTab({ id: 'tab-1', worktreeId, groupId: 'g', executionHostId: 'local' }),
+          makeUnifiedTab({
+            id: '/work/same/a.ts',
+            worktreeId,
+            groupId: 'g',
+            contentType: 'editor',
+            executionHostId: 'local'
+          })
+        ]
+      },
+      // Main loads the tab bar through its group, so the group record must hold both tabs.
+      groupsByWorktree: {
+        [worktreeId]: [
+          { id: 'g', worktreeId, activeTabId: 'tab-1', tabOrder: ['tab-1', '/work/same/a.ts'] }
+        ]
+      },
+      terminalLayoutsByTabId: { 'tab-1': makeLayout() },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      activeTabId: 'tab-1',
+      openFiles: [makeOpenFile({ id: '/work/same/a.ts', worktreeId })],
+      activeFileIdByWorktree: { [worktreeId]: '/work/same/a.ts' }
+    })
+    const main = await drawTabsFromMain(store)
 
     await store.getState().removeProject('same-repo', { hostId: 'local' })
+    // A layout-owner build closes the editor tab in main; its frame drops the tab.
+    await main.settle()
+    main.close()
 
-    expect(reposRemove).not.toHaveBeenCalled()
-    expect(main.current).toEqual([{ id: 'same-repo', hostId: 'ssh:target-1', kind: 'git' }])
+    const state = store.getState()
+    expect(state.worktreesByRepo['same-repo']).toEqual([sshTwin])
+    expect(state.tabsByWorktree[worktreeId] ?? []).toEqual([])
+    expect(state.unifiedTabsByWorktree[worktreeId] ?? []).toEqual([])
+    expect(state.terminalLayoutsByTabId['tab-1']).toBeUndefined()
+    expect(state.ptyIdsByTabId['tab-1']).toBeUndefined()
+    expect(state.activeTabId).toBeNull()
+    expect(state.openFiles).toEqual([])
+    expect(state.activeFileIdByWorktree[worktreeId]).toBeFalsy()
   })
 })

@@ -1,5 +1,8 @@
+import { useOwnedDiffCommentTarget } from '../diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { Editor } from '@tiptap/react'
 import type { AppState } from '@/store'
 import { richMarkdownAnnotationHighlightPluginKey } from './rich-markdown-annotation-highlight'
@@ -16,6 +19,7 @@ import { useRichMarkdownReviewData } from './useRichMarkdownReviewData'
 import { useRichMarkdownReviewCopyFeedback } from './useRichMarkdownReviewCopyFeedback'
 import { useRichMarkdownReviewRailController } from './useRichMarkdownReviewRailController'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { WorkspaceResource } from '@/lib/workspace-copy-owner'
 
 type UseRichMarkdownReviewControllerOptions = {
   addDiffComment: AppState['addDiffComment']
@@ -29,6 +33,7 @@ type UseRichMarkdownReviewControllerOptions = {
   markdownSourceLineOffset: number
   rootRef: MutableRefObject<HTMLDivElement | null>
   scrollContainerRef: MutableRefObject<HTMLDivElement | null>
+  noteSource: WorkspaceResource
   worktreeId: string
   worktreeRoot: string | null
 }
@@ -45,15 +50,15 @@ export function useRichMarkdownReviewController({
   markdownSourceLineOffset,
   rootRef,
   scrollContainerRef,
+  noteSource,
   worktreeId,
   worktreeRoot
 }: UseRichMarkdownReviewControllerOptions) {
   const [annotationTarget, setAnnotationTarget] = useState<RichMarkdownAnnotationTarget | null>(
     null
   )
-  const [annotationPopover, setAnnotationPopover] = useState<RichMarkdownAnnotationTarget | null>(
-    null
-  )
+  const [annotationPopover, setAnnotationPopover, annotationOwnerRef] =
+    useOwnedDiffCommentTarget<RichMarkdownAnnotationTarget>(worktreeId, noteSource)
   const annotationPopoverRef = useRef<RichMarkdownAnnotationTarget | null>(null)
   const canAnnotateRichMarkdownRef = useRef(false)
   const markdownCommentsRef = useRef<DiffComment[]>([])
@@ -163,7 +168,12 @@ export function useRichMarkdownReviewController({
       if (!annotationPopover || sourceRelativePath === null) {
         return
       }
-      const result = await addDiffComment({
+      const submittedEditor = editorRef.current
+      const owner = annotationOwnerRef.current
+      if (!owner) {
+        return
+      }
+      const result = await addDiffComment(owner, {
         worktreeId,
         filePath: sourceRelativePath,
         source: 'markdown',
@@ -177,13 +187,26 @@ export function useRichMarkdownReviewController({
         side: 'modified'
       })
       if (!result) {
-        console.error('Failed to add markdown comment — draft preserved')
+        // The draft stays open for retry.
+        toast.error(
+          translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
+        )
         return
       }
+      if (
+        !submittedEditor ||
+        submittedEditor.isDestroyed ||
+        annotationPopoverRef.current !== annotationPopover
+      ) {
+        return
+      }
+      const currentComments = markdownCommentsRef.current
       updateRichMarkdownAnnotationHighlightsAfterSubmit({
         annotationPopover,
-        comments: [...markdownComments, result],
-        editor: editorRef.current,
+        comments: currentComments.some((comment) => comment.id === result.id)
+          ? currentComments
+          : [...currentComments, result],
+        editor: submittedEditor,
         markdownSourceLineOffset
       })
       setAnnotationPopover(null)
@@ -192,38 +215,34 @@ export function useRichMarkdownReviewController({
     },
     [
       addDiffComment,
+      annotationOwnerRef,
       annotationPopover,
       clearAnnotationHighlight,
       editorRef,
-      markdownComments,
       markdownSourceLineOffset,
       sourceRelativePath,
+      setAnnotationPopover,
       worktreeId
     ]
   )
 
-  // Why: reports whether a composer actually opened (or an open draft was kept)
-  // so keyboard callers can leave the chord unconsumed only on true no-ops.
+  // Report opened/retained composers so keyboard callers consume only handled chords.
   const openAnnotationPopover = useCallback(
     (requireLiveSelection = false): boolean => {
       if (!canAnnotateRichMarkdown) {
         return false
       }
-      // Why: product B — second chord while drafting must consume the key without
-      // remounting the composer and silently discarding the in-progress note.
+      // Consume repeated open requests without remounting a composer and losing its draft.
       if (annotationPopoverRef.current) {
         return true
       }
       const editor = editorRef.current
       const root = rootRef.current
-      // Why: an immediate chord after a mouse-drag can run before ProseMirror
-      // copies the native selection into editor.state; flush it before reading
-      // the target so the composer opens on the live selection, not stale state.
+      // Flush native mouse selection before choosing the target; a chord can precede ProseMirror’s selection sync.
       if (editor) {
         flushPendingProseMirrorSelection(editor)
       }
-      // Why: keyboard callers require the live selection to avoid stale-target
-      // races; the mouse button may use the target from the render that exposed it.
+      // Keyboard actions need live targets; mouse buttons may use the target their render exposed.
       const liveTarget = editor && root ? getRichMarkdownAnnotationTarget(editor, root) : null
       const baseTarget = liveTarget ?? (requireLiveSelection ? null : annotationTarget)
       if (!baseTarget) {
@@ -242,8 +261,7 @@ export function useRichMarkdownReviewController({
           activeRange: { from: target.from, to: target.to }
         })
       )
-      // Why: claim the draft ref before setState so a same-tick second chord
-      // (or OS key-repeat racing the open) cannot remount and discard text.
+      // Claim the draft before setState so same-tick chords/repeats cannot remount it and discard typing.
       annotationPopoverRef.current = target
       // Why: opening a draft should reserve the notes rail immediately; saved notes stay visible.
       setReviewRailOpen(true)
@@ -258,6 +276,7 @@ export function useRichMarkdownReviewController({
       markdownComments,
       markdownSourceLineOffset,
       rootRef,
+      setAnnotationPopover,
       setReviewRailOpen
     ]
   )
@@ -266,14 +285,13 @@ export function useRichMarkdownReviewController({
     if (canAnnotateRichMarkdown) {
       return
     }
-    // Why: disabling annotations must immediately remove stale popovers and
-    // highlights that cannot be derived from the next non-annotatable render.
+    // Remove transient highlights/popovers immediately when annotations become unavailable.
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setAnnotationTarget(null)
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setAnnotationPopover(null)
     clearAllAnnotationHighlights()
-  }, [canAnnotateRichMarkdown, clearAllAnnotationHighlights])
+  }, [canAnnotateRichMarkdown, clearAllAnnotationHighlights, setAnnotationPopover])
 
   return {
     ...copyFeedback,

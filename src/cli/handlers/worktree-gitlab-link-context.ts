@@ -3,11 +3,12 @@ import type { Repo } from '../../shared/repo-types'
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import { parseGitLabIssueOrMRLink, type ProjectSlug } from '../../shared/new-workspace/gitlab-links'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
+import type { CliRepoTarget } from '../worktree-project-target'
 
 export async function assertGitLabLinkFlagProjectsMatch(
   flags: Map<string, string | boolean>,
   client: RuntimeClient,
-  target: { repo: string } | { worktree: string }
+  target: CliRepoTarget | { worktree: string }
 ): Promise<void> {
   const projects = ['gitlab-issue', 'gitlab-mr'].flatMap((name) => {
     const value = flags.get(name)
@@ -22,7 +23,7 @@ export async function assertGitLabLinkFlagProjectsMatch(
   }
 
   let project: ProjectSlug | null = null
-  let repo: string
+  let repoTarget: CliRepoTarget
   if ('worktree' in target) {
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', target)
     const context = result.result.worktree.linkedTaskSourceContext
@@ -30,12 +31,12 @@ export async function assertGitLabLinkFlagProjectsMatch(
     if (context?.provider === 'gitlab' && identity?.provider === 'gitlab' && identity.webUrl) {
       project = parseRemoteProjectRefCandidate(identity.webUrl)
     }
-    repo = `id:${result.result.worktree.repoId}`
+    repoTarget = { repo: `id:${result.result.worktree.repoId}` }
   } else {
-    repo = target.repo
+    repoTarget = target
   }
   if (!project) {
-    const result = await client.call<{ repo: Repo }>('repo.show', { repo })
+    const result = await client.call<{ repo: Repo }>('repo.show', repoTarget)
     const remoteUrl = result.result.repo.gitRemoteIdentity?.remoteUrl
     project = remoteUrl ? parseRemoteProjectRefCandidate(remoteUrl) : null
   }

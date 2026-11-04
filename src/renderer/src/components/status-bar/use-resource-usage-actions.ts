@@ -1,6 +1,13 @@
-import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction
+} from 'react'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { getAllWorktreesFromState } from '../../store/selectors'
@@ -45,8 +52,8 @@ export function useResourceUsageActions({
   openModal: AppState['openModal']
   openSpacePage: AppState['openSpacePage']
   refreshSessions: () => Promise<void>
-  removeSession: (sessionId: string) => void
-  removeSessions: (sessionIds: ReadonlySet<string>) => void
+  removeSession: (sessionId: string, incarnationId?: string) => void
+  removeSessions: (sessions: readonly Pick<DaemonSession, 'id' | 'incarnationId'>[]) => void
   sessions: readonly DaemonSession[]
   resourceSessionBindings: ResourceSessionBindingInputs
   workspaceSessionReady: boolean
@@ -58,6 +65,7 @@ export function useResourceUsageActions({
   popoverBodyRef: MutableRefObject<HTMLDivElement | null>
   popoverBodyFocusFrameRef: MutableRefObject<number | null>
 }) {
+  const [actionError, setActionError] = useState<string | null>(null)
   const toggleRepo = useCallback(
     (repoId: string): void => {
       setCollapsedRepos((prev) => {
@@ -93,7 +101,7 @@ export function useResourceUsageActions({
     if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
       return
     }
-    // Why: the target resolve below only knows worktrees, so a folder key never matched; the folder activator owns host and path-status gating.
+    // Folder activation owns host/path gating; git-worktree target resolution cannot handle folder keys.
     if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
       activateAndRevealWorkspace(worktreeId)
       return
@@ -112,13 +120,12 @@ export function useResourceUsageActions({
     (tabId: string, paneKey: string | null) => {
       navigateResourceSessionToTab(tabId, paneKey, {
         tabsByWorktree,
-        setOpen,
         setActiveView,
-        activateAndRevealWorktree,
+        activateAndRevealWorktree: navigateToWorktree,
         activateTabAndFocusPane
       })
     },
-    [tabsByWorktree, setOpen, setActiveView]
+    [tabsByWorktree, setActiveView, navigateToWorktree]
   )
 
   const deleteWorktree = useCallback(
@@ -147,13 +154,19 @@ export function useResourceUsageActions({
         return
       }
       if (!requiresKillConfirmation(session)) {
-        removeSession(session.sessionId)
+        setActionError(null)
         // Why: await the kill before refreshing, else the refresh re-reads the daemon list before the kill lands and re-adds the row.
         void (async () => {
           try {
             await window.api.pty.kill(session.sessionId)
+            removeSession(session.sessionId, session.incarnationId)
           } catch {
-            /* already dead */
+            setActionError(
+              translate(
+                'resourceManager.killFailed',
+                'The terminal could not be ended. Last-observed sessions are retained.'
+              )
+            )
           }
           await refreshSessions()
         })()
@@ -168,16 +181,22 @@ export function useResourceUsageActions({
     if (!workspaceSessionReady) {
       return
     }
-    // Why the shared selector: the button's count comes from the same function, so the set killed
-    // is exactly the set advertised. Filtering separately here is how live sessions got killed.
+    // Use the badge’s exact orphan selector so bulk cleanup cannot destroy sessions excluded from its count.
     const orphans = selectUnboundDaemonSessions(sessions, resourceSessionBindings)
     if (orphans.length === 0) {
       return
     }
-    // Why: optimistic removal so rows disappear immediately instead of waiting for the next daemon-side list refresh.
-    const orphanIds = new Set(orphans.map((s) => s.id))
-    removeSessions(orphanIds)
-    await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
+    setActionError(null)
+    const results = await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
+    removeSessions(orphans.filter((_session, index) => results[index]?.status === 'fulfilled'))
+    if (results.some((result) => result.status === 'rejected')) {
+      setActionError(
+        translate(
+          'resourceManager.killFailed',
+          'The terminal could not be ended. Last-observed sessions are retained.'
+        )
+      )
+    }
     void refreshSessions()
   }, [sessions, resourceSessionBindings, workspaceSessionReady, refreshSessions, removeSessions])
 
@@ -187,12 +206,17 @@ export function useResourceUsageActions({
     }
     const target = killConfirm
     setKilling(true)
-    // Why: optimistic removal avoids a flash where the dialog closes but the killed row lingers until the next list refresh.
-    removeSession(target.sessionId)
+    setActionError(null)
     try {
       await window.api.pty.kill(target.sessionId)
+      removeSession(target.sessionId, target.incarnationId)
     } catch {
-      /* already dead — fall through */
+      setActionError(
+        translate(
+          'resourceManager.killFailed',
+          'The terminal could not be ended. Last-observed sessions are retained.'
+        )
+      )
     } finally {
       if (mountedRef.current) {
         setKilling(false)
@@ -226,6 +250,7 @@ export function useResourceUsageActions({
   }, [openSpacePage, setOpen])
 
   return {
+    actionError,
     toggleRepo,
     toggleWorktree,
     navigateToWorktree,

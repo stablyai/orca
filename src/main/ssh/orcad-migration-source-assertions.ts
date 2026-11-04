@@ -1,15 +1,14 @@
-/** Checks run before every stage and commit: the fenced source is still what the journal says. */
 import { createHash } from 'node:crypto'
 import {
   serializeOrcadMigrationValue,
   type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 import { resolveOrcadMigrationFence } from './orcad-migration-source-fence'
 import { confirmOrcadMigrationTerminalsUnderFence } from './orcad-migration-terminal-gate'
-import { collectUntransferredDependentBlockers } from './ssh-target-orcad-dependents'
-import type { OrcadMigrationPreflightStore } from './ssh-target-orcad-preflight'
+import { collectUntransferredDependentBlockers } from './targets/ssh-target-orcad-dependents'
+import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
 
 export function assertOrcadMigrationSourceUnchanged(
   context: { userDataPath: string; store: OrcadMigrationPreflightStore },
@@ -20,7 +19,7 @@ export function assertOrcadMigrationSourceUnchanged(
   if (!target || fence?.state !== 'fenced' || fence.cutover.migrationId !== cutover.migrationId) {
     throw new Error('orcad_migration_source_fence_lost')
   }
-  // Same id, time and destination as the journaled export: any difference is a source change.
+  // Re-export with journaled identity/time/destination so only source changes affect comparison.
   const current = createOrcadMigrationManifest(context.store, target, {
     migrationId: cutover.migrationId,
     destinationEnvironmentId: cutover.destinationEnvironmentId,
@@ -49,21 +48,18 @@ export function assertOrcadMigrationSourceUnchanged(
   }
 }
 
-/**
- * The manifest minus what the UI rewrites as the user works (tabs, focus, routing): the server
- * gets those as journaled, and a tab reorder mid-conversion must not fail the move.
- */
+/** Ignore mutable UI layout/focus/routing: the destination gets the journaled view, and tab churn must not invalidate migration. */
 function frozenSourceDigest(manifest: OrcadMigrationManifest): string {
   const { manifestSha256: _digest, payload, ...rest } = manifest
   const {
     version: _version,
     workspaceSession: _session,
     clientState: _client,
-    // Retained for the transfer, so a tab closed mid-move still sends its journaled bytes.
+    // Retention preserves journaled bytes even if their tab closes during transfer.
     terminalScrollbackSnapshots: _snapshots,
     ...dormant
   } = payload.dormantState ?? {}
-  // Export omits an empty dormant payload, so UI state alone can make one appear.
+  // UI-only changes can introduce a dormant payload that export previously omitted as empty.
   const empty = Object.values(dormant).every(
     (value) => value === undefined || (Array.isArray(value) && value.length === 0)
   )

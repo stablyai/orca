@@ -16,17 +16,28 @@ const buttonVariants = cva(
           'border border-border bg-background text-foreground shadow-xs hover:border-muted-foreground/35 hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
-        link: 'text-primary underline-offset-4 hover:underline'
+        link: 'text-primary underline-offset-4 hover:underline',
+        'menu-launch':
+          'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
+        'menu-segment':
+          'rounded-l-none border-l border-border bg-muted/40 text-muted-foreground hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground aria-expanded:bg-primary aria-expanded:text-primary-foreground',
+        'pane-title': 'pane-title-split-trigger',
+        'pane-title-close': 'pane-title-close',
+        // The worktree card's "rename failed" chip, for a failure the user can open.
+        'destructive-chip':
+          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
         xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',
+        menu: 'h-8 gap-2 px-2 py-1.5 text-xs leading-5',
         lg: 'h-10 rounded-md px-6 has-[>svg]:px-4',
         icon: 'size-9',
         'icon-xs': "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8',
-        'icon-lg': 'size-10'
+        'icon-lg': 'size-10',
+        chip: "h-4 gap-0.5 rounded px-0.5 text-[10px] leading-none has-[>svg]:px-0.5 [&_svg:not([class*='size-'])]:size-2.5"
       }
     },
     defaultVariants: {

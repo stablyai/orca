@@ -7,8 +7,7 @@ export type PairingRelayLogger = (
   detail?: string
 ) => void
 
-// Why: every relay dial and recovery attempt builds its own logger but they all
-// feed one list, so the id sequence has to be process-wide to stay a unique key.
+// Use process-wide ids because separate relay loggers append into the same keyed list.
 let sequence = 0
 
 export function createPairingRelayLogger(onLog?: ConnectionLogSink): PairingRelayLogger {

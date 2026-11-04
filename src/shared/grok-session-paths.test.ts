@@ -55,11 +55,8 @@ describe('grok-session-paths', () => {
     expect(resolveGrokHomeDir({}, '/home/ada')).toBe(join('/home/ada', '.grok'))
   })
 
-  // Why: Grok itself accepts a relative GROK_HOME, but resolves it against *its own* cwd — a
-  // different directory per terminal. Orca's readers (main at `/` when Finder-launched, the
-  // daemon at the user data dir, the scan service inheriting main) would each resolve the same
-  // value somewhere else and walk it with no depth, entry or time cap (#13082). `~/…` is in the
-  // list because Grok 1.0.30 does not expand a tilde — it creates a literal `~` dir under its cwd.
+  // Relative GROK_HOME depends on each terminal/main/daemon cwd and can trigger unbounded scans (#13082).
+  // Grok 1.0.30 also treats ~ literally rather than expanding it.
   it.each(['.', '..', 'rel/path', '~/grok', '~', 'C:foo', 'C:'])(
     'ignores the non-absolute GROK_HOME %j',
     (relativeHome) => {
@@ -72,16 +69,36 @@ describe('grok-session-paths', () => {
     }
   )
 
-  it('refuses to invent encodeURIComponent names longer than 255 bytes', () => {
+  it('uses the CLI slug and BLAKE3 name for long cwd paths', () => {
     const longCwd = `/${'a'.repeat(200)}/${'b'.repeat(200)}`
-    expect(grokEncodedCwdDirName(longCwd)).toBeNull()
+    const group = `${'b'.repeat(40)}-e22e6487078c7674`
+    expect(grokEncodedCwdDirName(longCwd)).toBe(group)
     expect(
       buildGrokChatHistoryPathCandidates({
         sessionId: 'sess-1',
         cwd: longCwd,
         sessionsDir: '/tmp/sessions'
       })
-    ).toEqual([])
+    ).toEqual([join('/tmp/sessions', group, 'sess-1', 'chat_history.jsonl')])
+  })
+
+  it.each([
+    [`/Users/test/${'中'.repeat(30)}`, 'workspace-43f12fb9a5ee1037'],
+    [
+      '/Users/dev/Documents/開発プロジェクト/機能追加/テスト環境/ソースコード/main-branch',
+      'main-branch-6aaeefdde2a621aa'
+    ],
+    [`/${'a'.repeat(260)}/My Workspace  `, 'my-workspace-821ab64a500ab620'],
+    [`/${'a'.repeat(260)}/İProject`, 'i-project-a676b9c62bbe86c8'],
+    [`/${'a'.repeat(260)}/${'A'.repeat(39)} !! end`, `${'a'.repeat(39)}--6306ef8d209ddda1`]
+  ])('matches the raw UTF8 cwd vector %s', (cwd, expected) => {
+    expect(grokEncodedCwdDirName(cwd)).toBe(expected)
+  })
+
+  it('matches the CLI URL encoding and switches layouts only beyond 255 bytes', () => {
+    expect(grokEncodedCwdDirName("/repo/!'()*")).toBe('%2Frepo%2F%21%27%28%29%2A')
+    expect(grokEncodedCwdDirName(`/${'a'.repeat(252)}`)).toBe(`%2F${'a'.repeat(252)}`)
+    expect(grokEncodedCwdDirName(`/${'a'.repeat(253)}`)).toMatch(/^a{40}-[a-f0-9]{16}$/)
   })
 
   it('rejects unsafe session ids and path-special cwd components', async () => {
@@ -123,15 +140,15 @@ describe('grok-session-paths', () => {
     ).toBe(history)
   })
 
-  it('does not synchronously discover a long-cwd slug group', () => {
+  it('resolves the CLI long-cwd slug group', () => {
     const root = makeRoot()
     const sessionsDir = join(root, 'sessions')
     const sessionId = 'sess-long'
     // Simulate Grok's slug+hash group directory (not encodeURIComponent of cwd).
-    const slugGroup = 'long-path-ab12cd34'
+    const slugGroup = `${'x'.repeat(40)}-bc763004a2f1ee5a`
     const history = join(sessionsDir, slugGroup, sessionId, 'chat_history.jsonl')
     mkdirSync(dirname(history), { recursive: true })
-    writeFileSync(join(sessionsDir, slugGroup, '.cwd'), '/very/long/path\n')
+    writeFileSync(join(sessionsDir, slugGroup, '.cwd'), `/${'x'.repeat(300)}\n`)
     writeFileSync(history, '{"type":"assistant","content":"hi"}\n')
 
     expect(
@@ -140,7 +157,7 @@ describe('grok-session-paths', () => {
         cwd: `/${'x'.repeat(300)}`,
         sessionsDir
       })
-    ).toBeNull()
+    ).toBe(history)
   })
 
   it('finds the documented group/session layout asynchronously', async () => {

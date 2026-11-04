@@ -15,6 +15,8 @@ type RuntimeFileWatchEvent =
 type RuntimeFileWatchListener = {
   onPayload: (payload: FsChangedPayload) => void
   onError?: (error: Error) => void
+  /** Fires once the host reports its watcher installed (immediately when joining a live one). */
+  onReady?: () => void
 }
 
 type SharedRuntimeFileWatch = {
@@ -26,6 +28,7 @@ type SharedRuntimeFileWatch = {
   remoteSubscriptionId: string | null
   keepStreamUntilReady: boolean
   closed: boolean
+  ready: boolean
 }
 
 const sharedRuntimeFileWatches = new Map<string, SharedRuntimeFileWatch>()
@@ -41,14 +44,17 @@ function getSharedRuntimeFileWatchKey(
 export async function subscribeRuntimeFileChanges(
   context: RuntimeFileOperationArgs,
   onPayload: (payload: FsChangedPayload) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  onReady?: () => void
 ): Promise<() => void> {
   const target = context.target
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
-    return window.api.fs.onFsChanged(onPayload)
+    const unsubscribe = window.api.fs.onFsChanged(onPayload)
+    onReady?.()
+    return unsubscribe
   }
 
-  const listener: RuntimeFileWatchListener = { onPayload, onError }
+  const listener: RuntimeFileWatchListener = { onPayload, onError, onReady }
   const key = getSharedRuntimeFileWatchKey(
     target.environmentId,
     context.worktreeId,
@@ -60,6 +66,9 @@ export async function subscribeRuntimeFileChanges(
     sharedRuntimeFileWatches.set(key, shared)
   }
   shared.listeners.add(listener)
+  if (shared.ready) {
+    onReady?.()
+  }
   try {
     await shared.start
   } catch (err) {
@@ -93,16 +102,17 @@ function createSharedRuntimeFileWatch(
     unsubscribe: null,
     remoteSubscriptionId: null,
     keepStreamUntilReady: isWebRuntimeFileWatchSharedSocket(),
-    closed: false
+    closed: false,
+    ready: false
   }
-  // Why: editor reloads and the Explorer can watch the same remote worktree.
-  // Keep one runtime WebSocket/server watcher and fan out events in renderer.
+  // Editor/Explorer share one host watcher/WebSocket with renderer event fan-out.
   shared.start = window.api.runtimeEnvironments
     .subscribe(
       {
         selector: target.environmentId,
         method: 'files.watch',
-        params: { worktree: toRuntimeWorktreeSelector(worktreeId) },
+        // Why: this client coalesces watcher reads, so it can take the faster host cadence.
+        params: { worktree: toRuntimeWorktreeSelector(worktreeId), batchCadence: 'interval' },
         timeoutMs: 15_000
       },
       {
@@ -156,18 +166,21 @@ function handleSharedRuntimeFileWatchResponse(
         if (!shared.keepStreamUntilReady) {
           unwatchSharedRuntimeFileWatch(shared)
         }
+      } else if (event.type === 'ready' && !shared.ready) {
+        shared.ready = true
+        for (const listener of Array.from(shared.listeners)) {
+          listener.onReady?.()
+        }
       }
     } else if (event.type === 'changed') {
       for (const listener of Array.from(shared.listeners)) {
         listener.onPayload({ worktreePath, events: event.events })
       }
     } else if (event.type === 'error') {
-      // Why: error listeners may synchronously retry. Evict the terminal watch
-      // before callbacks run so the retry cannot join a stream awaiting `end`.
+      // Evict before callbacks: synchronous retries must not join a dying stream.
       failSharedRuntimeFileWatch(key, shared, new Error(event.message))
     } else if (event.type === 'end') {
-      // Why: shared-control completes without onClose; evict and release its
-      // transport handle so later listeners start cleanly without retained state.
+      // Shared-control can finish without onClose; evict/release so later readers start without retained state.
       if (sharedRuntimeFileWatches.get(key) === shared) {
         sharedRuntimeFileWatches.delete(key)
       }
@@ -210,8 +223,7 @@ function closeSharedRuntimeFileWatch(key: string, shared: SharedRuntimeFileWatch
   shared.closed = true
   sharedRuntimeFileWatches.delete(key)
   if (shared.keepStreamUntilReady) {
-    // Why: WebRuntimeClient owns shared-socket file-watch cleanup, including
-    // pre-ready cancellation ownership and late-ready files.unwatch.
+    // WebRuntimeClient owns shared-socket cleanup, pre-ready cancellation and late-ready unwatch.
     shared.unsubscribe?.()
     shared.unsubscribe = null
     return

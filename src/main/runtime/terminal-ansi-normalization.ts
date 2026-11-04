@@ -97,7 +97,7 @@ export function normalizeTerminalChunk(
   chunk: string,
   pendingAnsi: string = ''
 ): { text: string; pendingAnsi: string } {
-  // Why: skip full ANSI/OSC scanning for the common plain-text PTY chunk (perf on high-throughput streams).
+  // Skip ANSI/OSC scanning for plain-text chunks on the high-throughput PTY path.
   if (pendingAnsi.length === 0 && !terminalChunkNeedsNormalization(chunk)) {
     return { text: chunk, pendingAnsi: '' }
   }
@@ -130,13 +130,18 @@ export function normalizeTerminalChunk(
       ) {
         const parsed = parseTerminalCsiAtEnd(combined, index, endIndex)
         if (isTerminalPreviewLineControl(parsed)) {
-          // Why: Codex redraws status text with ANSI controls but no CR; keep them so the tail overwrites the prior frame.
+          // Preserve Codex ANSI-only redraws so the tail overwrites the previous frame.
           parts.push(combined.slice(index, endIndex + 1))
         }
       }
       index = endIndex
       textStart = index + 1
       continue
+    }
+    if (code === 0x0d && index + 1 === combined.length) {
+      // A final CR may be half of CRLF; keep the painted row until the next byte decides.
+      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+      return { text: parts.join(''), pendingAnsi: '\r' }
     }
     if (code === 0x0d && combined.charCodeAt(index + 1) === 0x0a) {
       // CRLF keeps only its LF, which starts the next span.
@@ -214,7 +219,7 @@ function isTerminalPreviewLineControl(parsed: {
   params: string
   firstParam: number | null
 }): boolean {
-  // Why: normalizeTerminalChunk pre-filters on this predicate, so any final accepted here must pass it first.
+  // normalizeTerminalChunk prefilters here; every accepted final must pass the same predicate.
   if (
     !isTerminalPreviewLineControlFinal(parsed.final.charCodeAt(0)) ||
     !hasCanonicalNumericCsiParams(parsed.params)

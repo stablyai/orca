@@ -8,7 +8,8 @@ const secretStore = vi.hoisted(() => ({
 
 vi.mock('../../../shared/secret-store', () => ({ getSecretStore: () => secretStore }))
 
-const { ProtectedSecretPersistence } = await import('../../protected-secret-persistence')
+const { ProtectedSecretPersistence } =
+  await import('../../credentials/protected-secret-persistence')
 const {
   LEGACY_OPENCODE_GO_API_KEY_SLOT,
   migrateLegacyOpenCodeGoApiKey,
@@ -119,6 +120,7 @@ describe('migrateLegacyOpenCodeGoApiKey', () => {
     expect(migrateLegacyOpenCodeGoApiKey(secrets, store)).toBe(true)
     expect(store.save).not.toHaveBeenCalled()
     expect(store.value()).toBe('fake-current-key')
+    expect(secrets.sealedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT)).toBeNull()
     expect(secretStore.decryptString).not.toHaveBeenCalled()
     expect(console.warn).toHaveBeenCalledWith(
       '[opencode-go] Kept the existing saved API key and dropped the one from settings.'

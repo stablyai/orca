@@ -1,19 +1,26 @@
+import {
+  combinedDiffViewportAttributes,
+  combinedDiffRowAttributes
+} from '../../combined-diff-viewport'
 import type React from 'react'
 import { useMemo } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import { DiffSectionItem } from '../../DiffSectionItem'
 import type { DiffSectionItemProps } from '../../diff-section-item-props'
 import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
 import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
 import type { DiffSection } from '../../diff-section-types'
 import type { CombinedDiffScrollThumb } from './use-combined-diff-scrollbar'
+import { translate } from '@/i18n/i18n'
 
 export function CombinedDiffSectionList({
   activeGroupId,
   canOpenWorkspaceFileBrowserForPath,
+  commentOwner,
   diffCommentsForWorktree,
   file,
   handleSectionSaveRef,
@@ -35,7 +42,6 @@ export function CombinedDiffSectionList({
   setScrollContainerRef,
   setSectionHeights,
   setSections,
-  settings,
   sideBySide,
   skippedConflictNotice,
   toggleSection,
@@ -43,6 +49,7 @@ export function CombinedDiffSectionList({
 }: {
   activeGroupId: string | undefined
   canOpenWorkspaceFileBrowserForPath: (path: string) => boolean
+  commentOwner: DiffCommentOwner | null
   diffCommentsForWorktree: DiffComment[]
   file: OpenFile
   handleSectionSaveRef: DiffSectionItemProps['handleSectionSaveRef']
@@ -64,13 +71,12 @@ export function CombinedDiffSectionList({
   setScrollContainerRef: (node: HTMLDivElement | null) => void
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
-  settings: DiffSectionItemProps['settings']
   sideBySide: boolean
   skippedConflictNotice: React.ReactNode
   toggleSection: (index: number) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): React.JSX.Element {
-  // Why: per-row filter() rescanned all worktree comments per visible row per render — index once, same order preserved.
+  // Index comments once by file instead of rescanning all worktree comments per visible row.
   const commentCountByFilePath = useMemo(() => {
     const counts = new Map<string, number>()
     for (const comment of diffCommentsForWorktree) {
@@ -81,6 +87,7 @@ export function CombinedDiffSectionList({
   return (
     <div className="relative min-w-0 flex-1">
       <div
+        {...combinedDiffViewportAttributes}
         ref={setScrollContainerRef}
         className="combined-diff-scroll-container h-full overflow-auto pr-5 scrollbar-editor"
         onWheel={markDirectScrollInput}
@@ -98,11 +105,11 @@ export function CombinedDiffSectionList({
               <div
                 key={virtualItem.key}
                 data-index={virtualItem.index}
-                data-combined-diff-section-row
+                {...combinedDiffRowAttributes}
                 data-combined-diff-section-key={section.key}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 top-0 w-full"
-                // Why: position via top, not transform, so sticky file headers don't jump (transform creates a containing block).
+                // Position with top: transforms create containing blocks that make sticky headers jump.
                 style={{ top: `${virtualItem.start}px` }}
               >
                 <DiffSectionItem
@@ -111,16 +118,21 @@ export function CombinedDiffSectionList({
                   isBranchMode={isBranchMode}
                   sideBySide={sideBySide}
                   isDark={isDark}
-                  settings={settings}
                   sectionHeight={sectionHeights[virtualItem.index]}
                   worktreeId={file.worktreeId}
+                  noteSource={file}
                   loadSection={loadSection}
                   loadDeferredSection={loadDeferredSection}
                   retrySection={retrySection}
                   toggleSection={toggleSection}
                   openSection={openSection}
                   openSectionTitle={
-                    isAllMode || isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
+                    isAllMode || isBranchMode || isCommitMode
+                      ? translate('auto.components.editor.CombinedDiffViewer.openDiff', 'Open diff')
+                      : translate(
+                          'auto.components.editor.CombinedDiffViewer.openInEditor',
+                          'Open in editor'
+                        )
                   }
                   onOpenPreview={
                     canOpenDiffSectionPreviewToSide({
@@ -142,6 +154,7 @@ export function CombinedDiffSectionList({
                     const fileNoteCount = commentCountByFilePath.get(section.path) ?? 0
                     return fileNoteCount > 0 ? (
                       <DiffNotesSendMenu
+                        owner={commentOwner}
                         worktreeId={file.worktreeId}
                         groupId={activeGroupId ?? file.worktreeId}
                         comments={diffCommentsForWorktree}

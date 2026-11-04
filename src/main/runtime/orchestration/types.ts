@@ -47,7 +47,7 @@ export type RunRow = {
   home_database: string
   coordinator_handle: string | null
   coordinator_pane_key: string | null
-  /** Bare Orca session id the coordinator is addressed by, when it has one (today only structured sessions); a `/clear`ed chat's lineage root. */
+  /** Bare coordinator session id; cleared chats use their lineage root. */
   coordinator_orca_session_id: OrcaSessionId | null
   /** The consumer_generation the id was written at; see currentRunCoordinatorOrcaSessionId. */
   coordinator_orca_session_id_generation: number | null
@@ -190,9 +190,14 @@ export type FederatedDispatchRow = {
   remote_terminal_handle: string | null
   to_home_imported_sequence: number
   to_home_acknowledged_sequence: number
+  home_auto_release_at: string | null
+  home_auto_release_state: FederatedHomeAutoReleaseState | null
   created_at: string
   updated_at: string
 }
+
+/** The home's own deadline for a host that cannot release settled workers by itself. */
+export type FederatedHomeAutoReleaseState = 'armed' | 'ended'
 
 export type RemoteDispatchAttachmentRow = {
   home_run_id: string
@@ -284,7 +289,7 @@ export type DispatchContextRow = {
   launch_token_hash: string | null
   assignee_handle: string | null
   assignee_pane_key: string | null
-  /** Bare Orca session id the assignee is addressed by, when it has one (today only structured sessions); a `/clear`ed chat's lineage root. */
+  /** Bare assignee session id; cleared chats use their lineage root. */
   assignee_orca_session_id: OrcaSessionId | null
   /** Written only by hosts that minted a per-Dispatch capability; never read for authority. */
   capability_hash: string | null
@@ -297,14 +302,13 @@ export type DispatchContextRow = {
   /** Creator identity; equal to the assignee means a self-dispatch, which adds no nesting depth. */
   creator_handle: string | null
   creator_pane_key: string | null
-  /** Bare Orca session id the creator is addressed by, when it has one (today only structured sessions); a `/clear`ed chat's lineage root. */
+  /** Bare creator session id; cleared chats use their lineage root. */
   creator_orca_session_id: OrcaSessionId | null
   host_scope: string | null
   status: DispatchStatus
   failure_count: number
   last_failure: string | null
-  /** Why the dispatch ended, when Orca could establish it — `operator_close`,
-   *  `signaled`, `exited`, `unknown`. Null on rows written before STA-4603. */
+  /** Proven termination cause; null for rows predating STA-4603. */
   termination_reason: TerminalExitCause['kind'] | null
   /** Nesting depth; a root coordinator's worker is 1. Never 0 on a persisted row. */
   depth: number
@@ -314,6 +318,10 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  /** The settled Dispatch whose worker this follow-up continues. */
+  follow_up_of_dispatch_id: string | null
+  /** When its worker reported with coordinator mail unread, until that mail continues it. */
+  follow_up_mail_at: string | null
 }
 
 export type DecisionGateRow = {

@@ -7,8 +7,7 @@ export function preserveDiffViewStateAcrossModelSwaps(
   let restoreFrame: number | null = null
 
   const captureViewState = (): void => {
-    // Why: Monaco resets cursor and scroll state when a retained editor swaps
-    // models, so capture once before either diff side starts rotating.
+    // Model swaps reset cursor and scroll; capture once before either diff side rotates.
     pendingViewState ??= diffEditor.saveViewState()
   }
   const scheduleRestore = (): void => {

@@ -56,12 +56,11 @@ describe('DaemonSpawner crash-loop containment', () => {
     })
     for (let i = 0; i < 3; i += 1) {
       await spawner.ensureRunning()
-      // What a dead daemon looks like to the adapter's respawn path.
+      // Model daemon loss so the next ensureRunning must launch again.
       spawner.resetHandle()
     }
     expect(launcher).toHaveBeenCalledTimes(3)
     await expect(spawner.ensureRunning()).rejects.toBeInstanceOf(DaemonCrashLoopError)
-    // The refusal must actually prevent the fork, not just annotate it.
     expect(launcher).toHaveBeenCalledTimes(3)
   })
 

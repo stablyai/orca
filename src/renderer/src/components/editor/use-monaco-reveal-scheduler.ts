@@ -10,11 +10,12 @@ export type MonacoRevealScheduler = {
     line: number,
     column: number,
     matchLength: number,
-    onApplied?: () => void
+    onApplied?: () => void,
+    canApply?: () => boolean
   ) => void
 }
 
-// Why: reveal needs two editor-owned frames plus a content-wait loop, so the RAF/timer handles live in one closed state machine.
+// Own both reveal frames and content-wait timers together so cancellation cannot leave a partial reveal.
 export function useMonacoRevealScheduler(): MonacoRevealScheduler {
   const revealDecorationRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const revealHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -47,20 +48,24 @@ export function useMonacoRevealScheduler(): MonacoRevealScheduler {
       line: number,
       column: number,
       matchLength: number,
-      onApplied?: () => void
+      onApplied?: () => void,
+      canApply?: () => boolean
     ) => {
       cancelScheduledReveal()
       let waitFrames = 0
 
       const schedule = (): void => {
-        // Why: Monaco can mount before its viewport math settles, so defer the reveal two editor-owned frames for deterministic scroll/highlight.
+        // Wait two frames for Monaco viewport geometry to settle before scrolling/highlighting.
         revealRafRef.current = requestAnimationFrame(() => {
           revealInnerRafRef.current = requestAnimationFrame(() => {
             revealRafRef.current = null
             revealInnerRafRef.current = null
+            if (canApply?.() === false) {
+              return
+            }
             const modelLineCount = editorInstance.getModel()?.getLineCount() ?? 0
             if (line > 1 && modelLineCount < line && waitFrames < MAX_REVEAL_CONTENT_WAIT_FRAMES) {
-              // Why: fresh opens can mount an empty 1-line model before the async read; waiting stops the target line clamping to 1.
+              // Async opens can mount an empty model; wait before the target line is clamped to 1.
               waitFrames += 2
               schedule()
               return

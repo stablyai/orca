@@ -1,8 +1,4 @@
-/**
- * Shape checks for the frames a daemon client sends. JSON.parse yields anything — `null`, a
- * number, an object missing `id` — and one unchecked property read on such a frame throws out of
- * the socket handler and takes the daemon, and every PTY in it, down (#17841).
- */
+// Validate parsed JSON before socket handlers access it; malformed frames must not crash the daemon.
 import type { DaemonRequest, HelloMessage } from './types'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -21,10 +17,7 @@ export function isHelloFrame(value: unknown): value is HelloMessage {
   )
 }
 
-/**
- * The routing envelope only: a request needs a string `id` to be answered and a string `type` to
- * be routed. Payload faults throw inside the router's try and come back as error replies.
- */
+/** Check only routing fields; payload validation failures become router error replies. */
 export function isDaemonRequestFrame(value: unknown): value is DaemonRequest {
   return isRecord(value) && typeof value.id === 'string' && typeof value.type === 'string'
 }

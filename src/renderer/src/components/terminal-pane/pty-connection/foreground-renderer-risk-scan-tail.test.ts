@@ -2,13 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/**
- * The foreground renderer-risk scan classifies the carried tail SPLICED onto the
- * incoming chunk, not the raw chunk. ConPTY splits a background SGR mid-sequence
- * routinely, and the continuation carries no escape of its own — so any cheap
- * pre-gate that inspects `data` instead of `scanData` silently drops the refresh
- * for exactly the redraws this path exists to catch.
- */
+/** Classify carried tail plus new chunk: ConPTY-split SGR continuations contain no ESC, so gating on raw data misses repaint risk. */
 function buildSession(): ConnectPanePtySession {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bag names every field the renderer-risk scan reads; the cast only supplies the rest of the session shape, which this suite never reaches.
   const session = {

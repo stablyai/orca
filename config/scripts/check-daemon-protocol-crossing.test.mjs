@@ -53,11 +53,37 @@ afterEach(() => {
 })
 
 describe('selectLatestStableReleaseTag', () => {
-  it('orders numerically and skips prerelease tags', () => {
-    expect(selectLatestStableReleaseTag(['v1.4.9', 'v1.4.10', 'v1.5.0-rc.1', 'nightly'])).toBe(
-      'v1.4.10'
-    )
-    expect(selectLatestStableReleaseTag(['nightly'])).toBeNull()
+  it.each([
+    { tags: ['v1.4.9', 'v1.4.10', 'v1.5.0-rc.1', 'nightly'], expected: 'v1.4.10' },
+    { tags: ['v1.9.99', 'v1.10.0'], expected: 'v1.10.0' },
+    { tags: ['v9.99.99', 'v10.0.0'], expected: 'v10.0.0' },
+    { tags: [], expected: null },
+    { tags: ['nightly', 'mobile-v1.2.3', 'v1.2.3-rc.1'], expected: null },
+    { tags: ['v0001.4.003', 'v1.04.3'], expected: 'v1.04.3' },
+    { tags: ['v1.04.3', 'v0001.4.003'], expected: 'v0001.4.003' },
+    { tags: ['v1.2.3', 'v1.2.3\n'], expected: 'v1.2.3' },
+    { tags: ['v1.2.3\r\n', 'v0.0.1'], expected: 'v0.0.1' },
+    { tags: [`v${'9'.repeat(400)}.1.2`, 'v0.1.2'], expected: 'v0.1.2' },
+    {
+      tags: ['v9007199254740993.1.0', 'v9007199254740992.1.0'],
+      expected: 'v9007199254740992.1.0'
+    }
+  ])(
+    'selects the newest stable tag without changing its spelling or input: $tags',
+    ({ tags, expected }) => {
+      const input = [...tags]
+      expect(selectLatestStableReleaseTag(Object.freeze(tags))).toBe(expected)
+      expect(tags).toEqual(input)
+      expect(selectLatestStableReleaseTag(['v0.0.0'])).toBe('v0.0.0')
+    }
+  )
+
+  it('skips unfilled entries in a sparse tag list', () => {
+    const sparse = []
+    sparse.length = 12
+    sparse[3] = 'v1.2.3'
+    sparse[8] = 'v2.0.0'
+    expect(selectLatestStableReleaseTag(Object.freeze(sparse))).toBe('v2.0.0')
   })
 })
 

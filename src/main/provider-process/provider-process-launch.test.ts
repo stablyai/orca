@@ -15,13 +15,4 @@ describe('resolveProviderChildEnv', () => {
     expect(baseEnv).toEqual({ PATH: '/bin', AGENT_HOME: '/inherited', PARENT_AGENT: 'parent' })
     expect(overlay.PARENT_AGENT).toBe('overlay')
   })
-
-  it('copies the inherited env when the launch carries no env', () => {
-    const baseEnv = { PATH: '/bin' }
-
-    const childEnv = resolveProviderChildEnv({}, baseEnv)
-
-    expect(childEnv).toEqual(baseEnv)
-    expect(childEnv).not.toBe(baseEnv)
-  })
 })

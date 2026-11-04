@@ -11,6 +11,7 @@ import type { WorktreeMeta } from './orca-runtime-test-mocks.spec'
 import { makeWorktreeMeta, store } from './orca-runtime-test-fixtures.spec'
 import { createWorktreeWithStartupAgent } from '../agent-launch/startup-agent-worktree-create'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type DraftSettings = {
   defaultTuiAgent: 'claude' | null
@@ -18,7 +19,6 @@ type DraftSettings = {
   detected: string[]
 }
 
-/** One create on a fresh runtime: what the user is left with, and how often agents were detected. */
 async function runCreate(
   route: 'create' | 'launch',
   settings: DraftSettings,
@@ -37,9 +37,9 @@ async function runCreate(
     }),
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-    setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
-      metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-      return metaById[worktreeId]
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+      metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
+      return metaById[id]
     }
   })
   const spawn = vi.fn().mockResolvedValue({ id: `pty-${route}` })
@@ -69,8 +69,7 @@ async function runCreate(
 
 const DRAFT = 'https://github.com/stablyai/orca/issues/123'
 
-// `worktree.create` now reaches the create through the launch executor; for a linked draft the
-// user must be left with exactly what the create alone gave them.
+// Linked-draft launch execution must preserve direct-create results.
 describe('a linked-draft create through the launch executor', () => {
   it.each([false, true])(
     'matches the create when the default agent cannot be launched (activate %s)',
@@ -86,7 +85,6 @@ describe('a linked-draft create through the launch executor', () => {
       const after = await runCreate('launch', settings, request)
 
       expect(after).toEqual(before)
-      // No agent started, so none is recorded and a background create still opens its shell.
       expect(before.createdWithAgent).toBeUndefined()
       if (!activate) {
         expect(before.spawned).toHaveLength(1)

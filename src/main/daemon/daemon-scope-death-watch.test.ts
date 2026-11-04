@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ProcessSpec, SpawnedProcess } from '@orca/process-host/process-spec'
+import { ownFreshDaemonScope } from './daemon-cgroup-scope'
 import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
 
 const spawnProcess = vi.fn<(spec: ProcessSpec) => SpawnedProcess>()
@@ -14,36 +15,27 @@ afterEach(() => {
 
 function options() {
   return {
-    freshScope: true,
-    launchNonce: 'launch-a',
-    platform: 'linux' as const,
+    daemonScope: 'orca-daemon-launch-a.scope',
     spawn: spawnProcess,
-    detectScope: () => 'orca-daemon-launch-a.scope',
     log: vi.fn()
   }
 }
 
 describe('daemon scope death watch ownership', () => {
-  it.each(['darwin', 'win32'] as const)('never spawns on %s', (platform) => {
-    expect(startDaemonScopeDeathWatch({ ...options(), platform })).toBeNull()
-    expect(spawnProcess).not.toHaveBeenCalled()
-  })
-
-  it('does not arm an adopted scope even when its nonce matches', () => {
-    expect(startDaemonScopeDeathWatch({ ...options(), freshScope: false })).toBeNull()
-    expect(spawnProcess).not.toHaveBeenCalled()
-  })
-
-  it.each([null, 'app-orca-123.scope', 'orca-daemon-other.scope'])(
-    'rejects unverified ownership of %s',
-    (unit) => {
-      expect(startDaemonScopeDeathWatch({ ...options(), detectScope: () => unit })).toBeNull()
-      expect(spawnProcess).not.toHaveBeenCalled()
+  it('only a fresh scope the daemon is still in qualifies', () => {
+    const own = (unit: string | null) => () => unit
+    expect(ownFreshDaemonScope(true, 'launch-a', own('orca-daemon-launch-a.scope'))).toBe(
+      'orca-daemon-launch-a.scope'
+    )
+    expect(ownFreshDaemonScope(false, 'launch-a', own('orca-daemon-launch-a.scope'))).toBeNull()
+    expect(ownFreshDaemonScope(true, undefined, own('orca-daemon-launch-a.scope'))).toBeNull()
+    for (const unit of [null, 'app-orca-123.scope', 'orca-daemon-other.scope']) {
+      expect(ownFreshDaemonScope(true, 'launch-a', own(unit))).toBeNull()
     }
-  )
+  })
 
-  it('does not arm without the launcher nonce', () => {
-    expect(startDaemonScopeDeathWatch({ ...options(), launchNonce: undefined })).toBeNull()
+  it('does not arm without an owned scope', () => {
+    expect(startDaemonScopeDeathWatch({ ...options(), daemonScope: null })).toBeNull()
     expect(spawnProcess).not.toHaveBeenCalled()
   })
 

@@ -81,7 +81,6 @@ describe('Session shell-owned recovery through the output barrier', () => {
     await new Promise((r) => setTimeout(r, 20))
     expect(session.getSnapshot()?.terminalOwner).toBe('shell')
 
-    // Live stream continues with a split mode-enable; snapshot lands inside the window.
     sub.emit('marker\x1b[?10')
     await new Promise((r) => setTimeout(r, 10))
     const mid = session.getSnapshot()!
@@ -98,7 +97,7 @@ describe('Session shell-owned recovery through the output barrier', () => {
 
   it('flushes queued bytes to clients when the shell exits mid-proof instead of dropping them', async () => {
     const sub = createSubprocess()
-    // Models TerminalHost.reapSession: exit and disposal are one synchronous chain.
+    // Match the host’s synchronous exit-to-reaper chain.
     const session: Session = new Session({
       sessionId: 's3',
       cols: 80,
@@ -116,13 +115,11 @@ describe('Session shell-owned recovery through the output barrier', () => {
 
     sub.emit('\x1b[?1049hTUI\x1b]133;D;137\x07\r\nprompt-after-death')
     await vi.waitFor(() => expect(sub.confirmShellForeground).toHaveBeenCalledTimes(1))
-    // The shell exits before the proof settles — sub-millisecond in production,
-    // so it essentially always wins the race against the ps fork.
+    // Let exit beat the pending process-tree proof.
     sub.exit(0)
 
     expect(received.join('')).toContain('prompt-after-death')
     expect(exits).toEqual([0])
-    // No injection either: an unproven episode flushes unmodified.
     expect(received.join('')).not.toContain('\x1b[?1049l')
   })
 
@@ -139,8 +136,7 @@ describe('Session shell-owned recovery through the output barrier', () => {
     const received: string[] = []
     session.attachClient({ onData: (data: string) => received.push(data), onExit: () => {} })
 
-    // Three alt-screen death cycles inside one proof window: each flush pass can
-    // re-enter pending on the next trigger, so a single-level flush loses the tail.
+    // Each flush can re-enter recovery; one pass would strand the final prompt.
     sub.emit(
       '\x1b[?1049hT1\x1b]133;D;1\x07AAA\x1b[?1049hT2\x1b]133;D;2\x07BBB\x1b[?1049hT3\x1b]133;D;3\x07CCC'
     )

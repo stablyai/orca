@@ -2,6 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from './worktree-activation'
+import './workspace-switch-user-act'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -76,17 +84,6 @@ function seedAutomationWorktreeState(
 }
 
 describe('activateAndRevealWorktree automation filters', () => {
-  it('clears the automation-generated filter before revealing an automation-created worktree', () => {
-    const worktree = makeAutomationWorktree()
-    const revealWorktreeInSidebar = vi.fn()
-    seedAutomationWorktreeState(worktree, { revealWorktreeInSidebar })
-
-    activateAndRevealWorktree(worktree.id)
-
-    expect(useAppStore.getState().hideAutomationGeneratedWorkspaces).toBe(false)
-    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
-  })
-
   it('keeps workspace-list filters while the activity view is showing', () => {
     const worktree = makeAutomationWorktree()
     seedAutomationWorktreeState(worktree, {

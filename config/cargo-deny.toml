@@ -1,0 +1,5 @@
+[graph]
+all-features = true
+
+[advisories]
+ignore = []

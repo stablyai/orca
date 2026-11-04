@@ -13,6 +13,7 @@ import {
 } from './workspace-reference-details'
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
 import { readWorkspaceReferenceDetails } from './workspace-reference-detail-read'
+import { getDetachedWorkspaceReviewRequest } from './workspace-detached-review-request'
 import { selectIsSleepingWorktree } from './use-worktree-sleep-state'
 
 export function getWorkspaceReferenceRefreshTargets(
@@ -39,6 +40,7 @@ export function getWorkspaceReferenceRefreshTargets(
     const knownProvider =
       state.hostedReviewCache[branchKey]?.data?.provider ??
       (state.prCache[candidate.cacheKey]?.data ? 'github' : undefined)
+    const primaryExactKey = getDetachedWorkspaceReviewRequest(worktree, repo)?.key
     const runtimeVersion = getWorkspaceReferenceRuntimeVersion(worktree, repo)
     for (const item of getWorkspaceAttachments(worktree)) {
       if (item.type === 'issue') {
@@ -52,6 +54,10 @@ export function getWorkspaceReferenceRefreshTargets(
         continue
       }
       const key = request.key
+      // The primary detached review already has a visible refresh target.
+      if (key === primaryExactKey) {
+        continue
+      }
       if (targets.get(key)?.selected) {
         continue
       }

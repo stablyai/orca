@@ -6,7 +6,11 @@ import {
   resetMobileRelayPairingRecoveryForTests,
   settleMobileRelayPairingRecovery
 } from './mobile-relay-pairing-recovery'
-import { RelayOuterError, type PairingCandidateClient } from './mobile-relay-physical-client'
+import {
+  RelayOuterError,
+  type connectMobileRelayForPairing,
+  type PairingCandidateClient
+} from './mobile-relay-physical-client'
 import type { HostProfile, PairingOffer, RpcResponse } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -36,10 +40,9 @@ function response(result: unknown): RpcResponse {
   return { id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
-function installed(
-  journal: ReturnType<typeof journal>,
-  mode: 'authenticated-direct' | 'relay-basis'
-) {
+type TestJournal = ReturnType<typeof journal>
+
+function installed(journal: TestJournal, mode: 'authenticated-direct' | 'relay-basis') {
   return {
     v: 1 as const,
     reqId: journal.metadata.installReqId,
@@ -50,7 +53,7 @@ function installed(
 }
 
 function endpoints(
-  journal: ReturnType<typeof journal>,
+  journal: TestJournal,
   state: { state: 'not-found' } | { state: 'committed'; result: ReturnType<typeof installed> }
 ) {
   return {
@@ -69,7 +72,7 @@ function endpoints(
 
 function journal(mode: 'authenticated-direct' | 'relay-basis' = 'authenticated-direct') {
   const value = createMobileRelayPairingJournal({
-    offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+    offer,
     hostId: 'host-1',
     hostName: 'Blue Whale',
     now,
@@ -90,20 +93,22 @@ function client(handler: (method: string, params: unknown) => Promise<RpcRespons
 }
 
 function dependencies(args: {
-  journal: ReturnType<typeof journal>
-  connectRelay: ReturnType<typeof vi.fn>
+  journal: TestJournal
+  connectRelay: typeof connectMobileRelayForPairing
   bundle?: MobileRelayCredentialBundle | null
   hosts?: HostProfile[]
 }) {
+  const releaseJournal = vi.fn()
   return {
+    releaseJournal,
     loadJournal: vi.fn(async () => args.journal),
     updateJournal: vi.fn(async (_id, update) => {
       Object.assign(args.journal.metadata, update(args.journal.metadata))
     }),
     clearJournal: vi.fn(async () => {}),
-    claimJournal: vi.fn(async () => () => {}),
+    claimJournal: vi.fn(async () => releaseJournal),
     readCredentialBundle: vi.fn(async () => args.bundle ?? null),
-    writeCredentialBundle: vi.fn(async () => {}),
+    writeCredentialBundle: vi.fn(async (_bundle: MobileRelayCredentialBundle) => {}),
     loadHosts: vi.fn(async (): Promise<HostProfile[]> => args.hosts ?? []),
     savePairedHost: vi.fn(async () => {}),
     connectRelay: args.connectRelay,
@@ -141,9 +146,32 @@ describe('mobile relay pairing recovery', () => {
         expectedCredentialKind: 'resume'
       })
     )
-    expect(deps.writeCredentialBundle).toHaveBeenCalledOnce()
-    expect(deps.savePairedHost).toHaveBeenCalledOnce()
-    expect(deps.clearJournal).toHaveBeenCalledOnce()
+    expect(deps.writeCredentialBundle).toHaveBeenCalledExactlyOnceWith({
+      v: 1,
+      hostId: 'host-1',
+      deviceToken: offer.deviceToken,
+      current: {
+        token: saved.secrets.pendingResumeToken,
+        hash: saved.metadata.pendingResumeTokenHash,
+        version: committed.currentVersion,
+        expiresAt: committed.resumeExpiresAt
+      }
+    })
+    expect(deps.savePairedHost).toHaveBeenCalledExactlyOnceWith({
+      ...saved.metadata.host,
+      deviceToken: offer.deviceToken,
+      relay: endpoints(saved, { state: 'committed', result: committed }).relay
+    })
+    expect(deps.clearJournal).toHaveBeenCalledExactlyOnceWith(saved.metadata.journalId)
+    expect(deps.claimJournal).toHaveBeenCalledExactlyOnceWith(saved.metadata.journalId)
+    expect(deps.releaseJournal).toHaveBeenCalledOnce()
+    expect(deps.writeCredentialBundle.mock.invocationCallOrder[0]).toBeLessThan(
+      deps.savePairedHost.mock.invocationCallOrder[0]
+    )
+    expect(deps.savePairedHost.mock.invocationCallOrder[0]).toBeLessThan(
+      deps.clearJournal.mock.invocationCallOrder[0]
+    )
+    expect(pending.close).toHaveBeenCalledOnce()
   })
 
   it('clears a journal whose relay routing the host already carries, without dialing', async () => {
@@ -242,8 +270,6 @@ describe('mobile relay pairing recovery', () => {
     expect(saved.metadata.authorizationMode).toBe('authenticated-direct')
     expect(deps.updateJournal).toHaveBeenCalledTimes(2)
   })
-  // Why: a journal stranded by a relay outage used to block every later pairing
-  // with "recovery pending" forever, because recovery only ever deferred.
   it('abandons a journal once its invite expired and no credential can reconcile', async () => {
     const saved = journal()
     const unreachable = client(async () => {
@@ -258,8 +284,6 @@ describe('mobile relay pairing recovery', () => {
     expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
   })
 
-  // Why: a desktop that rotated its QR revokes the pending device; the relay then
-  // rejects every credential, and waiting out the invite only locked the phone out.
   it('abandons at once when the relay rejects every credential', async () => {
     const saved = journal()
     const rejected = client(async () => {
@@ -271,7 +295,7 @@ describe('mobile relay pairing recovery', () => {
     expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
   })
 
-  // Why: the relay also closes 4401 on a first-frame timeout, with no relay-hello.
+  // A bare 4401 can mean first-frame timeout and is not authoritative credential rejection.
   it('keeps a journal whose 4401 closes carried no relay-hello refusal', async () => {
     const saved = journal()
     const timedOut = client(async () => {
@@ -283,7 +307,7 @@ describe('mobile relay pairing recovery', () => {
     expect(deps.clearJournal).not.toHaveBeenCalled()
   })
 
-  it('never publishes a committed install once a newer scan replaced its journal', async () => {
+  it('never publishes a committed install when its journal publication claim is stale', async () => {
     const saved = journal()
     const committed = installed(saved, 'relay-basis')
     const pending = client(async () =>
@@ -299,6 +323,9 @@ describe('mobile relay pairing recovery', () => {
     await expect(recoverMobileRelayPairing(deps)).resolves.not.toBe('recovered')
     expect(deps.writeCredentialBundle).not.toHaveBeenCalled()
     expect(deps.savePairedHost).not.toHaveBeenCalled()
+    expect(deps.claimJournal).toHaveBeenCalledWith(saved.metadata.journalId)
+    expect(deps.clearJournal).not.toHaveBeenCalled()
+    expect(pending.close).toHaveBeenCalledTimes(2)
   })
 
   it('bounds how long a new scan waits for recovery', async () => {
@@ -344,8 +371,7 @@ describe('mobile relay pairing recovery', () => {
     expect(deps.clearJournal).not.toHaveBeenCalled()
   })
 
-  // Why: a committed install whose local persistence failed is the one case the
-  // journal must survive — it is the only record left to retry the write from.
+  // Keep the only retry record when the install committed but local persistence failed.
   it('keeps a journal when the server committed but the local write failed', async () => {
     const saved = journal()
     const directInstalled = installed(saved, 'authenticated-direct')
@@ -362,5 +388,9 @@ describe('mobile relay pairing recovery', () => {
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
     expect(deps.clearJournal).not.toHaveBeenCalled()
+    expect(deps.writeCredentialBundle).toHaveBeenCalled()
+    expect(deps.savePairedHost).not.toHaveBeenCalled()
+    expect(deps.releaseJournal).toHaveBeenCalled()
+    expect(committed.close).toHaveBeenCalled()
   })
 })

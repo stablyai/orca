@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, onMock, removeAllListenersMock, removeHandlerMock, fromWebContentsMock } =
@@ -21,8 +22,16 @@ vi.mock('electron', () => ({
   }
 }))
 
+import {
+  clearStructuredHostStub,
+  hostCalls,
+  installStructuredHostStub,
+  SESSION
+} from '../runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
 import { registerRuntimeHandlers } from './runtime'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
+import { PROJECT_SECTION_PARITY_SERVED } from '../../shared/project-section-parity.test-fixture'
+import { readMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
 
 function runtimeCallEvent() {
   const mainFrame = {}
@@ -45,6 +54,60 @@ describe('registerRuntimeHandlers', () => {
     removeHandlerMock.mockReset()
     fromWebContentsMock.mockReset()
   })
+
+  it.each(['desktop-renderer', 'trusted-local:runtime'])(
+    'identifies an answer by %s as this computer through desktop IPC',
+    async (resolvedBy) => {
+      installStructuredHostStub()
+      try {
+        hostCalls.history.mockReturnValue({
+          ok: true,
+          page: {
+            submissions: [],
+            removedItemIds: [],
+            items: [
+              {
+                itemId: 'question-1',
+                sequence: 1,
+                revision: 2,
+                observedAt: 10,
+                body: {
+                  kind: 'question',
+                  question: 'Which color?',
+                  options: [],
+                  resolution: {
+                    state: 'resolved',
+                    selectedOptionId: null,
+                    resolvedBy,
+                    resolvedAt: 10
+                  }
+                }
+              }
+            ]
+          }
+        })
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this IPC read uses only identity/name methods; the installed host supplies journal reads.
+        registerRuntimeHandlers({
+          getRuntimeId: () => 'runtime-1',
+          readMachineName: () => 'Work Mac',
+          readPairedDeviceName: () => null
+        } as never)
+        const handler = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')![1]
+        const response = await handler(runtimeCallEvent(), {
+          method: 'agentSession.history',
+          params: { sessionId: SESSION, direction: 'tail' }
+        })
+        expect(response).toMatchObject({
+          ok: true,
+          result: {
+            page: { items: [{ body: { resolution: { resolvedByDevice: { kind: 'current' } } } }] }
+          }
+        })
+      } finally {
+        clearStructuredHostStub()
+      }
+    }
+  )
 
   it('routes sync requests through the authoritative browser window id', () => {
     const runtime = {
@@ -70,6 +133,46 @@ describe('registerRuntimeHandlers', () => {
 
     expect(runtime.syncWindowGraph).toHaveBeenCalledWith(17, graph)
     expect(result).toEqual({ graphStatus: 'ready' })
+  })
+
+  it("serves the authoritative window's sidebar catalog to paired phones, and keeps it when omitted", () => {
+    const runtime = { syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }) }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:syncWindowGraph'
+    )![1]
+    const currentMainFrame = {}
+    const event = { sender: { mainFrame: currentMainFrame }, senderFrame: currentMainFrame }
+    fromWebContentsMock.mockReturnValue({ id: 17 })
+    const graph = { tabs: [], leaves: [], rendererGeneration: 'renderer-1' }
+
+    handler(event, { ...graph, projectSectionCatalog: PROJECT_SECTION_PARITY_SERVED })
+    handler(event, graph)
+
+    expect(readMobileProjectSections()).toEqual({ catalog: PROJECT_SECTION_PARITY_SERVED })
+  })
+
+  it('does not serve a catalog from a graph the runtime refused', () => {
+    const refused = { ...PROJECT_SECTION_PARITY_SERVED, projectOrderBy: 'recent' as const }
+    const runtime = {
+      syncWindowGraph: vi.fn(() => {
+        throw new Error('Runtime graph publisher does not match the authoritative window')
+      })
+    }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:syncWindowGraph'
+    )![1]
+    const currentMainFrame = {}
+    fromWebContentsMock.mockReturnValue({ id: 18 })
+
+    expect(() =>
+      handler(
+        { sender: { mainFrame: currentMainFrame }, senderFrame: currentMainFrame },
+        { tabs: [], leaves: [], rendererGeneration: 'renderer-2', projectSectionCatalog: refused }
+      )
+    ).toThrow()
+    expect(readMobileProjectSections().catalog).not.toEqual(refused)
   })
 
   it('rejects a graph publication queued by a superseded main frame', () => {
@@ -172,7 +275,7 @@ describe('registerRuntimeHandlers', () => {
     }
     const runtime = {
       getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
-      getClientSettings: vi.fn(() => ({ experimentalNativeChat: true })),
+      getClientSettings: vi.fn(() => ({ nativeChatProviders: EVERY_AGENT_CHAT })),
       restoreStructuredAgentSessionTabs: vi.fn(async () => undefined),
       listMobileSessionTabs: vi.fn(async () => ({
         worktree: 'workspace-1',
@@ -201,7 +304,7 @@ describe('registerRuntimeHandlers', () => {
       syncWindowGraph: vi.fn(),
       getStatus: vi.fn(),
       getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
-      listProjectGroups: vi.fn().mockReturnValue([{ id: 'group-1', name: 'Platform' }])
+      listVisibleProjectGroups: vi.fn().mockReturnValue([{ id: 'group-1', name: 'Platform' }])
     }
 
     registerRuntimeHandlers(runtime as never)

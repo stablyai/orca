@@ -24,6 +24,7 @@ const REQUIRED_FILES = [
   'preload/index.js',
   'renderer/index.html',
   'renderer/.vite/manifest.json',
+  'renderer/.orca-web-client-files.json',
   'web/web-index.html',
   'mobile-web/manifest.json',
   'package.json'
@@ -62,17 +63,26 @@ export function releaseJavascriptConfiguration(root, env = process.env) {
     )
   }
   const { version, packageManager } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-  const identity = releaseBuildIdentity(`v${version}`)
-  assert.equal(env.ORCA_BUILD_IDENTITY, identity, 'Release build identity differs from version')
+  const requestedIdentity = env.ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY
+  const identity = requestedIdentity === 'dev' ? 'dev' : releaseBuildIdentity(`v${version}`)
+  if (requestedIdentity) {
+    assert.equal(requestedIdentity, identity, 'Invalid JavaScript build identity')
+  }
+  if (identity === 'dev') {
+    assert(!env.ORCA_BUILD_IDENTITY, 'Development bundle must not set an official build identity')
+    assert(!env.ORCA_POSTHOG_WRITE_KEY, 'Development bundle must not set a release telemetry key')
+  } else {
+    assert.equal(env.ORCA_BUILD_IDENTITY, identity, 'Release build identity differs from version')
+    assert(env.ORCA_POSTHOG_WRITE_KEY, 'Missing release telemetry key')
+  }
   assert(env.ORCA_DIAGNOSTICS_TOKEN_URL, 'Missing release diagnostics URL')
-  assert(env.ORCA_POSTHOG_WRITE_KEY, 'Missing release telemetry key')
   return {
     sourceSha,
     version,
     packageManager,
     identity,
     diagnosticsTokenUrl: env.ORCA_DIAGNOSTICS_TOKEN_URL,
-    telemetryKeySha256: sha256(env.ORCA_POSTHOG_WRITE_KEY)
+    telemetryKeySha256: identity === 'dev' ? null : sha256(env.ORCA_POSTHOG_WRITE_KEY)
   }
 }
 

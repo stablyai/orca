@@ -5,8 +5,7 @@ import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { openChecks } from './helpers/source-control-ai-generation'
 
-// Repro for #7732: expanding a GitLab pipeline job in the Checks panel must show its log,
-// not "No inline details are available for this check." All fixture data is synthetic.
+// #7732: expanding a GitLab job must render its synthetic trace instead of the no-inline-details fallback.
 const FIXTURE = {
   mrNumber: 4242,
   jobId: 987654,
@@ -141,9 +140,9 @@ test.describe('#7732 GitLab Checks panel job details', () => {
     mkdirSync(SCREENSHOT_DIR, { recursive: true })
     await jobRow.click()
     const noDetails = orcaPage.getByText('No inline details are available for this check.')
-    const viewFullLogs = orcaPage.getByRole('button', { name: 'View full logs' })
+    const viewFullDetails = orcaPage.getByRole('button', { name: 'View full details' })
     for (let attempt = 0; attempt < 20; attempt++) {
-      if ((await noDetails.count()) > 0 || (await viewFullLogs.count()) > 0) {
+      if ((await noDetails.count()) > 0 || (await viewFullDetails.count()) > 0) {
         break
       }
       await orcaPage.waitForTimeout(500)
@@ -152,9 +151,8 @@ test.describe('#7732 GitLab Checks panel job details', () => {
       path: path.join(SCREENSHOT_DIR, 'gitlab-checks-job-expanded.png')
     })
 
-    // Correct behavior: the stubbed gitlab:jobTrace log renders instead of the "no details" fallback.
     expect(await readJobTraceCallCount(electronApp)).toBeGreaterThan(0)
     await expect(noDetails).toHaveCount(0)
-    await expect(viewFullLogs).toBeVisible({ timeout: 10_000 })
+    await expect(viewFullDetails).toBeVisible({ timeout: 10_000 })
   })
 })

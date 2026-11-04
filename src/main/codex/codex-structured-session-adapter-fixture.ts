@@ -1,20 +1,66 @@
 import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+  StructuredAgentSessionAcquireInput,
+  StructuredAgentSessionOptionsReportedEvent
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
+  CodexAppServerConnectionHandlers
+} from './app-server/codex-app-server-connection-types'
+import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
-} from './codex-app-server-connection'
-import {
+} from './app-server/codex-app-server-connection'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredLaunch,
+  CodexStructuredSessionEvent,
+  CodexStructuredSessionAdapterDeps
+} from './codex-structured-session-state'
+
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+
+const startLinks = new WeakMap<
   CodexStructuredSessionAdapter,
-  type CodexStructuredLaunch,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
-import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+  Map<string, NonNullable<StructuredAgentSessionProviderOpenResult['link']>>
+>()
+const startReports = new WeakMap<
+  CodexStructuredSessionAdapter,
+  Map<string, StructuredAgentSessionProviderOpenResult | StructuredAgentSessionOptionsReportedEvent>
+>()
+
+export function codexStartReport(adapter: CodexStructuredSessionAdapter, sessionId = 'session-1') {
+  const report = startReports.get(adapter)?.get(sessionId)
+  if (!report) {
+    throw new Error(`Codex has not started ${sessionId}`)
+  }
+  return report
+}
+
+export function codexStartedLink(adapter: CodexStructuredSessionAdapter, sessionId = 'session-1') {
+  return startLinks.get(adapter)?.get(sessionId)
+}
+
+export async function acquireReadyCodexForTest(
+  adapter: CodexStructuredSessionAdapter,
+  input: StructuredAgentSessionAcquireInput
+) {
+  const acquired = await adapter.acquire(input)
+  const result = await adapter.open({
+    sessionId: input.identity.sessionId,
+    fence: input.fence,
+    acquisitionGeneration: acquired.acquisitionGeneration,
+    signal: new AbortController().signal
+  })
+  startReports.get(adapter)?.set(input.identity.sessionId, result)
+  if (result.link) {
+    startLinks.get(adapter)?.set(input.identity.sessionId, result.link)
+  }
+  return acquired
+}
 
 export const THREAD_ID = 'thread-abc'
 
@@ -45,13 +91,34 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   closeCount: number
 }
 
+const STARTUP_METHODS = new Set(['thread/start', 'thread/resume', 'thread/read'])
+
 export function fakeCodex(routes: Record<string, Route> = {}): {
   connections: FakeConnection[]
   openConnection: typeof openCodexAppServerConnection
   routes: Record<string, Route>
 } {
   const connections: FakeConnection[] = []
-  const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
+  const openConnection: typeof openCodexAppServerConnection = async (
+    launch,
+    adapterHandlers = {}
+  ) => {
+    // As the real connection: a spontaneous exit also fails the start's calls still waiting.
+    const waiting = new Set<(error: Error) => void>()
+    const handlers: CodexAppServerConnectionHandlers = {
+      ...adapterHandlers,
+      onExit: (error, exit) => {
+        // The real connection's own exit error reads as the agent's exit, never a refusal.
+        adapterHandlers.onExit?.(exit?.expected ? error : withObservedProviderExit(error), exit)
+        if (exit?.expected) {
+          return
+        }
+        for (const fail of waiting) {
+          fail(error)
+        }
+        waiting.clear()
+      }
+    }
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -63,12 +130,19 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       request: async (method, params) => {
         connection.calls.push({ method, params })
         const route = routes[method]
-        return route ? route(params) : {}
+        const answer = route ? route(params) : {}
+        // Turn calls keep the answers their tests script; a start's calls end with the child.
+        if (!(answer instanceof Promise) || !STARTUP_METHODS.has(method)) {
+          return answer
+        }
+        const exited = new Promise<never>((_resolve, reject) => waiting.add(reject))
+        void exited.catch(() => {})
+        return Promise.race([answer, exited])
       },
       notify: () => {},
       respond: (id, result) => connection.replies.push({ id, result }),
       respondWithError: (id, code, message) => connection.replies.push({ id, code, message }),
-      // As the real connection: the root's exit is reported, once, inside the close that ends it.
+      // Match the real connection's synchronous exit report during close.
       close: async () => {
         connection.closeCount += 1
         if (!connection.closed) {
@@ -81,6 +155,7 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       }
     }
     connections.push(connection)
+    await handlers.onSpawned?.(connection.pid ?? 0)
     return connection
   }
   routes['thread/start'] ??= () => ({
@@ -96,7 +171,6 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
   return { connections, openConnection, routes }
 }
 
-/** A `turn/start` route for a Codex that opened the turn before its answer was read. */
 export function answerWithOpenedTurn(
   codex: Pick<ReturnType<typeof fakeCodex>, 'connections'>,
   turnId: string
@@ -113,11 +187,15 @@ export function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
   events: CodexStructuredSessionEvent[] = [],
-  /** Host wiring the runtime adds, such as the late dispatch settlement. */
   deps: Partial<CodexStructuredSessionAdapterDeps> = {}
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
-  return new CodexStructuredSessionAdapter({
+  const links = new Map<string, NonNullable<StructuredAgentSessionProviderOpenResult['link']>>()
+  const reports = new Map<
+    string,
+    StructuredAgentSessionProviderOpenResult | StructuredAgentSessionOptionsReportedEvent
+  >()
+  const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
       command: 'codex',
       args: ['app-server'],
@@ -126,13 +204,23 @@ export function adapterFor(
       resumeThreadId: null,
       ...launch
     }),
-    onEvent: (event) => events.push(event),
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
     mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
-    ...deps
+    ...deps,
+    onEvent: (event) => {
+      if (event.type === 'options-reported') {
+        reports.set(event.sessionId, event)
+      } else {
+        events.push(event)
+      }
+      deps.onEvent?.(event)
+    }
   })
+  startReports.set(adapter, reports)
+  startLinks.set(adapter, links)
+  return adapter
 }
 
 export async function acquired(
@@ -141,6 +229,10 @@ export async function acquired(
   events: CodexStructuredSessionEvent[] = []
 ): Promise<CodexStructuredSessionAdapter> {
   const adapter = adapterFor(codex, launch, events)
-  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+  await acquireReadyCodexForTest(adapter, {
+    identity: identityFor('session-1'),
+    fence: 7,
+    spawnToken: 'spawn-9'
+  })
   return adapter
 }

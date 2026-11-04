@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { assertLegacyAiVaultResumeCommandAllowed } from './structured-session-ownership'
 import { installOwnership, PROVIDER_SESSION } from './structured-session-ownership.test-support'
@@ -125,8 +125,7 @@ describe.each(AGENTS)('a $name resume read as a shell reads it', (agent) => {
   })
 })
 
-// terminal.send checks agent prompts too, and its text may still reach a shell, so a name counts
-// only where a shell would run it.
+// Agent names count only where the shell would run them, including text sent from agent prompts.
 describe.each(AGENTS)('a $name resume in command position', (agent) => {
   const resume = `${agent.name} ${agent.resumeArgs}`
 

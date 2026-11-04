@@ -6,8 +6,7 @@ mode=${2:?mode is required}
 result_dir=/tmp/daemon-shutdown-descendants
 mkdir -p "$result_dir"
 
-# The fixture exits like daemon-entry after dispose(). This shell remains as a
-# supervisor so a detached descendant can be inspected after the daemon exits.
+# Keep this supervisor alive after the daemon-like exit to inspect detached descendants.
 timeout --kill-after=2s 20s node /opt/daemon-shutdown-descendants/fixture.cjs "$bundle" "$result_dir/fixture.json"
 
 child_pid=$(node -e "const r=require(process.argv[1]); process.stdout.write(String(r.childPid))" "$result_dir/fixture.json")

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PinnedRuntimeArchive } from './pinned-runtime-materializer'
-import { downloadVerifiedArchive } from './runtime-archive-download'
+import { downloadFailureMessage, downloadVerifiedArchive } from './runtime-archive-download'
 
 const BODY = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])
 const NO_DELAY = [0, 0, 0]
@@ -28,7 +28,6 @@ function requestSignal(options: RequestInit | undefined): AbortSignal {
   return options.signal
 }
 
-/** A body that delivers its first half, then fails as Chromium does when the network drops. */
 function droppedMidway(): Response {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -80,6 +79,34 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
     expect(signals[1]?.aborted).toBe(false)
   })
 
+  it('gives up at once, without retrying, when no response arrives within its connect budget', async () => {
+    const fetcher = vi.fn<typeof fetch>(
+      (_url, options) =>
+        new Promise<Response>((_resolve, reject) => {
+          // A firewall that drops packets: nothing comes back until the request is aborted.
+          requestSignal(options).addEventListener('abort', () => reject(new Error('aborted')))
+        })
+    )
+    await expect(
+      downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY, undefined, 20)
+    ).rejects.toThrow('Node runtime download got no response within 0.02 s')
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets a response that arrives in time download in full', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => ok())
+    await downloadVerifiedArchive(
+      archive(),
+      destination,
+      fetcher,
+      undefined,
+      NO_DELAY,
+      undefined,
+      5_000
+    )
+    expect(new Uint8Array(await readFile(destination))).toEqual(BODY)
+  })
+
   it('gives up after its bounded attempts with the last error', async () => {
     const signals: AbortSignal[] = []
     const failure = new Error('net::ERR_NETWORK_CHANGED')
@@ -109,6 +136,28 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
     ).rejects.toThrow()
     expect(fetcher).toHaveBeenCalledTimes(1)
     expect(signals[0]?.aborted).toBe(true)
+  })
+
+  it('blames the release only for a proven mismatch', async () => {
+    const failure = (response: () => Promise<Response>) =>
+      downloadVerifiedArchive(
+        archive(),
+        destination,
+        vi.fn<typeof fetch>(response),
+        undefined,
+        []
+      ).then(
+        () => '',
+        (error: unknown) => downloadFailureMessage('Node', error)
+      )
+    expect(
+      await failure(async () => {
+        throw new Error('net::ERR_PROXY_CONNECTION_FAILED')
+      })
+    ).toMatch(/^Couldn't download Node\./)
+    expect(await failure(async () => ok(new Uint8Array([9, 9])))).toMatch(
+      /didn't match the release/
+    )
   })
 
   it('stops waiting to retry once the caller cancels', async () => {

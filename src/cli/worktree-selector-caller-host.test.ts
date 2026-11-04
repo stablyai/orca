@@ -1,7 +1,3 @@
-/**
- * #21210: several SSH hosts hold a worktree of one repo at the same path. A CLI on host D must
- * resolve `current` (and a pane's forwarded worktree id) to host D's row, never another host's twin.
- */
 import { describe, expect, it } from 'vitest'
 import {
   getCallerExecutionHostId,
@@ -37,7 +33,6 @@ describe('implicit worktree selection is scoped to the caller host (#21210)', ()
   it('reads the caller host from the relay stamp, encoding the SSH target', () => {
     expect(getCallerExecutionHostId(SSH_CALLER_D)).toBe('ssh:host%20d')
     expect(getCallerExecutionHostId({})).toBe('local')
-    // A WSL stamp is still this machine.
     expect(
       getCallerExecutionHostId({
         ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
@@ -57,7 +52,6 @@ describe('implicit worktree selection is scoped to the caller host (#21210)', ()
     expect(selectEnclosingWorktreeOnHost(TWINS, PATH, 'local')).toBe(`id:repo-l::${PATH}`)
   })
 
-  // A runtime-stamped row in this runtime's own catalog is a checkout it holds locally.
   it('keeps a runtime-stamped local checkout for a local caller', () => {
     const rows = [
       TWINS[0]!,

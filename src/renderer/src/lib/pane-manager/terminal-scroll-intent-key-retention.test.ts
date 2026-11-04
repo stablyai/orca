@@ -30,11 +30,8 @@ import {
   detachManagedPaneForExternalMove,
   retireManagedPanePreservingPty
 } from './pane-split-close'
-import {
-  bindTerminalScrollIntentKey,
-  markTerminalPinnedViewport,
-  type TerminalScrollIntentTarget
-} from './terminal-scroll-intent'
+import { bindTerminalScrollIntentKey, markTerminalPinnedViewport } from './terminal-scroll-intent'
+import type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
 import {
   readTerminalScrollIntentKeyRetention,
   releaseTerminalScrollIntentKey
@@ -44,7 +41,6 @@ function leafIdAt(index: number): TerminalLeafId {
   return `11111111-1111-4111-8111-${String(index).padStart(12, '0')}` as TerminalLeafId
 }
 
-/** A pinned (non-bottom) viewport so a keyed intent is actually retained. */
 function createPinnedTerminal(): TerminalScrollIntentTarget {
   return {
     buffer: { active: { type: 'normal', viewportY: 3, baseY: 40 } } as never,
@@ -123,7 +119,6 @@ describe('terminal scroll intent key retention', () => {
       const leafId = leafIdAt(index)
       const pane = openPane(index + 1, leafId)
       const panes = new Map([[pane.id, pane]])
-      // A pinned pane must actually retain its keyed intent while it is open.
       expect(readTerminalScrollIntentKeyRetention()).toEqual({
         intents: baseline.intents + 1,
         bindings: baseline.bindings + 1

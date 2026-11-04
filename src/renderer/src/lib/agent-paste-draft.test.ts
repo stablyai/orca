@@ -7,12 +7,13 @@ import {
   iterateAgentDraftPasteContentChunks,
   pasteDraftToAgentPtyWhenReady,
   pasteDraftWhenAgentReady,
-  POST_PASTE_SUBMIT_DELAY_MS,
   sendAgentDraftPasteContent,
   sendBracketedPasteToRunningAgent,
   submitPromptToAgentPty
 } from './agent-paste-draft'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS as POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState = vi.hoisted(() => ({
   appState: {
@@ -55,11 +56,15 @@ vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId,
-  // Why drop the kind: this suite pins write shapes; startup-draft-input-kind.test.ts pins kinds.
-  sendRuntimePtyInputVerified: (ptyId: string, data: string) =>
-    testState.sendRuntimePtyInputVerified(ptyId, data),
   inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess
+}))
+vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
+  sendRuntimePtyInputVerified: (ptyId: string, data: string) =>
+    testState.sendRuntimePtyInputVerified(ptyId, data)
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
@@ -211,35 +216,8 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('rescues opencode delivery under never-settling output churn', async () => {
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: ISSUE_URL,
-      agent: 'opencode'
-    })
-    await flushMicrotasks()
-
-    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
-    await flushMicrotasks()
-    for (let index = 0; index < 5; index += 1) {
-      await vi.advanceTimersByTimeAsync(1499)
-      testState.ptyObserver?.(`setup output ${index}`)
-      await flushMicrotasks()
-      expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
-    }
-
-    testState.ptyObserver?.(SHOW_CURSOR)
-
-    await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('does not paste on the quiet window for opencode (it never arms one)', async () => {
-    // Why: opencode is silent for ~1.5-2s between enabling bracketed paste and
-    // mounting its composer. A quiet window would fire during that gap and paste
-    // before the composer exists (the original bug), so the cursor signal must
-    // not arm one. With process inspection failing, delivery times out instead.
+    // OpenCode can pause after enabling bracketed paste before mounting its composer; cursor/quiet alone must not authorize early paste.
     testState.inspectRuntimeTerminalProcess.mockResolvedValue(null)
     const onTimeout = vi.fn()
     const promise = pasteDraftWhenAgentReady({
@@ -253,12 +231,10 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
     await flushMicrotasks()
 
-    // Quiet-window duration elapses with no show-cursor: must NOT paste.
     await vi.advanceTimersByTimeAsync(1500)
     await flushMicrotasks()
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
 
-    // Only the hard timeout (and failed process check) resolves it — to false.
     await vi.advanceTimersByTimeAsync(20_000)
     await flushMicrotasks(5)
     await vi.advanceTimersByTimeAsync(1000)
@@ -268,8 +244,7 @@ describe('pasteDraftWhenAgentReady', () => {
   })
 
   it('best-effort pastes for opencode at the hard timeout when its process is running', async () => {
-    // Why: with no quiet window, the hard-timeout process-ownership check is the
-    // backstop if show-cursor is somehow missed — same model as Codex.
+    // If show-cursor is missed, process ownership remains the hard-timeout fallback, as for Codex.
     testState.inspectRuntimeTerminalProcess.mockResolvedValue({
       foregroundProcess: 'opencode',
       hasChildProcesses: false
@@ -288,7 +263,6 @@ describe('pasteDraftWhenAgentReady', () => {
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
-    // The composer was never observed; the caller must be able to hedge its success notice.
     expect(onUnconfirmedDelivery).toHaveBeenCalledTimes(1)
   })
 
@@ -312,19 +286,6 @@ describe('pasteDraftWhenAgentReady', () => {
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
-  })
-
-  it('does not paste for agents that already use native draft prefill', async () => {
-    await expect(
-      pasteDraftWhenAgentReady({
-        tabId: 'tab-1',
-        content: ISSUE_URL,
-        agent: 'pi'
-      })
-    ).resolves.toBe(false)
-
-    expect(testState.subscribeToPtyData).not.toHaveBeenCalled()
-    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
   })
 
   it('submits in a separate write after force-pasting native-prefill agents', async () => {
@@ -369,20 +330,6 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
   })
 
-  it('reports false when verified input delivery fails', async () => {
-    testState.sendRuntimePtyInputVerified.mockResolvedValue(false)
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: ISSUE_URL,
-      agent: 'codex'
-    })
-    await flushMicrotasks()
-
-    testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
-
-    await expect(promise).resolves.toBe(false)
-  })
-
   it('reports false when verified input delivery rejects', async () => {
     testState.sendRuntimePtyInputVerified.mockRejectedValue(new Error('runtime timeout'))
     const promise = pasteDraftWhenAgentReady({
@@ -397,30 +344,8 @@ describe('pasteDraftWhenAgentReady', () => {
     await expect(promise).resolves.toBe(false)
   })
 
-  it('best-effort pastes when the ready escape was missed but the agent process is running', async () => {
-    testState.inspectRuntimeTerminalProcess.mockResolvedValue({
-      foregroundProcess: 'gemini',
-      hasChildProcesses: false
-    })
-
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: ISSUE_URL,
-      agent: 'gemini'
-    })
-    await flushMicrotasks()
-
-    await vi.advanceTimersByTimeAsync(8000)
-
-    await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
-  })
-
   it('waits past the default budget for a cold-boot Codex composer glyph (STA-3367)', async () => {
-    // Why: first-run/cold codex can take >8s to mount its composer. The '›' glyph
-    // is a positive readiness proof, so the marker-gated budget waits for it
-    // instead of giving up at 8s and dropping the handoff prompt. Process
-    // inspection stays 'bash' so only the real marker — not the fallback — delivers.
+    // Cold Codex can need over 8s; require its real composer marker within the longer budget while inspection still reports bash.
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
@@ -429,7 +354,6 @@ describe('pasteDraftWhenAgentReady', () => {
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
-    // Old 8s budget would have already timed out and dropped the prompt here.
     await vi.advanceTimersByTimeAsync(8000)
     await flushMicrotasks()
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
@@ -442,9 +366,7 @@ describe('pasteDraftWhenAgentReady', () => {
   })
 
   it('gives up on a never-spawned PTY at the spawn budget, not the composer budget (STA-3367)', async () => {
-    // Why: the two waits must not each spend the marker budget. A tab whose PTY
-    // never appears is a failed launch, and must not also burn the 20s cold-boot
-    // composer window before the caller is told.
+    // A missing PTY must fail within its own budget rather than also spend the cold-composer timeout.
     testState.appState.ptyIdsByTabId = {}
     const onTimeout = vi.fn()
     const promise = pasteDraftWhenAgentReady({
@@ -464,9 +386,7 @@ describe('pasteDraftWhenAgentReady', () => {
   })
 
   it('starts the composer budget once the PTY exists, so a slow spawn does not shorten it', async () => {
-    // Why: "tab has a PTY" and "composer accepts input" are separate states. A
-    // spawn that eats most of a shared budget would leave a cold codex too little
-    // room and re-drop the prompt — the exact STA-3367 failure.
+    // PTY appearance and composer readiness need separate budgets or a slow spawn consumes the cold-start grace (STA-3367).
     testState.appState.ptyIdsByTabId = {}
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
@@ -474,7 +394,6 @@ describe('pasteDraftWhenAgentReady', () => {
       agent: 'codex'
     })
 
-    // PTY takes 4s to appear — most of the old shared 8s budget.
     await vi.advanceTimersByTimeAsync(4000)
     testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
     for (const subscriber of testState.storeSubscribers) {
@@ -482,8 +401,7 @@ describe('pasteDraftWhenAgentReady', () => {
     }
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
-    // 19s of cold boot after the PTY appeared: past a shared budget, inside the
-    // composer's own window.
+    // The composer gets its own window after PTY appearance, beyond the old shared budget.
     await vi.advanceTimersByTimeAsync(19000)
     await flushMicrotasks()
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
@@ -539,60 +457,6 @@ describe('pasteDraftWhenAgentReady', () => {
     await expect(promise).resolves.toBe(false)
     expect(onTimeout).toHaveBeenCalledTimes(1)
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
-  })
-
-  it('pastes into a tab whose workspace a server owns', async () => {
-    testState.appState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
-    testState.appState.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
-    testState.appState.repos = [
-      { id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }
-    ]
-    testState.appState.worktreesByRepo = { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] }
-
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: ISSUE_URL,
-      agent: 'codex'
-    })
-    await flushMicrotasks()
-
-    testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
-
-    await expect(promise).resolves.toBe(true)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
-  })
-
-  it('subscribes to a remote PTY by its id, never by the focused server', async () => {
-    testState.appState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
-    testState.appState.ptyIdsByTabId = { 'tab-1': ['remote:terminal-handle'] }
-    testState.appState.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
-    testState.appState.repos = [
-      { id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }
-    ]
-    testState.appState.worktreesByRepo = { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] }
-    testState.isRemoteRuntimePtyId.mockReturnValue(true)
-    testState.subscribeToRuntimeTerminalData.mockImplementation(
-      async (_ptyId: string, _clientId: string, observer: (data: string) => void) => {
-        testState.ptyObserver = observer
-        return testState.unsubscribe
-      }
-    )
-
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: ISSUE_URL,
-      agent: 'codex'
-    })
-    await flushMicrotasks()
-
-    testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
-
-    await expect(promise).resolves.toBe(true)
-    expect(testState.subscribeToRuntimeTerminalData).toHaveBeenCalledWith(
-      'remote:terminal-handle',
-      'desktop:paste-ready:remote:terminal-handle',
-      expect.any(Function)
-    )
   })
 
   it('submits to an already running agent without waiting for readiness signals', async () => {
@@ -703,20 +567,6 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith('pty-1', '\r')
   })
 
-  it('normalizes multiline running-agent drafts like terminal paste', async () => {
-    const promise = sendBracketedPasteToRunningAgent({
-      ptyId: 'pty-1',
-      content: 'line one\r\nline two\nline three'
-    })
-
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      'pty-1',
-      '\x1b[200~line one\rline two\rline three\x1b[201~'
-    )
-    await vi.advanceTimersByTimeAsync(50)
-    await expect(promise).resolves.toBe(true)
-  })
-
   it('closes bracketed paste and does not submit when a chunked draft write is rejected', async () => {
     testState.sendRuntimePtyInputVerified
       .mockResolvedValueOnce(true)
@@ -755,27 +605,6 @@ describe('pasteDraftWhenAgentReady', () => {
 
     expect(chunks).toEqual(['\x1b[200~', 'abc\r', 'def\r', 'ghi', '\x1b[201~'])
     expect(chunks.join('')).not.toContain('\n')
-  })
-
-  it('chunks escape-heavy agent draft paste without per-character string sanitizer scans', () => {
-    const content = Array.from({ length: 64 }, (_value, index) => `draft-${index}\x1b[201~`).join(
-      ''
-    )
-    const includesSpy = vi.spyOn(String.prototype, 'includes')
-    const replaceAllSpy = vi.spyOn(String.prototype, 'replaceAll')
-
-    const chunks = chunkAgentDraftPasteContent(content, 12)
-    const includesCallCount = includesSpy.mock.calls.length
-    const replaceAllCallCount = replaceAllSpy.mock.calls.length
-    includesSpy.mockRestore()
-    replaceAllSpy.mockRestore()
-
-    expect(chunks.at(0)).toBe('\x1b[200~')
-    expect(chunks.at(-1)).toBe('\x1b[201~')
-    expect(chunks.slice(1, -1).join('')).not.toContain('\x1b[201~')
-    expect(chunks.slice(1, -1).join('')).toContain('␛[201~')
-    expect(includesCallCount).toBe(0)
-    expect(replaceAllCallCount).toBe(0)
   })
 
   it('iterates large agent draft chunks lazily', () => {

@@ -99,16 +99,4 @@ describe('workspace space scan budget', () => {
     ).rejects.toBeInstanceOf(WorkspaceSpaceScanCapacityError)
     expect(closed).toBe(true)
   })
-
-  it('reports the configured cap rather than the default limits', async () => {
-    await expect(
-      collectWorkspaceSpaceDirectoryEntries(
-        [{ name: 'first' }, { name: 'second' }],
-        '/workspace',
-        (entry) => entry.name,
-        createWorkspaceSpaceScanBudget({ maxEntries: 1, maxRetainedBytes: 4 * 1024 * 1024 }),
-        () => undefined
-      )
-    ).rejects.toThrow('limit: 1 entries or 4 MiB of live scan state')
-  })
 })

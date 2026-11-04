@@ -27,8 +27,7 @@ describe('terminal scrollback policy', () => {
   })
 
   it('scales the output backlog cap with scrollback rows above a 2 MB floor', () => {
-    // Default and small scrollbacks stay on the floor; large scrollbacks get
-    // proportionally more so the cap never drops lines scrollback would keep.
+    // Large scrollback raises the cap so backlog drops do not discard history the setting would retain.
     expect(terminalOutputBacklogCapChars(undefined)).toBe(TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS)
     expect(terminalOutputBacklogCapChars(5_000)).toBe(TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS)
     expect(terminalOutputBacklogCapChars('garbage')).toBe(TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS)

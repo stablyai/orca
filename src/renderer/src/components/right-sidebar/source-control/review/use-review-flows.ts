@@ -5,10 +5,6 @@ import { useSourceControlHostedReviewCreation } from './use-hosted-review-creati
 import { useSourceControlHostedReviewEligibility } from './use-hosted-review-eligibility'
 import { useSourceControlPullRequestGeneration } from './use-pull-request-generation'
 
-/**
- * The hand-driven review path: draft the fields, keep eligibility fresh while they are edited, and
- * create the review on the host.
- */
 export function useSourceControlReviewFlows(foundation: SourceControlPanelFoundation) {
   const {
     activeRepo,
@@ -18,6 +14,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     activeRepoPath,
     activeRepoTarget,
     activeWorktreeId,
+    activeWorktree,
     allocatePullRequestGenerationRequestId,
     branchName,
     createHostedReview,
@@ -102,6 +99,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     activeRepo,
     activeRepoTarget,
     activeWorktreeId,
+    activeWorktree,
     branchName,
     effectiveBaseRef,
     fetchHostedReviewForBranch,
@@ -170,9 +168,11 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     prBase,
     prBody,
     prDraft,
+    prFieldRevisions: createReviewComposer.prFieldRevisions,
     prFieldsAreSeedPlaceholders: createReviewComposer.prFieldsAreSeedPlaceholders,
     prGenerating,
     prTitle,
+    pullRequestFieldsInitialized: createReviewComposer.pullRequestFieldsInitialized,
     resolvedPrCreationDefaults,
     setCreatePrInFlightByWorktree,
     setCreatePrIntentNoticeForWorktree,

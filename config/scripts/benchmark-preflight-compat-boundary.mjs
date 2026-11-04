@@ -1,3 +1,4 @@
+import { readPinnedBunVersion } from './pinned-bun-executable.mjs'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -38,8 +39,8 @@ async function requireSuccess(program, args, label) {
   return result
 }
 report.bunVersion = (await requireSuccess(bun, ['--version'], 'compat-bun-version')).stdout.trim()
-if (report.bunVersion !== '1.4.3') {
-  throw new Error('Pin Bun 1.4.3')
+if (report.bunVersion !== readPinnedBunVersion(root)) {
+  throw new Error(`Pin Bun ${readPinnedBunVersion(root)}`)
 }
 report.baselineSha = (
   await requireSuccess('git', ['rev-parse', baselineRef], 'compat-baseline-sha')

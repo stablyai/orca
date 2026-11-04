@@ -1,28 +1,25 @@
-/**
- * Leases on extracted AppImage generations. A process running from a generation records its pid,
- * Linux start ticks and boot id under `<cache>/leases`, outside every deletable root, so a pruner
- * can prove the generation idle before deleting it. Pre-lease builds never read these files.
- */
+// Process identities in <cache>/leases survive payload deletion; pre-lease builds ignore them.
 import { randomUUID } from 'node:crypto'
 import { readFileSync, unlinkSync } from 'node:fs'
 import { lstat, mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import type { ProcessLivenessVerdict } from '../daemon/daemon-incarnation-evidence-types'
 import { parseLinuxStartTicks, readBootIdentity } from '../agent-hooks/managed-hook-owner-identity'
+import {
+  resolveAppImageGenerationOfExecutable,
+  type AppImageGenerationLocation
+} from '../../shared/appimage-cache-identity'
 import { isAppImageCacheKey } from './appimage-cache-layout'
 
 const LEASE_DIRECTORY_NAME = 'leases'
 const LEASE_SUFFIX = '.json'
-const LINUX_EXECUTABLE_NAME = 'orca-ide'
 // A lease is written by temp-and-rename, so an unreadable one is foreign or damaged, not torn.
 const UNREADABLE_LEASE_GRACE_MS = 60_000
 
-export type AppImageGenerationLocation = {
-  cacheRootPath: string
-  namespaceKey: string
-  generationKey: string
-  rootPath: string
-}
+export {
+  resolveAppImageGenerationOfExecutable,
+  type AppImageGenerationLocation
+} from '../../shared/appimage-cache-identity'
 
 type LeaseRecord = { pid: number; linuxStartTicks: string; bootId: string }
 
@@ -34,23 +31,6 @@ export type ProcessStartTicksRead =
 export type AppImageLeaseProcessReader = {
   readStartTicks(pid: number): ProcessStartTicksRead
   readBootId(): Promise<string | undefined>
-}
-
-export function resolveAppImageGenerationOfExecutable(
-  execPath: string
-): AppImageGenerationLocation | null {
-  const rootPath = dirname(resolve(execPath))
-  const namespacePath = dirname(rootPath)
-  const generationKey = basename(rootPath)
-  const namespaceKey = basename(namespacePath)
-  if (
-    basename(execPath) !== LINUX_EXECUTABLE_NAME ||
-    !isAppImageCacheKey(generationKey) ||
-    !isAppImageCacheKey(namespaceKey)
-  ) {
-    return null
-  }
-  return { cacheRootPath: dirname(namespacePath), namespaceKey, generationKey, rootPath }
 }
 
 export function resolveAppImageGenerationOfRoot(
@@ -179,7 +159,6 @@ export async function inspectAppImageGenerationLeases(
     ) {
       return { status: 'live' }
     }
-    // The holder exited or its pid was recycled: the lease no longer protects anything.
     await unlink(leasePath).catch(() => {})
   }
   return verdict

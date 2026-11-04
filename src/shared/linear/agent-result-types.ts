@@ -47,8 +47,7 @@ export type LinearIssueCommentNode = {
   id: string
   body: string
   bodyTruncated: boolean
-  // Extracted from the full comment body before truncation so media past the
-  // body cap is not lost.
+  // Extract before truncation so media beyond the body cap survives.
   inlineMedia?: LinearInlineMedia[]
   createdAt?: string | null
   updatedAt?: string | null

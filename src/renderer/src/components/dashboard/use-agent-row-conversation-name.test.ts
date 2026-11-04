@@ -14,9 +14,7 @@ const storeState = vi.hoisted(() => {
   return { current }
 })
 
-// Why: the mocked selector makes the hook a pure function, so tests can call it
-// directly without mounting a component. The pane maps default to empty so each
-// test declares only the ones it exercises.
+// Run selectors directly against declared slices so conversation-name cases need no mounted component.
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: AppState) => unknown) =>
     selector({
@@ -222,8 +220,7 @@ describe('useAgentRowConversationName', () => {
   it('prefers the live store tab over the stale row snapshot', () => {
     storeState.current = {
       settings: {},
-      // Why: row data patches entries in place and keeps the creation-time tab
-      // snapshot; a rename landing after that must still surface.
+      // Retained row tabs are creation-time snapshots; a later live rename must still surface.
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', worktreeId: 'wt-1', customTitle: 'Renamed later', title: '' }]
       }
@@ -231,8 +228,6 @@ describe('useAgentRowConversationName', () => {
     expect(useAgentRowConversationName(makeAgent())).toBe('Renamed later')
   })
 
-  // STA-2811 / #11069: both panes of a split tab showed one name that flipped to
-  // whichever pane was clicked last, because tab.title tracks only the focused pane.
   describe('split panes', () => {
     const LEAF_A = '11111111-1111-4111-8111-111111111111'
     const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -247,8 +242,7 @@ describe('useAgentRowConversationName', () => {
       expandedLeafId: null
     }
 
-    // Why: pty-connection syncs the FOCUSED pane's title onto the tab, so the tab
-    // snapshot every row carries names one pane and mislabels the other.
+    // The tab title tracks only the focused pane; a split row must resolve its own title.
     function splitRow(leafId: string, focusedPaneTitle: string): DashboardAgentRow {
       return makeAgent({
         paneKey: `tab-1:${leafId}`,

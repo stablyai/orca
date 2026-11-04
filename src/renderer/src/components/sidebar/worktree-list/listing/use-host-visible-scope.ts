@@ -7,15 +7,14 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { SidebarWorktreeFilters } from './use-filters'
-import { filterFolderWorkspacesFromOtherDevices } from '../../workspace-creator-visibility'
+import { filterFolderWorkspacesFromOtherDevices } from '../../../../../../shared/workspace-creator-visibility'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
-} from './host-filtering'
+} from '../../../../../../shared/sidebar-list/host-filtering'
 
-// Narrows repos, project groups, and folder workspaces to the hosts (and devices) the
-// current host filter admits.
+// Apply host/device scope consistently to repos, project groups and folder workspaces.
 export function useSidebarHostVisibleScope(args: {
   filterState: SidebarWorktreeFilters['filterState']
   defaultHostId: ExecutionHostId

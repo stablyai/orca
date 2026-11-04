@@ -14,13 +14,16 @@ import { useAppStore } from '../../store'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
-/** The chat's find: open state and query live with the chat, so a reopen keeps the last query. */
+// Keep open state/query with the retained chat so reopen preserves its last search.
 export type NativeChatFind = {
   isOpen: boolean
   query: string
   setQuery: (query: string) => void
   close: () => void
+  /** Opens the bar, or refocuses it when open; absent where the chat's find does not run. */
+  open: ((returnFocusTo?: Element | null) => void) | undefined
   /** For the chat root's onKeyDownCapture: an Escape while open closes the bar. */
   onKeyDownCapture: (event: ReactKeyboardEvent) => void
   rootRef: RefObject<HTMLDivElement | null>
@@ -30,7 +33,6 @@ export type NativeChatFind = {
   revealMatch: (match: Range) => void
 }
 
-/** A composer whose suggestion list is open spends its own Escape closing that list. */
 function ownsEscape(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
@@ -44,7 +46,6 @@ function focusInput(input: HTMLInputElement): void {
   input.select()
 }
 
-/** Mod+F inside the focused chat opens find over its transcript. */
 export function useNativeChatFind(
   enabled: boolean,
   rootRef: RefObject<HTMLDivElement | null>,
@@ -73,8 +74,7 @@ export function useNativeChatFind(
       previous?.isConnected && root.contains(previous) && !previous.closest('[hidden], [inert]')
         ? previous
         : null
-    // A shown prompt card that wants focus takes it, as it would have with the bar closed (one that
-    // arrived while the bar held focus included), unless focus came from a control inside it.
+    // Restore an eligible prompt card, including one arriving during find, unless returning to a control inside it.
     if (focusNativeChatPromptCard(root, usable)) {
       return
     }
@@ -86,6 +86,19 @@ export function useNativeChatFind(
       root.focus({ preventScroll: true })
     }
   }, [composerRef, rootRef])
+
+  const open = useCallback(
+    (returnFocusTo = rootRef.current?.ownerDocument.activeElement) => {
+      // A mounted input means the bar is open: refocus it, keeping the current match.
+      if (inputRef.current) {
+        focusInput(inputRef.current)
+        return
+      }
+      focusBeforeOpenRef.current = returnFocusTo instanceof HTMLElement ? returnFocusTo : null
+      setIsOpen(true)
+    },
+    [rootRef]
+  )
 
   useEffect(() => {
     // Out of scope in the web client: the browser's own find keeps Mod+F there.
@@ -103,25 +116,15 @@ export function useNativeChatFind(
       }
       e.preventDefault()
       e.stopPropagation()
-      if (e.repeat) {
-        return
+      if (!e.repeat) {
+        open()
       }
-      // A mounted input means the bar is open: refocus it, keeping the current match.
-      if (inputRef.current) {
-        focusInput(inputRef.current)
-        return
-      }
-      const active = root.ownerDocument.activeElement
-      focusBeforeOpenRef.current = active instanceof HTMLElement ? active : null
-      setIsOpen(true)
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [enabled, rootRef])
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
+  }, [enabled, open, rootRef])
 
-  // Why React capture on the root: it runs before the composer's own onKeyDownCapture (outer
-  // first), so the composer never interrupts the turn; layers that close on Escape at the
-  // document (Radix popovers, the context card) still claim it earlier.
+  // Root capture precedes composer interruption; document-level layers still claim Escape before find.
   const onKeyDownCapture = useCallback(
     (event: ReactKeyboardEvent) => {
       if (
@@ -155,6 +158,7 @@ export function useNativeChatFind(
     query,
     setQuery,
     close,
+    open: isWebClientLocation() ? undefined : open,
     onKeyDownCapture,
     rootRef,
     barRef,

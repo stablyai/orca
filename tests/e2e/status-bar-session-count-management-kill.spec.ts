@@ -1,20 +1,4 @@
-/**
- * E2E regression for #8372 — the status-bar CLI session count froze after a Manage Sessions kill.
- *
- * `pty:management:killOne` tears a session down with `adapter.shutdown()`. The daemon only fans
- * `exit` to the clients attached to that session, so when the killed session belongs to *another*
- * daemon client (a previous app generation, `orca serve`, a second Orca client) this window's main
- * process never emits `pty:exit`. The status-bar chip is an event-sourced cache: with no lifecycle
- * event and no interval it kept painting the pre-kill count until the Resource Manager popover was
- * opened — and opening the popover refreshes, which is exactly why this spec never opens it.
- *
- * The spec creates that foreign session the way the daemon protocol really does it: a second
- * DaemonClient connected to the app's own daemon socket. The app then sees three live sessions
- * (its two panes plus the foreign one), the third of which Manage Sessions lists as unbound.
- *
- * Visible evidence: the `>_ N` number in the status bar. It must go 3 -> 2 after the row kill,
- * with the popover closed the whole time.
- */
+// Resource counts stay unknown until Resources is opened; Manage Sessions must not invent an observation.
 
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -32,20 +16,7 @@ import {
 
 /** The closed status-bar chip. Its accessible name carries the same count it paints. */
 function resourceChip(page: Page) {
-  return page.getByRole('button', { name: /^Resource Manager, \d+ terminal session/ })
-}
-
-/** The count as the chip's accessible name reports it. */
-async function readChipAriaCount(page: Page): Promise<number | null> {
-  const label = await resourceChip(page).getAttribute('aria-label')
-  const match = /(\d+) terminal session/.exec(label ?? '')
-  return match ? Number(match[1]) : null
-}
-
-/** The count as a human reads it off the chip: the digits next to the terminal glyph. */
-async function readChipVisibleCount(page: Page): Promise<string | null> {
-  const text = await resourceChip(page).locator('span.tabular-nums').last().textContent()
-  return text?.trim() ?? null
+  return page.getByRole('button', { name: /^Resource Manager, / })
 }
 
 async function listDaemonSessionIds(page: Page): Promise<string[]> {
@@ -72,7 +43,7 @@ async function waitForStableSessionIds(page: Page, expected: number): Promise<vo
 }
 
 test.describe('Status bar CLI session count', () => {
-  test('drops after Manage Sessions kills a foreign daemon session, popover never opened', async ({
+  test('keeps an unobserved count unknown after Manage Sessions kills a foreign daemon session', async ({
     orcaPage: page,
     electronApp
   }) => {
@@ -94,8 +65,7 @@ test.describe('Status bar CLI session count', () => {
     )
     await waitForPaneCount(page, 1, 30_000)
 
-    // A second daemon client, connected to the app's own daemon exactly as another Orca client
-    // would be. Its session is live and listed, but this app never attaches to it.
+    // Create through a second daemon connection so this app lists the foreign session without attaching.
     const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
     const runtimeDir = path.join(userDataDir, 'daemon')
     const foreignClient = new DaemonClient({
@@ -112,14 +82,11 @@ test.describe('Status bar CLI session count', () => {
       )
       expect(created.isNew, 'the foreign daemon session was not created').toBe(true)
 
-      // Split after the foreign session exists: the new pane's spawn event is the app's one
-      // natural inventory re-read, so the chip starts out agreeing with the daemon.
+      // Keep two attached panes alive alongside the foreign session throughout the kill.
       await splitActiveTerminalPane(page, 'vertical')
       await waitForPaneCount(page, 2, 30_000)
 
-      // Both panes must be fully bound and settled before Settings unmounts the terminal view:
-      // parking a still-spawning pane tears its PTY down, which would move the count for a
-      // reason that has nothing to do with the kill under test.
+      // Wait for both panes to bind before Settings unmounts; killing a still-spawning pane would change counts independently.
       await waitForPaneIdentitySnapshot(page, 2)
       await waitForStableSessionIds(page, 3)
 
@@ -130,18 +97,11 @@ test.describe('Status bar CLI session count', () => {
       const baseline = baselineIds.length
       expect(baseline, 'expected the two panes plus the foreign session').toBe(3)
 
-      // Baseline: the chip must already agree with the daemon before the kill, otherwise a
-      // post-kill mismatch would prove nothing about invalidation.
-      await expect(resourceChip(page)).toBeVisible()
-      await expect
-        .poll(async () => readChipAriaCount(page), {
-          timeout: 30_000,
-          message: 'The status-bar chip never caught up with the live session count'
-        })
-        .toBe(baseline)
-      expect(await readChipVisibleCount(page)).toMatch(new RegExp(`^${baseline}\\b`))
+      await expect(resourceChip(page)).toHaveAccessibleName(
+        'Resource Manager, terminal count unavailable'
+      )
+      await expect(resourceChip(page)).toHaveAttribute('aria-expanded', 'false')
 
-      // Real UI kill path: Settings > Terminal > Manage Sessions, row kill + confirm.
       await page.evaluate(() => {
         const state = window.__store?.getState()
         if (!state) {
@@ -159,7 +119,6 @@ test.describe('Status bar CLI session count', () => {
       await expect(confirmButton).toBeVisible()
       await confirmButton.click()
 
-      // The kill itself must succeed identically on both branches; only the chip differs.
       await expect
         .poll(async () => (await listDaemonSessionIds(page)).includes(foreignSessionId), {
           timeout: 30_000,
@@ -167,22 +126,11 @@ test.describe('Status bar CLI session count', () => {
         })
         .toBe(false)
 
-      // Guard the whole point of the bug: the popover refreshes on open, so it must stay closed.
-      await expect(page.locator('[data-radix-popper-content-wrapper]')).toHaveCount(0)
-
-      // The regression: with no pty:exit and no invalidation the closed chip keeps the stale count.
-      await expect
-        .poll(async () => readChipAriaCount(page), {
-          timeout: 15_000,
-          message: `The status-bar chip stayed at the pre-kill count instead of dropping to ${baseline - 1}`
-        })
-        .toBe(baseline - 1)
-      expect(
-        await readChipVisibleCount(page),
-        'The number painted on the chip did not follow its accessible name'
-      ).toMatch(new RegExp(`^${baseline - 1}\\b`))
-
-      await expect(page.locator('[data-radix-popper-content-wrapper]')).toHaveCount(0)
+      await waitForStableSessionIds(page, baseline - 1)
+      await expect(resourceChip(page)).toHaveAccessibleName(
+        'Resource Manager, terminal count unavailable'
+      )
+      await expect(resourceChip(page)).toHaveAttribute('aria-expanded', 'false')
     } finally {
       await foreignClient
         .request('kill', { sessionId: foreignSessionId, immediate: true })

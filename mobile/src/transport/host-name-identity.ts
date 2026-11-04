@@ -1,12 +1,7 @@
 import { GENERATED_HOST_NAME_PATTERN, getNextHostNameFromHosts } from './host-names'
 import type { StoredHostProfile } from './types'
 
-/**
- * The rules that keep a stored host's `name` equal to
- * `personalName ?? lastKnownMachineName ?? "Host N"`. Pure: host-store applies them inside its
- * serialized mutation pass, so the resolved name and its sources are always written together.
- * One exception: see `withReportedDescriptor`.
- */
+// Resolve name identity inside host-store’s serialized mutation so display name and sources commit together; see withReportedDescriptor’s omission exception.
 
 type HostNameIdentity = Pick<
   StoredHostProfile,
@@ -18,13 +13,7 @@ export type ReportedHostDescriptor = {
   platform: NodeJS.Platform | null
 }
 
-/**
- * Classifies a record written before the name-identity fields existed. Legacy storage held one
- * `name` that was either the generated "Host N" or typed by the user, and only the typed one is an
- * override. Safe to re-run on every parse: any record a current build has written carries at least
- * one of the three fields (clearing an override either restores the machine name — a field — or
- * keeps a generated "Host N", which this pattern skips), so only true legacy records are classified.
- */
+// Classify only legacy names with no identity fields; current records already preserve explicit overrides or generated names.
 export function classifyLegacyHostName<T extends HostNameIdentity>(profile: T): T {
   if (
     profile.personalName !== undefined ||
@@ -37,11 +26,7 @@ export function classifyLegacyHostName<T extends HostNameIdentity>(profile: T): 
   return { ...profile, personalName: profile.name }
 }
 
-/**
- * Why: a save rebuilds the record from a pairing offer (no name identity) or from a connection's
- * profile snapshot (identity as of connect). Only the stored record reflects later renames and
- * descriptor reads, so it keeps the name identity; the save supplies everything else.
- */
+// Preserve stored identity during save because incoming pairing/connection snapshots may predate renames and descriptor reads.
 export function mergeHostNameIdentity(
   incoming: StoredHostProfile,
   existing: StoredHostProfile
@@ -79,12 +64,8 @@ export function withPersonalName(
   return { ...rest, name: current.lastKnownMachineName ?? fallback }
 }
 
-/**
- * Applies what the desktop reported; returns `current` itself when nothing changed. An answered
- * status is authoritative, so an omitted half clears its last-known value, and an unoverridden
- * row adopts a newly reported machine name as its display name.
- * Exception: an OS reported without a machine name keeps the previously adopted name as `name`.
- */
+// Readable status authoritatively clears omitted descriptor fields and updates unoverridden names.
+// OS-only reports retain the adopted display name even when the last-known machine name clears.
 export function withReportedDescriptor(
   current: StoredHostProfile,
   descriptor: ReportedHostDescriptor

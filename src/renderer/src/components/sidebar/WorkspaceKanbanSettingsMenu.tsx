@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { SettingsSwitch } from '../settings/SettingsFormControls'
+import { SettingsSwitch } from '../settings/form-controls/SettingsFormControls'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import WorkspaceStatusAppearancePopover from './WorkspaceStatusAppearancePopover'
@@ -165,7 +165,7 @@ export default function WorkspaceKanbanSettingsMenu({
                     disabled={index === workspaceStatuses.length - 1}
                     onClick={() => onMoveStatus(status.id, 1)}
                     aria-label={translate(
-                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.b45b350eb0',
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.moveStatusRight',
                       'Move {{value0}} right',
                       { value0: status.label }
                     )}

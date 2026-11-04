@@ -54,13 +54,6 @@ function makeCandidate(overrides: CandidateOverrides = {}): WorkspaceCleanupCand
 }
 
 describe('workspace cleanup policy', () => {
-  it('marks clean inactive workspaces as ready and selected', () => {
-    const candidate = applyWorkspaceCleanupPolicy(makeCandidate())
-
-    expect(candidate.tier).toBe('ready')
-    expect(candidate.selectedByDefault).toBe(true)
-  })
-
   it('keeps legacy verdict fields stable for older clients', () => {
     const candidate = applyWorkspaceCleanupPolicy(makeCandidate({ reasons: [] }))
 

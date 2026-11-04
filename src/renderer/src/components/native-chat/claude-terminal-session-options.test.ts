@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
 
-// Captured from a live `claude` 2.1.220 startup frame by replaying the PTY
-// bytes through @xterm/headless and calling serializeAddon.serialize({
-// scrollback: 0 }) — byte-for-byte what TerminalPane hands the scraper. The two
-// widths matter: at 100 columns the frame keeps its version and prints billing
-// on the model row, at 60 it drops the version and wraps billing to its own row.
+// Captured Claude 2.1.220 xterm/headless screen serializations: narrow frames omit version and wrap billing.
 
 const FRESH_SESSION_100_COLS = [
   '\u001b[?1049h\u001b[H\r',
@@ -123,7 +119,6 @@ const EFFORT = {
 
 describe('Claude terminal session option detection', () => {
   it('reads the model from a real 100-column startup frame', () => {
-    // The descriptor sits eight rows under the version, below the welcome art.
     expect(readClaudeSessionOptionsFromTerminalScreen(FRESH_SESSION_100_COLS)).toEqual({
       model: 'fable',
       effort: 'high'
@@ -138,9 +133,7 @@ describe('Claude terminal session option detection', () => {
   })
 
   it('reads a real narrow frame whose option-less model carries no metadata', () => {
-    // Why: `Haiku 4.5` has no effort control and its billing wrapped to the next
-    // row, so nothing marks the row as a model — only its position above the
-    // working directory does.
+    // Without effort or same-line billing, the working directory is the remaining model-row landmark.
     expect(readClaudeSessionOptionsFromTerminalScreen(OPTION_LESS_MODEL_60_COLS)).toEqual({
       model: 'haiku'
     })
@@ -159,10 +152,7 @@ describe('Claude terminal session option detection', () => {
   })
 
   it('reports nothing rather than release-notes prose when the model row is bare', () => {
-    // Why: a custom model with its billing wrapped away carries no descriptor
-    // metadata, so nothing in the frame identifies it. The panel shares rows
-    // with the art and its borders collide (`││`) — reading past them would
-    // make panel prose win the search and report a sentence as the model.
+    // A bare custom model has no metadata; adjacent release-panel prose must not win through colliding borders.
     const screen = [
       '╭─── Claude Codev2.1.220 ───────────────────────╮',
       '││Runs faster · uses fewer tokens│',
@@ -197,8 +187,7 @@ describe('Claude terminal session option detection', () => {
     })
   })
 
-  // The exact catalog `claude -p` list_models returns on CLI 2.1.220: note the
-  // host offers no plain `opus`, and `sonnet` and `sonnet[1m]` are distinct.
+  // Actual CLI 2.1.220 catalog: opus has only a 1M variant, while sonnet offers both context sizes.
   const DISCOVERED = [
     { id: 'opus[1m]', label: 'Opus (1M context)', options: [EFFORT] },
     { id: 'sonnet', label: 'Sonnet', options: [EFFORT] },
@@ -212,8 +201,6 @@ describe('Claude terminal session option detection', () => {
   }
 
   it('resolves to the host id the picker lists, not the seed family', () => {
-    // Why: `opus` is not offered on this host, so reporting it would select a
-    // row the picker has to invent.
     expect(
       readClaudeSessionOptionsFromTerminalScreen(
         frame('Opus 5 (1M context) with high effort · API Usage Billing'),
@@ -232,8 +219,7 @@ describe('Claude terminal session option detection', () => {
   })
 
   it('keeps the plain family when the frame names no variant', () => {
-    // Why: `Sonnet 5` must not be captured by the 1M-context row just because
-    // that row's label happens to start with the same two tokens.
+    // A plain family name must not match a context variant merely through shared leading tokens.
     expect(
       readClaudeSessionOptionsFromTerminalScreen(
         frame('Sonnet 5 with medium effort · API Usage Billing'),
@@ -296,7 +282,6 @@ describe('Claude terminal session option detection', () => {
   })
 
   it('matches headers from newer CLIs where the alias resolves to another version', () => {
-    // Why: family labels must keep matching as `opus` moves across releases.
     const screen =
       'Claude Code v2.1.220\r\n' +
       'Opus 5 (1M context) with xhigh effort · API Usage Billing\r\n' +
@@ -335,8 +320,7 @@ describe('Claude terminal session option detection', () => {
   })
 
   it('keeps a custom model whose name only starts with a catalog family', () => {
-    // Why: the family must match as a whole leading word, not a bare prefix, or
-    // every vendor slug built off a family name would be claimed as that model.
+    // Require a whole leading family word so vendor slugs cannot impersonate catalog families.
     const screen = 'Claude Code v2.1.211\r\nopus-internal-v3 · API Usage Billing\r\n~/repo'
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({

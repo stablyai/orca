@@ -1,3 +1,7 @@
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../../shared/text-generation-failure-copy'
 import { ipcMain } from 'electron'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
@@ -8,12 +12,12 @@ import {
   type GenerateCommitMessageResult
 } from '../../text-generation/commit-message-text-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/commit-message-host-key'
-import { getStagedCommitContext } from '../../git/status'
+import { getStagedCommitContext } from '../../git/source-control/staged-commit-context'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { withLinkedIssueDraftContext } from '../../../shared/source-control-ai-action-variables'
-import { resolveSourceControlAiLinkedIssue } from '../source-control-ai-linked-issue'
+import { resolveSourceControlAiLinkedIssue } from '../source-control/source-control-ai-linked-issue'
 import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import {
@@ -59,7 +63,11 @@ export function registerFilesystemGitCommitGenerationHandlers(
             await getRepoForSourceControlAi(store, args)
           )
       if (!resolvedSettings.ok) {
-        return { success: false, error: resolvedSettings.error }
+        return {
+          success: false,
+          error: resolvedSettings.error,
+          ...textGenerationFailureCodeFields(resolvedSettings)
+        }
       }
       if (args.connectionId) {
         return { success: false, error: SSH_HOST_NOT_SERVED_MESSAGE }
@@ -80,11 +88,11 @@ export function registerFilesystemGitCommitGenerationHandlers(
         console.error('[filesystem] Failed to read staged commit context:', error)
         return {
           success: false,
-          error: 'Failed to read staged changes.'
+          ...textGenerationFailure('stagedChangesReadFailed')
         }
       }
       if (!context) {
-        return { success: false, error: 'No staged changes to summarize.' }
+        return { success: false, ...textGenerationFailure('noStagedChanges') }
       }
       context = withLinkedIssueDraftContext(
         context,

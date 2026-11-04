@@ -1,21 +1,11 @@
 import { setTimeout } from 'node:timers/promises'
 import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 
 const RUNTIME_UPLOAD_SWEEP_ATTEMPTS = 2
 const RUNTIME_UPLOAD_SWEEP_SETTLE_MS = 250
 
-/**
- * Sweep an abandoned upload temp path after an abort.
- *
- * Aborting rejects the in-flight chunk locally, but the host may still apply
- * that append — and appends open with `flag: 'a'`, which recreates the file a
- * delete just removed. Slices are strictly sequential, so at most one append
- * can be outstanding: a second pass after it has had time to land is enough.
- *
- * Best-effort throughout. The runtime may be why the upload failed, and a
- * failed cleanup of a hidden temp file is not actionable.
- */
+/** Sweep twice: one in-flight append can recreate a deleted temp file; sequential slices bound this to one late write. */
 export async function sweepAbandonedRuntimeUploadTempPath(
   userDataPath: string,
   args: RuntimeUploadFileStreamRequest

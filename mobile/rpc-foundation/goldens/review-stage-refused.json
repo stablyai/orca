@@ -37,18 +37,16 @@
         "$rpc": "null"
       }
     },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
     "ccba3a78ab93": {
       "name": "git.discard#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.discard\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     },
     "f4ea7cb3a3d2": {
       "name": "git.discard#1",
@@ -96,7 +94,7 @@
           "sender": ["f4ea7cb3a3d2"],
           "payloads": ["ccba3a78ab93"],
           "settlements": {
-            "discard": "eb79a9b3682a"
+            "discard": "7ed3d39f0607"
           },
           "state": "36787858f78b",
           "effects": []

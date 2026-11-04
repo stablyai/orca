@@ -1,4 +1,8 @@
-import type { TuiAgent } from './tui-agent'
+import {
+  claudeBackgroundArgs,
+  claudeTextGenerationToolArgs
+} from './claude-background-run-isolation'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type {
   CommitMessageAgentSpec,
   CommitMessageModel,
@@ -30,25 +34,25 @@ export function buildPrimaryCommitMessageAgentSpecs({
   return {
     claude: {
       id: 'claude',
+      modelFlag: [{ aliases: ['--model'] }],
+      effortFlag: [{ aliases: ['--effort'] }],
       label: 'Claude',
       binary: 'claude',
-      // Why: diffs can be large and `claude -p` reads from stdin natively when no
-      // positional prompt is provided.
+      // Claude -p accepts large prompts on stdin when no positional prompt is supplied.
       promptDelivery: 'stdin',
-      buildArgs: ({ model, thinkingLevel }) => [
+      buildArgs: ({ model, thinkingLevel, strictMcp, legacyToolPolicy, userArgs }) => [
         '-p',
         '--output-format',
         'text',
         '--model',
         model,
-        '--permission-mode',
-        'plan',
-        ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
+        ...claudeTextGenerationToolArgs({ strictMcp, legacyToolPolicy }),
+        ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
+        ...claudeBackgroundArgs(strictMcp, userArgs)
       ],
+      singletonOptions: [['--model']],
       modelSource: 'dynamic',
-      // Why: the Claude CLI has no listing subcommand; one list_models control
-      // request over --print stream-json returns the /model picker catalog.
-      // Older CLIs answer with a control error and exit 0, keeping the fallback.
+      // list_models reads the picker without a listing subcommand; older CLIs exit 0 with control errors, retaining fallback models.
       modelDiscovery: {
         binary: 'claude',
         args: [...CLAUDE_MODEL_LIST_ARGS],
@@ -57,8 +61,7 @@ export function buildPrimaryCommitMessageAgentSpecs({
       },
       models: [
         {
-          // Why: Claude Code aliases track the account/provider's supported
-          // model IDs; hardcoded version IDs can be rejected by Bedrock/Vertex.
+          // Use provider/account aliases; Bedrock/Vertex may reject hardcoded version IDs.
           id: 'haiku',
           label: 'Haiku'
         },
@@ -79,17 +82,18 @@ export function buildPrimaryCommitMessageAgentSpecs({
     },
     codex: {
       id: 'codex',
+      modelFlag: [
+        { aliases: ['--model', '-m'] },
+        { aliases: ['-c', '--config'], configKey: 'model' }
+      ],
+      effortFlag: [{ aliases: ['-c', '--config'], configKey: 'model_reasoning_effort' }],
       label: 'Codex',
       binary: 'codex',
-      // Why: `codex exec` reads stdin when no prompt arg is supplied. Commit
-      // prompts include large staged diffs, so argv would exceed Windows and
-      // some SSH/POSIX command-line limits.
+      // codex exec reads stdin without prompt argv, avoiding Windows/SSH/POSIX size limits for staged diffs.
       promptDelivery: 'stdin',
       buildArgs: ({ model, thinkingLevel }) => [
         'exec',
-        // Why: commit-message generation needs text only, not a persisted agent
-        // session or workspace writes. Match the safe git-text mode used by
-        // local-first coding agents.
+        // Text generation needs no persisted session or workspace writes; use ephemeral read-only mode.
         '--ephemeral',
         '--skip-git-repo-check',
         '-s',
@@ -106,8 +110,7 @@ export function buildPrimaryCommitMessageAgentSpecs({
         args: ['debug', 'models'],
         parse: parseCodexModels
       },
-      // Why: ordered to match the official `codex` model picker — descending
-      // by version so the frontier model lands on top and legacy models trail.
+      // Match the official picker’s descending version order.
       models: [
         {
           id: 'gpt-5.6-terra',
@@ -140,10 +143,7 @@ export function buildPrimaryCommitMessageAgentSpecs({
           defaultThinkingLevel: 'low'
         },
         {
-          // Why: Codex's Spark variant accepts `model_reasoning_effort` (the
-          // CLI banner reports "reasoning effort: medium" by default); the
-          // gating that surfaces "model not supported" is on the account
-          // tier, not the effort flag.
+          // Spark accepts reasoning effort (default medium); unsupported-model refusals concern account tier, not effort.
           id: 'gpt-5.3-codex-spark',
           label: 'GPT-5.3 Codex Spark',
           thinkingLevels: OPENAI_THINKING_LEVELS,
@@ -160,10 +160,11 @@ export function buildPrimaryCommitMessageAgentSpecs({
     },
     opencode: {
       id: 'opencode',
+      modelFlag: [{ aliases: ['--model', '-m'] }],
+      effortFlag: [{ aliases: ['--variant'] }],
       label: 'OpenCode',
       binary: 'opencode',
-      // Why: Source Control AI prompts can include large staged diffs; OpenCode
-      // accepts the prompt on stdin, which avoids cross-platform argv limits.
+      // OpenCode stdin avoids cross-platform argv limits for large staged diffs.
       promptDelivery: 'stdin',
       buildArgs: ({ model, thinkingLevel }) => [
         'run',
@@ -189,6 +190,8 @@ export function buildPrimaryCommitMessageAgentSpecs({
     },
     opencode2: {
       id: 'opencode2',
+      modelFlag: [{ aliases: ['--model', '-m'] }],
+      effortFlag: [{ aliases: ['--model', '-m'], modelVariant: true }],
       label: 'OpenCode 2',
       binary: 'opencode2',
       promptDelivery: 'stdin',
@@ -217,6 +220,8 @@ export function buildPrimaryCommitMessageAgentSpecs({
     },
     pi: {
       id: 'pi',
+      modelFlag: [{ aliases: ['--model'] }],
+      effortFlag: [{ aliases: ['--thinking'] }],
       label: 'Pi',
       binary: 'pi',
       promptDelivery: 'stdin',
@@ -235,8 +240,7 @@ export function buildPrimaryCommitMessageAgentSpecs({
       modelDiscovery: { binary: 'pi', args: ['--list-models'], parse: parsePiModels },
       models: [
         {
-          // Why: the unqualified choice lets Pi use its configured provider and
-          // avoids forcing GitHub Copilot credentials during automation.
+          // Let Pi choose its configured provider instead of forcing Copilot credentials during automation.
           id: 'default',
           label: 'Config default'
         }

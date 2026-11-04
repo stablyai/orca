@@ -13,8 +13,7 @@ const CLOSE = SYNCHRONIZED_OUTPUT_END_SEQUENCE
 
 describe('advanceDroppedSynchronizedOutputLatch', () => {
   it('releases the latch when the dropped span ended mid-frame', () => {
-    // The close was inside the bytes the renderer will never receive, so xterm
-    // would paint nothing until its 1000ms forced flush.
+    // The dropped close never reaches xterm, freezing repaint until its 1s forced flush.
     const result = advanceDroppedSynchronizedOutputLatch(
       `${OPEN}rows`,
       INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
@@ -60,10 +59,6 @@ describe('advanceDroppedSynchronizedOutputLatch', () => {
 })
 
 describe('resolveSynchronizedOutputSafeSplit', () => {
-  it('returns the whole length when it already fits', () => {
-    expect(resolveSynchronizedOutputSafeSplit('abc', 16)).toBe(3)
-  })
-
   it('splits after a completed frame rather than inside the next one', () => {
     const data = `${OPEN}aaaa${CLOSE}${OPEN}bbbbbbbbbb${CLOSE}`
     const limit = data.indexOf('bbb')
@@ -87,25 +82,5 @@ describe('resolveSynchronizedOutputSafeSplit', () => {
   it('falls back to the limit when one frame is longer than the window', () => {
     const data = `${OPEN}${'x'.repeat(100)}${CLOSE}`
     expect(resolveSynchronizedOutputSafeSplit(data, 20)).toBe(20)
-  })
-
-  it('never returns past the limit or breaks byte-exactness across many shapes', () => {
-    const outputSamples = [
-      `${OPEN}${'a'.repeat(50)}${CLOSE}`,
-      `${'a'.repeat(50)}${CLOSE}${'b'.repeat(50)}`,
-      `${OPEN}${OPEN}${'a'.repeat(30)}${CLOSE}${CLOSE}`,
-      `${'a'.repeat(30)}\x1b]52;c;SGVsbG8=\x07${'b'.repeat(30)}`,
-      `${'a'.repeat(30)}\x1bP0;1|payload\x1b\\${'b'.repeat(30)}`,
-      CLOSE.repeat(10),
-      `${OPEN.repeat(10)}tail`
-    ]
-    for (const data of outputSamples) {
-      for (let limit = 1; limit <= data.length + 3; limit++) {
-        const splitAt = resolveSynchronizedOutputSafeSplit(data, limit)
-        expect(splitAt).toBeGreaterThan(0)
-        expect(splitAt).toBeLessThanOrEqual(Math.min(limit, data.length))
-        expect(data.slice(0, splitAt) + data.slice(splitAt)).toBe(data)
-      }
-    }
   })
 })

@@ -2,11 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { VerifiedCodexResumeSource } from '../codex/codex-session-resume-preparation'
 
-/**
- * Turning Codex off in the per-agent hook settings removes Orca's Codex hook
- * entry. Launch prep and session resume must read that same opt-out, or the
- * next Codex launch writes the entry straight back.
- */
+/** Launch/resume must honor the hook opt-out or they reinstall the entry just removed by settings. */
 const SYSTEM_HOME = '/home/user/.codex'
 const ACCOUNT_HOME = '/accounts/one/.codex'
 
@@ -25,7 +21,9 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => '/tmp/orca-user-data') } }))
-vi.mock('../agent-trust-presets', () => ({ markCodexProjectTrusted: vi.fn(async () => {}) }))
+vi.mock('../agent-launch/trust/agent-trust-presets', () => ({
+  markCodexProjectTrusted: vi.fn(async () => {})
+}))
 vi.mock('../codex/hook-service', () => ({
   codexHookService: {
     prepareRuntimeHomeForLaunch: mocks.prepareRuntimeHomeForLaunch,
@@ -36,12 +34,13 @@ vi.mock('../codex/hook-service', () => ({
 vi.mock('../codex/codex-hook-reconcile', () => ({
   reconcileCodexHooksForLaunch: mocks.reconcileCodexHooksForLaunch
 }))
-// Why: the real predicate, without loading every agent's hook service.
+// Keep the real predicate without importing every agent hook service.
 vi.mock(
   '../agent-hooks/managed-agent-hook-controls',
-  async () => await import('../../shared/agent-status-hooks-setting')
+  async () =>
+    await import('../../shared/agent-hook-listener/configuration/agent-status-hooks-setting')
 )
-vi.mock('../wsl', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
+vi.mock('../wsl/discovery/distro-catalog', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
 vi.mock('../codex/codex-home-paths', () => ({
   getSystemCodexHomePath: () => SYSTEM_HOME,
   getOrcaManagedCodexHomePath: () => '/managed/.codex'
@@ -94,7 +93,6 @@ const HOOK_SETTINGS: readonly {
   }
 ]
 
-/** The hooks-setting reader a launch passes, matched by what it reads now. */
 function readsSetting(enabled: boolean): { asymmetricMatch: (reader: unknown) => boolean } {
   return { asymmetricMatch: (reader) => typeof reader === 'function' && reader() === enabled }
 }
@@ -134,7 +132,7 @@ describe('Codex launch prep honours the per-agent hook opt-out', () => {
         prepareCodexRuntimeHomeForLaunch(undefined, undefined, { launchesCodex: true })
       ).resolves.toBeNull()
 
-      // Why either way: the reconcile reads the opt-out itself, before it writes.
+      // Reconciliation itself checks opt-out before writing.
       expect(mocks.reconcileCodexHooksForLaunch).toHaveBeenCalledTimes(1)
       expect(mocks.prepareRuntimeHomeForLaunch).not.toHaveBeenCalled()
     }
@@ -167,7 +165,7 @@ describe('Codex launch prep honours the per-agent hook opt-out', () => {
 
       await resumeFrom(SYSTEM_HOME)
 
-      // Why: a resume of a ~/.codex session reconciles there whatever the selection.
+      // Resuming a system-home session reconciles there regardless of current account selection.
       expect(mocks.reconcileCodexHooksForLaunch).toHaveBeenCalledTimes(1)
       expect(mocks.installForLaunchPrep).not.toHaveBeenCalled()
       expect(mocks.refreshRuntimeUserHooksForLaunchPrep).not.toHaveBeenCalled()

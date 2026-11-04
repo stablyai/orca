@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { WorktreeSortOrderUpdate } from '../../../shared/worktree/sort-order-update'
 
 type WorktreeRename = {
   oldWorktreeId: string
@@ -9,16 +10,20 @@ type WorktreeChangeOwner = {
   forceLocalOwner?: boolean
   executionHostId?: ExecutionHostId
   sortOrderOnly?: boolean
+  sortOrders?: WorktreeSortOrderUpdate[]
+  // Connection the values were published on; a patch from another connection refetches instead.
+  sortOrderFence?: string
 }
 
 type WorktreeChangeEvent = {
   repoId: string
   renamed?: WorktreeRename
-  // Why: set on local worktrees:changed while a remote runtime is active, so the
-  // refresh pins to the local host instead of dropping the event (see useIpcEvents).
+  // Local change events must pin refresh to local ownership even while a remote runtime is active.
   forceLocalOwner?: boolean
   executionHostId?: ExecutionHostId
   sortOrderOnly?: boolean
+  sortOrders?: WorktreeSortOrderUpdate[]
+  sortOrderFence?: string
 }
 
 type WorktreeChangeRefreshHandler = (
@@ -39,6 +44,17 @@ export type WorktreeChangeRefreshQueue = {
   enqueue: (event: WorktreeChangeEvent) => void
 }
 
+function mergeSortOrders(
+  earlier: readonly WorktreeSortOrderUpdate[],
+  later: readonly WorktreeSortOrderUpdate[]
+): WorktreeSortOrderUpdate[] {
+  const byId = new Map(earlier.map((entry) => [entry.worktreeId, entry]))
+  for (const entry of later) {
+    byId.set(entry.worktreeId, entry)
+  }
+  return [...byId.values()]
+}
+
 export function createWorktreeChangeRefreshQueue(
   handler: WorktreeChangeRefreshHandler
 ): WorktreeChangeRefreshQueue {
@@ -54,7 +70,10 @@ export function createWorktreeChangeRefreshQueue(
           await handler(repoId, next?.renamed, {
             forceLocalOwner: next?.forceLocalOwner,
             ...(next?.executionHostId ? { executionHostId: next.executionHostId } : {}),
-            ...(next?.sortOrderOnly === true ? { sortOrderOnly: true } : {})
+            ...(next?.sortOrderOnly === true ? { sortOrderOnly: true } : {}),
+            ...(next?.sortOrderOnly === true && next.sortOrders
+              ? { sortOrders: next.sortOrders, sortOrderFence: next.sortOrderFence }
+              : {})
           })
         } catch (error) {
           console.error('Failed to refresh changed worktrees:', error)
@@ -94,10 +113,7 @@ export function createWorktreeChangeRefreshQueue(
         })
       } else {
         const lastQueued = state.queue.at(-1)
-        // Why: Windows/OneDrive can emit a burst for one checkout change. Keep a
-        // trailing refresh, but do not fan out adjacent identical repo scans.
-        // A differing forceLocalOwner is not identical — keep it as its own scan
-        // so a local-pinned refresh is never coalesced into a runtime-routed one.
+        // Coalesce identical Windows/OneDrive bursts with a trailing refresh; different forceLocalOwner values require distinct host scans.
         if (
           !lastQueued ||
           lastQueued.renamed !== undefined ||
@@ -107,11 +123,24 @@ export function createWorktreeChangeRefreshQueue(
           state.queue.push({
             forceLocalOwner: event.forceLocalOwner,
             executionHostId: event.executionHostId,
-            ...(event.sortOrderOnly === true ? { sortOrderOnly: true } : {})
+            ...(event.sortOrderOnly === true ? { sortOrderOnly: true } : {}),
+            ...(event.sortOrderOnly === true && event.sortOrders
+              ? { sortOrders: event.sortOrders, sortOrderFence: event.sortOrderFence }
+              : {})
           })
         } else if (event.sortOrderOnly !== true) {
           // An order save cannot erase an adjacent structural refresh.
           delete lastQueued.sortOrderOnly
+          delete lastQueued.sortOrders
+          delete lastQueued.sortOrderFence
+        } else if (lastQueued.sortOrders) {
+          if (event.sortOrders && event.sortOrderFence === lastQueued.sortOrderFence) {
+            lastQueued.sortOrders = mergeSortOrders(lastQueued.sortOrders, event.sortOrders)
+          } else {
+            // Values missing or from another connection: the refetch reads current ones.
+            delete lastQueued.sortOrders
+            delete lastQueued.sortOrderFence
+          }
         }
       }
 

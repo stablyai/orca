@@ -2,37 +2,21 @@ import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge/bridge
 import { captureBridgeError } from './bridge/bridge-error-capture'
 import type { BridgeHostDiagnostic } from './bridge-host-contract'
 
-/** One host's outbound frames: what it posts, and whether the post landed. */
 export type BridgeHostFrames = {
-  /**
-   * Posts one frame and answers whether the page received it.
-   *
-   * True only once `post` has resolved. A caller that spends something on delivery — the screen
-   * clears a one-shot route param on it — must not act on the handover: `post` crosses to the
-   * native view and a view that is gone rejects, which used to be reported a turn later as a
-   * diagnostic while the caller had already treated the frame as delivered.
-   */
+  // True only after native post resolves; a vanished view rejects. Resolution proves handoff, not page receipt or one-shot consumption.
   readonly postJson: (json: string) => Promise<boolean>
-  /** Fire-and-forget, for every frame nobody waits on. */
   readonly sendJson: (json: string) => void
   readonly send: (frame: BridgeHostMessage) => void
   readonly sendError: (id: string, error: unknown) => void
 }
 
-/**
- * The send half of a host, split out because `bridge-host.ts` sits at its line cap.
- *
- * `isOpen` rather than two flags: between documents the view still exists and still accepts posts,
- * which is exactly why it is asked — a frame sent then lands in the next document before it has
- * said `ready` — and a disposed host can neither post nor refuse.
- */
+// Check document openness, not just view existence: posts between close and ready could reach the next document; disposed hosts cannot post.
 export function createBridgeHostFrames(args: {
   post: (json: string) => Promise<void>
   isOpen: () => boolean
   onDiagnostic?: (diagnostic: BridgeHostDiagnostic) => void
 }): BridgeHostFrames {
-  // Once per session, for the reason a failing post is: a page nudging a broken listener nudges it
-  // again on every foreground, and a line per frame buries the one that says why.
+  // Report once so repeated foreground/frame failures cannot bury the first cause.
   let postFailureReported = false
 
   function reportPostFailure(error: unknown): void {
@@ -48,9 +32,7 @@ export function createBridgeHostFrames(args: {
       return false
     }
     try {
-      // A `post` that throws where it should reject would escape into the client's own
-      // state-change fan-out, which is what sends the `state` frame, and take the other listeners
-      // down with it. Awaited here, so both shapes land in the same catch.
+      // Await inside try so synchronous throws and rejected posts both stay out of the client’s state-change fan-out.
       await args.post(json)
       return true
     } catch (error) {
@@ -66,8 +48,7 @@ export function createBridgeHostFrames(args: {
   return {
     postJson,
     sendJson,
-    // Every value in a host frame has already been serialized by whoever produced it — a reply by
-    // `splitBridgeReply`, an error `code` by the capture's round trip — so this cannot throw.
+    // Frame producers already serialized values or captured errors, so no cyclic/unserializable values remain.
     send: (frame) => {
       sendJson(JSON.stringify(frame))
     },

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import ja from '../../../renderer/src/i18n/locales/ja.json'
 import {
   ProfileStateAuthorityBootstrapError,
   ProfileStateRecoveryRequiredError
-} from './profile-state-authority-bootstrap'
+} from './profile-state-recovery-required'
 import {
   formatProfileStateStartupFailure,
   profileStateStartupFailureClass
@@ -36,6 +37,42 @@ describe('profile-state startup failure formatting', () => {
     )
     expect(formatProfileStateStartupFailure(error)).toContain('/profile/profile-state.db')
     expect(profileStateStartupFailureClass(error)).toBe('recovery-required')
+  })
+
+  it('tells the user to repair damaged sections with the profile command, kept history included', () => {
+    const error = new ProfileStateRecoveryRequiredError(
+      {
+        dataFile: '/profile/orca-data.json',
+        databaseFile: '/profile/profile-state.db',
+        profileId: 'profile-a'
+      },
+      new Error('placeholder is damaged'),
+      [
+        { domain: 'automationRuns', source: 'current' },
+        { domain: 'repos', backupId: '1-a', backupCreatedAtMs: 5 }
+      ]
+    )
+    const command = 'orca profile state rollback --repair --profile-id profile-a'
+    expect(error.message).toBe(
+      `Damaged profile sections: Automation history, Projects; run \`${command}\` to repair only those sections`
+    )
+
+    const english = formatProfileStateStartupFailure(error)
+    expect(english).toContain('Automation history')
+    expect(english).toContain(`run \`${command}\` to repair only the damaged parts`)
+    expect(english).not.toContain('from backups')
+
+    const japanese = formatProfileStateStartupFailure(error, (key, fallback, options) =>
+      key === 'profileState.startupFailure.repairCommand'
+        ? ja.profileState.startupFailure.repairCommand.replace(
+            '{{command}}',
+            options?.command ?? ''
+          )
+        : fallback.replace(/\{\{(\w+)\}\}/g, (slot, name: string) => options?.[name] ?? slot)
+    )
+    expect(japanese).toContain(`\`${command}\` を実行すると、破損した部分だけを修復し`)
+    expect(japanese).not.toContain('{{command}}')
+    expect(japanese).not.toContain('バックアップから')
   })
 
   it('explains ambiguity and offers explicit inspection before choosing a recovery point', () => {

@@ -1,11 +1,4 @@
-/**
- * Executes the generated OpenCode plugin source (the artifact that runs inside
- * OpenCode's process) to verify streamed message.part.updated events are
- * coalesced and capped before POSTing to Orca's agent-hook server. The
- * un-throttled plugin re-posted the full accumulated reply per streamed
- * append — O(n²) bytes per turn — which saturated Orca's main + renderer
- * event loops on Windows and froze the UI mid-reply.
- */
+// Reposting accumulated replies per delta causes quadratic traffic and freezes the UI.
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -81,7 +74,6 @@ describe('OpenCode plugin MessagePart throttling', () => {
     }
     const client = {
       session: {
-        // No parentID → root session, events flow through.
         list: async () => ({ data: [{ id: 'session-1' }] })
       }
     }
@@ -121,22 +113,19 @@ describe('OpenCode plugin MessagePart throttling', () => {
     const handler = await loadPluginEventHandler()
     await seedAssistantRole(handler)
 
-    // Simulate a streaming turn: 50 part updates, each carrying the full
-    // accumulated text so far (how OpenCode actually publishes parts).
+    // OpenCode streams full accumulated text in each part update.
     let text = ''
     for (let i = 0; i < 50; i++) {
       text += 'chunk-of-streamed-reply-text-'.repeat(10)
       await handler(assistantPartEvent(text))
     }
 
-    // Leading edge only — everything else is pending behind the throttle.
     expect(messagePartPosts()).toHaveLength(1)
 
     await vi.advanceTimersByTimeAsync(300)
 
     const parts = messagePartPosts()
     expect(parts).toHaveLength(2)
-    // Trailing post carries the LATEST snapshot, capped.
     const trailing = parts[1].body.payload
     expect(trailing.text!.length).toBeLessThanOrEqual(4000)
     expect(text.startsWith(trailing.text!)).toBe(true)
@@ -145,7 +134,7 @@ describe('OpenCode plugin MessagePart throttling', () => {
   it('flushes the pending reply snapshot before posting SessionIdle', async () => {
     const handler = await loadPluginEventHandler()
     await seedAssistantRole(handler)
-    // Mark the session busy so the idle transition is not deduped away.
+    // Seed busy so the idle transition is not deduplicated.
     await handler({
       event: {
         type: 'session.status',
@@ -270,8 +259,6 @@ describe('OpenCode plugin MessagePart throttling', () => {
     expect(parts[0].body.payload.role).toBe('user')
     expect(parts[0].body.payload.text!.length).toBe(4000)
 
-    // An assistant part right after the user prompt still posts immediately
-    // (leading edge) because user posts do not touch the throttle clock.
     await seedAssistantRole(handler)
     await handler(assistantPartEvent('assistant reply'))
     expect(messagePartPosts()).toHaveLength(2)

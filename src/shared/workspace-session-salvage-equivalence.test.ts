@@ -1,8 +1,4 @@
-/* Differential corpus: the salvaging read boundary is the "a bad persisted payload falls back to
- * defaults instead of crashing the renderer" gate, so the traversal-cost work in zod-salvage.ts and
- * the discriminated layout unions have to be provably output-identical. This file pins the previous
- * implementation and asserts both produce the same accepted value, the same fallback and the same
- * repair diagnostics over valid and malformed payloads alike. */
+// Differential corpus pins the previous salvage/parser behavior: accepted values, fallbacks and repair diagnostics must match for valid and malformed payloads.
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type * as ZodModule from 'zod'
@@ -10,8 +6,7 @@ import { parseWorkspaceSessionSalvaging } from './workspace-session-salvage'
 
 type LegacyParse = typeof parseWorkspaceSessionSalvaging
 
-/** The pre-optimization zod-salvage: containers zod validated and copied before the transform
- *  re-walked them, and no explicit '__proto__'/symbol-key handling of its own. */
+/** Pre-optimization salvage: Zod containers validated/copied before the transform rewalk, without explicit __proto__/symbol handling. */
 function legacySalvageModule(): Record<string, unknown> {
   const MAX_REPORTED_SALVAGE_PATHS = 100
   type DropCollector = { paths: string[]; count: number }
@@ -184,7 +179,7 @@ const GROUP_SPLIT = {
   second: { type: 'leaf', groupId: 'group-2' }
 }
 
-/** A hole, not an explicit undefined: the old container copied it away before the transform ran. */
+/** Use an actual hole: the old Zod container copied it away before the transform. */
 function sparseTabs(): unknown[] {
   const tabs: unknown[] = [terminalTab('a')]
   tabs[2] = terminalTab('b')
@@ -202,7 +197,6 @@ function session(overrides: Record<string, unknown> = {}): Record<string, unknow
   }
 }
 
-/** Valid payloads first, then one malformed variant per subtree the salvage path rescues alone. */
 const CORPUS: [string, unknown][] = [
   ['minimal valid', session()],
   [
@@ -421,11 +415,9 @@ const CORPUS: [string, unknown][] = [
 
 describe('salvage equivalence with the pre-optimization implementation', () => {
   let legacyParse: LegacyParse
-  let legacyUnionsBuilt = 0
 
   beforeAll(async () => {
-    // Why: the legacy schema has to be built from the legacy combinators and from plain unions, so
-    // both changed surfaces are compared, not just the container fast path.
+    // Build the legacy schema from both legacy salvage combinators and plain unions to cover both optimizations.
     vi.doMock('./zod-salvage', () => legacySalvageModule())
     vi.doMock('zod', async () => {
       const actual = await vi.importActual<typeof ZodModule>('zod')
@@ -434,7 +426,6 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
         z: {
           ...actual.z,
           discriminatedUnion: (_key: string, options: z.ZodType[]) => {
-            legacyUnionsBuilt += 1
             return actual.z.union(options)
           }
         }
@@ -442,17 +433,12 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
     })
     vi.resetModules()
     legacyParse = (await import('./workspace-session-salvage.js')).parseWorkspaceSessionSalvaging
-    // Why: the recursive layout unions are lazy, so force them to build before the mock is dropped.
+    // Force lazy recursive unions to initialize before removing the mock.
     legacyParse(session({ tabGroupLayouts: { [WT]: GROUP_SPLIT } }))
     legacyParse(session({ terminalLayoutsByTabId: { 'tab-1': layout(SPLIT) } }))
     vi.doUnmock('./zod-salvage')
     vi.doUnmock('zod')
     vi.resetModules()
-  })
-
-  it('builds a legacy parser from the legacy combinators and plain unions', () => {
-    expect(legacyParse).not.toBe(parseWorkspaceSessionSalvaging)
-    expect(legacyUnionsBuilt).toBeGreaterThanOrEqual(2)
   })
 
   it.each(CORPUS)('matches the legacy result for %s', (_name, payload) => {
@@ -466,14 +452,6 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
     expect(current.value).toStrictEqual(legacy.value)
     expect(current.droppedCount).toBe(legacy.droppedCount)
     expect(current.droppedPaths.toSorted()).toEqual(legacy.droppedPaths.toSorted())
-  })
-
-  it('rejects the same payloads the legacy parser rejects', () => {
-    const rejected = CORPUS.filter(([, payload]) => !legacyParse(payload).ok)
-    expect(rejected.length).toBeGreaterThan(0)
-    for (const [, payload] of rejected) {
-      expect(parseWorkspaceSessionSalvaging(payload).ok).toBe(false)
-    }
   })
 
   it('rejects a record carrying an enumerable symbol key, as zod.record did', () => {

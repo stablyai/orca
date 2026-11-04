@@ -3,12 +3,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { EditorFilesSlice } from '@/store/slices/editor/types/editor-files-slice'
 import { detectLanguage } from './language-detect'
 
-/**
- * Opens a local document that belongs to no workspace as a floating-workspace editor tab.
- *
- * Why local-only: every caller resolves an absolute path on this machine (a native picker or
- * the OS shell), so routing it through the active runtime would read it on the wrong host.
- */
+/** Open picker/shell-resolved absolute local files in the floating workspace; focused runtime routing would read the wrong machine. */
 export function openDocumentInFloatingWorkspace(
   openFile: EditorFilesSlice['openFile'],
   document: Pick<FileDocument, 'filePath' | 'relativePath'>,

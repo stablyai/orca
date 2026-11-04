@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { transform } from 'esbuild'
+import { build } from 'esbuild'
+import { runProcessSync } from '@orca/process-host'
 import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
 import { summarizeBenchmarkSamples } from './benchmark-sample-summary.mjs'
+import { describeProcessFailure } from './process-failure-message.mjs'
 
 const baseline = process.argv[2]
 if (!baseline) {
@@ -12,32 +14,123 @@ if (!baseline) {
     'Usage: node config/scripts/mobile-file-ranking-benchmark.mjs <baseline-ref|--autocomplete-stdin>'
   )
 }
-// git show <ref>:mobile/src/session/mobile-native-chat-autocomplete.ts | node config/scripts/mobile-file-ranking-benchmark.mjs --autocomplete-stdin
+// git show <ref>:mobile/src/session/native-chat/composer/mobile-native-chat-autocomplete.ts | node config/scripts/mobile-file-ranking-benchmark.mjs --autocomplete-stdin
 const autocompleteSource = baseline === '--autocomplete-stdin' ? readFileSync(0, 'utf8') : null
-async function load(source) {
-  const { code } = await transform(source, { loader: 'ts', format: 'esm' })
+const root = path.resolve(import.meta.dirname, '../..')
+function git(args) {
+  return runProcessSync({
+    program: 'git',
+    args,
+    cwd: root,
+    timeoutMs: 30_000,
+    maxOutputBytes: 2 * 1024 * 1024
+  })
+}
+function readGit(args) {
+  const result = git(args)
+  if (result.code !== 0 || result.timedOut || result.outputTruncated) {
+    throw new Error(describeProcessFailure(result))
+  }
+  return result.stdout
+}
+const baselineCommit =
+  autocompleteSource === null
+    ? readGit(['rev-parse', '--verify', `${baseline}^{commit}`]).trim()
+    : null
+function resolveBaselineFile(candidates) {
+  for (const file of candidates) {
+    const result = git(['cat-file', '-t', `${baselineCommit}:${file}`])
+    if (result.timedOut || result.outputTruncated || ![0, 128].includes(result.code)) {
+      throw new Error(describeProcessFailure(result))
+    }
+    if (result.code === 0 && result.stdout.trim() === 'blob') {
+      return file
+    }
+  }
+  throw new Error(`Missing baseline source: ${candidates.join(', ')}`)
+}
+/**
+ * @param {string} file
+ * @param {string | null} ref
+ * @param {string | null} source
+ */
+async function load(file, ref = null, source = null) {
+  const { outputFiles } = await build({
+    ...(source === null
+      ? { entryPoints: [file] }
+      : {
+          stdin: {
+            contents: source,
+            sourcefile: file,
+            resolveDir: path.dirname(path.resolve(root, file)),
+            loader: 'ts'
+          }
+        }),
+    absWorkingDir: root,
+    bundle: source === null,
+    tsconfigRaw: {},
+    write: false,
+    platform: 'node',
+    format: 'esm',
+    plugins:
+      ref === null
+        ? []
+        : [
+            {
+              name: 'exact-baseline-ranking-source',
+              setup(builder) {
+                builder.onResolve({ filter: /.*/ }, (args) => {
+                  if (args.kind === 'entry-point') {
+                    return { path: file, namespace: 'git-baseline' }
+                  }
+                  if (args.namespace !== 'git-baseline') {
+                    return undefined
+                  }
+                  if (!args.path.startsWith('.')) {
+                    return { path: args.path, external: true }
+                  }
+                  const target = path.posix.join(path.posix.dirname(args.importer), args.path)
+                  return {
+                    path: resolveBaselineFile([
+                      target,
+                      `${target}.ts`,
+                      `${target}.tsx`,
+                      `${target}.js`,
+                      `${target}/index.ts`
+                    ]),
+                    namespace: 'git-baseline'
+                  }
+                })
+                builder.onLoad({ filter: /.*/, namespace: 'git-baseline' }, (args) => ({
+                  contents: readGit(['show', `${ref}:${args.path}`]),
+                  loader: args.path.endsWith('.tsx') ? 'tsx' : 'ts'
+                }))
+              }
+            }
+          ]
+  })
+  const code = outputFiles[0].text
   return await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
 }
 const results = []
 let differentialCases = 0
 for (const [file, name] of [
-  ['src/main/runtime/runtime-mobile-file-path-search.ts', 'rankRuntimeMobileFilePaths'],
-  ['mobile/src/session/mobile-native-chat-autocomplete.ts', 'rankSuggestions'],
-  ['mobile/src/session/mobile-native-chat-autocomplete.ts', 'rankSlashCommandSuggestions']
+  ['src/main/runtime/files/search/mobile-path-search.ts', 'rankRuntimeMobileFilePaths'],
+  ['mobile/src/session/native-chat/composer/mobile-native-chat-autocomplete.ts', 'rankSuggestions']
 ]) {
   if (autocompleteSource !== null && name === 'rankRuntimeMobileFilePaths') {
     continue
   }
-  const before = (
-    await load(
-      autocompleteSource ??
-        execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8' })
-    )
-  )[name]
-  const after = (await load(readFileSync(file, 'utf8')))[name]
-  const slash = name === 'rankSlashCommandSuggestions'
-  const toCandidates = (names) =>
-    slash ? names.map((name, index) => ({ name, description: `Command ${index}` })) : names
+  const baselineFile =
+    autocompleteSource === null
+      ? resolveBaselineFile(
+          name === 'rankRuntimeMobileFilePaths'
+            ? [file, 'src/main/runtime/runtime-mobile-file-path-search.ts']
+            : [file]
+        )
+      : file
+  const before = (await load(baselineFile, baselineCommit, autocompleteSource))[name]
+  const after = (await load(file))[name]
   if (name !== 'rankRuntimeMobileFilePaths') {
     let seed = 42
     const random = (max) => {
@@ -61,11 +154,9 @@ for (const [file, name] of [
       Infinity
     ]
     for (let index = 0; index < 3000; index += 1) {
-      const candidates = toCandidates(
-        Array.from(
-          { length: random(100) },
-          () => tokens[random(tokens.length)] + tokens[random(tokens.length)]
-        )
+      const candidates = Array.from(
+        { length: random(100) },
+        () => tokens[random(tokens.length)] + tokens[random(tokens.length)]
       )
       const query = tokens[random(tokens.length)]
       const limit = limits[random(limits.length)]
@@ -73,19 +164,18 @@ for (const [file, name] of [
       differentialCases += 1
     }
   }
-  for (const count of slash ? [16, 100, 1000] : [16, 100, 10_000, 50_000, 100_000]) {
-    const names = Array.from({ length: count }, (_, index) =>
-      slash
-        ? `team-review-${index}`
-        : `src/components/workspace/group-${index % 100}/file-${index}.tsx`
+  for (const count of [16, 100, 10_000, 50_000, 100_000]) {
+    const names = Array.from(
+      { length: count },
+      (_, index) => `src/components/workspace/group-${index % 100}/file-${index}.tsx`
     )
-    const limit = slash ? 12 : 16
-    const substringQuery = slash ? 'review' : 'workspace'
+    const limit = 16
+    const substringQuery = 'workspace'
     const workloads = [
       { name: 'empty-query', names, query: '' },
       { name: 'substring', names, query: substringQuery },
       { name: 'no-match', names, query: 'missing' },
-      { name: 'early-prefix', names, query: slash ? 'team' : 'file' },
+      { name: 'early-prefix', names, query: 'file' },
       {
         name: 'late-prefix',
         names: [...names, ...Array.from({ length: 4 }, (_, index) => `${substringQuery}-${index}`)],
@@ -93,7 +183,7 @@ for (const [file, name] of [
       }
     ]
     for (const workload of workloads) {
-      const candidates = toCandidates(workload.names)
+      const candidates = workload.names
       const expected = before(candidates, workload.query, limit)
       assert.deepEqual(after(candidates, workload.query, limit), expected)
       const implementations = { before, after }

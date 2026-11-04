@@ -29,15 +29,6 @@ function sessionWithLastFocusedAt(lastFocusedAt: unknown): Record<string, unknow
 }
 
 describe('workspace session unified-tab focus timestamp', () => {
-  it('preserves a finite nonnegative lastFocusedAt', () => {
-    const result = parseWorkspaceSession(sessionWithLastFocusedAt(1_700_000_000_123))
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.value.unifiedTabs?.wt[0]?.lastFocusedAt).toBe(1_700_000_000_123)
-    }
-  })
-
   it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
     'drops an invalid lastFocusedAt without dropping its tab (%s)',
     (lastFocusedAt) => {

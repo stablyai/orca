@@ -1,14 +1,18 @@
 import { useCallback, useState } from 'react'
 import type { CommitMessageAiSettings } from '../../../../shared/commit-message-ai-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentCapability,
   isCustomAgentId,
   resolveCommitMessageAgentChoice
 } from '../../../../shared/commit-message-agent-spec'
+import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../shared/commit-message-host-key'
+import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
+import { getTextGenerationModels } from '../../../../shared/source-control-ai-model-selection'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   EMPTY_COMMIT_MESSAGE_AI_SETTINGS,
   readCommitMessageAiSettings,
@@ -34,6 +38,24 @@ export type AiCommitPrSettingsViewModel = {
   writeConfig: (patch: Partial<CommitMessageAiSettings>) => void
 }
 
+/** List what Commit message generation can run on this host, including saved discovery. */
+function getTextGenerationCapability(agentId: string, settings: GlobalSettings | null) {
+  const capability = isTuiAgent(agentId) ? getCommitMessageAgentCapability(agentId) : undefined
+  if (!capability || !settings) {
+    return capability
+  }
+  return {
+    ...capability,
+    models: getTextGenerationModels(
+      capability.models,
+      normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi),
+      settings.commitMessageAi,
+      LOCAL_COMMIT_MESSAGE_HOST_KEY,
+      capability.id
+    )
+  }
+}
+
 export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -53,7 +75,7 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
   const isCustom = isCustomAgentId(resolvedAgentId)
   const activeCapability =
     resolvedAgentId && !isCustomAgentId(resolvedAgentId)
-      ? getCommitMessageAgentCapability(resolvedAgentId)
+      ? getTextGenerationCapability(resolvedAgentId, settings)
       : undefined
   const unsupportedConfiguredAgent =
     resolvedAgentId && !isCustom && !activeCapability ? resolvedAgentId : null
@@ -115,7 +137,7 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
       writeConfig({ agentId: CUSTOM_AGENT_ID })
       return
     }
-    const capability = getCommitMessageAgentCapability(newAgentId as TuiAgent)
+    const capability = getTextGenerationCapability(newAgentId, settings)
     if (!capability) {
       return
     }

@@ -3,9 +3,9 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
-import type * as RepoWorktrees from '../repo-worktrees'
-import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
+import type { Store } from '../persistence/loading-store/store'
+import type * as RepoWorktrees from '../workspaces/catalog/repo-worktrees'
+import { invalidateAuthorizedRootsCache } from './worktrees/removal/registered-worktree-roots-cache'
 
 type Handler = (event: unknown, args: unknown) => unknown
 
@@ -19,8 +19,8 @@ vi.mock('electron', () => ({
   app: { getPath: () => userData.path },
   ipcMain: { handle: (channel: string, handler: Handler) => handlers.set(channel, handler) }
 }))
-vi.mock('../repo-worktrees', async () => {
-  const actual = await vi.importActual<typeof RepoWorktrees>('../repo-worktrees')
+vi.mock('../workspaces/catalog/repo-worktrees', async () => {
+  const actual = await vi.importActual<typeof RepoWorktrees>('../workspaces/catalog/repo-worktrees')
   return { ...actual, listRepoWorktreeGraph: vi.fn(async () => []) }
 })
 vi.mock('../notebook/notebook-kernel', () => ({ startNotebookKernel: startNotebookKernelMock }))

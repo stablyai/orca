@@ -1,16 +1,12 @@
-/**
- * Shapes the per-host automation cache stores and fences.
- *
- * A cached row is only ever as trustworthy as the incarnation it was fetched
- * under, so every row keeps the owner it came from (null when the authority
- * could not qualify it) and every request keeps the three generations its
- * commit must still match.
- */
+/** Rows retain captured owners, null when unqualified; requests retain all three generations required by their commit fence. */
 
 import type { Automation } from '../../../../shared/automations-types'
 import type { AutomationListItemSelector } from '../../../../shared/automation-list-scope'
 import type { LegacyAutomationSelector } from '../../../../shared/automation-legacy-list-partition'
-import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
+import type {
+  AutomationAuthorityRef,
+  AutomationOwnerRef
+} from '../../../../shared/automation-owner-ref'
 import type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
 
 /** A legacy SSH row carries no registration generation, which is why it can never be fenced. */
@@ -20,6 +16,7 @@ export type AutomationHostRow = {
   automation: Automation
   /** Null when nothing may be mutated through it: legacy unscoped rows and orphans. */
   owner: AutomationOwnerRef | null
+  authority?: AutomationAuthorityRef
   selector: AutomationHostRowSelector
   usageSummary: AutomationUsageSummary | null
   /** False on the legacy path, where the authority sends no projection and none may be fetched. */
@@ -56,10 +53,7 @@ export type AutomationHostCacheEntry = {
   orphanCount: number | null
 }
 
-/**
- * Everything a response must still match to commit. `catalogGeneration` covers
- * removal tombstones too: a target leaving the catalog advances it.
- */
+/** Require all captured generations to match; catalog generation also covers removed-target tombstones. */
 export type AutomationHostRequestFence = {
   stableKey: string
   authorityKey: string

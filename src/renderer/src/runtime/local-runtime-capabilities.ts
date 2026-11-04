@@ -1,10 +1,28 @@
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 
-// `null` while no successful probe has landed. "Not asked yet" and "host says no" are
-// different answers, and a caller that routes on them must be able to tell them apart.
-let localRuntimeCapabilities: readonly RuntimeCapability[] | null = null
+type LocalRuntimeCapabilityObservation =
+  | { state: 'unlearned' | 'pending' | 'unavailable' }
+  | { state: 'known'; capabilities: readonly RuntimeCapability[] }
+let observation: LocalRuntimeCapabilityObservation = { state: 'unlearned' }
 let refreshPromise: Promise<readonly RuntimeCapability[]> | null = null
 const knownListeners = new Set<(capabilities: readonly RuntimeCapability[]) => void>()
+const listeners = new Set<() => void>()
+
+export function readLocalRuntimeCapabilityObservation(): LocalRuntimeCapabilityObservation {
+  return observation
+}
+
+export function subscribeLocalRuntimeCapabilityObservation(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+function publish(next: LocalRuntimeCapabilityObservation): void {
+  observation = next
+  listeners.forEach((listener) => listener())
+}
 
 /** Called each time a probe lands an answer, so work that needs the capabilities runs when they
  *  become known instead of being skipped while they were not. Returns the unsubscribe. */
@@ -18,32 +36,25 @@ export function subscribeLocalRuntimeCapabilitiesKnown(
 }
 
 export function readLocalRuntimeCapabilities(): readonly RuntimeCapability[] {
-  return localRuntimeCapabilities ?? []
+  return readLocalRuntimeCapabilitiesOrUnknown() ?? []
 }
 
 /** `null` when the local runtime has not answered yet, so a routing decision can wait
  *  instead of reading an unprobed host as unsupported. */
 export function readLocalRuntimeCapabilitiesOrUnknown(): readonly RuntimeCapability[] | null {
-  return localRuntimeCapabilities
+  return observation.state === 'known' ? observation.capabilities : null
 }
 
-/** Like `readLocalRuntimeCapabilitiesOrUnknown`, but probes the local runtime when no answer
- *  has landed yet, so a caller that can wait never reads "not asked yet" as "unsupported"
- *  (#19154: that reads a structured-native-chat create as a bare terminal).
- *
- *  The renderer boot chain calls this once, ungated, so the answer is normally already cached
- *  by the time any launch route is resolved — including for the readers that are synchronous
- *  and cannot await. Awaiting it at a route decision is the backstop for the residual window
- *  and for re-probing after a failed one. Still `null` after an actually failed probe, and
- *  never rejects. */
+/** Probe unknown local capabilities before awaited routing decisions so unasked hosts do not fall back to bare terminals (#19154). Ungated boot normally seeds synchronous readers; this closes residual startup/failed-probe gaps. Failed probes retain null and never reject. */
 export async function ensureLocalRuntimeCapabilities(): Promise<
   readonly RuntimeCapability[] | null
 > {
-  if (localRuntimeCapabilities !== null) {
-    return localRuntimeCapabilities
+  const known = readLocalRuntimeCapabilitiesOrUnknown()
+  if (known !== null) {
+    return known
   }
   await refreshLocalRuntimeCapabilities()
-  return localRuntimeCapabilities
+  return readLocalRuntimeCapabilitiesOrUnknown()
 }
 
 /** Resolves with the capabilities once a probe lands them, probing once now; a failed probe does
@@ -54,8 +65,9 @@ export function awaitLocalRuntimeCapabilities(): {
 } {
   let stop = (): void => {}
   const known = new Promise<readonly RuntimeCapability[]>((resolve) => {
-    if (localRuntimeCapabilities !== null) {
-      resolve(localRuntimeCapabilities)
+    const capabilities = readLocalRuntimeCapabilitiesOrUnknown()
+    if (capabilities !== null) {
+      resolve(capabilities)
       return
     }
     stop = subscribeLocalRuntimeCapabilitiesKnown((capabilities) => {
@@ -81,25 +93,30 @@ export function refreshLocalRuntimeCapabilities(): Promise<readonly RuntimeCapab
   refreshPromise ??= startLocalRuntimeCapabilityProbe()
     .then((status) => {
       const capabilities = [...(status.capabilities ?? [])]
-      localRuntimeCapabilities = capabilities
+      publish({ state: 'known', capabilities })
       knownListeners.forEach((listener) => listener(capabilities))
       return capabilities
     })
     .catch(() => {
-      // Stays unknown rather than becoming an empty (== unsupported) list: a failed probe
-      // is not evidence about the host.
-      localRuntimeCapabilities = null
+      // Probe failure proves no host capability; retain unknown, not an unsupported empty list.
+      publish({ state: 'unavailable' })
       return []
     })
     .finally(() => {
       refreshPromise = null
     })
+  if (observation.state === 'unlearned') {
+    publish({ state: 'pending' })
+  }
   return refreshPromise
 }
 
 export function setLocalRuntimeCapabilitiesForTests(
   capabilities: readonly RuntimeCapability[] | null
 ): void {
-  localRuntimeCapabilities = capabilities === null ? null : [...capabilities]
+  observation =
+    capabilities === null
+      ? { state: 'unlearned' }
+      : { state: 'known', capabilities: [...capabilities] }
   refreshPromise = null
 }

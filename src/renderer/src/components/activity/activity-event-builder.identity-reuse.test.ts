@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentStatusEntry,
-  AgentStateHistoryEntry
-} from '../../../../shared/agent-status-types'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStateHistoryEntry } from '../../../../shared/agent-status/lifecycle/agent-state-history'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   buildActivityEvents,
@@ -50,6 +48,7 @@ import type { Tab } from '../../../../shared/tab-types'
     const repo = makeRepo()
     const worktree = makeWorktree()
     return {
+      chatNames: new Map(),
       agentStatusByPaneKey: {
         [PANE_A]: entry(PANE_A),
         [PANE_B]: entry(PANE_B, { state: 'working', stateStartedAt: NOW - 1_000 })
@@ -298,6 +297,7 @@ import type { Tab } from '../../../../shared/tab-types'
     const worktree = makeWorktree()
     const tab = makeTab()
     return buildActivityEvents({
+      chatNames: new Map(),
       agentStatusByPaneKey: args.entries ?? {},
       retainedAgentsByPaneKey: {},
       tabsByWorktree: { [worktree.id]: [tab] },
@@ -310,7 +310,7 @@ import type { Tab } from '../../../../shared/tab-types'
   }
 
   describe('newestActivityHistoryEntries', () => {
-    it('takes only the newest cap-many eligible entries without scanning results past the cap', () => {
+    it('returns only the newest cap-many eligible history entries', () => {
       const history: AgentStateHistoryEntry[] = []
       for (let i = 0; i < 10_000; i += 1) {
         history.push(historyEntry(i + 1, i % 2 === 0 ? 'done' : 'working'))
@@ -422,6 +422,7 @@ import type { Tab } from '../../../../shared/tab-types'
         })
       )
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: entries,
         retainedAgentsByPaneKey: {},
         tabsByWorktree: { [worktree.id]: tabs },
@@ -451,6 +452,7 @@ import type { Tab } from '../../../../shared/tab-types'
     const repo = makeRepo()
     const worktree = makeWorktree()
     return buildActivityEvents({
+      chatNames: new Map(),
       agentStatusByPaneKey: { [PANE_KEY]: args.entry },
       retainedAgentsByPaneKey: {},
       tabsByWorktree: { [worktree.id]: [] },
@@ -539,6 +541,7 @@ import type { Tab } from '../../../../shared/tab-types'
       )
 
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: {
           [PANE_KEY]: { ...makeWorkingEntryWithoutHistory(), connectionId: null }
         },
@@ -576,6 +579,7 @@ import type { Tab } from '../../../../shared/tab-types'
       )
 
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: {
           [PANE_KEY]: {
             ...makeWorkingEntryWithoutHistory(),

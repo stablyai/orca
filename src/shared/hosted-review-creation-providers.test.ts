@@ -5,9 +5,7 @@ import {
 } from './hosted-review-creation-providers'
 
 describe('hosted review creation providers', () => {
-  // Why: this list is the gate behind the "provider does not support creating a
-  // pull request" blocker. A provider whose forge adapter implements
-  // createReview but is missing here reports unsupported to the user forever.
+  // The create-review blocker uses this list; missing implemented providers would remain unsupported in the UI.
   it('accepts every provider Orca can create a review on', () => {
     for (const provider of ['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea'] as const) {
       expect(supportsHostedReviewCreation(provider)).toBe(true)

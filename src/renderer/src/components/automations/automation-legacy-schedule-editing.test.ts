@@ -51,8 +51,7 @@ describe('editing an automation whose saved schedule predates the input gate', (
     expect(draft.scheduleWarning).toBeNull()
   })
 
-  // The regression this guards: a rename was blocked behind re-authoring a schedule the
-  // user never touched and that is still firing.
+  // Untouched legacy schedules must not block unrelated renames behind re-authoring.
   it('lets a rename through without re-authoring the schedule', () => {
     const automation = makeAutomation()
     const renamed = { ...buildAutomationEditDraft(automation), name: 'Renamed sweep' }
@@ -89,8 +88,7 @@ describe('editing an automation whose saved schedule predates the input gate', (
     ).toBe(false)
   })
 
-  // The editor's live cron status runs the same gate, so an untouched legacy cadence is not
-  // painted red with "fix this before saving" for a rule it only owes as new input.
+  // Apply the save gate to live validation too; unchanged legacy cadences must not show a new-input error.
   it('reports the saved schedule as valid in the editor cron status', () => {
     const draft = buildAutomationEditDraft(makeAutomation())
     const accepts = (schedule: string): boolean =>
@@ -108,8 +106,7 @@ describe('editing an automation whose saved schedule predates the input gate', (
     expect(buildAutomationEditDraft(makeAutomation()).savedSchedule).toBe(LEGACY_OVERSIZED_STEP)
   })
 
-  // Leniency is scoped to the oversized-step gate; a schedule that cannot parse at all is
-  // still unrepresentable and must keep warning rather than silently round-trip.
+  // Only oversized steps receive legacy leniency; unparseable schedules still need warnings.
   it('keeps warning about a saved schedule that cannot be parsed', () => {
     const draft = buildAutomationEditDraft(makeAutomation({ rrule: '0 9 32 * *' }))
     expect(draft.customSchedule).toBe('')

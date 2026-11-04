@@ -2,15 +2,14 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { isStructuredAgentSessionMainAgentWorking } from '../../shared/structured-agent-session-main-agent-working'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener
@@ -23,7 +22,7 @@ import {
   type StructuredAgentSessionChildExitSession
 } from '../native-chat/agent-session-wire/structured-agent-session-child-exit'
 import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { pendingPromptExists } from '../native-chat/agent-session-wire/structured-agent-session-queued-messages'
+import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-current-work'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { handleCodexSessionExit } from './codex-structured-session-close'
 import type { CodexSession, CodexStructuredSessionEvent } from './codex-structured-session-state'
@@ -46,15 +45,12 @@ afterEach(async () => {
   }
 })
 
-function userVisible(journal: AgentSessionJournal) {
+function userVisible(journal: AgentSessionJournal, liveFence: number | null) {
   const items = journal.snapshot().items
+  const work = new StructuredAgentSessionCurrentWork(journal, liveFence)
   return {
-    working: isStructuredAgentSessionMainAgentWorking(
-      journal.activeTurnId(),
-      journal.submissions(),
-      8
-    ),
-    prompt: pendingPromptExists(journal),
+    working: work.working(),
+    prompt: work.hasActionablePrompt(),
     turnStates: items.flatMap((item) => readAgentJournalTurn(item.body)?.state ?? []),
     runningCalls: items.filter(
       (item) => item.body.kind === 'tool-call' && item.body.state === 'running'
@@ -98,9 +94,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   const deferred = createDeferredStructuredAgentSessionEventSink({
     sessionId: SESSION,
     logger: recording.logger,
-    onFailed,
-    // Small budget exercises the production refusal without multi-megabyte fixtures.
-    watermarks: { maxLifecycleQueuedBytes: 16_384 }
+    onFailed
   })
   deferred.bind({ journal, fence: 7, publish: () => undefined })
   const translator = createCodexJournalTranslator({
@@ -149,7 +143,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   ).toEqual({ accepted: true })
   await expect(deferred.drained()).resolves.toEqual({ ok: true })
   expect(deferred.state().queuedBytes).toBe(0)
-  expect(userVisible(journal)).toEqual({
+  expect(userVisible(journal, 7)).toEqual({
     working: true,
     prompt: true,
     turnStates: ['running'],
@@ -185,25 +179,26 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
     options: new Map(),
     reportedOptions: {}
   }
-  expect(
-    handleCodexSessionExit({
-      sessions: new Map([[SESSION, codexSession]]),
-      sessionId: SESSION,
-      connection: codexSession.connection,
-      error: new Error('codex exited'),
-      logger: recording.logger,
-      onEvent: (event) => {
-        if (event.type === 'ended' && 'cause' in event) {
-          events.push(event)
-        }
+  // A closed sink refuses the provider's exit rows, so the host must settle the turn.
+  deferred.close()
+  const exited = handleCodexSessionExit({
+    sessions: new Map([[SESSION, codexSession]]),
+    sessionId: SESSION,
+    connection: codexSession.connection,
+    error: new Error('codex exited'),
+    logger: recording.logger,
+    onEvent: (event) => {
+      if (event.type === 'ended' && 'cause' in event) {
+        events.push(event)
       }
-    })
-  ).toBe(true)
-  expect(admission).toHaveReturnedWith({ accepted: false, reason: 'backpressure' })
+    }
+  })
+  expect(exited).toBe(true)
+  expect(admission).toHaveReturnedWith({ accepted: false, reason: 'closed' })
   expect(recording.entries).toContainEqual({
     level: 'warn',
     message: "Codex's final rows were refused; the host settles the turn instead",
-    fields: { scope: 'codex-exit-rows', sessionId: SESSION, reason: 'backpressure' }
+    fields: { scope: 'codex-exit-rows', sessionId: SESSION, reason: 'closed' }
   })
   expect(codexSession.ended).toBe(true)
   expect(events).toHaveLength(1)
@@ -234,13 +229,13 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
       },
       sessions: new Map([[SESSION, hostSession]]),
       flushLifecycle: () => deferred.lifecycleBarrier(),
-      publishFence: vi.fn(),
+      generationEnded: vi.fn(),
       serialize: async (_sessionId, task) => task(),
       now: () => 5_000
     },
     event
   )
-  expect(userVisible(journal)).toEqual({
+  expect(userVisible(journal, null)).toEqual({
     working: false,
     prompt: false,
     turnStates: ['interrupted'],
@@ -265,7 +260,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   const settled = journal.snapshot()
   const submissions = journal.submissions()
   await journal.close()
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   const reopened = await journals.open(options)
   expect(reopened.snapshot()).toEqual(settled)
   expect(reopened.submissions()).toEqual(submissions)

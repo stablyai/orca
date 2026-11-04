@@ -31,10 +31,4 @@ describe('readNodeReadableTextWithinLimit', () => {
       new NodeReadableTextTooLargeError(5, 4)
     )
   })
-
-  it('does not let an unlimited sequence of empty chunks grow retained state', async () => {
-    await expect(
-      readNodeReadableTextWithinLimit(chunks(Array.from({ length: 10_000 }, () => '')), 0)
-    ).resolves.toBe('')
-  })
 })

@@ -168,9 +168,7 @@ describe('Korean won input after a composition commit', () => {
     await expect(
       typeHangulThenWon(['₩'], {
         beforeWon: (textarea) => {
-          // Why: the full sequence a browser emits for an unprevented printable
-          // key. The keydown alone is not a shape Chromium can produce, and the
-          // `input` event is what carries the character now.
+          // Replay the full uncancelled browser sequence; keydown alone cannot carry the character now supplied by input.
           textarea.dispatchEvent(keyboardEvent('keydown', 'a', 'KeyA', 65))
           textarea.dispatchEvent(keyboardEvent('keypress', 'a', 'KeyA', 65))
           textarea.value += 'a'

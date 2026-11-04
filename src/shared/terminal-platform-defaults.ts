@@ -1,4 +1,4 @@
-// Why: only the initial value shown in Settings; buildFontFamily() adds the real cross-platform fallback chain.
+// Settings displays this family; buildFontFamily adds the cross-platform fallback chain.
 export function defaultTerminalFontFamily(): string {
   const platform = typeof process !== 'undefined' ? process.platform : ''
   if (platform === 'win32') {

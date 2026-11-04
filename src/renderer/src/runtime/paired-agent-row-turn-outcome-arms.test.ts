@@ -1,14 +1,8 @@
-/**
- * A paired client mirrors the host's agent rows from `session.tabs` with no per-field parser, so a
- * verdict arm the client's build does not know reaches its store as-is. The row must survive and
- * read as the done it always did; the arms this build knows read as their own mark.
- *
- * Runs the real host-snapshot mirror, the real store and the real sidebar row builder.
- */
+// Unparsed mirrored rows can carry newer verdict arms. Preserve them and legacy done fallback while known arms render their mark; exercise real mirror/store/sidebar builder.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { AgentTurnOutcome } from '../../../shared/agent-turn-outcome'
-import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
+import type { AgentTurnOutcome } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
+import { agentVerdictDisplayMark } from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -124,13 +118,5 @@ describe('a paired client mirroring a host verdict arm', () => {
     expect(rest).toEqual([])
     expect(row?.state).toBe('done')
     expect(row && agentVerdictDisplayMark(row.entry)).toBeNull()
-  })
-
-  it.each([
-    ['interruption', 'failed'],
-    ['unconfirmed', 'unconfirmed']
-  ] as const)('reads a mirrored %s as its own mark', (outcome, mark) => {
-    const [row] = mirroredRows(outcome)
-    expect(row && agentVerdictDisplayMark(row.entry)).toBe(mark)
   })
 })

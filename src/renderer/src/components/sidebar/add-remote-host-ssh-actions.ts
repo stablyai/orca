@@ -5,18 +5,19 @@ import {
   getSshTargetDraftConnectionFields,
   hasAdvancedConnectionValues,
   type EditingTarget
-} from '../settings/ssh-target-draft'
-import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../../shared/ssh-types'
-import type {
-  SshConfigHostSummary,
-  SshConfigHostListArgs,
-  SshConfigHostListResult,
-  SshConfigHostResolution,
-  SshRepoReadoption,
-  SshTarget,
-  SshTargetAddResult,
-  SshTargetCreateInput
+} from '../settings/ssh/targets/ssh-target-draft'
+import {
+  SSH_CONFIG_HOST_RESULT_LIMIT,
+  type SshConfigHostSummary,
+  type SshConfigHostListArgs,
+  type SshConfigHostListResult,
+  type SshConfigHostResolution,
+  type SshRepoReadoption,
+  type SshTarget,
+  type SshTargetAddResult,
+  type SshTargetCreateInput
 } from '../../../../shared/ssh-types'
+
 import { isDuplicateSshTargetAlias } from './ssh-target-duplicate'
 
 type SshApi = {
@@ -74,6 +75,7 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
+  const systemSshProxyConnectionReuse = form.systemSshProxyConnectionReuse ? true : undefined
   const target = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost || host),
     configHost,
@@ -84,7 +86,10 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
+    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
+    ...(systemSshProxyConnectionReuse ? { systemSshProxyConnectionReuse } : {}),
+    // Send true/false explicitly because older servers interpret absence as disabled.
+    allowRemoteCliControl: form.allowRemoteCliControl
   }
 
   try {
@@ -153,7 +158,6 @@ export async function prefillFormFromSshConfigHost(
   }
 }
 
-/** Bulk-load ~/.ssh/config hosts into Orca’s host list (sidebar targets). */
 export async function addAllSshConfigHostsToOrca({
   ssh,
   recordSshRepoReadoptions,
@@ -166,9 +170,7 @@ export async function addAllSshConfigHostsToOrca({
   recordFeatureInteraction: (feature: 'ssh') => void
 }): Promise<{ kind: 'added'; count: number } | { kind: 'already-synced' } | { kind: 'failed' }> {
   try {
-    // Why: no reAdopt — the button counts and promises only the *new* hosts the picker
-    // showed. Re-adopting would resurrect hosts the user deleted, which the count omits.
-    // Settings → Import stays the explicit re-adopt path.
+    // Import only newly counted hosts; re-adopting deleted aliases remains an explicit Settings action.
     const result = await ssh.importConfig()
     recordSshRepoReadoptions(result.repoReadoptions)
     setSshTargetsMetadata(await ssh.listTargets())
@@ -185,8 +187,8 @@ export async function addAllSshConfigHostsToOrca({
     toast.success(
       translate(
         'auto.components.sidebar.AddRemoteHostDialog.sshImportSynced',
-        'Added {{value0}} host{{value1}} to Orca.',
-        { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
+        'Added {{count}} hosts to Orca.',
+        { count: result.targets.length, defaultValue_one: 'Added {{count}} host to Orca.' }
       )
     )
     return { kind: 'added', count: result.targets.length }
@@ -211,7 +213,12 @@ export async function loadSshConfigHostsForPicker(
     const listed: unknown = await ssh.listConfigHosts(args)
     const result = normalizeSshConfigHostListResult(listed)
     if (!result) {
-      throw new Error('Invalid SSH config host response')
+      throw new Error(
+        translate(
+          'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerInvalidResponse',
+          'Invalid SSH config host response'
+        )
+      )
     }
     return { ok: true, result }
   } catch (error) {

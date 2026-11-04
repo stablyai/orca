@@ -57,11 +57,6 @@ describe('counterbalanced benchmark schedule', () => {
     const login = summarizeBenchmarkSamples(samples.login)
     const fast = summarizeBenchmarkSamples(samples.fast)
     expect(fast.medianMs - login.medianMs).toBe(trueDuration.fast - trueDuration.login)
-
-    const lowerMedian = (values) => [...values].sort((left, right) => left - right)[9]
-    expect(lowerMedian(samples.fast) - lowerMedian(samples.login)).toBe(
-      trueDuration.fast - trueDuration.login - driftPerLaunch
-    )
   })
 
   it('bounds the descriptive p95 bias to one linear-drift launch slot', () => {

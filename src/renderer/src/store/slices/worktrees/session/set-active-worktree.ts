@@ -1,28 +1,22 @@
+import { cancelActiveWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import type { AppState } from '../../../types'
-import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import { applyWorktreeUpdates } from '../../worktree-helpers'
 import { projectWorktreeTabModelReconciliation } from '../../tabs'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import {
   ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS,
   ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS,
   ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS
 } from '../listing/worktree-slice-constants'
-import { getTerminalActivationSpawnSuppression } from '../../terminal-activation-spawn-suppression'
+import { markWorktreeTabsForActivationSpawn } from '../../tabs/worktree-layout-lifecycle'
 import {
   isWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../../../shared/workspace-scope'
-import {
-  applyDetectedWorktreeUpdates,
-  findKnownWorktreeById
-} from '../listing/detected-worktree-meta'
-import { persistPassiveWorktreeMetaForOwner } from '../listing/worktree-owner-settings'
+import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
@@ -45,6 +39,9 @@ export function createSetActiveWorktree(
       }
       return false
     }
+    if (!worktreeId) {
+      cancelActiveWorktreeRemoval()
+    }
     const workspaceScope = worktreeId ? parseWorkspaceKey(worktreeId) : null
     if (worktreeId && shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
@@ -53,13 +50,10 @@ export function createSetActiveWorktree(
     if (get().activeWorktreeId !== worktreeId) {
       moveFocusToRendererBeforeFocusedWebviewHidden()
     }
-    let shouldClearUnread = false
     let shouldPrepareTerminalTabs = false
     let shouldTagTerminalTabs = false
     set((current) => {
-      const transitioned = stateTransition
-        ? ({ ...current, ...stateTransition.patch } as AppState)
-        : current
+      const transitioned = stateTransition ? { ...current, ...stateTransition.patch } : current
       const reconciliation = worktreeId
         ? projectWorktreeTabModelReconciliation(transitioned, worktreeId)
         : null
@@ -68,7 +62,7 @@ export function createSetActiveWorktree(
       )
       const s =
         reconciliation && reconciliationChanged
-          ? ({ ...transitioned, ...reconciliation.patch } as AppState)
+          ? { ...transitioned, ...reconciliation.patch }
           : transitioned
       const reconciledActiveTabId = reconciliation?.activeRenderableTabId ?? null
       if (!worktreeId) {
@@ -82,8 +76,10 @@ export function createSetActiveWorktree(
         }
       }
 
+      const nextActiveWorkspaceKey = isWorkspaceKey(worktreeId)
+        ? worktreeId
+        : worktreeWorkspaceKey(worktreeId)
       const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
-      shouldClearUnread = Boolean(worktree?.isUnread)
       const {
         restoredRightSidebarExplorerView,
         activeFileId,
@@ -97,13 +93,7 @@ export function createSetActiveWorktree(
         reconciledActiveTabId
       )
 
-      // Why: focus isn't smart-sort activity — writing lastActivityAt here caused the "jump after focus" bug; only clear unread.
-      const metaUpdates: Partial<WorktreeMeta> = shouldClearUnread ? { isUnread: false } : {}
-
-      // Why: prep is deferred (shell render deferred below) so it waits for input quiet instead of blocking the click.
-      // Why first-activation guard, not tab.ptyId==null: reconnectPersistedTerminals repopulates ptyId before mount.
-      // Tag every tab on FIRST activation so reattach/fresh-spawn updateTabPtyId suppresses activity + sortEpoch bumps.
-      // Generation is only bumped when no tab has a live PTY — a live remount would kill the user's shell.
+      // Defer prep until input quiet. First activation tags even rehydrated PTYs to suppress click activity; bump generation only for dead tabs or remount kills live shells.
       const tabs = s.tabsByWorktree[worktreeId ?? ''] ?? []
       const wakeable = tabs.filter(isWakeable)
       const allDead =
@@ -120,20 +110,6 @@ export function createSetActiveWorktree(
       const nextEverActivated = isFirstActivation
         ? new Set([...s.everActivatedWorktreeIds, worktreeId!])
         : s.everActivatedWorktreeIds
-      const nextWorktrees = shouldClearUnread
-        ? applyWorktreeUpdates(s.worktreesByRepo, worktreeId, metaUpdates)
-        : s.worktreesByRepo
-      const nextDetectedWorktrees = shouldClearUnread
-        ? applyDetectedWorktreeUpdates(s.detectedWorktreesByRepo, worktreeId, metaUpdates)
-        : s.detectedWorktreesByRepo
-      const nextFolderWorkspaces =
-        shouldClearUnread && workspaceScope?.type === 'folder'
-          ? s.folderWorkspaces.map((workspace) =>
-              workspace.id === workspaceScope.folderWorkspaceId
-                ? { ...workspace, isUnread: false }
-                : workspace
-            )
-          : s.folderWorkspaces
       const nextActiveRepoId =
         workspaceScope?.type === 'folder'
           ? null
@@ -142,22 +118,7 @@ export function createSetActiveWorktree(
             : s.activeRepoId
       const tabsByWorktreeUpdate =
         allDead && worktreeId != null
-          ? {
-              tabsByWorktree: {
-                ...s.tabsByWorktree,
-                [worktreeId]: tabs.map((tab) =>
-                  !isWakeable(tab)
-                    ? tab
-                    : {
-                        ...tab,
-                        generation: (tab.generation ?? 0) + 1,
-                        pendingActivationSpawn: getTerminalActivationSpawnSuppression(
-                          s.terminalLayoutsByTabId[tab.id]
-                        )
-                      }
-                )
-              }
-            }
+          ? markWorktreeTabsForActivationSpawn(s, worktreeId, { isWakeable, bumpGeneration: true })
           : {}
 
       const nextActiveTabTypeByWorktree =
@@ -166,6 +127,7 @@ export function createSetActiveWorktree(
           : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
+        s.activeWorkspaceKey !== nextActiveWorkspaceKey ||
         s.activeWorkspaceExecutionHostId !== (executionHostId ?? null) ||
         // Why: a pending-creation panel can show over the prior worktree; a non-null activePendingCreationId counts as a change.
         s.activePendingCreationId !== null ||
@@ -176,10 +138,8 @@ export function createSetActiveWorktree(
         s.activeTabId !== activeTabId ||
         nextActiveTabTypeByWorktree !== s.activeTabTypeByWorktree ||
         nextEverActivated !== s.everActivatedWorktreeIds ||
-        nextWorktrees !== s.worktreesByRepo ||
-        nextDetectedWorktrees !== s.detectedWorktreesByRepo ||
-        nextFolderWorkspaces !== s.folderWorkspaces ||
         nextActiveRepoId !== s.activeRepoId ||
+        allDead ||
         reconciliationChanged ||
         stateTransition !== undefined
       if (!hasStateChange) {
@@ -192,9 +152,7 @@ export function createSetActiveWorktree(
         ...reconciliation?.patch,
         activeRepoId: nextActiveRepoId,
         activeWorktreeId: worktreeId,
-        activeWorkspaceKey: isWorkspaceKey(worktreeId)
-          ? worktreeId
-          : worktreeWorkspaceKey(worktreeId),
+        activeWorkspaceKey: nextActiveWorkspaceKey,
         activeWorkspaceExecutionHostId: executionHostId ?? null,
         activePendingCreationId: null,
         activeFileId,
@@ -204,20 +162,11 @@ export function createSetActiveWorktree(
         rightSidebarExplorerView: restoredRightSidebarExplorerView,
         activeTabId,
         everActivatedWorktreeIds: nextEverActivated,
-        ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
-        ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
-          ? { detectedWorktreesByRepo: nextDetectedWorktrees }
-          : {}),
-        ...(nextFolderWorkspaces !== s.folderWorkspaces
-          ? { folderWorkspaces: nextFolderWorkspaces }
-          : {}),
         ...tabsByWorktreeUpdate
       }
     })
 
-    // Why: any activation is an explicit wake (null is the sleep flow clearing selection).
-    // Cleared after the set() above so a pane still waiting on the marker connects once,
-    // in the remounted generation, instead of connecting and then being remounted.
+    // Activation explicitly wakes (null only clears selection for sleep); clear intent after remount-generation update so waiting panes connect once.
     clearWorktreeSleepIntent(worktreeId)
 
     if (worktreeId && shouldPrepareTerminalTabs) {
@@ -236,23 +185,10 @@ export function createSetActiveWorktree(
           if (!allDead && !shouldTagTerminalTabs) {
             return s
           }
-          return {
-            tabsByWorktree: {
-              ...s.tabsByWorktree,
-              [worktreeId]: tabs.map((tab) =>
-                !isWakeable(tab)
-                  ? tab
-                  : {
-                      ...tab,
-                      ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
-                      // Why: slept terminal remount/spawn is click-driven wake work; tag its PTY updates so they don't reshuffle Recent.
-                      pendingActivationSpawn: getTerminalActivationSpawnSuppression(
-                        s.terminalLayoutsByTabId[tab.id]
-                      )
-                    }
-              )
-            }
-          }
+          return markWorktreeTabsForActivationSpawn(s, worktreeId, {
+            isWakeable,
+            bumpGeneration: allDead
+          })
         })
       }
 
@@ -275,26 +211,10 @@ export function createSetActiveWorktree(
     }
 
     // Why: activation is explicit enough to revalidate PR state now; the coordinator still coalesces and rate-guards.
-    if (worktreeId) {
+    if (worktreeId && workspaceScope?.type !== 'folder') {
       get().refreshGitHubForWorktreeIfStale(worktreeId)
     }
 
-    if (!worktreeId || !get().getKnownWorktreeById(worktreeId, executionHostId)) {
-      return true
-    }
-
-    if (shouldClearUnread) {
-      if (workspaceScope?.type === 'folder') {
-        void get().updateFolderWorkspace(workspaceScope.folderWorkspaceId, { isUnread: false })
-        return true
-      }
-      persistPassiveWorktreeMetaForOwner(
-        get,
-        worktreeId,
-        { isUnread: false },
-        'persist worktree activation state'
-      )
-    }
     return true
   }
 }

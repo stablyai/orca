@@ -1,7 +1,7 @@
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { EditingTarget } from '../settings/ssh-target-draft'
+import type { EditingTarget } from '../settings/ssh/targets/ssh-target-draft'
 import { SshHostFields } from './AddRemoteHostFields'
 
 export function AddRemoteHostSshFormPanel({
@@ -60,6 +60,7 @@ export function AddRemoteHostSshFormPanel({
         configIdentityAlias={configIdentityAlias}
         onFormChange={onFormChange}
         onSubmit={onSubmit}
+        offerProxyConnectionReuse={!serverLabel}
       />
 
       <DialogFooter className="sm:justify-between">

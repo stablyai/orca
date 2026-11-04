@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
 
 type StoreState = {
   settings: {
@@ -52,8 +52,6 @@ afterEach(() => cleanup())
 
 describe('useMobilePairingAddressPreference', () => {
   it('does not invalidate the offer on the first address resolution', () => {
-    // Why: the renderer's first pick matches the default main already minted
-    // with, so invalidating there would drop a QR that is still correct.
     const { result, onSelectionInvalidated } = renderPreference()
 
     act(() => result.current.selectAddressAfterRefresh([LAN]))

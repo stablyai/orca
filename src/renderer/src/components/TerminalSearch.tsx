@@ -7,6 +7,7 @@ import type { SearchState } from '@/components/terminal-pane/terminal-keyboard-s
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
 import { safeFind } from './terminal-search-safe-find'
+import { buildTerminalSearchOptions } from './terminal-search-options'
 
 type TerminalSearchProps = {
   isOpen: boolean
@@ -41,21 +42,9 @@ export default function TerminalSearch({
   const [results, setResults] = useState(EMPTY_RESULTS)
   const requestQuery = getFindRequestQuery(query)
 
-  // xterm needs hex colors; explicit highlights stay visible over terminal themes (#612).
   const searchOptions = useCallback(
-    (incremental: boolean = false) => ({
-      caseSensitive,
-      regex,
-      incremental,
-      decorations: {
-        matchBackground: '#5c4a00',
-        matchBorder: '#5c4a00',
-        matchOverviewRuler: '#ffcc00',
-        activeMatchBackground: '#c4580e',
-        activeMatchBorder: '#ffcf6b',
-        activeMatchColorOverviewRuler: '#ff9900'
-      }
-    }),
+    (incremental: boolean = false) =>
+      buildTerminalSearchOptions({ caseSensitive, regex, incremental }),
     [caseSensitive, regex]
   )
 

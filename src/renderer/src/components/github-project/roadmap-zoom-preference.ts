@@ -1,5 +1,4 @@
-// Why: timeline zoom is a per-device viewing preference like column widths —
-// keep it out of the debounced settings write and off the remote wire.
+// Keep per-device zoom local instead of syncing cosmetic state or writing debounced settings.
 import type { RoadmapZoom } from '../../../../shared/github/project-roadmap-timeline'
 
 const STORAGE_KEY = 'orca.githubProject.roadmapZoom'

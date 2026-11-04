@@ -1109,108 +1109,14 @@
           {
             "step": "phone opens a file",
             "reply": {
-              "ok": false,
-              "error": "runtime_error",
-              "message": "renderer_unavailable"
+              "ok": true,
+              "fields": ["kind", "opened", "relativePath", "worktree"]
             },
             "phone": {
               "activeTab": "tab1",
               "groups": [
                 {
-                  "tabs": ["tab1", "tab2"],
-                  "active": "tab1"
-                }
-              ],
-              "rows": [
-                {
-                  "type": "terminal",
-                  "tab": "tab1",
-                  "leaf": "leaf1",
-                  "pty": "ptyServe1",
-                  "title": "phone-renamed",
-                  "tree": "leaf1",
-                  "paneTitles": []
-                },
-                {
-                  "type": "terminal",
-                  "tab": "tab2",
-                  "leaf": "leaf2",
-                  "pty": "ptyServe2",
-                  "title": "Terminal",
-                  "pinned": true,
-                  "tree": "leaf2",
-                  "paneTitles": []
-                }
-              ]
-            },
-            "server": {
-              "activeTab": "tab1",
-              "groups": [
-                {
-                  "tabs": ["tab1", "tab2"],
-                  "active": "tab1"
-                }
-              ],
-              "rows": [
-                {
-                  "type": "terminal",
-                  "tab": "tab1",
-                  "leaf": "leaf1",
-                  "pty": "ptyServe1",
-                  "title": "phone-renamed",
-                  "tree": "leaf1",
-                  "paneTitles": []
-                },
-                {
-                  "type": "terminal",
-                  "tab": "tab2",
-                  "leaf": "leaf2",
-                  "pty": "ptyServe2",
-                  "title": "Terminal",
-                  "pinned": true,
-                  "tree": "leaf2",
-                  "paneTitles": []
-                }
-              ]
-            }
-          },
-          {
-            "step": "phone reconnects after a server restart",
-            "snapshotBefore": {
-              "activeTab": "tab1",
-              "groups": [
-                {
-                  "tabs": ["tab1", "tab2"],
-                  "active": "tab1"
-                }
-              ],
-              "rows": [
-                {
-                  "type": "terminal",
-                  "tab": "tab1",
-                  "leaf": "leaf1",
-                  "pty": "ptyServe1",
-                  "title": "phone-renamed",
-                  "tree": "leaf1",
-                  "paneTitles": []
-                },
-                {
-                  "type": "terminal",
-                  "tab": "tab2",
-                  "leaf": "leaf2",
-                  "pty": "ptyServe2",
-                  "title": "Terminal",
-                  "pinned": true,
-                  "tree": "leaf2",
-                  "paneTitles": []
-                }
-              ]
-            },
-            "snapshotAfter": {
-              "activeTab": "tab1",
-              "groups": [
-                {
-                  "tabs": ["tab1", "tab2"],
+                  "tabs": ["tab1", "tab2", "tab3"],
                   "active": "tab1"
                 }
               ],
@@ -1233,6 +1139,119 @@
                   "pinned": true,
                   "tree": "leaf2",
                   "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2", "tab3"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal 2",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone reconnects after a server restart",
+            "snapshotBefore": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2", "tab3"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal 2",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
+                }
+              ]
+            },
+            "snapshotAfter": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2", "tab3"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal 2",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
                 }
               ]
             },
@@ -1257,7 +1276,7 @@
               "activeTab": "tab2",
               "groups": [
                 {
-                  "tabs": ["tab2"],
+                  "tabs": ["tab2", "tab3"],
                   "active": "tab2"
                 }
               ],
@@ -1271,6 +1290,11 @@
                   "pinned": true,
                   "tree": "leaf2",
                   "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
                 }
               ]
             },
@@ -1278,7 +1302,7 @@
               "activeTab": "tab2",
               "groups": [
                 {
-                  "tabs": ["tab2"],
+                  "tabs": ["tab2", "tab3"],
                   "active": "tab2"
                 }
               ],
@@ -1292,6 +1316,11 @@
                   "pinned": true,
                   "tree": "leaf2",
                   "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
                 }
               ]
             }
@@ -1309,6 +1338,654 @@
           "worktree"
         ],
         "terminalRowFields": [
+          "customTitle",
+          "id",
+          "incarnationId",
+          "isActive",
+          "isPinned",
+          "leafId",
+          "parentLayout",
+          "parentTabId",
+          "ptyId",
+          "startupCwd",
+          "status",
+          "terminal",
+          "title",
+          "type"
+        ]
+      }
+    },
+    "old-phone-on-new-server.layout-owner": {
+      "linux": {
+        "steps": [
+          {
+            "step": "phone creates two terminals",
+            "phone": {
+              "activeTab": "tab2",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab2"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone activates the first",
+            "reply": {
+              "ok": true,
+              "fields": [
+                "activeGroupId",
+                "activeTabId",
+                "activeTabType",
+                "publicationEpoch",
+                "snapshotVersion",
+                "tabGroups",
+                "tabs",
+                "worktree"
+              ]
+            },
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "Terminal",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone renames the first",
+            "reply": {
+              "ok": true,
+              "fields": ["rename"]
+            },
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone focuses the second",
+            "reply": {
+              "ok": true,
+              "fields": ["focus"]
+            },
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "host pins the second",
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone closes the pinned tab",
+            "reply": {
+              "ok": false,
+              "error": "terminal_tab_pinned"
+            },
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone opens a file",
+            "reply": {
+              "ok": true,
+              "fields": ["kind", "opened", "relativePath", "worktree"]
+            },
+            "phone": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2", "tab3"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2", "tab3"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
+                }
+              ]
+            }
+          },
+          {
+            "step": "phone reconnects after a server restart",
+            "snapshotBefore": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2", "tab3"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
+                }
+              ]
+            },
+            "snapshotAfter": {
+              "activeTab": "tab1",
+              "groups": [
+                {
+                  "tabs": ["tab1", "tab2", "tab3"],
+                  "active": "tab1"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab1",
+                  "leaf": "leaf1",
+                  "pty": "ptyServe1",
+                  "title": "phone-renamed",
+                  "tree": "leaf1",
+                  "paneTitles": []
+                },
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal 2",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
+                }
+              ]
+            },
+            "terminalsAfter": [
+              {
+                "tab": "tab1",
+                "pty": "ptyServe1"
+              },
+              {
+                "tab": "tab2",
+                "pty": "ptyServe2"
+              }
+            ]
+          },
+          {
+            "step": "phone closes the first terminal",
+            "reply": {
+              "ok": true,
+              "fields": ["close"]
+            },
+            "phone": {
+              "activeTab": "tab2",
+              "groups": [
+                {
+                  "tabs": ["tab2", "tab3"],
+                  "active": "tab2"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal 2",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
+                }
+              ]
+            },
+            "server": {
+              "activeTab": "tab2",
+              "groups": [
+                {
+                  "tabs": ["tab2", "tab3"],
+                  "active": "tab2"
+                }
+              ],
+              "rows": [
+                {
+                  "type": "terminal",
+                  "tab": "tab2",
+                  "leaf": "leaf2",
+                  "pty": "ptyServe2",
+                  "title": "Terminal 2",
+                  "pinned": true,
+                  "tree": "leaf2",
+                  "paneTitles": []
+                },
+                {
+                  "type": "markdown",
+                  "tab": "tab3",
+                  "title": "README.md"
+                }
+              ]
+            }
+          }
+        ],
+        "snapshotFields": [
+          "activeGroupId",
+          "activeTabId",
+          "activeTabType",
+          "publicationEpoch",
+          "snapshotVersion",
+          "tabGroups",
+          "tabs",
+          "type",
+          "worktree"
+        ],
+        "terminalRowFields": [
+          "customTitle",
           "id",
           "incarnationId",
           "isActive",

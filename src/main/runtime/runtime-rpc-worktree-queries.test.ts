@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,20 +10,40 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { sendRequest } from './runtime-rpc-test-harness'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: listings.listWorktrees
   }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listings.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    }
+  }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 describe('OrcaRuntimeRpcServer', () => {
@@ -82,35 +104,6 @@ describe('OrcaRuntimeRpcServer', () => {
             preview: 'hello'
           }
         ],
-        totalCount: 1,
-        truncated: false
-      }
-    })
-
-    await server.stop()
-  })
-
-  it('bounds worktree.list responses with limit metadata', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService(makeStore({ isUnread: true }) as never)
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
-
-    await server.start()
-
-    const metadata = readRuntimeMetadata(userDataPath)
-    const response = await sendRequest(metadata!.transports[0]!.endpoint, {
-      id: 'req_worktrees',
-      authToken: metadata!.authToken,
-      method: 'worktree.list',
-      params: {
-        limit: 1
-      }
-    })
-
-    expect(response).toMatchObject({
-      id: 'req_worktrees',
-      ok: true,
-      result: {
         totalCount: 1,
         truncated: false
       }

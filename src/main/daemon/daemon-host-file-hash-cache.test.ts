@@ -21,7 +21,7 @@ function codeReads(): unknown[] {
   return vi
     .mocked(readFileSync)
     .mock.calls.map(([path]) => path)
-    .filter((path) => typeof path === 'string' && path.endsWith('.js'))
+    .filter((path) => typeof path === 'string' && (path.endsWith('.js') || path.endsWith('.node')))
 }
 
 const originalPlatform = process.platform
@@ -51,12 +51,16 @@ function pinMtime(path: string): void {
   utimesSync(path, PINNED_MTIME_SECONDS, PINNED_MTIME_SECONDS)
 }
 
-function rewriteKeepingSizeAndMtime(path: string, contents: string): void {
+async function rewriteKeepingSizeAndMtime(path: string, contents: string): Promise<void> {
   const before = statSync(path)
   expect(contents.length).toBe(before.size)
+  // Allow ctime to tick before restoring mtime on the same-size rewrite.
+  await new Promise((resolve) => setTimeout(resolve, 20))
   writeFileSync(path, contents)
   pinMtime(path)
-  expect(statSync(path).mtimeMs).toBe(before.mtimeMs)
+  const after = statSync(path)
+  expect(after.mtimeMs).toBe(before.mtimeMs)
+  expect(after.ctimeMs).not.toBe(before.ctimeMs)
 }
 
 beforeEach(() => {
@@ -103,10 +107,10 @@ describe('daemon-host code hash cache', () => {
     expect(codeReads()).toEqual([])
   })
 
-  it('detects a same-size source edit that restores mtime', () => {
+  it('detects a same-size source edit that restores mtime', async () => {
     pinMtime(join(installDir, chunkRel))
     const root = materializedRoot()
-    rewriteKeepingSizeAndMtime(join(installDir, chunkRel), 'chunX')
+    await rewriteKeepingSizeAndMtime(join(installDir, chunkRel), 'chunX')
 
     expect(getRelocatedDaemonHost()).toBeNull()
     expect(codeReads()).toContain(join(installDir, chunkRel))
@@ -115,11 +119,11 @@ describe('daemon-host code hash cache', () => {
     expect(readFileSync(join(rebuilt, chunkRel), 'utf8')).toBe('chunX')
   })
 
-  it('detects a same-size mirror edit that restores mtime', () => {
+  it('detects a same-size mirror edit that restores mtime', async () => {
     const root = materializedRoot()
     pinMtime(join(root, chunkRel))
     expect(getRelocatedDaemonHost()).not.toBeNull()
-    rewriteKeepingSizeAndMtime(join(root, chunkRel), 'chunX')
+    await rewriteKeepingSizeAndMtime(join(root, chunkRel), 'chunX')
 
     expect(getRelocatedDaemonHost()).toBeNull()
   })

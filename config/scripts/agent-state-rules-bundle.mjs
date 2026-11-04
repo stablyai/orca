@@ -1,11 +1,5 @@
-// Builds and publishes the agent state rules bundle (agent-state-rules.json). The app's loader
-// validates the same file (src/main/runtime/agent-state-rules/agent-state-rules-bundle.ts), and
-// agent-state-rules-bundle.test.mjs proves the build passes it; this script only assembles the
-// file and enforces the publishing rules a single file cannot express.
-//
-//   node config/scripts/agent-state-rules-bundle.mjs build <out> [--bundled-only]
-//   node config/scripts/agent-state-rules-bundle.mjs publish-next [--bundled-only]
-//   node config/scripts/agent-state-rules-bundle.mjs promote-stable
+// Assemble rules accepted by the app loader and enforce channel publishing constraints.
+// Usage: build <out> [--bundled-only] | publish-next [--bundled-only] | promote-stable.
 
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -79,8 +73,7 @@ export function publishAgentStateRules({ repo, channel, text, target, gh = runGh
   const candidate = JSON.parse(text)
   const tag = agentStateRulesTag(candidate.engineVersion, channel)
   const publishedText = downloadPublished(gh, repo, tag)
-  // Why strictly higher: apps refuse a version they already have, so republishing one would reach
-  // nobody, and a lower one would reach only apps that never took the higher.
+  // Apps refuse existing/lower versions, so only strictly increasing publication reaches upgraded clients.
   const published = publishedText === null ? null : JSON.parse(publishedText).version
   if (published !== null && candidate.version <= published) {
     throw new Error(
@@ -107,18 +100,13 @@ export function publishAgentStateRules({ repo, channel, text, target, gh = runGh
       'Agent state rules for Orca. Running apps download this file; it is not an app release.'
     ])
   } else {
-    // Why --clobber on the same tag: the app's fixed URL stays valid, and a fetch that lands
-    // mid-upload gets a 404 and keeps its last good copy.
+    // Keep fixed channel URL with --clobber; mid-upload 404 retains the app’s last good copy.
     ghOrThrow(gh, ['release', 'upload', tag, file, '--repo', repo, '--clobber'])
   }
   return { tag, version: candidate.version }
 }
 
-/**
- * Why no rebuild and no re-gate: stable gets exactly the bytes RC and dev builds soaked on next,
- * which only the gated publish-next job writes. A bundledOnly next is promoted too: that is how
- * stable rolls back to the rules it shipped.
- */
+// Promote exact gated next bytes without rebuilding; bundledOnly next also permits rollback to shipped rules.
 export function promoteAgentStateRules({ repo, engineVersion, target, gh = runGh }) {
   const nextTag = agentStateRulesTag(engineVersion, 'next')
   const text = downloadPublished(gh, repo, nextTag)

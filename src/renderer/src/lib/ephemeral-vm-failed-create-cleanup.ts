@@ -1,7 +1,8 @@
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 
 type FailedCreateCleanupActions = {
-  deleteProjectHostSetup: (setupId: string) => Promise<unknown>
+  deleteProjectHostSetup: (setupId: string, hostId: ExecutionHostId) => Promise<unknown>
   cleanupRuntime: (runtimeId: string) => Promise<unknown>
   reportSetupError: (error: unknown) => void
   reportRuntimeError: (error: unknown) => void
@@ -20,7 +21,8 @@ export async function cleanupFailedEphemeralVmWorkspace(
   ) {
     try {
       const deleted = await actions.deleteProjectHostSetup(
-        request.workspaceRunContext.projectHostSetupId
+        request.workspaceRunContext.projectHostSetupId,
+        request.workspaceRunContext.hostId
       )
       if (deleted == null) {
         actions.reportSetupError(new Error('Could not confirm project host rollback.'))

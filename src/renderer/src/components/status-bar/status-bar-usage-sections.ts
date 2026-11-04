@@ -14,7 +14,6 @@ export type StatusBarUsageSection = {
 
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
-/** The percentages actually shown in a provider chip, also used by the row's unit label. */
 export function getStatusBarUsageSections(
   p: ProviderRateLimits | null,
   mode: StatusBarUsageMode

@@ -1,4 +1,3 @@
-/** Withdrawing a managed stop request that the running orcad has not acted on yet. */
 import { rmSync } from 'node:fs'
 import type {
   OrcadManagedStopCancellation,
@@ -10,7 +9,7 @@ import {
   readOrcadManagedStopRequest
 } from './orcad-managed-stop-request'
 
-/** `dispatched` means orcad already began stopping; only its completion can say how it ended. */
+/** Dispatched stops cannot be canceled; their completion verdict remains authoritative. */
 export function cancelOrcadManagedStop(
   request: OrcadManagedStopRequest
 ): OrcadManagedStopCancellation['outcome'] {
@@ -21,7 +20,6 @@ export function cancelOrcadManagedStop(
   return outcome
 }
 
-/** Removes the request file only while it still carries this transaction. */
 export function withdrawOrcadManagedStopRequest(request: OrcadManagedStopRequest): void {
   const path = orcadManagedStopRequestPath(request.instance)
   try {
@@ -29,6 +27,6 @@ export function withdrawOrcadManagedStopRequest(request: OrcadManagedStopRequest
       rmSync(path, { force: true })
     }
   } catch {
-    // Absent or another transaction's request: the standing decision already fences this one.
+    // The persisted decision fences this transaction even if its request is gone.
   }
 }

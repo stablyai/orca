@@ -41,21 +41,23 @@ describe('checked-out PostgreSQL client failure handling', () => {
       throw terminated
     })
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const database = new PostgresDatabase(poolOf(client) as never)
+    try {
+      const database = new PostgresDatabase(poolOf(client) as never)
 
-    await expect(
-      database.transaction(async (transaction) => await transaction.query('SELECT 1'))
-    ).rejects.toBe(terminated)
+      await expect(
+        database.transaction(async (transaction) => await transaction.query('SELECT 1'))
+      ).rejects.toBe(terminated)
 
-    expect(listenersWhileCheckedOut).toBe(1)
-    expect(client.listenerCount('error')).toBe(0)
-    expect(client.released).toEqual([terminated])
-    expect(client.statements).toEqual(['BEGIN', 'SELECT 1', 'ROLLBACK'])
-    expect(warning).toHaveBeenCalledWith(
-      '[orca-relay] checked-out PostgreSQL client failed: 57P01 Connection terminated unexpectedly'
-    )
-
-    warning.mockRestore()
+      expect(listenersWhileCheckedOut).toBe(1)
+      expect(client.listenerCount('error')).toBe(0)
+      expect(client.released).toEqual([terminated])
+      expect(client.statements).toEqual(['BEGIN', 'SELECT 1'])
+      expect(warning).toHaveBeenCalledWith(
+        '[orca-relay] checked-out PostgreSQL client failed: 57P01 Connection terminated unexpectedly'
+      )
+    } finally {
+      warning.mockRestore()
+    }
   })
 
   it('releases a healthy client back to the pool with no error', async () => {

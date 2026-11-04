@@ -6,11 +6,7 @@ import type { SkillDeleteResult } from '../../../../shared/skill-delete-contract
 import { skillDeleteResultLines } from './skill-delete-copy'
 import { SKILLS_PAGE_COLUMN } from './skills-page-column'
 
-/**
- * Persistent rather than a toast: a toast disappears before a user can act on
- * "3 failed", and the lines are grouped per reason, which the flat four-string
- * install status component cannot render.
- */
+/** Keep grouped delete failures visible until acted on; a transient toast would lose actionable details. */
 export function SkillDeleteResultBand({
   result,
   onDismiss

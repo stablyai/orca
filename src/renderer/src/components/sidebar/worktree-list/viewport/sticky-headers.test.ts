@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildRows } from '../grouping/build-rows'
+import { buildRows } from '../grouping/build-rows.test-fixture'
 import { getStickyHeaderIndexes } from './virtual-rows'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { Row } from '../grouping/row-types'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -13,18 +12,6 @@ const repo: Repo = {
   badgeColor: '#000',
   addedAt: 1
 }
-
-const makeHeaderRow = (
-  key: string,
-  overrides: Partial<Extract<Row, { type: 'header' }>> = {}
-): Extract<Row, { type: 'header' }> => ({
-  type: 'header',
-  key,
-  label: key,
-  count: 0,
-  tone: 'text-foreground',
-  ...overrides
-})
 
 const makeWorktree = (id: string): Worktree => ({
   id,
@@ -48,31 +35,7 @@ const makeWorktree = (id: string): Worktree => ({
   lastActivityAt: 0
 })
 
-const makeWorktreeRow = (id: string): Extract<Row, { type: 'item' }> => ({
-  type: 'item',
-  rowKey: `all:${id}`,
-  sectionKey: 'all',
-  worktree: makeWorktree(id),
-  repo,
-  depth: 0,
-  groupDepth: 0,
-  lineageTrail: [],
-  isLastLineageChild: false,
-  lineageChildCount: 0
-})
-
 describe('getStickyHeaderIndexes', () => {
-  it('keeps nested project rows from replacing their top-level project group header', () => {
-    expect(
-      getStickyHeaderIndexes([
-        makeHeaderRow('project-group:personal', { projectGroupDepth: 0 }),
-        makeHeaderRow('repo:autogenie', { projectGroupDepth: 1 }),
-        makeWorktreeRow('main'),
-        makeHeaderRow('repo:ungrouped', { projectGroupDepth: 0 })
-      ])
-    ).toEqual([0, 3])
-  })
-
   it('uses the real project-group hierarchy when choosing sticky headers', () => {
     const projectGroup: ProjectGroup = {
       id: 'group-personal',

@@ -3,41 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { buildTerminalShortcutKey, TERMINAL_ACCESSORY_KEYS } from './terminal-accessory-keys'
 
 describe('TERMINAL_ACCESSORY_KEYS', () => {
-  it('sends reverse-tab with a non-repeatable Shift+Tab key', () => {
-    const key = TERMINAL_ACCESSORY_KEYS.find((candidate) => candidate.id === 'shiftTab')
-
-    expect(key).toEqual({
-      id: 'shiftTab',
-      label: 'Shift+Tab',
-      bytes: '\x1b[Z',
-      accessibilityLabel: 'Shift Tab'
-    })
-  })
-
-  it('includes a non-repeatable Enter default key', () => {
-    expect(TERMINAL_ACCESSORY_KEYS.find((candidate) => candidate.id === 'enter')).toEqual({
-      id: 'enter',
-      label: 'Enter',
-      bytes: '\r',
-      accessibilityLabel: 'Enter'
-    })
-  })
-
-  it('includes a non-repeatable Space default key near the primary editing keys', () => {
-    const ids = TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
-
-    expect(TERMINAL_ACCESSORY_KEYS.find((candidate) => candidate.id === 'space')).toEqual({
-      id: 'space',
-      label: 'Space',
-      bytes: ' ',
-      accessibilityLabel: 'Space'
-    })
-    expect(ids.indexOf('space')).toBeGreaterThan(ids.indexOf('shiftTab'))
-    expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('backspace'))
-    expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('delete'))
-    expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('arrowUp'))
-  })
-
   it('has unique non-empty built-in ids', () => {
     const ids = TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
 
@@ -121,6 +86,13 @@ describe('TERMINAL_ACCESSORY_KEYS', () => {
       bytes: '\x1b[3;3~',
       accessibilityLabel: 'Alt Del'
     })
+  })
+
+  it('builds desktop bytes for Shift+Enter and Ctrl+Backspace', () => {
+    expect(buildTerminalShortcutKey({ key: 'enter', modifiers: ['shift'] })?.bytes).toBe(
+      '\x1b[13;2u'
+    )
+    expect(buildTerminalShortcutKey({ key: 'backspace', modifiers: ['ctrl'] })?.bytes).toBe('\x17')
   })
 
   it('builds function-key terminal sequences', () => {

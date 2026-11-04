@@ -10,6 +10,7 @@ import {
   enrichWorkspaceCleanupCandidatesWithCache,
   type WorkspaceCleanupEnrichmentCacheEntry
 } from './workspace-cleanup-candidate-enrichment'
+import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
 
 let latestWorkspaceCleanupScanToken = 0
 let finalizedWorkspaceCleanupScanToken = 0
@@ -109,9 +110,7 @@ async function applyWorkspaceCleanupProgress(
     return
   }
   const state = getState()
-  // Why: a cached snapshot (or the previous settled scan) may already fill the
-  // list; streamed rows reconcile into it by worktreeId so a refresh never
-  // clears and rebuilds what the user is reading.
+  // Reconcile streamed rows into cached/settled snapshots without clearing the list under the reader.
   const previousCandidates =
     state.workspaceCleanupProgress?.scanId === progress.scanId
       ? state.workspaceCleanupProgress.candidates
@@ -150,8 +149,7 @@ async function applyWorkspaceCleanupProgress(
       // sweep every subscriber.
       return state
     }
-    // Why: a dismissal committed while this frame's enrichment awaited must
-    // not be clobbered by candidates derived from the pre-await snapshot.
+    // Dismissals may commit during enrichment; do not overwrite them with pre-await candidates.
     const finalCandidates =
       state.workspaceCleanupDismissals === dismissalsAtEnrichment
         ? candidates
@@ -160,9 +158,7 @@ async function applyWorkspaceCleanupProgress(
           )
     return {
       workspaceCleanupScan: {
-        // Why: mid-refresh the list still mixes in rows from the previous
-        // snapshot; the honest "as of" time stays the snapshot's until the new
-        // scan settles and removes vanished rows.
+        // Mixed old/new rows retain snapshot’s as-of time until settlement removes vanished rows.
         scannedAt: state.workspaceCleanupScan?.scannedAt ?? progress.scannedAt,
         candidates: finalCandidates,
         errors: progress.errors
@@ -192,11 +188,7 @@ export async function enrichWorkspaceCleanupCandidatesForScan(
   })
 }
 
-/**
- * Identity token over every state slice the local signature projects — a
- * strict superset of getWorkspaceCleanupLocalStateSignature's inputs, so an
- * unchanged token guarantees an unchanged signature without stringifying.
- */
+/** Reference token covers a superset of local-signature inputs; equality skips signature stringification. */
 function buildWorkspaceCleanupLocalStateToken(state: AppState): readonly unknown[] {
   return [
     state.activeWorktreeId,
@@ -209,6 +201,11 @@ function buildWorkspaceCleanupLocalStateToken(state: AppState): readonly unknown
     state.browserTabsByWorktree,
     state.retainedAgentsByPaneKey,
     state.agentStatusByPaneKey,
+    state.unifiedTabsByWorktree,
+    selectWorktreesByRepo(state),
+    selectDetectedWorktreesByRepo(state),
+    state.runtimeAgentOrchestrationByPaneKey,
+    state.paneForegroundAgentByPaneKey,
     state.lastVisitedAtByWorktreeId,
     state.workspaceCleanupViewedCandidates,
     state.workspaceCleanupDismissals
@@ -239,8 +236,7 @@ function mergeWorkspaceCleanupProgressCandidates({
   )
   const merged = [...indexCache.candidates]
   for (const candidate of nextCandidates) {
-    // Why (STA-4343): two hosts publish the same `repoId::path` id; keying the
-    // merge on the id alone made one host's row overwrite the other's.
+    // Merge host-qualified identities or same-ID rows overwrite the other host (STA-4343).
     const identity = getWorkspaceCleanupCandidateIdentity(candidate)
     const existingIndex = indexCache.indexesByIdentity.get(identity)
     if (existingIndex === undefined) {

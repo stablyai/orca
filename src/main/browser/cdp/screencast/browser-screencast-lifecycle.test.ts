@@ -1,0 +1,100 @@
+import { Buffer } from 'node:buffer'
+import { EventEmitter } from 'node:events'
+import { describe, expect, it, vi } from 'vitest'
+
+import { createBrowserScreencastMessageHandler } from './browser-screencast-cdp-events'
+import { startBrowserScreencast } from './browser-screencast-stream'
+
+function createWebContents() {
+  let attached = false
+  const debuggerApi = new EventEmitter() as EventEmitter & {
+    isAttached: ReturnType<typeof vi.fn>
+    attach: ReturnType<typeof vi.fn>
+    detach: ReturnType<typeof vi.fn>
+    sendCommand: ReturnType<typeof vi.fn>
+  }
+  debuggerApi.isAttached = vi.fn(() => attached)
+  debuggerApi.attach = vi.fn(() => {
+    attached = true
+  })
+  debuggerApi.detach = vi.fn(() => {
+    attached = false
+  })
+  debuggerApi.sendCommand = vi.fn(async () => ({}))
+  return { isDestroyed: vi.fn(() => false), isCrashed: vi.fn(() => false), debugger: debuggerApi }
+}
+
+describe('browser screencast lifecycle', () => {
+  it('restarts the screencast and retimes the pacer when the shared frame budget changes', async () => {
+    const webContents = createWebContents()
+    const onFrame = vi.fn()
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 3840,
+      maxHeight: 2160,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    await session.updateFrameBudget({
+      quality: 60,
+      maxWidth: 975,
+      maxHeight: 844,
+      everyNthFrame: 1,
+      minFrameIntervalMs: 100
+    })
+    expect(webContents.debugger.sendCommand).toHaveBeenLastCalledWith('Page.startScreencast', {
+      format: 'jpeg',
+      quality: 60,
+      maxWidth: 975,
+      maxHeight: 844,
+      everyNthFrame: 1
+    })
+
+    const emitFrame = (sessionId: number): void => {
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        sessionId,
+        data: Buffer.from(`frame-${sessionId}`).toString('base64'),
+        metadata: {}
+      })
+    }
+    emitFrame(1)
+    emitFrame(2)
+    expect(onFrame).toHaveBeenCalledOnce()
+
+    session.stop()
+    await session.done
+  })
+
+  it('acks malformed frames when Chromium supplied a valid session id', () => {
+    const webContents = createWebContents()
+    const ackScreencastFrame = vi.fn()
+    const handler = createBrowserScreencastMessageHandler({
+      dbg: webContents.debugger as never,
+      options: {
+        format: 'jpeg',
+        quality: 70,
+        maxWidth: 1440,
+        maxHeight: 1200,
+        everyNthFrame: 2,
+        minFrameIntervalMs: 0,
+        onFrame: vi.fn()
+      },
+      isClosed: () => false,
+      isStopping: () => false,
+      queueFrame: vi.fn(),
+      ackScreencastFrame,
+      scheduleNavigationFrameCapture: vi.fn(),
+      clearNavigationCaptureTimer: vi.fn(),
+      bumpSnapshotGeneration: vi.fn(),
+      observeGuestViewSize: () => false,
+      openDialog: () => null
+    })
+
+    handler({}, 'Page.screencastFrame', { sessionId: 42, data: '' })
+    expect(ackScreencastFrame).toHaveBeenCalledOnce()
+    expect(ackScreencastFrame).toHaveBeenCalledWith(42)
+  })
+})

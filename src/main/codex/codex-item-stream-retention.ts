@@ -5,27 +5,15 @@ import {
 } from './codex-structured-item-stream-bounds'
 import type { CodexItemStreamState } from './codex-structured-item-stream-contracts'
 
-// Preserve the previous metadata ceiling while letting small live commands share it.
-export const MAX_CODEX_ITEM_STREAM_METADATA_BYTES =
-  MAX_CODEX_ITEM_STREAM_STATES * MAX_CODEX_ITEM_STREAM_ITEM_BYTES
+// Bounds only evictable streams; a command that outlives its turn is kept until it ends.
+const MAX_EVICTABLE_STATE_BYTES = MAX_CODEX_ITEM_STREAM_STATES * MAX_CODEX_ITEM_STREAM_ITEM_BYTES
 
 type RetainedState = { state: CodexItemStreamState; bytes: number; persistent: boolean }
 
 export class CodexItemStreamRetention {
   private readonly states = new Map<string, RetainedState>()
-  private bytes = 0
-  private persistentBytes = 0
+  private evictableBytes = 0
   private persistentCount = 0
-
-  constructor(private readonly maxBytes = MAX_CODEX_ITEM_STREAM_METADATA_BYTES) {}
-
-  get retainedBytes(): number {
-    return this.bytes
-  }
-
-  get size(): number {
-    return this.states.size
-  }
 
   get persistentSize(): number {
     return this.persistentCount
@@ -33,7 +21,7 @@ export class CodexItemStreamRetention {
 
   get overCapacity(): boolean {
     return (
-      this.bytes > this.maxBytes ||
+      this.evictableBytes > MAX_EVICTABLE_STATE_BYTES ||
       this.states.size - this.persistentCount > MAX_CODEX_ITEM_STREAM_STATES
     )
   }
@@ -46,30 +34,16 @@ export class CodexItemStreamRetention {
     return this.states.get(key)?.persistent === true
   }
 
-  canRetain(key: string, state: CodexItemStreamState): boolean {
-    const previous = this.states.get(key)
-    return (
-      this.persistentBytes -
-        (previous?.persistent ? previous.bytes : 0) +
-        this.stateBytes(key, state) <=
-      this.maxBytes
-    )
-  }
-
-  retain(key: string, state: CodexItemStreamState): boolean {
-    if (!this.canRetain(key, state)) {
-      return false
-    }
+  retain(key: string, state: CodexItemStreamState): void {
     this.forget(key)
     const bytes = this.stateBytes(key, state)
     const persistent = codexCommandOutlivesTurn(state.item)
     this.states.set(key, { state, bytes, persistent })
-    this.bytes += bytes
     if (persistent) {
-      this.persistentBytes += bytes
       this.persistentCount += 1
+    } else {
+      this.evictableBytes += bytes
     }
-    return true
   }
 
   oldestEvictable(): string | undefined {
@@ -86,18 +60,17 @@ export class CodexItemStreamRetention {
     if (!entry) {
       return
     }
-    this.bytes -= entry.bytes
     if (entry.persistent) {
-      this.persistentBytes -= entry.bytes
       this.persistentCount -= 1
+    } else {
+      this.evictableBytes -= entry.bytes
     }
     this.states.delete(key)
   }
 
   clear(): void {
     this.states.clear()
-    this.bytes = 0
-    this.persistentBytes = 0
+    this.evictableBytes = 0
     this.persistentCount = 0
   }
 

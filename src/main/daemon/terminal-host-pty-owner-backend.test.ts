@@ -3,7 +3,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
-vi.mock('../pty-descendant-termination', () => ({
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
@@ -69,7 +69,7 @@ describe('TerminalHost PTY owner backend', () => {
     return subprocess
   }
 
-  // Orca's default theme: nothing reported colours for this session.
+  // Without a reported theme, the session answers using Orca’s default colors.
   const query = '\x1b]10;?\x07'
   const reply = '\x1b]10;rgb:ffff/ffff/ffff\x1b\\'
   // ConPTY echoes a reply with its ESC bytes stripped; wsl.exe's echo shape is unverified.

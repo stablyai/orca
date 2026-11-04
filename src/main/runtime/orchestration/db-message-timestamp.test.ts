@@ -16,7 +16,7 @@ describe('orchestration message timestamps', () => {
     })
 
     expect(message.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/)
-    db.markAsDelivered([message.id])
+    db.markAsDelivered([message.id], 'b')
     expect(db.getMessageById(message.id)?.delivered_at).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/
     )

@@ -1,18 +1,16 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { makeTreeReadOnly, shareTree } from './space-sharing-copy.mjs'
+import { publishSharedTree, sharedTreeStagingPath } from './shared-tree-publish.mjs'
+import { isSharedPackageDir } from './native-build-entry.cjs'
 
 const IDENTITY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 // Sibling of path.txt, never inside dist: an install replaces dist wholesale.
 const MARKER_FILENAME = '.orca-shared-dist'
 
-/**
- * Where sibling worktrees of one repository keep their shared extracted Electron.
- *
- * Null means "install normally" -- every caller treats a missing entry as "do what you did before".
- */
+// Return repository-wide shared Electron location or null for normal install; folder workspaces also use normal install.
 export function resolveSharedElectronDistEntry(options) {
   const { repoRoot, version, targetPlatform, targetArch } = options
   const env = options.env ?? process.env
@@ -21,6 +19,10 @@ export function resolveSharedElectronDistEntry(options) {
     return null
   }
   if (![version, targetPlatform, targetArch].every((part) => IDENTITY_PATTERN.test(part ?? ''))) {
+    return null
+  }
+  // Skip cache under global pnpm store: worktrees already share package and replacing dist would displace running apps.
+  if ((options.isSharedPackageDir ?? isSharedPackageDir)(options.electronPackageDir, repoRoot)) {
     return null
   }
   let gitCommonDir
@@ -65,11 +67,7 @@ export function recordAdoptedSharedElectronDist(entry, write) {
   }
 }
 
-/**
- * Share a validated cache entry into `stagePath`. Deliberately never falls back to a byte copy --
- * with no storage to share the caller is better off with its normal install, which this must not
- * slow down.
- */
+// Share validated entry without byte-copy fallback: when storage cannot be shared, caller’s normal install is preferable.
 export function shareElectronDistFromCache(entry, stagePath, options) {
   const { version, platformPath } = options
   if (!isUsableElectronDist(entry.entryPath, version, platformPath)) {
@@ -83,13 +81,7 @@ export function shareElectronDistFromCache(entry, stagePath, options) {
   return isUsableElectronDist(stagePath, version, platformPath)
 }
 
-/**
- * Publish this worktree's dist as the shared entry, best effort.
- *
- * No lock: staging names are unique and `rename` onto a populated directory fails with ENOTEMPTY,
- * so a concurrent publisher either wins the rename or cleans up its own staging tree. Neither can
- * observe a half-written entry, and a usable entry already in place is never overwritten.
- */
+// Publish via unique staging/atomic rename without lock: populated entry blocks racing replacement; usable entry is never overwritten.
 export function publishSharedElectronDist(distPath, entry, options = {}) {
   const { version, platformPath } = options
   const uuid = options.uuid ?? randomUUID
@@ -99,75 +91,23 @@ export function publishSharedElectronDist(distPath, entry, options = {}) {
     return false
   }
 
-  const stagePath = `${entry.entryPath}.staging-${process.pid}-${uuid()}`
+  const stagePath = sharedTreeStagingPath(entry.entryPath, uuid)
   try {
     mkdirSync(entry.cacheRoot, { recursive: true })
     ;(options.share ?? shareTree)(distPath, stagePath)
-    // Before publishing, not after: an entry is visible the instant the rename lands, and under
-    // hardlink sharing this is the only thing standing between a stray write and every worktree.
+    // Protect before publish: rename exposes entry immediately, and hardlink writes would mutate every worktree.
     ;(options.protect ?? makeTreeReadOnly)(stagePath)
   } catch {
     rmSync(stagePath, { recursive: true, force: true })
     return false
   }
 
-  return swapInElectronDistEntry(entry, stagePath, {
-    canValidate,
-    version,
-    platformPath,
+  // An entry we cannot judge counts as good: another worktree got there first, so keep theirs.
+  return publishSharedTree(stagePath, entry.entryPath, {
+    isUsable: () => !canValidate || isUsable(entry, version, platformPath),
     uuid,
-    rename: options.rename ?? renameSync
+    rename: options.rename
   })
-}
-
-/**
- * Replace the entry with a staged tree, re-checking first.
- *
- * Sharing the tree above takes seconds, and a sibling worktree can publish a perfectly good entry
- * in that time. Re-validating here, immediately before the destructive rename, keeps us from
- * discarding that entry -- and restoring the quarantine on a failed swap keeps a losing publisher
- * from leaving the cache empty.
- */
-function swapInElectronDistEntry(entry, stagePath, options) {
-  const { canValidate, version, platformPath, uuid, rename } = options
-  let quarantinePath = null
-  if (existsSync(entry.entryPath)) {
-    // Same rule as before staging: an entry we cannot judge, or one that is good, is never
-    // displaced. Both mean another worktree got there first, so keep theirs.
-    if (!canValidate || isUsable(entry, version, platformPath)) {
-      rmSync(stagePath, { recursive: true, force: true })
-      return false
-    }
-    quarantinePath = `${entry.entryPath}.unusable-${process.pid}-${uuid()}`
-    try {
-      renameSync(entry.entryPath, quarantinePath)
-    } catch {
-      rmSync(stagePath, { recursive: true, force: true })
-      return false // Another worktree is already replacing it.
-    }
-  }
-
-  try {
-    rename(stagePath, entry.entryPath)
-  } catch {
-    rmSync(stagePath, { recursive: true, force: true })
-    if (quarantinePath !== null) {
-      // Put it back rather than leave no entry at all; a bad entry still beats an empty cache,
-      // because the next publisher re-validates and replaces it.
-      try {
-        renameSync(quarantinePath, entry.entryPath)
-        return false
-      } catch {
-        rmSync(quarantinePath, { recursive: true, force: true })
-      }
-    }
-    return false
-  }
-
-  if (quarantinePath !== null) {
-    rmSync(quarantinePath, { recursive: true, force: true })
-  }
-  return true
 }
 
 function isUsable(entry, version, platformPath) {

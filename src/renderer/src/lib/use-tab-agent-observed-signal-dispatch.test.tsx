@@ -19,7 +19,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
@@ -120,8 +120,7 @@ describe('useTabAgent observed-signal dispatch', () => {
     for (let revision = 1; revision <= TITLE_PUBLICATIONS; revision += 1) {
       act(() => publishRuntimeTitle(revision))
     }
-    // One commit per publication. Re-dispatching the unchanged observed-signal
-    // flag doubled this, and put SortableTab's fiber in every #185 stack.
+    // Each title publication should commit once; redundant true dispatches doubled commits and implicated SortableTab in unrelated #185 cascades.
     expect(probeRenders).toBe(TITLE_PUBLICATIONS)
     expect(latestAgent).toBe('codex')
   })

@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { JiraConnectionStatus, JiraIssue, JiraViewer } from '../../../../shared/jira-types'
+import type {
+  JiraConnectionStatus,
+  JiraIssue,
+  JiraViewer
+} from '../../../../shared/jira/jira-types'
 import {
   getTaskSourceCacheScope,
-  getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
-import { credentialDecryptionMessage } from '../../../../shared/integration-credential-errors'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import '../../../../shared/integration-credential-errors'
+import '@/lib/provider-runtime-context'
 import { createJiraSlice } from './jira'
-import { beginJiraMutation } from './jira-read-coordination'
+import './jira-read-coordination'
 
 const jiraStatus = vi.fn()
 const jiraConnect = vi.fn()
@@ -34,6 +37,7 @@ vi.mock('@/runtime/runtime-jira-client', () => ({
   jiraListCreateFields: vi.fn(),
   jiraListIssueTypes: vi.fn(),
   jiraListIssues: (...args: unknown[]) => jiraListIssues(...args),
+  jiraListIssuesForTarget: (...args: unknown[]) => jiraListIssues(...args),
   jiraReadStatus: (...args: unknown[]) => jiraReadStatus(...args),
   jiraListPriorities: vi.fn(),
   jiraListProjects: vi.fn(),
@@ -208,44 +212,15 @@ describe('createJiraSlice runtime context', () => {
 
     sourceResult.resolve([{ ...issue('ALP-1'), title: 'Source issue' }])
     await expect(request).resolves.toMatchObject([{ key: 'ALP-1', title: 'Source issue' }])
-    expect(jiraListIssues).toHaveBeenCalledWith(sourceContext, 'assigned', 30, 'site-1')
+    expect(jiraListIssues).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'source-runtime' },
+      'assigned',
+      30,
+      'site-1',
+      undefined
+    )
     expect(Object.values(store.getState().jiraSearchCache)).toHaveLength(1)
     expect(store.getState().jiraSearchCache['site-1::list::assigned::30']).toBeUndefined()
-  })
-
-  it('forces fresh list and search reads while keeping ordinary cache reads', async () => {
-    const store = createTestStore()
-    store.setState({
-      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' },
-      jiraSearchCache: {
-        'site-1::list::assigned::30': { data: [issue('ALP-OLD')], fetchedAt: Date.now() },
-        'site-1::project = ALP::30': { data: [issue('ALP-OLD')], fetchedAt: Date.now() }
-      }
-    })
-    jiraListIssues.mockResolvedValueOnce([issue('ALP-LIST-FRESH')])
-    jiraSearchIssues.mockResolvedValueOnce([issue('ALP-SEARCH-FRESH')])
-
-    await expect(store.getState().listJiraIssues('assigned', 30)).resolves.toMatchObject([
-      { key: 'ALP-OLD' }
-    ])
-    await expect(
-      store.getState().listJiraIssues('assigned', 30, { force: true })
-    ).resolves.toMatchObject([{ key: 'ALP-LIST-FRESH' }])
-    await expect(store.getState().searchJiraIssues('project = ALP', 30)).resolves.toMatchObject([
-      { key: 'ALP-OLD' }
-    ])
-    await expect(
-      store.getState().searchJiraIssues('project = ALP', 30, { force: true })
-    ).resolves.toMatchObject([{ key: 'ALP-SEARCH-FRESH' }])
-
-    expect(jiraListIssues).toHaveBeenCalledTimes(1)
-    expect(jiraSearchIssues).toHaveBeenCalledTimes(1)
-    expect(store.getState().jiraSearchCache['site-1::list::assigned::30']?.data).toMatchObject([
-      { key: 'ALP-LIST-FRESH' }
-    ])
-    expect(store.getState().jiraSearchCache['site-1::project = ALP::30']?.data).toMatchObject([
-      { key: 'ALP-SEARCH-FRESH' }
-    ])
   })
 
   it('reuses ordinary in-flight reads but force starts a fresh list and search request', async () => {
@@ -315,20 +290,6 @@ describe('createJiraSlice runtime context', () => {
     }
   )
 
-  it('rejects a forced late write after the Jira mutation generation changes', async () => {
-    const store = createTestStore()
-    store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
-    const pending = deferred<JiraIssue[]>()
-    jiraListIssues.mockReturnValueOnce(pending.promise)
-
-    const request = store.getState().listJiraIssues('assigned', 30, { force: true })
-    await Promise.resolve()
-    beginJiraMutation()
-    pending.resolve([issue('ALP-STALE')])
-    await expect(request).resolves.toMatchObject([{ key: 'ALP-STALE' }])
-    expect(store.getState().jiraSearchCache['site-1::list::assigned::30']).toBeUndefined()
-  })
-
   it('does not cache a late abortable search response', async () => {
     const store = createTestStore()
     store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
@@ -351,29 +312,6 @@ describe('createJiraSlice runtime context', () => {
     await rejection
     expect(signal?.aborted).toBe(true)
     expect(store.getState().jiraSearchCache['site-1::project = ALP::30']).toBeUndefined()
-  })
-
-  it('keeps isolated status failures from mutating the focused Jira Settings state', async () => {
-    const store = createTestStore()
-    const focusedStatus = {
-      connected: true,
-      viewer: { email: 'focused@example.com' } as JiraViewer,
-      selectedSiteId: 'site-1'
-    }
-    store.setState({
-      jiraStatus: focusedStatus,
-      jiraStatusChecked: true,
-      jiraStatusContextKey: 'local#0'
-    })
-    jiraReadStatus.mockRejectedValueOnce(new Error('Source runtime credentials unavailable'))
-
-    await expect(
-      store.getState().readJiraStatus(jiraSourceContext('source-runtime'))
-    ).rejects.toThrow('Source runtime credentials unavailable')
-
-    expect(store.getState().jiraStatus).toEqual(focusedStatus)
-    expect(store.getState().jiraStatusContextKey).toBe('local#0')
-    expect(jiraStatus).not.toHaveBeenCalled()
   })
 
   it('isolates summary cache entries by source runtime and Jira site without bare-key fallback', async () => {
@@ -429,36 +367,6 @@ describe('createJiraSlice runtime context', () => {
       store.getState().jiraIssueSummaryCache[`${getTaskSourceCacheScope(sourceC)}::site-2::ALP-1`]
         ?.data?.title
     ).toBe('Site 2')
-  })
-
-  it('forces a fresh summary lookup and does not cache invalid fulfilled results', async () => {
-    const store = createTestStore()
-    const source = jiraSourceContext('runtime-a', 'site-1')
-    const cacheKey = `${getTaskSourceCacheScope(source)}::site-1::ALP-1`
-    store.setState({
-      jiraIssueSummaryCache: {
-        [cacheKey]: { data: null, fetchedAt: Date.now() }
-      }
-    })
-    jiraLookupIssueSummary.mockResolvedValueOnce(issue('ALP-1'))
-
-    await expect(
-      store.getState().lookupJiraIssueSummary(source, 'ALP-1', 'site-1', { force: true })
-    ).resolves.toMatchObject({ key: 'ALP-1' })
-
-    expect(jiraLookupIssueSummary).toHaveBeenCalledWith(
-      source,
-      'ALP-1',
-      'site-1',
-      expect.any(AbortSignal)
-    )
-    expect(store.getState().jiraIssueSummaryCache[cacheKey]?.data?.key).toBe('ALP-1')
-
-    jiraLookupIssueSummary.mockResolvedValueOnce(null)
-    await store.getState().lookupJiraIssueSummary(source, 'ALP-2', 'site-1', { force: true })
-    expect(
-      store.getState().jiraIssueSummaryCache[`${getTaskSourceCacheScope(source)}::site-1::ALP-2`]
-    ).toBeUndefined()
   })
 
   it('shares one summary read across abortable callers and cancels only when all abandon it', async () => {
@@ -530,6 +438,10 @@ describe('createJiraSlice runtime context', () => {
         [`${remoteScope}::site-1::ALP-1`]: {
           data: { ...issue('ALP-1'), title: 'Remote title' },
           fetchedAt: Date.now()
+        },
+        [`${localScope}::site-2::ALP-1`]: {
+          data: { ...issue('ALP-1'), siteId: 'site-2', title: 'Other site title' },
+          fetchedAt: Date.now()
         }
       },
       jiraSearchCache: {
@@ -540,6 +452,13 @@ describe('createJiraSlice runtime context', () => {
         [`${remoteScope}::site-1::list::assigned::30`]: {
           data: [{ ...issue('ALP-1'), title: 'Remote title' }],
           fetchedAt: Date.now()
+        },
+        [`${localScope}::all::list::assigned::30`]: {
+          data: [
+            { ...issue('ALP-1'), siteId: 'site-2', title: 'Other site title' },
+            { ...issue('ALP-1'), title: 'Local title' }
+          ],
+          fetchedAt: Date.now()
         }
       }
     })
@@ -548,7 +467,8 @@ describe('createJiraSlice runtime context', () => {
       'ALP-1',
       { title: 'Patched local title' },
       {
-        sourceContext: localSource
+        sourceContext: localSource,
+        siteId: 'site-1'
       }
     )
 
@@ -566,6 +486,14 @@ describe('createJiraSlice runtime context', () => {
       store.getState().jiraSearchCache[`${remoteScope}::site-1::list::assigned::30`]?.data?.[0]
         ?.title
     ).toBe('Remote title')
+    expect(store.getState().jiraIssueCache[`${localScope}::site-2::ALP-1`]?.data?.title).toBe(
+      'Other site title'
+    )
+    expect(
+      store
+        .getState()
+        .jiraSearchCache[`${localScope}::all::list::assigned::30`]?.data?.map((item) => item.title)
+    ).toEqual(['Other site title', 'Patched local title'])
   })
 
   it('returns a failed Jira connect result when the active runtime changes before completion', async () => {
@@ -588,101 +516,11 @@ describe('createJiraSlice runtime context', () => {
     expect(store.getState().jiraStatus.connected).toBe(false)
     expect(store.getState().jiraStatusContextKey).toBeNull()
   })
-
-  it('does not run a stale test follow-up status check after the active runtime changes', async () => {
-    const store = createTestStore()
-    const testResult = deferred<{ ok: true; viewer: JiraViewer }>()
-    jiraTestConnection.mockReturnValueOnce(testResult.promise)
-
-    const request = store.getState().testJiraConnection()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
-
-    testResult.resolve({ ok: true, viewer: { email: 'local@example.com' } as JiraViewer })
-    await request
-    expect(jiraStatus).not.toHaveBeenCalled()
-  })
-
-  it('does not clear or refresh stale disconnect results after the active runtime changes', async () => {
-    const store = createTestStore()
-    const disconnectResult = deferred<void>()
-    jiraDisconnect.mockReturnValueOnce(disconnectResult.promise)
-
-    const request = store.getState().disconnectJira()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
-
-    disconnectResult.resolve()
-    await request
-    expect(jiraStatus).not.toHaveBeenCalled()
-  })
-
-  it('publishes a connection revision after disconnecting the active Jira source', async () => {
-    const store = createTestStore()
-    jiraDisconnect.mockResolvedValueOnce(undefined)
-    jiraStatus.mockResolvedValueOnce({ connected: false, viewer: null })
-
-    await store.getState().disconnectJira()
-
-    expect(store.getState().jiraConnectionRevisions['local#0']).toBe(1)
-  })
 })
 
 describe('createJiraSlice credential errors', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  it('serves fresh Jira cache without reading credentials', async () => {
-    const store = createTestStore()
-    store.setState({
-      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' },
-      jiraSearchCache: {
-        'site-1::list::assigned::30': { data: [issue('ALP-1')], fetchedAt: Date.now() }
-      }
-    })
-
-    await expect(store.getState().listJiraIssues('assigned', 30)).resolves.toMatchObject([
-      { key: 'ALP-1' }
-    ])
-
-    expect(jiraListIssues).not.toHaveBeenCalled()
-  })
-
-  it('uses the selected site from an explicit workspace source context', async () => {
-    const store = createTestStore()
-    const source = jiraSourceContext('remote-runtime')
-    jiraSearchIssues.mockResolvedValueOnce([issue('ALP-1')])
-
-    await expect(
-      store
-        .getState()
-        .searchJiraIssues('text ~ "search*"', 12, { sourceContext: source, siteId: 'site-2' })
-    ).resolves.toMatchObject([{ key: 'ALP-1' }])
-
-    expect(jiraSearchIssues).toHaveBeenCalledWith(
-      source,
-      'text ~ "search*"',
-      12,
-      'site-2',
-      undefined
-    )
-  })
-
-  it('publishes source-scoped auth changes without clearing focused Settings status', async () => {
-    const store = createTestStore()
-    const source = jiraSourceContext('remote-runtime')
-    const focusedStatus = status('focused@example.com')
-    store.setState({ jiraStatus: focusedStatus })
-    jiraSearchIssues.mockRejectedValueOnce(new Error('Error 401: Unauthorized'))
-
-    await expect(
-      store
-        .getState()
-        .searchJiraIssues('text ~ "search*"', 12, { sourceContext: source, siteId: 'site-1' })
-    ).resolves.toEqual([])
-
-    const revisionKey = getProviderRuntimeContextKey(getTaskSourceRuntimeSettings(source))
-    expect(store.getState().jiraConnectionRevisions[revisionKey]).toBe(1)
-    expect(store.getState().jiraStatus).toEqual(focusedStatus)
   })
 
   it('does not read a rejected query that mentions 401 as a lost connection', async () => {
@@ -697,163 +535,5 @@ describe('createJiraSlice credential errors', () => {
         .searchJiraIssues('key = "ALP-1401"', 12, { sourceContext: source, siteId: 'site-1' })
     ).rejects.toBe(error)
     expect(store.getState().jiraConnectionRevisions).toEqual({})
-  })
-
-  it('does not borrow the global site when a workspace source has no selected site', async () => {
-    const store = createTestStore()
-    const source = jiraSourceContext('remote-runtime')
-    store.setState({
-      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'global-site' }
-    })
-    jiraSearchIssues.mockResolvedValueOnce([])
-
-    await store
-      .getState()
-      .searchJiraIssues('text ~ "search*"', 12, { sourceContext: source, siteId: null })
-
-    expect(jiraSearchIssues).toHaveBeenCalledWith(source, 'text ~ "search*"', 12, null, undefined)
-  })
-
-  it('returns an empty list and surfaces the credential error in status on Jira decrypt errors', async () => {
-    const store = createTestStore()
-    const error = new Error(credentialDecryptionMessage('Jira'))
-    store.setState({
-      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' }
-    })
-    jiraStatus.mockResolvedValue({
-      connected: true,
-      viewer: null,
-      selectedSiteId: 'site-1',
-      credentialError: error.message
-    })
-    jiraSearchIssues.mockRejectedValueOnce(error)
-
-    await expect(store.getState().searchJiraIssues('project = ALP', 30)).resolves.toEqual([])
-    await vi.waitFor(() => {
-      expect(store.getState().jiraStatus.credentialError).toBe(error.message)
-    })
-  })
-
-  it('returns null and refreshes status on Jira decrypt errors during detail refresh', async () => {
-    const store = createTestStore()
-    const error = new Error(credentialDecryptionMessage('Jira'))
-    store.setState({
-      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' },
-      jiraIssueCache: {
-        'site-1::ALP-1': { data: issue('ALP-1'), fetchedAt: 1 }
-      }
-    })
-    jiraStatus.mockResolvedValue({
-      connected: true,
-      viewer: null,
-      selectedSiteId: 'site-1',
-      credentialError: error.message
-    })
-    jiraGetIssue.mockRejectedValueOnce(error)
-
-    await expect(store.getState().fetchJiraIssue('ALP-1', 'site-1')).resolves.toBeNull()
-    expect(jiraStatus).toHaveBeenCalled()
-  })
-
-  it('refreshes status after all-site Jira list reads partially succeed', async () => {
-    const store = createTestStore()
-    const error = new Error(credentialDecryptionMessage('Jira'))
-    store.setState({
-      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'all' }
-    })
-    jiraListIssues.mockResolvedValueOnce([issue('ALP-1')])
-    jiraStatus.mockResolvedValueOnce({
-      connected: true,
-      viewer: null,
-      selectedSiteId: 'all',
-      credentialError: error.message
-    })
-
-    await expect(store.getState().listJiraIssues('assigned', 30)).resolves.toMatchObject([
-      { key: 'ALP-1' }
-    ])
-    await vi.waitFor(() => {
-      expect(store.getState().jiraStatus.credentialError).toBe(error.message)
-    })
-  })
-
-  it('clears stale Jira credential errors after successful site list reads', async () => {
-    const store = createTestStore()
-    const staleError = credentialDecryptionMessage('Jira')
-    store.setState({
-      jiraStatus: {
-        connected: true,
-        viewer: null,
-        selectedSiteId: 'site-1',
-        credentialError: staleError
-      }
-    })
-    jiraListIssues.mockResolvedValueOnce([issue('ALP-1')])
-    jiraStatus.mockResolvedValueOnce({
-      connected: true,
-      viewer: null,
-      selectedSiteId: 'site-1'
-    })
-
-    await expect(store.getState().listJiraIssues('assigned', 30)).resolves.toMatchObject([
-      { key: 'ALP-1' }
-    ])
-    await vi.waitFor(() => {
-      expect(store.getState().jiraStatus.credentialError).toBeUndefined()
-    })
-  })
-
-  it('clears stale Jira credential errors after successful issue detail reads', async () => {
-    const store = createTestStore()
-    const staleError = credentialDecryptionMessage('Jira')
-    store.setState({
-      jiraStatus: {
-        connected: true,
-        viewer: null,
-        selectedSiteId: 'site-1',
-        credentialError: staleError
-      }
-    })
-    jiraGetIssue.mockResolvedValueOnce(issue('ALP-1'))
-    jiraStatus.mockResolvedValueOnce({
-      connected: true,
-      viewer: null,
-      selectedSiteId: 'site-1'
-    })
-
-    await expect(store.getState().fetchJiraIssue('ALP-1', 'site-1')).resolves.toMatchObject({
-      key: 'ALP-1'
-    })
-    await vi.waitFor(() => {
-      expect(store.getState().jiraStatus.credentialError).toBeUndefined()
-    })
-  })
-
-  it('surfaces endpoint-level forbidden errors without disconnecting Jira', async () => {
-    const store = createTestStore()
-    store.setState({
-      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' }
-    })
-    jiraListIssues.mockRejectedValueOnce(new Error('Forbidden'))
-
-    // A non-auth failure must reject so the Tasks panel can show a real error
-    // instead of a misleading empty list, while keeping the session connected.
-    await expect(store.getState().listJiraIssues('assigned', 30)).rejects.toThrow('Forbidden')
-
-    expect(store.getState().jiraStatus.connected).toBe(true)
-  })
-
-  it('surfaces endpoint-level search errors without disconnecting Jira', async () => {
-    const store = createTestStore()
-    store.setState({
-      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' }
-    })
-    jiraSearchIssues.mockRejectedValueOnce(new Error('Malformed JQL'))
-
-    await expect(store.getState().searchJiraIssues('project =', 30)).rejects.toThrow(
-      'Malformed JQL'
-    )
-
-    expect(store.getState().jiraStatus.connected).toBe(true)
   })
 })

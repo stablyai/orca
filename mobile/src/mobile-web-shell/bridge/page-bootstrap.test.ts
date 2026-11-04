@@ -32,7 +32,6 @@ function createTarget(): PageMountTarget {
   return { dataset: {} }
 }
 
-/** The channel the shell's document-start script installs, as a double. */
 function installChannel(): { posted: string[]; deliver: (frame: unknown) => void } {
   const posted: string[] = []
   const channel: OrcaBridgePageChannel = {
@@ -52,12 +51,10 @@ function installChannel(): { posted: string[]; deliver: (frame: unknown) => void
 
 type Mounted = { client: BridgeRpcClient; session: BridgeShellSession }
 
-/** Everything the page did to its document, in the order it did it. */
 type Page = {
   mounts: Mounted[]
   urls: string[]
   refusals: number
-  /** One list, because what matters is which came first: routing after a render is a render at `/`. */
   order: string[]
   client: BridgeRpcClient | null
 }
@@ -102,8 +99,7 @@ describe('the page bootstrap inside the shell', () => {
     expect(channel.posted.map((json) => JSON.parse(json).type)).toEqual(['ready'])
     expect(page.order).toEqual([])
     expect(target.dataset[PAGE_MOUNT_STATE_KEY]).toBeUndefined()
-    // The handshake keeps asking rather than waiting out an `init` that has been and gone, and
-    // still nothing is routed or mounted while it does.
+    // Keep asking for init but route/mount nothing until it arrives.
     vi.advanceTimersByTime(5_000)
     expect(channel.posted.length).toBeGreaterThan(1)
     expect(page.order).toEqual([])
@@ -152,9 +148,7 @@ describe('the page bootstrap inside the shell', () => {
       refuseUnroutedShell: () => {}
     })
 
-    // The throw does not leave the delivery (ruling 34 addendum): on iOS that would reject the
-    // host's post for an `init` the page had already taken, and the shell tracks nothing about
-    // posts, so nothing would ever send it again. The stamp is what a device log reads instead.
+    // Report bootstrap failure locally; escaping the frame handler would reject iOS post for an init already received (ruling 34 addendum).
     expect(() => {
       channel.deliver(INIT)
     }).not.toThrow()
@@ -204,7 +198,6 @@ describe('the page bootstrap under a shell that named no screen', () => {
 
     expect(page.order).toEqual(['refuse'])
     expect(target.dataset[PAGE_MOUNT_STATE_KEY]).toBe('shell-too-old')
-    // Still stamped: the build it could not open is the fact worth reading off the document.
     expect(target.dataset[PAGE_BUILD_ID_KEY]).toBe('build-a')
   })
 

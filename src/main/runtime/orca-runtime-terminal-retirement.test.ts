@@ -12,9 +12,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 
 const WORKTREE_ID = 'repo::/worktree'
 const REPO_ID = 'repo'
-// Why: main's hydrateHeadlessMobileSessionTabsFromWorkspaceSession skips
-// `${repoId}::…` keys whose repo is missing from getRepos (PR #9343). Tests
-// that persist worktree sessions must advertise that repo as live.
+// #9343 hydration drops sessions for removed repos; persisted fixtures must advertise their live repo.
 const LIVE_REPO = {
   id: REPO_ID,
   path: '/worktree',
@@ -152,7 +150,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
   it('releases each early-exit fence after its matching registration is rejected', async () => {
     const runtime = new OrcaRuntimeService()
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
+      pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
 
     for (let index = 0; index < 1_000; index += 1) {
@@ -166,13 +164,12 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       runtime.releaseRejectedPtyRegistrationFence(ptyId, incarnationId)
     }
 
-    expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
+    expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
   })
 
   it('does not retain fences for completed surface-less lifecycles', async () => {
     const runtime = new OrcaRuntimeService()
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
       pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
 
@@ -183,7 +180,6 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       await runtime.onPtyExit(`pty-headless-${index}`, 0, `incarnation-${index}`)
     }
 
-    expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
   })
 
@@ -205,10 +201,8 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
     ).toThrow('agent_session_exited_during_start')
     runtime.releaseRejectedPtyRegistrationFence('pty-left', 'incarnation-replacement')
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
       pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
-    expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
   })
 
@@ -717,7 +711,6 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
 
     await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
-    // Why: the process is gone either way; a failed write is reported, not reinstated.
     expect((await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual([
       expect.objectContaining({ id: 'tab::right' })
     ])
@@ -759,7 +752,6 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
 
     await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
-    // Why: the next profile write carries the staged retirement; nothing may reinstate the leaf.
     expect(session).not.toEqual(original)
     expect(session.terminalLayoutsByTabId.tab?.ptyIdsByLeafId).toEqual({ right: 'pty-right' })
     expect(setWorkspaceSession).toHaveBeenCalledOnce()

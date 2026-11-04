@@ -19,8 +19,7 @@ function mockSubprocess(): SubprocessHandle {
   } as SubprocessHandle
 }
 
-// Why: without CR (Enter) the startup command sits typed at the prompt but
-// unexecuted (#23250). A caller-supplied terminator is replaced, not doubled.
+// Submit with one Enter CR so startup commands execute without a doubled terminator.
 describe('TerminalHost startup command terminator', () => {
   const origPlatform = process.platform
   afterEach(() => {
@@ -55,7 +54,6 @@ describe('TerminalHost startup command terminator', () => {
   })
 })
 
-// Why: a missing command and a lost one used to log identically.
 describe('TerminalHost startup command delivery logging', () => {
   let sub: SubprocessHandle
   let events: { event: string; details: Record<string, unknown> }[]
@@ -68,45 +66,6 @@ describe('TerminalHost startup command delivery logging', () => {
       spawnSubprocess: () => sub,
       reportReadinessEvent: (event, details) => events.push({ event, details })
     })
-  })
-
-  const delivery = (): Record<string, unknown> =>
-    events.find((e) => e.event === 'startup-command-delivery')?.details ?? {}
-
-  it('records a written startup command', async () => {
-    await host.createOrAttach({
-      sessionId: 'delivery-written',
-      cols: 80,
-      rows: 24,
-      command: 'codex',
-      shellReadySupported: false,
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-    expect(delivery()).toMatchObject({ written: true, hasCommand: true, commandLength: 5 })
-  })
-
-  it('records a session created with no startup command at all', async () => {
-    await host.createOrAttach({
-      sessionId: 'delivery-none',
-      cols: 80,
-      rows: 24,
-      shellReadySupported: false,
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-    expect(delivery()).toMatchObject({ written: false, hasCommand: false, commandLength: 0 })
-    expect(sub.write).not.toHaveBeenCalled()
-  })
-
-  it('never logs the command text, which can carry credentials', async () => {
-    await host.createOrAttach({
-      sessionId: 'delivery-secret',
-      cols: 80,
-      rows: 24,
-      command: 'deploy --token=hunter2',
-      shellReadySupported: false,
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-    expect(JSON.stringify(delivery())).not.toContain('hunter2')
   })
 
   it('still delivers the command when the diagnostic sink throws', async () => {

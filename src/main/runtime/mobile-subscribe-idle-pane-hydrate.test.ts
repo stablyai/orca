@@ -1,11 +1,5 @@
-/**
- * A phone subscribing to an idle reattached PTY must get its first snapshot on the phone grid.
- *
- * Harness: real OrcaRuntimeService + real legacy `terminal.subscribe`. After a relaunch the
- * reattach skips seeding the host model because a pane is mounted; the PTY then emits no byte
- * (an agent waiting for input), and the pane, hidden in another workspace, answers its
- * serializer at desktop size.
- */
+import './rpc/unused-default-rpc-methods.test-fixture'
+/** Reattached idle PTYs may never emit; hidden panes serialize at desktop size, but phones need a phone-grid snapshot. */
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -67,7 +61,6 @@ function setup(opts: { paneMounted: boolean; providerSnapshot?: boolean }) {
     getRendererSerializerGeneration: () => 1,
     waitForRendererSerializer: async () => false,
     serializeBuffer,
-    // The daemon resizes its model with the PTY.
     serializeProviderBuffer: async (ptyId: string) => {
       const grid = sizes.get(ptyId) ?? DESKTOP
       return opts.providerSnapshot
@@ -130,7 +123,6 @@ function subscribePhone(runtime: OrcaRuntimeService, handle: string) {
   return { snapshot, close }
 }
 
-/** What a phone xterm sized to the frame's declared grid shows after replaying it. */
 async function paintedRows(snapshot: { cols: number; rows: number; data: string }) {
   const emulator = new HeadlessEmulator({ cols: snapshot.cols, rows: snapshot.rows, scrollback: 0 })
   try {

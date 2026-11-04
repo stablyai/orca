@@ -203,8 +203,12 @@ describe('DispatcherClientWriter', () => {
 
     sink.drain()
 
-    expect(sink.accepted.findIndex((write) => write.data === 'ordinary')).toBeLessThanOrEqual(6)
-    expect(sink.accepted.findIndex((write) => write.data === 'bulk')).toBeLessThanOrEqual(5)
+    const ordinaryIndex = sink.accepted.findIndex((write) => write.data === 'ordinary')
+    const bulkIndex = sink.accepted.findIndex((write) => write.data === 'bulk')
+    expect(ordinaryIndex).toBeGreaterThanOrEqual(0)
+    expect(ordinaryIndex).toBeLessThanOrEqual(6)
+    expect(bulkIndex).toBeGreaterThanOrEqual(0)
+    expect(bulkIndex).toBeLessThanOrEqual(5)
   })
 
   it('settles callback-less saturated writes when drain fires during registration', () => {

@@ -99,7 +99,7 @@ async function readDarwinAvailableMemory(total: number): Promise<number | null> 
       }
     }
   } catch {
-    // The built-in command is unavailable on older or restricted hosts.
+    // Older/restricted hosts may lack this command; fall back to Node.
   }
   darwinAvailabilitySupported = false
   return null
@@ -113,7 +113,7 @@ async function readLinuxAvailableMemory(): Promise<number | null> {
       return available
     }
   } catch {
-    // Non-procfs Linux environments fall back to Node's host value.
+    // Non-procfs Linux hosts use Node's memory value.
   }
   linuxAvailabilitySupported = false
   return null

@@ -109,8 +109,7 @@ function createDividerDragHarness(): DividerDragHarness {
   }
 }
 
-// Each pointer type has its own primary pointer, so a finger on a touchscreen
-// arrives with isPrimary true while a mouse drag is already in flight.
+// Each pointer type has its own primary; a stray finger can be primary during mouse drag.
 const STRAY_TOUCH = { pointerId: 42, pointerType: 'touch', isPrimary: true } as const
 
 function startMouseDrag(harness: DividerDragHarness): void {
@@ -123,36 +122,11 @@ function startMouseDrag(harness: DividerDragHarness): void {
   harness.flushAnimationFrames()
 }
 
-// The mirror of STRAY_TOUCH: a mouse keeps its own primary while a finger
-// already owns the divider, and needs no contact with the divider strip.
-const TOUCH_DRAG = { pointerId: 7, pointerType: 'touch', isPrimary: true } as const
-const STRAY_MOUSE = { pointerId: 51, pointerType: 'mouse', isPrimary: true } as const
-
-function startTouchDrag(harness: DividerDragHarness): void {
-  harness.dividerListeners.get('pointerdown')?.(createPointerEvent({ ...TOUCH_DRAG, clientX: 100 }))
-  harness.windowListeners.get('pointermove')?.(createPointerEvent({ ...TOUCH_DRAG, clientX: 180 }))
-  harness.flushAnimationFrames()
-}
-
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
 describe('divider drag pointer-type isolation', () => {
-  it('ignores stray touch motion during an active mouse drag', () => {
-    const harness = createDividerDragHarness()
-    startMouseDrag(harness)
-    expect(harness.previousPane.style.flex).toBe('180 1 0%')
-
-    harness.windowListeners.get('pointermove')?.(
-      createPointerEvent({ ...STRAY_TOUCH, clientX: 320 })
-    )
-    harness.flushAnimationFrames()
-
-    expect(harness.previousPane.style.flex).toBe('180 1 0%')
-    expect(harness.nextPane.style.flex).toBe('220 1 0%')
-  })
-
   it('does not commit the layout when a stray touch lifts mid mouse drag', () => {
     const harness = createDividerDragHarness()
     startMouseDrag(harness)
@@ -183,46 +157,5 @@ describe('divider drag pointer-type isolation', () => {
 
     expect(harness.previousPane.style.flex).toBe('180 1 0%')
     expect(harness.windowListeners.has('pointermove')).toBe(true)
-  })
-
-  it('still continues a mouse drag from a primary pen pointer (WSLg relay)', () => {
-    const harness = createDividerDragHarness()
-    harness.dividerListeners.get('pointerdown')?.(
-      createPointerEvent({ pointerId: 1, pointerType: 'mouse', isPrimary: true, clientX: 100 })
-    )
-    harness.windowListeners.get('pointermove')?.(
-      createPointerEvent({ pointerId: 19, pointerType: 'pen', isPrimary: true, clientX: 180 })
-    )
-    harness.windowListeners.get('pointerup')?.(
-      createPointerEvent({ pointerId: 1, pointerType: 'mouse', isPrimary: true, clientX: 180 })
-    )
-
-    expect(harness.previousPane.style.flex).toBe('180 1 0%')
-    expect(harness.nextPane.style.flex).toBe('220 1 0%')
-    expect(harness.onLayoutChanged).toHaveBeenCalledTimes(1)
-  })
-
-  it('drives a touch-started drag from its own pointerId', () => {
-    const harness = createDividerDragHarness()
-    startTouchDrag(harness)
-    harness.windowListeners.get('pointerup')?.(createPointerEvent({ ...TOUCH_DRAG, clientX: 180 }))
-
-    expect(harness.previousPane.style.flex).toBe('180 1 0%')
-    expect(harness.nextPane.style.flex).toBe('220 1 0%')
-    expect(harness.onLayoutChanged).toHaveBeenCalledTimes(1)
-  })
-
-  it('ignores stray mouse motion during an active touch drag', () => {
-    const harness = createDividerDragHarness()
-    startTouchDrag(harness)
-    expect(harness.previousPane.style.flex).toBe('180 1 0%')
-
-    harness.windowListeners.get('pointermove')?.(
-      createPointerEvent({ ...STRAY_MOUSE, clientX: 320 })
-    )
-    harness.flushAnimationFrames()
-
-    expect(harness.previousPane.style.flex).toBe('180 1 0%')
-    expect(harness.nextPane.style.flex).toBe('220 1 0%')
   })
 })

@@ -1,5 +1,8 @@
-import { PINNED_GROUP_KEY, getWorktreeLineageGroupKey } from '../grouping/group-keys'
-import type { HostSectionRow } from '../../host-section-rows'
+import {
+  PINNED_GROUP_KEY,
+  getWorktreeLineageGroupKey
+} from '../../../../../../shared/sidebar-list/group-keys'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { RenderRow } from './render-row'
 
 export type WorktreeItemRow = Extract<HostSectionRow, { type: 'item' }>

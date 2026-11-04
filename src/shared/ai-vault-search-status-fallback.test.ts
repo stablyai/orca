@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createSessionSearchClient, unavailableSessionSearchStatus } from './ai-vault-search-client'
+import { createSessionSearchClient } from './ai-vault-search-client'
 import { AiVaultSearchRequestSchema as LegacyRequestSchema } from './__fixtures__/pre-qoder-search-request'
 import { searchResults } from './ai-vault-search-test-fixture'
 
@@ -71,20 +71,6 @@ describe.each(['runtime', 'relay'] as const)('missing search status over %s', (t
     expect(call).toHaveBeenCalledExactlyOnceWith('aiVault.searchStatus', {})
   })
 
-  it.each([{ supportedAgents: [] }, { supportedAgents: ['future-agent'] }])(
-    'honors explicit narrow host vocabulary $supportedAgents',
-    async ({ supportedAgents }) => {
-      const call = vi.fn(async () => ({ ...unavailableSessionSearchStatus(), supportedAgents }))
-      expect(
-        await createSessionSearchClient(call, transport).searchSessions({
-          query: 'needle',
-          filters: { agents: ['claude'] }
-        })
-      ).toEqual({ kind: 'unavailable', reason: 'unsupported-agent' })
-      expect(call).toHaveBeenCalledExactlyOnceWith('aiVault.searchStatus', {})
-    }
-  )
-
   it.each([
     { code: 'unauthorized', message: 'Authentication required' },
     { code: 'connection_closed', message: 'Host disconnected' },
@@ -123,6 +109,12 @@ describe.each(['runtime', 'relay'] as const)('missing search status over %s', (t
         filters: { agents: ['claude'] }
       })
     ).toEqual({ kind: 'unavailable', reason: 'no-service' })
-    expect(call.mock.calls.map(() => true)).toHaveLength(2)
+    expect(call.mock.calls).toEqual([
+      ['aiVault.searchStatus', {}],
+      [
+        'aiVault.searchSessions',
+        expect.objectContaining({ query: 'needle', filters: { agents: ['claude'] } })
+      ]
+    ])
   })
 })

@@ -2,8 +2,7 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type { TERMINAL_SCROLLBACK_SESSION_HOMES } from '../../../../shared/workspace-session-terminal-buffers'
 
-/** The session fields a tab's scrollback can live in — typed off the same constant the cap
- *  enumerates, so a third home is a compile error here until this resolver reads it. */
+/** Track every persisted scrollback home; adding one must also extend this resolver. */
 export type TerminalScrollbackSessionHomes = Pick<
   WorkspaceSessionState,
   (typeof TERMINAL_SCROLLBACK_SESSION_HOMES)[number]
@@ -16,9 +15,7 @@ export type LeafScrollbackHomes = {
   localOnly: Record<string, string> | undefined
 }
 
-/** The one read of a leaf's scrollback across its two homes; no consumer touches either directly.
- *  Why local-only wins a conflict: it is written by the ordinary park, and every shared capture
- *  clears it, so whenever both hold a leaf the local copy is the later one. */
+/** Read both homes; local-only wins because ordinary park writes it and shared capture clears it, making any surviving local copy newer. */
 export function resolveLeafScrollbackBuffers({
   shared,
   localOnly

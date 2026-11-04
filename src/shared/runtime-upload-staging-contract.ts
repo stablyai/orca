@@ -2,10 +2,7 @@ import type { SshMutationExpectation } from './ssh-types'
 
 export type RuntimeUploadSkipReason = 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
 
-/**
- * What staging observed about a file, so the uploader can refuse a source that
- * was swapped between the two calls. Size alone misses a same-size replacement.
- */
+/** Fence source swaps between staging and upload; size alone misses same-size replacements. */
 export type StagedRuntimeUploadFileIdentity = {
   byteLength: number
   /** 0 when the filesystem does not report one; compared only when both sides have it. */
@@ -16,8 +13,7 @@ export type StagedRuntimeUploadFileIdentity = {
 
 export type StagedRuntimeUploadEntry =
   | { relativePath: string; kind: 'directory' }
-  // Why: file bodies are streamed in slices at upload time, so staging carries
-  // identity the uploader re-checks against the handle it actually reads.
+  // Recheck staged identity against the file handle actually streamed at upload time.
   | ({ relativePath: string; kind: 'file' } & StagedRuntimeUploadFileIdentity)
 
 export type StagedRuntimeUploadSource =

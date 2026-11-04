@@ -1,8 +1,14 @@
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { readScenarios } from '../scenario-input'
 import { readGolden } from '../golden-recording'
-import { runRecordingMutant } from '../run-recording'
+import { runRecording, runRecordingMutant } from '../run-recording'
+import { materializeScenario } from '../scenario-execution-mode'
+import { RecordingParamsMismatch } from '../recording-mismatch'
+import { ScriptedRpcTransport } from '../scripted-rpc-transport'
+import { DEVICE_TOKEN } from '../scripted-rpc-device'
+import { captureValue } from '../recording-values'
+import type { RecordingScenario } from '../recording-scenario'
 import { pilotMountAdapters } from '../pilot-mount-adapters'
 import { vitestRecordingScheduler } from '../vitest-recording-scheduler'
 import { operationMutation, type Mutation } from './operation-mutations'
@@ -14,18 +20,8 @@ const input = readScenarios(
 )
 const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
 
-/**
- * Each probe exists because a real mutation survived the whole pre-probe suite. Hole and closure
- * are asserted together: if a pre-probe scenario of the same operation also caught the mutation,
- * the probe is redundant and this test says so instead of letting it accumulate.
- *
- * The six session entries are the same shape one step later: each names a guard whose false arm
- * no session recording reached, because every scenario of its family declared the cell filled. The
- * closing scenario declares it empty, so the member the guard drops is absent from the wire and the
- * mutant that always sends it has somewhere to diverge. Two of them close a cell an adapter
- * constant used to fill: while the worktree and the active tab were fixtures rather than
- * arguments, no scenario could describe a session that has neither.
- */
+// Prove each probe closes a surviving mutation.
+// Empty session inputs exercise omission guards that always-filled fixtures could not reach.
 const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonly string[] }[] = [
   {
     mutation: 'new-tab-refusal-order',
@@ -77,76 +73,204 @@ const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonl
   }
 ]
 
-/** What the scripted transport raises when a send no longer carries the params the step asserts. */
-const PARAMS_MISMATCH = 'Request params mismatch:'
+const changedParams: Partial<
+  Record<Mutation, (params: Record<string, unknown>) => Record<string, unknown>>
+> = {
+  'display-mode-unconditional-client': ({ terminal, mode, ...params }) => ({
+    terminal,
+    mode,
+    client: { id: null, type: 'mobile' },
+    ...params
+  }),
+  'display-mode-unmeasured-viewport': (params) => ({ ...params, viewport: null }),
+  'create-after-tab-id-null': (params) => ({ ...params, afterTabId: null }),
+  'create-quick-command-keys': (params) =>
+    Object.fromEntries(
+      Object.entries(params).map(([key, value]) => [
+        key === 'command' ? 'agentPrompt' : key === 'agentPrompt' ? 'command' : key,
+        value
+      ])
+    )
+}
 
-/**
- * A mutation that changes a param the scenario completes is caught before a recording exists to
- * compare: the transport asserts the sender's params at every `complete`, so the sequence aborts
- * where a state or effect mutation would have diverged. The scenario detected it, which is what
- * `killed` means here — narrowed to that one message, and only once the anchor is proved applied,
- * so a mutant that failed to apply or a scenario that broke some other way still fails loudly.
- */
-async function verdict(id: string, mutation: Mutation): Promise<string> {
-  const scenario = input.scenarios.find((candidate) => candidate.id === id)!
+function isParams(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+async function rejectedParamsVerdict(
+  scenario: RecordingScenario,
+  mutation: Mutation,
+  changed: (params: Record<string, unknown>) => Record<string, unknown>
+): Promise<string> {
+  const baseline = readGolden(goldens, scenario.id).recording
+  const original = pilotMountAdapters(root, { device: scenario })
+  const control = await runRecording(
+    scenario,
+    original.adapters[scenario.operation]!,
+    vitestRecordingScheduler()
+  )
+  expect(control).toStrictEqual(baseline)
+
+  const method =
+    scenario.operation === 'session.terminal-display-mode'
+      ? 'terminal.setDisplayMode'
+      : 'session.tabs.createTerminal'
+  const targets = scenario.steps.filter((step) => 'complete' in step)
+  expect(targets).toHaveLength(1)
+  const target = targets[0]
+  if (!target || !('complete' in target)) {
+    throw new Error('Missing original parameter-mutant completion')
+  }
+  expect(target.complete).toBe(`${method}#1`)
+  if (!isParams(target.params)) {
+    throw new Error('Missing original parameter-mutant input')
+  }
+  const actualParams = changed(target.params)
   const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
     device: scenario,
     mutation: operationMutation(mutation)
   })
-  try {
-    const result = await runRecordingMutant(
-      scenario,
-      adapters[scenario.operation],
-      vitestRecordingScheduler(),
-      readGolden(goldens, id).recording
-    )
-    assertMutationApplied()
-    return result.verdict
-  } catch (error) {
-    assertMutationApplied()
-    if (error instanceof Error && error.message.startsWith(PARAMS_MISMATCH)) {
-      return 'killed'
+  const scheduler = vitestRecordingScheduler()
+  const complete = ScriptedRpcTransport.prototype.complete
+  const completions: string[] = []
+  const actions: string[] = []
+  const states: unknown[] = []
+  let disposed = 0
+  const observed: {
+    stopped?: { error: unknown; owner: ScriptedRpcTransport; at: number }
+  } = {}
+  let outcome: { error: unknown } | undefined
+  const spy = vi.spyOn(ScriptedRpcTransport.prototype, 'complete').mockImplementation(function (
+    this: ScriptedRpcTransport,
+    ...args: Parameters<ScriptedRpcTransport['complete']>
+  ) {
+    completions.push(args[0])
+    try {
+      return complete.apply(this, args)
+    } catch (error) {
+      observed.stopped = { error, owner: this, at: scheduler.elapsed() }
+      throw error
     }
-    throw error
+  })
+  try {
+    await runRecording(
+      scenario,
+      (context) => {
+        const mounted = adapters[scenario.operation]!(context)
+        return {
+          action(...args) {
+            actions.push(args[0])
+            return mounted.action.apply(mounted, args)
+          },
+          state() {
+            const state = mounted.state()
+            states.push(captureValue(state))
+            return state
+          },
+          dispose() {
+            disposed += 1
+            return mounted.dispose()
+          }
+        }
+      },
+      scheduler
+    )
+  } catch (error) {
+    outcome = { error }
+  } finally {
+    spy.mockRestore()
   }
+  if (!outcome) {
+    throw new Error('Parameter mutant did not reach its required rejection')
+  }
+  if (!(outcome.error instanceof RecordingParamsMismatch)) {
+    throw outcome.error
+  }
+  assertMutationApplied()
+  const { stopped } = observed
+  if (!stopped || stopped.error !== outcome.error) {
+    throw outcome.error
+  }
+  const { owner } = stopped
+  expect(owner.stoppedGuard?.error).toBe(outcome.error)
+  const binding = owner.bindings.get(target.complete)
+  if (!binding) {
+    throw new Error('Missing original allocated mutant binding')
+  }
+  expect(outcome.error.request).toBe(target.complete)
+  expect(outcome.error.method).toBe(method)
+  expect(outcome.error.frameId).toBe(binding.id)
+  expect(binding.id).toBe('frame-1')
+  expect(binding.child.allocation?.id).toBe(binding.id)
+  expect(binding.method).toBe(method)
+  expect(binding.params).toBe(outcome.error.actual)
+  expect(outcome.error.expected).toBe(target.params)
+  expect(outcome.error.actual).toStrictEqual(actualParams)
+  expect(binding.completed).toBe(false)
+  expect(binding.child.completion).toBeUndefined()
+  expect(owner.failureGuard(outcome.error)).toStrictEqual({
+    origin: 'scripted-complete-params',
+    requested: target.complete,
+    resolved: target.complete,
+    method,
+    frameId: binding.id,
+    expected: captureValue(target.params),
+    actual: captureValue(actualParams),
+    expectedOwnKeys: Object.keys(target.params),
+    actualOwnKeys: Object.keys(actualParams),
+    completed: false,
+    replyIssued: false
+  })
+  expect(owner.payloads.map((payload) => payload.json)).toStrictEqual([
+    JSON.stringify({ id: binding.id, deviceToken: DEVICE_TOKEN, method, params: actualParams })
+  ])
+  expect(completions).toStrictEqual([target.complete])
+  const prefix = scenario.steps.slice(0, scenario.steps.indexOf(target))
+  expect(actions).toStrictEqual(prefix.flatMap((step) => ('action' in step ? [step.action] : [])))
+  expect(states).toStrictEqual([control.checkpoints[0]!.observation.state])
+  expect(disposed).toBe(1)
+  expect(owner.pendingRequests()).toBe(0)
+  expect(owner.requests).toHaveLength(1)
+  expect(owner.requests[0]!.settlement.status).toBe('rejected')
+  expect(stopped.at).toBe(0)
+  expect(scheduler.timerEvidence?.()).toMatchObject({
+    residual: 0,
+    stopAttempted: true,
+    stopped: true,
+    clockRestored: true,
+    spiesRestored: true
+  })
+  return 'killed'
+}
+
+async function verdict(id: string, mutation: Mutation): Promise<string> {
+  const scenario = materializeScenario(
+    input.scenarios.find((candidate) => candidate.id === id)!,
+    'native'
+  )
+  const changed = changedParams[mutation]
+  if (changed) {
+    return rejectedParamsVerdict(scenario, mutation, changed)
+  }
+  const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
+    device: scenario,
+    mutation: operationMutation(mutation)
+  })
+  const result = await runRecordingMutant(
+    scenario,
+    adapters[scenario.operation],
+    vitestRecordingScheduler(),
+    readGolden(goldens, id).recording
+  )
+  assertMutationApplied()
+  return result.verdict
 }
 
 describe('probe scenarios close holes the pre-probe recordings left open', () => {
-  // What makes the classification above sound, held over the whole manifest rather than argued
-  // about: every `complete` is followed by a checkpoint, so a send whose params stopped matching
-  // always suppressed an observation the golden holds. A scenario that completed a request after
-  // its last checkpoint could abort with nothing left to record, and a params-only mutant would
-  // read as killed by a recording that never looked.
-  it('never completes a request after the last checkpoint of a scenario', () => {
-    const trailing = input.scenarios
-      .filter((scenario) => {
-        let lastComplete = -1
-        let lastCheckpoint = -1
-        scenario.steps.forEach((step, index) => {
-          if ('complete' in step) {
-            lastComplete = index
-          }
-          // A step may carry both, and then the checkpoint records what the completion produced.
-          if ('checkpoint' in step) {
-            lastCheckpoint = index
-          }
-        })
-        return lastComplete > lastCheckpoint
-      })
-      .map((scenario) => scenario.id)
-    expect(trailing).toEqual([])
-  })
-
   for (const hole of HOLES) {
-    const family = input.scenarios.filter((scenario) => scenario.operation === hole.operation)
     for (const id of hole.closedBy) {
       it(`${id} kills ${hole.mutation}`, async () => {
         expect(await verdict(id, hole.mutation)).toBe('killed')
-      })
-    }
-    for (const scenario of family.filter(({ id }) => !hole.closedBy.includes(id))) {
-      it(`${scenario.id} cannot see ${hole.mutation}`, async () => {
-        expect(await verdict(scenario.id, hole.mutation)).toBe('survived')
       })
     }
   }

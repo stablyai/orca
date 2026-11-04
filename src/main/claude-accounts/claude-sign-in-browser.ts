@@ -10,9 +10,8 @@ import type { ClaudeCommandConfig } from './claude-command-process'
 const HELPER_NAME = '.orca-sign-in-browser'
 const LINK_SUFFIX = '.link'
 const POLL_INTERVAL_MS = 250
-// Why a deadline: Claude runs BROWSER as soon as it listens, so silence means it never ran.
 const LINK_WAIT_MS = 60_000
-// Why a file: Claude discards BROWSER's output, and the link it prints itself needs a pasted code.
+// Claude discards BROWSER stdout; its printed link uses a different pasted-code flow.
 const HELPER_SCRIPT = `#!/bin/sh\nprintf '%s' "$1" > "$0.tmp" && mv "$0.tmp" "$0${LINK_SUFFIX}"\n`
 const CLAUDE_AUTHORIZE_HOSTS = new Set(['claude.com', 'claude.ai'])
 const LOCAL_CALLBACK_HOSTS = new Set(['localhost', '127.0.0.1'])
@@ -20,12 +19,11 @@ const LOCAL_CALLBACK_HOSTS = new Set(['localhost', '127.0.0.1'])
 export type ClaudeSignInBrowser = {
   /** BROWSER as the Claude process sees it. */
   path: string
-  /** The localhost-callback link Claude handed BROWSER; null if stopped, late, or not one. */
-  nextLink: (signal: AbortSignal) => Promise<string | null>
+  /** Null on cancellation, timeout, or an invalid callback link. */
+  nextLink: (signal: AbortSignal, waitMs?: number) => Promise<string | null>
   dispose: () => Promise<void>
 }
 
-/** Claude's sign-in link that calls back to this computer, never the pasted-code one it prints. */
 export function isClaudeLocalSignInLink(signInLink: string): boolean {
   try {
     const url = new URL(signInLink)
@@ -41,8 +39,7 @@ export function isClaudeLocalSignInLink(signInLink: string): boolean {
   }
 }
 
-/** A BROWSER stand-in in the account's folder that hands Claude's sign-in link to Orca instead of
- *  opening it. */
+/** Capture BROWSER links without opening a browser. */
 export async function prepareClaudeSignInBrowser(
   folder: ClaudeCommandConfig
 ): Promise<ClaudeSignInBrowser> {
@@ -67,13 +64,17 @@ export async function prepareClaudeSignInBrowser(
   }
   return {
     path: isWsl && folder.linuxPath ? posix.join(folder.linuxPath, HELPER_NAME) : helperPath,
-    nextLink: (signal) => pollForLink(linkPath, signal),
+    nextLink: (signal, waitMs = LINK_WAIT_MS) => pollForLink(linkPath, signal, waitMs),
     dispose
   }
 }
 
-async function pollForLink(linkPath: string, signal: AbortSignal): Promise<string | null> {
-  const deadline = Date.now() + LINK_WAIT_MS
+async function pollForLink(
+  linkPath: string,
+  signal: AbortSignal,
+  waitMs: number
+): Promise<string | null> {
+  const deadline = Date.now() + waitMs
   while (!signal.aborted && Date.now() < deadline) {
     const signInLink = await readFile(linkPath, 'utf8').then(
       (text) => text.trim(),

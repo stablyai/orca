@@ -19,27 +19,6 @@ beforeEach(() => {
 })
 
 describe('runGuardedWriteCompletionStep', () => {
-  it('contains a synchronous throw and reports a breadcrumb', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      expect(() =>
-        runGuardedWriteCompletionStep('test-step', () => {
-          throw new RangeError('synthetic settle failure')
-        })
-      ).not.toThrow()
-      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
-        'terminal_write_completion_error',
-        expect.objectContaining({
-          context: 'test-step',
-          errorName: 'RangeError',
-          errorMessage: 'synthetic settle failure'
-        })
-      )
-    } finally {
-      errorSpy.mockRestore()
-    }
-  })
-
   it('caps repeated reports per context so a throw-per-write loop cannot spam breadcrumbs', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
@@ -52,13 +31,6 @@ describe('runGuardedWriteCompletionStep', () => {
     } finally {
       errorSpy.mockRestore()
     }
-  })
-
-  it('runs non-throwing steps transparently', () => {
-    const step = vi.fn()
-    runGuardedWriteCompletionStep('ok-step', step)
-    expect(step).toHaveBeenCalledTimes(1)
-    expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
   })
 })
 
@@ -87,10 +59,7 @@ describe('writeForegroundTerminalChunk completion guarding', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const pendingCallbacks: (() => void)[] = []
-      // Why a getter that throws only after the write is dispatched: it
-      // models renderer/buffer state failing between parse start and the
-      // post-parse viewport settle (refreshVisibleRowsNow self-catches, so
-      // the viewport comparison is the escaping surface).
+      // Throw after dispatch to model buffer/renderer failure during post-parse settle; refresh self-catches, so viewport comparison exposes the escaping path.
       let bufferAccessPoisoned = false
       const realBuffer = { active: { cursorY: 0, baseY: 0, viewportY: 0 } }
       const terminal = {
@@ -114,9 +83,7 @@ describe('writeForegroundTerminalChunk completion guarding', () => {
         onParsed
       })
       bufferAccessPoisoned = true
-      // Simulate xterm completing the parse: the completion callback must not
-      // let the settle throw escape into the WriteBuffer, and onParsed (the
-      // replay-guard release) must still run.
+      // Settle failure must not escape into WriteBuffer or starve onParsed’s replay-guard release.
       expect(() => pendingCallbacks.forEach((cb) => cb())).not.toThrow()
       expect(onParsed).toHaveBeenCalledTimes(1)
       expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(

@@ -2,11 +2,11 @@ import { join } from 'node:path'
 import {
   getEndpointFileName,
   writeEndpointFile
-} from '../../../shared/agent-hook-listener/endpoint-publication'
+} from '../../../shared/agent-hook-listener/transport/endpoint-publication'
 import {
   ORCA_HOOK_PROTOCOL_VERSION,
   ORCA_HOOK_RAW_JSON_TRANSPORT
-} from '../../../shared/agent-hook-types'
+} from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { AgentHookServerIngestRemote } from './server-ingest-remote'
 
 export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRemote {
@@ -22,7 +22,7 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
       ORCA_AGENT_HOOK_OPENCODE_TUI: '1',
       ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
     }
-    // Why: hooks source this file at invocation; dev namespaces it so parallel `pnpm dev` runs don't steal each other's hooks.
+    // Hooks read the endpoint on invocation; dev instances must not steal each other's hooks.
     if (this.endpointFileWritten && this.endpointFilePathCache) {
       env.ORCA_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
     }
@@ -33,7 +33,6 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
     return this.endpointFilePathCache
   }
 
-  /** Test/diagnostic accessor for the on-disk last-status file path. */
   get lastStatusPath(): string | null {
     return this.lastStatusFilePath
   }
@@ -55,7 +54,7 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
   }
 
   protected configureEndpointPaths(userDataPath: string, endpointNamespace?: string): void {
-    // Why: dev builds share one userData path; namespace per instance while packaged keeps the stable path for PTY reconnect.
+    // Dev endpoints are per instance; packaged endpoints stay stable for PTY reconnect.
     this.endpointDir = endpointNamespace
       ? join(userDataPath, 'agent-hooks', endpointNamespace)
       : join(userDataPath, 'agent-hooks')

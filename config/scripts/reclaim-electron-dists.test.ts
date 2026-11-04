@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -29,14 +29,15 @@ async function fixture() {
   await writeFile(join(pkg, 'package.json'), JSON.stringify({ version: '99.1.0' }))
   await writeFile(join(pkg, 'dist', 'version'), '99.1.0\n')
   await writeFile(executable, 'fake electron executable\n')
-  const run = (apply = false) =>
+  const run = (apply = false, flags: string[] = []) =>
     runProcess({
       program: process.env.ORCA_TEST_NODE_EXECUTABLE ?? process.execPath,
       args: [
         resolve(import.meta.dirname, 'reclaim-electron-dists.mjs'),
         '--repo',
         root,
-        ...(apply ? ['--apply'] : [])
+        ...(apply ? ['--apply'] : []),
+        ...flags
       ],
       cwd: root,
       env: { ...process.env, CI: '', ORCA_BACKGROUND_LAUNCH: '1' },
@@ -84,3 +85,31 @@ it('shares a writable install and preserves its executable bytes', async () => {
   const repeated = await run()
   expect(repeated.stdout).toContain('Would share 0 worktree(s)')
 })
+
+it('protects the launching worktree, including when selected through a filesystem alias', async () => {
+  const { root, pkg, executable, run } = await fixture()
+  const alias = join(root, 'alias')
+  await symlink(root, alias, process.platform === 'win32' ? 'junction' : 'dir')
+  for (const exclusion of [root, alias]) {
+    for (const apply of [false, true]) {
+      const result = await run(apply, ['--exclude-worktree', exclusion])
+      expect(result.code, result.stderr).toBe(0)
+      expect(result.stdout).toContain('0 worktree(s)')
+      expect(await readFile(executable, 'utf8')).toBe('fake electron executable\n')
+      await expect(readFile(join(pkg, '.orca-shared-dist'))).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
+    }
+  }
+})
+
+it.each([['--exclude-worktree'], ['--exclude-worktree', '--apply']])(
+  'rejects invalid exclusions before changing an install: %j',
+  async (...flags) => {
+    const { pkg, run } = await fixture()
+    const result = await run(true, flags)
+    expect(result.code).not.toBe(0)
+    expect(result.stderr).toContain('--exclude-worktree requires a directory')
+    await expect(readFile(join(pkg, '.orca-shared-dist'))).rejects.toMatchObject({ code: 'ENOENT' })
+  }
+)

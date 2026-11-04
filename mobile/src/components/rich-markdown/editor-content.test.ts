@@ -1,35 +1,29 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 import type { RichMarkdownEditorDocument } from './document-host-seams'
 
-/**
- * What the host sets, what it gets back, and the generation that tells the two apart.
- *
- * The host replaces the content while the user is typing into it, so every change carries the
- * generation the content was set under and a reply from before a replacement is one the host can
- * drop. The document's own rewrites are not changes at all, which is what makes a replacement
- * silent rather than a change the host would apply back to itself.
- */
+// Round-trip host generation unchanged so pre-replacement changes can be discarded; suppress document’s own rewrites to avoid echo.
 const started: RichMarkdownEditorDocument[] = []
 
-function editorDocument() {
+function editorDocument(loadImageSource?: (path: string) => Promise<string>) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const posted: MobileRichMarkdownEditorMessage[] = []
-  const cleared: (number | null)[] = []
-  const document_ = createRichMarkdownEditorDocument({
-    postToHost: (message) => posted.push(message),
-    keyboardInsetSource: () => null,
-    clearTimer: (handle) => cleared.push(handle)
-  })
+  const document_ = createRichMarkdownEditorDocument(
+    quietRichMarkdownEditorHost({
+      postToHost: (message) => posted.push(message),
+      keyboardInsetSource: () => null,
+      loadImageSource
+    })
+  )
   started.push(document_)
   posted.length = 0
   return {
     handle: document_.send,
     posted,
-    cleared,
     editor: document.getElementById('editor')!,
     type: () => document.getElementById('editor')!.dispatchEvent(new Event('input'))
   }
@@ -43,6 +37,36 @@ afterEach(() => {
 })
 
 describe('the editor document content', () => {
+  it('shows workspace images from the host and saves their markdown paths', async () => {
+    const loadImageSource = vi.fn(async (path: string) => `data:image/png;base64,${btoa(path)}`)
+    const editor = editorDocument(loadImageSource)
+    const markdown = '![Diagram](images/diagram.png)\n\n![Remote](https://example.com/remote.png)'
+    editor.handle.setMarkdown(markdown, 1)
+    await vi.waitFor(() =>
+      expect(editor.editor.querySelector('img')?.getAttribute('src')).toBe(
+        `data:image/png;base64,${btoa('images/diagram.png')}`
+      )
+    )
+    expect(loadImageSource).toHaveBeenCalledExactlyOnceWith('images/diagram.png')
+    expect(editor.editor.querySelectorAll('img')[1]?.getAttribute('src')).toBe(
+      'https://example.com/remote.png'
+    )
+    editor.type()
+    expect(editor.posted).toEqual([{ type: 'change', markdown, generation: 1 }])
+  })
+
+  it('shows an image an edit brings back without loading it again', async () => {
+    const loadImageSource = vi.fn(async () => 'data:image/png;base64,AAAA')
+    const editor = editorDocument(loadImageSource)
+    editor.handle.setMarkdown('![Diagram](images/diagram.png)', 1)
+    const pasted = document.createElement('img')
+    pasted.setAttribute('data-workspace-path', 'images/diagram.png')
+    editor.editor.append(pasted)
+    editor.type()
+    await vi.waitFor(() => expect(pasted.getAttribute('src')).toBe('data:image/png;base64,AAAA'))
+    expect(loadImageSource).toHaveBeenCalledOnce()
+  })
+
   it('carries the generation it was set under into every change', () => {
     const editor = editorDocument()
     editor.handle.setMarkdown('first', 4)
@@ -63,8 +87,6 @@ describe('the editor document content', () => {
   })
 
   it('posts the change on the spot, with no timer between the edit and the host', () => {
-    // There is no debounce, and the pending handle is cleared before every replacement so that
-    // adding one later cannot leak a change from the content it has already replaced.
     const editor = editorDocument()
     vi.useFakeTimers()
     try {
@@ -75,12 +97,10 @@ describe('the editor document content', () => {
     } finally {
       vi.useRealTimers()
     }
-    expect(editor.cleared).toEqual([null, null])
   })
 
   it('says nothing while it is rewriting itself', () => {
-    // `setMarkdown` replaces the markup, which a live browser reports as input; a change posted
-    // from it would send the host back the content the host just set.
+    // setMarkdown’s DOM rewrite must not echo host’s content as new user change.
     const editor = editorDocument()
     editor.handle.setMarkdown('# Title', 2)
     expect(editor.posted).toEqual([])
@@ -119,8 +139,7 @@ describe('the editor document content', () => {
   })
 
   it('reports one change for a checkbox tap, not one per event the tap raises', () => {
-    // One tap raises click, input and change, and all three bubble to `#editor`: the recorded
-    // sequence is the precondition, so a count of one cannot pass by the events going missing.
+    // Assert click/input/change all bubble for one tick, then prove only one report; missing events cannot satisfy count accidentally.
     const editor = editorDocument()
     editor.handle.setMarkdown('- [ ] Open', 1)
     const reached: string[] = []

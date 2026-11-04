@@ -15,8 +15,7 @@ export function isSafeGitRemoteName(remoteName: string): boolean {
     return false
   }
   return remoteName.split('/').every((segment) => {
-    // Git accepts slash-separated remote names; each segment still needs to be
-    // a concrete name so persisted push targets cannot smuggle path traversal.
+    // Slash-separated remotes still need concrete segments to prevent persisted push targets smuggling traversal.
     return (
       segment !== '' &&
       segment !== '.' &&
@@ -26,8 +25,7 @@ export function isSafeGitRemoteName(remoteName: string): boolean {
   })
 }
 
-// Why: the relay allows a fork remote to be added via git.exec, so the exec
-// validator needs the same URL rule the pushTarget-carrying RPCs already apply.
+// Relay git.exec can add fork remotes; use the same URL rule as push-target RPCs.
 export function isSafePushTargetRemoteUrl(remoteUrl: string): boolean {
   return GITHUB_CLONE_URL.test(remoteUrl) || GITHUB_SSH_URL.test(remoteUrl)
 }

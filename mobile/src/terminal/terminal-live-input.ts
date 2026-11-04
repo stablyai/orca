@@ -31,8 +31,7 @@ type TerminalLiveSpecialKeyId =
   | 'pageUp'
   | 'tab'
 
-// Why: Enter stays on onSubmitEditing; mapping it here can double-send carriage
-// returns when native TextInput emits both submit and key events.
+// Keep Enter on onSubmitEditing; handling both native key and submit events would double-send Return.
 const TERMINAL_LIVE_SPECIAL_KEY_IDS = new Map<string, TerminalLiveSpecialKeyId>([
   ['Escape', 'escape'],
   ['Esc', 'escape'],
@@ -86,8 +85,12 @@ export type TerminalLiveInputDefaultResult = {
 
 export type TerminalLiveInputPruneResult = TerminalLiveInputDefaultResult
 
+export function getTerminalLiveSpecialKeyId(key: string): TerminalLiveSpecialKeyId | null {
+  return TERMINAL_LIVE_SPECIAL_KEY_IDS.get(key) ?? null
+}
+
 export function getTerminalLiveSpecialKeyBytes(key: string): string | null {
-  const shortcutKey = TERMINAL_LIVE_SPECIAL_KEY_IDS.get(key)
+  const shortcutKey = getTerminalLiveSpecialKeyId(key)
   if (!shortcutKey) {
     return null
   }
@@ -220,8 +223,7 @@ export function scheduleTerminalLiveInputFocus(
   focus: () => void,
   delayMs = 50
 ): void {
-  // Why: live input can be toggled during route changes; replacing the pending
-  // focus timer prevents stale native TextInput focus after unmount/disable.
+  // Replace pending focus timers so route changes cannot focus a stale input after disable/unmount.
   clearTerminalLiveInputFocusTimer(timerRef)
   timerRef.current = setTimeout(() => {
     timerRef.current = null
@@ -242,8 +244,7 @@ export function focusTerminalLiveInputTarget(
   }
 
   if (reopenFocusedInputWhenKeyboardHidden && keyboardHeight <= 0 && input.isFocused?.()) {
-    // Why: Android can keep a hidden TextInput focused after the IME is dismissed;
-    // focus() is then a no-op, so force a new focus session to reopen the keyboard.
+    // Android can retain hidden input focus after IME dismissal; blur first to create a new focus session.
     input.blur()
     refocus()
     return

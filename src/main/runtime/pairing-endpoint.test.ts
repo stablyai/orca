@@ -105,8 +105,7 @@ describe('resolveAdvertisedPairingEndpoint', () => {
 })
 
 describe('resolveAdvertisedPairingHostname', () => {
-  // Why: the loopback/off-host decision must read the host a link will advertise, not the raw string the
-  // user typed — `127.0.0.1:8443` and `ws://127.0.0.1:6768` both publish a loopback host.
+  // Classify the normalized advertised host: bare loopback with ports and ws URLs are still loopback.
   it.each([
     ['127.0.0.1', '127.0.0.1'],
     ['127.0.0.1:8443', '127.0.0.1'],

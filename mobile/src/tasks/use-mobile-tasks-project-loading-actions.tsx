@@ -191,8 +191,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
             ? views.find((view) => view.number === options.viewNumber)
             : undefined
         if (options.viewNumber !== undefined && !explicitView) {
-          // Why: desktop treats stale /views/{n} URLs as a prompt to choose a
-          // replacement view, not as a failed project selection.
+          // Stale view URLs prompt for a replacement view, matching desktop.
           const supportedViews = views.filter((view) => view.layout === 'TABLE_LAYOUT')
           if (supportedViews.length === 0) {
             throw new Error('This project has no supported views.')
@@ -205,8 +204,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
           throw new Error("Orca doesn't support this GitHub Project layout yet.")
         }
         if (!explicitView && !rememberedView) {
-          // Why: desktop asks which Project view to open the first time a project
-          // is selected. Mobile should not silently choose the first table view.
+          // Ask for the first Project view; do not silently choose the first table.
           const supportedViews = views.filter((view) => view.layout === 'TABLE_LAYOUT')
           if (supportedViews.length === 0) {
             throw new Error('This project has no supported views.')
@@ -286,8 +284,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     tasksSupported
   ])
 
-  // Why: a refresh must re-read the host, not replay the cached list, or a repo
-  // added since this screen mounted can never appear.
+  // Refresh must bypass cached repos so newly added repos can appear.
   const refreshTasks = useCallback(() => {
     void repoListReload().catch(() => {})
     void loadTasks({ silent: true })

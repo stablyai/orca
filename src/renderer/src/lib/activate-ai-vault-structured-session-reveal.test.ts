@@ -1,10 +1,4 @@
-/**
- * The reveal call itself, rather than the activation flow that injects it.
- *
- * What it has to get right is which host it negotiates against: the chat lives on the host that
- * owns the workspace, which for a paired workspace is not this process. Gating on the local build's
- * capabilities would pass unconditionally on desktop and say nothing about the host being called.
- */
+/** Negotiate reveal against the workspace’s answering host; local build capabilities say nothing about a paired host’s version. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -21,27 +15,34 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 
 vi.mock('./worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.environmentIdFor
+  runtimeEnvironmentIdOrLocalUnlessTwin: mocks.environmentIdFor
 }))
 
-import { revealStructuredSession } from './activate-ai-vault-structured-session'
-import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  activateAiVaultStructuredSession,
+  revealStructuredSession
+} from './activate-ai-vault-structured-session'
+import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
 
 const target = { worktreeId: 'workspace-1', sessionId: 'session-1' }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.call.mockResolvedValue({ ok: true })
+  mocks.call.mockResolvedValue({
+    ok: true,
+    sessionId: target.sessionId,
+    workspaceId: target.worktreeId,
+    agent: 'codex'
+  })
   mocks.supports.mockResolvedValue(true)
   mocks.environmentIdFor.mockReturnValue(null)
 })
 
 describe('revealStructuredSession', () => {
   it('asks a local host without a capability round trip', async () => {
-    // The renderer and its local host are one build, so probing would only cost a round trip on a
-    // user's click to prove something already known.
-    await expect(revealStructuredSession(target)).resolves.toBe('revealed')
+    // The local host shares this build; probing it would only add a round trip.
+    await expect(revealStructuredSession(target)).resolves.toEqual({ ...target, agent: 'codex' })
 
     expect(mocks.supports).not.toHaveBeenCalled()
     expect(mocks.call).toHaveBeenCalledWith(
@@ -55,7 +56,7 @@ describe('revealStructuredSession', () => {
   it('negotiates against the host that owns the workspace, not the local one', async () => {
     mocks.environmentIdFor.mockReturnValue('env-1')
 
-    await expect(revealStructuredSession(target)).resolves.toBe('revealed')
+    await expect(revealStructuredSession(target)).resolves.toEqual({ ...target, agent: 'codex' })
 
     expect(mocks.supports).toHaveBeenCalledWith(
       'env-1',
@@ -72,7 +73,10 @@ describe('revealStructuredSession', () => {
 
   it('keeps a known recipient target when the active workspace would resolve locally', async () => {
     const host = { kind: 'environment', environmentId: 'recipient-host' } as const
-    await expect(revealStructuredSession({ ...target, target: host })).resolves.toBe('revealed')
+    await expect(revealStructuredSession({ ...target, target: host })).resolves.toEqual({
+      ...target,
+      agent: 'codex'
+    })
     expect(mocks.supports).toHaveBeenCalledWith(
       'recipient-host',
       STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
@@ -87,62 +91,13 @@ describe('revealStructuredSession', () => {
   })
 
   it('reports a paired host that cannot open it rather than sending an unknown method', async () => {
-    // The regression this guards: an older paired host answers method_not_found, which is
-    // indistinguishable from a refusal, so the user is told the chat is gone when it is not.
+    // An old host’s method_not_found must request an update rather than claim the chat is gone.
     mocks.environmentIdFor.mockReturnValue('legacy-env')
     mocks.supports.mockResolvedValue(false)
 
     await expect(revealStructuredSession(target)).resolves.toBe('host-cannot-open')
 
     expect(mocks.call).not.toHaveBeenCalled()
-  })
-
-  it('reports unreachable when the capability probe cannot reach the host', async () => {
-    // Losing contact is not evidence about the host's age or about the chat.
-    mocks.environmentIdFor.mockReturnValue('env-1')
-    mocks.supports.mockRejectedValue(new Error('status timeout'))
-
-    await expect(revealStructuredSession(target)).resolves.toBe('unreachable')
-
-    expect(mocks.call).not.toHaveBeenCalled()
-  })
-
-  it('gives up on a probe that never settles instead of hanging the row', async () => {
-    // The in-flight guard releases on settle, so a probe that never answers would otherwise hold
-    // this session's entry for the life of the process and leave the row permanently dead.
-    vi.useFakeTimers()
-    mocks.environmentIdFor.mockReturnValue('env-1')
-    mocks.supports.mockReturnValue(new Promise(() => {}))
-
-    try {
-      const outcome = revealStructuredSession(target)
-      await vi.advanceTimersByTimeAsync(10_000)
-
-      await expect(outcome).resolves.toBe('unreachable')
-      expect(mocks.call).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('reports the chat gone only for the refusal that means the record is absent', async () => {
-    mocks.call.mockResolvedValue({
-      ok: false,
-      refusal: { code: 'agent_session_identity_required' }
-    })
-
-    await expect(revealStructuredSession(target)).resolves.toBe('gone')
-  })
-
-  it('does not call a host-side refusal a missing chat', async () => {
-    // The host answers this when it holds the record but no adapter of its own can open it.
-    // Saying "gone" there tells someone their work is lost while it sits on disk.
-    mocks.call.mockResolvedValue({
-      ok: false,
-      refusal: { code: 'structured_agent_session_unsupported' }
-    })
-
-    await expect(revealStructuredSession(target)).resolves.toBe('host-cannot-open')
   })
 
   it('reads a version block as a host too old, not as a lost connection', async () => {
@@ -155,10 +110,54 @@ describe('revealStructuredSession', () => {
     await expect(revealStructuredSession(target)).resolves.toBe('host-cannot-open')
     expect(mocks.call).not.toHaveBeenCalled()
   })
+})
 
-  it('reports unreachable when the call fails rather than answers', async () => {
-    mocks.call.mockRejectedValue(new Error('structured_session_restore_timeout'))
-
-    await expect(revealStructuredSession(target)).resolves.toBe('unreachable')
+it('returns the actual revealed identity/workspace/provider for reconciliation', async () => {
+  mocks.call.mockResolvedValue({
+    ok: true,
+    sessionId: 'successor',
+    workspaceId: 'actual-owner',
+    agent: 'claude'
   })
+  expect(await revealStructuredSession(target)).toEqual({
+    sessionId: 'successor',
+    worktreeId: 'actual-owner',
+    agent: 'claude'
+  })
+})
+
+it('bounds a cached stalled probe, releases the shared click and permits a subsequent explicit retry', async () => {
+  vi.useFakeTimers()
+  const host = { kind: 'environment', environmentId: 'cached-stalled' } as const
+  const cached = new Promise<boolean>(() => {})
+  mocks.supports.mockReturnValue(cached)
+  mocks.call.mockImplementation(async () => ({
+    location: { kind: 'chat', sessionId: target.sessionId, worktreeId: target.worktreeId }
+  }))
+  const parts = {
+    tabs: () => [],
+    activate: vi.fn(() => false),
+    refresh: vi.fn(async () => undefined),
+    reveal: revealStructuredSession,
+    unavailable: vi.fn(),
+    gone: vi.fn(),
+    hostCannotOpen: vi.fn()
+  }
+  const session = {
+    structuredSession: { workspaceId: target.worktreeId, sessionId: target.sessionId }
+  }
+  try {
+    const click = activateAiVaultStructuredSession(session, parts, host)
+    await vi.advanceTimersByTimeAsync(5_001)
+    expect(await click).toBe(true)
+    expect(parts.unavailable).toHaveBeenCalledOnce()
+    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual([
+      'orchestration.partyLocation'
+    ])
+    mocks.supports.mockResolvedValue(false)
+    expect(await activateAiVaultStructuredSession(session, parts, host)).toBe(true)
+    expect(parts.hostCannotOpen).toHaveBeenCalledOnce()
+  } finally {
+    vi.useRealTimers()
+  }
 })

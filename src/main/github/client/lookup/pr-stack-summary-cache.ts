@@ -1,11 +1,12 @@
 import type { GitHubPRStack } from '../../../../shared/github/pull-request-types'
 import type { ghRepoExecOptions } from '../../gh-utils'
-import type { GitHubApiRepository } from '../../github-api-repository'
+import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
+import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { getRestPRByNumber } from './pr-number-lookup'
 export const PR_STACK_SUMMARY_CACHE_TTL_MS = 60_000
 
-// Why: a failed probe must not masquerade as "no stack" for a full minute; retry it sooner.
+// Retry failed probes sooner without presenting cached failures as confirmed no-stack results.
 export const PR_STACK_SUMMARY_FAILURE_CACHE_TTL_MS = 5_000
 
 export const PR_STACK_SUMMARY_CACHE_MAX_ENTRIES = 512
@@ -42,12 +43,12 @@ export async function getCachedGitHubPRStackSummary(
   ghOptions: ReturnType<typeof ghRepoExecOptions>,
   executionScope: string
 ): Promise<GitHubPRStack | undefined> {
-  const key = `${executionScope}\0${githubRepoIdentityKey(ownerRepo)}#${number}`
+  const execution = { ...ghOptions, ...githubHostExecOptions(ownerRepo) }
+  const key = `${executionScope}\0${githubReadExecutionScope(execution)}\0${githubRepoIdentityKey(ownerRepo)}#${number}`
   const now = Date.now()
   prunePRStackSummaryCache(now)
   const cached = prStackSummaryCache.get(key)
   if (cached && cached.expiresAt > now) {
-    // Why: a cached failure must stay a failure — returning undefined would read as "this PR has no stack".
     if (!cached.ok) {
       throw cached.error
     }
@@ -57,7 +58,7 @@ export async function getCachedGitHubPRStackSummary(
   if (existing) {
     return existing
   }
-  const request = getRestPRByNumber(ownerRepo, number, ghOptions).then((pr) => pr.stack)
+  const request = getRestPRByNumber(ownerRepo, number, execution).then((pr) => pr.stack)
   prStackSummaryInFlight.set(key, request)
   try {
     const value = await request
@@ -70,7 +71,7 @@ export async function getCachedGitHubPRStackSummary(
     prunePRStackSummaryCache()
     return value
   } catch (err) {
-    // Why: avoid repeating a failed REST probe on every review poll, on a short cooldown.
+    // Briefly cache failures to avoid a REST retry on every poll.
     prStackSummaryCache.delete(key)
     prStackSummaryCache.set(key, {
       ok: false,

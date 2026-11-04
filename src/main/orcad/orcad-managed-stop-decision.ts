@@ -1,10 +1,4 @@
-/**
- * Arbitrating a managed request between the orcad acting on it and a client cancelling it.
- *
- * Both sides race to create one decision file per transaction with a hard link, which fails if
- * the file exists. Exactly one wins, and the loser reads the winner's decision, so a cancel can
- * never report success for a stop that orcad already began.
- */
+// Exclusive hard links arbitrate stop versus cancel; cancel cannot succeed once dispatch wins.
 import { linkSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { writeDurableSecureJsonFile } from '../../shared/secure-file'
@@ -17,7 +11,7 @@ import {
 import { orcadStopReceiptPath, readOrcadStopReceipt } from './orcad-completed-stop-receipt'
 import { hasErrorCode } from '../daemon/daemon-process-inspection'
 
-export type OrcadManagedStopDecisionValue = OrcadManagedStopDecision['decision']
+type OrcadManagedStopDecisionValue = OrcadManagedStopDecision['decision']
 
 export function readOrcadManagedStopDecision(
   request: OrcadManagedStopRequest
@@ -25,7 +19,6 @@ export function readOrcadManagedStopDecision(
   return readOrcadStopReceipt(request, 'decision', OrcadManagedStopDecisionSchema)?.decision ?? null
 }
 
-/** Returns the decision that stands: ours if we created it first, otherwise the other side's. */
 export function claimOrcadManagedStopDecision(
   input: OrcadManagedStopRequest,
   decision: OrcadManagedStopDecisionValue

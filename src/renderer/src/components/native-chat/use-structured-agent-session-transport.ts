@@ -9,8 +9,9 @@ export function useStructuredAgentSessionTransport(args: {
   target: RuntimeClientTarget
   isVisible: boolean
   enabled: boolean
+  agentName?: string
 }) {
-  const { enabled, isVisible, sessionId, target } = args
+  const { agentName, enabled, isVisible, sessionId, target } = args
   const providerVisible = isVisible && enabled
   useStructuredAgentSessionHold({
     sessionId,
@@ -25,11 +26,11 @@ export function useStructuredAgentSessionTransport(args: {
     sessionId,
     target,
     stateRef,
-    enabled
+    enabled,
+    ...(agentName ? { agentName } : {})
   })
   useEffect(() => {
     stateRef.current = read.state
   }, [read.state])
-  // `stateRef`: the read state now, for a reply that lands after the render that sent it.
   return { ...read, ...mutation, providerVisible, stateRef }
 }

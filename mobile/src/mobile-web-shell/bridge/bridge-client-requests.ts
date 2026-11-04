@@ -1,3 +1,4 @@
+import type { SendRequestOptions } from '../../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../../transport/types'
 import { BridgeClientClosedError, BridgeReplyRefusedError } from './bridge-client-errors'
@@ -9,13 +10,7 @@ export type PendingRequest = {
   reject: (error: unknown) => void
 }
 
-/**
- * The page's in-flight requests, and the replies that settle them.
- *
- * Nothing here expires an id on its own, so every id this opens is discarded from the assembler the
- * moment it settles or is abandoned: a reply whose last part never arrives would otherwise hold a
- * slot until the page closes, and 64 of those are the whole in-flight budget.
- */
+// Discard assembler state whenever a request settles or is abandoned; a missing final part otherwise holds one of the 64 slots until page close.
 export class BridgeClientRequests {
   private readonly pending = new Map<string, PendingRequest>()
   private readonly assembler = new BridgeReplyAssembler()
@@ -32,16 +27,87 @@ export class BridgeClientRequests {
     this.pending.set(id, request)
   }
 
-  /** For a frame that never left the page: the caller settles it, and no part can have arrived for
-   *  an id the shell was never told about, so there is no assembler slot to give back. */
+  // A frame that never left has no assembler slot; settle it locally.
   abandon(id: string): void {
     this.pending.delete(id)
+  }
+
+  wait(
+    id: string,
+    response: Promise<RpcResponse>,
+    options: SendRequestOptions | undefined,
+    cancel: () => void
+  ): Promise<RpcResponse> {
+    const signal = options?.signal
+    if (!signal) {
+      return response
+    }
+    return new Promise((resolve, reject) => {
+      // Pending-map removal precedes raw reaction delivery; an abort in between must still win.
+      let terminal = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const cleanup = () => {
+        if (timer !== undefined) {
+          clearTimeout(timer)
+        }
+        signal.removeEventListener('abort', onAbort)
+      }
+      const abandon = (error: Error) => {
+        if (terminal) {
+          return
+        }
+        terminal = true
+        cleanup()
+        this.fail(id, new Error('Request abandoned'))
+        cancel()
+        reject(error)
+      }
+      const onAbort = () =>
+        abandon(Object.assign(new Error('Promise settlement wait aborted'), { name: 'AbortError' }))
+      void response.then(
+        (value) => {
+          if (!terminal) {
+            terminal = true
+            cleanup()
+            resolve(value)
+          }
+        },
+        (error: unknown) => {
+          if (!terminal) {
+            terminal = true
+            cleanup()
+            reject(error)
+          }
+        }
+      )
+      if (signal.aborted) {
+        onAbort()
+        return
+      }
+      timer = setTimeout(
+        () => abandon(new Error('Promise settlement wait timed out')),
+        Math.max(1, options?.timeoutMs ?? 30_000)
+      )
+      const handle: unknown = timer
+      if (
+        typeof handle === 'object' &&
+        handle !== null &&
+        'unref' in handle &&
+        typeof handle.unref === 'function'
+      ) {
+        handle.unref()
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      if (signal.aborted) {
+        onAbort()
+      }
+    })
   }
 
   acceptReply(message: BridgeReplyMessage): void {
     const assembly = this.assembler.accept(message)
     if (assembly.status === 'pending') {
-      // A part for an id nobody is waiting on still costs a slot until it is discarded.
+      // Discard unsolicited reply parts too, or they consume an assembler slot.
       if (!this.pending.has(message.id)) {
         this.assembler.discard(message.id)
       }
@@ -51,7 +117,6 @@ export class BridgeClientRequests {
       this.fail(message.id, new BridgeReplyRefusedError(assembly.refusal))
       return
     }
-    // A host `RpcFailure` resolves: it is data the caller reads, and the goldens record it.
     this.settle(message.id, (request) => {
       request.resolve(assembly.payload)
     })
@@ -63,11 +128,7 @@ export class BridgeClientRequests {
     })
   }
 
-  /**
-   * Every pending request reaches its caller before this returns, and each one rejects
-   * delivery-unknown: the desktop may already have run it, and a caller told this was a definite
-   * send failure would offer to retry something that already happened.
-   */
+  // Reject all pending requests before returning, marked delivery-unknown because desktop execution may already have happened.
   closeAll(reason: Error = new BridgeClientClosedError()): void {
     const error = markRpcDeliveryUnknown(reason)
     for (const request of this.pending.values()) {

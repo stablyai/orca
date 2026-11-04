@@ -1,0 +1,24 @@
+diff --git a/build/src/utils/tsconfig/evaluateTsConfig.js b/build/src/utils/tsconfig/evaluateTsConfig.js
+index ecf0298a6858541f2e33d0af5293ad61aa80a159..491d9800703dab8e3c197c09bd45af4fd3e13b58 100644
+--- a/build/src/utils/tsconfig/evaluateTsConfig.js
++++ b/build/src/utils/tsconfig/evaluateTsConfig.js
+@@ -77,11 +77,15 @@ function evaluateTsConfig(ts, tsConfigPath) {
+     }
+ }
+ function importTypeScriptFromProjectOptionally(projectRoot) {
+-    const resolvedPath = _resolvefrom().default.silent(projectRoot, 'typescript');
+-    if (!resolvedPath) {
+-        return null;
++    // TypeScript 7 ships no compiler API; read tsconfig with the project's TypeScript 6 alias.
++    for (const name of ['typescript', 'typescript-api']) {
++        const resolvedPath = _resolvefrom().default.silent(projectRoot, name);
++        const ts = resolvedPath ? require(resolvedPath) : null;
++        if (typeof (ts == null ? void 0 : ts.readConfigFile) === 'function') {
++            return ts;
++        }
+     }
+-    return require(resolvedPath);
++    return null;
+ }
+ 
+ //# sourceMappingURL=evaluateTsConfig.js.map

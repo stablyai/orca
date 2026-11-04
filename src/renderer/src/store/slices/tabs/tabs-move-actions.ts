@@ -37,7 +37,7 @@ export function createTabsMoveActions(
 
         const dedupedSourceGroupOrder = dedupeTabOrder(sourceGroup.tabOrder)
         const sourceOrder = dedupeTabOrder(dedupedSourceGroupOrder.filter((id) => id !== tabId))
-        // Why: defensive dedupe so target order can't grow a duplicate id (stale state); see dropUnifiedTab for the same guard.
+        // Stale target orders may already contain tabId; dedupe to prevent duplicate React keys (also guarded in dropUnifiedTab).
         const targetOrder = dedupeTabOrder(targetGroup.tabOrder.filter((id) => id !== tabId))
         const targetIndex = Math.max(
           0,
@@ -59,7 +59,12 @@ export function createTabsMoveActions(
               activeTabId:
                 group.activeTabId === tabId
                   ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
-                    pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
+                    pickNextActiveTab(
+                      dedupedSourceGroupOrder,
+                      sourceGroup.recentTabIds,
+                      tabId,
+                      state.unifiedTabsByWorktree[worktreeId]
+                    )
                   : group.activeTabId,
               tabOrder: sourceOrder,
               recentTabIds: sourceRecentTabIds

@@ -7,13 +7,7 @@ const TERMINAL_TAB_CLOSE_REASONS = [
   'pty-exit'
 ] as const satisfies readonly RuntimeSessionTabCloseReason[]
 
-/** Main's record that a terminal tab was closed, written by its close transaction only.
- *
- *  Why it must exist: absence alone cannot distinguish "never told" from "closed", so without it a
- *  host snapshot or a late spawn commit brings the tab back, and an emptied workspace reads as one
- *  that was never initialized. Safe because tab ids are uuids: a closed id never legitimately
- *  returns. Nothing acknowledges it away; it dies by TTL, the per-host cap, or when its workspace's
- *  session rows are removed. */
+/** Only close transactions record tombstones: absence cannot distinguish unseen from closed, letting late spawns/snapshots resurrect tabs. UUIDs never return legitimately; retain until TTL, per-host cap or workspace session removal. */
 export type ClosedTerminalTabTombstone = {
   closedAt: number
   worktreeId: string
@@ -23,8 +17,7 @@ export type ClosedTerminalTabTombstone = {
 
 export type ClosedTerminalTabTombstonesByTabId = Record<string, ClosedTerminalTabTombstone>
 
-/** Colocated with the type so the two cannot drift. Must survive a relaunch — omitted from the
- *  session schema once, and zod silently stripped the map on every launch. */
+/** Colocate persistence schema with type; omitting it once let zod silently strip tombstones on every relaunch. */
 export const closedTerminalTabTombstoneSchema = z.object({
   closedAt: z.number().int().nonnegative(),
   worktreeId: z.string().min(1),
@@ -32,15 +25,15 @@ export const closedTerminalTabTombstoneSchema = z.object({
   reason: z.enum(TERMINAL_TAB_CLOSE_REASONS).optional().catch(undefined)
 })
 
-/** Bounds on one host partition's map: pruned per partition, so one host's churn cannot evict
- *  another host's records. */
+/** Prune within host partitions so one host’s churn cannot evict another’s records. */
 export const CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 export const MAX_CLOSED_TERMINAL_TAB_TOMBSTONES = 500
 
-export function pruneClosedTerminalTabTombstones(
-  map: ClosedTerminalTabTombstonesByTabId | undefined,
+/** Also bounds main's closed-pane records (closed-terminal-panes.ts), under the same TTL and cap. */
+export function pruneClosedTerminalTabTombstones<Closed extends { closedAt: number }>(
+  map: Record<string, Closed> | undefined,
   now: number
-): ClosedTerminalTabTombstonesByTabId {
+): Record<string, Closed> {
   const entries = Object.entries(map ?? {}).filter(
     ([, tombstone]) => now - tombstone.closedAt <= CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS
   )
@@ -57,9 +50,7 @@ export function recordClosedTerminalTabTombstone(
   return pruneClosedTerminalTabTombstones({ ...map, [tabId]: { ...record, closedAt: now } }, now)
 }
 
-/** Whether a tab id was closed within the TTL, by the record's own worktree. The TTL is checked
- *  here because pruning only runs when the partition next records a close. Object.hasOwn because
- *  the map is a plain object: `in` answers true for every Object.prototype key. */
+/** Check TTL even before prune-on-close runs; require the owning workspace and Object.hasOwn so prototype keys cannot prove closure. */
 export function hasClosedTerminalTabRecord(
   map: ClosedTerminalTabTombstonesByTabId | undefined,
   tabId: string,
@@ -74,11 +65,7 @@ export function hasClosedTerminalTabRecord(
   )
 }
 
-/** Emptied on purpose: the workspace's terminal row exists, is empty, and some tab in it was
- *  closed within the TTL. An empty row with no live record is unknown (legacy data, an expired
- *  record, or a writer that is not a close), so it reads as never initialized. Any record
- *  suffices, which is weaker than "the last removal was a close" until every membership shrink is
- *  a close. */
+/** An empty terminal row plus any live close record means intentionally emptied. Without a record it is unknown/never initialized; this is weaker than proving the last removal was a close until every shrink records one. */
 export function isTerminalWorkspaceEmptiedOnPurpose(
   state: {
     tabsByWorktree: Readonly<Record<string, readonly unknown[] | undefined>>

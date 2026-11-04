@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { requireTuiAgentConfig } from './require-tui-agent-config'
 
 describe('requireTuiAgentConfig', () => {

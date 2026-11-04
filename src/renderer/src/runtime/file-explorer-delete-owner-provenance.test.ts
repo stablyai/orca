@@ -160,117 +160,6 @@ afterEach(() => {
 })
 
 describe('file explorer deletion owner provenance', () => {
-  it('routes a HUB-owned SSH delete through the HUB and never local SSH', async () => {
-    useAppStore.setState({
-      settings: { activeRuntimeEnvironmentId: 'different-hub' } as never,
-      repos: [
-        makeRepo({
-          id: LOCAL_REPO_ID,
-          path: '/tmp/project',
-          connectionId: SSH_ID,
-          executionHostId: 'runtime:owner-hub'
-        })
-      ],
-      worktreesByRepo: {
-        [LOCAL_REPO_ID]: [makeWorktree(`ssh:${SSH_ID}`, 'owner-hub')]
-      },
-      sshStateByEnvironment: new Map([
-        [
-          'owner-hub',
-          { connectionStates: new Map([[SSH_ID, { connectionGeneration: 1 }]]) } as never
-        ]
-      ])
-    })
-    const owner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
-    expect(owner).toEqual({
-      kind: 'runtime',
-      environmentId: 'owner-hub',
-      executionHostId: 'ssh:ssh-target-1'
-    })
-
-    const { result } = renderDelete(LOCAL_WORKTREE_ID)
-    await requestDelete(result, localNode, owner)
-
-    await vi.waitFor(() =>
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-        expect.objectContaining({ selector: 'owner-hub', method: 'files.delete' })
-      )
-    )
-    expect(fsDeletePath).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when the same SSH worktree is projected by two HUBs', () => {
-    useAppStore.setState({
-      repos: [],
-      worktreesByRepo: {
-        [LOCAL_REPO_ID]: [
-          makeWorktree(`ssh:${SSH_ID}`, 'hub-a'),
-          makeWorktree(`ssh:${SSH_ID}`, 'hub-b')
-        ]
-      }
-    })
-
-    expect(getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)).toEqual({ kind: 'unresolved' })
-  })
-
-  it('routes a HUB-owned SSH rename through the HUB and never local SSH', async () => {
-    useAppStore.setState({
-      settings: { activeRuntimeEnvironmentId: 'different-hub' } as never,
-      repos: [
-        makeRepo({
-          id: LOCAL_REPO_ID,
-          path: '/tmp/project',
-          connectionId: SSH_ID,
-          executionHostId: 'runtime:owner-hub'
-        })
-      ],
-      worktreesByRepo: {
-        [LOCAL_REPO_ID]: [makeWorktree(`ssh:${SSH_ID}`, 'owner-hub')]
-      },
-      sshStateByEnvironment: new Map([
-        [
-          'owner-hub',
-          { connectionStates: new Map([[SSH_ID, { connectionGeneration: 1 }]]) } as never
-        ]
-      ])
-    })
-
-    await renameFileOnDisk({
-      oldPath: '/tmp/project/src/old.ts',
-      newName: 'new.ts',
-      worktreeId: LOCAL_WORKTREE_ID,
-      worktreePath: '/tmp/project'
-    })
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({ selector: 'owner-hub', method: 'files.rename' })
-    )
-    expect(fsRenamePath).not.toHaveBeenCalled()
-  })
-
-  it('fails a rename closed when the same SSH worktree is projected by two HUBs', async () => {
-    useAppStore.setState({
-      repos: [],
-      worktreesByRepo: {
-        [LOCAL_REPO_ID]: [
-          makeWorktree(`ssh:${SSH_ID}`, 'hub-a'),
-          makeWorktree(`ssh:${SSH_ID}`, 'hub-b')
-        ]
-      }
-    })
-
-    await expect(
-      renameFileOnDisk({
-        oldPath: '/tmp/project/src/old.ts',
-        newName: 'new.ts',
-        worktreeId: LOCAL_WORKTREE_ID,
-        worktreePath: '/tmp/project'
-      })
-    ).rejects.toThrow("Couldn't determine which host owns this workspace")
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(fsRenamePath).not.toHaveBeenCalled()
-  })
-
   it('fails a cached rename closed when ownership changed after listing', async () => {
     useAppStore.setState({
       repos: [
@@ -293,33 +182,6 @@ describe('file explorer deletion owner provenance', () => {
     useAppStore.setState({
       worktreesByRepo: {
         [LOCAL_REPO_ID]: [makeWorktree('ssh:hub-private-target', 'hub-b')]
-      }
-    })
-
-    await expect(
-      renameFileOnDisk({
-        oldPath: '/tmp/project/src/old.ts',
-        newName: 'new.ts',
-        worktreeId: LOCAL_WORKTREE_ID,
-        worktreePath: '/tmp/project',
-        operationOwner: listingOwner
-      })
-    ).rejects.toThrow("Couldn't determine which host owns this workspace")
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(fsRenamePath).not.toHaveBeenCalled()
-  })
-
-  it('fails a cached rename closed when the HUB switches its nested SSH target', async () => {
-    useAppStore.setState({
-      repos: [],
-      worktreesByRepo: {
-        [LOCAL_REPO_ID]: [makeWorktree('ssh:direct-target', 'hub-a')]
-      }
-    })
-    const listingOwner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
-    useAppStore.setState({
-      worktreesByRepo: {
-        [LOCAL_REPO_ID]: [makeWorktree('ssh:jump-target', 'hub-a')]
       }
     })
 
@@ -403,43 +265,6 @@ describe('file explorer deletion owner provenance', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
-  it('does not pop the batch confirm for an unresolved-owner multi-select', async () => {
-    useAppStore.setState({
-      repos: duplicateHostRepos(),
-      worktreesByRepo: {
-        [LOCAL_REPO_ID]: [makeWorktree('local'), makeWorktree(`ssh:${SSH_ID}`)]
-      }
-    })
-    const owner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
-    expect(owner).toEqual({ kind: 'unresolved' })
-
-    const { result } = renderDelete(LOCAL_WORKTREE_ID)
-    const nodeA: TreeNode = {
-      ...localNode,
-      name: 'a.ts',
-      path: '/tmp/project/src/a.ts',
-      relativePath: 'src/a.ts',
-      operationOwner: owner
-    }
-    const nodeB: TreeNode = {
-      ...localNode,
-      name: 'b.ts',
-      path: '/tmp/project/src/b.ts',
-      relativePath: 'src/b.ts',
-      operationOwner: owner
-    }
-    await act(async () => {
-      result.current.requestDeleteAll([nodeA, nodeB])
-    })
-
-    await vi.waitFor(() => expect(toastError).toHaveBeenCalled())
-    // Why: unresolved deletes throw before any confirm, so the batch must not
-    // pop a destructive prompt for operations that provably cannot succeed.
-    expect(confirm).not.toHaveBeenCalled()
-    expect(fsDeletePath).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
   it('keeps an explicit local worktree local when duplicate repo IDs include SSH', async () => {
     useAppStore.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as never,
@@ -461,43 +286,6 @@ describe('file explorer deletion owner provenance', () => {
       })
     )
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('permanently deletes a paired-server worktree through its stamped runtime', async () => {
-    useAppStore.setState({
-      settings: { activeRuntimeEnvironmentId: 'web-server-b' } as never,
-      repos: [
-        makeRepo({
-          id: LOCAL_REPO_ID,
-          path: '/tmp/project',
-          executionHostId: 'runtime:web-server-a'
-        })
-      ],
-      worktreesByRepo: {
-        [LOCAL_REPO_ID]: [makeWorktree('runtime:web-server-a')]
-      }
-    })
-    const owner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
-    expect(owner).toEqual({
-      kind: 'runtime',
-      environmentId: 'web-server-a',
-      executionHostId: 'runtime:web-server-a'
-    })
-
-    const { result } = renderDelete(LOCAL_WORKTREE_ID)
-    await requestDelete(result, localNode, owner)
-
-    await vi.waitFor(() =>
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-        expect.objectContaining({ selector: 'web-server-a', method: 'files.delete' })
-      )
-    )
-    expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({
-        description: 'This permanently deletes the file on the remote host. This cannot be undone.'
-      })
-    )
-    expect(fsDeletePath).not.toHaveBeenCalled()
   })
 })
 

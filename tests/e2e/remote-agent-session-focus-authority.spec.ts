@@ -9,7 +9,7 @@ import {
 } from './helpers/paired-electron-client'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 import type { RuntimeTerminalSummary } from '../../src/shared/runtime-types'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 type ClientMirror = {
   activeTabId: string | null

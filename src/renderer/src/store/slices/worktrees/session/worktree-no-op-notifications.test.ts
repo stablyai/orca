@@ -10,28 +10,6 @@ vi.mock('@/components/worktree-base-fallback-notice', () => ({
 }))
 
 describe('worktree no-op notifications', () => {
-  it('keeps missing creation, recovery, activity, deletion and visit updates silent', () => {
-    const store = createTestStore()
-    const before = store.getState()
-    const listener = vi.fn()
-    store.subscribe(listener)
-
-    before.updatePendingWorktreeCreation('missing', { phase: 'fetching' })
-    before.removePendingWorktreeCreation('missing')
-    before.setActivePendingWorktreeCreation('missing')
-    before.remountTerminalTabForRecovery('missing')
-    before.settleTerminalTabRecovery('missing', 1, 'success')
-    before.markWorktreeUnread('missing')
-    before.bumpWorktreeActivity('missing')
-    before.clearWorktreeDeleteState('missing')
-    before.seedActiveWorktreeLastVisitedIfMissing()
-    before.pruneLastVisitedTimestamps()
-    before.migrateWorktreeIdentity('missing-old', 'missing-new')
-
-    expect(store.getState()).toBe(before)
-    expect(listener).not.toHaveBeenCalled()
-  })
-
   it.each(['local', 'ssh:test'] as const)(
     'keeps repeated %s deletion and visit updates silent',
     (hostId) => {

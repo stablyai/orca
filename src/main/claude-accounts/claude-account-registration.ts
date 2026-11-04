@@ -24,11 +24,7 @@ export const CLAUDE_SIGN_IN_NOT_FINISHED_MESSAGE =
 const CLAUDE_LOGIN_WITHOUT_ACCOUNT_MESSAGE =
   'Claude login completed, but Orca could not resolve the account email.'
 
-/**
- * Sign-in runs `claude auth login` against the account's own folder: hidden from Settings, in
- * the user's terminal from the CLI. A folder becomes an account only once it holds a login
- * (superset U/profiles.ts:132,178), so an abandoned sign-in never shows as a row.
- */
+/** Publish accounts only after login, so abandoned sign-ins never appear in the list. */
 export class ClaudeAccountRegistration {
   constructor(
     private readonly deps: {
@@ -39,13 +35,11 @@ export class ClaudeAccountRegistration {
     }
   ) {}
 
-  /** A new folder, or a saved account's own folder when `accountId` is given. */
   async begin(request: ClaudeSignInRequest): Promise<ClaudeAccountSignIn> {
     const { accountId, target, folder } = await this.prepare(request)
     return { accountId, configDir: folder.configDir, ...target }
   }
 
-  /** Runs `login` into the account's folder, then saves it; a failed new folder is deleted. */
   async signIn(
     request: ClaudeSignInRequest,
     login: (folder: ClaudeCommandConfig) => Promise<void>
@@ -60,7 +54,7 @@ export class ClaudeAccountRegistration {
       })
       return await this.finish(signIn, CLAUDE_LOGIN_WITHOUT_ACCOUNT_MESSAGE)
     } catch (error) {
-      // Why caught: the sign-in's own failure is what the user needs to see.
+      // Preserve the sign-in error if cleanup also fails.
       await this.cancel(signIn).catch((cleanupError: unknown) =>
         console.warn(
           '[claude-accounts] Could not delete an unfinished sign-in folder:',
@@ -92,7 +86,7 @@ export class ClaudeAccountRegistration {
     const { store, rateLimits, runtimeAuth, selection } = this.deps
     const saved = selection.findAccount(signIn.accountId)
     const target = saved ? getClaudeSelectionTargetForAccount(saved) : signInTarget(signIn)
-    // Why set up again: onboarding is merged only into a state file the login just created.
+    // Merge onboarding into the state file created by login.
     const folder = await runtimeAuth.prepareAccountFolder(signIn.accountId, target)
     const login = readClaudeFolderLogin(claudeStateFile(folder.readPath))
     if (!login) {
@@ -105,7 +99,8 @@ export class ClaudeAccountRegistration {
     } as const
     if (
       !saved &&
-      findDuplicateClaudeAccount(accounts, {
+      // Compare current folder logins; saved identities may be stale.
+      findDuplicateClaudeAccount(selection.list().accounts, {
         email: login.email,
         organizationUuid: login.organizationUuid,
         ...scope
@@ -134,7 +129,7 @@ export class ClaudeAccountRegistration {
       ]
     })
     rateLimits.evictInactiveClaudeCache(signIn.accountId)
-    // Why publish: a selected account's terminals follow its folder only once it exists.
+    // Publish the new folder for terminals using the selected account.
     await runtimeAuth.syncForCurrentSelection(target)
     selection.refreshUsage(undefined, target)
     return selection.list()

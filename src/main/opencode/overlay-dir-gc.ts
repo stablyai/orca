@@ -1,7 +1,7 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
-import { isSafeDescendCandidate, safeRemoveOverlay } from '../pty/overlay-mirror'
+import { isSafeDescendCandidate, safeRemoveOverlay } from '../pty/scrollback/overlay-mirror'
 import {
   OPENCODE_OVERLAY_MANIFEST_FILE,
   readOpenCodeOverlayManifest

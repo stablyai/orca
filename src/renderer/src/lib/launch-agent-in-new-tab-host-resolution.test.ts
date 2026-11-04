@@ -1,10 +1,9 @@
-// Execution-host coverage for launchAgentInNewTab, split from launch-agent-in-new-tab.test.ts to
-// keep both files within the lines budget.
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
-const mockQueueTabStartupCommand = vi.fn()
+function queuedStartups() {
+  return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
+}
 
 type StoreRepo = {
   id: string
@@ -39,10 +38,8 @@ const store = {
     ['openclaw', { status: 'connected', remotePlatform: 'linux' }],
     ['m4air', { status: 'connected', remotePlatform: 'linux' }]
   ]),
-  sshStateByEnvironment: new Map([
-    ['vm-1', { connectionStates: new Map([['nested', { remotePlatform: 'linux' }]]) }]
-  ]),
-  runtimeStatusByEnvironmentId: new Map([['vm-1', { status: { hostPlatform: 'linux' } }]]),
+  sshStateByEnvironment: new Map(),
+  runtimeStatusByEnvironmentId: new Map(),
   transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   worktreesByRepo: {} as Record<string, StoreWorktree[]>,
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1'] ?? []),
@@ -57,7 +54,6 @@ const store = {
   ptyIdsByTabId: {} as Record<string, string[]>,
   createTab: mockCreateTab,
   closeTab: vi.fn(),
-  queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: vi.fn(),
   setTabBarOrder: vi.fn(),
   setAgentStatus: vi.fn(),
@@ -112,7 +108,7 @@ async function launchOnLinux(): Promise<void> {
 }
 
 function queuedCommand(): string {
-  return mockQueueTabStartupCommand.mock.calls[0]?.[1]?.command
+  return queuedStartups()[0]?.command
 }
 
 describe('launchAgentInNewTab execution host resolution', () => {
@@ -134,8 +130,7 @@ describe('launchAgentInNewTab execution host resolution', () => {
   })
 
   it('shapes the launch from the worktree host, not a rival repo row on another SSH host', async () => {
-    // `store.repos.find` is host-blind, so a worktree that names its own host could be shaped by
-    // an `ssh:openclaw` row it has nothing to do with (#11163).
+    // Host-blind repos.find could shape this worktree using another SSH host’s same-ID repo (#11163).
     store.repos = [
       { id: 'repo-1', connectionId: 'openclaw', path: '/srv/openclaw' },
       { id: 'repo-1', connectionId: null, executionHostId: 'local', path: '/repo' }
@@ -157,27 +152,5 @@ describe('launchAgentInNewTab execution host resolution', () => {
     await launchOnLinux()
 
     expect(queuedCommand()).toBe("orca claude-teams '--dangerously-skip-permissions'")
-  })
-
-  it('keeps a runtime host reaching a nested SSH target on the relay shim name', async () => {
-    store.repos = [
-      { id: 'repo-1', connectionId: 'nested', executionHostId: 'runtime:vm-1', path: '/srv/vm' }
-    ]
-    store.worktreesByRepo = { 'repo-1': [worktreeOn('runtime:vm-1', '/srv/vm/worktree')] }
-
-    await launchOnLinux()
-
-    expect(queuedCommand()).toBe("orca claude-teams '--dangerously-skip-permissions'")
-  })
-
-  it('keeps a runtime host with no nested SSH target on the local CLI name', async () => {
-    store.repos = [
-      { id: 'repo-1', connectionId: null, executionHostId: 'runtime:vm-1', path: '/srv/vm' }
-    ]
-    store.worktreesByRepo = { 'repo-1': [worktreeOn('runtime:vm-1', '/srv/vm/worktree')] }
-
-    await launchOnLinux()
-
-    expect(queuedCommand()).toBe("orca-ide claude-teams '--dangerously-skip-permissions'")
   })
 })

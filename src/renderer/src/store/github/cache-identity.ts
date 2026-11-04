@@ -8,10 +8,18 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId
+  getRepoExecutionHostId,
+  normalizeExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '../slices/github-cache-key'
-import type { AppState } from '../types'
+import {
+  composeRepoCacheKey,
+  getGitHubPRCacheKey,
+  getGitHubRepoCacheKey,
+  repoCacheKeyHostId,
+  type RuntimeFocusSettings
+} from '../../../../shared/github/github-cache-key'
+import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { CacheEntry } from './cache-model'
 
@@ -63,15 +71,16 @@ export function workItemsCacheKey(
   repoId: string,
   limit: number,
   query: string,
-  executionHostId?: string | null
+  executionHostId?: string | null,
+  binding?: string
 ): string {
   const scope = executionHostId?.trim() ?? ''
   const hostId = normalizeExecutionHostId(scope)
-  const owner = `${repoId}::${limit}::${query}`
-  if (hostId) {
-    return hostId !== LOCAL_EXECUTION_HOST_ID ? `${hostId}::${owner}` : owner
-  }
-  return scope ? `${scope}::${owner}` : owner
+  return composeRepoCacheKey(
+    hostId ? (hostId !== LOCAL_EXECUTION_HOST_ID ? hostId : null) : scope,
+    repoId,
+    `${binding ? `binding=${encodeURIComponent(binding)}::` : ''}${limit}::${query}`
+  )
 }
 
 export function workItemsInflightRequestKey(
@@ -107,7 +116,7 @@ export function runtimeScopedRepoCacheKey(
   repoPath: string,
   repoId: string | undefined,
   suffix: string,
-  settings?: AppState['settings'],
+  settings?: RuntimeFocusSettings,
   connectionId?: string | null,
   executionHostId?: string | null,
   hasRepoOwner = false
@@ -127,14 +136,14 @@ export function sourceScopedRepoCacheKey(
   repoPath: string,
   repoId: string | undefined,
   suffix: string,
-  settings?: AppState['settings'],
+  settings?: RuntimeFocusSettings,
   connectionId?: string | null,
   executionHostId?: string | null,
   sourceContext?: TaskSourceContext | null,
   hasRepoOwner = false
 ): string {
   if (sourceContext?.provider === 'github') {
-    return `${getTaskSourceCacheScope(sourceContext)}::${repoId ?? repoPath}::${suffix}`
+    return composeRepoCacheKey(getTaskSourceCacheScope(sourceContext), repoId ?? repoPath, suffix)
   }
   return runtimeScopedRepoCacheKey(
     repoPath,
@@ -151,7 +160,7 @@ export function prCacheKey(
   repoPath: string,
   repoId: string | undefined,
   branch: string,
-  settings?: AppState['settings'],
+  settings?: RuntimeFocusSettings,
   connectionId?: string | null,
   executionHostId?: string | null,
   hasRepoOwner = false
@@ -167,25 +176,44 @@ export function prCacheKey(
   )
 }
 
-export function repoCacheKeyPrefixes(repoId: string, repoPath?: string): string[] {
-  const prefixes = [`${repoId}::`]
-  if (repoPath && repoPath !== repoId) {
-    prefixes.push(`${repoPath}::`)
+/** A repo's cache entries to drop: every host's bucket except a surviving same-id twin's. */
+export type RepoCacheEviction = {
+  owners: readonly string[]
+  keptHostIds: ReadonlySet<ExecutionHostId>
+}
+
+export function repoCacheEviction(
+  repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[],
+  repoId: string,
+  repoPath: string | undefined,
+  evictedHostId: ExecutionHostId | null
+): RepoCacheEviction {
+  const owners = repoPath && repoPath !== repoId ? [repoId, repoPath] : [repoId]
+  const keptHostIds = new Set<ExecutionHostId>()
+  // Why: with no known host to evict, every bucket for the id may be the stale one.
+  if (evictedHostId) {
+    for (const repo of repos) {
+      const hostId = getRepoExecutionHostId(repo)
+      if (repo.id === repoId && hostId !== evictedHostId) {
+        keptHostIds.add(hostId)
+      }
+    }
   }
-  return prefixes
+  return { owners, keptHostIds }
 }
 
-export function matchesRepoCacheKey(key: string, prefixes: readonly string[]): boolean {
-  return prefixes.some((prefix) => key.startsWith(prefix))
+export function matchesRepoCacheEviction(key: string, eviction: RepoCacheEviction): boolean {
+  const hostId = repoCacheKeyHostId(key, eviction.owners)
+  return hostId !== null && !eviction.keptHostIds.has(hostId)
 }
 
-export function evictRepoCacheEntries<T>(
-  cache: Record<string, CacheEntry<T>>,
-  prefixes: readonly string[]
-): { cache: Record<string, CacheEntry<T>>; evicted: boolean } {
-  let next: Record<string, CacheEntry<T>> | null = null
+export function evictRepoCacheEntries<V>(
+  cache: Record<string, V>,
+  eviction: RepoCacheEviction
+): { cache: Record<string, V>; evicted: boolean } {
+  let next: Record<string, V> | null = null
   for (const key of Object.keys(cache)) {
-    if (!matchesRepoCacheKey(key, prefixes)) {
+    if (!matchesRepoCacheEviction(key, eviction)) {
       continue
     }
     next ??= { ...cache }

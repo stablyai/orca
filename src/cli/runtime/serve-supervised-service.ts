@@ -1,9 +1,11 @@
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
+import { orcadStaleLockReclaimCommand } from '../../shared/orcad-stale-lock-reclaim'
 import {
   brakeForBuild,
   clearServeSupervisorBrake,
   readServeSupervisorBrake,
   recordSupervisedFailure,
+  SERVE_GAVE_UP_ADVICE,
   standbyDelayMs,
   writeServeSupervisorBrake,
   type ServeSupervisorBrake
@@ -19,13 +21,14 @@ import {
   requestSupervisedServeStop,
   resetSupervisedServeStop
 } from './serve-supervised-stop'
-import type { ServeBundlePark } from './serve-bundle-park'
+import type { ServeBundlePark } from '../../shared/serve-bundle-park'
 import { createSupervisedParkWatch } from './serve-supervised-park-watch'
+import type { AppImageBuildState } from './serve-appimage-update'
 
 export const SERVE_INSTALL_HOLD_POLL_MS = 2_000
 /** A hold this long is reported as stuck; it still never times out into a spawn. */
 export const SERVE_INSTALL_HOLD_STUCK_MS = 30 * 60_000
-/** A version-specific executable this long gone was removed by an update, not swapped by one. */
+/** After this delay, exit so the service manager can find the updated launcher. */
 export const SERVE_EXECUTABLE_MISSING_EXIT_MS = 2 * 60_000
 
 type StopListener = () => void
@@ -52,6 +55,14 @@ export type SupervisedServeOptions = {
   park?: ServeBundlePark | null
   currentChild?: typeof currentServeChild
   setRepeating?: (callback: () => void, ms: number) => () => void
+  /** The AppImage this build was unpacked from, checked before each start; null elsewhere. */
+  appImageUpdate?: SupervisedAppImageUpdate | null
+}
+
+export type SupervisedAppImageUpdate = {
+  inspect: () => AppImageBuildState
+  /** Re-execs into the new build and never returns; otherwise resolves with why it could not. */
+  restart: (isStopped: () => boolean) => Promise<string>
 }
 
 export function getServeSuperviseValidationError(input: {
@@ -102,10 +113,7 @@ async function settle(run: () => Promise<number>): Promise<PromiseSettledResult<
   }
 }
 
-/**
- * `orca serve --supervise`: the restart owner for a service manager. It never exits because its
- * child died; it exits on a stop signal, or with 0 after giving up so the manager stops too.
- */
+/** Own server restarts; exit 0 after giving up so the service manager stops retrying. */
 export async function superviseServeService(options: SupervisedServeOptions): Promise<number> {
   const now = options.now ?? Date.now
   const random = options.random ?? Math.random
@@ -117,7 +125,7 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
     ((executable: string) => serveBuildIdentity(executable, options.appRoot))
   const writeBrake = options.writeBrake ?? writeServeSupervisorBrake
 
-  // Why not keyed yet: mid-install the executable may be missing, which must not reset a give-up.
+  // Mid-install missing executables must not reset the crash brake.
   let record: ServeSupervisorBrake | null = (options.readBrake ?? readServeSupervisorBrake)(
     options.userDataPath
   )
@@ -126,12 +134,15 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
     record = null
   }
   const refuseGaveUp = (gaveUp: { reason: string }): number => {
-    log(
-      `[serve] Not starting: ${gaveUp.reason} Fix the cause, then run \`orca serve --supervise --force\` once, or reinstall Orca.`
-    )
+    log(`[serve] Not starting: ${gaveUp.reason} ${SERVE_GAVE_UP_ADVICE}`)
     return 0
   }
-  if (record?.gaveUp && record.build === identify(options.executable)) {
+  // A new AppImage deserves a retry even after the previous build hit the brake.
+  if (
+    record?.gaveUp &&
+    record.build === identify(options.executable) &&
+    (options.appImageUpdate?.inspect() ?? 'current') === 'current'
+  ) {
     return refuseGaveUp(record.gaveUp)
   }
 
@@ -179,7 +190,6 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
         evidence.reason === 'bundle-missing' &&
         now() - since >= SERVE_EXECUTABLE_MISSING_EXIT_MS
       ) {
-        // The outer loop sees the same hold and hands the restart to the service manager.
         return false
       }
       await sleep(SERVE_INSTALL_HOLD_POLL_MS)
@@ -188,6 +198,7 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
   }
   resetSupervisedServeStop(awaitClearToSpawn, () => options.park?.holds() ?? false)
 
+  let appImageUpdate = options.appImageUpdate ?? null
   try {
     let standbyAttempt = 0
     const hold: { current: { reason: string; since: number; reportedStuck: boolean } | null } = {
@@ -211,7 +222,7 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
           evidence.reason === 'bundle-missing' &&
           now() - held.since >= SERVE_EXECUTABLE_MISSING_EXIT_MS
         ) {
-          // Why exit 1: the manager restarts the CLI through the stable launcher, which finds the installed build.
+          // Let the service manager find the updated app through its stable launcher.
           log(
             '[serve] The Orca executable this service started from is gone; exiting so the service manager starts the installed Orca.'
           )
@@ -226,6 +237,19 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
         continue
       }
       hold.current = null
+      const appImage = appImageUpdate?.inspect() ?? 'current'
+      if (appImage === 'settling') {
+        // Wait until the new AppImage finishes copying before choosing a build.
+        await sleep(SERVE_INSTALL_HOLD_POLL_MS)
+        continue
+      }
+      if (appImage === 'superseded' && appImageUpdate) {
+        const reason = await appImageUpdate.restart(() => stopped)
+        // One attempt per supervisor: a failed restart keeps serving the running build.
+        appImageUpdate = null
+        log(`[serve] Kept the running build: ${reason}.`)
+        continue
+      }
       record = brakeForBuild(record, identify(options.executable))
       if (record.gaveUp) {
         return refuseGaveUp(record.gaveUp)
@@ -238,17 +262,17 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
         break
       }
       if (attempt.parked) {
-        // Why not a failure: the desktop stopped this server to install an update.
+        // Desktop update parks do not count against the crash brake.
         continue
       }
       let failure: string
       if (attempt.settled.status === 'fulfilled') {
         const code = attempt.settled.value
         if (code === SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE) {
-          // Why not a failure: another Orca serves this profile, so wait for it instead of racing it.
+          // An occupied profile warrants standby, not a crash-brake failure.
           const delayMs = standbyDelayMs(standbyAttempt++, random)
           log(
-            `[serve] Another Orca serves this profile; checking again in ${Math.round(delayMs / 1000)}s.`
+            `[serve] Another Orca serves this profile, or holds it and cannot be shown to have stopped; checking again in ${Math.round(delayMs / 1000)}s.${process.platform === 'linux' ? ` If its message says it may have stopped, \`${orcadStaleLockReclaimCommand(options.userDataPath, null)}\` checks it.` : ''}`
           )
           await sleep(delayMs)
           continue
@@ -256,7 +280,9 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
         failure = `exited with code ${code}`
       } else {
         const error: unknown = attempt.settled.reason
-        failure = error instanceof Error ? error.message : String(error)
+        failure = (error instanceof Error ? error.message : String(error))
+          .replace(/^Orca serve /, '')
+          .replace(/\.$/, '')
       }
       standbyAttempt = 0
       const next = recordSupervisedFailure(record, { now: now(), reason: failure, random })

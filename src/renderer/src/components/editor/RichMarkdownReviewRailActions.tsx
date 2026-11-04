@@ -1,9 +1,11 @@
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import { Check, Copy, MessageSquare } from 'lucide-react'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import type { MarkdownReviewNote } from '@/lib/markdown-review-notes'
 import { translate } from '@/i18n/i18n'
 
 type RichMarkdownReviewRailActionsProps = {
+  owner: DiffCommentOwner | null
   worktreeId: string
   filePath: string
   noteCount: number
@@ -16,6 +18,7 @@ type RichMarkdownReviewRailActionsProps = {
 }
 
 export function RichMarkdownReviewRailActions({
+  owner,
   worktreeId,
   filePath,
   noteCount,
@@ -89,6 +92,7 @@ export function RichMarkdownReviewRailActions({
         {notesCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
       </button>
       <NotesSendMenu
+        owner={owner}
         worktreeId={worktreeId}
         groupId={worktreeId}
         modeIdParts={['markdown-notes', worktreeId, filePath, 'rail']}

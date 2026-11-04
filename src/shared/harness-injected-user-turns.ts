@@ -1,19 +1,7 @@
-// Why: agent harnesses (Claude Code and its forks) inject machinery into the
-// conversation as user-role turns — background task notifications, system
-// reminders, inter-agent messages, slash-command envelopes, local-command
-// output, interruption and compaction notices. These fire user-prompt hooks
-// and land in transcripts, but they are not something the user typed, so
-// prompt-derived UI must not surface them.
-//
-// We match only tags we have observed from harnesses, never a broad kebab
-// shape: a real prompt starting with a custom `<my-element>` or a Grok
-// `<user_query>` envelope is a genuine user turn, and misclassifying it would
-// hide the turn (drop it from transcripts, demote its session title, or leave
-// the agent visibly done after an interrupt).
+// Harness machinery uses user-role turns and fires prompt hooks, but must not become prompt-derived UI.
+// Match only observed tags: custom elements and Grok user_query are real input; false positives hide transcripts/titles or leave interrupted agents marked done.
 const LEADING_TAG_NAME = /^<([a-z][a-z0-9-]*)(?:[\s>]|$)/
 
-// Consumers must only treat tags we have observed from harnesses as machinery;
-// arbitrary kebab tags can be genuine user code.
 const KNOWN_HARNESS_TAG_NAMES = new Set([
   'agent-message',
   'bash-input',
@@ -36,9 +24,7 @@ const KNOWN_HARNESS_TAG_NAMES = new Set([
   'user-prompt-submit-hook'
 ])
 
-// Injected turns identified by a leading string rather than a known tag name:
-// the harness only emits <channel> in its attributed `<channel source=…>` form
-// (a bare <channel> is a real RSS/XML paste), plus prose deliveries and notices.
+// Match attributed channel source envelopes separately; bare channel is legitimate RSS/XML. Also recognize observed prose notices.
 const COMPACT_CONTINUATION_PREFIX = 'this session is being continued from a previous conversation'
 const HARNESS_INJECTED_TURN_PREFIXES = [
   '<channel source=',
@@ -50,13 +36,11 @@ const HARNESS_INJECTED_TURN_PREFIXES = [
   COMPACT_CONTINUATION_PREFIX
 ]
 
-// Why: classification only inspects leading tags/prefixes. Cap the toLowerCase
-// copy so vault-scan / prompt-seed paths stay O(1) on multi-KB pastes.
+// Bound lowercasing of leading tags/prefixes so vault/prompt scans stay constant-cost on large pastes.
 const HARNESS_CLASSIFY_HEAD_LIMIT = 256
 const HARNESS_CLASSIFY_LEADING_WS_LIMIT = 64
 
-/** True only for observed harness shapes. Match on trimmed, lowercased text.
- *  Unknown kebab tags stay user turns — only tags we have observed count. */
+/** Match only observed harness shapes on trimmed, lowercased text; unknown tags remain user input. */
 export function isKnownHarnessInjectedUserTurnText(text: string): boolean {
   const normalized = normalizedHarnessTurnHead(text)
   if (!normalized) {

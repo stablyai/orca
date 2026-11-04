@@ -9,6 +9,7 @@ import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'
 import {
   clearNativeChatComposerDraftsForTests,
+  deleteNativeChatComposerDraftsOwnedBy,
   hydrateNativeChatComposerDrafts,
   nativeChatComposerDraftWritesSettled,
   readNativeChatComposerDraft,
@@ -71,6 +72,7 @@ async function fixture(acceptsImages = true, source: 'menu' | 'event' = 'menu') 
     const attachments = useNativeChatComposerAttachments({
       attachmentScopeKey: scope('menu'),
       allowWithoutTarget: true,
+      imageReferences: true,
       acceptsImages,
       caret: 0,
       disabled: false,
@@ -95,6 +97,8 @@ async function fixture(acceptsImages = true, source: 'menu' | 'event' = 'menu') 
       disabled: false,
       caret: 0,
       resolveAttachmentOwner: () => owner,
+      attachCopiedFiles: () => {},
+      captureCopiedFiles: () => async () => {},
       ...attachments,
       insertTypedText: () => true,
       setCaret: () => {},
@@ -134,13 +138,19 @@ it.each(
         attachmentScopeKey: scope('menu'),
         acceptsImages,
         allowWithoutTarget: true,
+        imageReferences: true,
         caret: 0,
         disabled: false,
         isComposing: () => false,
         resolveTarget: () => null,
         textareaRef: createRef<NativeChatComposerInput>(),
         setCaret: () => {},
-        setDraft: () => {},
+        setDraft: (update) =>
+          updateNativeChatComposerDraft(
+            scope('menu'),
+            { text: update(readNativeChatComposerDraft(scope('menu')).text) },
+            'immediate'
+          ),
         setNotice: () => {}
       })
     )
@@ -200,7 +210,6 @@ it('preserves menu uploads closed before a delayed or absent thumbnail', async (
     expect(nativeChatPendingAttachmentSnapshot(scope('menu'))).toEqual([])
     expect(readNativeChatComposerDraft(scope('menu')).images).toHaveLength(++completed)
     expect(readNativeChatComposerDraft(scope('menu')).images.at(-1)).toMatchObject({ path })
-    // The save also settles when a thumbnail has not answered at all.
     if (preview === 'delayed') {
       await act(async () => thumbnail.resolve(null))
     }
@@ -220,8 +229,10 @@ it.each([true, false])(
     for (const end of ['remove', 'workspace', 'failure'] as const) {
       const { view, save, thumbnail, path } = await fixture(acceptsImages)
       if (end === 'remove') {
-        await act(async () => view.result.current.attachments.clearImageAttachments())
+        const { attachments } = view.result.current
+        await act(async () => attachments.removeImageAttachment(attachments.imageAttachments[0].id))
       } else if (end === 'workspace') {
+        deleteNativeChatComposerDraftsOwnedBy(draftOwner)
         dropNativeChatPendingAttachmentsOwnedBy(draftOwner)
       }
       view.unmount()

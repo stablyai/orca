@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,20 +14,40 @@ import {
   createEncryptedWsResponseReader
 } from './runtime-rpc-mobile-ws-test-harness'
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: listings.listWorktrees
   }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listings.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    }
+  }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 describe('OrcaRuntimeRpcServer', () => {
@@ -224,8 +246,7 @@ describe('OrcaRuntimeRpcServer', () => {
       if (!anywhere.available) {
         throw new Error('WebSocket pairing unavailable')
       }
-      // Why: a QR displayed under the local-only pledge must not become an
-      // anywhere-capable credential; the policy switch mints a fresh token.
+      // Changing local-only policy must mint a new token; an already-shown QR cannot silently gain anywhere access.
       expect(anywhere.deviceId).not.toBe(local.deviceId)
       expect(server.getDeviceRegistry()?.getDevice(local.deviceId)).toBeNull()
       expect(anywhere.connectionMode).toBe('automatic')
@@ -274,8 +295,7 @@ describe('OrcaRuntimeRpcServer', () => {
       if (!first.available) {
         throw new Error('WebSocket pairing unavailable')
       }
-      // Why: a same-mode remint (e.g. two windows converging after a
-      // preference sync) must not race rotations off each other's token.
+      // Same-mode remints from converging windows must not rotate using each other's tokens.
       const second = await server.createMobilePairingOffer({ address: '100.64.1.20' })
       expect(second.available).toBe(true)
       if (!second.available) {

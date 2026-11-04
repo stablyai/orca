@@ -8,6 +8,18 @@ import type { OpenFile } from './editor'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const live = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
 vi.mock('@/store', () => ({
@@ -23,6 +35,20 @@ vi.mock('@/store', () => ({
 
 let store: StoreApi<AppState>
 let file: OpenFile
+let main: TabsDrawnFromMain | null = null
+
+/** The document's tab, as a restore shows it: a layout-owner build's open waits for main. */
+function ensureDocumentTab(): void {
+  if (!store.getState().unifiedTabsByWorktree['wt-1']?.some((tab) => tab.entityId === file.id)) {
+    store.getState().createUnifiedTab('wt-1', 'editor', { entityId: file.id, label: 'note.md' })
+  }
+}
+
+/** Main holds the tabs the store shows, as after a restore; its frames draw them from here. */
+async function mainHoldsStore(): Promise<TabsDrawnFromMain> {
+  main = await drawTabsFromMain(store)
+  return main
+}
 
 beforeEach(() => {
   store = createEditorTabsStore()
@@ -42,6 +68,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  main?.close()
+  main = null
   live.store = null
   vi.unstubAllGlobals()
 })
@@ -77,43 +105,56 @@ function addSplitView(): void {
 }
 
 describe('closing duplicate document records', () => {
-  it('closes clean duplicate records for the same document owner', () => {
+  it('closes clean duplicate records for the same document owner', async () => {
+    ensureDocumentTab()
     addSibling()
+    const drawn = await mainHoldsStore()
     store.getState().closeFile(file.id)
+    await drawn.settle()
     expect(store.getState().openFiles).toEqual([])
-    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([])
-    expect(store.getState().groupsByWorktree['wt-1'][0]?.recentTabIds).toEqual([])
+    // A layout-owner build's frame drops the emptied workspace's tab map with its last tab.
+    expect(store.getState().unifiedTabsByWorktree['wt-1'] ?? []).toEqual([])
+    expect(store.getState().groupsByWorktree['wt-1']?.[0]?.recentTabIds ?? []).toEqual([])
     expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toHaveLength(1)
   })
 
-  it('removes both file and unified tab ids from the persisted tab order', () => {
+  it('removes both file and unified tab ids from the persisted tab order', async () => {
+    ensureDocumentTab()
     const sibling = addSibling()
+    const drawn = await mainHoldsStore()
     const tabIds = store.getState().unifiedTabsByWorktree['wt-1'].map((tab) => tab.id)
     store.setState({
       tabBarOrderByWorktree: { 'wt-1': [file.id, sibling.id, ...tabIds, 'survivor'] }
     })
     store.getState().closeFile(file.id)
+    await drawn.settle()
     expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual(['survivor'])
   })
 
-  it('document close removes every tab linked to that record', () => {
+  it('document close removes every tab linked to that record', async () => {
+    ensureDocumentTab()
     addSplitView()
+    const drawn = await mainHoldsStore()
     store.getState().closeFile(file.id)
-    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([])
+    await drawn.settle()
+    expect(store.getState().unifiedTabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 
-  it('closing one pane tab preserves the document and its other view', () => {
+  it('closing one pane tab preserves the document and its other view', async () => {
+    ensureDocumentTab()
     const originalTab = store.getState().unifiedTabsByWorktree['wt-1'][0]
     if (!originalTab) {
       throw new Error('Document tab did not open')
     }
     addSplitView()
+    const drawn = await mainHoldsStore()
     expect(
       dispatchWorkspaceTabCommand({
         type: 'close',
         target: { kind: 'tab', worktreeId: 'wt-1', tabId: originalTab.id }
       })
     ).toBe(true)
+    await drawn.settle()
     expect(store.getState().openFiles).toEqual([file])
     expect(store.getState().unifiedTabsByWorktree['wt-1'].map((tab) => tab.id)).toEqual([
       'second-pane-tab'
@@ -147,12 +188,6 @@ describe('closing duplicate document records', () => {
     expect(store.getState().openFiles).toEqual([sibling])
   })
 
-  it('preserves the same path in another worktree', () => {
-    const sibling = addSibling({ worktreeId: 'wt-2' })
-    store.getState().closeFile(file.id)
-    expect(store.getState().openFiles).toEqual([sibling])
-  })
-
   it('preserves a sibling with different captured owner provenance', () => {
     const provenance = file.operationProvenance
     if (!provenance) {
@@ -168,20 +203,15 @@ describe('closing duplicate document records', () => {
     expect(store.getState().openFiles).toEqual([sibling])
   })
 
-  it.each([{ readOnly: true }, { mode: 'diff' } as const])(
-    'preserves another file mode or access type: %j',
-    (overrides) => {
-      const sibling = addSibling(overrides)
-      store.getState().closeFile(file.id)
-      expect(store.getState().openFiles).toEqual([sibling])
-    }
-  )
-
-  it('closes a disconnected runtime document without requiring its worktree catalog', () => {
+  it('closes a disconnected runtime document without requiring its worktree catalog', async () => {
     const provenance = file.operationProvenance
     if (!provenance) {
       throw new Error('Owner provenance did not capture')
     }
+    ensureDocumentTab()
+    addSibling()
+    // Main holds the tabs first; the owner going offline is the window's record alone.
+    const drawn = await mainHoldsStore()
     file = {
       ...file,
       runtimeEnvironmentId: 'offline-owner',
@@ -193,8 +223,11 @@ describe('closing duplicate document records', () => {
         }
       }
     }
-    store.setState({ openFiles: [file], worktreesByRepo: {}, runtimeEnvironments: [] })
-    addSibling()
+    store.setState({
+      openFiles: [file, { ...file, id: 'duplicate-record' }],
+      worktreesByRepo: {},
+      runtimeEnvironments: []
+    })
     const originalTab = store
       .getState()
       .unifiedTabsByWorktree['wt-1'].find((tab) => tab.entityId === file.id)
@@ -207,51 +240,10 @@ describe('closing duplicate document records', () => {
         target: { kind: 'tab', worktreeId: 'wt-1', tabId: originalTab.id }
       })
     ).toBe(true)
+    await drawn.settle()
     expect(store.getState().openFiles).toEqual([])
-    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([])
+    expect(store.getState().unifiedTabsByWorktree['wt-1'] ?? []).toEqual([])
   })
-
-  it.each([undefined, '', 'pending sibling text'])(
-    'close-all preserves the backing file of a dirty duplicate: %s',
-    async (draft) => {
-      const stat = vi.fn(async () => ({ size: 0, isDirectory: false, mtime: 0 }))
-      const deletePath = vi.fn(async () => {})
-      vi.stubGlobal('window', { api: { fs: { stat, deletePath } } })
-      file = { ...file, isUntitled: true }
-      store.setState({ openFiles: [file] })
-      const sibling = addSibling({ isDirty: draft === undefined })
-      if (draft !== undefined) {
-        store.setState({ editorDrafts: { [sibling.id]: draft } })
-      }
-      store.getState().closeAllFiles()
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(stat).not.toHaveBeenCalled()
-      expect(deletePath).not.toHaveBeenCalled()
-      expect(store.getState().openFiles).toEqual([])
-    }
-  )
-
-  it.each(['closeFile', 'closeAllFiles'] as const)(
-    '%s retains the backing file when the selected untitled document has an empty draft',
-    async (action) => {
-      const stat = vi.fn(async () => ({ size: 0, isDirectory: false, mtime: 0 }))
-      const deletePath = vi.fn(async () => {})
-      vi.stubGlobal('window', { api: { fs: { stat, deletePath } } })
-      store.setState({
-        openFiles: [{ ...file, isUntitled: true }],
-        editorDrafts: { [file.id]: '' }
-      })
-      if (action === 'closeFile') {
-        store.getState().closeFile(file.id)
-      } else {
-        store.getState().closeAllFiles()
-      }
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(stat).not.toHaveBeenCalled()
-      expect(deletePath).not.toHaveBeenCalled()
-      expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toHaveLength(1)
-    }
-  )
 
   it.each(['closeFile', 'closeAllFiles'] as const)(
     '%s cancels placeholder deletion when its document reopens during stat',

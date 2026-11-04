@@ -1,7 +1,7 @@
 import React from 'react'
 import { SquareTerminal } from 'lucide-react'
 import type { CliWorkspaceProvenance } from '../../../../shared/worktree/types'
-import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent

@@ -5,12 +5,12 @@ import { cn } from '@/lib/utils'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
-import { WorktreeCardParentContent } from './worktree-card-parent-content'
-import { buildWorktreeCardPresentation } from './worktree-card-presentation'
+import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from './use-worktree-card-controller'
+import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from './workspace-card/default-workspace-card'
+import { renderWorkspaceCardTemplate } from './workspace-card/render-workspace-card-template'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
-  const presentation = buildWorktreeCardPresentation(card)
   const {
     worktree,
     selectedWorktrees,
@@ -33,17 +33,32 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     isQueuedForDeletion,
     deleteLabel,
     handleClick,
+    handlePointerDown,
+    handlePointerEnter,
+    handlePointerLeave,
     handleDoubleClick,
     handleDragStart,
     handleDragEnd,
     handleContextMenuSelect,
     showRenameErrorDialog,
-    setShowRenameErrorDialog
+    setShowRenameErrorDialog,
+    contentIndent
   } = card
-  const { titleOnlyCard, cardStyle } = presentation
   const isSleeping = useIsSleepingWorktree(worktree.id)
-
-  const parentCardContent = <WorktreeCardParentContent card={card} presentation={presentation} />
+  const geometryFor = (statusLane: boolean) =>
+    getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
+  const { content: parentCardContent, frame } = renderWorkspaceCardTemplate(
+    card,
+    DEFAULT_WORKSPACE_CARD_TEMPLATE,
+    (templateFrame) => {
+      const { parentContentMarginLeft } = geometryFor(templateFrame.statusLane)
+      return parentContentMarginLeft < 0
+        ? { style: { marginLeft: `${parentContentMarginLeft}px` } }
+        : undefined
+    }
+  )
+  const { cardStyle } = geometryFor(frame.statusLane)
+  const titleOnlyCard = frame.singleLine
 
   const cardBody = (
     <div
@@ -52,8 +67,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
         'overflow-hidden rounded-lg',
-        // Why: the live data attribute updates before React state during navigation,
-        // so it must own the complete active style without stale utility classes.
+        // Navigation updates the live attribute before React; it must own the complete active style.
         isLineageDropTarget
           ? 'border border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
           : isActiveSurface
@@ -66,12 +80,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         ],
         titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
-        // Why: sleep dim carries the awake/sleeping distinction in new-card style,
-        // where quiet statuses share the branch/PR lane (#19624). Same token as
-        // the disconnected dim; legacy keeps its green/gray dots untouched.
-        // Why: no SSH dim — the inline host control now states the disconnected state
-        // explicitly, and a subtree opacity would composite its destructive tint and spinner
-        // down to an illegible alpha (a descendant cannot escape an ancestor's opacity).
+        // Dim disconnected runtimes only; ancestor opacity would make the SSH control’s error tint/spinner illegible.
         isRuntimeDisconnected && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
@@ -83,6 +92,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       }
       data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
       onClick={handleClick}
+      onPointerDown={affiliateListMode ? undefined : handlePointerDown}
+      onPointerEnter={affiliateListMode ? undefined : handlePointerEnter}
+      onPointerLeave={affiliateListMode ? undefined : handlePointerLeave}
       onDoubleClick={affiliateListMode ? undefined : handleDoubleClick}
       draggable={!affiliateListMode && nativeDragEnabled && !isDeleting && !titleRenaming}
       onDragStart={!affiliateListMode && nativeDragEnabled ? handleDragStart : undefined}
@@ -101,18 +113,15 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         </div>
       )}
       {isSleeping && newCardStyle && !isDeleting ? (
-        // Why a token mix (see [data-worktree-sleeping-dim] in main.css), not opacity:
-        // opacity dims toward whatever is painted behind, so the step shrank on lighter
-        // surfaces and vanished on custom backgrounds (#19624). Scoped to the parent row
-        // so awake lineage children keep their own brightness.
+        // Mix tokens for background-independent sleep dimming; scope to the parent so awake children stay bright.
         <div data-worktree-sleeping-dim="">{parentCardContent}</div>
       ) : (
         parentCardContent
       )}
 
-      {newCardStyle && lineageChildren ? (
+      {lineageChildren ? (
         <div
-          className="mt-1.5 space-y-1"
+          className={cn('space-y-1', newCardStyle ? 'mt-1.5' : 'mt-3')}
           data-worktree-lineage-children=""
           style={lineageChildrenStyle}
         >
@@ -143,6 +152,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
             open={showRenameErrorDialog}
             onOpenChange={setShowRenameErrorDialog}
             worktreeId={worktree.id}
+            executionHostId={worktree.hostId}
             worktreeName={worktree.displayName}
             error={worktree.firstAgentMessageRenameError}
           />

@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-/** The chat failures a sign-in to the selected Claude account fixes. */
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
   'notSignedIn',
   'claudeAccountFolderMissing'
@@ -14,7 +13,6 @@ export function isClaudeSignInFailureKind(kind: string | undefined): boolean {
   return kind !== undefined && SIGN_IN_FAILURE_KINDS.has(kind)
 }
 
-/** Settings' Sign in again for the selected account, offered where a chat failed for want of it. */
 export type NativeChatClaudeSignIn = { signingIn: boolean; signIn: () => void }
 
 export const NativeChatClaudeSignInContext = createContext<NativeChatClaudeSignIn | null>(null)
@@ -29,8 +27,7 @@ export function nativeChatClaudeSignInLabel(signIn: NativeChatClaudeSignIn): str
     : translate('accounts.claude.signIn', 'Sign in')
 }
 
-/** Null unless a local Claude chat runs under a selected account, and after a sign-in until a new
- *  failure (a different `failure`, or another `failureRows`), so a resend is what follows it. */
+/** Offer local selected-account sign-in until successful, then suppress it until the failure or failure-row count changes. */
 export function useNativeChatClaudeSignIn(input: {
   agent: string
   target: RuntimeClientTarget

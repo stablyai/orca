@@ -4,6 +4,7 @@ import {
   type MarkdownRichModeEligibility,
   type MarkdownRichModeEligibilityDecision
 } from './markdown-rich-mode'
+import { exceedsMarkdownRenderOverrideSizeLimit } from './markdown-rich-size-limit'
 
 type EligibilityCacheEntry = {
   content: string
@@ -11,28 +12,12 @@ type EligibilityCacheEntry = {
   decision: MarkdownRichModeEligibilityDecision
 }
 
-// Why: one entry per visible markdown surface (active tab plus split panes),
-// so a split view does not evict its own siblings on every render.
+// Retain split-pane siblings so visible surfaces do not evict each other on every render.
 const MAX_ENTRIES = 4
 
 const entries: EligibilityCacheEntry[] = []
 
-/**
- * Memoized rich-mode eligibility.
- *
- * Why: classifying is pure but scans the whole document (and can build a
- * throwaway TipTap editor to round-trip it), while `EditorPanel` re-renders
- * from ~18 store subscriptions — including idle git-status polls. Keying on the
- * content string keeps classification at once per content change instead of
- * once per render.
- *
- * Only the *decision* is cached. `unsupportedMessage` is resolved per read
- * because the matcher messages are late-bound `translate()` getters: caching
- * the string would freeze the fallback banner in whatever UI language happened
- * to be active when the document was first classified, which is wrong both on
- * a language switch and at startup (the persisted language is applied from an
- * effect, after the first render).
- */
+/** Cache whole-document classification by content across rerenders; resolve messages per read so language changes stay current. */
 export function getCachedMarkdownRichModeEligibility(params: {
   content: string
   sizeOverridden: boolean
@@ -62,6 +47,10 @@ function getCachedMarkdownRichModeEligibilityDecision(params: {
   }
 
   const decision = getMarkdownRichModeEligibilityDecision({ content, sizeOverridden })
+  // Don't retain hard-cap documents; checked after lookup so cache hits skip the UTF-8 probe.
+  if (decision.exceedsSizeLimit && exceedsMarkdownRenderOverrideSizeLimit(content)) {
+    return decision
+  }
   entries.unshift({ content, sizeOverridden, decision })
   if (entries.length > MAX_ENTRIES) {
     entries.length = MAX_ENTRIES

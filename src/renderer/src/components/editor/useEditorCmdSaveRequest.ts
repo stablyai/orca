@@ -7,6 +7,9 @@ import {
 } from './editor-autosave'
 import type { FileContent } from './editor-panel-content-types'
 import { getEditorSaveTargetFile } from './editor-save-target'
+import { isCodeViewTab } from './editor-save-disk-precondition'
+import { isEditorWritableView } from './editor-save-writer-view'
+import { needsFinalNewline } from './editor-final-newline'
 
 type UseEditorCmdSaveRequestParams = {
   activeFile: OpenFile | null
@@ -34,21 +37,39 @@ export function useEditorCmdSaveRequest({
       ) {
         return
       }
-      const saveTargetFile = getEditorSaveTargetFile(activeFile, openFiles)
-      if (!saveTargetFile) {
+      const targetFile = getEditorSaveTargetFile(activeFile, openFiles)
+      if (!targetFile) {
         return
       }
-      // Why: a markdown preview tab is read-only but fronts the same document,
-      // so Cmd/Ctrl+S should save the source editor's current draft.
+      // Read-only Markdown previews still save their source record’s current draft.
       const state = useAppStore.getState()
+      const saveTargetFile =
+        state.openFiles.find((openFile) => openFile.id === targetFile.id) ?? targetFile
       const draft = state.editorDrafts[saveTargetFile.id]
-      if (!draft && !saveTargetFile.isUntitled && !saveTargetFile.isDirty) {
+      const loaded = fileContents[activeFile.id]
+      const cleanCodeContent =
+        state.settings?.editorInsertFinalNewline === true &&
+        activeFile.id === saveTargetFile.id &&
+        isEditorWritableView(saveTargetFile) &&
+        isCodeViewTab(state, saveTargetFile) &&
+        loaded &&
+        !loaded.isBinary &&
+        !loaded.loadError &&
+        !loaded.isStale
+          ? loaded.content
+          : undefined
+      const needsCleanSave = cleanCodeContent !== undefined && needsFinalNewline(cleanCodeContent)
+      if (
+        draft === undefined &&
+        !saveTargetFile.isUntitled &&
+        !saveTargetFile.isDirty &&
+        !needsCleanSave
+      ) {
         return
       }
       const fallbackContent =
-        draft ??
-        (activeFile.mode === 'markdown-preview' ? fileContents[activeFile.id]?.content : '')
-      void handleSave(fallbackContent ?? '')
+        draft ?? (activeFile.mode === 'markdown-preview' ? loaded?.content : cleanCodeContent) ?? ''
+      void handleSave(fallbackContent)
     }
     window.addEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)
     return () => window.removeEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)

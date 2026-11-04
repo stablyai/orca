@@ -1,30 +1,20 @@
-/** A `pty.shutdown` a relay-era client issued to an SSH host and could not confirm, carried on its
- *  `SshRemotePtyLease`. This build never records or replays one; it keeps the field through
- *  load and save so a downgraded build can still replay it. */
+/** Unconfirmed client-local shutdown, replayed only through the legacy relay bridge for a closed tab’s surviving shell; downgrades replay it too. */
 export type SshPendingPtyKill = {
   requestedAt: number
-  /** The host-minted PTY incarnation this kill was aimed at, and the fence.
-   *
-   *  A legacy relay renumbers from `pty-1` on every start, so `(targetId, relayPtyId)` alone can
-   *  name a DIFFERENT shell after a redeploy — the collision behind #16970. Current relays enforce
-   *  this identity on `pty.shutdown`; the client also proves it from `pty.listProcesses` before
-   *  replay so older relays that ignore the additive field keep the safest available fallback.
-   *
-   *  Absent only for a `pty2:` id, whose per-start mint epoch makes the id itself the fence. */
+  /** Fence the intended incarnation: legacy pty-N IDs recycle after relay restart (#16970).
+   * Current relays enforce it; preflight listProcesses also protects older relays that ignore the field.
+   * Only epoch-scoped pty2: IDs may omit it because they cannot recur across starts. */
   incarnationId?: string
   /** Replays attempted since. Diagnostic; the TTL, not this, is the bound. */
   attempts: number
 }
 
-/** Whether a relay PTY id names exactly one process: current relays mint `pty2:<epoch>:<n>` with a
- *  fresh epoch per start, so the id never recurs. Legacy `pty-N` ids restart at 1. */
-function isEpochScopedRelayPtyId(relayPtyId: string): boolean {
+/** pty2:<epoch>:<n> has a fresh epoch per start; legacy pty-N IDs recycle. */
+export function isEpochScopedRelayPtyId(relayPtyId: string): boolean {
   return relayPtyId.startsWith('pty2:')
 }
 
-/** Colocated with the type so the two cannot drift. The lease loader is a strict whitelist that
- *  drops anything it does not name, so a record omitted here would be silently stripped on every
- *  launch — the exact failure `closed-terminal-tab-tombstones.ts` records having shipped once. */
+/** The strict lease loader strips unknown fields; colocate admission so persistence cannot silently lose pending kills. */
 export function normalizeSshPendingPtyKill(
   value: unknown,
   relayPtyId: string
@@ -40,7 +30,7 @@ export function normalizeSshPendingPtyKill(
   if (raw.incarnationId === undefined && isEpochScopedRelayPtyId(relayPtyId)) {
     return { requestedAt: raw.requestedAt, attempts }
   }
-  // No fence, and an unfenced kill order is worse than none.
+  // Never retain an unfenced kill for a recyclable ID.
   if (
     typeof raw.incarnationId !== 'string' ||
     !raw.incarnationId ||

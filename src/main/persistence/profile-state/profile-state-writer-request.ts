@@ -45,7 +45,7 @@ export function isExpectedProfileStateWriterSuccess(
   return response.exportedRevision === undefined
 }
 
-/** A request stays pending until its matching reply or a real fault; slowness only warns. */
+/** Slowness warns; only a matching reply or real fault settles the request. */
 export function createProfileStateWriterRequest(
   id: number,
   command: PendingProfileStateWriterRequest['command'],

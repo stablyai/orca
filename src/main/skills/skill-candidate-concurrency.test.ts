@@ -3,19 +3,33 @@ import { runSkillCandidateTasks } from './skill-candidate-concurrency'
 
 describe('runSkillCandidateTasks', () => {
   it('bounds concurrency and preserves task order', async () => {
+    const gates = Array.from({ length: 12 }, () => Promise.withResolvers<number>())
+    const fifthStarted = Promise.withResolvers<void>()
+    const started: number[] = []
     let active = 0
     let maxActive = 0
-    const results = await runSkillCandidateTasks(
-      Array.from({ length: 12 }, (_, index) => async () => {
+    const pending = runSkillCandidateTasks(
+      gates.map((gate, index) => async () => {
+        started.push(index)
+        if (index === 4) {
+          fifthStarted.resolve()
+        }
         active += 1
         maxActive = Math.max(maxActive, active)
-        await new Promise((resolve) => setTimeout(resolve, 12 - index))
+        const result = await gate.promise
         active -= 1
-        return index
+        return result
       })
     )
 
+    expect(started).toEqual([0, 1, 2, 3])
+    gates[3].resolve(3)
+    await fifthStarted.promise
+    expect(started).toEqual([0, 1, 2, 3, 4])
+    gates.forEach((gate, index) => gate.resolve(index))
+
+    expect(await pending).toEqual(Array.from({ length: 12 }, (_, index) => index))
     expect(maxActive).toBe(4)
-    expect(results).toEqual(Array.from({ length: 12 }, (_, index) => index))
+    expect(active).toBe(0)
   })
 })

@@ -12,15 +12,11 @@ import type {
 } from './dispatcher-contract'
 import { RelayDispatcherClientState } from './dispatcher-client-state'
 
-// Why: a client that clears the endpoint handshake and then never frames anything is invisible to
-// the silence window -- it has no lastReceivedAt to go stale -- so its socket, writer and client
-// entry are held for the life of the relay. The bound is deliberately several windows wide: a real
-// client frames immediately after the handshake, so only a peer that is already gone reaches it.
+// A client that never frames has no lastReceivedAt; bound its lifetime from attach, allowing several handshake windows.
 const SILENT_CONNECT_TIMEOUT_MS = TIMEOUT_MS * 6
 
 export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClientState {
-  // Why: redirect outgoing frames to the reconnected socket without rebuilding the dispatcher + handler tree.
-  // Why: a new multiplexer restarts at seq=1; reset state to avoid stalled acknowledgements.
+  // Redirect to the reconnected sink and reset per-channel sequence state because a new mux starts at 1.
   setWrite(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions): void {
     this.requestAborts.abortClient(this.primaryClient.id)
     this.primaryClient.closed = true
@@ -61,8 +57,7 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
     this.closeClient(client, new Error('Relay client detached'), true, cause)
   }
 
-  // Why: a displaced owner must lose its transport whichever client holds it, and the launch channel is
-  // often the half-open one. The primary keeps its id for setWrite() revival, so invalidate it instead.
+  // Detach displaced owners on every client; invalidate the primary without losing its id for setWrite revival.
   releaseDisplacedClient(clientId: number): void {
     if (clientId === this.primaryClient.id) {
       this.invalidateClient()
@@ -181,12 +176,8 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
         return
       }
       const now = Date.now()
-      // Why this threshold and not TIMEOUT_MS: a healthy client answers the PREVIOUS tick, so its
-      // lastReceivedAt is already up to KEEPALIVE_SEND_MS + RTT old. A tick gap beyond
-      // TIMEOUT_MS - KEEPALIVE_SEND_MS therefore pushes staleness past the window on its own, and a
-      // rebase armed at TIMEOUT_MS would not have fired -- reaping every client after a host
-      // suspend, a VM migration, or the relay's own event loop stalling. Mirrors the client's
-      // WAKE_GAP_MS guard (ssh-channel-multiplexer.ts).
+      // Rebase after gaps > TIMEOUT_MS - KEEPALIVE_SEND_MS: healthy peers may already be one tick stale before suspension.
+      // Using TIMEOUT_MS alone would reap healthy clients after suspend/VM migration; match the mux wake guard.
       const resumedAfterPause = now - lastTickAt >= TIMEOUT_MS - KEEPALIVE_SEND_MS
       lastTickAt = now
       for (const client of this.clients.values()) {
@@ -214,40 +205,24 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
     this.keepaliveTimer.unref()
   }
 
-  /**
-   * Drop the transport of a client that has gone silent. The relay's writer parks forever on a
-   * half-open link and nothing else ever notices, so an abandoned viewer kept its owner lease and
-   * left every PTY it held paused — the shape behind the "SSH degrades until I cannot connect at
-   * all" reports. Reaping is a statement about the TRANSPORT only: the cause stays the cautious
-   * 'local' default because silence is not evidence the peer died, and the PTYs stay live for the
-   * replacement client to reclaim (docs/reference/ssh-execution-boundary.md).
-   */
+  // Silence reaps transport only, with local cause; it proves no peer death and leaves PTYs available for reconnect.
   private reapSilentClients(now: number): void {
     for (const client of Array.from(this.clients.values())) {
-      // Why the primary is exempt: closing it tears down the relay's own stdin/stdout, and nothing
-      // in production revives it -- setWrite() has no non-test caller. The leak this exists for is
-      // a socket client holding an owner lease, and the launch channel's own liveness is already
-      // owned by the client-side dead-link check.
+      // Never reap the primary: closing stdin/stdout has no production setWrite revival; client-side dead-link detection owns it.
       if (client === this.primaryClient) {
         continue
       }
       if (client.closed) {
         continue
       }
-      // Why a client that has never spoken gets its own, much wider bound: a relay is launched
-      // before its client finishes handshaking, and on a slow link that can exceed the silence
-      // window, so judging it there would break the connect it is still completing. Leaving it
-      // unbounded instead held its socket and client entry forever.
+      // Use a wider attach-time bound before first frame so slow handshakes survive without retaining abandoned clients forever.
       if (client.lastReceivedAt === null) {
         if (now - client.attachedAt > SILENT_CONNECT_TIMEOUT_MS) {
           this.closeClient(client, new Error('Relay client never spoke'), true)
         }
         continue
       }
-      // Why keepaliveObserved gates this: not every client speaks the keepalive protocol. The
-      // remote `orca` CLI sends one `orca.cli` request and waits for a result budgeted in minutes
-      // so judging it on inbound silence would kill
-      // `terminal wait`, `--wait` and `orchestration ask` after 20s.
+      // Require observed keepalives: the remote CLI may send one request then wait minutes with no inbound traffic.
       if (!client.keepaliveObserved || now - client.lastReceivedAt <= TIMEOUT_MS) {
         continue
       }
@@ -259,8 +234,7 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
     client: RelayClient,
     error: Error,
     remove: boolean,
-    // Why the default is the cautious one: most closes here are the relay's own doing, and only the
-    // callers holding real evidence of a peer-side transport end may say so.
+    // Default to local; only callers with observed peer-end evidence may shorten owner grace.
     cause: PtyConsumerCloseCause = 'local'
   ): void {
     if (client.closed) {
@@ -275,9 +249,8 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
     }
     this.notifyClientDetached(client.id, cause)
     if (remove) {
-      // Only for a client that is gone for good: an invalidated primary is revived by setWrite, and a
-      // frame stranded by its retired sink must stay armed to retry. After the detach fan-out, so a
-      // listener that unsubscribes on detach is not left holding a stale slot.
+      // Drop only permanently removed clients; invalidated primary retries must survive setWrite revival.
+      // Release capacity slots after detach listeners unsubscribe.
       this.clientCapacityListeners.delete(client.id)
     }
     this.notifyLegacyCapacity(true)

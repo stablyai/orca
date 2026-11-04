@@ -1,10 +1,4 @@
 import './mock-descendant-sweep'
-/**
- * OOM regression: a daemon owning 100+ terminals retained ~5000 rows of grid per session with no
- * bound, grew to ~1.9 GB, and was killed under system memory pressure — losing every session it
- * owned. Sessions now retain a flat window; deep scrolling on an open terminal is the renderer's
- * live buffer, and the window is what a rebuild (reload/remount/restart/remote attach) restores.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -25,8 +19,6 @@ describe('resolveDaemonSessionScrollbackRows', () => {
       const env = { ORCA_DAEMON_SESSION_SCROLLBACK_ROWS: raw } as NodeJS.ProcessEnv
       expect(resolveDaemonSessionScrollbackRows(env)).toBe(Number(raw))
     }
-    // Why bounded: 0 loses the visible screen's context; huge values silently reintroduce the
-    // unbounded retention this window exists to prevent.
     for (const raw of ['0', '50', '99', '5001', '50000', '-1', '3.5', 'nonsense', '']) {
       const env = { ORCA_DAEMON_SESSION_SCROLLBACK_ROWS: raw } as NodeJS.ProcessEnv
       expect(resolveDaemonSessionScrollbackRows(env)).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
@@ -85,7 +77,6 @@ describe('daemon session scrollback window', () => {
       const snapshot = host.getSnapshot('windowed')
       expect(snapshot?.snapshotAnsi ?? snapshot?.scrollbackAnsi).toBeTruthy()
       const text = `${snapshot?.scrollbackAnsi ?? ''}${snapshot?.snapshotAnsi ?? ''}`
-      // Newest line always present; the oldest has scrolled past the window.
       expect(text).toContain(`LINE_${String(total).padStart(5, '0')}`)
       expect(text).not.toContain('LINE_00001')
       const retainedMatches = text.match(/LINE_\d{5}/g) ?? []

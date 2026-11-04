@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-// Converts worktrees that already have their own Electron dist over to the shared cache.
-// Healthy installs also share now; this migrates worktrees without waiting for their next install.
+// Migrate existing worktree-local Electron distributions to shared cache without waiting for next install.
 
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -11,6 +10,7 @@ import {
   existsSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -31,6 +31,24 @@ const apply = process.argv.includes('--apply')
 const repoRoot = process.argv.includes('--repo')
   ? path.resolve(process.argv[process.argv.indexOf('--repo') + 1])
   : process.cwd()
+
+const excludeIndex = process.argv.indexOf('--exclude-worktree')
+const excludeArgument = excludeIndex === -1 ? undefined : process.argv[excludeIndex + 1]
+if (excludeIndex !== -1 && (!excludeArgument || excludeArgument.startsWith('-'))) {
+  throw new Error('--exclude-worktree requires a directory')
+}
+const excludeWorktree = excludeArgument ? realpathSync(excludeArgument) : null
+
+function isExcluded(worktree) {
+  if (!excludeWorktree) {
+    return false
+  }
+  try {
+    return realpathSync(worktree) === excludeWorktree
+  } catch {
+    return path.resolve(worktree) === excludeWorktree
+  }
+}
 
 function listWorktrees(root) {
   const raw = execFileSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], {
@@ -88,6 +106,9 @@ function main() {
   let skipped = 0
 
   for (const worktree of listWorktrees(repoRoot)) {
+    if (isExcluded(worktree)) {
+      continue
+    }
     const electronPackageDir = path.join(worktree, 'node_modules', 'electron')
     const distPath = path.join(electronPackageDir, 'dist')
     if (!existsSync(path.join(electronPackageDir, 'package.json')) || !existsSync(distPath)) {

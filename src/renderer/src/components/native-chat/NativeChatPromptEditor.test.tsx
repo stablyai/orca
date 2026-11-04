@@ -1,7 +1,7 @@
 import { readNativeChatDraftDocument } from './native-chat-draft-cache'
 // @vitest-environment happy-dom
 import { createRef } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import {
@@ -9,6 +9,7 @@ import {
   type NativeChatComposerInput
 } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
+import { updateNativeChatComposerDraft } from './native-chat-composer-draft-store'
 
 afterEach(cleanup)
 
@@ -28,12 +29,41 @@ function setup(value = '') {
   return {
     ...view,
     input: inputRef.current!,
-    editor: promptEditor(screen.getByRole('textbox')),
+    editor: promptEditor(within(view.container).getByRole('textbox')),
     onChange
   }
 }
 
 describe('native chat skill editor', () => {
+  it('continues replacing the selected text after a composer handoff', () => {
+    const inputRef = createRef<NativeChatComposerInput>()
+    const text = 'Hello\nworld'
+    updateNativeChatComposerDraft('handoff-selection', { text }, 'immediate', undefined, {
+      at: 'selection',
+      from: 6,
+      to: 11,
+      target: 'chat-tab',
+      pending: true
+    })
+    render(
+      <NativeChatPromptEditor
+        scopeKey="handoff-selection"
+        positionTarget="chat-tab"
+        inputRef={inputRef}
+        initialValue={text}
+        disabled={false}
+        placeholder="Message"
+        onChange={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    )
+
+    expect(inputRef.current?.selectionStart).toBe(6)
+    expect(inputRef.current?.selectionEnd).toBe(11)
+    act(() => inputRef.current?.insertText?.('there'))
+    expect(inputRef.current?.value).toBe('Hello\nthere')
+  })
+
   it('renders only picker insertions as pills and serializes the exact invocation', async () => {
     const { input, container } = setup('Please $rev')
     await act(async () => input.insertSkill!(7, 11, '$review'))
@@ -50,6 +80,13 @@ describe('native chat skill editor', () => {
     expect(input.value).toBe('Please $review $review typed manually')
   })
 
+  it("labels Pi's `/skill:<name>` pill by the skill alone", async () => {
+    const { input, container } = setup('/cav')
+    await act(async () => input.insertSkill!(0, 4, '/skill:caveman'))
+    expect(container.querySelector('[data-native-chat-skill]')?.textContent).toBe('Caveman')
+    expect(input.value).toBe('/skill:caveman ')
+  })
+
   it('shows attached files as filename pills that serialize to the reference the agent reads', async () => {
     const { input, container, onChange } = setup('See  please')
     act(() => input.setSelectionRange(4, 4))
@@ -63,10 +100,12 @@ describe('native chat skill editor', () => {
     expect(input.value).toBe(`See ${references} please`)
     expect(input.selectionStart).toBe(4 + references.length)
     expect(onChange).toHaveBeenCalled()
+    const edited = input.value.replace('letter.pdf', 'letter.pd')
     act(() => {
-      input.value = input.value.replace('letter.pdf', 'letter.pd')
+      input.value = edited
     })
     expect(container.querySelectorAll('[data-native-chat-file-reference]')).toHaveLength(1)
+    expect(input.value).toBe(edited)
   })
 
   it('keeps typed and restored invocations plain', () => {
@@ -92,6 +131,22 @@ describe('native chat skill editor', () => {
     })
     expect(input.value).toBe('$review ')
     expect(container.querySelector('[data-native-chat-skill]')).not.toBeNull()
+  })
+
+  it('reads the current text and caret after edits and undo, separately per editor', async () => {
+    const first = setup('one')
+    const second = setup('second')
+    act(() => first.input.setSelectionRange(3, 3))
+    act(() => first.input.insertText!('!'))
+    expect(first.input.value).toBe('one!')
+    expect(first.input.selectionStart).toBe(4)
+    expect(second.input.value).toBe('second')
+    await act(async () => {
+      first.editor.commands.undo()
+    })
+    expect(first.input.value).toBe('one')
+    expect(first.input.selectionStart).toBe(3)
+    expect(second.input.value).toBe('second')
   })
 
   it('preserves multiple selected skills through multiline edits and clears them on send', async () => {
@@ -189,4 +244,39 @@ it('moves focus into the composer when a paste is routed from elsewhere', async 
   expect(input.value).toBe('hi there')
   expect(editor.view.dom.contains(document.activeElement)).toBe(true)
   hiddenTerminal.remove()
+})
+
+describe('a pasted run too long to lay out with kerning', () => {
+  const unkerned = (container: HTMLElement) =>
+    [...container.querySelectorAll<HTMLElement>('[style]')]
+      .filter((element) => element.style.fontKerning === 'none')
+      .map((element) => element.textContent)
+
+  it('turns kerning off on that run only and keeps the pasted text whole', () => {
+    const { input, container } = setup('short line')
+    const blob = 'x'.repeat(5000)
+    act(() => {
+      input.setSelectionRange(10, 10)
+      insertNativeChatPastedText(input, `\nsee ${blob} here`)
+    })
+    expect(unkerned(container)).toEqual([blob])
+    expect(input.value).toBe(`short line\nsee ${blob} here`)
+  })
+
+  it('keeps kerning on prose, CJK and Shift+Enter lines, and never splits a CJK code point', () => {
+    const { editor, container } = setup('')
+    act(() => {
+      editor.commands.insertContent('a few words '.repeat(500))
+      editor.commands.insertContent('日本語の文章です。中文的句子。'.repeat(100))
+      for (let line = 0; line < 60; line++) {
+        editor.commands.insertContent('y'.repeat(70))
+        editor.commands.setHardBreak()
+      }
+      editor.commands.insertContent('\u{20000}')
+      editor.commands.insertContent('x'.repeat(300))
+      editor.commands.setHardBreak()
+      editor.commands.insertContent(`\u{20000}${'y'.repeat(300)}`)
+    })
+    expect(unkerned(container)).toEqual(['x'.repeat(300), 'y'.repeat(300)])
+  })
 })

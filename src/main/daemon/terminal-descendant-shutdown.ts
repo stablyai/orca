@@ -1,16 +1,16 @@
-import * as descendantTermination from '../pty-descendant-termination'
-import type { ProcessTableReader, DescendantSnapshot } from '../pty-descendant-termination'
+import * as descendantTermination from '../pty/process-retirement/pty-descendant-termination'
+import type { ProcessTableReader } from '../pty/process-retirement/pty-descendant-fresh-table'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict
-} from '../pty-descendant-exit-verification'
+} from '../pty/process-retirement/pty-descendant-exit-verification'
 import {
   SHUTDOWN_DESCENDANT_TABLE_TIMEOUT_MS,
   SHUTDOWN_DESCENDANT_VERIFY_MS
 } from './immediate-kill-reply-budget'
 
-// Keep one fresh table for the short burst of verifier polls that follows a shutdown signal.
-// This bounds process-table fanout without reusing a completed capture for a later polling round.
+// Share in-flight shutdown scans and retain results for 25ms to limit process-table fanout.
 let sharedShutdownCapture: {
   promise: ReturnType<ProcessTableReader>
   expires?: ReturnType<typeof setTimeout>
@@ -36,6 +36,9 @@ const readShutdownProcessTable: ProcessTableReader = (timeoutMs) => {
   }, clear)
   return promise
 }
+// Wrapping the production reader keeps its in-process allowance, so a stalled native read still leaves ps the whole window.
+readShutdownProcessTable.deadlineAllowanceMs = (timeoutMs) =>
+  descendantTermination.readProcessTable.deadlineAllowanceMs?.(timeoutMs) ?? 0
 
 export function terminateShutdownDescendants(
   snapshot: DescendantSnapshot

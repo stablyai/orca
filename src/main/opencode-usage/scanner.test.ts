@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, statSync, unlinkSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -437,6 +437,16 @@ describe('scanOpenCodeUsageDatabases', () => {
     return path
   }
 
+  function appendLiveSessionRow(path: string, sessionId: string, inputTokens: number): void {
+    const previousMtimeMs = statSync(path).mtimeMs
+    const db = new Database(path)
+    insertSessionTotalsRow(db, sessionId, inputTokens)
+    db.close()
+    // A same-page write may retain coarse mtime; force the scanner’s mtime/size fingerprint to change.
+    const changedAt = new Date(previousMtimeMs + 1000)
+    utimesSync(path, changedAt, changedAt)
+  }
+
   it('does not scan disk databases when OPENCODE_DB uses memory', async () => {
     writeSessionTotalsDb('opencode.db', [])
     process.env.OPENCODE_DB = ':memory:'
@@ -451,8 +461,6 @@ describe('scanOpenCodeUsageDatabases', () => {
   })
 
   it('counts a session duplicated into a stale backup database exactly once', async () => {
-    // The backup holds a stale snapshot of session-1; the canonical db has
-    // grown since. The canonical totals must win and be counted once.
     writeSessionTotalsDb('opencode.db', [
       ['session-1', 1000],
       ['session-2', 300]
@@ -472,8 +480,6 @@ describe('scanOpenCodeUsageDatabases', () => {
 
   it('still counts backup-only sessions and stays stable across cached rescans', async () => {
     const canonicalPath = writeSessionTotalsDb('opencode.db', [['session-1', 1000]])
-    // The backup duplicates session-1 (stale) and preserves session-9, which
-    // no longer exists in the canonical database.
     writeSessionTotalsDb('opencode-backup.db', [
       ['session-1', 400],
       ['session-9', 50]
@@ -489,11 +495,7 @@ describe('scanOpenCodeUsageDatabases', () => {
       second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
     ).toBe(1050)
 
-    // The canonical db keeps growing while the backup stays cached; session-1
-    // must stay owned by the canonical db.
-    const db = new Database(canonicalPath)
-    insertSessionTotalsRow(db, 'session-2', 200)
-    db.close()
+    appendLiveSessionRow(canonicalPath, 'session-2', 200)
 
     const third = await scanOpenCodeUsageDatabases([], second.processedDatabases)
     expect(
@@ -505,9 +507,6 @@ describe('scanOpenCodeUsageDatabases', () => {
   })
 
   it('reuses a fully-duplicate backup instead of reparsing it when the live db changes', async () => {
-    // The backup only holds stale copies of sessions the canonical db already
-    // owns, so it owns nothing. When the live db changes it must not be
-    // demoted back into the parse set — there is no claim to reclaim.
     const canonicalPath = writeSessionTotalsDb('opencode.db', [['session-1', 1000]])
     writeSessionTotalsDb('opencode-backup.db', [['session-1', 400]])
 
@@ -517,15 +516,13 @@ describe('scanOpenCodeUsageDatabases', () => {
     )
     expect(firstBackup?.ownedSessionIds).toEqual([])
 
-    const db = new Database(canonicalPath)
-    insertSessionTotalsRow(db, 'session-2', 200)
-    db.close()
+    appendLiveSessionRow(canonicalPath, 'session-2', 200)
 
     const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
     const secondBackup = second.processedDatabases.find((database) =>
       database.path.endsWith('opencode-backup.db')
     )
-    // A reused cache entry is the same object; a reparse would produce a new one.
+    // Cache reuse preserves object identity.
     expect(secondBackup).toBe(firstBackup)
     expect(
       second.dailyAggregates.reduce((total, aggregate) => total + aggregate.inputTokens, 0)
@@ -533,9 +530,6 @@ describe('scanOpenCodeUsageDatabases', () => {
   })
 
   it('lets the live database reclaim sessions after a sticky backup-only claim', async () => {
-    // First scan only has the backup (e.g. live db temporarily missing), so it
-    // owns session-1 at the stale snapshot. When opencode.db reappears with
-    // higher totals it must reclaim the session instead of staying frozen.
     writeSessionTotalsDb('opencode-backup.db', [['session-1', 400]])
 
     const first = await scanOpenCodeUsageDatabases([], [])

@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   stop: vi.fn<(home: string) => Promise<boolean>>(),
   legacyAdapters: new Array<{ protocolVersion: number; hasPty: (id: string) => boolean }>()
 }))
-vi.mock('../../pty-host-bindings', () => ({
+vi.mock('../pty-host-bindings', () => ({
   getPtyIpc: () => ({
     handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler)
   })
@@ -41,7 +41,6 @@ import { toAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from '../provider/ownership-state'
 import { installPtyCodexSharedServerIpcHandler } from './codex-shared-server'
 
-// Each channel with its answer for a local pane and its answer when it refuses one.
 const CHANNELS = [
   ['pty:isCodexOnSharedServer', { joined: true, openedBeforeWrapper: false }, { joined: false }],
   ['pty:disableCodexSharedServerAutoStart', true, false],

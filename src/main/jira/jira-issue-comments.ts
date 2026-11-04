@@ -1,4 +1,10 @@
-import type { JiraComment } from '../../shared/jira-types'
+import { requireStrictJiraSite } from './jira-read-failure'
+import type { JiraComment } from '../../shared/jira/jira-types'
+import {
+  JIRA_IMAGE_MAX_BYTES,
+  JIRA_IMAGE_MAX_REFERENCES,
+  type JiraMediaFormat
+} from '../../shared/jira/jira-attachment-image'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
@@ -11,7 +17,7 @@ import {
 import {
   extractAttachmentContentIdsFromHtml,
   selectPreferredAttachmentIds
-} from './attachment-discovery'
+} from './attachments/discovery'
 import { mapUser } from './jira-issue-mapping'
 import {
   flushMediaResolutionWarn,
@@ -30,15 +36,12 @@ function mapComment(raw: JiraRecord, adfOptions?: AdfToMarkdownOptions): JiraCom
   }
 }
 
-/**
- * Pooled comment media collect: attachment metadata JSON stays under the semaphore.
- * Residual: Server/DC comment bodies are wiki markup, not ADF — this only fixes
- * the lookup path; wiki `!filename!` is not rendered as media.
- */
+/** Keep metadata JSON under the semaphore; Server/DC wiki !filename! media remains unsupported. */
 async function collectCommentMediaRequest(
   client: JiraClientForSite,
   key: string,
-  comments: JiraRecord[]
+  comments: JiraRecord[],
+  mediaFormat?: JiraMediaFormat
 ): Promise<MediaRequest | undefined> {
   const htmlIds: string[] = []
   const seen = new Set<string>()
@@ -56,14 +59,12 @@ async function collectCommentMediaRequest(
   const needingCount = mediaAttrs.filter(
     (attrs) => !(attrs.url && /^https?:\/\//i.test(attrs.url))
   ).length
-  // Why: selectPreferredAttachmentIds yields nothing without attachment-needing media, so
-  // HTML ids alone can never produce a download — skip the extra metadata request entirely.
+  // HTML IDs alone cannot produce downloads; skip metadata without attachment-needing media.
   if (needingCount === 0) {
     return undefined
   }
 
-  // Why: comment media usually references issue-level attachments; pull them once
-  // for the whole thread. Use apiBasePath so Server/DC does not 404 on /rest/api/3.
+  // Comment media shares issue attachments; use the site's API version for Server/DC.
   let attachmentField: unknown
   try {
     const issue = await jiraRequest<JiraRecord>(
@@ -79,7 +80,8 @@ async function collectCommentMediaRequest(
   const selection = selectPreferredAttachmentIds({
     renderedHtmlIds: htmlIds,
     attachmentField,
-    mediaAttrs
+    mediaAttrs,
+    ...(mediaFormat ? { maxBytes: JIRA_IMAGE_MAX_BYTES, maxImages: JIRA_IMAGE_MAX_REFERENCES } : {})
   })
   if (selection.needCount === 0 && selection.preferredIds.length === 0) {
     return undefined
@@ -95,9 +97,13 @@ async function collectCommentMediaRequest(
 
 export async function getIssueComments(
   key: string,
-  siteId?: string | null
+  siteId?: string | null,
+  strict = false,
+  mediaFormat?: JiraMediaFormat
 ): Promise<JiraComment[]> {
-  const entry = getClients(siteId)[0]
+  const entries = getClients(siteId)
+  requireStrictJiraSite(entries, siteId, strict)
+  const entry = entries[0]
   if (!entry) {
     return []
   }
@@ -117,13 +123,16 @@ export async function getIssueComments(
       })
       return `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/comment?${params.toString()}`
     })
-    mediaRequest = await collectCommentMediaRequest(entry, key, comments)
+    mediaRequest = await collectCommentMediaRequest(entry, key, comments, mediaFormat)
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
       throw error
     }
     console.warn('[jira] getIssueComments failed:', error)
+    if (strict) {
+      throw error
+    }
     return []
   } finally {
     if (held) {
@@ -133,7 +142,9 @@ export async function getIssueComments(
   }
 
   try {
-    const prepared = mediaRequest ? await prepareMediaResolver(entry, mediaRequest) : undefined
+    const prepared = mediaRequest
+      ? await prepareMediaResolver(entry, mediaRequest, mediaFormat)
+      : undefined
     const mapped = comments.map((comment) => mapComment(comment, prepared?.options))
     if (prepared) {
       flushMediaResolutionWarn(entry, prepared)

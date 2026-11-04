@@ -1,28 +1,27 @@
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../src/shared/agent-session-wire'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session-definitive-refusal'
+} from '../../../src/shared/agent-session/agent-session-wire'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionCreateParams
-} from '../../../src/shared/structured-agent-session-create'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
+} from '../../../src/shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentCreateSupportReply } from '../../../src/shared/agent-session/structured-agent-create-support-reply'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   structuredAgentSessionCreate,
   structuredAgentSupportProbe
 } from './mobile-session-launch-operations'
-import { structuredSessionRandomUuid } from './structured-session-operation-id'
+import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
-type StructuredCreateSupport = {
-  supported?: boolean
-  reason?: 'agent' | 'remote' | 'wsl'
-}
+// Partial: the reply is read before it is checked.
+type StructuredCreateSupport = Partial<StructuredAgentCreateSupportReply>
 
 const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'
 const CREATE_SUPPORT_RETRY_DELAYS_MS: readonly number[] = [50, 150, 300]
@@ -42,10 +41,10 @@ function createParamsFor(
   worktree: string
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
-    sessionId: createStructuredAgentSessionId(agent, structuredSessionRandomUuid),
+    sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
     worktree,
     agent,
-    randomUuid: structuredSessionRandomUuid
+    randomUuid: randomV4Uuid
   })
 }
 
@@ -65,8 +64,7 @@ function failedMessage(agent: AgentSessionHandleProvider): string {
   return `Could not open ${TUI_AGENT_DISPLAY_NAMES[agent]} chat.`
 }
 
-/** Only a refusal the host names as definitive may become `failed`; anything else keeps the
- *  outcome unknown so no legacy sibling terminal is created for a session that may exist. */
+// Only definitive refusal permits failure/fallback; uncertain creates may already own a session and must not create a sibling.
 function classifyCreateRefusal(
   agent: AgentSessionHandleProvider,
   code: string,
@@ -143,8 +141,7 @@ export async function createMobileStructuredAgentSession(
     }
   }
 
-  // Why: this path distrusts the declared RpcResponse type — a malformed reply must read as
-  // unconfirmed, not as a refusal we can classify.
+  // Inspect malformed replies as unconfirmed rather than classifying them as refusals.
   if (!response || typeof response !== 'object' || typeof response.ok !== 'boolean') {
     return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }

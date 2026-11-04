@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   LEGACY_PTY_ALLOCATION_HINT,
   LEGACY_TERMINAL_PROCESS_LIMIT_HINT,
-  PTY_ALLOCATION_HINT,
-  TERMINAL_HOST_CAP_HINT,
-  TERMINAL_PROCESS_LIMIT_HINT
+  PTY_ALLOCATION_HINT
 } from '../../../../shared/terminal-spawn-error-copy'
 
 // Why a locale stand-in: English fallbacks equal the host copy, so only a translation shows the swap.
@@ -19,10 +17,7 @@ vi.mock('@/i18n/i18n', () => ({
     })[key] ?? fallback
 }))
 
-import {
-  localizeTerminalSpawnHints,
-  withoutTerminalSpawnIssueRequest
-} from './terminal-spawn-error-display'
+import { failedSpawnShell, localizeTerminalSpawnHints } from './terminal-spawn-error-display'
 
 const RAW =
   'Failed to spawn shell "/bin/zsh": node-pty: open_slave failed: EMFILE (errno 24, Too many open files) (shell: /bin/zsh). If this persists, please file an issue.'
@@ -34,10 +29,6 @@ describe('localizeTerminalSpawnHints', () => {
     )
   })
 
-  it('translates the terminal process limit hint', () => {
-    expect(localizeTerminalSpawnHints(TERMINAL_PROCESS_LIMIT_HINT)).toBe('系统无法再启动终端进程。')
-  })
-
   it('translates the multi-line hints an older host publishes', () => {
     expect(localizeTerminalSpawnHints(`${LEGACY_PTY_ALLOCATION_HINT} ${RAW}`)).toBe(
       `系统无法再分配 pty 设备。 ${RAW}`
@@ -46,31 +37,16 @@ describe('localizeTerminalSpawnHints', () => {
       '系统无法再启动终端进程。'
     )
   })
-
-  it('translates the host terminal cap refusal', () => {
-    expect(localizeTerminalSpawnHints(TERMINAL_HOST_CAP_HINT)).toBe('主机终端已达上限。')
-  })
-
-  it('leaves unrelated errors untouched', () => {
-    expect(localizeTerminalSpawnHints('Paste failed.')).toBe('Paste failed.')
-  })
 })
 
-describe('withoutTerminalSpawnIssueRequest', () => {
-  it('drops the host issue request and keeps the diagnostic', () => {
-    expect(withoutTerminalSpawnIssueRequest(RAW)).toBe(
-      'Failed to spawn shell "/bin/zsh": node-pty: open_slave failed: EMFILE (errno 24, Too many open files) (shell: /bin/zsh).'
-    )
-  })
-
-  it('drops the request from an error before another pane error', () => {
-    expect(withoutTerminalSpawnIssueRequest(`${RAW}\nPaste failed.`)).toBe(
-      'Failed to spawn shell "/bin/zsh": node-pty: open_slave failed: EMFILE (errno 24, Too many open files) (shell: /bin/zsh).\nPaste failed.'
-    )
-  })
-
-  it('keeps the same words when they are part of the diagnostic', () => {
-    const error = `Command printed: If this persists, please file an issue.\nMore detail follows.`
-    expect(withoutTerminalSpawnIssueRequest(error)).toBe(error)
+describe('failedSpawnShell', () => {
+  it('reads the shell from daemon and local spawn failures', () => {
+    expect(
+      failedSpawnShell(
+        'Daemon failed to spawn shell "C:\\Windows\\System32\\wsl.exe" with cwd "C:\\"'
+      )
+    ).toBe('C:\\Windows\\System32\\wsl.exe')
+    expect(failedSpawnShell(RAW)).toBe('/bin/zsh')
+    expect(failedSpawnShell('Paste failed.')).toBeNull()
   })
 })

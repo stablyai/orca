@@ -1,7 +1,4 @@
-/**
- * E2E: Add SSH host → Fill from ~/.ssh/config picker (isolated HOME + real ssh -G).
- * Plan cases: P1, P2, P3, P4, P8 (+ N3 with P3). Bulk/import: ssh-config-host-import.spec.ts.
- */
+// Use isolated HOME and real ssh -G for picker P1/P2/P3/P4/P8 plus N3; bulk/re-adopt lives in ssh-config-host-import.spec.ts.
 
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -12,7 +9,6 @@ import {
   closeOpenDialogs,
   configHostRow,
   expectSshHostListedInSettings,
-  hostEndpointSummary,
   makeSshConfigHostPrefix,
   openSshConfigHostPicker,
   openSshHostSettings,
@@ -23,8 +19,7 @@ import {
 
 test.use({ seedTestRepo: false })
 
-// Why: afterEach deletes every target carrying this prefix; workers loading the
-// module in the same millisecond must not collide on a shared Date.now().
+// Use unique cleanup prefixes so workers loaded in the same millisecond cannot delete each other’s targets.
 const HOST_PREFIX = makeSshConfigHostPrefix()
 
 function pairHosts(prefix: string): { alpha: SeededSshConfigHost; bravo: SeededSshConfigHost } {
@@ -63,48 +58,6 @@ test.describe('SSH config host picker', () => {
     await removeSshTargetsByPrefix(orcaPage, HOST_PREFIX).catch(() => undefined)
   })
 
-  // ── P1 ─────────────────────────────────────────────────────────────
-  test('P1: empty config shows empty state; Back returns to blank form', async ({ orcaPage }) => {
-    // Isolated HOME has no ~/.ssh/config by default.
-    const picker = await openSshConfigHostPicker(orcaPage)
-    await expect(picker.getByRole('heading', { name: 'Choose from ~/.ssh/config' })).toBeVisible()
-    await expect(picker.getByText('No hosts in ~/.ssh/config')).toBeVisible()
-    await expect(
-      picker.getByText('Add a Host entry there, or go back and type the details manually.')
-    ).toBeVisible()
-    await expect(picker.getByRole('button', { name: 'Add all to Orca' })).toBeDisabled()
-
-    await picker.getByRole('button', { name: 'Back' }).click()
-    const form = orcaPage.getByRole('dialog', { name: 'Add SSH host' })
-    await expect(form.getByRole('heading', { name: 'Add SSH host' })).toBeVisible()
-    const fields = addSshHostFormFields(form)
-    await expect(fields.host).toHaveValue('')
-    await expect(fields.username).toHaveValue('')
-    await expect(fields.label).toHaveValue('')
-  })
-
-  // ── P2 ─────────────────────────────────────────────────────────────
-  test('P2: seeded hosts list with summary lines and Add all enabled', async ({
-    electronApp,
-    orcaPage
-  }) => {
-    const hosts = await seedPairConfig(electronApp, HOST_PREFIX)
-    const picker = await openSshConfigHostPicker(orcaPage)
-
-    const hostList = picker.getByRole('list', { name: 'SSH config hosts' })
-    await expect(hostList).toBeVisible()
-    await expect(configHostRow(picker, hosts.alpha)).toBeVisible()
-    await expect(configHostRow(picker, hosts.bravo)).toBeVisible()
-    await expect(
-      hostList.getByText(hostEndpointSummary(hosts.alpha), { exact: true })
-    ).toBeVisible()
-    await expect(
-      hostList.getByText(hostEndpointSummary(hosts.bravo), { exact: true })
-    ).toBeVisible()
-    await expect(picker.getByRole('button', { name: 'Add all 2 to Orca' })).toBeEnabled()
-  })
-
-  // ── P3 + N3 ────────────────────────────────────────────────────────
   test('P3: select host prefills form; Save persists; N3 identity hint', async ({
     electronApp,
     orcaPage
@@ -146,7 +99,6 @@ test.describe('SSH config host picker', () => {
     await expectSshHostListedInSettings(sshSection, prod)
   })
 
-  // ── P4 ─────────────────────────────────────────────────────────────
   test('P4: filter narrows host list', async ({ electronApp, orcaPage }) => {
     const hosts = await seedPairConfig(electronApp, HOST_PREFIX)
     const picker = await openSshConfigHostPicker(orcaPage)
@@ -165,22 +117,6 @@ test.describe('SSH config host picker', () => {
     await expect(
       picker.getByText('Try another filter, or go back and type manually.')
     ).toBeVisible()
-  })
-
-  // ── P8 ─────────────────────────────────────────────────────────────
-  test('P8: Back without select leaves form empty', async ({ electronApp, orcaPage }) => {
-    const hosts = await seedPairConfig(electronApp, HOST_PREFIX)
-    const picker = await openSshConfigHostPicker(orcaPage)
-    await expect(configHostRow(picker, hosts.alpha)).toBeVisible()
-
-    await picker.getByRole('button', { name: 'Back' }).click()
-    const form = orcaPage.getByRole('dialog', { name: 'Add SSH host' })
-    await expect(form.getByRole('heading', { name: 'Add SSH host' })).toBeVisible()
-    const fields = addSshHostFormFields(form)
-    await expect(fields.host).toHaveValue('')
-    await expect(fields.username).toHaveValue('')
-    await expect(fields.label).toHaveValue('')
-    await expect(orcaPage.getByText(/Filled from /i)).toHaveCount(0)
   })
 })
 

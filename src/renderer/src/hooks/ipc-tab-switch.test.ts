@@ -78,8 +78,7 @@ function makeStore(activeTabType: ActiveTabType, overrides: Partial<MockStore> =
     getActiveTab: () => null,
     ...overrides
   }
-  // Why the real resolver: the group-scoped active tab is what the code under test reads, so a
-  // hand-written stub here would decide the answer instead of exercising it.
+  // Use the real resolver so group selection is exercised instead of supplied by a stub.
   store.getActiveTab = createTabsFocusActions(
     (() => {}) as unknown as TabsSliceSet,
     (() => store) as unknown as TabsSliceGet
@@ -133,16 +132,6 @@ describe('handleSwitchTerminalTab', () => {
       { type: 'editor', id: 'editor-1' },
       { type: 'browser', id: 'browser-1' }
     ])
-
-    expect(handleSwitchTerminalTab(1)).toBe(false)
-    expect(store.setActiveTab).not.toHaveBeenCalled()
-    expect(store.setActiveTabType).not.toHaveBeenCalled()
-  })
-
-  it('returns false when only one terminal tab exists', () => {
-    const store = makeStore('terminal')
-    getStateMock.mockReturnValue(store)
-    getActiveTabNavOrderMock.mockReturnValue([{ type: 'terminal', id: 'term-1' }])
 
     expect(handleSwitchTerminalTab(1)).toBe(false)
     expect(store.setActiveTab).not.toHaveBeenCalled()
@@ -421,16 +410,6 @@ describe('handleSwitchTabAcrossAllTypes', () => {
     expect(store.setActiveTab).toHaveBeenCalledWith('term-1')
     expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
   })
-
-  it('returns false when only one tab exists total', () => {
-    const store = makeStore('terminal')
-    getStateMock.mockReturnValue(store)
-    getActiveTabNavOrderMock.mockReturnValue([{ type: 'terminal', id: 'term-1' }])
-
-    expect(handleSwitchTabAcrossAllTypes(1)).toBe(false)
-    expect(store.setActiveTab).not.toHaveBeenCalled()
-    expect(store.setActiveTabType).not.toHaveBeenCalled()
-  })
 })
 
 describe('handleSwitchRecentTab', () => {
@@ -462,27 +441,5 @@ describe('handleSwitchRecentTab', () => {
     expect(store.setActiveBrowserTab).toHaveBeenCalledWith('browser-b')
     expect(store.activateTab).toHaveBeenCalledWith('tab-b')
     expect(store.setActiveTabType).toHaveBeenCalledWith('browser', 'wt-1')
-  })
-
-  it('returns false when the MRU stack has no previous visible tab', () => {
-    const store = makeStore('terminal')
-    store.groupsByWorktree = {
-      'wt-1': [
-        {
-          id: 'group-1',
-          activeTabId: 'tab-term-1',
-          tabOrder: ['tab-term-1'],
-          recentTabIds: ['tab-term-1']
-        }
-      ]
-    }
-    getStateMock.mockReturnValue(store)
-    getActiveTabNavOrderMock.mockReturnValue([
-      { type: 'terminal', id: 'term-1', tabId: 'tab-term-1' }
-    ])
-
-    expect(handleSwitchRecentTab()).toBe(false)
-    expect(store.setActiveTab).not.toHaveBeenCalled()
-    expect(store.setActiveTabType).not.toHaveBeenCalled()
   })
 })

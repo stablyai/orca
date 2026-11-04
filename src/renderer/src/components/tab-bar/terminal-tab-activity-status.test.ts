@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   hasUnreadAgentCompletionForTerminalTab,
@@ -21,7 +19,6 @@ const NOW = 10_000
 
 const TAB: Pick<TerminalTab, 'id' | 'title'> = { id: TAB_ID, title: 'Codex' }
 
-/** Build a canonical pane-status fixture for one tab leaf. */
 function entry(
   leafId: string,
   state: AgentStatusEntry['state'],
@@ -57,10 +54,7 @@ afterEach(() => {
 })
 
 describe('resolveTerminalTabActivityStatus', () => {
-  // Why: Orca injects its own "<Agent> - action required" OSC title on a blocked/waiting hook and
-  // classifies that title back as evidence. Once the pane's row aged past the freshness window it
-  // stopped registering its identity, so the self-authored title outranked the pane's own `done`
-  // row and the tab glyph claimed a question nobody was asking.
+  // Stale hook identity must suppress Orca’s own permission title instead of reviving it as current needs-input evidence.
   it('does not paint a stale self-authored action-required title as a live question', () => {
     const done = entry(FIRST_LEAF_ID, 'done', {
       updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
@@ -279,9 +273,7 @@ describe('resolveTerminalTabActivityStatus', () => {
   })
 
   it('de-spins a stale working tab on an epoch bump without a new map reference', () => {
-    // Why: the freshness scheduler bumps agentStatusEpoch (not the map ref) at
-    // the 30m stale boundary. The flag cache must invalidate on that bump, or an
-    // abandoned tab keeps spinning while the sidebar (epoch-keyed) de-spins.
+    // Freshness epochs can stale a row without replacing its map; invalidate cached flags so abandoned tabs stop spinning.
     const working = entry(FIRST_LEAF_ID, 'working')
     const agentStatusByPaneKey = { [working.paneKey]: working }
     expect(
@@ -294,7 +286,6 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('working')
 
     vi.setSystemTime(31 * 60 * 1000)
-    // Same map reference, bumped epoch — the entry is now stale.
     expect(
       resolveTerminalTabActivityStatus({
         tab: TAB,

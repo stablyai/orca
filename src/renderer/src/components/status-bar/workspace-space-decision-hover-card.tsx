@@ -11,15 +11,18 @@ import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { HoverCardContent } from '../ui/hover-card'
-import {
-  formatBytes,
-  getWorkspaceSpaceBranchLabel,
-  getWorkspaceSpaceStatusLabel
-} from './workspace-space-format'
+import { formatBytes, getWorkspaceSpaceBranchLabel } from './workspace-space-format'
 import { translate } from '@/i18n/i18n'
-import { pluralize, type WorkspaceDecisionDetails } from './workspace-space-decision-details'
+import type { WorkspaceDecisionDetails } from './workspace-space-decision-details'
 import type { WorkspaceGitRefreshState } from './workspace-space-manager-state-types'
 import { WorkspaceSpaceStatusBadge } from './workspace-space-status-badge'
+import {
+  getAgentDecisionLabel,
+  getDeleteDecisionLabel,
+  getEditorDecisionLabel,
+  getGitDecisionLabel,
+  getTerminalDecisionLabel
+} from './workspace-space-decision-labels'
 
 function DecisionLine({
   icon,
@@ -54,77 +57,6 @@ function DecisionLine({
   )
 }
 
-function getAgentDecisionLabel(details: WorkspaceDecisionDetails): string {
-  if (details.activeAgentCount > 0 && details.completedAgentCount > 0) {
-    return `${pluralize(details.activeAgentCount, 'active agent')}, ${pluralize(
-      details.completedAgentCount,
-      'completed agent'
-    )}`
-  }
-  if (details.activeAgentCount > 0) {
-    return pluralize(details.activeAgentCount, 'active agent')
-  }
-  if (details.completedAgentCount > 0) {
-    return `${pluralize(details.completedAgentCount, 'completed agent')} retained`
-  }
-  return 'No tracked agents running'
-}
-
-function getTerminalDecisionLabel(details: WorkspaceDecisionDetails): string {
-  if (details.terminalTabCount === 0) {
-    return 'No terminal tabs'
-  }
-  return `${details.liveTerminalCount} live of ${pluralize(details.terminalTabCount, 'terminal tab')}`
-}
-
-function getGitDecisionLabel(
-  details: WorkspaceDecisionDetails,
-  gitRefreshState?: WorkspaceGitRefreshState
-): string {
-  if (details.changedFileCount === null) {
-    if (gitRefreshState?.error) {
-      return `Git status unavailable: ${gitRefreshState.error}`
-    }
-    return 'Git status has not loaded yet'
-  }
-  if (details.changedFileCount === 0) {
-    return 'No uncommitted files'
-  }
-  return pluralize(details.changedFileCount, 'changed file')
-}
-
-function getEditorDecisionLabel(details: WorkspaceDecisionDetails): string {
-  if (details.openEditorFileCount === 0) {
-    return 'No editor files open'
-  }
-  if (details.dirtyEditorBufferCount === 0) {
-    return `${pluralize(details.openEditorFileCount, 'editor file')} open`
-  }
-  return `${pluralize(details.dirtyEditorBufferCount, 'dirty editor buffer')} of ${pluralize(
-    details.openEditorFileCount,
-    'open file'
-  )}`
-}
-
-function getDeleteDecisionLabel(
-  worktree: WorkspaceSpaceWorktree,
-  details: WorkspaceDecisionDetails
-): string {
-  if (details.isActive) {
-    return 'This is the active workspace'
-  }
-  if (worktree.status !== 'ok') {
-    return worktree.error ?? getWorkspaceSpaceStatusLabel(worktree.status)
-  }
-  if (worktree.isMainWorktree) {
-    return 'Main worktree is protected'
-  }
-  if (!worktree.canDelete) {
-    return 'Workspace is protected'
-  }
-  return 'Can be deleted after review'
-}
-
 export function WorkspaceDecisionHoverCard({
   worktree,
   details,
@@ -138,7 +70,8 @@ export function WorkspaceDecisionHoverCard({
 }): React.JSX.Element {
   const deleteDecision = getDeleteDecisionLabel(worktree, details)
   const issueLabel =
-    [details.issueLabel, details.linearIssueLabel].filter(Boolean).join(' · ') || 'No linked issue'
+    [details.issueLabel, details.linearIssueLabel].filter(Boolean).join(' · ') ||
+    translate('auto.components.status.bar.workspaceSpaceDecision.noLinkedIssue', 'No linked issue')
   return (
     <HoverCardContent
       align="end"
@@ -219,7 +152,13 @@ export function WorkspaceDecisionHoverCard({
             'auto.components.status.bar.WorkspaceSpaceManagerPanel.fb2069acb7',
             'Review'
           )}
-          value={details.reviewLabel ?? 'No linked PR'}
+          value={
+            details.reviewLabel ??
+            translate(
+              'auto.components.status.bar.workspaceSpaceDecision.noLinkedReview',
+              'No linked PR'
+            )
+          }
         />
         <DecisionLine
           icon={<ExternalLink />}
@@ -235,9 +174,9 @@ export function WorkspaceDecisionHoverCard({
         <div className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
           {details.browserTabCount > 0
             ? translate(
-                'auto.components.status.bar.WorkspaceSpaceManagerPanel.131662ac65',
-                '{{value0}} open',
-                { value0: pluralize(details.browserTabCount, 'browser tab') }
+                'auto.components.status.bar.workspaceSpaceDecision.browserTabsOpen',
+                '{{count}} browser tabs open',
+                { count: details.browserTabCount, defaultValue_one: '{{count}} browser tab open' }
               )
             : worktree.path}
         </div>

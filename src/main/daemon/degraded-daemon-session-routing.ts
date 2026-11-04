@@ -11,10 +11,7 @@ export function listProviderSessionIds(
     .map(([id]) => id)
 }
 
-/** Attach-only session adoption: refuses the in-process fallback route. A
- *  fallback pty cannot own a daemon-surviving session by definition, and its
- *  no-op attach resolving would pin a subscriber-driven attach as succeeded
- *  while the stream stays blank. */
+/** Refuse fallback attach: its resolving no-op would report success for a blank daemon stream. */
 export async function attachDaemonOwnedSession(
   owner: IPtyProvider,
   fallback: IPtyProvider,
@@ -26,8 +23,6 @@ export async function attachDaemonOwnedSession(
   return await owner.attach(sessionId)
 }
 
-/** Probes providers for an id absent from the routing map and adopts the
- *  first proven owner into the map. */
 export function adoptOwningProvider(
   sessionProviders: Map<string, IPtyProvider>,
   providers: readonly IPtyProvider[],

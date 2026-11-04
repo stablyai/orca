@@ -5,23 +5,12 @@ type RestoredBrowserHandleSource = {
   remoteBrowserPageHandlesByPageId?: Record<string, RemoteBrowserPageHandle>
 }
 
-// Why in flight rather than ever-attempted: hydration can run before the environment is reachable,
-// and that attempt has to be retryable. What stops the retries is the restored marker itself --
-// adoption spends it the moment the host republishes the page.
+// Coalesce only in-flight attempts; early unreachable hydration must retry. Adoption spends restored markers to end retries.
 const preparingEnvironmentIds = new Set<string>()
-// Coalescing an ordinary retry is fine, but a restart must not be swallowed by a preparation still
-// aimed at the runtime that just died -- that request can hang until its RPC times out, and dropping
-// the one signal that the authority changed is exactly how the rows get lost.
+// Restart must bypass preparation aimed at the dead runtime; coalescing loses the only authority-change signal until timeout.
 const environmentIdsAwaitingRepreparation = new Set<string>()
 
-/**
- * Start this desktop's browser client host for every environment the restored session says it was
- * hosting pages for. The host is otherwise started lazily on the create path, so after a relaunch
- * the runtime never sees an attach and never hands the retained pages back.
- *
- * Safe to call again whenever an environment becomes reachable: preparation is idempotent per
- * environment, and an environment with no restored client-hosted rows left is skipped entirely.
- */
+/** Start lazy desktop browser hosting for restored client-hosted environments so runtime attach can recover retained pages. Repeated reachability calls are idempotent; skip environments after adoption spends their markers. */
 export async function ensureBrowserClientHostsForRestoredPages(
   state: RestoredBrowserHandleSource
 ): Promise<void> {
@@ -30,17 +19,7 @@ export async function ensureBrowserClientHostsForRestoredPages(
   }
 }
 
-/**
- * Re-claims hosting duty when contact with a runtime is (re)established: after it restarted under a
- * new id, or after an outage.
- *
- * After a restart the guests are still alive in this desktop's webviews, but the replacement runtime
- * knows nothing about them. Preparing again drives the host registry down its `replaceAuthority`
- * path, which keeps the guests and re-attaches with a page inventory the new runtime can adopt.
- * After an outage past the lease grace the host was torn down with its guests; preparing starts a
- * fresh one, and the runtime's recovery re-places the pages at their last URL. Without this nothing
- * observes either edge and the rows are simply lost.
- */
+/** Reclaim hosting on runtime restart/contact return. replaceAuthority preserves live guests and inventories them to new authority; past lease grace, fresh hosting lets runtime re-place destroyed guests at last URLs. Nothing else observes these recovery edges. */
 export async function ensureBrowserClientHostOnRuntimeContact(
   state: RestoredBrowserHandleSource,
   environmentId: string
@@ -64,15 +43,13 @@ async function prepareBrowserClientHost(
   }
   preparingEnvironmentIds.add(environmentId)
   try {
-    // Idempotent per environment: the registry returns the live lease when one is already up, and
-    // reserves no per-page state, so this only claims hosting duty.
+    // Registry reuses live leases and reserves no page state; this only claims hosting duty.
     const placement = await window.api.runtimeEnvironments.prepareBrowserClientHostPlacement({
       selector: environmentId,
       preference: 'auto'
     })
     if (placement.kind !== 'client') {
-      // Why still worth a line: preparation stopped throwing when the probe cannot answer, so
-      // without this a relaunch that never recovers the retained pages says nothing at all.
+      // Unanswered probes no longer throw; log failed relaunch recovery explicitly.
       console.warn(
         '[restored-client-hosted-browser] no client host for restored pages; preparation answered',
         placement.kind,
@@ -81,9 +58,7 @@ async function prepareBrowserClientHost(
       )
     }
   } catch (error) {
-    // Why swallowed: both callers ride paths a throw would take down with them -- hydration, which
-    // would boot the app in degraded no-save mode, and the status update, which would lose unrelated
-    // state. A page nobody hosts is recoverable; a lost session is not.
+    // Contain failures in hydration/status updates or lose saving/unrelated state. Unhosted pages remain recoverable.
     console.warn(
       '[restored-client-hosted-browser] failed to start the browser client host for',
       environmentId,

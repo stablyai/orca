@@ -1,4 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
 import { toast } from 'sonner'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
@@ -9,6 +10,7 @@ import { translate } from '@/i18n/i18n'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
+import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from './markdown-internal-links'
 import {
@@ -16,11 +18,7 @@ import {
   resolveMarkdownPreviewHref,
   resolveMarkdownPreviewHttpOpenOptions
 } from './markdown-preview-links'
-import {
-  cancelMarkdownPreviewEditorRevealFrames,
-  parseMarkdownPreviewLineTarget,
-  requestMarkdownPreviewEditorRevealFrame
-} from './markdown-preview-editor-reveal'
+import { parseMarkdownPreviewLineTarget } from './markdown-preview-editor-reveal'
 import {
   findMarkdownPreviewOpenedEditFileId,
   findMarkdownPreviewTargetWorktree
@@ -42,8 +40,6 @@ export type MarkdownPreviewLinkContext = Pick<
   | 'openFile'
   | 'openMarkdownPreview'
   | 'setMarkdownViewMode'
-  | 'pendingEditorRevealFrameIdsRef'
-  | 'setPendingEditorReveal'
 > &
   Pick<MarkdownPreviewViewport, 'scrollToAnchor'>
 
@@ -76,8 +72,6 @@ export async function handleMarkdownPreviewLinkClick({
     openFile,
     openMarkdownPreview,
     setMarkdownViewMode,
-    pendingEditorRevealFrameIdsRef,
-    setPendingEditorReveal,
     scrollToAnchor
   } = context
 
@@ -219,19 +213,16 @@ export async function handleMarkdownPreviewLinkClick({
     if (language === 'markdown') {
       setMarkdownViewMode(targetFileId, 'source')
     }
-    cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
-    setPendingEditorReveal(null)
-    requestMarkdownPreviewEditorRevealFrame(pendingEditorRevealFrameIdsRef, () => {
-      requestMarkdownPreviewEditorRevealFrame(pendingEditorRevealFrameIdsRef, () => {
-        setPendingEditorReveal({
-          filePath: absolutePath,
-          fileId: targetFileId,
-          line: lineTarget.line,
-          column: lineTarget.column ?? 1,
-          matchLength: 0
-        })
-      })
-    })
+    // Why: wait for the tab, then keep its reveal alive after Preview teardown.
+    afterPendingEntityTabs(targetWorktree.id, targetFileId, () =>
+      scheduleEditorLineReveal(
+        useAppStore.getState,
+        absolutePath,
+        lineTarget.line,
+        lineTarget.column,
+        targetFileId
+      )
+    )
     return
   }
 

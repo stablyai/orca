@@ -15,7 +15,6 @@ export function hasOsFileDragTypes(
   )
 }
 
-/** Cancels unclaimed OS file drops before the browser can navigate to them. */
 export function installOsFileDropCancellationGuard(): () => void {
   if (disposeInstalledGuard) {
     return disposeInstalledGuard

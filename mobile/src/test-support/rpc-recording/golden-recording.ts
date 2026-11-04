@@ -1,6 +1,7 @@
 import { format } from 'oxfmt'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import {
   checkpointListDifference,
   decodeGoldenFile,
@@ -12,10 +13,8 @@ import {
 import { internRecording } from './golden-value-pool'
 import type { Recording, RecordingScenario } from './recording-scenario'
 
-// 6 drops the provenance header (baseline pin, input digests, lockfile, platform, runner, projection
-// and scenario versions): every run re-derives the recording from the current tree and compares it.
+// Version 6 omits provenance; each run derives recordings from the current tree.
 export const GOLDEN_FORMAT_VERSION = 6
-/** How many grouped differences one failure prints in full. */
 const REPORTED_DIFFERENCES = 8
 export type GoldenRecording = {
   goldenFormatVersion: number
@@ -69,7 +68,6 @@ export function readGolden(directory: string, id: string): GoldenRecording {
     ...decodeGoldenFile(file, id)
   }))
 }
-/** A corrupt or hand-edited golden names itself and the command that rewrites it. */
 function withRecordHint<T>(id: string, read: () => T): T {
   try {
     return read()
@@ -90,7 +88,6 @@ export async function writeGolden(
   mkdirSync(directory, { recursive: true })
   writeFileSync(goldenPath(directory, golden.recording.scenario), await goldenFileText(golden))
 }
-/** The exact file text `rpc:record` writes for a golden. */
 async function goldenFileText(golden: GoldenRecording): Promise<string> {
   const result = await format(`${golden.recording.scenario}.json`, goldenBytes(golden), {
     printWidth: 100,
@@ -107,10 +104,7 @@ function goldenPath(directory: string, id: string): string {
   }
   return join(directory, `${id}.json`)
 }
-/**
- * Replay passes only if the committed file is exactly what `rpc:record` would write for this run, so
- * nothing the file carries (a leftover key, a stale pool entry, a hand edit) goes uncompared.
- */
+// Compare exact file text so stale keys, pool entries and hand edits cannot escape decoded-value checks.
 export async function expectGoldenFile(
   directory: string,
   id: string,
@@ -127,8 +121,11 @@ export async function expectGoldenFile(
         `Golden ${id} holds the same recording but is not the file rpc:record writes for it (a hand edit, a leftover key, a stale pool entry, or keys in another order).\n${recordHint(id)}`
       )
 }
-/** Value-based compare for a run checked against decoded values rather than a committed file. */
 export function compareGolden(expected: GoldenRecording, actual: GoldenRecording): void {
+  // Matching recordings need no field-by-field diagnostic strings, but still pin encoded bytes.
+  if (isDeepStrictEqual(expected, actual) && goldenBytes(expected) === goldenBytes(actual)) {
+    return
+  }
   const problems = recordingProblems(expected, actual)
   // The field compares ignore key order and the re-encoded bytes do not, so the bytes decide last.
   if (!problems.length && goldenBytes(expected) !== goldenBytes(actual)) {

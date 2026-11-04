@@ -1,13 +1,12 @@
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import type { AppState } from '@/store/types'
-import { isClaudeManagementTitle } from '../../../../shared/agent-detection'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { Tab } from '../../../../shared/tab-types'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   isNativeChatTabWideFallbackSafe,
-  nativeChatLaunchAgentForLeaf,
   resolveNativeChatActiveLayoutLeafId
 } from '../../components/native-chat/native-chat-leaf-routing'
 import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
@@ -43,7 +42,7 @@ export function getRuntimeLeafIdsForTerminal(
   if (persistedLeafIds.length > 0) {
     return persistedLeafIds
   }
-  // A new tab can predate TerminalPane mount; do not fabricate a stale pane:1.
+  // Only a tab with no saved layout, or an older rootless one, gets here; do not fabricate pane:1.
   return []
 }
 
@@ -77,10 +76,32 @@ export function isMobileFileDiffSource(
   return diffSource === 'staged' || diffSource === 'unstaged'
 }
 
+export function getMobileMarkdownSourceFile(
+  file: AppState['openFiles'][number],
+  openFilesById: ReadonlyMap<string, AppState['openFiles'][number]> | undefined
+): AppState['openFiles'][number] | null {
+  if (file.mode !== 'edit' && file.mode !== 'markdown-preview') {
+    return null
+  }
+  if (file.language !== 'markdown' && file.mode !== 'markdown-preview') {
+    return null
+  }
+  return file.mode === 'markdown-preview' && file.markdownPreviewSourceFileId
+    ? (openFilesById?.get(file.markdownPreviewSourceFileId) ?? file)
+    : file
+}
+
 export function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
-  // Combined diff tabs use display labels as paths and need the desktop renderer, as do chat visuals.
+  // A tab mirrored from a paired host is that host's; republishing it echoes it back to the host.
+  if (file.mirroredFromRuntimeSession === true) {
+    return false
+  }
+  // Virtual review/check views use display labels as paths, not readable files.
+  if (file.mode !== 'edit' && file.mode !== 'diff' && file.mode !== 'markdown-preview') {
+    return false
+  }
+  // Combined diff tabs use display labels as paths and need the desktop renderer.
   return !(
-    file.mode === 'chat-visual' ||
     file.diffSource === 'combined-all' ||
     file.diffSource === 'combined-uncommitted' ||
     file.diffSource === 'combined-branch' ||
@@ -88,12 +109,8 @@ export function isMobilePublishableOpenFile(file: AppState['openFiles'][number])
   )
 }
 
-/**
- * Why a workspace document is held back: it is served to one desktop guest through a grant no
- * mobile client holds, so there is nothing on the other side that could render it — and the wire
- * has no tab kind for it, so an old client would take it for an ordinary browser tab and offer
- * navigation for a page that has no URL. Host and phone parity ships behind capability negotiation.
- */
+// Hold workspace docs back: only desktop guest has their grant, and old wire clients misread unsupported tab kind as navigable browser URL.
+// Negotiate capability before adding host/phone parity.
 export function isMobilePublishableBrowserWorkspace(
   workspace: NonNullable<AppState['browserTabsByWorktree'][string]>[number]
 ): boolean {
@@ -108,5 +125,3 @@ export function isUnifiedTabActiveInActiveGroup(
     (group) => group.id === inputs.activeGroupId && group.activeTabId === unifiedTabId
   )
 }
-
-export { isClaudeManagementTitle, isTerminalLeafId, makePaneKey, nativeChatLaunchAgentForLeaf }

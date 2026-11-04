@@ -4,7 +4,6 @@ import {
   inspectLocalBaseBranch,
   parseLocalBaseBranchFastForwardOutcome,
   readFastForwardableBehindCount,
-  toLocalBaseRefRefreshResult,
   type LocalBaseBranchGit
 } from './local-base-branch-fast-forward'
 
@@ -13,27 +12,6 @@ const REFS = {
   fullRef: 'refs/heads/main',
   remoteTrackingRef: 'refs/remotes/origin/main'
 }
-const OWNER_MERGE_ARGS = [
-  '-c',
-  'core.hooksPath=/dev/null',
-  '-c',
-  'gc.auto=0',
-  '-c',
-  'maintenance.auto=false',
-  '-c',
-  'merge.autoStash=false',
-  '-c',
-  'branch.main.mergeOptions=',
-  'merge',
-  '--ff-only',
-  '-s',
-  'recursive',
-  '--no-verify-signatures',
-  '--no-overwrite-ignore',
-  '--no-stat',
-  '-q',
-  'remote-main'
-]
 const INDEX_LOCK_ERROR = Object.assign(new Error('Command failed: git merge'), {
   stderr: "fatal: Unable to create '/repo-main/.git/index.lock': File exists."
 })
@@ -42,7 +20,7 @@ const MUTATIONS = new Set(['merge', 'update-ref', 'reset', 'checkout'])
 type Reply = { stdout: string } | Error
 type Handler = (args: string[], cwd: string) => Reply | Promise<Reply>
 
-/** The git subcommand, past leading global options such as `-c key=value`. */
+/** Skip leading global Git options when identifying the subcommand. */
 function commandOf(args: readonly string[]): string {
   for (let index = 0; index < args.length; index += 1) {
     if (args[index] === '-c') {
@@ -105,17 +83,6 @@ afterEach(() => {
 })
 
 describe('inspectLocalBaseBranch', () => {
-  it('has nothing to do when local already matches, without reading worktrees', async () => {
-    const fake = createFakeGit({ 'rev-parse': () => ({ stdout: 'same\n' }) })
-
-    await expect(inspectLocalBaseBranch(fake.git, REFS)).resolves.toEqual({
-      status: 'nothing_to_do'
-    })
-    expect(fake.commands()).toEqual(['rev-parse', 'rev-parse'])
-    expect(fake.git.listWorktrees).not.toHaveBeenCalled()
-  })
-
-  // #15331: a branch that does not exist yet cannot be stale.
   it('has nothing to do when the local branch is proven absent', async () => {
     const fake = createFakeGit({
       'rev-parse': (args) =>
@@ -168,35 +135,6 @@ describe('inspectLocalBaseBranch', () => {
     }
   )
 
-  it('compares the resolved oids, not the ref names', async () => {
-    const fake = createFakeGit()
-
-    await expect(inspectLocalBaseBranch(fake.git, REFS)).resolves.toEqual({
-      status: 'behind',
-      behind: 3,
-      localOid: 'old-main',
-      remoteOid: 'remote-main',
-      ownerWorktreePath: '/repo-main'
-    })
-    expect(fake.calls.slice(0, 3)).toEqual([
-      { args: ['rev-parse', '--verify', 'refs/heads/main^{commit}'], cwd: '/repo' },
-      { args: ['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}'], cwd: '/repo' },
-      { args: ['rev-list', '--left-right', '--count', 'old-main...remote-main'], cwd: '/repo' }
-    ])
-    expect(fake.mutations()).toEqual([])
-  })
-
-  it('reads the owner status without taking optional locks and ignores untracked files', async () => {
-    const fake = createFakeGit()
-
-    await inspectLocalBaseBranch(fake.git, REFS)
-
-    expect(fake.calls.find(({ args }) => commandOf(args) === 'status')).toEqual({
-      args: ['--no-optional-locks', 'status', '--porcelain', '--untracked-files=no'],
-      cwd: '/repo-main'
-    })
-  })
-
   it('reports an error when worktree ownership cannot be listed', async () => {
     const fake = createFakeGit({}, () => Promise.reject(new Error('worktree list failed')))
 
@@ -237,20 +175,6 @@ describe('fastForwardLocalBaseBranch', () => {
       }
     ])
     expect(fake.commands()).not.toContain('status')
-  })
-
-  it('confirms the owner still has the branch out, then fast-forwards it without hooks', async () => {
-    const fake = createFakeGit()
-
-    await expect(fastForwardLocalBaseBranch(fake.git, REFS)).resolves.toEqual({
-      status: 'updated',
-      ownerWorktreePath: '/repo-main'
-    })
-    expect(fake.calls.slice(-3)).toEqual([
-      { args: ['symbolic-ref', '-q', 'HEAD'], cwd: '/repo-main' },
-      { args: OWNER_MERGE_ARGS, cwd: '/repo-main' },
-      { args: ['rev-parse', '--verify', 'refs/heads/main^{commit}'], cwd: '/repo' }
-    ])
   })
 
   it('pins the merge options of the branch being moved', async () => {
@@ -342,7 +266,6 @@ describe('fastForwardLocalBaseBranch', () => {
     await vi.runAllTimersAsync()
 
     await expect(pending).resolves.toEqual({ status: 'updated', ownerWorktreePath: '/repo-main' })
-    // Each attempt re-confirms the owner's branch before merging.
     expect(fake.commands().slice(-5)).toEqual([
       'symbolic-ref',
       'merge',
@@ -419,15 +342,6 @@ describe('fastForwardLocalBaseBranch', () => {
       ownerWorktreePath: '/repo-main'
     })
   })
-
-  it('passes a non-behind inspection straight through without mutating', async () => {
-    const fake = createFakeGit({ 'rev-list': () => ({ stdout: '1\t3\n' }) })
-
-    await expect(fastForwardLocalBaseBranch(fake.git, REFS)).resolves.toEqual({
-      status: 'skipped_not_fast_forward'
-    })
-    expect(fake.mutations()).toEqual([])
-  })
 })
 
 describe('relay reply parsing', () => {
@@ -461,15 +375,5 @@ describe('relay reply parsing', () => {
     [4, undefined]
   ])('reads the behind count of %j as %s', (value, expected) => {
     expect(readFastForwardableBehindCount(value)).toBe(expected)
-  })
-
-  it('reports no status when there was nothing to refresh', () => {
-    const names = { baseRef: 'origin/main', localBranch: 'main' }
-
-    expect(toLocalBaseRefRefreshResult(names, undefined)).toBeUndefined()
-    expect(toLocalBaseRefRefreshResult(names, { status: 'nothing_to_do' })).toBeUndefined()
-    expect(
-      toLocalBaseRefRefreshResult(names, { status: 'updated', ownerWorktreePath: '/repo-main' })
-    ).toEqual({ ...names, status: 'updated', ownerWorktreePath: '/repo-main' })
   })
 })

@@ -1,9 +1,6 @@
 import type { Editor } from '@tiptap/react'
 
-/**
- * Table Tab: move between cells; Tab past the last cell inserts a row.
- * Returns true when the key should be consumed (always inside a table).
- */
+/** Consume table Tab/Shift+Tab, appending a row after the last cell. */
 export function handleRichMarkdownTableTab(editor: Editor, shiftKey: boolean): boolean {
   if (!editor.isActive('table')) {
     return false
@@ -18,8 +15,7 @@ export function handleRichMarkdownTableTab(editor: Editor, shiftKey: boolean): b
     return true
   }
 
-  // Why: match TipTap Table shortcuts — last-cell Tab grows the table instead
-  // of letting focus escape the editor.
+  // Append rather than letting last-cell Tab escape the editor, matching Tiptap.
   if (editor.can().addRowAfter()) {
     editor.chain().addRowAfter().goToNextCell().run()
   }

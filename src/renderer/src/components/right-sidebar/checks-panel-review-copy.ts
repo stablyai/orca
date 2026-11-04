@@ -13,10 +13,7 @@ import {
 
 type KeyedCopy = { key: string; fallback: string }
 
-/**
- * Muted sentence appended beneath a blocker or accepted-no-review body when a
- * concurrent lookup failure or positive-unresolved evidence is also current.
- */
+/** Append current concurrent lookup failures or positive-unresolved evidence below blocker/no-review copy. */
 export function concurrentLookupDetail(input: ChecksPanelReviewStateInput): string | undefined {
   const { reviewLabel, providerName, refresh } = input
   if (input.reviewLookup === 'positive_unresolved') {
@@ -64,7 +61,6 @@ export function transientRefreshState(
     recovery: ['retry'] as ChecksPanelRecoveryAction[],
     ...schedule
   }
-  // Why: preserve the upstream GitHub-attributed 5xx copy in the unified state model.
   const githubUnavailableCopy =
     refresh?.errorType === 'server_error'
       ? getGitHubUnavailableEmptyStateCopy(refresh.errorType)
@@ -249,6 +245,18 @@ const SKIPPED_COPY: Partial<
     body: {
       key: 'auto.components.right.sidebar.checks.panel.review.skipped.not_git.body',
       fallback: 'Orca could not treat this folder as a Git repository for {{reviewLabel}} status.'
+    },
+    recovery: []
+  },
+  'host-off': {
+    title: {
+      key: 'auto.components.right.sidebar.checks.panel.review.skipped.host_off.title',
+      fallback: 'WSL host is off'
+    },
+    body: {
+      key: 'auto.components.right.sidebar.checks.panel.review.skipped.host_off.body',
+      fallback:
+        'Orca refreshes {{reviewLabel}} status through this project’s WSL host, which is off. Reconnect it to refresh.'
     },
     recovery: []
   },

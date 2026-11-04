@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createAgentStatusExtensionHarness } from '../../src/main/pi/agent-status-extension-test-harness'
-import { normalizeHookPayload } from '../../src/shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../src/shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../src/shared/agent-hook-listener/listener-state'
-import { getAgentResumeArgv } from '../../src/shared/agent-session-resume'
-import { buildAgentResumeStartupPlan } from '../../src/shared/tui-agent-resume-startup'
+import { getAgentResumeArgv } from '../../src/shared/agent-launch/startup/agent-resume-argv'
+import { buildAgentResumeStartupPlan } from '../../src/shared/agent-launch/startup/tui-agent-resume-startup'
 import { sleepingAgentSessionsByPaneKeySchema } from '../../src/shared/workspace-session-sleeping-agents'
 import { createTestStore, makeTab } from '../../src/renderer/src/store/slices/store-test-helpers'
 

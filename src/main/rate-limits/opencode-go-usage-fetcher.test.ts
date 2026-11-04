@@ -7,11 +7,14 @@ const resolveProxyMock = vi.hoisted(() => vi.fn())
 const setProxyMock = vi.hoisted(() => vi.fn())
 const fromPartitionMock = vi.hoisted(() => vi.fn())
 
-vi.mock('electron', () => ({
-  session: { fromPartition: fromPartitionMock }
-}))
-
+import { setMainHttpClient } from '../network/http-client'
 import { fetchOpenCodeGoRateLimits, normalizeCookieInput } from './opencode-go-usage-fetcher'
+
+setMainHttpClient({
+  fetch: (url, init) => globalThis.fetch(url, init),
+  proxySession: () => null,
+  partitionSession: fromPartitionMock
+})
 
 const WORKSPACES_SERVER_ID = 'def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f'
 const CONSOLE_STATUS_URL = 'https://opencode.ai/console/api/go/status'
@@ -98,6 +101,21 @@ describe('fetchOpenCodeGoRateLimits', () => {
       setProxy: setProxyMock,
       closeAllConnections: vi.fn().mockResolvedValue(undefined)
     })
+  })
+
+  it('reports a cookie fetch as desktop-only on a host without Chromium', async () => {
+    setMainHttpClient(null)
+    try {
+      const result = await fetchOpenCodeGoRateLimits('auth=token')
+      expect(result.status).toBe('error')
+      expect(result.error).toContain('not available on this server')
+    } finally {
+      setMainHttpClient({
+        fetch: (url, init) => globalThis.fetch(url, init),
+        proxySession: () => null,
+        partitionSession: fromPartitionMock
+      })
+    }
   })
 
   it('returns unavailable when cookie is empty', async () => {
@@ -758,6 +776,7 @@ describe('fetchOpenCodeGoRateLimits', () => {
 
     expect(result.status).toBe('error')
     expect(result.error).toBe('Usage fetch failed (404)')
+    expect(result.usageMetadata).toBeUndefined()
   })
 
   it('tells the user to include __Host-console_session when usage fetch returns 401', async () => {
@@ -792,5 +811,15 @@ describe('fetchOpenCodeGoRateLimits', () => {
     expect(result.status).toBe('error')
     expect(result.error).toBe('network timeout')
     expect(result.error).not.toContain('secret123')
+    expect(result.usageMetadata?.failureKind).toBe('network')
+  })
+
+  it('tags a usage request that throws as a network failure', async () => {
+    netFetchMock.mockRejectedValueOnce(new Error('net::ERR_PROXY_CONNECTION_FAILED'))
+
+    const result = await fetchOpenCodeGoRateLimits('auth=mytoken', 'wrk_OVERRIDE123')
+
+    expect(result.error).toBe('net::ERR_PROXY_CONNECTION_FAILED')
+    expect(result.usageMetadata?.failureKind).toBe('network')
   })
 })

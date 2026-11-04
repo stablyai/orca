@@ -20,7 +20,7 @@ describe('ripgrep match offsets', () => {
     expect(read(7)).toBeNull()
   })
 
-  it('handles many adjacent matches in one pass', () => {
+  it('converts 10000 adjacent astral match boundaries', () => {
     const read = createRipgrepOffsetReader('😀x'.repeat(10_000))
     for (let index = 0; index < 10_000; index++) {
       expect(read(index * 5)).toBe(index * 3)

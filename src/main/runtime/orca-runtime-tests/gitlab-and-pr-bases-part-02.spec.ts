@@ -1,3 +1,4 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -9,7 +10,6 @@ import {
   getGitLabWorkItemByProjectRefMock,
   getGlabKnownHostsMock,
   getPullRequestPushTargetMock,
-  gitRunner,
   setPlatform
 } from '../orca-runtime-test-mocks.spec'
 import {
@@ -106,7 +106,7 @@ describe('OrcaRuntimeService', () => {
       })
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
       }
@@ -161,14 +161,13 @@ describe('OrcaRuntimeService', () => {
           'origin',
           '+refs/heads/feature/add-feature:refs/remotes/origin/feature/add-feature'
         ],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
+        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
       )
       expect(gitSpy).toHaveBeenCalledWith(['rev-parse', '--verify', 'origin/feature/add-feature'], {
         cwd: TEST_REPO_PATH,
         wslDistro: 'Ubuntu'
       })
-      // Why: the explicit origin preference must short-circuit before any
-      // identity probe, so no remote — not just upstream — gets a get-url.
+      // Explicit origin preference must skip all remote-identity probes.
       expect(gitSpy).not.toHaveBeenCalledWith(
         ['remote', 'get-url', expect.anything()],
         expect.anything()
@@ -225,7 +224,7 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }
@@ -266,7 +265,7 @@ describe('OrcaRuntimeService', () => {
       )
       expect(gitSpy).toHaveBeenCalledWith(
         ['fetch', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-        { cwd: TEST_REPO_PATH }
+        { cwd: TEST_REPO_PATH, timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
       )
       expect(gitSpy).toHaveBeenCalledWith(
         ['rev-parse', '--verify', `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`],
@@ -296,9 +295,8 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    // Why: simulate a concurrent `git fetch origin` clobbering FETCH_HEAD with the
-    // default-branch tip. The resolved base must come from the durable Orca MR ref.
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    // Concurrent fetch overwrites FETCH_HEAD; durable Orca MR refs must retain compare-base authority.
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }
@@ -341,8 +339,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps the durable MR head when the head fetch fails but the local ref resolves', async () => {
-    // Why: mirror compare-base soft-keep — a transient fetch failure must not
-    // fail the resolve when a prior fetch already pinned refs/orca/merge-requests/<iid>.
+    // Transient compare-base fetch failures may reuse already-pinned MR refs.
     const localRepo = {
       id: TEST_REPO_ID,
       path: TEST_REPO_PATH,
@@ -361,7 +358,7 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }
@@ -408,8 +405,7 @@ describe('OrcaRuntimeService', () => {
       'stale relay'
     ]
   ])('fails hard instead of soft-keeping the durable MR head on: %s', async (message) => {
-    // Why: soft-keep on a non-transient failure would check out a dead or
-    // unauthorized tip (or mask the reconnect prompt) with a success UX.
+    // Non-transient failures cannot reuse dead/unauthorized tips or hide reconnect prompts.
     const localRepo = {
       id: TEST_REPO_ID,
       path: TEST_REPO_PATH,
@@ -428,7 +424,7 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }
@@ -457,7 +453,10 @@ describe('OrcaRuntimeService', () => {
       })
 
       expect(result).toEqual({
-        error: `Failed to fetch refs/merge-requests/42/head: ${message}`
+        error: `Failed to fetch refs/merge-requests/42/head: ${message}`,
+        errorCode: 'fetchFailed',
+        errorParams: { ref: 'refs/merge-requests/42/head' },
+        errorDetail: message
       })
       expect(gitSpy).not.toHaveBeenCalledWith(
         ['rev-parse', '--verify', `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`],
@@ -499,7 +498,7 @@ describe('OrcaRuntimeService', () => {
       })
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
       }

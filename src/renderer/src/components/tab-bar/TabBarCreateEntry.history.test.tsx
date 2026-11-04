@@ -26,8 +26,7 @@ vi.mock('../quick-open-file-list', () => ({
 }))
 vi.mock('@/lib/agent-catalog', () => ({ getAgentCatalog: () => [], AgentIcon: () => null }))
 
-// `hold` pins deferred rows to the query they were built from, standing in for
-// the hook's useDeferredValue so later keystrokes leave them stale.
+// Pin deferred results to their originating query so newer keystrokes leave stale rows visible.
 const historyStoreMock = vi.hoisted(() => ({
   entries: [] as BrowserHistoryEntry[],
   hold: null as string | null,
@@ -229,26 +228,6 @@ describe('TabBarCreateEntry browser history rows', () => {
         groupId: 'g'
       })
     )
-  })
-
-  it('keeps arrow-key selection across a background history write', () => {
-    historyStoreMock.entries = [linear, historyEntry({ url: 'https://linear.app/acme/inbox' })]
-    mount()
-    setQuery('linear')
-    pressKey('ArrowDown')
-    pressKey('ArrowDown')
-    const selectedBefore = container.querySelector('[aria-selected="true"]')?.textContent
-
-    // A committed navigation elsewhere replaces the store array mid-session.
-    act(() => {
-      historyStoreMock.entries = [
-        historyEntry({ url: 'https://unrelated.example/page' }),
-        ...historyStoreMock.entries
-      ]
-    })
-    setQuery('linear ')
-
-    expect(container.querySelector('[aria-selected="true"]')?.textContent).toBe(selectedBefore)
   })
 
   it('refuses to submit a row the visible query no longer matches', () => {

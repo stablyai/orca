@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
@@ -19,7 +20,7 @@ import {
   writePaneRegistry
 } from './runtime-home-service-test-harness'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+// Keep asserted config bytes independent of platform socket-path limits.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   applyCodexDaemonSocketGuard: (config: string) => config
@@ -30,9 +31,10 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -80,8 +82,8 @@ describe('CodexRuntimeHomeService', () => {
       })
     ).toBeNull()
     if (process.platform !== 'win32') {
-      // Why: shell startup CODEX_HOME discovery is a POSIX-shell lane; Windows
-      // must not invoke an ambient WSL bash while evaluating this contract.
+      // Avoid ambient WSL bash: shell-startup home discovery is a POSIX-host contract.
+
       writeFileSync(
         join(testState.fakeHomeDir, '.zshrc'),
         'export CODEX_HOME="$HOME/shell-custom-codex-home"\n',
@@ -98,8 +100,8 @@ describe('CodexRuntimeHomeService', () => {
     process.env.CODEX_HOME = getRuntimeCodexHomePath()
     process.env.ORCA_CODEX_HOME = getRuntimeCodexHomePath()
     try {
-      // Background fetchers prefer ambient CODEX_HOME when passed null, so an
-      // explicit path proves nested Orca launches cannot poll the managed home.
+      // Pin the path so nested Orca cannot poll an inherited managed CODEX_HOME.
+
       expect(service.prepareForRateLimitFetch()).toEqual({
         kind: 'ready',
         codexHomePath: getSystemCodexHomePath()
@@ -124,6 +126,69 @@ describe('CodexRuntimeHomeService', () => {
       } else {
         process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
       }
+    }
+  })
+
+  it('bridges managed-account history into the real home when launching system default', async () => {
+    const accountBridge = vi.fn(async () => {})
+    vi.doMock('../codex/codex-account-session-bridge', () => ({
+      startCodexAccountSessionBridgeInBackground: accountBridge
+    }))
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('user@example.com', 'acct-1', 'refresh-1')
+    )
+    const store = createStore(
+      createSettings({
+        realHomeRoutable: true,
+        codexManagedAccounts: [
+          createCodexAccountRecord('account-1', 'user@example.com', 'acct-1', managedHomePath)
+        ]
+      })
+    )
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+
+      expect(service.prepareForCodexLaunch()).toBeNull()
+      expect(accountBridge).toHaveBeenCalledWith({
+        targetCodexHomePath: getSystemCodexHomePath(),
+        sourceCodexHomePaths: [managedHomePath],
+        hardlinkOnly: true
+      })
+    } finally {
+      vi.doUnmock('../codex/codex-account-session-bridge')
+    }
+  })
+
+  it('leaves a history source inside a WSL distro to the WSL lane', async () => {
+    const accountBridge = vi.fn(async () => {})
+    vi.doMock('../codex/codex-account-session-bridge', () => ({
+      startCodexAccountSessionBridgeInBackground: accountBridge
+    }))
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('user@example.com', 'acct-1', 'refresh-1')
+    )
+    const store = createStore(
+      createSettings({
+        realHomeRoutable: true,
+        codexManagedAccounts: [
+          createCodexAccountRecord('account-1', 'user@example.com', 'acct-1', managedHomePath)
+        ],
+        codexSessionSourceHome: { host: '\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex' }
+      })
+    )
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+
+      expect(service.prepareForCodexLaunch()).toBeNull()
+      expect(accountBridge).not.toHaveBeenCalled()
+    } finally {
+      vi.doUnmock('../codex/codex-account-session-bridge')
     }
   })
 

@@ -4,26 +4,9 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
 import { collectLocalizationReferences } from './verify-localization-catalog.mjs'
+import { readLocalizationSurface } from './localization-surfaces.mjs'
 
-export const EN_CATALOG_RELATIVE_PATH = path.join(
-  'src',
-  'renderer',
-  'src',
-  'i18n',
-  'locales',
-  'en.json'
-)
-export const RUNTIME_REQUIRED_RELATIVE_PATH = path.join(
-  'src',
-  'renderer',
-  'src',
-  'i18n',
-  'en-runtime-required.json'
-)
-
-// CLDR categories i18next appends to a key when `count` is supplied. i18next
-// never derives a plural form from `defaultValue`, so a suffixed entry is only
-// ever served from the catalog.
+// i18next resolves CLDR plural suffixes only from catalog, never defaultValue.
 const PLURAL_SUFFIX_RE = /_(zero|one|two|few|many|other)$/
 
 function flattenCatalogEntries(value, prefix = '', entries = new Map()) {
@@ -40,19 +23,8 @@ function flattenCatalogEntries(value, prefix = '', entries = new Map()) {
   return entries
 }
 
-/**
- * English entries i18next cannot reproduce from the call site's `defaultValue`.
- *
- * `translate(key, fallback)` always passes a default, and for the default
- * locale i18next prefers the catalog entry and only then the default — so an
- * entry whose every call site already spells the identical string is dead
- * weight in the boot bundle. An entry is kept when any of these hold:
- *   - it carries a CLDR plural suffix (resolved from the catalog, never a default),
- *   - no call site with a literal default references it (dynamic key or
- *     dynamic default: the runtime default is unknown and the catalog wins today),
- *   - some call site's literal default differs from the catalog value (the
- *     catalog value is what ships today).
- */
+// Retain catalog entries when plural-suffixed, lacking literal defaults or differing from any call-site default.
+// Catalog wins over defaults; only entries identical at every literal-default call site are redundant in the boot bundle.
 export function collectRuntimeRequiredKeys(catalogEntries, references) {
   const literalFallbacksByKey = new Map()
   const dynamicFallbackKeys = new Set()
@@ -99,13 +71,8 @@ export function buildRuntimeRequiredCatalog(catalogEntries, requiredKeys) {
   return catalog
 }
 
-/**
- * Why not a byte-for-byte comparison: the shipped subset only has to be *safe*,
- * and safety is "every required entry is present, and nothing it ships
- * contradicts en.json". An entry that stopped being required is dead weight,
- * never a wrong string — so an unrelated PR adding an ordinary key never
- * invalidates every other open branch's copy of this file.
- */
+// Require all needed entries and agreement with en.json, not exact subset equality.
+// Formerly required extras only cost bytes; allowing them avoids unrelated key additions invalidating open branches.
 export function collectRuntimeRequiredCatalogProblems(catalogEntries, requiredKeys, shipped) {
   const missing = [...requiredKeys].filter((key) => !shipped.has(key)).sort()
   const contradicting = [...shipped.keys()]
@@ -129,18 +96,21 @@ function reportKeys(label, keys) {
 
 export async function main(root = process.cwd(), argv = process.argv.slice(2), sharedReferences) {
   const fix = argv.includes('--fix')
+  const surface = readLocalizationSurface(argv)
   const catalogEntries = flattenCatalogEntries(
-    JSON.parse(await fs.readFile(path.join(root, EN_CATALOG_RELATIVE_PATH), 'utf8'))
+    JSON.parse(await fs.readFile(path.join(root, surface.localesDir, 'en.json'), 'utf8'))
   )
-  const references = sharedReferences ?? (await collectLocalizationReferences(root))
+  const references =
+    sharedReferences ?? (await collectLocalizationReferences(root, surface.sourceRoots))
   const requiredKeys = collectRuntimeRequiredKeys(catalogEntries, references)
-  const outputPath = path.join(root, RUNTIME_REQUIRED_RELATIVE_PATH)
+  const outputPath = path.join(root, surface.runtimeRequiredPath)
+  const outputLabel = path.relative(root, outputPath).split(path.sep).join('/')
 
   if (fix) {
     const catalog = buildRuntimeRequiredCatalog(catalogEntries, requiredKeys)
     await fs.writeFile(outputPath, `${JSON.stringify(catalog, null, 2)}\n`, 'utf8')
     console.log(
-      `Wrote ${requiredKeys.size} of ${catalogEntries.size} English entries to en-runtime-required.json.`
+      `Wrote ${requiredKeys.size} of ${catalogEntries.size} English entries to ${outputLabel}.`
     )
     return 0
   }
@@ -153,7 +123,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2), s
   )
 
   if (missing.length > 0 || contradicting.length > 0) {
-    console.error('src/renderer/src/i18n/en-runtime-required.json no longer covers en.json.')
+    console.error(`${outputLabel} no longer covers en.json.`)
     console.error('')
     if (missing.length > 0) {
       reportKeys(
@@ -165,7 +135,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2), s
       reportKeys('Shipped entries whose text disagrees with en.json', contradicting)
     }
     console.error('')
-    console.error('Run `pnpm run sync:localization-runtime-catalog` to regenerate it.')
+    console.error(`Run \`${surface.syncRuntimeCatalogCommand}\` to regenerate it.`)
     return 1
   }
 
@@ -174,7 +144,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2), s
       ? `, ${superfluous.length} shipped entry/entries are no longer required (harmless; sync to drop them).`
       : '.'
   console.log(
-    `en-runtime-required.json covers en.json: ${requiredKeys.size} of ${catalogEntries.size} English entries must ship in the boot bundle${superfluousNote}`
+    `${outputLabel} covers en.json: ${requiredKeys.size} of ${catalogEntries.size} English entries must ship in the boot bundle${superfluousNote}`
   )
   return 0
 }

@@ -1,12 +1,9 @@
-/**
- * A tab a create just published becomes one paired client's selection: the shared snapshot the host
- * and unselected clients follow stays put, and no PTY work runs — unlike a tap, which may respawn.
- */
+/** Create selects only its caller; shared selection stays put and no tap-style PTY respawn runs. */
 import { expect, it, vi } from 'vitest'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const { store, TEST_WORKTREE_ID, HEADLESS_LEAF_ID } =
@@ -16,7 +13,7 @@ const { makePendingAgentTabActivationRuntime } =
 
 const WT = TEST_WORKTREE_ID
 
-function pairedRuntime() {
+function pairedRuntime(clientKind?: 'mobile' | 'runtime') {
   let next = 0
   const spawn = vi.fn(async () => ({ id: `pty-${++next}` }))
   const runtime = new OrcaRuntimeService(store)
@@ -27,9 +24,12 @@ function pairedRuntime() {
     getForegroundProcess: async () => null
   })
   const caller: RuntimeMobileSessionTabsResult[] = []
-  runtime.onMobileSessionTabsChanged((snapshot) => caller.push(snapshot), 'device-caller')
-  // A subscribed second device: selection that fans out to live clients would move it too.
-  runtime.onMobileSessionTabsChanged(() => {}, 'device-bystander')
+  runtime.onMobileSessionTabsChanged(
+    (snapshot) => caller.push(snapshot),
+    'device-caller',
+    clientKind
+  )
+  runtime.onMobileSessionTabsChanged(() => {}, 'device-bystander', clientKind)
   return { runtime, spawn, caller }
 }
 
@@ -108,7 +108,31 @@ it('never materializes a pane that is not ready, as a tap would', async () => {
 
   const selected = await runtime.listMobileSessionTabs(`id:${WT}`, 'device-caller')
   expect(selected.activeTabId).toBe(`host-tab::${HEADLESS_LEAF_ID}`)
-  // Why wait: a tap's respawn lands several awaits later, so an immediate check cannot see one.
+  // Respawn crosses several awaits; an immediate absence assertion would be premature.
   await new Promise((resolve) => setTimeout(resolve, 200))
   expect(spawn).not.toHaveBeenCalled()
+})
+
+it('phone create-selection, reopen and internal adoption reads retain navigation without sender work', async () => {
+  const { runtime, caller } = pairedRuntime('mobile')
+  const launched = await createPane(runtime)
+  await runtime.publishStructuredAgentSessionTab({
+    workspaceId: WT,
+    sessionId: 'phone-chat',
+    agent: 'codex',
+    activate: false
+  })
+  const before = runtime['agentProjections'].senders.workForTest()
+  expect(runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')).toBe(true)
+  expect(caller.at(-1)?.activeTabId).toBe(launched.id)
+  expect(runtime.reopenMobileSessionTabForClient(WT, 'phone-chat', 'device-caller')).toBe(true)
+  expect(caller.at(-1)?.activeTabId).toBe(launched.id)
+  expect(caller.at(-1)?.tabs).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: 'agent-session:phone-chat' })])
+  )
+  expect(runtime['getTerminalOrphanAdoptionSnapshot'](WT).tabs).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: launched.id })])
+  )
+  expect(runtime['agentProjections'].senders.workForTest()).toEqual(before)
+  expect(caller.every((snapshot) => snapshot.agentSenderAssociations === undefined)).toBe(true)
 })

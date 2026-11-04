@@ -4,6 +4,7 @@ import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { PaletteFilterModel } from './palette-filter-options'
 import {
   addPaletteFilterValues,
@@ -71,15 +72,14 @@ export default function PaletteFilterMenu({
   onRequestInputFocus: () => void
   portalContainer: HTMLElement | null
 }): React.JSX.Element | null {
+  const languageRevision = useUiLanguageRevision()
   const [open, setOpen] = useState(false)
-  // null = category root; non-null = drill into that field's options
   const [activeField, setActiveField] = useState<PaletteFilterField | null>(null)
   const [optionQuery, setOptionQuery] = useState('')
 
   const groups = useMemo<PaletteFilterGroup[]>(() => {
     const entries: PaletteFilterGroup[] = []
-    // Why: a single host (or single repository) is nothing to disambiguate between,
-    // so that axis stays hidden rather than offering a no-op checkbox.
+    // Hide single-choice axes; their checkboxes cannot disambiguate anything.
     if (model.hosts.length > 1) {
       entries.push({
         field: 'host',
@@ -98,9 +98,9 @@ export default function PaletteFilterMenu({
       })
     }
     return entries
-  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories, languageRevision])
 
-  // Stale field falls back to root if its group disappeared mid-session.
   const activeGroup =
     activeField == null ? null : (groups.find((group) => group.field === activeField) ?? null)
 
@@ -119,7 +119,6 @@ export default function PaletteFilterMenu({
         resetMenuState()
         return
       }
-      // Single axis: skip the category step and open straight into its options.
       if (groups.length === 1) {
         setActiveField(groups[0].field)
       }
@@ -132,8 +131,7 @@ export default function PaletteFilterMenu({
     setOptionQuery('')
   }, [])
 
-  // Why: stopPropagation so the palette's ancestor cmdk doesn't steal keys;
-  // Escape on the options layer steps back instead of closing when both axes exist.
+  // Keep keys from ancestor cmdk; Escape returns from options to categories when both axes exist.
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       event.stopPropagation()

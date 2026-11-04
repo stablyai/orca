@@ -1,14 +1,14 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Worktree } from '../../shared/worktree/types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
-import { isWorktreeMetaOwnedByRepo } from '../worktree-metadata-ownership'
+import { isWorktreeMetaOwnedByRepo } from '../workspaces/catalog/worktree-metadata-ownership'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { Repo } from '../../shared/repo-types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
 import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-lineage'
 
@@ -80,16 +80,29 @@ export function resolveCreatedWorktreeTerminalTarget(
       continue
     }
     const parsedRelated = splitWorktreeIdForFilesystem(id)
-    if (parsedRelated?.repoId !== target.repoId) {
+    if (!parsedRelated) {
       continue
     }
-    const relatedMeta = readOwnedMetadata(store, id, routing.repo, routing.hostId, repoOwnerCount)
+    const relatedRepos = repos.filter(
+      (repo) => repo.id === parsedRelated.repoId && getRepoExecutionHostId(repo) === routing.hostId
+    )
+    if (relatedRepos.length !== 1) {
+      continue
+    }
+    const relatedRepo = relatedRepos[0]
+    const relatedMeta = readOwnedMetadata(
+      store,
+      id,
+      relatedRepo,
+      routing.hostId,
+      repos.filter((repo) => repo.id === parsedRelated.repoId).length
+    )
     if (!relatedMeta) {
       continue
     }
     rows.push(
       mergeWorktree(
-        target.repoId,
+        relatedRepo.id,
         {
           path: parsedRelated.worktreePath,
           head: '',

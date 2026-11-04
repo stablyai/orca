@@ -29,7 +29,7 @@ vi.mock('../codex/hook-service', () => ({
 vi.mock('../codex/codex-hook-reconcile', () => ({
   reconcileCodexHooksForLaunch: mocks.reconcileCodexHooksForLaunch
 }))
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../shared/agent-hook-listener/configuration/agent-status-hooks-setting', () => ({
   isAgentStatusHooksEnabledForAgent: () => mocks.hooksEnabled
 }))
 vi.mock('../codex/codex-home-paths', async (importOriginal) => ({
@@ -56,7 +56,7 @@ vi.mock('./main-process-state', () => ({
 
 import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
 
-// Why: long enough that the daemon socket overflows sun_path on every host OS.
+// Exceed sun_path on every supported host OS.
 const LONG_SEGMENT = 'a'.repeat(60)
 
 describe('Codex session resume daemon socket guard', () => {

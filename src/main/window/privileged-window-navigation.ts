@@ -13,8 +13,7 @@ export function installPrivilegedWindowNavigationPolicy(contents: WebContents): 
   })
 
   contents.on('will-navigate', (event, url) => {
-    // Why: location.reload() is a renderer-initiated navigation, so blocking it here
-    // silently kills the lazy-chunk recovery reload with no unload-prevented signal.
+    // Allow own-document reloads or lazy-chunk recovery silently fails without an unload-prevented signal.
     if (isRendererDocumentNavigation(contents.getURL(), url)) {
       return
     }

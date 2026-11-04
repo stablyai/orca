@@ -1,10 +1,10 @@
-import type { WslResult } from '../wsl/wsl-runner'
+import type { WslResult } from '../wsl/execution/wsl-runner'
 import { posix as pathPosix } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { buildSkillDiscoverySources } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
@@ -85,8 +85,7 @@ describe('WSL Claude plugin skill discovery', () => {
     async (explicitWorkspace) => {
       const homeDir = '/home/alice'
       const cwd = explicitWorkspace ? '/work/orca' : homeDir
-      // Why: a Windows host's own Hermes location says nothing about the distro's,
-      // so neither variable may reach the posix scan script.
+      // Windows host Hermes paths must not leak into distro discovery.
       vi.stubEnv('HERMES_HOME', 'C:\\Users\\alice\\hermes')
       vi.stubEnv('LOCALAPPDATA', 'C:\\Users\\alice\\AppData\\Local')
       const pluginId = 'compound-engineering@compound-engineering-plugin'

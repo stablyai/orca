@@ -25,11 +25,7 @@ import type {
   RpcOperation
 } from './rpc-operation-contract'
 
-// Why this file exists: the descriptor's whole point is that a call site cannot pick the
-// acceptance policy, the interpretation barrier, or the send-side params for itself. Every
-// expect-error directive below is that claim as an assertion — tsc fails on a directive that
-// stops catching an error, so `pnpm --dir mobile typecheck` is the gate. Nothing here runs and
-// no app code imports it.
+// Compile-only fences pin descriptor policy, barrier and sender params; mobile typecheck must consume every expect-error.
 
 declare const client: RpcClient
 
@@ -61,8 +57,6 @@ export const fenceDecodingWithoutReader: RequireResultRpcDefinition<
 // @ts-expect-error only the named policies in rpc-acceptance-policies.ts are allowed
 export const fenceInventedPolicy: RpcAcceptanceName = 'no-error-means-fine'
 
-// A reader for a payload no acceptance policy here admits, i.e. one belonging to some other
-// family's shape.
 const fenceTextReader: RpcCompatibleReader<string, 'text', string> = (raw) => ({
   compatible: true,
   variant: 'text',
@@ -96,12 +90,9 @@ export const fenceDefineRejectsMismatch = defineRpcOperation({
 // @ts-expect-error only generated catalog method names are addressable
 export const fenceUnknownMethod: RpcMethodName = 'worktree.nope'
 
-// The send-side params type. z.output (what the handler receives) and z.input (what the
-// coercing builders admit) are both wrong for a sender in opposite directions, so these pin
-// the two failures a regression to either one would reintroduce.
+// Pin outgoing params separately from parsed z.output and coercing z.input.
 
-// `query` and `limit` carry .default(), so a sender may leave them out. Under z.output both
-// read as required and this line stops compiling.
+// Defaulted fields must stay optional for senders.
 export const fenceOmitsDefaultedField: RpcSendParams<'files.searchPaths'> = { worktree: 'w' }
 
 export const fenceRejectsWrongFieldType: RpcSendParams<'files.searchPaths'> = {
@@ -112,15 +103,13 @@ export const fenceRejectsWrongFieldType: RpcSendParams<'files.searchPaths'> = {
 // @ts-expect-error `worktree` has neither a default nor an optional marker
 export const fenceKeepsRequiredField: RpcSendParams<'files.searchPaths'> = { query: 'x' }
 
-// Catalog-wide: anything a handler could have been handed is something a sender may write.
-// A method that ever resolves tighter than its parsed shape lands in this union.
+// Every handler-parsed shape must remain sendable across the catalog.
 declare const fenceTighterThanParsed: {
   [Method in RpcMethodName]: RpcParams<Method> extends RpcSendParams<Method> ? never : Method
 }[RpcMethodName] & {}
 export const fenceNoTighterMethod: never = fenceTighterThanParsed
 
-// z.input collapses every coercing builder to `unknown`. Only plugins.panelAction may be
-// unknown, because its schema is literally z.unknown().
+// Only plugins.panelAction’s literal z.unknown() may admit wholly unknown params.
 declare const fenceUnknownParams: {
   [Method in RpcMethodName]: unknown extends RpcSendParams<Method> ? Method : never
 }[RpcMethodName] & {}
@@ -147,9 +136,7 @@ export async function fenceBarrierAndParams(): Promise<void> {
   )
 }
 
-// A method the catalog declares params-less keeps every shape a shipped sender may use. An
-// explicit `null` is the one that matters: `params: null` is not the frame that omits the key,
-// so narrowing this to omission would rewrite bytes main already puts on the wire.
+// Keep explicit null for params-less methods: params: null and an omitted key are different wire frames.
 export async function fenceParamlessSend(): Promise<void> {
   await runRpcOperation(client, pushTestWithoutParams, null)
   await runRpcOperation(client, pushTestWithoutParams, undefined)

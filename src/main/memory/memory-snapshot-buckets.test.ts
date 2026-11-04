@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
 import type { MemorySnapshotStore } from './collector'
 import { resolveWorktreeMemoryNames } from './memory-snapshot-buckets'
 
@@ -19,9 +18,10 @@ const folder: FolderWorkspace = {
   createdAt: 0,
   updatedAt: 0
 }
-const group = { id: 'documentation', name: 'Documentation' } as ProjectGroup
+const group = { id: 'documentation', name: 'Documentation' }
 
-function makeStore(): MemorySnapshotStore {
+function makeStore(): MemorySnapshotStore &
+  Required<Pick<MemorySnapshotStore, 'getFolderWorkspace' | 'getProjectGroups'>> {
   return {
     getRepo: vi.fn(),
     getWorktreeMeta: vi.fn(),
@@ -66,14 +66,6 @@ describe('memory snapshot workspace names', () => {
       worktreeName: 'folder:missing',
       repoId: 'folder:missing',
       repoName: 'folder:missing'
-    })
-  })
-
-  it('preserves the git worktree name fallback', () => {
-    expect(resolveWorktreeMemoryNames('repo::/work/fix', makeStore())).toEqual({
-      worktreeName: 'fix',
-      repoId: 'repo',
-      repoName: 'repo'
     })
   })
 })

@@ -7,6 +7,18 @@ import {
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 import type { PtyTransport } from './pty-transport-types'
 
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
 
@@ -70,11 +82,7 @@ function managedServer(pairingRevision: number, hostKey: string) {
   }
 }
 
-/**
- * Main's environment record, mirrored into the real catalog store. A managed-server update
- * restarts the server and re-pairs it under the same environment id, so main refuses every request
- * that still carries the old revision — before it reaches the host, whose terminals are untouched.
- */
+/** Update re-pair keeps environment ID and live terminals, but main refuses stale revisions before host dispatch; mirror the new revision into the real catalog. */
 async function installRepairableMain(): Promise<{
   repair: (hostKey?: string) => void
   publishCatalog: () => void
@@ -144,11 +152,12 @@ async function createCatalogStore() {
   vi.doMock('sonner', () => ({
     toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn(), dismiss: vi.fn() }
   }))
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createRuntimeStatusTestStore } =
+    await import('@/store/slices/runtime-status.test-fixture')
   const { resetDeferredPeerChecksForTests } =
     await import('@/store/slices/runtime-environment-peer-replacement')
   resetDeferredPeerChecksForTests()
-  return createTestStore()
+  return createRuntimeStatusTestStore()
 }
 
 async function restartServerUnderLivePane(tabId: string): Promise<{

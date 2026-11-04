@@ -8,6 +8,7 @@ import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
+import type { AppState } from '../../store/types'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import {
   encodeWorkspaceFilePaths,
@@ -30,7 +31,7 @@ vi.mock('@/i18n/i18n', () => ({
     )
 }))
 vi.mock('@/store', () => ({
-  useAppStore: {
+  useAppStore: Object.assign((selector: (state: Partial<AppState>) => unknown) => selector({}), {
     getState: () => ({
       settings: { activeRuntimeEnvironmentId: null },
       repos: [{ id: 'repo1', connectionId: null, executionHostId: 'local' }],
@@ -39,11 +40,11 @@ vi.mock('@/store', () => ({
       folderWorkspaces: [],
       sshConnectionStates: new Map()
     })
-  }
+  })
 }))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
 vi.mock('./TerminalPaneResumeInChatButton', () => ({
-  TerminalPaneResumeInChatButton: () => <button type="button">Resume in New Native Chat</button>
+  TerminalPaneResumeInChatButton: () => <button type="button">Continue in Chat UI</button>
 }))
 
 const mounted: { container: HTMLDivElement; root: Root }[] = []
@@ -191,17 +192,18 @@ afterEach(() => {
 })
 
 describe('TerminalPaneHeaderOverlay', () => {
-  it('offers Resume in New Native Chat instead of a chat view switch, on the active pane only', () => {
+  it('offers Continue in Chat UI instead of a chat view switch, on the active pane only', () => {
     const { container } = renderOverlay({ paneTitles: {}, canResumeInNewNativeChat: true })
 
     const resumeButtons = [...container.querySelectorAll('button')].filter(
-      (button) => button.textContent === 'Resume in New Native Chat'
+      (button) => button.textContent === 'Continue in Chat UI'
     )
     expect(resumeButtons).toHaveLength(1)
     expect(resumeButtons[0]?.closest('.pane-title-bar')?.hasAttribute('data-active-pane')).toBe(
       true
     )
     expect(container.querySelector('button[aria-label="Show chat view"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Chat settings"]')).toBeNull()
   })
 
   it('keeps Show terminal as the way back from chat view', () => {
@@ -212,7 +214,13 @@ describe('TerminalPaneHeaderOverlay', () => {
     })
 
     expect(container.querySelector('button[aria-label="Show terminal"]')).not.toBeNull()
-    expect(container.textContent).not.toContain('Resume in New Native Chat')
+    expect(container.querySelectorAll('button[aria-label="Chat settings"]')).toHaveLength(1)
+    expect(
+      container.querySelector(
+        '.pane-title-bar[data-active-pane] button[aria-label="Chat settings"]'
+      )
+    ).not.toBeNull()
+    expect(container.textContent).not.toContain('Continue in Chat UI')
   })
 
   it('keeps the titled split-pane X as remove-title only', () => {

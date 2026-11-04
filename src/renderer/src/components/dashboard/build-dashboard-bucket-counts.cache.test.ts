@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -10,8 +10,7 @@ import {
 } from './build-dashboard-bucket-counts'
 
 const NOW = 1_000_000_000
-// Freshness decay boundaries are exercised via generation bumps; the exact stale
-// window belongs to the shared agent-status constants.
+// Exercise freshness invalidation with generation bumps; the exact window belongs to shared status constants.
 const AGENT_STALE_STEP = 60_000
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
