@@ -52,6 +52,12 @@ export function useDetailCardScope({
         outside()
       }
     }
+    // Terminal touches preventDefault on touchstart to keep the soft keyboard open, suppressing synthesized click.
+    const touch = (event: TouchEvent) => {
+      if (event.defaultPrevented && !inside(event.target) && !headerBack(event.target)) {
+        outside()
+      }
+    }
     let backwards = false
     const key = (event: KeyboardEvent) => {
       if (event.key === 'Tab') {
@@ -121,6 +127,7 @@ export function useDetailCardScope({
     }
     const capture = { capture: true, signal: listeners.signal }
     document.addEventListener('click', click, capture)
+    document.addEventListener('touchstart', touch, { passive: true, signal: listeners.signal })
     document.addEventListener('keydown', key, capture)
     document.addEventListener('keyup', key, capture)
     document.addEventListener('keydown', isolate, { signal: listeners.signal })
