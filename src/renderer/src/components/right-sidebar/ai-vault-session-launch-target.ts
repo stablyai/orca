@@ -1,12 +1,12 @@
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
-import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault-resume-target'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import {
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import { translate } from '@/i18n/i18n'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   isKnownAiVaultResumeWorkspaceTarget,

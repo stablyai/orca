@@ -1,4 +1,4 @@
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TerminalModes } from './types'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 

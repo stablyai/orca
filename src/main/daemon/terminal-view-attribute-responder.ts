@@ -7,7 +7,7 @@ import {
   TERMINAL_VIEW_ANSI_COLOR_COUNT,
   type TerminalViewAttributes,
   type TerminalViewRgb
-} from '../../shared/terminal-view-attributes'
+} from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import { installProgramStatusQueryResponder } from '../../shared/program-status/query-responder'
 
 type ViewAttributeParser = Pick<Terminal['parser'], 'registerOscHandler' | 'registerCsiHandler'>

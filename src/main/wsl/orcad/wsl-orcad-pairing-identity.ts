@@ -1,6 +1,6 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
-import { parsePairingCode } from '../../../shared/pairing'
-import type { PairingOffer } from '../../../shared/mobile-relay-pairing-offer'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import {
   orcadIdentityRefusal,
@@ -8,7 +8,7 @@ import {
   type OrcadTunnelIdentity
 } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
-import { getPreferredPairingOffer } from '../../../shared/runtime-environments'
+import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   buildWithPairingRepair,
   type ManagedOrcadPairingRecovery

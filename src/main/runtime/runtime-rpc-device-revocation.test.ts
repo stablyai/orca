@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
-import { encodeDeviceProofMessage } from '../../shared/device-key-proof'
+import { encodeDeviceProofMessage } from '../../shared/remote-runtime/pairing/device-key-proof'
 import { SimulatedMobileE2EEV2Peer } from './mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
 import { OrcaRuntimeService } from './orca-runtime'
 import { DeviceRegistry } from './device-registry'
@@ -16,10 +16,11 @@ import {
   TerminalStreamOpcode,
   encodeTerminalStreamFrame,
   encodeTerminalStreamText
-} from '../../shared/terminal-stream-protocol'
+} from '../../shared/terminal/stream/terminal-stream-protocol'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../shared/pairing'
-import { generateKeyPair } from '../../shared/e2ee-crypto'
+import { encodePairingOffer, parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { generateKeyPair } from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { waitFor } from './runtime-rpc-test-harness'
 import {
   connectWs,

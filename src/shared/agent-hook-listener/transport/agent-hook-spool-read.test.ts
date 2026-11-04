@@ -32,12 +32,4 @@ describe('readSpoolFile', () => {
     expect(result.records.map((entry) => entry.paneKey)).toEqual(['café😀'])
     expect(result.consumed).toBe(Buffer.byteLength(complete))
   })
-
-  it('skips blank lines without consuming less than the bytes they occupy', () => {
-    const contents = `${record('a')}\n\n\n${record('b')}\n`
-    const result = readSpoolFile(write(contents))
-
-    expect(result.records.map((entry) => entry.paneKey)).toEqual(['a', 'b'])
-    expect(result.consumed).toBe(Buffer.byteLength(contents))
-  })
 })

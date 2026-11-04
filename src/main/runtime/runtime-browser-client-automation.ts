@@ -1,4 +1,4 @@
-import { BrowserClientAutomationMethod } from '../../shared/browser-client-automation-protocol'
+import { BrowserClientAutomationMethod } from '../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { browserExpectedUrlMismatchError } from '../browser/cdp/input/browser-expected-page-url'
 import type { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'

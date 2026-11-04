@@ -3,7 +3,7 @@ import {
   hasFullAgentSessionContext
 } from '@/lib/agent-session-continuation'
 import { describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   canContinueAiVaultSessionInNewSession,
   prepareAiVaultSessionContinuation

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceWorktree
-} from '../../../shared/workspace-space-types'
+} from '../../../shared/workspace-disk-space/workspace-space-types'
 
 const { snapshotWriteSpy, userDataDirHolder } = vi.hoisted(() => ({
   snapshotWriteSpy: vi.fn(),

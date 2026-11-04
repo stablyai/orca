@@ -10,7 +10,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../src/shared/terminal-stream-protocol'
+} from '../../src/shared/terminal/stream/terminal-stream-protocol'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'
 // Use host-owned snapshot-backed daemon PTYs, matching the remotely viewed local pane.

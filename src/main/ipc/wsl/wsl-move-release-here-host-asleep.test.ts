@@ -23,7 +23,7 @@ const journal = vi.hoisted(() => ({
 }))
 const window = vi.hoisted(() => ({ reloads: 0 }))
 
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   listEnvironments: () => [{ id: 'wsl:Ubuntu' }]
 }))
 vi.mock('../../wsl/host-lifecycle/wsl-host-kept-for-peers', () => ({

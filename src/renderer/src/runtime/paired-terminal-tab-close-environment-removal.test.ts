@@ -1,9 +1,9 @@
 // Removed servers can never receive held closes; discard them immediately, including removals while app was closed, rather than waiting 30 days.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import '../../../shared/paired-terminal-tab-close-intent'
 import type { PairedTerminalTabCloseIntent } from '../../../shared/paired-terminal-tab-close-intent'
+
 import { useAppStore, type AppState } from '@/store'
 import { resetDeferredPeerChecksForTests } from '@/store/slices/runtime-environment-peer-replacement'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'

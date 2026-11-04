@@ -3,7 +3,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
+import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 
 // Why: the status is cast, not decoded, off the runtime RPC wire, so a newer host really can put a

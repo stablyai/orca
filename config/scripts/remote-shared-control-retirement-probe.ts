@@ -1,10 +1,10 @@
 import { getDefaultUserDataPath } from '../../src/cli/runtime/metadata'
-import type { PairingOffer } from '../../src/shared/mobile-relay-pairing-offer'
+import type { PairingOffer } from '../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { RemoteRuntimeSharedControlConnection } from '../../src/shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import {
   resolveEnvironment,
   resolveEnvironmentPairingOffer
-} from '../../src/shared/runtime-environment-store'
+} from '../../src/shared/remote-runtime/host-store/runtime-environment-store'
 import type { MemorySnapshot } from '../../src/shared/process-stats-types'
 import type { RuntimeStatus } from '../../src/shared/runtime-types'
 

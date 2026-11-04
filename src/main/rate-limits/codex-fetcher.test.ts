@@ -53,11 +53,11 @@ vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
 
-vi.mock('../codex/codex-state-db', () => ({
+vi.mock('../codex/history/index/codex-state-db', () => ({
   isCodexStateDbBackfillPending: isBackfillPendingMock
 }))
 
-vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: startBackfillRecoveryMock,
   hasCodexStateDbBackfillRecoveryGivenUp: backfillGaveUpMock
 }))

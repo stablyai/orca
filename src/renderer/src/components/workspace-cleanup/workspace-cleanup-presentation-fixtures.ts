@@ -6,7 +6,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   applyWorkspaceCleanupPolicy,
   type WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupFilters } from './workspace-cleanup-presentation'
 
 export const NOW = 1_700_000_000_000

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, webFrameMain } from 'electron'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
 import {
   BrowserExtensionApiError,

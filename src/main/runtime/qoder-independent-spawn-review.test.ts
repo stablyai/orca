@@ -4,7 +4,7 @@ import filesystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
-import { buildAiVaultResumeShellCommand } from '../../shared/ai-vault-resume-command'
+import { buildAiVaultResumeShellCommand } from '../../shared/ai-vault/resume/ai-vault-resume-command'
 
 await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')

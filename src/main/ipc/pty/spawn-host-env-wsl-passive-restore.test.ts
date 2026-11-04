@@ -27,7 +27,7 @@ vi.mock('../../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWslDistrosAsync: async () => []
 }))
-vi.mock('../../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () => ({
   ensureCodexStateDbBackfillRecoveryStarted: mocks.ensureBackfill
 }))
 vi.mock('../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({

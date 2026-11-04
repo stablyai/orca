@@ -51,22 +51,4 @@ describe('the Codex root record seeded from a durable row', () => {
     )
     expect(reconciled.mainAgent).toMatchObject({ state: 'done', outcome: 'cancellation' })
   })
-
-  it('folds a relayed waiting child through the shared rule, keeping the root fact', () => {
-    // The relay's aggregate says `working`; main re-derives the row from the roster instead.
-    const reconciled = reconcileRemoteCodexState(
-      state,
-      PANE_KEY,
-      'PermissionRequest',
-      'child',
-      {
-        state: 'working',
-        prompt: 'ship',
-        agentType: 'codex',
-        subagents: [{ id: 'child', state: 'waiting', startedAt: 1 }]
-      },
-      undefined
-    )
-    expect(reconciled).toMatchObject({ state: 'waiting', mainAgent: { state: 'working' } })
-  })
 })

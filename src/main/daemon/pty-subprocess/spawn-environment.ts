@@ -20,7 +20,7 @@ import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/termin
 import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
-} from '../../../shared/terminal-image-protocol'
+} from '../../../shared/terminal/images/terminal-image-protocol'
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables

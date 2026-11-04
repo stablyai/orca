@@ -7,7 +7,8 @@ import type {
   RelayRevokeOutbox
 } from '../mobile-cloud-relay/relay-revoke-outbox'
 import type { PushUnregisterOutbox } from '../push/push-unregister-outbox'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
 import { resolveAdvertisedPairingEndpoint } from '../pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'

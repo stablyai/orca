@@ -7,7 +7,7 @@ import type { GitStatusResult } from '../../../shared/git/status/git-status-type
 import type { Repo } from '../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import type { WorkspaceCleanupScanProgress } from '../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanProgress } from '../../../shared/workspace-cleanup/workspace-cleanup'
 
 const {
   lstatMock,

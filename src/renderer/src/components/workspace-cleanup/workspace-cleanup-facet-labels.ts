@@ -10,7 +10,7 @@ import type {
   WorkspaceCleanupSortField,
   WorkspaceCleanupTicketSource,
   WorkspaceCleanupTriState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 export function getWorkspaceCleanupSortFieldLabel(field: WorkspaceCleanupSortField): string {
   switch (field) {

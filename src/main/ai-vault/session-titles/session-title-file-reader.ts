@@ -4,7 +4,7 @@ import {
   type AiVaultSessionTitle,
   type AiVaultSessionTitleRequest,
   type AiVaultSessionTitlesResult
-} from '../../../shared/ai-vault-session-title'
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 
 const TITLE_PARSE_CONCURRENCY = 4

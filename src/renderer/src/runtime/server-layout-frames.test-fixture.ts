@@ -1,7 +1,7 @@
 // A paired server for the server layout frame tests: its session.tabs snapshots, its layout in the
 // server's own ids, its status entry, and the layout streams the desktop opens to it.
 
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeMobileSessionTabsResult, RuntimeStatus } from '../../../shared/runtime-types'
 import {
   LAYOUT_INTENTS_RUNTIME_CAPABILITY,
@@ -15,7 +15,7 @@ import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layou
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { AppState } from '@/store/types'
 import type { RuntimeLayoutStreamStatus } from './runtime-layout-client'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { publicRuntimeEnvironment } from './paired-runtime-environment-test-fixture'
 import { createTestStore } from '../store/slices/store-test-helpers'
 import { installServerLayoutFrames } from './server-layout-frames'

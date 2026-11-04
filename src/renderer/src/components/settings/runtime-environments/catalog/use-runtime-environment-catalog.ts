@@ -16,7 +16,7 @@ import { useAppStore } from '@/store/index'
 import {
   isListedRemoteServer,
   type PublicKnownRuntimeEnvironment
-} from '../../../../../../shared/runtime-environments'
+} from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import { evaluateHostDetails, type RuntimeHostDetails } from './runtime-environment-host-details'
 

@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline'
 import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/harness-injected-user-turns'
 import type { FileWithMtime, ResumableSessionParseState } from '../../session-scanner-types'

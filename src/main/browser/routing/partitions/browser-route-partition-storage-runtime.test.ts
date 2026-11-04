@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-test-user-data' } }))
-vi.mock('../../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   listEnvironments: () => mocks.environments
 }))
 vi.mock('./browser-route-partition-binding-runtime', () => ({

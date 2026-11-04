@@ -13,14 +13,18 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { MessageBox } from '../components/composer-input/MessageBox'
 import { TextField } from '../components/composer-input/TextField'
+import { getQuickCommandAgentLabel } from '../terminal/quick-commands'
+import { getTerminalQuickCommandBodySize } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import {
-  getQuickCommandAgentLabel,
-  getTerminalQuickCommandBodySize,
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
-} from '../terminal/quick-commands'
-import type { QuickCommandDraft } from './quick-command-draft'
-import { isQuickCommandDraftPromptTooLong, isQuickCommandDraftValid } from './quick-command-draft'
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-commands'
+
+import {
+  type QuickCommandDraft,
+  isQuickCommandDraftPromptTooLong,
+  isQuickCommandDraftValid
+} from './quick-command-draft'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'

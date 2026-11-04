@@ -9,7 +9,7 @@ import {
   type AgentPhase,
   type AgentTransition
 } from '../../shared/agent-status/lifecycle/agent-transitions'
-import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

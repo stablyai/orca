@@ -10,7 +10,7 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
 
 export type AiVaultHostScopeOption = {

@@ -1,7 +1,7 @@
 import type {
   BrowserClientHostCommandEvent,
   BrowserClientHostLeaseAuthority
-} from '../../../../shared/browser-client-host-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserHostCommandLedger } from '../../../runtime/browser-host/browser-host-command-ledger'
 import { BrowserClientHostCommandDispatcher } from '../commands/browser-client-host-command-dispatcher'

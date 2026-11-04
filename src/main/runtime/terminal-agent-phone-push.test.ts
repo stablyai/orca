@@ -149,11 +149,17 @@ describe('TerminalAgentPhonePush', () => {
     ])
   })
 
-  it('pushes a finish with no live work seen at once, as the window does', () => {
-    const { sent, finish } = harness()
-    finish()
-    expect(sent).toHaveLength(1)
-  })
+  it.each([null, 'host-a'])(
+    'pushes windowless news with its execution owner: %s',
+    (connectionId) => {
+      const { sent, finish } = harness()
+      finish({ connectionId })
+      expect(sent).toHaveLength(1)
+      expect(sent[0]?.workspaceExecutionHostId ?? 'local').toBe(
+        connectionId ? `ssh:${connectionId}` : 'local'
+      )
+    }
+  )
 
   it('waits out the quiet window for a Pi agent even with no live work seen', () => {
     const { sent, advance, finish } = harness()

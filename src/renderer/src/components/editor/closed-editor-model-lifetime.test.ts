@@ -12,7 +12,7 @@ import {
 import {
   getDiffViewerMonacoModelPaths,
   rememberDiffViewerModelPaths
-} from './diff-monaco-model-disposal'
+} from './diff/monaco-view/diff-monaco-model-disposal'
 import {
   scrollTopCache,
   editorSelectionCache,
@@ -27,7 +27,7 @@ import {
   checkReadingLogKey,
   checkReadingOuterKey,
   checkReadingStepsKey
-} from './check-details-reading-cache'
+} from './check-details/reading/check-details-reading-cache'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn(), success: vi.fn() } }))
 afterEach(resetModelLifetimeFixtures)

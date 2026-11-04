@@ -11,7 +11,7 @@ import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-s
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
-import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/runtime-host-status'
+import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import * as presentation from '@/lib/program-status/agent-row-presentation'
 import * as cache from '@/components/dashboard/worktree-agent-rows-cache'
 import * as selectors from '@/components/sidebar/worktree-agent-row-selectors'

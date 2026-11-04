@@ -3,7 +3,7 @@ import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment,
   type RuntimeSshTunnelLink
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { PortForwardEntry, SshTarget } from '../../../shared/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { adoptSshConnection } from '../../ssh/connection/ssh-connection-attribution'

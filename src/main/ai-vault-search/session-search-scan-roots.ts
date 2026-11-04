@@ -1,4 +1,4 @@
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { AI_VAULT_AGENT_SOURCES } from '../ai-vault/session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from '../ai-vault/session-scanner-roots'
 import { sessionCandidatesFromDiscoveries } from '../ai-vault/session-scanner-candidates'

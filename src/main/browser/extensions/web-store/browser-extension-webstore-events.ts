@@ -1,9 +1,9 @@
 import { webContents } from 'electron'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   BROWSER_EXTENSION_WEB_STORE_EVENT_CHANNEL,
   isChromeWebStoreUrl
-} from '../../../../shared/browser-extension-webstore'
+} from '../../../../shared/browser/extensions/browser-extension-webstore'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
 import { browserSessionRegistry } from '../../sessions/browser-session-registry'
 

@@ -6,7 +6,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_GRAPHIC_RENDITION,
   RELEASE_SYNCHRONIZED_OUTPUT
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { Terminal } from '@xterm/headless'
 import { flushAsyncTicks, createDeferred, writeHeadlessTerminal } from './pty-connection-test-async'

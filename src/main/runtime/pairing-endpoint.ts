@@ -1,5 +1,5 @@
 import { isIP } from 'node:net'
-import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../../shared/mobile-pairing-protocol-limits'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../../shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 import { isPairingWildcardHostname, normalizePairingUrl } from '../../shared/network/pairing-url'
 
 export const INVALID_PAIRING_ENDPOINT_GUIDANCE =

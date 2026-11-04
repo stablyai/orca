@@ -2,7 +2,7 @@ import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { isAiVaultScanCancelledError } from '../../../shared/ai-vault-types'
+import { isAiVaultScanCancelledError } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   getSessionParseCacheEntry,
   resetSessionParseCacheForTests

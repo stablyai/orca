@@ -1,6 +1,6 @@
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   promptsMatchSession,
   resolveOriginalPaneTarget,

@@ -2,7 +2,7 @@ import type { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
 import {
   extractOnlyTerminalQueryReplies,
   needsCookedEchoSafeQueryReply
-} from './terminal-query-reply'
+} from './terminal/protocol/queries/terminal-query-reply'
 
 /** Return true only after writing the whole payload. Cooked-echo-risk-only replies arm echo protection and bypass startup gating.
  * Keep CPR/DA/mixed payloads on the host’s ordered path so replies cannot splice into buffered startup commands; accepted writes retain caller order. */
