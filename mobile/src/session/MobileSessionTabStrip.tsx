@@ -15,7 +15,6 @@ import {
   latchInitialActiveTabUnread,
   resolveMobileSessionTabDotState,
   resolveMobileTerminalTabAgentId,
-  restoreLatchedUnreadTabKeys,
   seedUnreadWorktreeSessionTabs,
   subscribeCatalogWorktreesForTabStatus
 } from './mobile-terminal-tab-agent'
@@ -98,8 +97,8 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     latchedUnreadTabId: null
   })
   if (visitUnreadRef.current.worktreeId !== controller.worktreeId) {
-    if (!visitUnreadRef.current.userSwitchedTab && visitUnreadRef.current.latchedUnreadTabId) {
-      restoreLatchedUnreadTabKeys()
+    if (visitUnreadRef.current.latchedUnreadTabId) {
+      clearLatchedUnreadTabKeys()
     }
     visitUnreadRef.current = {
       worktreeId: controller.worktreeId,
@@ -110,8 +109,8 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
   }
   useEffect(
     () => () => {
-      if (!visitUnreadRef.current.userSwitchedTab && visitUnreadRef.current.latchedUnreadTabId) {
-        restoreLatchedUnreadTabKeys()
+      if (visitUnreadRef.current.latchedUnreadTabId) {
+        clearLatchedUnreadTabKeys()
       }
     },
     []
@@ -127,13 +126,22 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     void catalogRevision
     void visitEpoch
     const states = new Map<string, AgentDotState>()
+    const visit = visitUnreadRef.current
+    if (
+      visit.latchedUnreadTabId !== null &&
+      activeSessionTabId !== null &&
+      activeSessionTabId !== visit.latchedUnreadTabId
+    ) {
+      visit.userSwitchedTab = true
+      visit.latchedUnreadTabId = null
+      clearLatchedUnreadTabKeys()
+    }
     if (visibleTabs.length > 0 && hasPendingWorktreeUnreadForTabCompletion(controller.worktreeId)) {
       seedUnreadWorktreeSessionTabs(controller.worktreeId, visibleTabs, now)
     }
     for (const tab of visibleTabs) {
       const tabId = tab.id
       const isActive = tabId === activeSessionTabId
-      const visit = visitUnreadRef.current
       let state: AgentDotState | undefined
       if (
         isActive &&

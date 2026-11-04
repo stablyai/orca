@@ -649,6 +649,44 @@ describe('MobileSessionTabStrip edge taps', () => {
         .map((dot) => dot.props.state)
     ).toEqual(['done'])
     strip.unmount()
+
+    setCatalogWorktreesForTabStatus(
+      [
+        {
+          worktreeId: 'wt-leave',
+          unread: true,
+          agents: [
+            {
+              paneKey: 'a:leaf-1',
+              state: 'done',
+              updatedAt: 2000,
+              stateStartedAt: 2000
+            }
+          ]
+        }
+      ],
+      2000
+    )
+    const enteredLater = {
+      ...entered,
+      agentStatus: { ...entered.agentStatus, updatedAt: 2000, stateStartedAt: 2000 }
+    }
+    const stripLeave = mountStrip([], [enteredLater], { worktreeId: 'wt-leave' })
+    expect(
+      stripLeave.root
+        .findAll((node) => node.props.accessibilityRole === 'tab')[0]
+        .findAllByType(AgentStateDot)
+        .map((dot) => dot.props.state)
+    ).toEqual(['unread'])
+    stripLeave.unmount()
+    const stripReenter = mountStrip([], [enteredLater], { worktreeId: 'wt-leave' })
+    expect(
+      stripReenter.root
+        .findAll((node) => node.props.accessibilityRole === 'tab')[0]
+        .findAllByType(AgentStateDot)
+        .map((dot) => dot.props.state)
+    ).toEqual(['done'])
+    stripReenter.unmount()
   })
 
   it.each([20, 200])('bounds real refresh/measurement work with %i tabs and records', (size) => {
