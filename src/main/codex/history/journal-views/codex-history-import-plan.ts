@@ -1,161 +1,285 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import '../../structured/items/codex-structured-item-translation'
+import { preserveSavedHistoryPayload } from './codex-history-projection'
+import { isDeepStrictEqual } from 'node:util'
+import { CodexSubagentExecutions } from '../../structured/background-work/codex-subagent-executions'
 import {
-  codexItemIdentity,
-  readCodexThreadItem
-} from '../../structured/items/codex-thread-item-identity'
-import { CodexTurnOrdinals } from '../../structured/journal/codex-turn-ordinals'
-import {
-  agentJournalItemKey,
-  agentJournalSubmissionKey
-} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody,
+  type AgentJournalRenderItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import '../../../native-chat/agent-session-journal/journal-row-builders'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { codexJournalItem } from '../../structured/items/codex-structured-item-translation'
 import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/journal-lifecycle-mutation'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionItemAppendOptions
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-transition'
 import {
   continuedOutsideRecordId,
   createHistoryCatchUpBatch
 } from '../../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import { createCodexJournalTranslator } from '../../structured/journal/codex-structured-journal-translation'
+import { createCodexHistoryObservations } from './codex-history-observations'
+import type { HistoryAnchor } from './codex-history-source-facts'
+import {
+  CODEX_RESTORE_MAX_BYTES,
+  historicalTurnLifecycle
+} from '../../structured/journal/codex-structured-journal-translation-restore'
+import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import {
+  codexTurnLifecycleIdentity,
+  reviseCodexTurnRow
+} from '../../structured/journal/codex-structured-journal-translation-turns'
+import { codexCompactionKey } from '../../structured/journal/codex-structured-journal-compactions'
+import { readCodexSubagentAnnouncements } from '../../structured/background-work/codex-subagent-activity'
+import {
+  endedJournalReasoning,
+  withJournalReasoningLifecycle
+} from '../../../native-chat/agent-session-journal/journal-reasoning-row'
 
-/** Build the entire import before anything reaches the live sink. */
+/** Reconcile each completed source group before unique projection into one checked transaction. */
 export function createCodexHistoryImportPlan(input: {
   sessionId: string
   threadId: string
   journal: StructuredAgentSessionTransitionJournal
-  nativePromptKeys: ReadonlySet<string>
+  subagentExecutions?: CodexSubagentExecutions
+  nativePromptKeys: Pick<ReadonlySet<string>, 'has'>
   outsideNotice?: AgentJournalItemBody
   check: () => void
 }) {
   const batch = createHistoryCatchUpBatch()
-  const encoded = new Map<string, string>()
+  const helpers = new CodexSubagentExecutions()
+  const helperIds = new Map<string, string | null>()
   const turnIds: string[] = []
-  let outsideNoted = false
-  let omitted = new Map<string, string>()
-  const append = (
-    identity: AgentJournalItemIdentity,
-    body: AgentJournalItemBody,
-    options: StructuredAgentSessionItemAppendOptions
-  ) => {
-    input.check()
-    const key = agentJournalItemKey(identity)
-    if (omitted.has(key)) {
-      return { accepted: true } as const
-    }
-    // The saved relation is display-only: name the original prompt without accepting its send.
-    if (body.kind === 'turn' && body.userItemId) {
-      const nativePrompt = omitted.get(body.userItemId)
-      if (nativePrompt !== undefined) {
-        body = { ...body, userItemId: nativePrompt }
-      }
-    }
-    const mutation = {
-      ...journalLifecycleItemMutation(options, identity, body),
-      ...(body.kind === 'message' && body.role === 'user' ? { echoOf: null } : {})
-    }
-    const serialized = JSON.stringify(mutation)
-    const previous = encoded.get(key)
-    if (previous !== undefined) {
-      if (previous !== serialized) {
-        throw new Error('conflicting-history-identity')
-      }
-      return { accepted: true } as const
-    }
-    batch.push(mutation, serialized)
-    encoded.set(key, serialized)
-    return { accepted: true } as const
-  }
-  const sink: StructuredAgentSessionEventSink = {
-    appendItem: append,
-    tryAppendItem: append,
-    appendTombstone: () => {
-      throw new Error('unexpected-history-tombstone')
-    },
-    publish: () => {},
-    tryPublish: () => ({ accepted: true }),
-    tryReviseResolvedItem: (_reserved, resolve, options) => {
-      const item = resolve(input.journal)
-      return item ? append(item.identity, item.body, options) : { accepted: true }
-    }
-  }
-  const translator = createCodexJournalTranslator({
-    sink,
-    sessionId: input.sessionId,
-    primaryThreadId: () => input.threadId,
-    historyImport: true
+  const expected = new Set<string>()
+  let helperBytes = 0,
+    outsideNoted = false
+  const observations = createCodexHistoryObservations({
+    ...input,
+    retainedHelperBytes: () => helperBytes
   })
-  return {
-    append,
-    restore: (turn: Record<string, unknown>) => {
-      input.check()
-      if (typeof turn.id !== 'string') {
-        throw new Error('invalid-turn')
+  const completeTurn = () => {
+    input.check()
+    const turn = observations.group
+    if (!turn || turn.hidden) {
+      observations.release()
+      return
+    }
+    const identity = codexTurnLifecycleIdentity(input.sessionId, turn.id)
+    const scope: AgentJournalTurnScope = { kind: 'turn', turnItemId: turn.key }
+    const lifecycle = historicalTurnLifecycle(input.threadId, turn.source)
+    if (!lifecycle) {
+      observations.release()
+      return
+    }
+    const dependencies = new Map<string, HistoryAnchor>()
+    const writes = new Set<string>()
+    const require = (anchor: HistoryAnchor) =>
+      dependencies.set(
+        JSON.stringify([anchor.key, anchor.saved.itemId, anchor.saved.revision]),
+        anchor
+      )
+    let changed = false
+    let compacted = false
+    const outside =
+      ![...turn.items.values()].some(({ native }) => native) ||
+      [...turn.items.values()].some(({ item, native }) => item.type === 'userMessage' && !native)
+    const append = (
+      identity: AgentJournalItemIdentity,
+      body: AgentJournalItemBody,
+      scope: AgentJournalTurnScope,
+      saved: AgentJournalRenderItem | null
+    ): boolean => {
+      const key = agentJournalItemKey(identity)
+      if (
+        input.journal.presentationRemoved(key) ||
+        (saved &&
+          ((body.kind === 'message' && body.role === 'user') ||
+            isDeepStrictEqual(saved.body, body)))
+      ) {
+        return false
       }
-      omitted = new Map<string, string>()
-      const ordinals = new CodexTurnOrdinals()
-      let native = false
-      let outsideUser = false
-      for (const value of Array.isArray(turn.items) ? turn.items : []) {
-        const item = readCodexThreadItem(value)
-        if (!item) {
+      if (!outsideNoted && input.outsideNotice && outside) {
+        outsideNoted = true
+        const notice: AgentJournalItemIdentity = {
+          provider: 'legacy',
+          agent: 'codex',
+          sessionId: input.sessionId,
+          recordId: continuedOutsideRecordId(turn.id)
+        }
+        const savedNotice = input.journal.item(agentJournalItemKey(notice))
+        append(notice, input.outsideNotice, AGENT_JOURNAL_THREAD_SCOPE, savedNotice)
+      }
+      input.check()
+      const mutation = journalLifecycleItemMutation(
+        { turnScope: saved?.turnScope ?? scope },
+        identity,
+        body
+      )
+      if (body.kind === 'message' && body.role === 'user') {
+        mutation.echoOf = null
+      }
+      if (saved) {
+        batch.revise(mutation, { canonicalItemId: saved.itemId, revision: saved.revision })
+        expected.add(JSON.stringify([key, saved.itemId, saved.revision]))
+      } else {
+        batch.push(mutation)
+      }
+      writes.add(key)
+      changed = true
+      return true
+    }
+    for (const { item, anchors } of turn.items.values()) {
+      for (const announcement of readCodexSubagentAnnouncements(item, input.threadId)) {
+        input.check()
+        const old = helpers.label(announcement.agentThreadId)
+        helpers.register(announcement.agentThreadId, announcement.label)
+        const label = helpers.label(announcement.agentThreadId)
+        helperBytes +=
+          Buffer.byteLength(label ?? '') -
+          Buffer.byteLength(old ?? '') +
+          (helperIds.has(announcement.agentThreadId)
+            ? 0
+            : Buffer.byteLength(announcement.agentThreadId) + 32)
+        if (helperBytes + observations.bytes > CODEX_RESTORE_MAX_BYTES) {
+          throw new Error('history-workspace-too-large')
+        }
+        helperIds.set(announcement.agentThreadId, label)
+        for (const anchor of anchors) {
+          require(anchor)
+        }
+        if (turn.saved) {
+          require({ key: agentJournalItemKey(identity), saved: turn.saved })
+        }
+      }
+    }
+    const prompt = [...turn.items.values()].find(({ item }) => item.type === 'userMessage')
+    if (prompt) {
+      lifecycle.userItemId =
+        prompt.native ?? input.journal.canonicalItemId(agentJournalItemKey(prompt.identity))
+    } else {
+      delete lifecycle.userItemId
+    }
+    const body = codexTurnLifecycleBody(lifecycle)
+    const savedTurn = turn.saved?.body
+    if (savedTurn?.kind === 'turn') {
+      for (const key of [
+        'startedAt',
+        'requestedAt',
+        'completedAt',
+        'durationMs',
+        'outcome',
+        'userItemId'
+      ] as const) {
+        if (savedTurn[key] !== undefined) {
+          Object.assign(body, { [key]: savedTurn[key] })
+        }
+      }
+      if (savedTurn.state === 'interrupted') {
+        body.state = savedTurn.state
+      }
+    }
+    const lifecycleChanged = append(
+      identity,
+      reviseCodexTurnRow(input.journal, identity, body),
+      AGENT_JOURNAL_THREAD_SCOPE,
+      turn.saved
+    )
+    if (lifecycleChanged && body.userItemId) {
+      const savedUser = input.journal.item(body.userItemId)
+      if (savedUser) {
+        require({ key: body.userItemId, saved: savedUser })
+      }
+    }
+    for (const observation of turn.items.values()) {
+      input.check()
+      if (observation.native) {
+        continue
+      }
+      const item = observation.item
+      let translated: AgentJournalItemBody | null
+      let chosenIdentity = observation.identity,
+        saved = observation.saved
+      if (item.type === 'contextCompaction') {
+        if (compacted) {
           continue
         }
-        const identity = codexItemIdentity({
-          threadId: input.threadId,
-          turnId: typeof turn.id === 'string' ? turn.id : null,
+        compacted = true
+        chosenIdentity = {
+          provider: 'orca',
+          clientMessageId: `codex-compaction:${codexCompactionKey(input.threadId, turn.id)}`
+        }
+        saved = input.journal.item(agentJournalItemKey(chosenIdentity))
+        translated = { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
+      } else if (item.type === 'subAgentActivity') {
+        continue
+      } else {
+        translated = codexJournalItem(
           item,
-          ordinals,
-          historyImport: true
-        })
-        if (item.type === 'userMessage') {
-          if (
-            typeof item.clientId === 'string' &&
-            item.clientId.length > 0 &&
-            input.nativePromptKeys.has(agentJournalSubmissionKey(item.clientId))
-          ) {
-            native = true
-            omitted.set(agentJournalItemKey(identity), agentJournalSubmissionKey(item.clientId))
-          } else {
-            outsideUser = true
+          (id) => helpers.label(id) ?? input.subagentExecutions?.label(id) ?? null
+        ).body
+      }
+      if (!translated) {
+        continue
+      }
+      translated = preserveSavedHistoryPayload(item, translated, saved)
+      if (
+        append(
+          chosenIdentity,
+          withJournalReasoningLifecycle(translated, endedJournalReasoning()),
+          scope,
+          saved
+        )
+      ) {
+        if (turn.saved) {
+          require({ key: agentJournalItemKey(identity), saved: turn.saved })
+        }
+        for (const anchor of observation.anchors) {
+          require(anchor)
+        }
+        if (observation.parent) {
+          const parent = turn.items.get(observation.parent)
+          if (parent?.saved) {
+            require({ key: agentJournalItemKey(parent.identity), saved: parent.saved })
           }
         }
       }
-      if ((!native || outsideUser) && !outsideNoted && input.outsideNotice) {
-        append(
-          {
-            provider: 'legacy',
-            agent: 'codex',
-            sessionId: input.sessionId,
-            recordId: continuedOutsideRecordId(turn.id)
-          },
-          input.outsideNotice,
-          { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-        )
-        outsideNoted = true
+    }
+    for (const [checked, anchor] of dependencies) {
+      if (!writes.has(anchor.key) && !expected.has(checked)) {
+        batch.expectItem(anchor.key, {
+          canonicalItemId: anchor.saved.itemId,
+          revision: anchor.saved.revision
+        })
+        expected.add(checked)
       }
-      const restored = translator.restoreThread(input.threadId, { turns: [turn] })
-      if (!restored.accepted) {
-        throw new Error(restored.reason)
-      }
+    }
+    if (changed) {
       turnIds.push(turn.id)
-    },
+    }
+    observations.release()
+  }
+  return {
+    restore: observations.restore,
+    completeTurn,
     finish: () => {
-      input.check()
-      const keys = [...encoded.keys()]
-      const plan = batch.finish('codex-history-import', [
-        input.journal.epoch,
-        input.threadId,
-        turnIds,
-        keys
-      ])
-      return { ...plan, turnIds }
+      completeTurn()
+      if (!batch.size && !helperIds.size) {
+        return null
+      }
+      return {
+        ...batch.finish('codex-history-import', [input.journal.epoch, input.threadId, turnIds]),
+        turnIds
+      }
     },
-    dispose: () => translator.dispose()
+    discardHelpers: () => helperIds.clear(),
+    restoreHelpers: () => {
+      for (const [id, label] of helperIds) {
+        input.subagentExecutions?.register(id, label)
+      }
+      helperIds.clear()
+    },
+    dispose: () => {
+      observations.release()
+      helpers.clear()
+      expected.clear()
+    }
   }
 }

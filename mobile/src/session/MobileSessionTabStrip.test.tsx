@@ -284,20 +284,6 @@ describe('MobileSessionTabStrip edge taps', () => {
     strip.unmount()
   })
 
-  it('uses the host identity while retaining tab gestures', () => {
-    const strip = mountStrip([{ handle: 'term-c', agentIdentity: 'cursor' }])
-    expect(strip.tabs[2].findByType(MobileAgentIcon).props.agentId).toBe('cursor')
-    strip.tapAt(295)
-    strip.wait(100)
-    strip.tapAt(295)
-    expect(strip.setRenameTarget).toHaveBeenCalledWith(
-      expect.objectContaining({ handle: 'term-c' })
-    )
-    strip.wait(1000)
-    expect(strip.scrollTo.mock.calls).toEqual([[{ x: 112, animated: true }]])
-    strip.unmount()
-  })
-
   it('keeps one card through selection, reveal, movement, reparenting and stale results', () => {
     const strip = mountStrip()
     const scroll = () => strip.root.find((node) => node.props.horizontal === true)

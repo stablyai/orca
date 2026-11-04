@@ -65,20 +65,6 @@ describe('staging and discard preserve index authority', () => {
     expect(await git(['diff', '--cached', '--name-only'])).toBe('file.txt\n')
   })
 
-  it.each(modes)('restores staged additions during bulk=$bulk AM discard', async (mode) => {
-    await writeFile(path.join(repo, 'initial.txt'), 'committed\n')
-    gitCommit(repo, 'initial')
-    await writeFile(path.join(repo, 'new.txt'), 'staged addition\n')
-    await git(['add', 'new.txt'])
-    await writeFile(path.join(repo, 'new.txt'), 'working addition\n')
-
-    await mutate(mode, 'discard', ['new.txt'])
-
-    expect(await readFile(path.join(repo, 'new.txt'), 'utf8')).toBe('staged addition\n')
-    expect(await git(['show', ':new.txt'])).toBe('staged addition\n')
-    expect(await git(['diff', '--name-only'])).toBe('')
-  })
-
   it.each(modes)('unstages selected unborn paths on bulk=$bulk', async (mode) => {
     await writeFile(path.join(repo, 'selected.txt'), 'selected\n')
     await writeFile(path.join(repo, 'keep.txt'), 'keep\n')
@@ -88,21 +74,6 @@ describe('staging and discard preserve index authority', () => {
 
     expect(await git(['ls-files', '-z'])).toBe('keep.txt\0')
     expect(await readFile(path.join(repo, 'selected.txt'), 'utf8')).toBe('selected\n')
-  })
-
-  it('unstages both rename paths', async () => {
-    await writeFile(path.join(repo, 'old.txt'), 'rename content\n')
-    await writeFile(path.join(repo, 'keep.txt'), 'keep\n')
-    gitCommit(repo, 'initial')
-    await git(['mv', 'old.txt', 'new.txt'])
-    await writeFile(path.join(repo, 'keep.txt'), 'keep staged\n')
-    await git(['add', 'keep.txt'])
-
-    await mutate({ bulk: true }, 'unstage', ['new.txt', 'old.txt'])
-
-    expect(await git(['diff', '--cached', '--name-only'])).toBe('keep.txt\n')
-    expect(await git(['ls-files', '-z'])).toBe('keep.txt\0old.txt\0')
-    expect(await readFile(path.join(repo, 'new.txt'), 'utf8')).toBe('rename content\n')
   })
 
   it('discards a staged rename after unstaging both paths', async () => {

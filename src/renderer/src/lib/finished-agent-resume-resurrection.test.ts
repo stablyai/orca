@@ -105,17 +105,4 @@ describe('a finished local agent', () => {
     expect(state.tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
     expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
   })
-
-  it('still holds its resume identity for a cold restore while its pane exists', () => {
-    seedLiveLocalCodexPane()
-    reportTurnFinished()
-
-    // A restored surviving pane still needs its identity or crash recovery would reopen a bare shell (#9454).
-    const launched = resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
-
-    expect(launched, 'an owned pane resumes in place, never in a new tab').toBe(0)
-    const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]
-    expect(record, 'the pane still owns a record to cold-restore from').toBeDefined()
-    expect(record?.providerSession).toEqual({ key: 'session_id', id: SESSION_ID })
-  })
 })

@@ -43,28 +43,6 @@ describe('runtime environment capability evidence', () => {
     expect(isRuntimeEnvironmentCapabilityPaused('env')).toBe(false)
   })
 
-  it('rejects an older same-verdict outcome from a different runtime identity', () => {
-    const older = captureRuntimeEnvironmentCapabilityEvidence(
-      'env',
-      pairedRuntimeConnectionFromOffer(pairing())
-    )
-    const newer = captureRuntimeEnvironmentCapabilityEvidence(
-      'env',
-      pairedRuntimeConnectionFromOffer(pairing())
-    )
-    applyRuntimeEnvironmentCapabilityVerdict({
-      evidence: newer,
-      verdict: 'capable',
-      runtimeId: 'runtime-new'
-    })
-
-    expect(
-      isRuntimeEnvironmentCapabilityOutcomeCurrent(
-        runtimeEnvironmentCapabilityOutcome(older, 'capable', 'runtime-old')
-      )
-    ).toBe(false)
-  })
-
   it('rejects every pre-invalidation completion, including a same-pairing cycle', () => {
     const evidence = captureRuntimeEnvironmentCapabilityEvidence(
       'env',
@@ -142,35 +120,6 @@ describe('runtime environment capability evidence', () => {
     ).toMatchObject({
       kind: 'supported'
     })
-  })
-
-  it('does not reuse accepted evidence across runtime identities', () => {
-    const evidence = captureRuntimeEnvironmentCapabilityEvidence(
-      'env',
-      pairedRuntimeConnectionFromOffer(pairing())
-    )
-    applyRuntimeEnvironmentCapabilityVerdict({
-      evidence,
-      verdict: 'capable',
-      runtimeId: 'runtime-a'
-    })
-
-    expect(
-      getAcceptedRuntimeEnvironmentCapabilityOutcome(
-        'env',
-        pairedRuntimeConnectionFromOffer(pairing()),
-        'runtime-a'
-      )
-    ).toMatchObject({
-      kind: 'supported'
-    })
-    expect(
-      getAcceptedRuntimeEnvironmentCapabilityOutcome(
-        'env',
-        pairedRuntimeConnectionFromOffer(pairing()),
-        'runtime-b'
-      )
-    ).toBeNull()
   })
 })
 

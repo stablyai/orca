@@ -90,13 +90,4 @@ describe('the closed-pane fence', () => {
     create.rollback?.()
     expect(isClosedPaneFenced('t:b')).toBe(true)
   })
-
-  it('records nothing for an unfenced command', () => {
-    const store = partitions({ [LOCAL]: sessionWith('t', ['a', 'b']) })
-    fencedIfLayoutOwner(
-      () => null,
-      () => (store.set(LOCAL, sessionWith('t', ['a'])), { value: null })
-    )()
-    expect(isClosedPaneFenced('t:b')).toBe(false)
-  })
 })

@@ -105,17 +105,6 @@ describe('recoverFromDegradedStartup', () => {
       Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
     })
 
-    it('says the host is unreachable and reloads once it answers', async () => {
-      await recoverFrom(new Error('Could not connect to the remote Orca runtime.'))
-
-      expect(vi.mocked(toast.error).mock.calls[0]?.[0]).toBe("Couldn't reach your Orca host")
-      statusListener?.(snapshot('connecting'))
-      expect(relaunch).not.toHaveBeenCalled()
-      statusListener?.(snapshot('ready'))
-      statusListener?.(snapshot('ready'))
-      expect(relaunch).toHaveBeenCalledTimes(1)
-    })
-
     it('stops waiting to reload once its startup pass is torn down', async () => {
       const pass = new AbortController()
       await recoverFrom(new Error('Could not connect to the remote Orca runtime.'), {

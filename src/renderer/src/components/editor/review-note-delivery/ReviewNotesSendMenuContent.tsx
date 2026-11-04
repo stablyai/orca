@@ -1,4 +1,3 @@
-import React, { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -39,6 +38,7 @@ import type { LaunchSource } from '../../../../../shared/telemetry-property-sche
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
+import React, { useCallback, useMemo } from 'react'
 
 type OrderedSendTarget = {
   target: NotesSendAgentTarget
@@ -111,7 +111,7 @@ export function ReviewNotesSendMenuContent({
     (
       send: () => Promise<ActiveAgentNotesSendResult>,
       onSent: () => void,
-      options: { explicitTarget?: boolean } = {}
+      options: { explicitTarget?: boolean; structured?: boolean } = {}
     ) => {
       // Settle the loading toast in place: immediate sends can resolve before Sonner mounts, racing a separate dismissal.
       const pending = toast.loading(
@@ -132,6 +132,11 @@ export function ReviewNotesSendMenuContent({
               ),
               { id: pending }
             )
+            return
+          }
+
+          if (options.structured && result.status === 'unconfirmed') {
+            toast.dismiss(pending)
             return
           }
 
@@ -182,7 +187,7 @@ export function ReviewNotesSendMenuContent({
             request_kind: 'followup'
           })
         },
-        { explicitTarget: true }
+        { explicitTarget: true, structured: target.messageTarget.kind === 'structured-session' }
       )
     },
     [hasPrompt, runNotesSend, worktreeId, prompt, onPromptDelivered, launchSource]

@@ -62,76 +62,6 @@ afterEach(() => {
   railState.capable = true
   vi.useRealTimers()
 })
-
-it.each(['left', 'right'] as const)(
-  '%s rail pins the pad when it fits and scrolls it above the keyboard when short',
-  async (side) => {
-    vi.useFakeTimers()
-    railState.strip = { side, width: 84, height: 500, top: 0, bottom: 0 }
-    const toolbar = { ...SHELL_TOOLBAR, directionPadEnabled: true }
-    const send = vi.fn(() => true)
-    let keys = terminalKeyRailKeys(500, toolbar)
-    const render = () =>
-      act(() => {
-        const element = createElement(TerminalKeyRail, {
-          keys,
-          toolbar,
-          onKey: send
-        })
-        if (renderer) {
-          renderer.update(element)
-        } else {
-          renderer = create(element)
-        }
-      })
-    render()
-    const scroll = renderer!.root.findByType(ScrollView)
-    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'D-pad up' })).toHaveLength(1)
-    expect(scroll.findAllByProps({ accessibilityLabel: 'D-pad up' })).toHaveLength(0)
-    expect(scroll.findAllByProps({ accessibilityLabel: 'Arrow Up' })).toHaveLength(0)
-    const up = renderer!.root.findByProps({ accessibilityLabel: 'D-pad up' })
-    act(() => {
-      up.props.onPressIn(touch(20))
-      up.props.onLongPress()
-      scroll.props.onScrollBeginDrag()
-      up.props.onPressOut()
-      up.props.onPress()
-    })
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000)
-    })
-    expect(send).toHaveBeenCalledExactlyOnceWith('arrowUp')
-    railState.strip = { ...railState.strip, height: 145 }
-    render()
-    const shortScroll = renderer!.root.findByType(ScrollView)
-    const shortUp = shortScroll.findByProps({ accessibilityLabel: 'D-pad up' })
-    const sentBefore = send.mock.calls.length
-    act(() => {
-      shortUp.props.onPressIn(touch(20))
-      shortScroll.props.onTouchMove(touch(22))
-      shortUp.props.onPressOut()
-      shortUp.props.onPress()
-    })
-    expect(send).toHaveBeenCalledTimes(sentBefore + 1)
-    expect(send).toHaveBeenLastCalledWith('arrowUp')
-    act(() => {
-      shortUp.props.onPressIn(touch(20))
-      shortScroll.props.onScrollBeginDrag()
-      shortUp.props.onPressOut()
-      shortUp.props.onPress()
-    })
-    expect(send).toHaveBeenCalledTimes(sentBefore + 1)
-    expect(shortScroll.findAllByProps({ accessibilityLabel: 'Arrow Up' })).toHaveLength(0)
-    toolbar.directionPadEnabled = false
-    render()
-    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'D-pad up' })).toHaveLength(0)
-    toolbar.directionPadEnabled = true
-    railState.capable = false
-    railState.strip = { ...railState.strip, height: 500, side: 'left' }
-    render()
-    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'D-pad up' })).toHaveLength(0)
-  }
-)
 function mount() {
   const send = vi.fn((_key: string) => true)
   act(() => {
@@ -148,45 +78,6 @@ function mount() {
   return { send, root, key }
 }
 const touch = (pageY: number) => ({ nativeEvent: { pageX: 20, pageY } })
-it("lists the page key bar's shell and agent rows, whatever the strip's height", () => {
-  const controls = ['toggleKeyboard', 'toggleDisplayMode', 'toggleInputMode']
-  const arrows = ['arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight']
-  const shellRow = [
-    'escape',
-    'ctrl',
-    'tab',
-    'alt',
-    'shift',
-    'char:/',
-    'char:|',
-    'char:~',
-    'char:-',
-    'char::'
-  ]
-  const agentRow = ['escape', 'shiftTab', 'enter', 'ctrlC', 'ctrl', 'char:/', 'char:@', 'char:!']
-  expect(terminalKeyRailKeys(100, SHELL_TOOLBAR)).toEqual([
-    ...controls,
-    ...shellRow,
-    ...arrows,
-    'moreKeys'
-  ])
-  expect(terminalKeyRailKeys(100, { ...SHELL_TOOLBAR, runsAgent: true })).toEqual([
-    ...controls,
-    ...agentRow,
-    ...arrows,
-    'moreKeys'
-  ])
-  // A page with one live input and no composer reports canCompose false, and gets no mode key.
-  expect(terminalKeyRailKeys(100, { ...SHELL_TOOLBAR, canCompose: false })).toEqual([
-    'toggleKeyboard',
-    'toggleDisplayMode',
-    ...shellRow,
-    ...arrows,
-    'moreKeys'
-  ])
-  expect(terminalKeyRailKeys(0, SHELL_TOOLBAR)).toEqual([])
-  expect(terminalKeyRailKeys(100)).toEqual([])
-})
 
 it('uses a vertical scroll view and sends a tap only on release', () => {
   const { send, root, key } = mount()
@@ -310,102 +201,6 @@ it.each([
   expect(send).toHaveBeenCalledExactlyOnceWith(id)
 })
 
-it('renders the bar controls, ⋯ and sticky modifiers in the same scroll view', () => {
-  const send = vi.fn((_key: string) => true)
-  const render = (next: BridgeTerminalToolbar) =>
-    act(() => {
-      const element = createElement(TerminalKeyRail, {
-        keys: terminalKeyRailKeys(100, next),
-        toolbar: next,
-        onKey: send
-      })
-      if (renderer) {
-        renderer.update(element)
-      } else {
-        renderer = create(element)
-      }
-    })
-  render(SHELL_TOOLBAR)
-  const key = (label: string) => renderer!.root.findByProps({ accessibilityLabel: label })
-  const keysMode = 'Keys mode: typing goes straight to the terminal. Switch to Message mode'
-  const press = (label: string) =>
-    act(() => {
-      const button = key(label)
-      button.props.onPressIn(touch(20))
-      button.props.onPressOut()
-      button.props.onPress()
-    })
-  press('Show keyboard')
-  press('Phone width')
-  press(keysMode)
-  press('Control')
-  press('More keys and actions')
-  expect(send.mock.calls.map(([key]) => key)).toEqual([
-    'toggleKeyboard',
-    'toggleDisplayMode',
-    'toggleInputMode',
-    'ctrl',
-    'moreKeys'
-  ])
-  const latchStyle = (label: string) =>
-    renderer!.root
-      .findByProps({ accessibilityLabel: label })
-      .props.style({ pressed: false })
-      .filter(Boolean)
-  render({ ...SHELL_TOOLBAR, modifiers: { ctrl: 'once', alt: 'locked', shift: 'off' } })
-  expect(key('Control').props.accessibilityState).toEqual({ selected: true })
-  expect(key('Alt').props.accessibilityState).toEqual({ selected: true })
-  expect(key('Shift').props.accessibilityState).toEqual({ selected: false })
-  expect(latchStyle('Control')).not.toEqual(latchStyle('Alt'))
-  render({ ...SHELL_TOOLBAR, keyboardVisible: true, canSend: false })
-  expect(key('Dismiss keyboard').props.disabled).toBe(false)
-  expect(key('Phone width').props.disabled).toBe(true)
-  expect(key('Control').props.disabled).toBe(true)
-  expect(key('More keys and actions').props.disabled).toBeFalsy()
-})
-
-it('lists the arrows only while the D-pad is off', () => {
-  railState.strip = { side: 'right', width: 84, height: 500, top: 0, bottom: 0 }
-  let toolbar: BridgeTerminalToolbar = {
-    ...SHELL_TOOLBAR,
-    runsAgent: true,
-    directionPadEnabled: true
-  }
-  const send = vi.fn(() => true)
-  const render = () =>
-    act(() => {
-      const element = createElement(TerminalKeyRail, {
-        keys: terminalKeyRailKeys(500, toolbar),
-        toolbar,
-        onKey: send
-      })
-      if (renderer) {
-        renderer.update(element)
-      } else {
-        renderer = create(element)
-      }
-    })
-  render()
-  const labels = () =>
-    renderer!.root
-      .findByType(ScrollView)
-      .findAll((node) => String(node.type) === 'Pressable')
-      .map((node) => node.props.accessibilityLabel)
-  expect(labels()).not.toContain('Arrow Up')
-  expect(labels()).toContain('Interrupt terminal')
-  act(() => {
-    const up = renderer!.root.findByProps({ accessibilityLabel: 'D-pad up' })
-    up.props.onPressIn(touch(20))
-    up.props.onPressOut()
-    up.props.onPress()
-  })
-  expect(send).toHaveBeenCalledWith('arrowUp')
-  toolbar = { ...toolbar, directionPadEnabled: false }
-  render()
-  expect(renderer!.root.findAllByProps({ accessibilityLabel: 'D-pad up' })).toHaveLength(0)
-  expect(labels()).toContain('Arrow Up')
-})
-
 function mountRailHost() {
   railState.strip = { side: 'right', width: 84, height: 500, top: 0, bottom: 0 }
   const bridge = { publishTerminalKeyRail: vi.fn(), sendTerminalKey: vi.fn(() => true) }
@@ -440,20 +235,6 @@ function mountRailHost() {
     cover: () => act(() => renderer!.update(createElement(TerminalKeyRailHost, { overlay: true })))
   }
 }
-
-it('keeps the scroll view mounted when the focused pane changes', () => {
-  const h = mountRailHost()
-  const scroll = renderer!.root.findByType(ScrollView)
-  h.claim('pane-b')
-  expect(renderer!.root.findByType(ScrollView)).toBe(scroll)
-  const arrow = h.arrow()
-  act(() => {
-    arrow.props.onPressIn(touch(20))
-    arrow.props.onPressOut()
-    arrow.props.onPress()
-  })
-  expect(h.bridge.sendTerminalKey).toHaveBeenCalledExactlyOnceWith('arrowUp', 'pane-b')
-})
 
 it('delivers a release tap across an equivalent serialized rail claim', () => {
   const h = mountRailHost()

@@ -7,7 +7,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDeleteState } from '../../../../store/slices/worktree-helpers'
 import { normalizeRelativePath } from '@/lib/path'
-import { buildStatusMap } from '../../../right-sidebar/status-display'
+import { buildStatusMap } from '../../../../lib/git-path-decoration'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
