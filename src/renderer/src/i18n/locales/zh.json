@@ -12869,7 +12869,8 @@
             "clipboardStagingUnavailable": "无法复制文件，因为 Orca 的临时存储不可用",
             "revealInFinder": "在 Finder 中显示",
             "openContainingFolder": "打开包含的文件夹",
-            "revealInFileExplorer": "在文件资源管理器中显示"
+            "revealInFileExplorer": "在文件资源管理器中显示",
+            "compareSelectedFiles": "Compare Selected Files"
           },
           "FileExplorerToolbar": {
             "d238264654": "显示 Git 忽略的文件",

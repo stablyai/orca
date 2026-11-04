@@ -12869,7 +12869,8 @@
             "clipboardStagingUnavailable": "Orca의 임시 저장소를 사용할 수 없기 때문에 파일을 복사할 수 없습니다.",
             "revealInFinder": "Finder에서 보기",
             "openContainingFolder": "포함된 폴더 열기",
-            "revealInFileExplorer": "파일 탐색기에 표시"
+            "revealInFileExplorer": "파일 탐색기에 표시",
+            "compareSelectedFiles": "Compare Selected Files"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git이 무시한 파일 표시",

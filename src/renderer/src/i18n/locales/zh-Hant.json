@@ -13317,7 +13317,8 @@
             "clipboardStagingUnavailable": "無法複製檔案，因為 Orca 的暫存不可用",
             "revealInFinder": "在 Finder 中顯示",
             "openContainingFolder": "開啟所在資料夾",
-            "revealInFileExplorer": "在檔案總管中顯示"
+            "revealInFileExplorer": "在檔案總管中顯示",
+            "compareSelectedFiles": "Compare Selected Files"
           },
           "FileExplorerToolbar": {
             "d238264654": "顯示 Git 忽略的檔案",

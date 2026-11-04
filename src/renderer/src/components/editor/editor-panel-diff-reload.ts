@@ -2,6 +2,8 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 
 export function isReloadableSingleFileDiffTab(file: OpenFile): boolean {
+  // First open, nonce refresh, and external file changes use this predicate.
+  // Git status reloads stay in shouldReloadDiffOnGitStatusChange, so a file comparison still loads.
   return (
     file.mode === 'diff' &&
     file.diffSource !== undefined &&
