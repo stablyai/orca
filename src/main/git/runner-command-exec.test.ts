@@ -455,7 +455,8 @@ describe('runner execFile timeout handling', () => {
       expect(shellCommand).toContain('getent passwd')
       expect(shellCommand).toContain('exec "$_orca_wsl_shell" -ilc')
       expect(shellCommand).toContain('/mnt/c/repo')
-      expect(shellCommand).toContain("'git'")
+      // Bypass rc-defined git functions that would hand Linux paths to git.exe.
+      expect(shellCommand).toContain(String.raw`command '\''git'\''`)
       expect(shellCommand).toContain('status')
       expect(shellCommand).toContain('--short')
     })
