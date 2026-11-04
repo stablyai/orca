@@ -109,12 +109,12 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
-vi.mock('./WorktreeCardAgents', () => ({
+vi.mock('./workspace-card/activity/WorktreeCardAgents', () => ({
   default: () => <div>Agent row</div>,
   SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT: 'orca:test-suppress-scroll-adjustment'
 }))
 
-vi.mock('./WorktreeCard', async () => {
+vi.mock('./workspace-card/surface/WorktreeCard', async () => {
   const ReactModule = await import('react')
   const MockWorktreeCard = ReactModule.memo(function WorktreeCard({
     worktree

@@ -18,7 +18,7 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 
 import { getRepoRowIdentity } from '@/store/slices/repo-host-identity'
 import * as groupOperations from './project-group-operation'
-import WorktreeContextMenu from './WorktreeContextMenu'
+import WorktreeContextMenu from './workspace-actions/context-menu/WorktreeContextMenu'
 import {
   type ProjectGroupOperationOwner,
   ProjectGroupOperationContext,

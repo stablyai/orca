@@ -12,8 +12,8 @@ import type {
   DirectSshWorktreeFetchOptions
 } from '@/store/slices/worktree-helpers'
 
-import type { WorktreeCardProps } from './worktree-card-model'
-import type WorktreeCardComponent from './WorktreeCard'
+import type { WorktreeCardProps } from './workspace-card/controller/worktree-card-model'
+import type WorktreeCardComponent from './workspace-card/surface/WorktreeCard'
 
 import type * as ReactVirtualModule from '@tanstack/react-virtual'
 import type * as DesktopWindowChromeModule from '@/lib/desktop-window-chrome'
@@ -121,7 +121,7 @@ vi.mock('@tanstack/react-virtual', async (original) => ({
       [count, getItemKey]
     )
 }))
-vi.mock('@/components/sidebar/WorktreeCard', async (original) => {
+vi.mock('@/components/sidebar/workspace-card/surface/WorktreeCard', async (original) => {
   const actual = await original<{ default: typeof WorktreeCardComponent }>()
   return {
     default: (props: WorktreeCardProps) =>

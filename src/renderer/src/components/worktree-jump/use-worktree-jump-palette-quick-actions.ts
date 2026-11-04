@@ -1,7 +1,7 @@
 import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
-import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
+import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-context'
 import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
 import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-navigation-action'

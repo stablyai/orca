@@ -11,7 +11,7 @@ import {
 
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { projectRemovalTargets } from '../../removal-unsaved-files'
+import { projectRemovalTargets } from '../../workspace-actions/deletion/removal-unsaved-files'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'

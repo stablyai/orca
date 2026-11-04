@@ -121,7 +121,7 @@ vi.mock('@/hooks/use-now', () => ({
   useNow: () => harness.now
 }))
 
-vi.mock('@/components/sidebar/useWorktreeAgentRows', () => ({
+vi.mock('@/components/sidebar/workspace-card/activity/useWorktreeAgentRows', () => ({
   useWorktreeAgentRows: () => harness.worktreeAgentRows
 }))
 

@@ -20,7 +20,7 @@ import { renameTab } from '../../../shared/workspace-layout/workspace-layout-tab
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
 import { makeWorktree, makeUnifiedTab, TEST_REPO } from '@/store/slices/store-test-helpers'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import { WorkspaceAttachmentOrigins } from '@/components/sidebar/WorkspaceAttachmentOrigins'
+import { WorkspaceAttachmentOrigins } from '@/components/sidebar/workspace-card/review/WorkspaceAttachmentOrigins'
 import { useAppStore } from '@/store'
 import { installLegacyChatRenameMigration } from './legacy-chat-rename-migration'
 import { uploadLegacyStructuredChatRename } from './structured-chat-rename'

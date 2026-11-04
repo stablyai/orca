@@ -59,7 +59,9 @@ vi.mock('sonner', () => ({
   toast: { error: toastError, message: toastMessage, success: vi.fn() }
 }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMock }))
-vi.mock('@/components/sidebar/useWorktreeAgentRows', () => ({ useWorktreeAgentRows: () => [] }))
+vi.mock('@/components/sidebar/workspace-card/activity/useWorktreeAgentRows', () => ({
+  useWorktreeAgentRows: () => []
+}))
 vi.mock('@/runtime/structured-chat-name-observation', () => ({
   useStructuredChatTabNames: () => new Map(),
   getStructuredChatTabNames: () => new Map()
