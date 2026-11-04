@@ -328,29 +328,73 @@ describe('orca cli browser page targeting', () => {
 
     expect(callMock).toHaveBeenLastCalledWith(
       'browser.tabCreate',
-      { url: 'https://example.com', worktree: caller.id },
+      { url: 'https://example.com', worktree: `id:${caller.id}` },
       { timeoutMs: 60_000 }
     )
   })
 
-  it("creates a tab in the calling terminal's folder workspace when cwd is outside it", async () => {
+  it("names the calling terminal's host when its worktree id exists on two hosts", async () => {
+    const caller = { ...buildWorktree('/tmp/repo/caller', 'caller'), identity: { key: 'wt:local' } }
+    const sshTwin = { ...caller, hostId: 'ssh:host-a' as const, identity: { key: 'wt:ssh' } }
     queueFixtures(
       callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo/other', 'other')]),
+      worktreeListFixture([sshTwin, caller]),
       okFixture('req_tab_create', { browserPageId: 'page-1' })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.stubEnv('ORCA_WORKTREE_ID', '')
-    vi.stubEnv('ORCA_WORKSPACE_ID', 'folder:fw-1')
+    vi.stubEnv('ORCA_WORKTREE_ID', caller.id)
 
     await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/scratch')
 
     expect(callMock).toHaveBeenLastCalledWith(
       'browser.tabCreate',
-      { url: 'https://example.com', worktree: 'folder:fw-1' },
+      { url: 'https://example.com', worktree: 'identity:wt:local' },
       { timeoutMs: 60_000 }
     )
   })
+
+  it('leaves the worktree to the runtime when the worktree list cannot be read', async () => {
+    callMock
+      .mockRejectedValueOnce(new RuntimeClientError('runtime_unavailable', 'list failed'))
+      .mockResolvedValueOnce(okFixture('req_tab_create', { browserPageId: 'page-1' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.stubEnv('ORCA_WORKTREE_ID', 'repo::/tmp/repo/caller')
+
+    await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/repo/other')
+
+    expect(callMock).toHaveBeenLastCalledWith(
+      'browser.tabCreate',
+      { url: 'https://example.com', worktree: undefined },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  it.each(['ORCA_WORKTREE_ID', 'ORCA_WORKSPACE_ID'])(
+    'creates a tab in the SSH folder workspace named by %s when cwd is outside it',
+    async (envName) => {
+      queueFixtures(
+        callMock,
+        worktreeListFixture([buildWorktree('/tmp/repo/other', 'other')]),
+        okFixture('req_tab_create', { browserPageId: 'page-1' })
+      )
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      vi.stubEnv('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND', 'ssh')
+      vi.stubEnv('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID', 'host-a')
+      vi.stubEnv('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION', 'inc-1')
+      vi.stubEnv('ORCA_ORCHESTRATION_COMPATIBILITY_ATTACHMENT', 'att-1')
+      vi.stubEnv('ORCA_WORKTREE_ID', '')
+      vi.stubEnv('ORCA_WORKSPACE_ID', '')
+      vi.stubEnv(envName, 'folder:fw-1')
+
+      await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/scratch')
+
+      expect(callMock).toHaveBeenLastCalledWith(
+        'browser.tabCreate',
+        { url: 'https://example.com', worktree: 'folder:fw-1' },
+        { timeoutMs: 60_000 }
+      )
+    }
+  )
 
   it('prefers the worktree enclosing cwd over the calling terminal worktree', async () => {
     const caller = buildWorktree('/tmp/repo/caller', 'caller')

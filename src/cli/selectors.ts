@@ -13,6 +13,7 @@ import {
   resolveCallerPaneWorktreeSelector,
   selectWorktreeCreateCwdContext,
   selectEnclosingWorktreeSelectionOnHost,
+  selectWorktreeIdOnHost,
   selectorPurpose,
   type WorkspaceSelectionPurpose,
   type HostScopedWorktreeSelection
@@ -196,23 +197,36 @@ export async function getBrowserWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  // An Orca terminal knows its workspace; without this an unmanaged cwd lands in the focused one.
-  return (
-    (await optionalCurrentWorktreeSelector(cwd, client, purpose)) ??
-    (await callerTerminalWorkspaceSelector(client))
-  )
-}
-
-async function callerTerminalWorkspaceSelector(client: RuntimeClient) {
-  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
-  if (terminalWorktreeId?.trim()) {
-    const scoped = await resolveCallerPaneWorktreeSelector(terminalWorktreeId, client)
-    if (scoped) {
-      return scoped
-    }
+  const catalog = await client
+    .call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
+    .then((response) => response.result.worktrees)
+    .catch(() => undefined)
+  // Without the catalog neither cwd nor the terminal id can be checked; keep the runtime default.
+  if (!catalog) {
+    return undefined
   }
-  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
-  return folderWorkspaceId?.startsWith('folder:') ? folderWorkspaceId : undefined
+  const hostId = getCallerExecutionHostId()
+  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
+  const enclosing = selectEnclosingWorktreeSelectionOnHost(
+    catalog,
+    cwd,
+    hostId,
+    terminalWorktreeId,
+    purpose
+  )
+  if (enclosing) {
+    return enclosing.selector
+  }
+  // An Orca terminal knows its workspace; without this an unmanaged cwd lands in the focused one.
+  const terminalWorktree =
+    terminalWorktreeId?.trim() && selectWorktreeIdOnHost(catalog, terminalWorktreeId, hostId)
+  if (terminalWorktree) {
+    return terminalWorktree
+  }
+  // Native folder workspaces are not in worktree.list.
+  return [terminalWorktreeId?.trim(), process.env.ORCA_WORKSPACE_ID?.trim()].find((id) =>
+    id?.startsWith('folder:')
+  )
 }
 
 export async function getTerminalHandle(
@@ -281,10 +295,18 @@ export async function getEmulatorWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  return (
-    (await callerTerminalWorkspaceSelector(client)) ??
-    (await optionalCurrentWorktreeSelector(cwd, client))
-  )
+  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
+  if (terminalWorktreeId?.trim()) {
+    const scoped = await resolveCallerPaneWorktreeSelector(terminalWorktreeId, client)
+    if (scoped) {
+      return scoped
+    }
+  }
+  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
+  if (folderWorkspaceId?.startsWith('folder:')) {
+    return folderWorkspaceId
+  }
+  return optionalCurrentWorktreeSelector(cwd, client)
 }
 
 export async function getEmulatorCommandTarget(
