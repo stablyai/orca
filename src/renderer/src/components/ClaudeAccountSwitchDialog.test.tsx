@@ -95,7 +95,7 @@ describe('ClaudeAccountSwitchDialog', () => {
     expect(screen.getByText('Switched to account-b@example.com')).toBeTruthy()
     expect(
       screen.getByText(
-        '2 Claude sessions are still running on account-a@example.com. Restarting continues each conversation on account-b@example.com. Busy sessions wait for idle before restarting.'
+        '2 Claude sessions are still running on account-a@example.com. Restarting continues each conversation on account-b@example.com. Busy sessions stop their current work and restart now.'
       )
     ).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Keep as is' })).toBeTruthy()

@@ -21965,7 +21965,7 @@
         "busy": "Working",
         "idle": "Idle",
         "settingTitle": "When you switch accounts while Claude is running in terminals",
-        "settingDescription": "Restarting continues each terminal conversation on the new account.",
+        "settingDescription": "Restarting continues each terminal conversation on the new account. Busy sessions stop their current work.",
         "keyword": {
           "restart": "restart",
           "running": "running"
@@ -21994,8 +21994,8 @@
         "restartCount_other": "Restart {{count}} sessions",
         "reviewBody_one": "{{count}} other Claude session wasn't moved to {{next}}.",
         "reviewBody_other": "{{count}} other Claude sessions weren't moved to {{next}}.",
-        "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.",
-        "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
+        "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions stop their current work and restart now.",
+        "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions stop their current work and restart now.",
         "restartCount_one": "Restart {{count}} session"
       }
     },

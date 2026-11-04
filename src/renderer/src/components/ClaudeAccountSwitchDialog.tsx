@@ -152,13 +152,13 @@ function promptDescription(prompt: ClaudeAccountSwitchPrompt): string {
   }
   return translate(
     'accounts.claude.switchSessions.body',
-    '{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.',
+    '{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions stop their current work and restart now.',
     {
       count: onAccount.length,
       previous: prompt.previousAccountLabel,
       next,
       defaultValue_one:
-        '{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.'
+        '{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions stop their current work and restart now.'
     }
   )
 }

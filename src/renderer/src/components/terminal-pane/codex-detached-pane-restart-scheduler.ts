@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { subscribeMountedTerminalTabChanges } from '@/runtime/mounted-terminal-tab-registry'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import {
   resetDetachedCodexPaneRestartClaimsForTests,
@@ -28,17 +29,20 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
       hasAddedPendingCodexPaneRestart(
         state.pendingPaneAccountRestarts,
         previousState.pendingPaneAccountRestarts
-      ) ||
-      // Why: a deferred Claude restart runs once its turn ends, which only a status change reports.
-      (state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey &&
-        Object.values(state.pendingPaneAccountRestarts).includes('claude'))
+      )
     ) {
+      scheduleClaimSweep()
+    }
+  })
+  const unsubscribeMountedTabs = subscribeMountedTerminalTabChanges(() => {
+    if (!sweepQueued && Object.keys(useAppStore.getState().pendingPaneAccountRestarts).length > 0) {
       scheduleClaimSweep()
     }
   })
   scheduleClaimSweep()
   return () => {
     unsubscribe()
+    unsubscribeMountedTabs()
     if (executorGeneration === generation) {
       executorInstalled = false
       executorGeneration += 1

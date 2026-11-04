@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
 import {
-  isAccountRestartReady,
+  onQueuedRestartPaneBound,
   selectReadyAccountRestartPtyIds
 } from './pane-account-restart-readiness'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -227,22 +227,19 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     }
   }, [managerRef, panePtyLayoutBindings, paneTransportsRef, tabId])
 
-  // Why primitive ids: unrelated status updates stay shallow-equal and skip this pane.
-  const readyRestartPtyIds = useAppStore(
+  // Why primitive ids: another tab's queued restart stays shallow-equal and skips this pane.
+  const queuedRestartPtyIds = useAppStore(
     useShallow((state) => selectReadyAccountRestartPtyIds(state, tabId))
   )
-  useEffect(() => {
+  const runQueuedAccountRestarts = useCallback(() => {
     const manager = managerRef.current
-    if (!manager || readyRestartPtyIds.length === 0) {
+    const ready = selectReadyAccountRestartPtyIds(useAppStore.getState(), tabId)
+    if (!manager || ready.length === 0) {
       return
     }
     for (const pane of manager.getPanes()) {
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
-      if (
-        !ptyId ||
-        !readyRestartPtyIds.includes(ptyId) ||
-        !isAccountRestartReady(useAppStore.getState(), tabId, pane.leafId, ptyId)
-      ) {
+      if (!ptyId || !ready.includes(ptyId)) {
         continue
       }
       const agent = consumePendingPaneAccountRestart(ptyId)
@@ -256,12 +253,18 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     buildAccountRestartStartup,
     consumePendingPaneAccountRestart,
     handleRestartPane,
-    panePtyLayoutBindings,
-    readyRestartPtyIds,
     managerRef,
     paneTransportsRef,
     tabId
   ])
+  useEffect(() => {
+    runQueuedAccountRestarts()
+  }, [panePtyLayoutBindings, queuedRestartPtyIds, runQueuedAccountRestarts])
+  // Why a microtask: the bind fires inside the connection handler, which must finish before a restart replaces it.
+  useEffect(
+    () => onQueuedRestartPaneBound(tabId, () => queueMicrotask(runQueuedAccountRestarts)),
+    [runQueuedAccountRestarts, tabId]
+  )
 
   return { handleRestartExitedPane, handleCloseExitedPane }
 }

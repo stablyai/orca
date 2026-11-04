@@ -21556,7 +21556,7 @@
         "busy": "Çalışıyor",
         "idle": "Boşta",
         "settingTitle": "Claude çalışırken hesap değiştirdiğinizde",
-        "settingDescription": "Yeniden başlatma, devam eden her sohbeti yeni hesapta sürdürür.",
+        "settingDescription": "Yeniden başlatma, devam eden her sohbeti yeni hesapta sürdürür. Meşgul oturumlar yaptıkları işi keser.",
         "keyword": {
           "restart": "yeniden başlat",
           "running": "çalışıyor"
@@ -21583,8 +21583,8 @@
         "restartCount_one": "{{count}} oturumu yeniden başlat",
         "reviewBody_other": "Diğer {{count}} Claude oturumu {{next}} hesabına taşınmadı.",
         "reviewBody_one": "Diğer {{count}} Claude oturumu {{next}} hesabına taşınmadı.",
-        "body_other": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler.",
-        "body_one": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler.",
+        "body_other": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yaptıkları işi keser ve hemen yeniden başlar.",
+        "body_one": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yaptıkları işi keser ve hemen yeniden başlar.",
         "reasonSharedSession": "Başka bir bölmede de açık",
         "sharedOne": "Aynı konuşma başka bir bölmede açık olduğu için 1 Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir.",
         "sharedOther": "Aynı konuşma başka bir bölmede açık olduğu için {{count}} Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir."

@@ -21155,7 +21155,7 @@
         "keep": "그대로 유지",
         "listLabel": "다시 시작할 Claude 세션",
         "settingTitle": "터미널에서 Claude가 실행되는 동안 계정을 전환하는 경우",
-        "settingDescription": "다시 시작하면 각 터미널 대화가 새 계정에서 계속됩니다.",
+        "settingDescription": "다시 시작하면 각 터미널 대화가 새 계정에서 계속됩니다. 작업 중인 세션은 진행 중인 작업을 중단합니다.",
         "settingRestart": "항상 다시 시작",
         "settingKeep": "다시 시작하지 않음",
         "restartingOther": "{{account}} 계정에서 Claude 세션 {{count}}개를 다시 시작하는 중",
@@ -21175,7 +21175,7 @@
         "uncheckedOther": "터미널 {{count}}개에서 Claude 실행 여부를 확인할 수 없습니다. 그곳에서 실행 중인 Claude는 다시 시작할 때까지 {{previous}}을(를) 계속 사용합니다.",
         "restartCount_other": "세션 {{count}}개 다시 시작",
         "reviewBody_other": "다른 Claude 세션 {{count}}개가 {{next}}(으)로 이동되지 않았습니다.",
-        "body_other": "Claude 세션 {{count}}개가 아직 {{previous}}에서 실행 중입니다. 다시 시작하면 각 대화가 {{next}}에서 계속됩니다. 작업 중인 세션은 유휴 상태가 된 후 다시 시작됩니다.",
+        "body_other": "Claude 세션 {{count}}개가 아직 {{previous}}에서 실행 중입니다. 다시 시작하면 각 대화가 {{next}}에서 계속됩니다. 작업 중인 세션은 진행 중인 작업을 중단하고 바로 다시 시작됩니다.",
         "reasonSharedSession": "다른 패널에서도 열려 있음",
         "sharedOne": "다른 패널에서 같은 대화를 열고 있어 Claude 세션 1개가 {{previous}}에 유지됩니다. 다시 시작하면 다른 패널의 대화가 다시 열릴 수 있습니다.",
         "sharedOther": "다른 패널에서 같은 대화를 열고 있어 Claude 세션 {{count}}개가 {{previous}}에 유지됩니다. 다시 시작하면 다른 패널의 대화가 다시 열릴 수 있습니다."

@@ -73,7 +73,7 @@ async function isClaudeInForeground(
   return isClaudeProcess(fresh)
 }
 
-/** Whether the pane's Claude is mid-turn; a restart during a permission prompt or question drops it. */
+/** Whether the pane's Claude is mid-turn, so an account restart would interrupt it. */
 export function isClaudePaneMidTurn(state: AppState, paneKey: string): boolean {
   const entry = state.agentStatusByPaneKey[paneKey]
   return entry?.agentType === 'claude' && entry.state !== 'done'
