@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../agent-status-types'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import { IDLE, mostRecentAttentionInHistory, resolveAttention } from './smart-attention'
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()

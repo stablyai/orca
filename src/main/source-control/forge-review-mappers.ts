@@ -41,6 +41,7 @@ export function mapBitbucketReview(pr: BitbucketPullRequestInfo): HostedReviewIn
     state: pr.state,
     url: pr.url,
     status: pr.status,
+    ...(pr.checksSummary ? { checksSummary: pr.checksSummary } : {}),
     updatedAt: pr.updatedAt,
     mergeable: pr.mergeable,
     ...(pr.headSha ? { headSha: pr.headSha } : {})
@@ -55,6 +56,7 @@ export function mapAzureDevOpsReview(pr: AzureDevOpsPullRequestInfo): HostedRevi
     state: pr.state,
     url: pr.url,
     status: pr.status,
+    ...(pr.checksSummary ? { checksSummary: pr.checksSummary } : {}),
     updatedAt: pr.updatedAt,
     mergeable: pr.mergeable,
     ...(pr.headSha ? { headSha: pr.headSha } : {})

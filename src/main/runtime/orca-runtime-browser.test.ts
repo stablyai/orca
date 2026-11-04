@@ -56,7 +56,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: webContentsFromIdMock }
 }))
 
-vi.mock('../browser/browser-screencast-stream', () => ({
+vi.mock('../browser/cdp/screencast/browser-screencast-stream', () => ({
   startBrowserScreencast: startBrowserScreencastMock
 }))
 
@@ -65,11 +65,11 @@ vi.mock('../ipc/browser/browser-tab-registration-wait', () => ({
   waitForWorktreeTabRegistration: waitForWorktreeTabRegistrationMock
 }))
 
-vi.mock('../browser/browser-main-window-readiness', () => ({
+vi.mock('../browser/guest-lifecycle/browser-main-window-readiness', () => ({
   whenBrowserMainWindowReady: whenBrowserMainWindowReadyMock
 }))
 
-vi.mock('../browser/browser-session-registry', () => ({
+vi.mock('../browser/sessions/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
 }))
 

@@ -11,7 +11,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'plugin-frame-guest-preload': resolve('src/preload/plugin-frame-guest.ts'),
   'browser-extension-preload': resolve('src/preload/browser-extension-preload.ts'),
   'browser-extension-native-host-supervisor-entry': resolve(
-    'src/main/browser/extensions/browser-extension-native-host-supervisor-entry.ts'
+    'src/main/browser/extensions/native-messaging/browser-extension-native-host-supervisor-entry.ts'
   ),
   'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
   'plugin-host-entry': resolve('src/main/plugins/workers/plugin-host-entry.ts'),

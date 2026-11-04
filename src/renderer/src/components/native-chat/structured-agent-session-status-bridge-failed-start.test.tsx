@@ -11,10 +11,10 @@ import type {
   AgentSessionSendResult,
   AgentSessionStatusEvent
 } from '../../../../shared/agent-session/agent-session-wire'
-import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { structuredAgentSessionAgentStatus } from '../../../../shared/agent-session/view/structured-agent-session-agent-status'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'

@@ -154,3 +154,32 @@ describe('creating a tab directly into a new split', () => {
     }
   )
 })
+
+describe('creating a tab shown in another pane', () => {
+  it('shows the new tab in its pane without making that pane the active one', () => {
+    const { store, sourceGroupId } = seededStore()
+    const browserGroupId = store
+      .getState()
+      .createEmptySplitGroup(WT, sourceGroupId, 'right', { activate: false })!
+    store.getState().createUnifiedTab(WT, 'browser', {
+      id: 'browser-old',
+      targetGroupId: browserGroupId,
+      activate: false
+    })
+    store.getState().createUnifiedTab(WT, 'browser', {
+      id: 'browser-new',
+      targetGroupId: browserGroupId,
+      activate: false,
+      showInGroup: true
+    })
+
+    const state = store.getState()
+    expect(state.groupsByWorktree[WT].find((g) => g.id === browserGroupId)?.activeTabId).toBe(
+      'browser-new'
+    )
+    expect(state.activeGroupIdByWorktree[WT]).toBe(sourceGroupId)
+    expect(
+      state.unifiedTabsByWorktree[WT].find((tab) => tab.id === 'browser-new')?.lastFocusedAt
+    ).toBeUndefined()
+  })
+})

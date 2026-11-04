@@ -6,7 +6,7 @@ import {
   type SourceControlActionRecipe
 } from './source-control-ai-actions'
 import type { AiTextOperation, SourceControlAiSettings } from './source-control-ai-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 export function commandTemplateFromInstruction(instruction: string | null | undefined): string {
   const trimmed = instruction?.trim()

@@ -14,7 +14,7 @@ import {
   getPowerShellOsc133Bootstrap,
   getPowerShellOsc133StartupCommandMark
 } from '../pty/shell-startup/powershell-osc133-bootstrap'
-import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
+import { quoteStartupArg } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { WSL_GUEST_ROOT_MARKER_COMMAND } from '../../shared/wsl-guest-root-marker'
 
 /** cmd.exe's own documented ceiling; callers that go through sshd budget below it. */

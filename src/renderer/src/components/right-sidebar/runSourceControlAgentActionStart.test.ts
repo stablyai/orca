@@ -39,7 +39,7 @@ import { sourceControlActionLaunchOptions } from '../../../../shared/source-cont
 import {
   resolveAgentLaunchCommand,
   terminalSessionOptionInputs
-} from '../../../../shared/tui-agent-launch-command'
+} from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import type { Repo } from '../../../../shared/repo-types'
 
 function buildArgs(

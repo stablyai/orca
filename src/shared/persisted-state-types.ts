@@ -6,7 +6,7 @@ import type {
   SshTarget
 } from './ssh-types'
 import type { Automation, AutomationRun } from './automations-types'
-import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from './agent-status/contracts/agent-status-ipc-payload'
 import type { FeatureInteractionTelemetryBucketState } from './feature-interactions'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
 import type { ChatUiLaunchTipAudience } from './native-chat/chat-ui-launch-tip-audience'

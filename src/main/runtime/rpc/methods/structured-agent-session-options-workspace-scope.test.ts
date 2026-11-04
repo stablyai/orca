@@ -213,13 +213,15 @@ describe('options at rest in a repo with no config of its own', () => {
     expect(rig.adapter.acquire).not.toHaveBeenCalled()
   })
 
-  it('names the default model and its effort for a client that needs a model', async () => {
+  it('names the default model without choosing effort for a client that needs a model', async () => {
     const catalog = await chatAtRest({ configured: false })
 
-    expect(await readOptions(OLDER_CLIENT)).toMatchObject({
+    const older = await readOptions(OLDER_CLIENT)
+    expect(older).toMatchObject({
       ok: true,
-      result: { current: { model: 'gpt-5.5', effort: 'medium' } }
+      result: { current: { model: 'gpt-5.5' } }
     })
+    expect(older).not.toHaveProperty('result.current.effort')
     const current = await readOptions(CURRENT_CLIENT)
     expect(current).toMatchObject({ ok: true })
     expect(current).not.toHaveProperty('result.current.model')
@@ -234,10 +236,17 @@ describe('completed discovery in the exact project scope', () => {
     'shows what the project actually runs to $clientId',
     async (client) => {
       await chatAtRest({ configured: true, complete: true })
-      expect(await readOptions(client)).toMatchObject({
+      const reply = await readOptions(client)
+      expect(reply).toMatchObject({
         ok: true,
-        result: { current: { model: 'gpt-5.5', effort: 'high' } }
+        result: {
+          current: { model: 'gpt-5.5' },
+          models: expect.arrayContaining([
+            expect.objectContaining({ id: 'gpt-5.5', declaredDefaultEffort: 'high' })
+          ])
+        }
       })
+      expect(reply).not.toHaveProperty('result.current.effort')
       expect(rig.adapter.acquire).not.toHaveBeenCalled()
     }
   )

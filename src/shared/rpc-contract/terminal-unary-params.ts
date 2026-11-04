@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
-import { isTuiAgent } from '../tui-agent-config'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { SpawnIntentParam } from './agent-session-params'
 import {
   canonicalizeWindowsShellOverride,

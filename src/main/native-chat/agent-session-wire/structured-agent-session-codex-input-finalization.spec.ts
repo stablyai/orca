@@ -141,9 +141,9 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
           expect(starts()).toHaveLength(0)
           throw new CodexAppServerRequestError(
             'thread/resume',
-            -32000,
-            'startup failed',
-            'startup failed'
+            -32001,
+            'Server overloaded; retry later.',
+            'Server overloaded; retry later.'
           )
         }
         codex.connections[1]?.handlers.onExit?.(new Error('Codex died before ready'), {

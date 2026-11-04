@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { deriveSharedKey, encrypt, generateKeyPair } from '../../shared/e2ee-crypto'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
-import { startBrowserScreencast } from '../browser/browser-screencast-stream'
+import { startBrowserScreencast } from '../browser/cdp/screencast/browser-screencast-stream'
 import { E2EEChannel } from './rpc/e2ee-channel'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
 import type { RpcBinarySender } from './rpc/rpc-binary-sender'

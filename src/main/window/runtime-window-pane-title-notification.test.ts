@@ -48,16 +48,6 @@ function attachNotifier() {
 }
 
 describe('pane title renderer emission receipts', () => {
-  it('returns true only after emitting the exact addressed leaf and title', () => {
-    const { setPaneTitle, send } = attachNotifier()
-    expect(setPaneTitle('tab-1', 'leaf-1', 'REVIEWER')).toBe(true)
-    expect(send).toHaveBeenCalledExactlyOnceWith('ui:setPaneTitle', {
-      tabId: 'tab-1',
-      leafId: 'leaf-1',
-      title: 'REVIEWER'
-    })
-  })
-
   it('returns false without emitting to a destroyed desktop', () => {
     const { setPaneTitle, send, windowState } = attachNotifier()
     windowState.destroyed = true

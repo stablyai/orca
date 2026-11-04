@@ -1,11 +1,11 @@
 import { cliWriterExecutionMatcher, type CliWriterExecutionMatches } from './cli-writer-observation'
-import { isTmuxInnerSubject } from '../../../shared/tmux-agent-hook-owner'
+import { isTmuxInnerSubject } from '../../../shared/tmux-selected-status'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload
-} from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
-import type { HookTransportInterferenceReport } from '../../../shared/agent-hook-transport-interference'
+import type { HookTransportInterferenceReport } from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import {
   getLegacyStatusListingOrder,
   type HookListenerState
@@ -20,7 +20,7 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerState } from './server-state'
-import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
+import { serializeAgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { PaneTimers } from './program-status/pane-timers'
 import { ProgramStatusFacetStore } from './program-status/facet-store'

@@ -21,11 +21,11 @@ import {
   waitForNextTabRegistration,
   waitForWorktreeTabRegistration
 } from './browser-tab-registration-wait'
-import { installDocPreviewGuestPolicy } from '../../browser/doc-preview-guest-policy'
+import { installDocPreviewGuestPolicy } from '../../browser/document-preview/doc-preview-guest-policy'
 import {
   mintDocPreviewGrant,
   revokeAllDocPreviewGrants
-} from '../../browser/doc-preview-grant-registry'
+} from '../../browser/document-preview/doc-preview-grant-registry'
 import { buildDocPreviewUrl } from '../../../shared/doc-preview-scheme'
 
 const WAIT_MS = 1_000

@@ -1,6 +1,6 @@
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/session-tabs-change-publication'
 import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './mobile-terminal-startup'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,

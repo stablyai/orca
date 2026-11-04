@@ -35,7 +35,7 @@ vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', async (i
 
 import { useAppStore } from '@/store'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
-import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
 import {
   makeFolderWorkspace,

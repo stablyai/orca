@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'

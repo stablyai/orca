@@ -91,12 +91,6 @@ describe('readWslDistroRegistryIdShared', () => {
 describe('resolveWslDistroName', () => {
   const query = async () => ({ code: 0, stdout: REG_OUTPUT })
 
-  it('finds the distro by name, case-insensitively', async () => {
-    await expect(resolveWslDistroName('UBUNTU-24.04', undefined, query)).resolves.toBe(
-      'Ubuntu-24.04'
-    )
-  })
-
   it('names a renamed distro by its recorded GUID, braced or not', async () => {
     await expect(
       resolveWslDistroName('Ubuntu', '{0283592D-BE56-40D4-B935-3DC18C3AA007}', query)

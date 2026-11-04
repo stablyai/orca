@@ -7,7 +7,7 @@ import { TASK_PROVIDERS } from './task-providers'
 import { getDefaultSourceControlAiSettings } from './source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
-import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
+import { DEFAULT_DISABLED_TUI_AGENTS } from './agent-launch/catalog/tui-agent-selection'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
@@ -56,6 +56,7 @@ export function buildDefaultSettings(args: {
     appFontFamily: args.appFontFamily,
     editorAutoSave: false,
     editorFormatOnSave: false,
+    editorInsertFinalNewline: false,
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
@@ -112,6 +113,8 @@ export function buildDefaultSettings(args: {
     terminalQuickCommands: getDefaultTerminalQuickCommands(),
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
+    // Why: xterm's default; turning it off keeps a scrolled-up reading position while typing.
+    terminalScrollOnUserInput: true,
     windowBackgroundBlur: false,
     reduceVisualEffects: false,
     minimizeToTrayOnClose: false,

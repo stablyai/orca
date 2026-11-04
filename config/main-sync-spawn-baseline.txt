@@ -7,8 +7,8 @@
 # Prune after removing launches: pnpm check:main-sync-spawn-ratchet --prune
 1 src/main/agent-hooks/installer-utils.ts
 2 src/main/browser/cookies/sources/browser-cookie-key.ts
-1 src/main/browser/browser-route-egress-electron-launch.ts
-1 src/main/browser/browser-route-partition-binding-store.ts
+1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
+1 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 1 src/main/claude-accounts/runtime-auth-service.ts
 3 src/main/codex-accounts/fs-utils.ts
 2 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts

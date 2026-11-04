@@ -2,7 +2,7 @@ import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/us
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { useAppStore } from '@/store'
 import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import {

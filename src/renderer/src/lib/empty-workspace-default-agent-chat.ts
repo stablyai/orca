@@ -1,4 +1,4 @@
-import { pickTuiAgent } from '../../../shared/tui-agent-selection'
+import { pickTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import { newAgentLaunchesMayOpenChats } from '@/runtime/local-structured-chats'
 import { acquireAgentLaunchChoices } from './host-chat-program-acquisition'
 import { useAppStore } from '@/store'

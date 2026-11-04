@@ -1,5 +1,5 @@
 import type { AiVaultScanIssueText } from './ai-vault-scan-issue-copy'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { AgentSessionAccountHome } from './agent-session/lifecycle/agent-session-account-home'
 import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 

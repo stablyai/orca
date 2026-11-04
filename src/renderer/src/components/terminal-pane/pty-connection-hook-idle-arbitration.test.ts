@@ -11,7 +11,11 @@ import {
   createManager
 } from './pty-connection-test-pane-fixtures'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
@@ -150,6 +154,7 @@ describe('connectPanePty', () => {
 
   it('dispatches agent-task-complete on working→idle and raises tab/worktree unread', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
     )
@@ -185,7 +190,11 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps({ dispatchNotification })
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+    )
 
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
@@ -235,6 +244,7 @@ describe('connectPanePty', () => {
 
   it('ignores title-only idle while fresh hook status is still working', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -252,7 +262,11 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+    )
 
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
@@ -276,6 +290,7 @@ describe('connectPanePty', () => {
     { title: '✳ Claude Code', completion: true }
   ])('requires replacement identity over a fresh hook: $title', async ({ title, completion }) => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     vi.useFakeTimers()
@@ -294,7 +309,11 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+    )
 
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
@@ -330,6 +349,7 @@ describe('connectPanePty', () => {
 
   it('ignores an explicit idle title while fresh hook identity is unknown', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -347,7 +367,11 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+    )
 
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
@@ -368,6 +392,7 @@ describe('connectPanePty', () => {
 
   it('ignores a Pi idle title while compatible OMP hook status is active', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -385,7 +410,11 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
 
-    connectPanePty(pane as never, manager as never, deps as never)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+    )
 
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)

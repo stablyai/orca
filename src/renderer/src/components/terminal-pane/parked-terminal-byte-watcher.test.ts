@@ -601,7 +601,8 @@ describe('startParkedTerminalByteWatcher', () => {
 
     // Derive one fact batch per chunk through main’s stripping/title pipeline for parity with byte mode.
     async function emitViaMainTrackerFacts(chunks: string[]): Promise<void> {
-      const { createAgentStatusOscProcessor } = await import('../../../../shared/agent-status-osc')
+      const { createAgentStatusOscProcessor } =
+        await import('../../../../shared/agent-status/transport/agent-status-osc')
       const { createTerminalTitleTracker } =
         await import('../../../../shared/terminal-output-side-effects')
       const handler = await import('./terminal-side-effect-facts-handler')

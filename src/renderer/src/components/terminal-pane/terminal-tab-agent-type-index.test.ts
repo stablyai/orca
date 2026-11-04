@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { createTerminalTabAgentTypeSelector } from './terminal-tab-agent-type-index'
 
 function entry(agentType: AgentStatusEntry['agentType'], state = 'working'): AgentStatusEntry {

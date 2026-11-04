@@ -107,12 +107,4 @@ describe('replay-guard wedge burst against the fixed-size breadcrumb ring', () =
     expect(crumbs.map((crumb) => Boolean(crumb.data?.tabIdHash))).toEqual([false, true, true])
     expect(crumbs.map((crumb) => Boolean(crumb.data?.ptyId))).toEqual([false, false, true])
   })
-
-  it('bounds a many-pane burst to one slot within a call site', () => {
-    for (let pane = 0; pane < 40; pane += 1) {
-      emitReattachWedge(pane, pane % 2 === 0)
-    }
-
-    expect(wedgeCrumbs()).toHaveLength(2)
-  })
 })

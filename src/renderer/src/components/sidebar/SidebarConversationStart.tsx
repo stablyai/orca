@@ -21,7 +21,7 @@ import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
-import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 
 export function SidebarConversationStart({
   worktreeId,

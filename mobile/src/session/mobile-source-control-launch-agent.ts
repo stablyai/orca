@@ -9,9 +9,9 @@ import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
 } from '../../../src/shared/source-control-launch-agent-selection'
-import { filterEnabledTuiAgents } from '../../../src/shared/tui-agent-selection'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import { isMobileTuiAgent } from '../tasks/mobile-tui-agents'
+import { filterEnabledTuiAgents } from '../../../src/shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent as isMobileTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileAgentLaunchContext } from './mobile-new-tab-agent-loader'
 

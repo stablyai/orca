@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import {
-  buildCollapsedChildAgentSignalStates,
-  partitionIdleChildAgents
-} from './worktree-card-idle-child-agents'
+import { buildCollapsedChildAgentSignalStates } from './worktree-card-idle-child-agents'
 
 function row(paneKey: string, state: DashboardAgentRow['state']): DashboardAgentRow {
   return {
@@ -31,26 +28,6 @@ function row(paneKey: string, state: DashboardAgentRow['state']): DashboardAgent
     }
   }
 }
-
-describe('partitionIdleChildAgents', () => {
-  it('folds two or more idle children and keeps the rest in order', () => {
-    const { activeChildren, idleChildren } = partitionIdleChildAgents([
-      row('idle-a', 'idle'),
-      row('busy', 'working'),
-      row('idle-b', 'idle')
-    ])
-    expect(activeChildren.map((agent) => agent.paneKey)).toEqual(['busy'])
-    expect(idleChildren.map((agent) => agent.paneKey)).toEqual(['idle-a', 'idle-b'])
-  })
-
-  it('leaves a lone idle child inline', () => {
-    const children = [row('idle', 'idle'), row('busy', 'working')]
-    expect(partitionIdleChildAgents(children)).toEqual({
-      activeChildren: children,
-      idleChildren: []
-    })
-  })
-})
 
 describe('buildCollapsedChildAgentSignalStates', () => {
   it('surfaces live descendant work but stays quiet for idle or finished children', () => {
