@@ -76,7 +76,7 @@ vi.mock('@/i18n/i18n', () => ({
       'components.native-chat.failureWords.usageLimitWindowWeekly': 'die aktuelle Woche',
       'terminal.usageLimit.continue': 'Jetzt fortsetzen',
       'terminal.usageLimit.explanation':
-        'Sende „continue“ an {{agent}}, um die unterbrochene Unterhaltung erneut fortzusetzen.'
+        '„continue“ an {{agent}} senden, um die unterbrochene Unterhaltung erneut fortzusetzen.'
     }
     return (mocks.locale === 'de' ? (german[key] ?? fallback) : fallback).replace(
       /\{\{(\w+)\}\}/g,

@@ -635,9 +635,16 @@ it.each(['local', 'guest'] as const)(
       prompt: 'Next'
     })
     const opened = host.sourceRow()?.hostTurn?.currentTurnKey
+    const started = host.local.getStatusSnapshotForPane(paneKey)[0]
+    expect(started.turnStartedAt).toEqual(expect.any(Number))
+    expect(started.observation?.boundary).toBe(true)
+    await vi.advanceTimersByTimeAsync(1000)
     await host.post('claude', { hook_event_name: 'SessionStart', source: 'compact' })
     expect(host.sourceRow()?.hostTurn?.currentTurnKey).toBe(opened)
-    expect(host.local.getStatusSnapshotForPane(paneKey)[0]?.mainAgent?.state).toBe('working')
+    const compacted = host.local.getStatusSnapshotForPane(paneKey)[0]
+    expect(compacted.mainAgent?.state).toBe('working')
+    expect(compacted.turnStartedAt).toBe(started.turnStartedAt)
+    expect(compacted.observation?.boundary).toBeUndefined()
     await host.post('claude', { hook_event_name: 'Stop' })
     expect(host.local.getStatusSnapshotForPane(paneKey)[0]?.turnEndDisposition).toBe('identified')
   }
