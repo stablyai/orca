@@ -56,6 +56,7 @@ vi.mock('lucide-react', () => ({
   Columns2: () => null,
   Copy: () => null,
   ListX: () => null,
+  Link2: () => null,
   MessageSquare: () => null,
   PanelBottomClose: () => null,
   PanelLeftClose: () => null,
@@ -234,6 +235,14 @@ describe('requestActiveTerminalPaneSplit', () => {
 })
 
 describe('SortableTabContextMenu', () => {
+  it('opens collaboration without activating the right-clicked tab', () => {
+    const onWorkTogether = vi.fn()
+    const { container, onActivate } = renderMenu({ isActive: false, onWorkTogether })
+    act(() => getButton(container, 'Work together…').click())
+    expect(onWorkTogether).toHaveBeenCalledOnce()
+    expect(onActivate).not.toHaveBeenCalled()
+  })
+
   it.each([false, true])(
     'copies the workspace ID of an inactive tab (pinned: %s)',
     async (isPinned) => {

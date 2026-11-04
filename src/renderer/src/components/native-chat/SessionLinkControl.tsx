@@ -19,12 +19,22 @@ import { useSessionLink } from './use-session-link'
 
 export function SessionLinkControl({
   sessionId,
-  target
+  target,
+  initialPartnerSessionId,
+  sourceName,
+  partnerName,
+  dialogOnly = false,
+  onDismiss
 }: {
   sessionId: string
   target: RuntimeClientTarget
+  initialPartnerSessionId?: string
+  sourceName?: string
+  partnerName?: string
+  dialogOnly?: boolean
+  onDismiss?: () => void
 }): React.JSX.Element | null {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(dialogOnly)
   const [body, setBody] = useState('')
   const state = useSessionLink(sessionId, target, open)
   if (!state.supported) {
@@ -55,16 +65,31 @@ export function SessionLinkControl({
   }
   return (
     <>
-      <Button variant="ghost" size="xs" className="min-w-0 max-w-64" onClick={() => setOpen(true)}>
-        <Link2 className="size-3" />
-        <span className="truncate">
-          {link
-            ? `${t('components.sessionLink.linked', 'Linked with')} ${partner?.name ?? partner?.agent ?? ''}`
-            : t('components.sessionLink.workTogether', 'Work together…')}
-        </span>
-        {status ? <span className="shrink-0">· {status}</span> : null}
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      {!dialogOnly ? (
+        <Button
+          variant="ghost"
+          size="xs"
+          className="min-w-0 max-w-64"
+          onClick={() => setOpen(true)}
+        >
+          <Link2 className="size-3" />
+          <span className="truncate">
+            {link
+              ? `${t('components.sessionLink.linked', 'Linked with')} ${partner?.name ?? partner?.agent ?? ''}`
+              : t('components.sessionLink.workTogether', 'Work together…')}
+          </span>
+          {status ? <span className="shrink-0">· {status}</span> : null}
+        </Button>
+      ) : null}
+      <Dialog
+        open={open}
+        onOpenChange={(value) => {
+          setOpen(value)
+          if (!value) {
+            onDismiss?.()
+          }
+        }}
+      >
         <DialogContent surface="security" scrollable className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{t('components.sessionLink.workTogether', 'Work together…')}</DialogTitle>
@@ -89,6 +114,16 @@ export function SessionLinkControl({
             >
               {t('components.sessionLink.retry', 'Retry the unconfirmed action')}
             </Button>
+          ) : null}
+          {snapshot &&
+          initialPartnerSessionId &&
+          !snapshot.link.participants.some((p) => p.sessionId === initialPartnerSessionId) ? (
+            <p role="alert" className="text-sm">
+              {t(
+                'components.sessionLink.otherLink',
+                'This chat is already linked to another partner. End that link before connecting these two chats.'
+              )}
+            </p>
           ) : null}
           {snapshot ? (
             <div className="space-y-4">
@@ -189,8 +224,16 @@ export function SessionLinkControl({
           ) : state.candidates ? (
             <>
               <SessionLinkCreate
-                source={state.candidates.source}
-                candidates={state.candidates.candidates}
+                source={{
+                  ...state.candidates.source,
+                  name: sourceName ?? state.candidates.source.name
+                }}
+                initialPartnerSessionId={initialPartnerSessionId}
+                candidates={state.candidates.candidates.map((candidate) =>
+                  candidate.sessionId === initialPartnerSessionId && partnerName
+                    ? { ...candidate, name: partnerName }
+                    : candidate
+                )}
                 busy={state.busy || state.uncertain}
                 onCreate={(partnerSessionId, story, role) =>
                   void state.mutate('orchestration.linkCreate', {

@@ -21012,7 +21012,6 @@
       "story": "Shared story",
       "storyPlaceholder": "Goal, issue link or local plan path; existing spending and privacy boundaries…",
       "noAutomaticRead": "Links and plan files are references. Their contents are not read or shared automatically.",
-      "roles": "Roles",
       "implementer": "Implements",
       "reviewer": "Leads and reviews",
       "swap": "Swap roles",
@@ -21081,7 +21080,11 @@
       "checkedRecipient": "I checked the recipient chat",
       "resolveDelivery": "Mark reviewed; do not resend",
       "deliveryReviewed": "Delivery reviewed by the owner; automatic resend is disabled.",
-      "reviewBeforeContinue": "Review the unconfirmed delivery before continuing"
+      "reviewBeforeContinue": "Review the unconfirmed delivery before continuing",
+      "partnerUnavailable": "The selected chat is no longer available. Choose another partner.",
+      "choosePartner": "Choose the other chat to connect.",
+      "changePartner": "Change partner",
+      "otherLink": "This chat is already linked to another partner. End that link before connecting these two chats."
     },
     "wslHostMark": {
       "runsOn": "Runs on WSL: {{distro}} (Linux)"

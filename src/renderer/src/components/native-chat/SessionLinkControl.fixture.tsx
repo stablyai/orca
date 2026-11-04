@@ -155,3 +155,18 @@ export const unknown = defineFixture({
     })
   }
 })
+
+export const fromTabs = defineFixture({
+  width: 720,
+  setup: () => setup('create'),
+  render: () => (
+    <div className="h-[680px] bg-background">
+      <SessionLinkControl
+        sessionId={source.sessionId}
+        target={{ kind: 'local' }}
+        initialPartnerSessionId={partner.sessionId}
+        dialogOnly
+      />
+    </div>
+  )
+})
