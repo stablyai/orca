@@ -3,8 +3,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { act, renderHook } from '@testing-library/react'
-import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown-extensions'
-import { createRichMarkdownEditorCodec } from '@/components/editor/rich-markdown-source-transport'
+import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown/schema/rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from '@/components/editor/rich-markdown/document/rich-markdown-source-transport'
 import { useImageInput } from './use-image-input'
 
 vi.mock('sonner', () => ({

@@ -11,7 +11,7 @@ vi.mock('@/store', () => ({
     getState: vi.fn()
   }
 }))
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   notifyEditorExternalFileChange: vi.fn(),
   getOpenFilesForExternalFileChange: vi.fn(() => [])
 }))

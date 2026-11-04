@@ -10,9 +10,9 @@ import {
 import {
   getLocalImageCacheKey,
   getLocalImageSrcCacheKey,
-  releaseLocalImageSrcByKey,
   useLocalImageSrc
-} from '@/components/editor/useLocalImageSrc'
+} from '@/components/editor/document-images/useLocalImageSrc'
+import { releaseLocalImageBlob as releaseLocalImageSrcByKey } from '@/components/editor/document-images/local-image-src-cache'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
