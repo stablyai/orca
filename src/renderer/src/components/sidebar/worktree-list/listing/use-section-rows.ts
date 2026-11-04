@@ -33,7 +33,7 @@ import {
   buildSidebarHostOptions,
   sidebarHostSemantics,
   createSidebarHostLabelsSelector
-} from '../../sidebar-host-options'
+} from '../controls/sidebar-host-options'
 import {
   selectPendingWorktreeCreationKeys,
   decodePendingWorktreeCreationKeys

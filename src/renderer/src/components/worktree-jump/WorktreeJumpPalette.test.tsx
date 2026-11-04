@@ -11,6 +11,8 @@ import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-
 import type { activateAndRevealWorkspace as ActivateWorkspace } from '@/lib/worktree-activation'
 import type { WorkspaceTabPaletteActivationResult } from '@/lib/workspace-tab-palette-activation'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { getDefaultSettings } from '../../../../shared/constants'
 import {
   makeFolderWorkspace,
   makeGroup,
@@ -308,6 +310,41 @@ describe('WorktreeJumpPalette', () => {
     expect(getWorktreeRows()).toHaveLength(1)
     expect(getWorktreeRows()[0]).toContain('Remote design')
     expect(getWorktreeRows()[0]).toContain('Builder')
+  })
+
+  it('announces the selected project count as checkouts regroup', async () => {
+    const first = {
+      ...makeRepo(),
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/org/harbor',
+        remoteName: 'origin',
+        remoteUrl: 'https://github.com/org/harbor'
+      }
+    }
+    const second = { ...first, id: 'repo-2', path: '/repos/second' }
+    const notes = { ...makeRepo(), id: 'notes', path: '/repos/notes' }
+    const repos = [first, second, notes]
+    const projection = projectHostSetupProjectionFromRepos(repos)
+    await renderPalette({
+      repos,
+      projects: projection.projects,
+      projectHostSetups: projection.setups,
+      worktreesByRepo: {},
+      settings: getDefaultSettings(''),
+      filterRepoIds: ['repo-1', 'repo-2', 'notes']
+    })
+
+    expect(testContainer.querySelector('[aria-live="polite"]')?.textContent).toContain(
+      'Filter: 2 active.'
+    )
+    await act(async () => {
+      useAppStore.setState({
+        settings: { ...getDefaultSettings(''), projectGroupingMode: 'folder' }
+      })
+    })
+    expect(testContainer.querySelector('[aria-live="polite"]')?.textContent).toContain(
+      'Filter: 3 active.'
+    )
   })
 
   it('excludes folders when a repository filter is selected', async () => {

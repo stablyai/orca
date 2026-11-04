@@ -1,4 +1,4 @@
-import { worktree as worktreeBase } from '../sidebar/worktree-list-groups-test-fixtures'
+import { worktree as worktreeBase } from '../sidebar/worktree-list/grouping/worktree-list-groups-test-fixtures'
 import {
   addPaletteFilterValues,
   buildPaletteFilterPredicate,

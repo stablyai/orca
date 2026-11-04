@@ -20,9 +20,9 @@ import type * as DesktopWindowChromeModule from '@/lib/desktop-window-chrome'
 import { useMemo, useRef } from 'react'
 import { cleanup } from '@testing-library/react'
 
-import WorktreeList from './WorktreeList'
+import WorktreeList from './worktree-list/listing/WorktreeList'
 import { ConfirmationDialogProvider } from '../confirmation-dialog'
-import WorktreeVisibilityDialog from './WorktreeVisibilityDialog'
+import WorktreeVisibilityDialog from './workspace-visibility/dialog/WorktreeVisibilityDialog'
 import NewWorkspaceComposerModal from '../NewWorkspaceComposerModal'
 import Settings from '../settings/Settings'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
@@ -33,7 +33,7 @@ import { z } from 'zod'
 import { TooltipProvider } from '../ui/tooltip'
 import { useAppStore } from '@/store'
 
-import { repo, worktree } from './worktree-list-groups-test-fixtures'
+import { repo, worktree } from './worktree-list/grouping/worktree-list-groups-test-fixtures'
 export function fetchWorktreesFixture() {
   const providerRequestId = z
     .custom<ProviderRequestId>((value) => value === 'qualified-notice-fixture')

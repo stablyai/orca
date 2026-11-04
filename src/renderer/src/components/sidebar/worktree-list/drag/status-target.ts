@@ -2,9 +2,10 @@ import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
-import { getWorkspaceStatusFromGroupKey } from '../../workspace-status'
-import { getWorktreeLineageDropTargetId } from '../../worktree-lineage-drag-drop'
-import type { WorktreeSidebarStatusDropTarget } from '../../worktree-sidebar-drop-preview'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
+import { getWorktreeLineageDropTargetId } from './worktree-lineage-drag-drop'
+import type { WorktreeSidebarStatusDropTarget } from './worktree-sidebar-drop-preview'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET, type WorktreeSidebarLineageDropTarget } from './row-state'
 
 export function getPointerDropStatusTarget(args: {

@@ -11,12 +11,12 @@ import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-s
 import { makeFolderWorkspace } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { createProjectGroup } from '../../../../../../shared/project-groups'
 import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
-import { repo, worktree, repoMap } from '../../worktree-list-groups-test-fixtures'
+import { repo, worktree, repoMap } from '../grouping/worktree-list-groups-test-fixtures'
 import { buildSidebarRowPlan } from '../grouping/build-rows.test-fixture'
 import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
-import { INITIAL_REPO_DRAG_STATE } from '../../project-header-drag-contract'
-import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../../project-group-header-drag-contract'
+import { INITIAL_REPO_DRAG_STATE } from '../drag/project-header-drag-contract'
+import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../drag/project-group-header-drag-contract'
 
 const initial = useAppStore.getInitialState()
 afterEach(() => {

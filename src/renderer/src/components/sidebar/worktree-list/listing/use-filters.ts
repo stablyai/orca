@@ -1,5 +1,5 @@
 import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
-import { revealRepoInProjectFilter } from '../../project-filter-reveal'
+import { revealRepoInProjectFilter } from '../controls/project-filter-reveal'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -7,7 +7,7 @@ import {
   selectSidebarFilterState,
   sidebarHasActiveFilters,
   sidebarWorkspaceRowFilters
-} from '../../sidebar-filter-actions'
+} from '../controls/sidebar-filter-actions'
 import { useShallow } from 'zustand/react/shallow'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -41,7 +41,7 @@ import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs,
   getWorktreeIdsWithStructuredChat
-} from '../../visible-worktree-activity-inputs'
+} from './visible-worktree-activity-inputs'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>

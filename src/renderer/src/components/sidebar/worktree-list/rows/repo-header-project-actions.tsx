@@ -55,8 +55,8 @@ import {
 import {
   REPO_HEADER_ACTION_BUTTON_CLASS,
   REPO_HEADER_ACTION_REVEAL_CLASS
-} from '../../repo-header-action-button-class'
-import { getRepoHeaderCreateState } from '../../repo-header-create-state'
+} from './repo-header-action-button-class'
+import { getRepoHeaderCreateState } from './repo-header-create-state'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,

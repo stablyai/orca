@@ -7,7 +7,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import type { Repo } from '../../../../shared/repo-types'
-import { worktree as worktreeBase } from '../sidebar/worktree-list-groups-test-fixtures'
+import { worktree as worktreeBase } from '../sidebar/worktree-list/grouping/worktree-list-groups-test-fixtures'
 import { buildPaletteFilterModel } from './palette-filter-options'
 import {
   buildPaletteFilterPredicate,

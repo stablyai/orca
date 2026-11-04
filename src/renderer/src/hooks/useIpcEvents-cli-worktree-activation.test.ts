@@ -84,7 +84,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
       activateAndRevealWorktree,
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
-    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
@@ -352,7 +352,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
-    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
     vi.doMock('@/lib/editor-font-zoom', () => ({

@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import {
-  repo,
-  worktree,
-  project,
-  projectHostSetups
-} from '../../worktree-list-groups-test-fixtures'
+import { repo, worktree, project, projectHostSetups } from './worktree-list-groups-test-fixtures'
 import { makeProjectGroup } from '../../workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { getWorktreeRevealCollapsedGroupKeys } from '../navigation/worktree-reveal-group-keys'
 import { buildRows, buildSidebarRowPlan } from './build-rows.test-fixture'

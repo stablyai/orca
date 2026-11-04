@@ -12,8 +12,8 @@ import { toast } from 'sonner'
 import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import { useAppStore } from '@/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { worktree } from './worktree-list-groups-test-fixtures'
-import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
+import { worktree } from './worktree-list/grouping/worktree-list-groups-test-fixtures'
+import { ProjectGroupNameDialog } from './worktree-list/rows/ProjectGroupNameDialog'
 it('joins the shipping header/group owner to exact real persistence, mixed predicates, null, late receiving refusal and reload/reanchor', async () => {
   const fixture = await groupActionFixture({
     localRepos: [groupRepo('a'), groupRepo('b')],

@@ -187,7 +187,8 @@ afterEach(() => {
 })
 
 export async function renderDialog(): Promise<void> {
-  const { default: WorktreeVisibilityDialog } = await import('./WorktreeVisibilityDialog')
+  const { default: WorktreeVisibilityDialog } =
+    await import('./workspace-visibility/dialog/WorktreeVisibilityDialog')
   await act(async () => {
     root.render(<WorktreeVisibilityDialog />)
   })

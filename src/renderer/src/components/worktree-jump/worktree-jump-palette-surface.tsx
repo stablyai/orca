@@ -181,7 +181,7 @@ export function WorktreeJumpPaletteSurface({
               'worktreeJumpPalette.filter.ariaActiveCount',
               'Filter: {{count}} active.',
               {
-                count: getPaletteFilterSelectionCount(controller.filter),
+                count: getPaletteFilterSelectionCount(controller.filter, controller.filterModel),
                 defaultValue_one: 'Filter: {{count}} active.'
               }
             )} `

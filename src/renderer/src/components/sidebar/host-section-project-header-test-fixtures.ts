@@ -22,7 +22,7 @@ import {
   remoteWorktree,
   project,
   projectHostSetups
-} from './worktree-list-groups-test-fixtures'
+} from './worktree-list/grouping/worktree-list-groups-test-fixtures'
 export const hosts: HostSectionOption[] = [
   { id: 'local', kind: 'local', label: 'Local Mac', detail: '', health: 'local' },
   { id: 'ssh:gpu-vm', kind: 'ssh', label: 'Builder', detail: '', health: 'available' }

@@ -24,7 +24,7 @@ export async function measureRecovery() {
     listLowercaseBytes: 0
   }
   let phase = ''
-  const targets = await import('./worktree-visibility-host-target')
+  const targets = await import('./workspace-visibility/dialog/worktree-visibility-host-target')
   const originalResolve = targets.resolveWorktreeVisibilityTargets
   const resolveSpy = vi
     .spyOn(targets, 'resolveWorktreeVisibilityTargets')
@@ -82,7 +82,7 @@ export async function measureRecovery() {
       phase = previous
     }
   })
-  const source = await import('./WorktreeVisibilitySourceList')
+  const source = await import('./workspace-visibility/sources/WorktreeVisibilitySourceList')
   const originalSource = source.default
   const sourceSpy = vi.spyOn(source, 'default').mockImplementation((props) => {
     counts.sourceRenders++
@@ -94,7 +94,7 @@ export async function measureRecovery() {
       phase = previous
     }
   })
-  const list = await import('./HiddenWorktreeRecoveryList')
+  const list = await import('./workspace-visibility/dialog/HiddenWorktreeRecoveryList')
   const originalList = list.default
   const listSpy = vi.spyOn(list, 'default').mockImplementation((props) => {
     counts.listRenders++

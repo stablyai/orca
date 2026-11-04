@@ -20,7 +20,7 @@ import {
   getProjectSectionRepoLookup,
   type ProjectGroupingIndex
 } from '../../../../shared/project-section-grouping'
-import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
+import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sidebar-host-options'
 import {
   expandEquivalentExecutionHostIds,
   pickerExecutionHosts

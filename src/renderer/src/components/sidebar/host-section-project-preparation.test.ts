@@ -26,7 +26,7 @@ import {
   worktree,
   remoteWorktree,
   project
-} from './worktree-list-groups-test-fixtures'
+} from './worktree-list/grouping/worktree-list-groups-test-fixtures'
 it.each(['distinct', 'same-id', 'alias'] as const)(
   'M2-1 uses the selected qualified pending row for %s, expanded and collapsed',
   (variant) => {

@@ -7,7 +7,7 @@ import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo
 } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
-import { useContextWorkspaceStatuses } from '../../use-workspace-board-statuses'
+import { useContextWorkspaceStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
 import { useMenuScopedWorktreeCatalog } from './use-menu-scoped-worktree-catalog'
 import { getEligibleWorktreeParents } from '../parenting/worktree-parent-candidates'
 import {

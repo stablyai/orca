@@ -498,7 +498,8 @@ it.each([100, 1000])(
       )
       mocks.state.detectedWorktreesByRepo = detected
       mocks.state.fetchWorktrees.mockImplementation((id: string) => byId.get(id)!.promise)
-      const { default: Dialog } = await import('./WorktreeVisibilityDialog')
+      const { default: Dialog } =
+        await import('./workspace-visibility/dialog/WorktreeVisibilityDialog')
       await renderDialog()
       const opened = measurement.snapshot()
       expect(opened.scans).toBe(n)

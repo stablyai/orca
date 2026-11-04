@@ -7,7 +7,7 @@ import { sortProjectEntries } from '../../../../../../shared/project-section-ord
 import { appendProjectGroupSections } from '../../../../../../shared/sidebar-list/project-group-sections'
 import type { SectionAppendContext } from '../../../../../../shared/sidebar-list/group-sections'
 import type { OrderedGroupEntry } from '../../../../../../shared/sidebar-list/worktree-group-entry'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
+import { repo, worktree } from './worktree-list-groups-test-fixtures'
 
 function entry(
   key: string,

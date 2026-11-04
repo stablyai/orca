@@ -7,12 +7,10 @@ import type { AppState } from '@/store/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getHoveredWorkspaceIdentity } from '../../workspace-actions/deletion/hovered-workspace-delete'
-import { computeRenderedSidebarRows } from '../../rendered-sidebar-worktree-order'
-import {
-  computeVisibleWorktrees,
-  getPublishedVisibleWorktreeShortcutTargets
-} from '../../visible-worktrees'
-import { buildVisibleWorktreeOptionsFromState } from '../../visible-worktree-options-from-state'
+import { computeRenderedSidebarRows } from '../../worktree-list/listing/rendered-sidebar-worktree-order'
+import { getPublishedVisibleWorktreeShortcutTargets } from '../../worktree-list/listing/visible-worktrees'
+import { computeVisibleWorktrees } from '../../worktree-list/listing/compute-visible-worktrees'
+import { buildVisibleWorktreeOptionsFromState } from '../../worktree-list/listing/visible-worktree-options-from-state'
 import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
 import {
   getHostScopedWorktreeLineageInputs,

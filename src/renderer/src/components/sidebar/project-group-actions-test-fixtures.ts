@@ -23,7 +23,7 @@ import { getRepoRowIdentity } from '@/store/slices/repo-host-identity'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { type ExecutionHostId, getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { worktree } from './worktree-list-groups-test-fixtures'
+import { worktree } from './worktree-list/grouping/worktree-list-groups-test-fixtures'
 import { local } from './qualified-notice-actions-test-fixtures'
 export async function groupActionFixture(input: {
   localRepos: Repo[]

@@ -4,7 +4,7 @@ import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../sh
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
+import { buildSidebarHostOptions } from '../sidebar/worktree-list/controls/sidebar-host-options'
 import { buildPaletteFilterModel, resolveWorktreeFilterHostId } from './palette-filter-options'
 import { buildPaletteFilterPredicate } from './palette-filter'
 

@@ -10,8 +10,8 @@ import {
   ConductorDoneIcon,
   ConductorProgressIcon,
   ConductorReviewIcon
-} from '../../workspace-status-icons'
-import { getWorkspaceStatusVisualMeta } from '../../workspace-status'
+} from '../../workspace-status/presentation/workspace-status-icons'
+import { getWorkspaceStatusVisualMeta } from '../../workspace-status/presentation/workspace-status'
 
 const PR_GROUP_META: Record<
   PRGroupKey,

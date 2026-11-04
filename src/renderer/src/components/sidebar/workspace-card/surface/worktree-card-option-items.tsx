@@ -17,7 +17,7 @@ import {
   CARD_LAYOUT_OPTIONS,
   PROPERTY_OPTIONS,
   getWorktreeCardDisplayOptions
-} from '../../sidebar-workspace-option-items'
+} from '../../worktree-list/controls/sidebar-workspace-option-items'
 import { translate } from '@/i18n/i18n'
 
 type CardMenuItemProps = {

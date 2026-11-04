@@ -1,7 +1,7 @@
 import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { getProjectSectionRepoLookup } from '../../../../../../shared/project-section-reveal'
-import { partitionDetectedWorktreesByHost } from '../../worktree-visibility-host-target'
+import { partitionDetectedWorktreesByHost } from '../../workspace-visibility/dialog/worktree-visibility-host-target'
 import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -11,16 +11,14 @@ import {
   keepImportedWorktreesHiddenCard,
   showImportedWorktreesCard,
   type ImportedWorktreeCardActionState
-} from '../../imported-worktrees-card-actions'
-import {
-  buildImportedWorktreesCardCandidates,
-  getHiddenImportedWorktrees
-} from '../../imported-worktrees-card-candidates'
+} from './imported-worktrees-card-actions'
+import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
+import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/external-worktree-inbox'
 import {
   suppressNewExternalWorktreeInbox,
   type NewExternalWorktreesInboxActionState
-} from '../../new-external-worktrees-inbox-actions'
-import { buildNewExternalWorktreesInboxCandidates } from '../../new-external-worktrees-inbox-candidates'
+} from './new-external-worktrees-inbox-actions'
+import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
 import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function useSidebarExternalWorktreeCards(args: {

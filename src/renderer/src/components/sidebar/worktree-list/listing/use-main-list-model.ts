@@ -37,7 +37,7 @@ import { collectHeaderRevealPlacements } from '../../../../../../shared/sidebar-
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { sidebarWorkspaceRowFilters } from '../../sidebar-filter-actions'
+import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
 import type { SidebarListModel, SidebarListModelArgs } from './sidebar-list-model'
 import { withWindowCreations } from './window-worktree-creations'
 export { withWindowCreations } from './window-worktree-creations'

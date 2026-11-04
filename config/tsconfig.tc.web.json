@@ -14,7 +14,7 @@
     "../src/shared/**/*.spec.ts",
     "../src/shared/**/*.spec.tsx",
     "../src/renderer/src/app-shell/project-grouping-authored-peer-writes.test.tsx",
-    "../src/renderer/src/components/sidebar/SidebarRepositoryFilterSection.test.tsx",
+    "../src/renderer/src/components/sidebar/worktree-list/controls/SidebarRepositoryFilterSection.test.tsx",
     "../src/renderer/src/components/sidebar/project-group-actions-test-fixtures.ts",
     "../src/renderer/src/components/sidebar/qualified-group-actions-lifetime.test.tsx",
     "../src/renderer/src/components/sidebar/qualified-group-actions-scaling.test.tsx",

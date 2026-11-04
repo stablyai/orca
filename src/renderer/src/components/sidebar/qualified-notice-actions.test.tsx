@@ -21,13 +21,13 @@ import {
   buildImportedWorktreesCardRow,
   buildNewExternalWorktreesInboxRow
 } from '../../../../shared/sidebar-list/row-builders'
-import { repo } from './worktree-list-groups-test-fixtures'
-import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
-import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
+import { repo } from './worktree-list/grouping/worktree-list-groups-test-fixtures'
+import { buildImportedWorktreesCardCandidates } from './worktree-list/listing/imported-worktrees-card-candidates'
+import { buildNewExternalWorktreesInboxCandidates } from './worktree-list/listing/new-external-worktrees-inbox-candidates'
 import {
   partitionDetectedWorktreesByHost,
   resolveWorktreeVisibilityHostTarget
-} from './worktree-visibility-host-target'
+} from './workspace-visibility/dialog/worktree-visibility-host-target'
 import { useSidebarExternalWorktreeCards } from './worktree-list/listing/use-external-worktree-cards'
 import { SidebarWorktreeListDialogs } from './worktree-list/rows/ProjectGroupDialogs'
 import { useProjectGroupDialogs } from './worktree-list/rows/use-project-group-dialogs'

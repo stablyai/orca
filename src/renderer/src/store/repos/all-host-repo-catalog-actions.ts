@@ -91,6 +91,7 @@ export function createAllHostRepoCatalogActions(
           )
           return {
             repos: finalizedRepos,
+            ...(fence.target.kind === 'local' ? { localRepoCatalogHydrated: true } : {}),
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
             ...reconcileFetchedCatalogWorktreeState(
               s,

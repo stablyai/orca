@@ -6,16 +6,16 @@ import type { AppState } from '@/store/types'
 import {
   importNewExternalWorktreeInboxPaths,
   type NewExternalWorktreesInboxActionState
-} from './new-external-worktrees-inbox-actions'
-import type { resolveWorktreeVisibilityTargets } from './worktree-visibility-host-target'
-import { getLatestRepoForVisibilityScope } from './worktree-visibility-repo-sources'
+} from './worktree-list/listing/new-external-worktrees-inbox-actions'
+import type { resolveWorktreeVisibilityTargets } from './workspace-visibility/dialog/worktree-visibility-host-target'
+import { getLatestRepoForVisibilityScope } from './workspace-visibility/dialog/worktree-visibility-repo-sources'
 import {
   getActiveVisibilityMutation,
   startVisibilityMutation,
   finishVisibilityMutation,
   useVisibilityMutationFence,
   type ActiveVisibilityMutation
-} from './worktree-visibility-mutation-fence'
+} from './workspace-visibility/dialog/worktree-visibility-mutation-fence'
 
 export function useWorktreeVisibilityRecovery({
   isOpen,

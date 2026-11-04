@@ -17,7 +17,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { worktree } from './worktree-list-groups-test-fixtures'
+import { worktree } from './worktree-list/grouping/worktree-list-groups-test-fixtures'
 
 function hasConcreteRepoUpdates(
   updates: Parameters<AppState['updateRepo']>[1]

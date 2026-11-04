@@ -6,7 +6,7 @@ import { isDefaultBranchWorkspace } from '../../../../../../shared/worktree/work
 import {
   revealRepoInProjectFilter,
   type ProjectFilterRevealState
-} from '../../project-filter-reveal'
+} from '../../worktree-list/controls/project-filter-reveal'
 
 export type AddRepoSkipFinalizationState = ProjectFilterRevealState & {
   activeRepoId: string | null
