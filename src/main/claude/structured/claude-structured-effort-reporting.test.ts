@@ -3,7 +3,14 @@ import { setClaudeStructuredOption } from './launch/claude-structured-options'
 import { readClaudeSettingsEffort } from './launch/claude-structured-session-options'
 import type { ClaudeSession, ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 
-import { USER_MESSAGE, acquired, fakeClaude } from './claude-structured-session-test-support'
+import {
+  USER_MESSAGE,
+  acquired,
+  adapterFor,
+  fakeClaude,
+  identityFor,
+  recordingJournalSink
+} from './claude-structured-session-test-support'
 
 /** Verbatim from Claude Code 2.1.258's get_settings response. */
 const REAL_SETTINGS = {
@@ -74,6 +81,57 @@ describe('Claude effort reporting', () => {
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
       current: { effort: 'high' }
     })
+  })
+
+  it('keeps ordinary effort visible when a configured workflow uses another effort', async () => {
+    const settings = {
+      ...REAL_SETTINGS,
+      applied: { ...REAL_SETTINGS.applied, ultracode: true }
+    }
+    const adapter = await acquired(fakeClaude({ settings }))
+    expect((await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current.effort).toBe(
+      'high'
+    )
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'configured-workflow',
+        body: USER_MESSAGE,
+        executionOptions: {},
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'admitted', ranOptions: { effort: 'high' } })
+    await adapter.closeAll()
+  })
+
+  it('keeps a configured workflow at launch without confirming saved ordinary XHigh', async () => {
+    const claude = fakeClaude({
+      settings: { applied: { effort: 'xhigh', ultracode: true }, effective: {} }
+    })
+    const adapter = adapterFor(claude)
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'configured-workflow',
+      options: { effort: 'xhigh' },
+      events: recordingJournalSink()
+    })
+    const current = (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current
+    expect(current.effort).toBe('xhigh')
+    expect(current.confirmed ?? []).not.toContain('effort')
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'configured-workflow',
+        body: USER_MESSAGE,
+        executionOptions: { effort: 'xhigh' },
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'admitted', ranOptions: { effort: 'ultracode' } })
+    expect(claude.connections[0]!.calls.map(({ subtype }) => subtype)).not.toContain(
+      'apply_flag_settings'
+    )
+    await adapter.closeAll()
   })
 
   it('leaves the effort unreported when the session never learns one', async () => {

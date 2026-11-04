@@ -18,7 +18,7 @@ export function claudeObservedEffort(
   effort: string | null | undefined,
   ultracode: unknown
 ): string | null {
-  return ultracode === true ? (effort === 'xhigh' ? 'ultracode' : null) : (effort ?? null)
+  return ultracode === true && effort === 'xhigh' ? 'ultracode' : (effort ?? null)
 }
 
 /** Effort comes from settings; system/init omits it. */
