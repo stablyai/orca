@@ -4,7 +4,7 @@ import {
   getWorkspaceSpaceWorktreeIdentity
 } from './workspace-space-delete-selection'
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import {
   WORKSPACE_SPACE_FILTER_QUERY_MAX_BYTES,
   countWorkspaceSpaceActiveAgents,
@@ -23,7 +23,7 @@ import {
   getWorkspaceSpaceDeleteState,
   getWorkspaceSpaceGitStatusForScan
 } from './workspace-space-state-resolution'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'

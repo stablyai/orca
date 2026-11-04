@@ -3,7 +3,7 @@ import {
   writeRefused,
   writeUnverifiable,
   type WriteSettlement
-} from '../../../shared/pty-write-settlement'
+} from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export type OrchestrationPointerWriteArgs = {
   ptyId: string

@@ -13,9 +13,9 @@ import {
 import {
   getMonacoMarkdownSelectionAnnotationTarget,
   type MonacoMarkdownSelectionAnnotationTarget
-} from './monaco-markdown-selection-annotation'
+} from './markdown-source-tools/monaco/monaco-markdown-selection-annotation'
 import { handleMonacoLargeTextPaste, MONACO_PASTE_MAX_BYTES } from './monaco-large-text-paste'
-import type { MarkdownCommentPopoverState } from './use-monaco-markdown-annotations'
+import type { MarkdownCommentPopoverState } from './markdown-source-tools/monaco/use-monaco-markdown-annotations'
 import type { MonacoEditorPropsRef } from './monaco-editor-mount-params'
 
 type MonacoEditorInputBindingsParams = {

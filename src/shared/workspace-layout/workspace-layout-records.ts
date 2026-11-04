@@ -1,6 +1,6 @@
 // Publish changes as keyed records; splitting/joining preserves every field so additive wire fields pass through unchanged (E1).
 
-import { ownedEditorFileId } from '../workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-ownership'
 import { stableJson } from './workspace-layout-load-report'
 import type {
   PublishedBrowserTab,

@@ -1,0 +1,106 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import SyncDatabase from '../../../sqlite/sync-database'
+import {
+  findNewestCodexStateDbPath,
+  isCodexStateDbBackfillPending,
+  readCodexStateDbBackfillPendingState,
+  readCodexStateDbBackfillStatus,
+  readIndexedCodexThreadIds
+} from './codex-state-db'
+
+const temporaryHomes: string[] = []
+
+async function createHome(): Promise<string> {
+  const home = await mkdtemp(join(tmpdir(), 'orca-codex-state-db-'))
+  temporaryHomes.push(home)
+  return home
+}
+
+function createBackfillDb(home: string, version: number, status: string): string {
+  const path = join(home, `state_${version}.sqlite`)
+  const db = new SyncDatabase(path)
+  db.exec(
+    'CREATE TABLE backfill_state (id INTEGER PRIMARY KEY, status TEXT NOT NULL); ' +
+      `INSERT INTO backfill_state (id, status) VALUES (1, '${status}')`
+  )
+  db.close()
+  return path
+}
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryHomes.splice(0).map((home) => rm(home, { recursive: true, force: true }))
+  )
+})
+
+describe('Codex state DB backfill status', () => {
+  it('reads the newest schema DB without mutating an incomplete row', async () => {
+    const home = await createHome()
+    createBackfillDb(home, 4, 'complete')
+    const newest = createBackfillDb(home, 5, 'running')
+
+    expect(findNewestCodexStateDbPath(home)).toBe(newest)
+    expect(readCodexStateDbBackfillStatus(home)).toEqual({
+      kind: 'incomplete',
+      stateDbPath: newest,
+      status: 'running'
+    })
+
+    const db = new SyncDatabase(newest, { readonly: true, fileMustExist: true })
+    expect(db.prepare('SELECT status FROM backfill_state WHERE id = 1').get()).toEqual({
+      status: 'running'
+    })
+    db.close()
+  })
+
+  it('counts compressed rollouts, which Codex also backfills', async () => {
+    const home = await createHome()
+    const sessions = join(home, 'sessions', '2026', '08', '04')
+    await mkdir(sessions, { recursive: true })
+    await Promise.all(
+      Array.from({ length: 100 }, (_, index) =>
+        writeFile(join(sessions, `rollout-${index}.jsonl.zst`), '')
+      )
+    )
+
+    expect(isCodexStateDbBackfillPending(home)).toBe(true)
+  })
+})
+
+describe('readCodexStateDbBackfillPendingState', () => {
+  it('reports an unreadable index separately while the boolean stays not-pending', async () => {
+    const home = await createHome()
+    await writeFile(join(home, 'state_5.sqlite'), 'not a sqlite database')
+
+    expect(readCodexStateDbBackfillStatus(home).kind).toBe('unreadable')
+    expect(readCodexStateDbBackfillPendingState(home)).toBe('unreadable')
+    expect(isCodexStateDbBackfillPending(home)).toBe(false)
+  })
+})
+
+describe('readIndexedCodexThreadIds', () => {
+  it('returns lower-cased thread ids from the newest state DB', async () => {
+    const home = await createHome()
+    const path = createBackfillDb(home, 5, 'complete')
+    const db = new SyncDatabase(path)
+    db.exec(
+      "CREATE TABLE threads (id TEXT PRIMARY KEY); INSERT INTO threads (id) VALUES ('ABC'), ('def')"
+    )
+    db.close()
+
+    expect(readIndexedCodexThreadIds(home)).toEqual(new Set(['abc', 'def']))
+  })
+
+  it('returns null when there is no state DB or no threads table', async () => {
+    const home = await createHome()
+    expect(readIndexedCodexThreadIds(home)).toBeNull()
+
+    createBackfillDb(home, 5, 'complete')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(readIndexedCodexThreadIds(home)).toBeNull()
+    warn.mockRestore()
+  })
+})

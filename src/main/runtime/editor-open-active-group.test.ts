@@ -6,7 +6,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession
 } from './orca-runtime-test-fixtures.spec'
 import { openEditorFileThroughLayoutOwner } from './files/editor-open-through-layout-owner'
-import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../shared/workspace-session/workspace-session-pane-ownership'
 import {
   addWorkspace,
   emptySession,

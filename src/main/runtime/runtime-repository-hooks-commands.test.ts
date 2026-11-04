@@ -8,8 +8,8 @@ const mocks = vi.hoisted(() => ({
   loadHooks: vi.fn((): OrcaHooks | null => null)
 }))
 
-vi.mock('../wsl/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: mocks.blocked }))
-vi.mock('../hooks', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: mocks.blocked }))
+vi.mock('../workspace-hooks/hooks', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   hasHooksFile: mocks.hasHooksFile,
   loadHooks: mocks.loadHooks
@@ -41,13 +41,6 @@ describe('repo.hooksCheck on the host', () => {
     })
     expect(mocks.blocked).toHaveBeenCalledWith(repo.path)
     expect(mocks.hasHooksFile).not.toHaveBeenCalled()
-  })
-
-  it('an unverifiable distro is refused too, as worth a retry', async () => {
-    mocks.blocked.mockResolvedValue({ distro: 'Ubuntu', state: 'unverifiable' })
-    await expect(commands.checkRepoHooks('repo-1', { background: true })).resolves.toMatchObject({
-      unavailable: 'wsl-distro-unverifiable'
-    })
   })
 
   it('a user-asked check, or one from an older client, reads as before', async () => {

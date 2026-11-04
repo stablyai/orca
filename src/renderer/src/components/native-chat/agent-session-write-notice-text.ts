@@ -1,6 +1,7 @@
 // Translate whole shared sentences with their English fallbacks so desktop and mobile wording agree.
 
 import { translate } from '@/i18n/i18n'
+import { expiredAttachmentsSentence } from '../../../../shared/agent-session/failures/agent-session-attachment-failure-words'
 import {
   agentSessionFailureSentence,
   type AgentSessionFailureWordsContext
@@ -89,6 +90,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.attachmentExpired', COPY.attachmentExpired),
   reattachFile: () =>
     translate('components.native-chat.writeNotice.reattachFile', COPY.reattachFile),
+  reattachFiles: () =>
+    translate('components.native-chat.writeNotice.reattachFiles', COPY.reattachFiles),
   conversationCleared: () =>
     translate('components.native-chat.writeNotice.conversationCleared', COPY.conversationCleared),
   openCurrentConversation: () =>
@@ -188,12 +191,17 @@ export function agentSessionWriteNoticeText(parts: readonly AgentSessionWriteNot
         ? SENTENCES[part]()
         : 'text' in part
           ? part.text
-          : agentSessionFailureSentence(
-              part.failure,
-              part.surface,
-              part.context,
-              sayAgentSessionFailureTranslated
-            )
+          : 'expiredAttachmentNames' in part
+            ? expiredAttachmentsSentence(
+                part.expiredAttachmentNames,
+                sayAgentSessionFailureTranslated
+              )
+            : agentSessionFailureSentence(
+                part.failure,
+                part.surface,
+                part.context,
+                sayAgentSessionFailureTranslated
+              )
     )
   )
 }

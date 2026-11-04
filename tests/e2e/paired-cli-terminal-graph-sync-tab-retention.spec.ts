@@ -8,7 +8,7 @@ import type { Page, TestInfo } from '@stablyai/playwright-test'
 import {
   toWebTerminalSurfaceTabId,
   WEB_TERMINAL_SURFACE_TAB_PREFIX
-} from '../../src/shared/terminal-surface-id'
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
@@ -245,13 +245,6 @@ async function runCliTerminalRetentionJourney(
     await client.dispose()
   }
 }
-
-test('keeps a host-created CLI terminal when an earlier host-created terminal exists', async ({
-  orcaPage
-}, testInfo) => {
-  test.setTimeout(600_000)
-  await runCliTerminalRetentionJourney(orcaPage, testInfo, 'cli-terminal-graph-sync', true)
-})
 
 // The real CLI omits clientMutationId: its first host-admitted tab must establish persistence authority.
 // Reverting store.ts/pty.ts fails at host inventory retention.

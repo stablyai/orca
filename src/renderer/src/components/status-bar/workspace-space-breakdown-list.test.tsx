@@ -6,7 +6,7 @@ import { WorkspaceSpaceBreakdownList } from './workspace-space-breakdown-list'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
-} from '../../../../shared/workspace-space-types'
+} from '../../../../shared/workspace-disk-space/workspace-space-types'
 
 const revealInFileManager = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/reveal-in-file-manager', () => ({

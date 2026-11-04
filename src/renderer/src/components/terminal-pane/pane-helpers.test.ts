@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { fitAndFocusPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
+import { fitAndFocusPanes, isWindowsUserAgent } from './pane-helpers'
+import { shellEscapePath } from '../../../../shared/shell/launch/shell-path-quoting'
 
 describe('isWindowsUserAgent', () => {
   it('detects Windows user agents', () => {

@@ -1,14 +1,14 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { AiVaultAgent } from '../../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   assertAiVaultCopiedSessionStoreAllowed,
   buildAiVaultForkStartup,
-  resolveAiVaultCopiedSessionAgentArgs
-} from '../../../shared/ai-vault-resume-startup'
+  resolveAiVaultCopiedSessionAgentArgs,
+  type AiVaultResumeStartup
+} from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import {
   buildAiVaultResumeStartupForWorktree,
   resolveAiVaultResumeHost,
-  type AiVaultResumeStartup,
   type AiVaultResumeWorktreeArgs
 } from '@/lib/ai-vault-resume-command'
 

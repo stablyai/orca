@@ -1,10 +1,13 @@
 // A capture exceeding its budget must publish prompt unverifiable evidence; truthful-but-stale live records trigger retries and degrade completion cadence.
 import { describe, expect, it, vi } from 'vitest'
-import { handleAgentCompletionInspectionResult } from './agent-completion-inspection-result'
-import type { RemoteInspectionState } from './agent-completion-inspection-result'
+import {
+  handleAgentCompletionInspectionResult,
+  type RemoteInspectionState
+} from './agent-completion-inspection-result'
+
 import type { ProcessMonitorState } from './agent-completion-process-types'
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS } from '../../../../shared/remote-foreground-evidence-admission'
 

@@ -1,5 +1,5 @@
 import { isWslShellName } from '../../../shared/local-windows-terminal-runtime'
-import { parseWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 
 /** A local terminal that runs in WSL: a WSL shell, or a folder under `\\wsl.localhost\…`. */
 export function isWslTerminalSpawn(

@@ -27,7 +27,7 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
-vi.mock('../pwsh', () => ({
+vi.mock('../pty/shell-startup/pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 

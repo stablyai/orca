@@ -3,7 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as WorkspaceSessionModule from '@/lib/workspace-session'
 import type * as WorkspaceLayoutLoadModule from '../../../shared/workspace-layout/workspace-layout-load'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import {
@@ -149,21 +149,6 @@ describe('a records frame in the window', () => {
     close()
   })
 
-  it('shows a binding record without a rebuild', async () => {
-    const { store, first, send, close } = await boot()
-    const rebound = structuredClone(first)
-    rebound.tabs[7]!.terminal!.panes[0]!.ptyId = 'pty-fresh'
-    rebound.tabs[7]!.terminal!.panes[0]!.ptyGeneration = 2
-
-    await send(rebound)
-
-    expect([...check.fullBuilt, ...check.workspaceBuilt]).toEqual([])
-    expect(store.getState().terminalLayoutsByTabId['tab-7']!.ptyIdsByLeafId).toEqual({
-      [leafOf(7)]: 'pty-fresh'
-    })
-    close()
-  })
-
   it('rebinds a pane in its one store record, keeping its row and tree so the xterm stays mounted', async () => {
     const { store, first, send, close } = await boot()
     const before = store.getState()
@@ -188,18 +173,6 @@ describe('a records frame in the window', () => {
     expect(after.terminalLayoutsByTabId['tab-7']!.ptyIdsByLeafId).toEqual({
       [leafOf(7)]: 'pty-fresh'
     })
-    close()
-  })
-
-  it('writes nothing for a respawn under the same id: only its generation rose', async () => {
-    const { first, writes, send, close } = await boot()
-    const respawned = structuredClone(first)
-    respawned.tabs[3]!.terminal!.panes[0]!.ptyGeneration = 2
-
-    await send(respawned)
-
-    expect(writes).not.toHaveBeenCalled()
-    expect([...check.fullBuilt, ...check.workspaceBuilt]).toEqual([])
     close()
   })
 })

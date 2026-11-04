@@ -80,7 +80,7 @@ vi.mock('../gitlab/gl-utils', () => ({
   glabExecFileAsync: glabExecFileAsyncMock,
   glabRepoExecOptions: (repoPath: string) => ({ cwd: repoPath })
 }))
-vi.mock('../git/upstream', () => ({
+vi.mock('../git/source-control/upstream', () => ({
   getUpstreamStatus: getUpstreamStatusMock
 }))
 vi.mock('./hosted-review', () => ({

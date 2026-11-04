@@ -1,5 +1,6 @@
 import {
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
+  AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY
 } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import {
@@ -33,6 +34,7 @@ import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../src/shared/skill-i
 export type StructuredAgentSessionHostSupport = {
   commandsOnRequest?: boolean
   coherentModelCatalog?: boolean
+  modelEffortDiscovery?: boolean
   promptCancel: boolean
   questionAnswers: boolean
   // Older hosts send mid-turn messages immediately instead of queueing drafts.
@@ -70,6 +72,7 @@ export function structuredAgentSessionHostSupport(
   return {
     commandsOnRequest: capabilities.includes(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY),
     coherentModelCatalog: capabilities.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY),
+    modelEffortDiscovery: capabilities.includes(AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY),
     promptCancel: capabilities.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY),
     questionAnswers: capabilities.includes(AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY),
     queuedMessages: capabilities.includes(AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY),

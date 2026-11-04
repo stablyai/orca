@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 export function compareRecordedKeys(left: string, right: string): number {
   for (let i = 0; i < Math.min(left.length, right.length); i++) {

@@ -4,7 +4,7 @@ import {
   deriveIntegrationFlowState,
   deriveIntegrationStepStates
 } from './use-integration-connection-status'
-import { deriveCliProviderCardState } from '@/components/settings/source-control-integration-cards'
+import { deriveCliProviderCardState } from '@/components/integrations/source-control/source-control-preflight-card-status'
 
 type StatusFacts = Parameters<typeof deriveIntegrationConnectionStatus>[0]
 

@@ -8,11 +8,11 @@ import {
   DEVICE_KEY_EPHEMERAL_RUNTIME_CAPABILITY,
   DEVICE_KEY_RUNTIME_CAPABILITY,
   REGISTER_DEVICE_KEY_METHOD
-} from '../../../src/shared/device-key-capability'
-import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
+} from '../../../src/shared/remote-runtime/pairing/device-key-capability'
+import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
 import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
 import { registerSocketDeviceKey } from '../../../src/main/runtime/runtime-rpc/runtime-rpc-device-key-registration'
-import { generateKeyPair } from '../../../src/shared/e2ee-crypto'
+import { generateKeyPair } from '../../../src/shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,

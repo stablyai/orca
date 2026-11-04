@@ -8,6 +8,7 @@ import {
   FileMutationOpen,
   FileRename,
   FileWrite,
+  FileFormatText,
   FileWriteIfUnchanged,
   FileWriteBase64,
   FileWriteBase64Chunk
@@ -37,6 +38,18 @@ function sshMutationArguments(
 }
 
 export const FILE_MUTATION_METHODS = [
+  defineMethod({
+    name: 'files.formatText',
+    permission: 'workspace',
+    params: FileFormatText,
+    handler: async (params, { runtime }) =>
+      runtime.formatFileExplorerText(
+        params.worktree,
+        params.relativePath,
+        params.content,
+        ...sshMutationArguments(params)
+      )
+  }),
   defineMethod({
     name: 'files.write',
     permission: 'workspace',

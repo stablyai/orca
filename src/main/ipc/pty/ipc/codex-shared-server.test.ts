@@ -21,11 +21,11 @@ vi.mock('../pty-host-bindings', () => ({
     handle: (channel: string, handler: Handler) => mocks.handlers.set(channel, handler)
   })
 }))
-vi.mock('../../../codex/codex-shared-server-pane', () => ({
+vi.mock('../../../codex/configuration/shared-server/codex-shared-server-pane', () => ({
   findPaneCodexOnSharedServer: mocks.findPaneCodexOnSharedServer,
   resolveCodexPaneHome: mocks.resolveCodexPaneHome
 }))
-vi.mock('../../../codex/codex-shared-server-fix', () => ({
+vi.mock('../../../codex/configuration/shared-server/codex-shared-server-fix', () => ({
   disableCodexSharedServerAutoStart: mocks.disable,
   stopCodexSharedServer: mocks.stop
 }))

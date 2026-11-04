@@ -4,7 +4,7 @@ import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../shared/e
 import { collectUnsupportedSessionItems } from './orcad-source-workspace-session-eligibility'
 import type { OrcadMigrationSourceScope } from './orcad-source-scope'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 // `repo-1` is selected but another host registers it too, so its unqualified keys are ambiguous.
 const ROWS = {

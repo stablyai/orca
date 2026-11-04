@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MutableRefObject } from 'react'
-import type { GitUpstreamStatus } from '../../../../../../shared/git-status-types'
+import type { GitUpstreamStatus } from '../../../../../../shared/git/status/git-status-types'
 import {
   shouldRefreshBranchCompareForRemoteStatus,
   shouldRefreshBranchCompareForStatusHead,

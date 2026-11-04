@@ -1,7 +1,7 @@
 // A saved tunnel port can become unbindable: a Windows excluded port range or another app's listener.
-import { moveManagedOrcadLocalPort } from '../../../shared/runtime-environment-managed-orcad-store'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { getOrcadSshDeployment } from '../../../shared/runtime-environments'
+import { moveManagedOrcadLocalPort } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { reserveLocalForwardPort } from '../../ssh/system-transport/system-ssh-forward-port-reservation'
 import { notifyManagedOrcadPairingRepaired } from './orcad-managed-pairing-repaired-listener'
 

@@ -9,8 +9,8 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration-worker-output'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isLocalHookConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
 import type { DispatchContextRow } from '../../types'
 import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
@@ -26,7 +26,7 @@ export type WorkerResumeSession = {
 }
 
 export function getFollowUpDispatch(
-  db: OrchestrationDb,
+  db: Pick<OrchestrationDb, 'db'>,
   dispatchId: string
 ): DispatchContextRow | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
@@ -35,19 +35,36 @@ export function getFollowUpDispatch(
     .get(dispatchId) as DispatchContextRow | undefined
 }
 
+export type WorkerLineage = {
+  latest: DispatchContextRow
+  resource: WorkerTerminalResourceRow | undefined
+}
+
+/** The reads a lineage walk needs; the database itself, or a reader that memoizes them. */
+export type WorkerLineageReader = Pick<OrchestrationDb, 'db'> & {
+  getDispatchContextById(dispatchId: string): DispatchContextRow | undefined
+  getWorkerTerminalResourceByOwner(dispatchId: string): WorkerTerminalResourceRow | undefined
+  getWorkerTerminalResourceFormerlyOwnedBy(
+    dispatchId: string
+  ): WorkerTerminalResourceRow | undefined
+}
+
 /** A worker's newest Dispatch and resource, from any Dispatch it ran; follow-ups and `worker-start --terminal` both continue it. */
 export function resolveWorkerLineage(
-  db: OrchestrationDb,
-  dispatchId: string
-): { latest: DispatchContextRow; resource: WorkerTerminalResourceRow | undefined } | undefined {
+  db: WorkerLineageReader,
+  dispatchId: string,
+  followUp: (id: string) => DispatchContextRow | undefined = (id) => getFollowUpDispatch(db, id),
+  cache?: Map<string, WorkerLineage>
+): WorkerLineage | undefined {
   return resolveWorkerLineageFacts(
     {
       dispatch: (id) => db.getDispatchContextById(id),
       ownedResource: (id) => db.getWorkerTerminalResourceByOwner(id),
       formerResource: (id) => db.getWorkerTerminalResourceFormerlyOwnedBy(id),
-      followUp: (id) => getFollowUpDispatch(db, id)
+      followUp
     },
-    dispatchId
+    dispatchId,
+    cache
   )
 }
 

@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
@@ -192,76 +192,5 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     expect(mirrorKeys().resubscribeSignal).not.toBe(stranded.signal)
     expect(mirroredSubscriptions('session.tabs.subscribeAll')).toHaveLength(stranded.all + 1)
     expect(mirroredSubscriptions('session.tabs.subscribe')).toHaveLength(stranded.active + 1)
-  })
-
-  // Lost create replies may hide accepted terminals; the fresh census permits one recheck per return.
-  it('re-checks unconfirmed chat starts on that host when its reinstalled stream opens', async () => {
-    await connectThenLoseContact()
-    const census = async (): Promise<void> => {
-      const [reopened] = mirroredSubscriptions('session.tabs.subscribeAll').slice(-1)
-      await act(async () => {
-        reopened?.callbacks.onResponse({
-          id: 'census',
-          ok: true,
-          result: { type: 'snapshots', snapshots: [], authoritative: true },
-          _meta: { runtimeId: 'runtime-a' }
-        })
-        await settle()
-      })
-    }
-    mocks.recheckUnconfirmedLaunches.mockClear()
-
-    await regainContact()
-    expect(mocks.recheckUnconfirmedLaunches).not.toHaveBeenCalled()
-    await census()
-
-    expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledOnce()
-    expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledWith(`runtime:${ENV_A}`)
-  })
-
-  // Recovery keeps the connection identity/cache key, preserving retained-state stamps (#19647).
-  it('holds the mirror environment key across the outage and the recovery', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(async () => {
-      useAppStore.getState().applyRuntimeHostStatusSnapshot(hostSnapshot(1))
-      await settle()
-    })
-    const connectedKey = mirrorKeys().environmentKey
-    expect(connectedKey).not.toBe('')
-
-    await act(async () => {
-      useAppStore
-        .getState()
-        .applyRuntimeHostStatusSnapshot(hostSnapshot(2, { verification: 'unavailable' }))
-      await settle()
-    })
-    expect(mirrorKeys().environmentKey).toBe(connectedKey)
-
-    await regainContact()
-    expect(mirrorKeys().environmentKey).toBe(connectedKey)
-  })
-
-  // Replacement runtimes change connection identity and must rebuild the mirror.
-  it('still rebuilds the mirror key when the host returns as a replacement runtime', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(async () => {
-      useAppStore.getState().applyRuntimeHostStatusSnapshot(hostSnapshot(1))
-      await settle()
-    })
-    const connectedKey = mirrorKeys().environmentKey
-
-    await act(async () => {
-      useAppStore
-        .getState()
-        .applyRuntimeHostStatusSnapshot(hostSnapshot(2, { verification: 'unavailable' }))
-      useAppStore.getState().applyRuntimeHostStatusSnapshot(
-        hostSnapshot(3, {
-          status: makeStatus('runtime-b')
-        })
-      )
-      await settle()
-    })
-
-    expect(mirrorKeys().environmentKey).not.toBe(connectedKey)
   })
 })

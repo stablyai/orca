@@ -6,6 +6,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { OrchestrationCrewPanel } from './OrchestrationCrewPanel'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { i18n, loadRendererUiLanguage, translate } from '@/i18n/i18n'
 
 const rig = vi.hoisted(() => ({
   snapshot: {},
@@ -36,7 +38,12 @@ const worker: OrchestrationCrewRow = {
     sequence: 1
   }
 }
-function mount(row = worker, section: 'managing' | 'talkingWith' = 'managing', canMention = false) {
+function mount(
+  row = worker,
+  section: 'managing' | 'talkingWith' = 'managing',
+  canMention = false,
+  surface: 'chat' | 'terminal' = 'chat'
+) {
   rig.snapshot = {
     ...emptyCrew('ok'),
     sections: {
@@ -59,16 +66,57 @@ function mount(row = worker, section: 'managing' | 'talkingWith' = 'managing', c
             party="term_coordinator"
             canMention={canMention}
             mention={rig.mention}
+            surface={surface}
           />
         </div>
       </fieldset>
     </TooltipProvider>
   )
 }
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   vi.restoreAllMocks()
   vi.clearAllMocks()
+  await i18n.changeLanguage('en')
+})
+
+it.each([
+  ['chat', 'en'],
+  ['chat', 'de'],
+  ['terminal', 'en'],
+  ['terminal', 'de']
+] as const)('keeps the %s panel and tab opaque and outlined in %s', async (surface, language) => {
+  await i18n.changeLanguage(await loadRendererUiLanguage(language))
+  const user = userEvent.setup()
+  mount(worker, 'managing', false, surface)
+  const tab = screen.getByRole('button', { expanded: false })
+  const root = tab.closest('[data-orchestration-crew]')
+  expect(root).toHaveClass(
+    '[--crew-border:color-mix(in_srgb,var(--foreground)_20%,var(--border))]',
+    '[--crew-surface:color-mix(in_srgb,var(--foreground)_7%,var(--card))]'
+  )
+  expect(tab).toHaveClass(
+    'border-(--crew-border)',
+    'bg-(--crew-surface)',
+    'text-card-foreground',
+    'shadow-floating',
+    'dark:border-(--crew-border)',
+    'dark:bg-(--crew-surface)',
+    'dark:hover:bg-accent',
+    'dark:hover:text-accent-foreground'
+  )
+  expect(tab).not.toHaveClass('dark:bg-input/30')
+  await user.click(tab)
+  expect(
+    screen.getByRole('complementary', {
+      name: translate('components.orchestrationCrew.title', 'Orchestration')
+    })
+  ).toHaveClass(
+    'border-(--crew-border)',
+    'bg-(--crew-surface)',
+    'text-card-foreground',
+    'shadow-floating'
+  )
 })
 
 it('keeps disabled/enabled mentions, keyboard disclosure, Open, Copy, Escape and collapse independent', async () => {
@@ -149,8 +197,16 @@ it('keeps disabled/enabled mentions, keyboard disclosure, Open, Copy, Escape and
   expect(screen.queryByRole('complementary', { name: 'Orchestration' })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: /^Show orchestration:/ })).toHaveFocus()
   await user.keyboard('{Enter}')
+  expect(
+    screen.getByRole('button', { name: "Show Worker's task and latest message" })
+  ).toHaveAttribute('aria-expanded', 'false')
+  await user.click(screen.getByRole('button', { name: "Show Worker's task and latest message" }))
   await user.click(screen.getByRole('button', { name: 'Collapse orchestration panel' }))
   expect(screen.getByRole('button', { name: /^Show orchestration:/ })).toHaveFocus()
+  await user.keyboard('{Enter}')
+  expect(
+    screen.getByRole('button', { name: "Show Worker's task and latest message" })
+  ).toHaveAttribute('aria-expanded', 'false')
   expect(rig.copy).toHaveBeenCalledOnce()
 })
 
@@ -266,7 +322,7 @@ it('names the Orchestration disclosure and expands every manager', async () => {
   expect(managers.getByRole('button', { name: 'Open Other manager' })).toBeInTheDocument()
 })
 
-it('shows one collapsed avatar and question per party with reverse-role relationships while keeping both sections', async () => {
+it('keeps reverse-role disclosures independent and bounds them to the current source and complete relationships', async () => {
   const user = userEvent.setup()
   const error = vi.spyOn(console, 'error').mockImplementation(() => {})
   try {
@@ -274,20 +330,22 @@ it('shows one collapsed avatar and question per party with reverse-role relation
     const manager = { ...worker, role: 'manager' as const, pendingQuestion: question }
     const reverseWorker = { ...worker, pendingQuestion: question }
     const peer = { ...worker, partyKey: 'other-worker', label: 'Other worker' }
-    rig.snapshot = {
+    const relationships = {
       ...emptyCrew('ok'),
       sections: { managedBy: [manager], managing: [reverseWorker, peer], talkingWith: [] }
     }
-    render(
+    rig.snapshot = relationships
+    const panel = (target: RuntimeClientTarget = host, party = 'term_coordinator') => (
       <TooltipProvider delayDuration={0}>
         <OrchestrationCrewPanel
-          target={host}
-          party="term_coordinator"
+          target={target}
+          party={party}
           canMention={false}
           mention={rig.mention}
         />
       </TooltipProvider>
     )
+    const view = render(panel())
     const tab = screen.getByRole('button', {
       name: 'Show orchestration: 2 workers, 1 needs you, 1 working'
     })
@@ -298,6 +356,46 @@ it('shows one collapsed avatar and question per party with reverse-role relation
       expect(
         within(screen.getByRole('region', { name })).getByRole('button', { name: 'Open Worker' })
       ).toBeInTheDocument()
+    }
+    const disclosure = (section: string) =>
+      within(screen.getByRole('region', { name: section })).getByRole('button', {
+        name: "Show Worker's task and latest message"
+      })
+    await user.click(disclosure('Managed by'))
+    expect(disclosure('Managed by')).toHaveAttribute('aria-expanded', 'true')
+    expect(disclosure('Managing')).toHaveAttribute('aria-expanded', 'false')
+    await user.click(disclosure('Managing'))
+    rig.snapshot = {
+      ...relationships,
+      sections: { ...relationships.sections, managing: [peer, reverseWorker] }
+    }
+    view.rerender(panel())
+    expect(disclosure('Managed by')).toHaveAttribute('aria-expanded', 'true')
+    expect(disclosure('Managing')).toHaveAttribute('aria-expanded', 'true')
+    rig.snapshot = {
+      ...relationships,
+      sections: { ...relationships.sections, managedBy: [] }
+    }
+    view.rerender(panel())
+    rig.snapshot = relationships
+    view.rerender(panel())
+    expect(disclosure('Managed by')).toHaveAttribute('aria-expanded', 'false')
+    expect(disclosure('Managing')).toHaveAttribute('aria-expanded', 'true')
+    rig.snapshot = emptyCrew('ok')
+    view.rerender(panel())
+    rig.snapshot = relationships
+    view.rerender(panel())
+    expect(disclosure('Managing')).toHaveAttribute('aria-expanded', 'false')
+    for (const [target, party] of [
+      [host, 'term_other'],
+      [{ kind: 'environment', environmentId: 'other-host' }, 'term_other'],
+      [{ kind: 'local' }, 'term_other']
+    ] as const) {
+      await user.click(disclosure('Managing'))
+      expect(disclosure('Managing')).toHaveAttribute('aria-expanded', 'true')
+      view.rerender(panel(target, party))
+      expect(screen.getByRole('complementary', { name: 'Orchestration' })).toBeInTheDocument()
+      expect(disclosure('Managing')).toHaveAttribute('aria-expanded', 'false')
     }
   } finally {
     error.mockRestore()

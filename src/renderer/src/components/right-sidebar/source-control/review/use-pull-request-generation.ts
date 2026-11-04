@@ -8,8 +8,8 @@ import {
   generateRuntimePullRequestFields
 } from '@/runtime/runtime-git-generation-client'
 import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/runtime-git-client-context'
-import type { PullRequestGenerationOutcome } from '../../create-pull-request-dialog-field-model'
-import { settlePullRequestGenerationRequest } from '../../pull-request-generation-request-outcome'
+import type { PullRequestGenerationOutcome } from '../../hosted-review/creation/create-pull-request-dialog-field-model'
+import { settlePullRequestGenerationRequest } from '../../hosted-review/creation/pull-request-generation-request-outcome'
 import { useAppStore } from '@/store'
 import {
   createRunningPullRequestGenerationRecord,
@@ -24,9 +24,9 @@ import {
   type PullRequestGenerationFields
 } from '@/store/slices/pull-request-generation'
 import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
-import type { HostedReviewProvider } from '../../../../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { SourceControlAi } from '../ai/use-ai'
-import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
+import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'

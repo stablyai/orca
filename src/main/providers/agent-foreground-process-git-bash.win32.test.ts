@@ -11,7 +11,7 @@ import { createDaemonPtyEnvironment } from '../daemon/pty-subprocess/spawn-envir
 import { inspectSpawnFileWindowsChildProcesses } from '../daemon/pty-subprocess/spawn-file-child-processes'
 import type { PtyShellLaunchPlan } from '../daemon/pty-subprocess/shell-launch-plan'
 import type { PtySubprocessOptions } from '../daemon/pty-subprocess'
-import { isGitForWindowsBashLauncherPath, resolveGitBashPath } from '../git-bash'
+import { isGitForWindowsBashLauncherPath, resolveGitBashPath } from '../pty/shell-startup/git-bash'
 import { readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
 
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip

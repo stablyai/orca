@@ -6,12 +6,12 @@ const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 const armMock = vi.hoisted(() => vi.fn())
 const busyProbeMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../git/runner', async (importOriginal) => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../git/local-repo-ref-maintenance', async (importOriginal) => ({
+vi.mock('../git/refs/maintenance/local-repo-ref-maintenance', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   armLocalRepoRefMaintenance: armMock,
   setRepoRefMaintenanceBusyProbe: busyProbeMock

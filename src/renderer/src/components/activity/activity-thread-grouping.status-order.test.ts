@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { AgentTurnOutcome } from '../../../../shared/agent-turn-outcome'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentTurnOutcome } from '../../../../shared/agent-status/lifecycle/agent-turn-outcome'
 import {
   buildActivityThreadGroups,
   getActivityThreadGroup,

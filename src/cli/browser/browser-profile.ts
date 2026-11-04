@@ -15,7 +15,7 @@ import {
 } from './browser-format'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime/types'
-import { getBrowserCommandTarget } from '../selectors'
+import { getBrowserCommandTarget } from './browser-command-target'
 
 function parseScopeFlag(flags: Map<string, string | boolean>): 'isolated' | 'imported' {
   const raw = getOptionalStringFlag(flags, 'scope')

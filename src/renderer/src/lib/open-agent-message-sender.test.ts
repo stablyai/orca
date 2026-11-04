@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => {
     group: vi.fn(),
     type: vi.fn(),
     state: {
+      agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {},
       activeWorktreeId: 'wt-chat',
       activeWorkspaceExecutionHostId: 'local' as const,
       unifiedTabsByWorktree
@@ -135,7 +137,7 @@ it.each([
     }
     expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(
       host,
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       { address: 'term_worker', messageIds: ['m1'] },
       { timeoutMs: 5000 }
     )

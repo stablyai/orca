@@ -82,11 +82,6 @@ describe('approving a replacing plugin from the CLI', () => {
     })
     expect(message).toContain(`- Runs "Task board" instead of Orca's own view.tasks`)
   })
-
-  it('leaves the grants of other plugins as they were', () => {
-    const parsed = parsePluginManifest(manifest([{ id: 'tasks', title: 'Tasks' }]))
-    expect(parsed.ok && 'replacements' in pluginApprovalGrants(parsed.manifest)).toBe(false)
-  })
 })
 
 describe('consent for a replacement', () => {

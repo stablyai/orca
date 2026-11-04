@@ -6,11 +6,15 @@ import {
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Hello,
   type MobileE2EEV2Ready
-} from '../../../shared/mobile-e2ee-v2-contract'
-import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
+} from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
+import { sealMobileE2EEV2Frame } from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
 import type { DeviceRegistry } from '../device-registry'
-import { deriveSharedKey, encrypt, generateKeyPair } from '../../../shared/e2ee-crypto'
-import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
+import {
+  deriveSharedKey,
+  encrypt,
+  generateKeyPair
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { deriveMobileE2EEV2KeySchedule } from '../../../shared/remote-runtime/e2ee/node/mobile-e2ee-v2-node-key-schedule'
 import {
   MobileSocketWiring,
   type MobileSocketTransport,
@@ -54,6 +58,7 @@ function registryFor(
   token: string,
   scope: 'mobile' | 'runtime' = 'mobile'
 ): DeviceRegistry {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transport tests use only credential lookups and last-seen writes.
   return {
     validateToken: (candidate: string) =>
       candidate === token
@@ -65,6 +70,10 @@ function registryFor(
             pairedAt: 1,
             lastSeenAt: 0
           }
+        : null,
+    resolveAuthenticatedPrincipal: (principal: { deviceId: string; deviceToken?: string }) =>
+      principal.deviceId === deviceId && principal.deviceToken === token
+        ? { deviceId, token, name: 'Phone', scope, pairedAt: 1, lastSeenAt: 0 }
         : null,
     updateLastSeen: vi.fn(),
     updateLastSeenDeferred: vi.fn()

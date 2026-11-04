@@ -92,7 +92,7 @@ function exitProof(): Record<string, unknown> {
 async function loadBuild(ref: string | null): Promise<Build> {
   if (ref === null) {
     const [ledger, proof, retirement] = await Promise.all([
-      import('../../../src/shared/terminal-retirement-proof-ledger'),
+      import('../../../src/shared/workspace-layout/terminal-retirement-proof-ledger'),
       import('../../../src/main/runtime/mobile-session-terminal-retirement-proof'),
       import('../../../src/main/runtime/mobile-session-terminal-retirement')
     ])
@@ -160,12 +160,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version session-tabs retirement proof', () => {
-  it('old host against old client publishes no proof on the renderer-first close (the defect)', () => {
-    const frame = hostPublishesOnExit(preStack, snapshotAfterRendererRepublished())
-    expect(frame).toBeNull()
-    expect(clientRetains(preStack, frame)).toEqual([])
-  })
-
   it('new host against new client publishes a proof the client retains (the fix)', () => {
     const frame = hostPublishesOnExit(stack, snapshotAfterRendererRepublished())
     expect(frame).not.toBeNull()

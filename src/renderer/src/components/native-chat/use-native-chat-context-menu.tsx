@@ -7,6 +7,7 @@ import {
   type PointerEventHandler,
   type RefObject
 } from 'react'
+import { flushSync } from 'react-dom'
 import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
 import { Clipboard, Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
@@ -30,7 +31,10 @@ import { isEditableTarget } from '@/lib/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
-import { readNativeChatTranscriptSelection } from './native-chat-quote-selection'
+import {
+  formatNativeChatQuote,
+  readNativeChatTranscriptSelection
+} from './native-chat-quote-selection'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
@@ -297,7 +301,10 @@ export function useNativeChatContextMenu({
           ) : null}
           <NativeChatContextMenuTargetItems
             target={target}
-            composerRef={composerRef}
+            onQuote={(text) => {
+              flushSync(() => setState((prev) => ({ ...prev, open: false })))
+              composerRef.current?.appendText(formatNativeChatQuote(text))
+            }}
             rewind={rewind}
           />
           {state.canPaste ? (

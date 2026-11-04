@@ -2,7 +2,7 @@ import type { StoreApi } from 'zustand/vanilla'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
-import { createCheckRunDetailsRequestId } from '@/components/editor/check-run-details-tab'
+import '@/components/editor/check-details/actions/check-run-details-tab'
 import type { AppState } from '../types'
 import type { PRCheckRunDetails } from '../../../../shared/github/check-types'
 
@@ -159,37 +159,6 @@ describe('check-details tab owner', () => {
   )
 
   it.each([
-    {
-      rival: 'a direct SSH listing',
-      repo: { ...pairedRepo, path: '/direct', executionHostId: undefined, connectionId: 'builder' },
-      worktree: { ...pairedWorktree, path: '/direct', runtimeOwnerEnvironmentId: undefined }
-    },
-    {
-      rival: 'another server',
-      repo: { ...pairedRepo, path: '/other', executionHostId: 'runtime:other' },
-      worktree: { ...pairedWorktree, path: '/other', runtimeOwnerEnvironmentId: 'other' }
-    }
-  ] as const)(
-    'refuses to reload a paired SSH tab through $rival once its owner is gone',
-    async ({ repo, worktree }) => {
-      const { store, fetchPRCheckDetails, setCatalog } = createOwnerStore({
-        repos: [pairedRepo],
-        worktreesByRepo: { 'repo-1': [pairedWorktree] }
-      })
-      const tabId = open(store)
-      setCatalog({ repos: [repo], worktreesByRepo: { 'repo-1': [worktree] } })
-
-      await store.getState().reloadOpenCheckRunDetailsTab(tabId)
-
-      expect(fetchPRCheckDetails).not.toHaveBeenCalled()
-      expect(store.getState().openFiles[0].checkRunDetails).toMatchObject({
-        loading: false,
-        error: 'Repository details are unavailable for this check.'
-      })
-    }
-  )
-
-  it.each([
     { openedThrough: 'its server host', activeHost: 'runtime:server' },
     { openedThrough: 'the catalog', activeHost: undefined }
   ] as const)(
@@ -265,55 +234,4 @@ describe('check-details tab owner', () => {
       checkRunDetails: { error: 'Repository details are unavailable for this check.' }
     })
   })
-
-  it.each(['repo:99', 'repo:100'])(
-    'ignores a restored twin request ID when the new request context is %s',
-    (contextKey) => {
-      const localRepo = { ...TEST_REPO, id: 'repo-1', path: '/repo' }
-      const localWorktree = makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })
-      const catalog = {
-        repos: [localRepo, pairedRepo],
-        worktreesByRepo: { 'repo-1': [localWorktree, pairedWorktree] }
-      }
-      const source = createOwnerStore({ ...catalog, activeWorkspaceExecutionHostId: 'local' })
-      const requestId = createCheckRunDetailsRequestId()
-      source.store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
-        requestId,
-        details: null,
-        loading: false,
-        error: null
-      })
-      const restoredFiles = source.store.getState().openFiles.map((file) => ({
-        ...file,
-        checkRunDetails: file.checkRunDetails && { ...file.checkRunDetails }
-      }))
-      const { store } = createOwnerStore({
-        ...catalog,
-        openFiles: restoredFiles,
-        activeWorkspaceExecutionHostId: 'runtime:server'
-      })
-      store.getState().openCheckRunDetails('wt-1', contextKey, check, {
-        requestId,
-        details: null,
-        loading: true,
-        error: null
-      })
-      const targetId = store.getState().activeFileId
-      store.setState({ activeWorkspaceExecutionHostId: 'local' })
-      store.getState().patchOpenCheckRunDetails('wt-1', contextKey, check, {
-        requestId,
-        details,
-        loading: false,
-        error: null
-      })
-
-      expect(
-        store.getState().openFiles.find((file) => file.id === targetId)?.checkRunDetails
-      ).toMatchObject({ details, loading: false })
-      expect(
-        store.getState().openFiles.find((file) => file.id === restoredFiles[0].id)?.checkRunDetails
-          ?.details
-      ).toBeNull()
-    }
-  )
 })

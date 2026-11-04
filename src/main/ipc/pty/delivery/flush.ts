@@ -11,7 +11,7 @@ import {
   PTY_DISPATCHER_READY_WATCHDOG_MS
 } from './constants'
 import { getDroppedMode2031RendererData, getDroppedSynchronizedOutputRendererData } from './pending'
-import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal-synchronized-output-scan'
+import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import { makePtyDataPayload, sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import type { PtyIpcSession } from '../session'

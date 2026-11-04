@@ -4,7 +4,7 @@ import type {
   WorkspaceCleanupRemoveResult
 } from '@/store/slices/workspace-cleanup'
 import { translate } from '@/i18n/i18n'
-import { showPreservedBranchBatchToast } from '../sidebar/preserved-branch-batch-toast'
+import { showPreservedBranchBatchToast } from '../sidebar/workspace-actions/deletion/preserved-branch-batch-toast'
 
 export function showWorkspaceCleanupRemovalResultToasts(
   result: WorkspaceCleanupRemoveResult,
