@@ -45,7 +45,11 @@ export type NewTabAgentMenuRow = (
   | { kind: 'chat-unavailable'; agent: TuiAgent; reason: ChatUnavailableReason }
   | { kind: 'cli'; agent: TuiAgent; chat?: true }
   | { kind: 'terminal'; agent: TuiAgent }
-) & { executionHostId?: ExecutionHostId }
+) & {
+  executionHostId?: ExecutionHostId
+  /** A Claude terminal that runs in this saved profile folder instead of the selected account. */
+  claudeConfigProfile?: { id: string; label: string }
+}
 
 export type NewTabAgentMenuSettings = NativeChatDefaultSettings &
   Partial<Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>>

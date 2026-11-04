@@ -4,6 +4,7 @@ import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
+import { normalizeClaudeConfigProfiles } from '../../../shared/claude-config-profiles'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
@@ -169,6 +170,7 @@ export function normalizeLoadedGlobalSettings(
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
       seedDefaults: true
     }),
+    claudeConfigProfiles: normalizeClaudeConfigProfiles(parsed.settings?.claudeConfigProfiles),
     notifications: normalizedNotifications,
     sourceControlAi: migratedSourceControlAi,
     sourceControlGroupOrder: normalizedSourceControlGroupOrder,

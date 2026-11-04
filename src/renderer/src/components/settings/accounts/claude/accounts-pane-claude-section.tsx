@@ -8,6 +8,7 @@ import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
+import { ClaudeConfigProfilesSetting } from './claude-config-profiles-setting'
 import {
   getProviderAccountRuntime,
   providerAccountIsActiveInView
@@ -388,6 +389,9 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
       </SearchableSetting>
       {isRemoteAccountScope ? null : (
         <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
+      )}
+      {isRemoteAccountScope ? null : (
+        <ClaudeConfigProfilesSetting settings={settings} updateSettings={updateSettings} />
       )}
     </section>
   )

@@ -22006,6 +22006,27 @@
         "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "restartCount_one": "Restart {{count}} session"
+      },
+      "configProfiles": {
+        "title": "Claude Profiles",
+        "description": "Start Claude with a config folder of your own (CLAUDE_CONFIG_DIR) and its settings, CLAUDE.md, memory, skills and login. Each profile is its own entry in the agent menu and ignores the account selected above. Orca adds only its status hooks to the folder.",
+        "empty": "No profiles. Add a folder to launch Claude with it.",
+        "labelField": "Profile label",
+        "labelPlaceholder": "Label",
+        "pathField": "Profile folder",
+        "pathPlaceholder": "Absolute folder path",
+        "browse": "Browse",
+        "add": "Add Profile",
+        "removeHint": "Forget this profile. The folder and its contents stay.",
+        "labelRequired": "Enter a label.",
+        "pathInvalid": "Enter the folder as an absolute path, without ~ or ..",
+        "pathDuplicate": "This folder is already a profile.",
+        "menuLabel": "{{agent}} · {{profile}}",
+        "keyword": {
+          "profile": "profile",
+          "folder": "folder",
+          "configDir": "CLAUDE_CONFIG_DIR"
+        }
       }
     },
     "managedData": {

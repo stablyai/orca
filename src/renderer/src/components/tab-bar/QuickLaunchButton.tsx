@@ -32,6 +32,7 @@ import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/
 import { useNewTabAgentMenuRows, type NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './tab-agent-row-presentation'
+import { withClaudeConfigProfileRows } from './claude-config-profile-rows'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -84,16 +85,17 @@ export function useTabAgentMenuLaunch({
       }
       const { agent } = row
       const entry = getCatalogEntry(agent)
-      const label = entry?.label ?? agent
+      const label = row.claudeConfigProfile ? rowLabel(row) : (entry?.label ?? agent)
       const result = launchAgentInNewTab({
         requestId: newAgentLaunchRequestId(),
         focusIntent: captureNativeChatComposerFocusIntent(),
-        ...(row.kind === 'chat' || row.kind === 'cli'
+        ...(row.kind === 'chat' || row.kind === 'cli' || row.claudeConfigProfile
           ? {
               requestedSurface: row.kind === 'chat' ? ('chat' as const) : ('terminal' as const),
               selectedExecutionHostId: row.executionHostId
             }
           : {}),
+        ...(row.claudeConfigProfile ? { claudeConfigProfileId: row.claudeConfigProfile.id } : {}),
         agent,
         ...(draft ? agentPickerLaunchInputs(draft, pickerEntry) : {}),
         worktreeId,
@@ -192,6 +194,7 @@ export function ProjectedAgentMenuItems({
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
   const shortcutLabels = useAgentMenuShortcutLabels(pickerInventory ? model : undefined)
+  const claudeConfigProfiles = useAppStore((s) => s.settings?.claudeConfigProfiles)
   const openAgentSettings = useCallback(() => {
     openSettingsTarget({ pane: 'agents', repoId: null })
     openSettingsPage()
@@ -224,6 +227,7 @@ export function ProjectedAgentMenuItems({
     detection: { detectedIds, detectionFailed, needsServerUpdate }
   } = model
   const defaultAgent = 'defaultTuiAgent' in model ? model.defaultTuiAgent : desktopDefaultAgent
+  const shownRows = withClaudeConfigProfileRows(rows, claudeConfigProfiles, detectedIds)
   return (
     <>
       {(detectedIds === null && (detectionFailed || needsServerUpdate)) || rows.length === 0 ? (
@@ -261,11 +265,12 @@ export function ProjectedAgentMenuItems({
           hideSearch={hidePickerSearch}
         />
       ) : (
-        rows.map((row, index) => {
+        shownRows.map((row, index) => {
           const { agent } = row
           const label = getCatalogEntry(agent)?.label ?? agent
           // Chat rows come first; the rows that open a terminal start their own group.
-          const startsCliGroup = row.kind === 'cli' && index > 0 && rows[index - 1]?.kind !== 'cli'
+          const startsCliGroup =
+            row.kind === 'cli' && index > 0 && shownRows[index - 1]?.kind !== 'cli'
           if (row.kind === 'chat-unavailable') {
             return (
               <DropdownMenuItem key={rowId(row)} variant="launch" disabled>
@@ -278,7 +283,10 @@ export function ProjectedAgentMenuItems({
             )
           }
           const showsDefaultAgentShortcut =
-            newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
+            newAgentShortcut !== null &&
+            defaultAgent !== 'blank' &&
+            agent === defaultAgent &&
+            !row.claudeConfigProfile
           const rowContent = (
             <>
               <AgentIcon agent={agent} size={14} />
@@ -307,7 +315,7 @@ export function ProjectedAgentMenuItems({
                   variant="launch"
                   disabled={disabled}
                   onSelect={() => runLaunch(row)}
-                  title={rowTitle(row, label)}
+                  title={rowTitle(row, row.claudeConfigProfile ? rowLabel(row) : label)}
                 >
                   {rowContent}
                 </DropdownMenuItem>

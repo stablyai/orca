@@ -40,6 +40,8 @@ const fsAllowances: Record<string, readonly string[]> = {
   ],
   // Stores Claude config folder paths only.
   'claude-accounts/claude-observed-config-dirs.ts': ['writeFileAtomically'],
+  // Creates a user-registered profile folder; its settings.json is written only by the hook installer.
+  'claude-accounts/claude-config-profile-launch.ts': ['mkdir'],
   'claude-accounts/claude-profile-paths.ts': ['mkdirSync', 'writeFileAtomically'],
   'claude-accounts/claude-profile-router.ts': ['mkdirSync', 'rmSync', 'writeFileAtomically'],
   'claude-accounts/claude-account-folder.ts': ['rmSync', 'rmdirSync', 'unlinkSync'],
