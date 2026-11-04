@@ -1,8 +1,5 @@
 import type { AutomationRun } from '../../shared/automations-types'
-import {
-  AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
-  type ParsedAgentStatusPayload
-} from '../../shared/agent-status/contracts/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import { mainAgentDoneAt } from '../../shared/agent-status/lifecycle/main-agent-status'
 import {
   automationRunFailure,
@@ -28,6 +25,8 @@ export type AutomationRunAgentEvidence = {
   getAgentStatusRowsForPane(paneKey: string): readonly AutomationRunStatusRow[]
   /** The lead's full final reply for that finished turn; rows carry only a capped preview. */
   getAcceptedReply(paneKey: string, leadTurnKey: number): string | undefined
+  /** Calls back synchronously on every status row change, including the clear when an agent exits. */
+  subscribeStatusChanges(listener: (paneKey: string) => void): () => void
   /** Executable aliases used to distinguish a launch refusal from ordinary output. */
   agentCommandsForRun(run: AutomationRun): readonly string[]
 }
@@ -91,12 +90,22 @@ export function judgeHeldRunTurn(
     : { kind: 'completed' }
 }
 
-/** What the agent answered this run: its full accepted reply, else its capped status preview. */
+export type RunAgentReply = { text: string; truncated: boolean }
+
+/** A run watched with its agent's status evidence; `reply` is its latest captured answer. */
+export type JudgedRun = {
+  evidence: AutomationRunAgentEvidence
+  run: AutomationRun
+  reply: () => RunAgentReply | null
+}
+
+/** What the agent answered this run: its full accepted reply, else its status preview, which the
+ *  status cap may have cut by an amount its length cannot show. */
 export function runAgentReply(
   evidence: AutomationRunAgentEvidence,
   run: AutomationRun,
   runStartedAt: number
-): { text: string; truncated: boolean } | null {
+): RunAgentReply | null {
   const paneKey = run.terminalPaneKey
   const sentAt = run.dispatchedAt ?? runStartedAt
   const row = (paneKey ? evidence.getAgentStatusRowsForPane(paneKey) : [])
@@ -113,7 +122,21 @@ export function runAgentReply(
   }
   // Tool stdout is not the agent's answer.
   const preview = row.lastAssistantMessageIsToolOutput ? undefined : row.lastAssistantMessage
-  return preview?.trim()
-    ? { text: preview, truncated: preview.length >= AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH }
-    : null
+  return preview?.trim() ? { text: preview, truncated: true } : null
+}
+
+/** Holds this run's latest reply as its status changes, so the clear when the agent exits cannot
+ *  erase the reply before the run settles. */
+export function captureRunAgentReply(
+  evidence: AutomationRunAgentEvidence,
+  run: AutomationRun,
+  runStartedAt: number
+): JudgedRun & { stop: () => void } {
+  let latest = runAgentReply(evidence, run, runStartedAt)
+  const stop = evidence.subscribeStatusChanges((paneKey) => {
+    if (paneKey === run.terminalPaneKey) {
+      latest = runAgentReply(evidence, run, runStartedAt) ?? latest
+    }
+  })
+  return { evidence, run, reply: () => runAgentReply(evidence, run, runStartedAt) ?? latest, stop }
 }

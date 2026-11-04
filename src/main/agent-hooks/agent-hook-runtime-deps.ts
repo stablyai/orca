@@ -26,6 +26,13 @@ export function agentHookRuntimeDeps(
         : server.getProviderSessionSourceRowsForTab(tabId),
     getAgentProviderSessionRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
     getAcceptedAgentReply: (paneKey, leadTurnKey) => server.getAcceptedReply(paneKey, leadTurnKey),
+    subscribeAgentStatusRowChanges: (listener) =>
+      server.subscribeStatusRowMutations(({ before, after }) => {
+        const paneKey = after?.paneKey ?? before?.paneKey
+        if (paneKey) {
+          listener(paneKey)
+        }
+      }),
     subscribeAgentProviderSessionChanges: (listener) =>
       server.subscribeProviderSessionChanges(listener),
     // Use identity captured at observation; resolving now could attribute cached rows to a new process.

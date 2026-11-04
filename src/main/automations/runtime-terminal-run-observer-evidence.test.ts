@@ -18,6 +18,7 @@ type StatusRow = {
   stateStartedAt: number
   sessionBoundary?: boolean
   interrupted?: boolean
+  lastAssistantMessage?: string
 }
 
 function createPane(initial: {
@@ -106,6 +107,7 @@ function observe(
     getAgentStatusRowsForPane: (paneKey) => (paneKey === PANE_KEY ? pane.agentRows() : []),
     getAcceptedReply: (paneKey, leadTurnKey) =>
       paneKey === PANE_KEY ? pane.acceptedReplies.get(leadTurnKey) : undefined,
+    subscribeStatusChanges: () => () => {},
     agentCommandsForRun: () => ['goose']
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the observer reads only these run fields.
@@ -342,6 +344,20 @@ describe('observing a run with agent evidence', () => {
           content: 'the full final reply',
           truncated: false
         })
+      })
+    )
+  })
+
+  it('marks a status preview fallback truncated, since the cap can cut it below its own length', async () => {
+    const pane = createPane({ idle: false, tail: ['TUI chrome'] })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(1_000)
+    pane.report({ lastAssistantMessage: 'a cut preview' })
+    pane.becomeIdle()
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputSnapshot: expect.objectContaining({ content: 'a cut preview', truncated: true })
       })
     )
   })

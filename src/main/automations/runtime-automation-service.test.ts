@@ -72,7 +72,8 @@ function fixture(headless: boolean, definitionSurface: 'chat' | 'terminal' = 'ch
       () => '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301'
     ),
     waitForTerminal: vi.fn(async () => ({ state: 'done' })),
-    getAgentStatusRowsForPane: vi.fn(() => [])
+    getAgentStatusRowsForPane: vi.fn(() => []),
+    subscribeAgentStatusRowChanges: vi.fn(() => () => {})
   }
   createRuntimeAutomationService({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: construction and recovery use only these store boundaries.
@@ -308,7 +309,8 @@ describe('headless automation dispatch', () => {
       })),
       waitForTerminal: vi.fn(),
       getTerminalHandleForPaneKey: vi.fn(() => null),
-      getAgentStatusRowsForPane: vi.fn(() => [])
+      getAgentStatusRowsForPane: vi.fn(() => []),
+      subscribeAgentStatusRowChanges: vi.fn(() => () => {})
     }
     createRuntimeAutomationService({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service never reads the store; the dispatcher reads only past runs.

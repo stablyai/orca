@@ -3,7 +3,7 @@ import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
-import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
+import type { AutomationRunOutputSnapshot } from '../../shared/automations-types'
 import {
   AUTOMATION_RUN_FAILURE_COPY,
   automationRunFailure,
@@ -12,14 +12,13 @@ import {
 import {
   judgeHeldRunTurn,
   judgeIdleRun,
-  runAgentReply,
+  captureRunAgentReply,
   type AutomationRunAgentEvidence,
+  type JudgedRun,
   type IdleRunVerdict
 } from './automation-run-agent-evidence'
-import {
-  describeTerminalExitCause,
-  type TerminalExitCause
-} from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { describeTerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { readProvenTerminalExit } from '../runtime/terminal-wait-results'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
 
@@ -58,15 +57,12 @@ function snapshotOf(tail: readonly string[]): AutomationRunOutputSnapshot | null
   return snapshotBuffer.snapshot()
 }
 
-type JudgedRun = { evidence: AutomationRunAgentEvidence; run: AutomationRun }
-
 /** A finished run keeps what the agent answered; the screen is the fallback for agents without hooks. */
 function completedSnapshot(
   tail: readonly string[],
-  judged: JudgedRun | null,
-  runStartedAt: number
+  judged: JudgedRun | null
 ): AutomationRunOutputSnapshot | null {
-  const reply = judged ? runAgentReply(judged.evidence, judged.run, runStartedAt) : null
+  const reply = judged?.reply() ?? null
   const snapshot = snapshotOf(reply ? [reply.text] : tail)
   return snapshot && reply?.truncated ? { ...snapshot, truncated: true } : snapshot
 }
@@ -77,19 +73,18 @@ async function judgeIdleTail(
   runStartedAt: number
 ): Promise<AutomationRunCompletionObservation | null> {
   const verdict = judgeIdleRun(judged.evidence, judged.run, tail, runStartedAt, Date.now())
-  return verdict.kind === 'wait' ? null : observationOf(verdict, tail, judged, runStartedAt)
+  return verdict.kind === 'wait' ? null : observationOf(verdict, tail, judged)
 }
 
 function observationOf(
   verdict: Exclude<IdleRunVerdict, { kind: 'wait' }>,
   tail: readonly string[],
-  judged: JudgedRun | null,
-  runStartedAt: number
+  judged: JudgedRun | null
 ): AutomationRunCompletionObservation {
   if (verdict.kind === 'completed') {
     return {
       status: 'completed',
-      outputSnapshot: completedSnapshot(tail, judged, runStartedAt),
+      outputSnapshot: completedSnapshot(tail, judged),
       error: null
     }
   }
@@ -123,16 +118,6 @@ async function settleIdlePane(
 
 function isTerminalWaitTimeout(error: unknown): boolean {
   return error instanceof Error && error.message === 'timeout'
-}
-
-/** The agent's exit when its host proved it; operator closes and unreported causes prove nothing. */
-function provenAgentExit(error: unknown): TerminalExitCause | null {
-  const cause =
-    error instanceof Error && error.message === 'terminal_exited'
-      ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: buildPtyTerminalWaitExitError attaches the PTY's recorded cause.
-        (error as { terminalExitCause?: TerminalExitCause | null }).terminalExitCause
-      : null
-  return cause?.kind === 'exited' || cause?.kind === 'signaled' ? cause : null
 }
 
 async function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -251,81 +236,92 @@ export function createRuntimeAutomationRunTerminalObserver(
       run.terminalPaneKey ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey) : null,
     observeCompletion: async (handle, { signal, run }) => {
       const startedAt = Date.now()
-      const judged = evidence && run?.terminalPaneKey ? { evidence, run } : null
       const runStartedAt = run?.startedAt ?? run?.dispatchedAt ?? startedAt
-      // Without agent evidence, require a busy edge to exclude a previous run's idle state.
-      if (!judged && (await isTuiIdleSatisfiedNow(runtime, handle, signal))) {
-        const started = await waitForAgentStart(
-          runtime,
-          handle,
-          signal,
-          startedAt + AGENT_START_DEADLINE_MS
-        )
-        if (!started) {
-          return await buildUnobservedObservation(
-            runtime,
-            handle,
-            automationRunFailure('agentNeverStarted')
-          )
-        }
+      const judged =
+        evidence && run?.terminalPaneKey ? captureRunAgentReply(evidence, run, runStartedAt) : null
+      try {
+        return await observeTerminalRun(runtime, handle, signal, judged, startedAt, runStartedAt)
+      } finally {
+        judged?.stop()
       }
-      const deadlineAt = startedAt + OBSERVE_DEADLINE_MS
-      while (Date.now() < deadlineAt) {
-        try {
-          const wait = await runtime.waitForTerminal(handle, {
-            condition: 'tui-idle',
-            signal,
-            ...(judged ? { timeoutMs: HELD_DONE_SETTLE_MS } : {})
-          })
-          if (!judged || !wait.satisfied) {
-            return await buildObservation(runtime, handle, wait)
-          }
-          const observation = await settleIdlePane(
-            runtime,
-            handle,
-            judged,
-            runStartedAt,
-            signal,
-            deadlineAt
-          )
-          if (observation) {
-            return observation
-          }
-        } catch (error) {
-          const exit = signal.aborted ? null : provenAgentExit(error)
-          if (exit) {
-            return observationOf(
-              exit.kind === 'exited' && exit.exitCode === 0
-                ? { kind: 'completed' }
-                : { kind: 'failed', error: `${describeTerminalExitCause(exit)}.` },
-              await readTail(runtime, handle),
-              judged,
-              runStartedAt
-            )
-          }
-          // Individual wait timeouts do not prove the agent stopped working.
-          if (signal.aborted || !isTerminalWaitTimeout(error)) {
-            throw error
-          }
-          const held = judged
-            ? judgeHeldRunTurn(
-                judged.evidence,
-                judged.run,
-                runStartedAt,
-                Date.now(),
-                HELD_DONE_SETTLE_MS
-              )
-            : null
-          if (held) {
-            return observationOf(held, await readTail(runtime, handle), judged, runStartedAt)
-          }
-        }
-      }
+    }
+  }
+}
+
+async function observeTerminalRun(
+  runtime: AutomationRunTerminalHost,
+  handle: string,
+  signal: AbortSignal,
+  judged: JudgedRun | null,
+  startedAt: number,
+  runStartedAt: number
+): Promise<AutomationRunCompletionObservation> {
+  // Without agent evidence, require a busy edge to exclude a previous run's idle state.
+  if (!judged && (await isTuiIdleSatisfiedNow(runtime, handle, signal))) {
+    const started = await waitForAgentStart(
+      runtime,
+      handle,
+      signal,
+      startedAt + AGENT_START_DEADLINE_MS
+    )
+    if (!started) {
       return await buildUnobservedObservation(
         runtime,
         handle,
-        automationRunFailure('watchTimedOut')
+        automationRunFailure('agentNeverStarted')
       )
     }
   }
+  const deadlineAt = startedAt + OBSERVE_DEADLINE_MS
+  while (Date.now() < deadlineAt) {
+    try {
+      const wait = await runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        signal,
+        ...(judged ? { timeoutMs: HELD_DONE_SETTLE_MS } : {})
+      })
+      if (!judged || !wait.satisfied) {
+        return await buildObservation(runtime, handle, wait)
+      }
+      const observation = await settleIdlePane(
+        runtime,
+        handle,
+        judged,
+        runStartedAt,
+        signal,
+        deadlineAt
+      )
+      if (observation) {
+        return observation
+      }
+    } catch (error) {
+      const exit = signal.aborted ? null : readProvenTerminalExit(error)
+      if (exit) {
+        return observationOf(
+          exit.kind === 'exited' && exit.exitCode === 0
+            ? { kind: 'completed' }
+            : { kind: 'failed', error: `${describeTerminalExitCause(exit)}.` },
+          await readTail(runtime, handle),
+          judged
+        )
+      }
+      // Individual wait timeouts do not prove the agent stopped working.
+      if (signal.aborted || !isTerminalWaitTimeout(error)) {
+        throw error
+      }
+      const held = judged
+        ? judgeHeldRunTurn(
+            judged.evidence,
+            judged.run,
+            runStartedAt,
+            Date.now(),
+            HELD_DONE_SETTLE_MS
+          )
+        : null
+      if (held) {
+        return observationOf(held, await readTail(runtime, handle), judged)
+      }
+    }
+  }
+  return await buildUnobservedObservation(runtime, handle, automationRunFailure('watchTimedOut'))
 }

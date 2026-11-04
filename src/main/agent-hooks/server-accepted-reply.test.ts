@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
 import { mainAgentDoneAt } from '../../shared/agent-status/lifecycle/main-agent-status'
+import type { AutomationRun } from '../../shared/automations-types'
+import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -99,5 +101,43 @@ describe('accepted lead reply', () => {
 
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
     expect(replyForCurrentRow()).toBe(REPLY)
+  })
+
+  it("saves the reply of an agent that exits right after it, though exit cleanup clears the pane's status", async () => {
+    await post({ hook_event_name: 'UserPromptSubmit', prompt: 'write the report' })
+    const paneKey: string = PANE
+    const observer = createRuntimeAutomationRunTerminalObserver(
+      {
+        getTerminalHandleForPaneKey: () => 'terminal-1',
+        readTerminal: async () => ({ tail: [] }),
+        waitForTerminal: async () => {
+          await post({ hook_event_name: 'Stop', last_assistant_message: REPLY })
+          server.reconcileEndedProcessForPaneKeys([PANE])
+          throw Object.assign(new Error('terminal_exited'), {
+            terminalExitCause: { kind: 'exited', exitCode: 0 }
+          })
+        }
+      },
+      {
+        getAgentStatusRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+        getAcceptedReply: (paneKey, leadTurnKey) => server.getAcceptedReply(paneKey, leadTurnKey),
+        subscribeStatusChanges: (listener) =>
+          server.subscribeStatusRowMutations(({ after }) => after && listener(after.paneKey)),
+        agentCommandsForRun: () => ['claude']
+      }
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the observer reads only these run fields.
+    const run = { terminalPaneKey: paneKey, startedAt: 0, dispatchedAt: 0 } as AutomationRun
+
+    const observation = await observer.observeCompletion('terminal-1', {
+      signal: new AbortController().signal,
+      run
+    })
+
+    expect(replyForCurrentRow()).toBeUndefined()
+    expect(observation).toMatchObject({
+      status: 'completed',
+      outputSnapshot: { content: REPLY, truncated: false }
+    })
   })
 })
