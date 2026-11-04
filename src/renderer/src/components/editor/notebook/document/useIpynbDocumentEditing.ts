@@ -6,12 +6,12 @@ import {
   useState,
   type MutableRefObject
 } from 'react'
-import { registerPendingEditorFlush } from '../../editor-pending-flush'
+import { registerPendingEditorFlush } from '../../save/flush/editor-pending-flush'
 import {
   focusLeftView,
   notifyStaleViewEditRejected,
   staleViewEditEpoch
-} from '../../editor-stale-view-edit'
+} from '../../save/flush/editor-stale-view-edit'
 import {
   deleteIpynbCell,
   insertIpynbCell,

@@ -5,7 +5,7 @@ import { makeWorktree } from '../../worktrees-slice-test-fixtures'
 import type { OpenFile } from '../types/open-file'
 import { isDetachedEditorBufferId } from './editor-buffer-views'
 import './editor-buffer-rejoin'
-import { getEditorModelOwnerKey } from '@/components/editor/editor-model-owner'
+import { getEditorModelOwnerKey } from '@/components/editor/model-lifetime/identity/editor-model-owner'
 
 function tab(id: string, worktreeId: string, patch: Partial<OpenFile> = {}): OpenFile {
   return {

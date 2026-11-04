@@ -19,7 +19,7 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
   isFloatingWorkspacePanelFocused: () => panel.focused
 }))
 vi.mock('@/store/selectors', () => ({ selectFloatingVisibleTabCount: () => panel.remaining }))
-vi.mock('../editor/editor-autosave', () => ({ requestEditorFileClose }))
+vi.mock('../editor/autosave/editor-autosave', () => ({ requestEditorFileClose }))
 // Why: a pinned tab's confirmation prompt takes focus before its close runs.
 vi.mock('@/store/pinned-tab-close-guard', () => ({
   guardPinnedTabClose: ({ isPinned, onClose }: { isPinned: boolean; onClose: () => void }) => {

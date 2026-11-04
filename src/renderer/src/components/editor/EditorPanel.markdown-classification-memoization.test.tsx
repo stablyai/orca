@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import type { FileContent } from './editor-panel-content-types'
-import type * as MarkdownRichModeModule from './markdown-rich-mode'
-import type * as MarkdownRoundTripModule from './markdown-round-trip'
+import type * as MarkdownRichModeModule from './markdown/render-mode/markdown-rich-mode'
+import type * as MarkdownRoundTripModule from './markdown/render-mode/markdown-round-trip'
 
 type ShellProps = {
   onContentChangeForFile: (file: OpenFile | null, content: string) => void
@@ -24,7 +24,7 @@ const contentState = vi.hoisted(() => ({
   fileContents: {} as Record<string, FileContent>
 }))
 
-vi.mock('./markdown-rich-mode', async (importActual) => {
+vi.mock('./markdown/render-mode/markdown-rich-mode', async (importActual) => {
   const actual = await importActual<typeof MarkdownRichModeModule>()
   return {
     ...actual,
@@ -38,7 +38,7 @@ vi.mock('./markdown-rich-mode', async (importActual) => {
   }
 })
 
-vi.mock('./markdown-round-trip', async (importActual) => {
+vi.mock('./markdown/render-mode/markdown-round-trip', async (importActual) => {
   const actual = await importActual<typeof MarkdownRoundTripModule>()
   return {
     ...actual,
@@ -74,7 +74,7 @@ vi.mock('./useEditorPanelContentState', () => ({
 
 import { i18n } from '@/i18n/i18n'
 import EditorPanel from './EditorPanel'
-import { resetMarkdownRichModeEligibilityCache } from './markdown-rich-mode-eligibility-cache'
+import { resetMarkdownRichModeEligibilityCache } from './markdown/render-mode/markdown-rich-mode-eligibility-cache'
 
 const WORKTREE_ID = 'wt-memo'
 const FILE_PATH = '/repo/notes.md'

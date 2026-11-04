@@ -6,7 +6,7 @@ import { projectRemovalTargets } from './removal-unsaved-files'
 const mocks = vi.hoisted(() => ({ toastError: vi.fn() }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
-vi.mock('@/components/editor/editor-model-owner', () => ({
+vi.mock('@/components/editor/model-lifetime/identity/editor-model-owner', () => ({
   resolveEditorModelOwner: () => ({ environmentId: null, hostId: 'local' }),
   getEditorModelOwnerKey: () => ''
 }))
