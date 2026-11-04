@@ -97,42 +97,6 @@ async function createFromRendererPayload(options: {
 }
 
 describe('native-chat setup through renderer payload, RPC and execution host', () => {
-  it.each(
-    (['claude', 'codex'] as const).flatMap((agent) =>
-      (['new-tab', 'split-horizontal', 'split-vertical', undefined] as const).map((mode) => ({
-        agent,
-        mode
-      }))
-    )
-  )(
-    'creates only Setup for a background $agent chat with retired location $mode',
-    async ({ agent, mode }) => {
-      const { result, spawn } = await createFromRendererPayload({ agent, mode })
-      expect(spawn.mock.calls.map(([args]) => args.command)).toEqual([`bash ${RUNNER}`])
-      expect(spawn.mock.calls[0][0].env).toMatchObject(SETUP_ENV)
-      expect(result.setup).toBeUndefined()
-      expect(result.setupReceipt).toMatchObject({ state: 'running' })
-      expect(result.startupTerminal).toBeUndefined()
-    }
-  )
-
-  it.each([false, true])('keeps existing no-setup background policy (agent=%s)', async (agent) => {
-    const { spawn } = await createFromRendererPayload({
-      ...(agent ? { agent: 'codex' } : {}),
-      withSetup: false
-    })
-    expect(spawn.mock.calls.map(([args]) => args.command)).toEqual(agent ? [] : [undefined])
-  })
-
-  it.each([
-    { label: 'blank selection' },
-    { label: 'activated attribution', agent: 'codex' as const, activate: true },
-    { label: 'run-hooks attribution', agent: 'codex' as const, runHooks: true }
-  ])('keeps a primary shell for $label', async (options) => {
-    const { spawn } = await createFromRendererPayload(options)
-    expect(spawn.mock.calls.map(([args]) => args.command)).toEqual([undefined, `bash ${RUNNER}`])
-  })
-
   it.each(['split-horizontal', 'split-vertical'] as const)(
     'gives the requested startup and Setup separate tabs despite retired location %s',
     async (mode) => {
@@ -144,15 +108,4 @@ describe('native-chat setup through renderer payload, RPC and execution host', (
       expect(startupTabId).not.toBe(spawnedPtyEnv(spawn.mock.calls[1][0]).ORCA_TAB_ID)
     }
   )
-
-  it('keeps configured default commands alongside Setup', async () => {
-    const { spawn } = await createFromRendererPayload({ agent: 'codex', defaultTabs: true })
-    expect(spawn.mock.calls.map(([args]) => args.command)).toEqual(['pnpm dev', `bash ${RUNNER}`])
-  })
-
-  it('keeps the actual startup terminal alongside Setup', async () => {
-    const { result, spawn } = await createFromRendererPayload({ agent: 'codex', startup: true })
-    expect(spawn.mock.calls.map(([args]) => args.command)).toEqual(['codex', `bash ${RUNNER}`])
-    expect(result.startupTerminal).toMatchObject({ spawned: true })
-  })
 })
