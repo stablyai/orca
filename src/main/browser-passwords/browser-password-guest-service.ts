@@ -115,23 +115,6 @@ export function attachBrowserPasswordGuest(guest: WebContents): void {
   })
 }
 
-/** On a setting change: open pages start or stop now, not at their next load. */
-export function applyBrowserPasswordSettingsToGuests(): void {
-  for (const state of guests.values()) {
-    if (state.guest.isDestroyed()) {
-      continue
-    }
-    if (vaultForGuest(state.guest)) {
-      state.guest.send(BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable)
-      continue
-    }
-    state.tracker.dispose()
-    clearFocus(state)
-    closeBrowserPasswordSavePromptsForGuest(state.guest.id)
-    state.guest.send(BROWSER_PASSWORDS_TO_GUEST_CHANNELS.disable)
-  }
-}
-
 /** The guest state for a message only if it came from that guest's top frame, with its origin. */
 function guestMessageContext(event: IpcMainEvent): { state: GuestState; origin: string } | null {
   const state = guests.get(event.sender.id)

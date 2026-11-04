@@ -40,7 +40,7 @@ const OBSERVER_OPTIONS: MutationObserverInit = {
   attributeFilter: ['type', 'style', 'class', 'hidden', 'disabled']
 }
 
-type RunningDetector = { fill: (payload: unknown) => void; stop: () => void }
+type RunningDetector = { fill: (payload: unknown) => void }
 
 function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
   // Why only these values: page script can write any DOM value; only trusted input or our own fill is the user's.
@@ -185,27 +185,10 @@ function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
   document.addEventListener('focusout', focus.onFocusOut, true)
   domCheckTimer = setTimeout(runDomCheck, DOM_CHECK_DELAY_MS)
 
-  const stop = (): void => {
-    observer.disconnect()
-    document.removeEventListener('input', onInput, true)
-    document.removeEventListener('submit', submits.onSubmit, true)
-    document.removeEventListener('keydown', submits.onKeyDown, true)
-    document.removeEventListener('click', submits.onClick, true)
-    document.removeEventListener('focusin', onFocusIn, true)
-    document.removeEventListener('focusout', focus.onFocusOut, true)
-    for (const timer of [typedTimer, domCheckTimer]) {
-      if (timer !== null) {
-        clearTimeout(timer)
-      }
-    }
-    // Why not flushed: once off, nothing typed may leave the page.
-    typedInput = null
-    focus.clear()
-  }
-  return { fill, stop }
+  return { fill }
 }
 
-/** Until main enables this document, the only things installed are these three listeners. */
+/** Until main enables this document, the only things installed are these two listeners. */
 export function installBrowserPasswordDetector(port: BrowserPasswordGuestPort): void {
   // Why: subframes never get this preload today; refuse anyway so a policy change can't widen it.
   if (window.top !== window) {
@@ -214,10 +197,6 @@ export function installBrowserPasswordDetector(port: BrowserPasswordGuestPort): 
   let running: RunningDetector | null = null
   port.on(PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable, () => {
     running ??= startDetector(port)
-  })
-  port.on(PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS.disable, () => {
-    running?.stop()
-    running = null
   })
   port.on(PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS.fill, (payload) => running?.fill(payload))
 }

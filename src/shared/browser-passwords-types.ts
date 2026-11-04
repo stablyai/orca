@@ -8,8 +8,6 @@
 
 /** Global settings the password manager owns; all optional so older profiles load unchanged. */
 export type BrowserPasswordsGlobalSettings = {
-  /** Experimental switch; absent means off. */
-  experimentalBrowserPasswords?: boolean
   /** Advanced: offer to save after a login works; absent means on. */
   browserPasswordsOfferToSave?: boolean
   /** Advanced: confirm with Touch ID before every fill; absent means off. */
@@ -35,8 +33,6 @@ export const BROWSER_PASSWORDS_GUEST_CHANNELS = {
 export const BROWSER_PASSWORDS_TO_GUEST_CHANNELS = {
   /** Turns detection on for this document; until then the preload observes nothing. */
   enable: 'browserPasswords:toGuest:enable',
-  /** The setting was turned off: stop observing and reporting. */
-  disable: 'browserPasswords:toGuest:disable',
   fill: 'browserPasswords:toGuest:fill'
 } as const
 
@@ -203,8 +199,6 @@ export type BrowserPasswordEntryEditResult =
 export type BrowserPasswordReauthMethod = 'touch-id' | 'none'
 
 export type BrowserPasswordsStatus = {
-  /** The experimental setting. */
-  enabled: boolean
   availability: BrowserPasswordsAvailability
   reauthMethod: BrowserPasswordReauthMethod
 }

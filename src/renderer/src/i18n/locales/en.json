@@ -908,7 +908,6 @@
         "deleteConfirmTitle": "Delete the {{site}} password for {{username}}?",
         "deleteConfirmDescription": "Orca won’t fill it anymore. This can’t be undone.",
         "deleteConfirm": "Delete",
-        "experimental": "Experimental",
         "profileDescription": "Saved logins for the {{profile}} profile. Orca fills one only when you pick it under a sign-in field.",
         "unavailableTitle": "Saved passwords are off on this computer",
         "emptyTitle": "No saved passwords yet",
@@ -1216,13 +1215,7 @@
       "save": "Save formatter",
       "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
     },
-    "experimental": {
-      "browserPasswords": {
-        "title": "Saved passwords",
-        "description": "Orca’s browser offers to save a login after it works and fills it from a list under the field. Manage them in Settings › Browser › Passwords.",
-        "toggle": "Toggle saved passwords"
-      }
-    }
+    "experimental": {}
   },
   "menu": {
     "checkForUpdates": "Check for Updates...",

@@ -38,6 +38,7 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
@@ -347,7 +348,7 @@ export function BrowserPane({
 
       {/* The vault lives on this computer only, so it follows the local host's profiles. */}
       {showPasswords &&
-      settings.experimentalBrowserPasswords === true &&
+      !isWebClientLocation() &&
       selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
         <BrowserPasswordsSection
           browserProfileId={activeBrowserSessionProfileId}

@@ -188,22 +188,6 @@ describe('browser password detector', () => {
     expect(observe).toHaveBeenCalled()
   })
 
-  it('stops observing and reporting once main turns it off', async () => {
-    load(LOGIN_FORM)
-    install()
-    enable()
-    await vi.advanceTimersByTimeAsync(600)
-    sent = []
-
-    listeners.get(BROWSER_PASSWORDS_TO_GUEST_CHANNELS.disable)?.(undefined)
-    typeInto(el('#pw'), 'secret')
-    el('#pw').dispatchEvent(trusted(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
-    el('#login').remove()
-    await vi.advanceTimersByTimeAsync(1000)
-
-    expect(sent.filter(({ channel }) => channel !== CHANNEL.fieldBlurred)).toEqual([])
-  })
-
   it('reports the page forms once after enable and again only when they change', async () => {
     load(LOGIN_FORM)
     install()

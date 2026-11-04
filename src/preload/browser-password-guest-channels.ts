@@ -17,6 +17,5 @@ export const PRELOAD_BROWSER_PASSWORDS_GUEST_CHANNELS = {
 
 export const PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS = {
   enable: 'browserPasswords:toGuest:enable',
-  disable: 'browserPasswords:toGuest:disable',
   fill: 'browserPasswords:toGuest:fill'
 } as const satisfies typeof BROWSER_PASSWORDS_TO_GUEST_CHANNELS

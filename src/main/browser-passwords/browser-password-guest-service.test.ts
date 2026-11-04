@@ -62,7 +62,7 @@ afterEach(() => {
 })
 
 function setup() {
-  configureBrowserPasswords(() => ({ enabled: true, offerToSave: true, fillRequiresReauth: false }))
+  configureBrowserPasswords(() => ({ offerToSave: true, fillRequiresReauth: false }))
   const guest = new Guest()
   guests.push(guest)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the WebContents methods implemented by this event fixture are used.

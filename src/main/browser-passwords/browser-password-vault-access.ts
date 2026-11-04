@@ -5,18 +5,16 @@ import type { BrowserPasswordStore } from './browser-password-store'
 import { getBrowserPasswordVault } from './browser-password-vaults'
 
 export type BrowserPasswordSettings = {
-  enabled: boolean
   offerToSave: boolean
   fillRequiresReauth: boolean
 }
 
-const DISABLED: BrowserPasswordSettings = {
-  enabled: false,
+const UNCONFIGURED: BrowserPasswordSettings = {
   offerToSave: false,
   fillRequiresReauth: false
 }
 
-let readSettings: () => BrowserPasswordSettings = () => DISABLED
+let readSettings: () => BrowserPasswordSettings = () => UNCONFIGURED
 
 export function setBrowserPasswordSettingsSource(source: () => BrowserPasswordSettings): void {
   readSettings = source
@@ -41,13 +39,10 @@ export function browserPasswordVaultFor(browserProfileId: string): BrowserPasswo
   return getBrowserPasswordVault(browserProfileId)
 }
 
-/** The vault a guest may use right now: setting on, a profile-backed session, storage sealed. */
+/** The vault a guest may use right now: a profile-backed session with storage sealed. */
 export function browserPasswordVaultForGuest(
   guest: WebContents
 ): { browserProfileId: string; vault: BrowserPasswordStore } | null {
-  if (!readSettings().enabled) {
-    return null
-  }
   const browserProfileId = browserPasswordProfileIdForSession(guest.session)
   if (!browserProfileId) {
     return null

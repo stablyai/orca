@@ -13,7 +13,7 @@ import type {
 } from '../../../../../../shared/browser-passwords-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsBadge, SettingsRow } from '../../form-controls/SettingsFormControls'
+import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { BrowserPasswordPreferences } from './BrowserPasswordPreferences'
 import {
   BrowserPasswordEntryDialog,
@@ -226,12 +226,7 @@ function BrowserPasswordsProfile({
     <>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 space-y-0.5">
-          <div className="flex items-center gap-2">
-            <Label>{getBrowserPasswordsSearchEntry().title}</Label>
-            <SettingsBadge tone="muted">
-              {translate('settings.browser.passwords.experimental', 'Experimental')}
-            </SettingsBadge>
-          </div>
+          <Label>{getBrowserPasswordsSearchEntry().title}</Label>
           <p className="text-xs text-muted-foreground">
             {translate(
               'settings.browser.passwords.profileDescription',

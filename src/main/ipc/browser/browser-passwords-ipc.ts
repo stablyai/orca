@@ -7,7 +7,6 @@ import type {
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {
-  applyBrowserPasswordSettingsToGuests,
   configureBrowserPasswords,
   fillBrowserPassword
 } from '../../browser-passwords/browser-password-guest-service'
@@ -24,31 +23,18 @@ import {
 export type BrowserPasswordsSettingsSource = {
   getSettings: () => Pick<
     GlobalSettings,
-    | 'experimentalBrowserPasswords'
-    | 'browserPasswordsOfferToSave'
-    | 'browserPasswordsFillRequiresReauth'
+    'browserPasswordsOfferToSave' | 'browserPasswordsFillRequiresReauth'
   >
-  onSettingsChanged?: (listener: (updates: Partial<GlobalSettings>) => void) => () => void
 }
-
-let stopWatchingSettings: (() => void) | null = null
 
 export function registerBrowserPasswordsHandlers(store: BrowserPasswordsSettingsSource): void {
   configureBrowserPasswords(() => {
     const settings = store.getSettings()
     return {
-      enabled: settings.experimentalBrowserPasswords === true,
       offerToSave: settings.browserPasswordsOfferToSave !== false,
       fillRequiresReauth: settings.browserPasswordsFillRequiresReauth === true
     }
   })
-  stopWatchingSettings?.()
-  stopWatchingSettings =
-    store.onSettingsChanged?.((updates) => {
-      if ('experimentalBrowserPasswords' in updates) {
-        applyBrowserPasswordSettingsToGuests()
-      }
-    }) ?? null
   registerBrowserPasswordsEntryHandlers()
   registerBrowserPasswordsImportHandlers()
 
@@ -58,7 +44,6 @@ export function registerBrowserPasswordsHandlers(store: BrowserPasswordsSettings
       const request = readBrowserPasswordsVaultRequest(event, raw)
       return request
         ? {
-            enabled: store.getSettings().experimentalBrowserPasswords === true,
             availability: request.vault.availability(),
             reauthMethod: browserPasswordReauthMethod()
           }
