@@ -160,6 +160,31 @@ export function useAnchoredDetailCard(placement: string, obscured: boolean) {
       }
       return
     }
+    if (
+      typeof HTMLElement !== 'undefined' &&
+      layer instanceof HTMLElement &&
+      anchor instanceof HTMLElement &&
+      bar instanceof HTMLElement
+    ) {
+      const rootRect = layer.getBoundingClientRect()
+      const anchorRect = anchor.getBoundingClientRect()
+      const barRect = bar.getBoundingClientRect()
+      dispatch({
+        type: 'measured',
+        request: id,
+        anchor: {
+          trigger: {
+            x: anchorRect.left - rootRect.left,
+            y: anchorRect.top - rootRect.top,
+            width: anchorRect.width,
+            height: anchorRect.height
+          },
+          top: barRect.top + barRect.height - rootRect.top,
+          origin: { x: rootRect.left, y: rootRect.top }
+        }
+      })
+      return
+    }
     let disposed = false
     layer.measureInWindow((rootX, rootY) => {
       anchor.measureInWindow((x, y, width, height) => {
