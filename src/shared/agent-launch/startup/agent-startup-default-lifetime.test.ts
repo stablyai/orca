@@ -218,6 +218,11 @@ describe('typed creation through the startup and recorded resume owners', () => 
       expect(() =>
         pi('--model anthropic/claude', { agentDefaultArgs: { pi: "--provider '' --api-key key" } })
       ).toThrow(/--provider beside/)
+      expect(() =>
+        pi('--model anthropic/claude', {
+          agentDefaultArgs: { pi: "--provider openai --provider '' --api-key key" }
+        })
+      ).toThrow(/--provider beside/)
     })
 
     it('keep dash-leading operands of default options', () => {
