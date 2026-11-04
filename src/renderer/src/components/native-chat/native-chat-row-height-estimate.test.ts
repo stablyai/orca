@@ -1,4 +1,4 @@
-import { orchestrationNoticeMessage } from '../../../../shared/native-chat-orchestration-notice.test-fixture'
+import { orchestrationMailFixture } from '../../../../shared/agent-session/orchestration-mail.test-fixture'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
@@ -32,6 +32,35 @@ describe('transcript row height estimate', () => {
     expect(height(40, 'user')).toBeLessThan(height(40, 'assistant'))
     expect(height(8, 'user')).toBeGreaterThan(height(7, 'user'))
     expect(height(400, 'user')).toBe(height(9, 'user'))
+  })
+
+  it('estimates compact starts and mail from their closed header rather than hidden content', () => {
+    const height = (value: NativeChatMessage) =>
+      estimateNativeChatRowHeight(nativeChatRowContentMetrics(value), NO_CHROME)
+    const short = orchestrationMailFixture({ body: 'A result' })
+    const long = orchestrationMailFixture({ body: 'Long result.\n'.repeat(400) })
+    const start: NativeChatMessage = {
+      ...long,
+      role: 'system',
+      agentStart: true,
+      from: { ...long.from, orchestration: null },
+      blocks: [...long.blocks, { type: 'image-ref', url: 'https://example.com/diagram.png' }]
+    }
+    expect(height(long)).toBe(height(short))
+    expect(height(start)).toBe(height(short))
+    expect(height(start)).toBeLessThan(48)
+    expect(height({ ...long, from: { ...long.from, orchestration: null } })).toBeGreaterThan(
+      height(long)
+    )
+    expect(
+      height({
+        ...long,
+        from: {
+          ...long.from,
+          orchestration: { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }
+        }
+      })
+    ).toBeGreaterThan(height(long))
   })
 
   it('reuses row metrics across a one-pixel resize and refreshes after a substantial resize', () => {
@@ -269,13 +298,4 @@ describe('transcript row height estimate', () => {
     expect(standard).toBe(24)
     expect(large).toBeGreaterThan(standard)
   })
-})
-
-it('estimates typed mail as one collapsed line while human lookalike text keeps bubble height', () => {
-  const notice = orchestrationNoticeMessage()
-  const person = { ...notice, from: undefined }
-  expect(estimateNativeChatRowHeight(nativeChatRowContentMetrics(notice), NO_CHROME)).toBe(24)
-  expect(
-    estimateNativeChatRowHeight(nativeChatRowContentMetrics(person), NO_CHROME)
-  ).toBeGreaterThan(24)
 })

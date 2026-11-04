@@ -1,8 +1,15 @@
-import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type {
+  CurrentActionSelection,
+  SelectedSourceControlActionRecipe
+} from '../../../../shared/source-control-action-selection'
 import type { getAgentCatalog } from '@/lib/agent-catalog'
 import type { useAppStore } from '@/store'
 import type { useRepoById } from '@/store/selectors'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
@@ -19,7 +26,10 @@ export type UseSourceControlAgentActionDialogResult = {
   selectedAgent: TuiAgent | null
   hasEnabledAgents: boolean
   detecting: boolean
-  surfaceRows: AgentComboboxSurfaceRows
+  surfaceRows: AgentComboboxSurfaceRows & {
+    launchSelection?: CurrentActionSelection
+    worktreeId?: string
+  }
   statusCopy: string | null
   agentArgs: string
   /** False when this launch would be a structured native chat session, which reads no CLI arguments. */
@@ -35,7 +45,12 @@ export type UseSourceControlAgentActionDialogResult = {
   canStart: boolean
   isStarting: boolean
   isCreateAccepted: boolean
-  onAgentPick: (agent: TuiAgent, surface?: AgentLaunchSurface) => void
+  onAgentPick: (
+    agent: TuiAgent,
+    surface?: AgentLaunchSurface,
+    draft?: AgentPickerDraft,
+    entry?: AgentPickerEntry
+  ) => void
   onAgentArgsChange: (value: string) => void
   onCommandTemplateChange: (value: string) => void
   onSaveLaunchRecipeChange: (value: boolean) => void

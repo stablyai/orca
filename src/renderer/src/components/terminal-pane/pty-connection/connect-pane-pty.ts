@@ -14,7 +14,7 @@ import { TerminalResumeEscapeGap } from '../terminal-resume-escape-gap'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
 import { makePaneKey } from '../../../../../shared/stable-pane-id'
-import type { AgentType } from '../../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'

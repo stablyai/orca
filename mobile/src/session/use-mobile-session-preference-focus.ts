@@ -1,3 +1,4 @@
+import { useShellStorage } from '../platform/shell-storage'
 import { settleSessionPreferenceRead } from './session-preference-read'
 import { useCallback, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
@@ -23,6 +24,7 @@ export function useMobileSessionPreferenceFocus(
     setAutocompleteEnabled,
     setTerminalLinkOpenMode
   } = scope
+  const shellStorage = useShellStorage()
   const [terminalPreferencesReady, setTerminalPreferencesReady] = useState(false)
   // Reload on Settings return without dropping readiness or remounting terminal panes.
   useFocusEffect(
@@ -51,7 +53,7 @@ export function useMobileSessionPreferenceFocus(
       return () => {
         active = false
       }
-    }, [])
+    }, [shellStorage])
   )
   return { terminalPreferencesReady }
 }

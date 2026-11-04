@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
-import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './session-transcript-record-budget'
+import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './transcripts/session-transcript-record-budget'
 
 type ChunkSource = {
   chunks: Buffer[]

@@ -1,5 +1,7 @@
-import { MobileNativeChatOrchestrationNotice } from '../../MobileNativeChatOrchestrationNotice'
-import { MobileNativeChatTextAttachmentActions } from './MobileNativeChatTextAttachmentActions'
+import {
+  nativeChatTextAttachmentPaths,
+  chatTextAttachmentName
+} from '../../../../../src/shared/native-chat-text-attachment-references'
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
@@ -257,7 +259,7 @@ function MobileNativeChatMessageImpl({
           onLongPress={onLongPress}
           text={text}
         />
-        <MobileNativeChatTextAttachmentActions
+        <TextAttachmentActions
           text={text}
           onOpenFile={onOpenFile}
           pastedText={t('chat.textAttachmentPreview.pastedText', 'Pasted text')}
@@ -280,126 +282,132 @@ function MobileNativeChatMessageImpl({
   }
   const proseRows = (blocks: Chat.NativeChatBlock[]) =>
     blocks.map((block, index) => proseRow(block, index, Chat.isTextBlock(block) ? block.text : ''))
-  const mailNotice =
-    message.role === 'user' && message.from?.orchestration?.message === 'mail-notice'
-  const body = (
-    <View
-      style={[!mailNotice && styles.row, isUser && styles.rowUser]}
-      testID={mailNotice ? undefined : mobileNativeChatRowId(rowKey ?? message.id)}
-    >
-      <Content onLongPress={onLongPress} style={[styles.content, isUser && styles.userBubble]}>
-        {agentFrom ? (
-          <MobileNativeChatAgentMessageCard
-            message={message}
-            from={agentFrom}
-            fontScale={fontScale}
-            attachments={proseRows(drawnProse.filter(Chat.isImageRefBlock))}
-            onOpenFile={onOpenFile}
-            onLongPress={onLongPress}
-            status={showFull}
-          />
-        ) : (
-          <>
-            {/* A roster is not tool activity, so it stays out of the settled-tools collapse. */}
-            {isSystem ? (
-              <MobileNativeChatNoticeRow
-                blocks={drawnProse}
-                fontScale={fontScale}
-                onOpenFile={onOpenFile}
-                onLongPress={onLongPress}
-              />
-            ) : null}
-            {isUser ? (
-              <>
-                {proseRows(drawnProse.filter(Chat.isImageRefBlock))}
-                <MobileNativeChatUserMessageFold
-                  text={deriveNativeChatRowContent(message.blocks).markdown}
-                  fontScale={fontScale}
-                  open={userMessageOpen === true}
-                  onToggle={() => onToggleUserMessage?.(message.id)}
-                  recovery={recovery}
-                  status={showFull}
-                >
-                  {proseRows(drawnProse.filter((block) => !Chat.isImageRefBlock(block)))}
-                </MobileNativeChatUserMessageFold>
-              </>
-            ) : (
-              <MobileNativeChatPacedProse
-                rowKey={message.id}
-                blocks={drawnProse}
-                growingBlock={growingBlock}
-                paced={message.role === 'assistant'}
-              >
-                {(block, index, shown) => proseRow(block, index, shown.text, shown.revealing)}
-              </MobileNativeChatPacedProse>
-            )}
-            {isUser ? null : showFull}
-          </>
-        )}
-        {askRow}
-        {showToolRun ? (
-          <ToolRun
-            blocks={tools}
-            disclosureId={runOwner ?? rowKey ?? message.id}
-            asides={asides}
-            activeTurnIsWorking={structuredActivityUi ? activeTurnIsWorking : undefined}
-            trailing={trailingRun}
-            awaitingAnswer={askPending}
-            previousTodoWrite={previousTodoWrite}
-            previousUpdatePlan={previousUpdatePlan}
-            fontScale={fontScale}
-            onOpenFile={onOpenFile}
-            viewedImages={
-              viewedImages.length > 0
-                ? // Keyed by path: a read finishing late inserts above images already loaded.
-                  viewedImages.map((image) => (
-                    <Prose
-                      key={image.path}
-                      block={image}
-                      text=""
-                      fontScale={fontScale}
-                      onLongPress={onLongPress}
-                    />
-                  ))
-                : undefined
-            }
-          />
-        ) : null}
-      </Content>
-      {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
-      {/* Always shown, so the row never shifts when copy appears. */}
-      {isChatTurn && !agentFrom ? (
-        <View style={styles.meta}>
-          {copyText.length > 0 ? (
-            <View style={styles.metaCopy}>
-              <MobileSourceCopyButton
-                key={message.id}
-                text={copyText}
-                accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
-              />
-            </View>
-          ) : null}
-          <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
-        </View>
-      ) : null}
-    </View>
-  )
   return (
     <>
       {}
       {turnStatusAbove ? statusRow : null}
-      {mailNotice ? (
-        <View style={styles.row} testID={mobileNativeChatRowId(rowKey ?? message.id)}>
-          <MobileNativeChatOrchestrationNotice messageId={message.id} fontScale={fontScale}>
-            {body}
-          </MobileNativeChatOrchestrationNotice>
-        </View>
-      ) : (
-        body
-      )}
+      <View
+        style={[styles.row, isUser && styles.rowUser]}
+        testID={mobileNativeChatRowId(rowKey ?? message.id)}
+      >
+        <Content onLongPress={onLongPress} style={[styles.content, isUser && styles.userBubble]}>
+          {agentFrom ? (
+            <MobileNativeChatAgentMessageCard
+              message={message}
+              from={agentFrom}
+              fontScale={fontScale}
+              attachments={proseRows(drawnProse.filter(Chat.isImageRefBlock))}
+              onOpenFile={onOpenFile}
+              onLongPress={onLongPress}
+              status={showFull}
+            />
+          ) : (
+            <>
+              {/* A roster is not tool activity, so it stays out of the settled-tools collapse. */}
+              {isSystem ? (
+                <MobileNativeChatNoticeRow
+                  blocks={drawnProse}
+                  fontScale={fontScale}
+                  onOpenFile={onOpenFile}
+                  onLongPress={onLongPress}
+                />
+              ) : null}
+              {isUser ? (
+                <>
+                  {proseRows(drawnProse.filter(Chat.isImageRefBlock))}
+                  <MobileNativeChatUserMessageFold
+                    text={deriveNativeChatRowContent(message.blocks).markdown}
+                    fontScale={fontScale}
+                    open={userMessageOpen === true}
+                    onToggle={() => onToggleUserMessage?.(message.id)}
+                    recovery={recovery}
+                    status={showFull}
+                  >
+                    {proseRows(drawnProse.filter((block) => !Chat.isImageRefBlock(block)))}
+                  </MobileNativeChatUserMessageFold>
+                </>
+              ) : (
+                <MobileNativeChatPacedProse
+                  rowKey={message.id}
+                  blocks={drawnProse}
+                  growingBlock={growingBlock}
+                  paced={message.role === 'assistant'}
+                >
+                  {(block, index, shown) => proseRow(block, index, shown.text, shown.revealing)}
+                </MobileNativeChatPacedProse>
+              )}
+              {isUser ? null : showFull}
+            </>
+          )}
+          {askRow}
+          {showToolRun ? (
+            <ToolRun
+              blocks={tools}
+              disclosureId={runOwner ?? rowKey ?? message.id}
+              asides={asides}
+              activeTurnIsWorking={structuredActivityUi ? activeTurnIsWorking : undefined}
+              trailing={trailingRun}
+              awaitingAnswer={askPending}
+              previousTodoWrite={previousTodoWrite}
+              previousUpdatePlan={previousUpdatePlan}
+              fontScale={fontScale}
+              onOpenFile={onOpenFile}
+              viewedImages={
+                viewedImages.length > 0
+                  ? // Keyed by path: a read finishing late inserts above images already loaded.
+                    viewedImages.map((image) => (
+                      <Prose
+                        key={image.path}
+                        block={image}
+                        text=""
+                        fontScale={fontScale}
+                        onLongPress={onLongPress}
+                      />
+                    ))
+                  : undefined
+              }
+            />
+          ) : null}
+        </Content>
+        {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
+        {/* Always shown, so the row never shifts when copy appears. */}
+        {isChatTurn && !agentFrom ? (
+          <View style={styles.meta}>
+            {copyText.length > 0 ? (
+              <View style={styles.metaCopy}>
+                <MobileSourceCopyButton
+                  key={message.id}
+                  text={copyText}
+                  accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
+                />
+              </View>
+            ) : null}
+            <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
+          </View>
+        ) : null}
+      </View>
       {turnStatusAbove ? null : statusRow}
     </>
   )
 }
 
 export const MobileNativeChatMessage = memo(MobileNativeChatMessageImpl)
+
+const TextAttachmentActions = memo(function TextAttachmentActions(props: {
+  text: string
+  pastedText: string
+  onOpenFile?: (path: string) => void
+}) {
+  const { text, pastedText, onOpenFile } = props
+  const paths = useMemo(() => nativeChatTextAttachmentPaths(text), [text])
+  return paths.map((path) => (
+    <Text
+      key={path}
+      accessibilityRole="button"
+      onPress={() => onOpenFile?.(path)}
+      style={styles.agentAttribution}
+    >
+      {chatTextAttachmentName(path, pastedText)}
+    </Text>
+  ))
+})

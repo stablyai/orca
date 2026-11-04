@@ -12,7 +12,7 @@ import {
   readTerminalScrollbackStoredBytesSync,
   readTerminalScrollbackStoredSnapshotSync,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { compareKeys } from './orcad-source-key-order'
 
 export type ProjectedOrcadMigrationScrollback = {

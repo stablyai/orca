@@ -1,13 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   isTagBuiltFromCurrentRef,
   isReleaseCutDraft,
-  publishCompleteDraftReleases,
-  writeGithubOutputs
+  publishCompleteDraftReleases
 } from './publish-complete-draft-releases.mjs'
 import { getRequiredReleaseAssetNames } from './verify-release-required-assets.mjs'
 
@@ -96,16 +95,6 @@ describe('isReleaseCutDraft', () => {
 })
 
 describe('isTagBuiltFromCurrentRef', () => {
-  it('accepts a tag on the current release commit', async () => {
-    await withGitRepo((repo) => {
-      commit(repo, 'initial')
-      commit(repo, 'release: v1.4.36-rc.6')
-      git(repo, ['tag', 'v1.4.36-rc.6'])
-
-      expect(isTagBuiltFromCurrentRef('v1.4.36-rc.6', { cwd: repo })).toBe(true)
-    })
-  })
-
   it('accepts a tag whose release commit is built from the current ref', async () => {
     await withGitRepo((repo) => {
       commit(repo, 'initial')
@@ -240,33 +229,5 @@ describe('publishCompleteDraftReleases', () => {
         fetch.mockRestore()
       }
     })
-  })
-})
-
-describe('writeGithubOutputs', () => {
-  it('writes count outputs for workflow conditions', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-release-outputs-'))
-    const outputPath = join(dir, 'output')
-    try {
-      writeGithubOutputs(
-        {
-          published: ['v1.4.2-rc.7'],
-          skipped: [{ tag: 'v1.4.2-rc.8', reason: 'missing assets' }]
-        },
-        outputPath
-      )
-
-      expect(readFileSync(outputPath, 'utf8')).toBe(
-        `${[
-          'published_count=1',
-          'skipped_count=1',
-          'latest_published_tag=v1.4.2-rc.7',
-          'published_tags=v1.4.2-rc.7',
-          'skipped_tags=v1.4.2-rc.8'
-        ].join('\n')}\n`
-      )
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
   })
 })

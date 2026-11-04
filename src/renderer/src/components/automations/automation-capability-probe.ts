@@ -17,7 +17,7 @@ import {
 import {
   EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
   hasExtraAgentArgs
-} from '../../../../shared/automation-extra-agent-args'
+} from '../../../../shared/agent-launch/startup/automation-extra-agent-args'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
 import { automationHostDiagnostics } from './automation-host-diagnostics'
 import { translate } from '@/i18n/i18n'

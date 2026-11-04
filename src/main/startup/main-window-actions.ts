@@ -8,7 +8,7 @@ import {
   type Tray,
   type WebContents
 } from 'electron'
-import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
+import { isNativeBrowserPopupWindow } from '../browser/guest-lifecycle/popups/native-browser-popup-windows'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import type { AppMenuQuitHandlers } from '../menu/app-menu-quit-item'
 import type { createWebContentsTimedFlag } from './web-contents-timed-flag'
@@ -23,6 +23,7 @@ import {
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-existing-window'
 import { mainProcessState as state } from './main-process-state'
+import { quitTeardownStartGate } from './quit/quit-teardown-start-gate'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import { getWorkspaceSpaceWindow } from '../window/workspace-space-window'
 import { markUserQuitWindowClose } from '../window/user-quit-window-close'
@@ -58,7 +59,9 @@ export function focusExistingWindow(): void {
     getWindow: () => state.mainWindow,
     openWindow,
     // Repair rewrites renderer DACLs; second-click activation during a blank launch must wait for the gated opener.
-    canOpenWindow: () => !isBlockingInstallDirAclRepairInFlight(),
+    // A window opened after committed quit teardown binds to dying services and hangs the exit (#37625).
+    canOpenWindow: () =>
+      !isBlockingInstallDirAclRepairInFlight() && !quitTeardownStartGate.hasStarted(),
     warn: console.warn
   })
 }

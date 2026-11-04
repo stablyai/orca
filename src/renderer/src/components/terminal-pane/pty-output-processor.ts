@@ -1,10 +1,13 @@
-import { extractAllOscTitles } from '../../../../shared/agent-detection'
+import {
+  extractAllOscTitles,
+  extractAllOscTitleEntries
+} from '../../../../shared/agent-status/title/osc-title-extraction'
 import {
   createAgentStatusOscProcessor,
   type ProgramActivityChange
-} from '../../../../shared/agent-status-osc'
+} from '../../../../shared/agent-status/transport/agent-status-osc'
 import { createProgramStatusSideEffectScanner } from '../../../../shared/terminal-agent-status-processor'
-import { extractAllOscTitleEntries } from '../../../../shared/osc-title-extraction'
+
 import { placeProgramActivityAmongTitles } from '../../../../shared/program-status/title-activity-order'
 import {
   enqueueOrderedPtyEffects,

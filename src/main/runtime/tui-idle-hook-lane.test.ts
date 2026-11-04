@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusIpcPayload
-} from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { hookAuthority } from './agent-state-rules/agent-state-rules-engine'
 import { parseAgentStateRuleFiles } from './agent-state-rules/agent-state-rules-catalog'
 import { hookLeadTurnState, readTuiIdleHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'

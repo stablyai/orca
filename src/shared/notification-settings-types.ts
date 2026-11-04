@@ -2,8 +2,8 @@ import type {
   StructuredAttentionRead,
   StructuredAttentionOrigin
 } from './agent-session/agent-session-attention'
-import type { AgentStatusState, AgentType } from './agent-status-types'
-import type { AgentTurnOutcome } from './agent-turn-outcome'
+import type { AgentStatusState, AgentType } from './agent-status/contracts/agent-status-types'
+import type { AgentTurnOutcome } from './agent-status/lifecycle/agent-turn-outcome'
 import type { NotificationSourceId } from './notification-source'
 
 export type NotificationSettings = {

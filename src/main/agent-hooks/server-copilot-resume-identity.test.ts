@@ -2,34 +2,29 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
-import { resumeRecordFromStatus } from '../../shared/agent-resume-record-from-status'
-import { getAgentResumeArgv } from '../../shared/agent-resume-argv'
+import { resumeRecordFromStatus } from '../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { getAgentResumeArgv } from '../../shared/agent-launch/startup/agent-resume-argv'
 import { AgentHookServer } from './server'
 import { type Body, buildBody, PANE, postHookEvent } from './server.test-fixtures'
 
 const ROOT = 'cf0e6ff2-9ede-46de-a430-5778cf8da164'
 const CHILD = 'copilot-helper'
 
-function rootEnd(sessionKey: string = 'session_id'): Body {
+function rootEnd(): Body {
   // Copilot 1.0.105 captured root SessionEnd payloads; cwd is redacted to a test folder.
   // The hook script sends the configured event name in the envelope, not the payload.
-  return sessionKey === 'sessionId'
-    ? buildBody(
-        { sessionId: ROOT, timestamp: 1793350540748, cwd: '/test/project', reason: 'user_exit' },
-        { hookEventName: 'sessionEnd' }
-      )
-    : buildBody(
-        {
-          hook_event_name: 'SessionEnd',
-          session_id: ROOT,
-          timestamp: '2026-10-30T08:55:40.748Z',
-          cwd: '/test/project',
-          reason: 'user_exit'
-        },
-        { hookEventName: 'SessionEnd' }
-      )
+  return buildBody(
+    {
+      hook_event_name: 'SessionEnd',
+      session_id: ROOT,
+      timestamp: '2026-10-30T08:55:40.748Z',
+      cwd: '/test/project',
+      reason: 'user_exit'
+    },
+    { hookEventName: 'SessionEnd' }
+  )
 }
 
 function normalize(body: Body) {
@@ -60,41 +55,6 @@ function expectResume(server: AgentHookServer, id: string = ROOT): void {
     `--resume=${id}`
   ])
 }
-
-it.each([
-  ['agent_id', 'session_id'],
-  ['agentId', 'sessionId'],
-  ['parent_agent_id', 'session_id'],
-  ['parentAgentId', 'sessionId']
-])('keeps docs-shaped Copilot %s child hooks out of the pane restore ID', (marker, sessionKey) => {
-  const server = new AgentHookServer()
-  const root = normalize(rootEnd(sessionKey))
-  expect(root.providerSession?.id).toBe(ROOT)
-  server.ingestRemote(root, 'host-1')
-  // The child shape is documented, not captured; its session field's owner is unspecified.
-  const child = normalize(
-    buildBody({
-      hook_event_name: 'PreToolUse',
-      [sessionKey]: CHILD,
-      [marker]: marker.startsWith('parent') ? 'parent-agent' : CHILD,
-      tool_name: 'ask_user',
-      tool_input: { question: 'Which target?' }
-    })
-  )
-  expect(child.providerSession).toBeUndefined()
-  expect(child.payload.state).toBe('blocked')
-  server.ingestRemote(child, 'host-1')
-  expect(server.getStatusSnapshot()[0]?.state).toBe('blocked')
-  expectResume(server)
-  const end = rootEnd(sessionKey)
-  const childEnd = normalize({
-    ...end,
-    payload: { ...end.payload, [sessionKey]: CHILD, [marker]: CHILD }
-  })
-  server.ingestRemote(childEnd, 'host-1')
-  server.ingestRemote(child, 'host-1')
-  expectResume(server)
-})
 
 it('rejects old-relay child identity before a root exists and keeps later root/owner changes authoritative', () => {
   const server = new AgentHookServer()

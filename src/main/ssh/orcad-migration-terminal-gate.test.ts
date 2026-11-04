@@ -5,7 +5,7 @@ import {
   confirmOrcadMigrationTerminalsUnderFence,
   retireProvenExitedLeases
 } from './orcad-migration-terminal-gate'
-import { PtyExitProof } from '../pty-exit-proof'
+import { PtyExitProof } from '../pty/process-retirement/pty-exit-proof'
 
 type LeaseRow = Pick<SshRemotePtyLease, 'ptyId' | 'state'>
 

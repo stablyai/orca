@@ -1,3 +1,7 @@
+import {
+  getProviderChecksOutcome,
+  type CheckPresentationOutcome
+} from '../../../../shared/provider-check-summary'
 import { createElement } from 'react'
 import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -26,7 +30,7 @@ export function getProviderName(review: WorktreeCardPrDisplay): string {
 }
 
 // Open reviews take check tones; draft/closed/merged keep state tones, and unconfirmed stateless rows flag problems only.
-export function getReviewChecksTone(status: WorktreeCardPrDisplay['status']): string | null {
+export function getReviewChecksTone(status: CheckPresentationOutcome | undefined): string | null {
   if (status === 'failure') {
     return 'text-rose-500/85'
   }
@@ -36,14 +40,18 @@ export function getReviewChecksTone(status: WorktreeCardPrDisplay['status']): st
   if (status === 'success') {
     return 'text-emerald-500/80'
   }
-  return null
+  return status === 'cancelled' ? 'text-muted-foreground/60' : null
 }
 
-function getCheckTone(review: WorktreeCardPrDisplay): string | null {
+function getCheckTone(
+  review: Pick<WorktreeCardPrDisplay, 'state' | 'status' | 'checksSummary'>
+): string | null {
   if ((review.state && review.state !== 'open') || (!review.state && review.status === 'success')) {
     return null
   }
-  return getReviewChecksTone(review.status)
+  return getReviewChecksTone(
+    review.status ? getProviderChecksOutcome(review.checksSummary, review.status) : undefined
+  )
 }
 
 function getStateTone(state: WorktreeCardPrDisplay['state']): string {
@@ -68,7 +76,8 @@ export function ReviewIcon({
   variant = 'provider',
   showChecks = true
 }: {
-  review: WorktreeCardPrDisplay
+  review: Pick<WorktreeCardPrDisplay, 'state' | 'status' | 'checksSummary'> &
+    Partial<Pick<WorktreeCardPrDisplay, 'provider'>>
   className?: string
   variant?: 'provider' | 'generic'
   showChecks?: boolean

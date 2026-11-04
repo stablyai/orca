@@ -1,11 +1,11 @@
-import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
-import type * as WorktreeListingModule from '../git/worktree-listing'
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildAgentPromptPasteBytes,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs
-} from '../../shared/agent-prompt-injection'
+} from '../../shared/agent-launch/startup/agent-prompt-injection'
 import { setSshTargetRegistryHandlers } from '../ssh/targets/ssh-target-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
@@ -19,42 +19,46 @@ function useHostPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
 }
 
-vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
     listWorktrees: facade.listWorktrees
   }
 })
 
-vi.mock('../git/worktree-listing', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeListingModule>('../git/worktree')
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
     listWorktreesStrict: facade.listWorktreesStrict
   }
 })
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/prompt-verification',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/prompt-verification',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ])
-}))
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/prompt-verification',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/prompt-verification',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 // aider uses open-loop submission, exposing the delay under test.
 async function createPromptRuntime(): Promise<{

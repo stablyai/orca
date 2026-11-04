@@ -15,7 +15,7 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { parseAgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import * as reducer from '../agent-session-journal/journal-reducer'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'

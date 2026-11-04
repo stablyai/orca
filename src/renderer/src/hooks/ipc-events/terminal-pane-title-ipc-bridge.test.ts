@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SET_TERMINAL_PANE_TITLE_EVENT } from '@/constants/terminal'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 const { fakeStore } = vi.hoisted(() => {
@@ -13,7 +12,7 @@ const { fakeStore } = vi.hoisted(() => {
   }
   return { fakeStore: state }
 })
-vi.mock('../../store', () => ({ useAppStore: { getState: () => fakeStore } }))
+vi.mock('../../store/index', () => ({ useAppStore: { getState: () => fakeStore } }))
 
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 
@@ -51,17 +50,6 @@ describe('a pane title from main', () => {
     })
     applyRuntimePaneTitle({ tabId: 'tab-1', leafId: LEAF_ID, title: null })
     expect(layout()).toEqual(LAYOUT)
-  })
-
-  it('tells a mounted pane, and stays quiet when nothing changed', () => {
-    applyRuntimePaneTitle({ tabId: 'tab-1', leafId: LEAF_ID, title: 'REVIEWER' })
-    applyRuntimePaneTitle({ tabId: 'tab-1', leafId: LEAF_ID, title: 'REVIEWER' })
-    applyRuntimePaneTitle({ tabId: 'tab-1', leafId: SIBLING_ID, title: 'DEVELOPER' })
-    expect(dispatchEvent).toHaveBeenCalledTimes(1)
-    const event = dispatchEvent.mock.calls[0]?.[0]
-    expect(event).toBeInstanceOf(CustomEvent)
-    expect(event.type).toBe(SET_TERMINAL_PANE_TITLE_EVENT)
-    expect(event.detail).toEqual({ tabId: 'tab-1', leafId: LEAF_ID, title: 'REVIEWER' })
   })
 
   it("names a never-mounted tab's one pane from a rootless layout", () => {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
-import type { OpenCodeSqliteProcessOptions } from './session-scanner-opencode-sqlite-process-client'
+import type { OpenCodeSqliteProcessOptions } from './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-client'
 
 const mocks = vi.hoisted(() => ({
   runProcess: vi.fn<(spec: { args?: string[] }) => Promise<ProcessResult>>(),
@@ -10,30 +10,40 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
-vi.mock('./session-scanner-opencode-sqlite-process-client', () => ({
-  createOpenCodeSqliteProcessClient: mocks.create
+vi.mock(
+  './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-client',
+  () => ({
+    createOpenCodeSqliteProcessClient: mocks.create
+  })
+)
+vi.mock(
+  './scanners/opencode/sqlite/session-scanner-opencode-sqlite-open',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    readOpenCodeDatabase: mocks.readDb
+  })
+)
+vi.mock('../wsl/execution/wsl-executable-path', () => ({
+  resolveWslExecutablePath: () => 'wsl.exe'
 }))
-vi.mock('./session-scanner-opencode-sqlite-open', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  readOpenCodeDatabase: mocks.readDb
+vi.mock('../wsl/execution/wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\'
 }))
-vi.mock('../wsl/wsl-executable-path', () => ({ resolveWslExecutablePath: () => 'wsl.exe' }))
-vi.mock('../wsl-interop-spawn-directory', () => ({ resolveWslInteropSpawnCwd: () => 'C:\\' }))
 
-import { _resetWslCachesForTests } from '../wsl'
-import { _resetWslBackgroundDistroGateForTests } from '../wsl-background-distro-gate'
+import { _resetWslCachesForTests } from '../wsl/discovery/distro-catalog'
+import { _resetWslBackgroundDistroGateForTests } from '../wsl/discovery/wsl-background-distro-gate'
 import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from '../native-chat/wsl-transcript-running-admission'
 import {
   configureOpenCodeWslReaders,
   openCodeWslClient
-} from './session-scanner-opencode-wsl-client'
+} from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
 import {
   devinSessionsIndexForSidecar,
   resetDevinSessionsIndexCacheForTests
-} from './session-scanner-devin-db'
-import { listRunningWslHomeDirsUnlessStopped } from '../wsl/wsl-home-unless-stopped'
-import { clearWslHomeCache, rememberWslHome } from '../wsl-home-cache'
-import { _resetRunningWslDistroCacheForTests } from '../wsl-running-distro-cache'
+} from './scanners/devin/session-scanner-devin-db'
+import { listRunningWslHomeDirsUnlessStopped } from '../wsl/discovery/wsl-home-unless-stopped'
+import { clearWslHomeCache, rememberWslHome } from '../wsl/discovery/wsl-home-cache'
+import { _resetRunningWslDistroCacheForTests } from '../wsl/discovery/wsl-running-distro-cache'
 import { localAiVaultScanRoots } from './cached-session-list'
 
 const DB = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.opencode\\opencode.db'

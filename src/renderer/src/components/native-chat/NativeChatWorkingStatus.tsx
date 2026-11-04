@@ -6,7 +6,7 @@ import {
   formatNativeChatDuration,
   NATIVE_CHAT_TURN_STATUS_COPY
 } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
-import type { AgentTurnOutcome } from '../../../../shared/agent-turn-outcome'
+import type { AgentTurnOutcome } from '../../../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { useNativeChatElapsedSeconds } from './use-native-chat-elapsed-seconds'
 
 export { formatNativeChatDuration }

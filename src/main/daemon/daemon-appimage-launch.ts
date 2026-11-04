@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { relativePathInsideRoot } from '../../shared/cross-platform-path'
 import { resolveAppImageRuntimeIdentity } from '../updater/linux-package/appimage-runtime-identity'
 import type { DurableDaemonScopeCommand } from './daemon-cgroup-scope'
-import { envWithoutAppImageRuntime } from '../pty/appimage-terminal-env'
+import { envWithoutAppImageRuntime } from '../pty/shell-startup/appimage-terminal-env'
 
 export type AppImageDaemonLaunch = {
   appImagePath: string

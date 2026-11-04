@@ -84,8 +84,7 @@ export const mockApi = {
   }
 }
 
-// @ts-expect-error test window mock
-globalThis.window = { api: mockApi }
+globalThis.window = Object.assign(globalThis.window ?? {}, { api: mockApi })
 
 export function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()

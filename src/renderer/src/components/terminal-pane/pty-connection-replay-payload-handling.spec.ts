@@ -23,7 +23,11 @@ import {
   createManager
 } from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   createInitialStoreState,
   buildReattachPaneTitleState,
@@ -80,6 +84,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     it('preserves a scrolled-up viewport after hidden-backlog snapshot replay', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -117,7 +123,11 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       const deps = createDeps({
         isVisibleRef: { current: false }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -135,6 +145,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     it('cancels a delayed snapshot scroll restore when the pane binding is disposed', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { isTerminalScrollIntentRebuildInFlight } =
         await import('@/lib/pane-manager/terminal-scroll-intent-rebuild')
       const transport = createMockTransport('pty-id')
@@ -165,7 +177,11 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       pane.terminal.buffer.active.baseY = 100
       const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
       const deps = createDeps({ isVisibleRef: { current: false } })
-      const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -195,6 +211,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     it('does not apply a delayed snapshot restore after newer user intent', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { markTerminalFollowOutput } = await import('@/lib/pane-manager/terminal-scroll-intent')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
@@ -224,7 +242,11 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       pane.terminal.buffer.active.baseY = 100
       const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
       const deps = createDeps({ isVisibleRef: { current: false } })
-      const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -252,6 +274,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     it('rebuilds WebGL after remote buffered replay arrives on an already-open pane', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const transport = createMockTransport('remote:env-1@@terminal-1')
       const capturedReplayCallback: {
@@ -276,7 +300,11 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       })
       const manager = createManager(1)
       const deps = createDeps()
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
       await flushAsyncTicks(6)
 
       capturedReplayCallback.current?.('remote prompt\r\n$ ')
@@ -310,7 +338,14 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
       const disposable = await withMockedDocumentActiveElement(textarea, async () => {
-        const connection = connectPanePty(pane as never, manager as never, deps as never)
+        const agentTitleMocks5 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+        const connection = connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+        )
         await flushAsyncTicks(6)
 
         capturedReplayCallback.current?.(ANSI_POSITIONED_CURSOR_AGENT_REATTACH_SCREEN)
@@ -349,7 +384,14 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
       const disposable = await withMockedDocumentActiveElement(textarea, async () => {
-        const connection = connectPanePty(pane as never, manager as never, deps as never)
+        const agentTitleMocks6 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+        const connection = connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+        )
         await flushAsyncTicks(6)
 
         capturedReplayCallback.current?.(
@@ -389,7 +431,14 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
       const disposable = await withMockedDocumentActiveElement(textarea, async () => {
-        const connection = connectPanePty(pane as never, manager as never, deps as never)
+        const agentTitleMocks7 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+        const connection = connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+        )
         await flushAsyncTicks(6)
 
         capturedReplayCallback.current?.(
@@ -430,7 +479,14 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
       const disposable = await withMockedDocumentActiveElement(textarea, async () => {
-        const connection = connectPanePty(pane as never, manager as never, deps as never)
+        const agentTitleMocks8 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+        const connection = connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
+        )
         await flushAsyncTicks(6)
 
         // A dead run left the cursor hidden; the live-agent reset preserves ?25l, so the veto must re-show the cursor for the shell.
@@ -453,6 +509,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     it('does not clear restored scrollback when eager metadata replay opts out', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedReplayCallback: {
         current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
@@ -471,7 +529,11 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       })
       const manager = createManager(1)
       const deps = createDeps()
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
+      )
       await flushAsyncTicks(6)
 
       capturedReplayCallback.current?.('\x1b]0;Restored title\x07', { clearBeforeReplay: false })
@@ -490,6 +552,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     it('does not write a clear or reset for empty eager metadata replay', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedReplayCallback: {
         current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
@@ -508,7 +572,11 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       })
       const manager = createManager(1)
       const deps = createDeps()
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks10)
+      )
       await flushAsyncTicks(6)
 
       capturedReplayCallback.current?.('', { clearBeforeReplay: false })
@@ -520,6 +588,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     it('coalesces remote replay payloads that overlap before parsing starts', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const transport = createMockTransport('remote:env-1@@terminal-1')
       const capturedReplayCallback: {
@@ -542,7 +612,11 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       })
       const manager = createManager(1)
       const deps = createDeps()
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks11)
+      )
       await flushAsyncTicks(6)
 
       capturedReplayCallback.current?.('first replay')
@@ -570,6 +644,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     it('holds newer live bytes until a later replay frame has fully parsed', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks12 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { deliverTerminalDataWithDeferredCredit } =
         await import('@/lib/pane-manager/terminal-delivery-credit')
       enableActiveRuntimeEnvironment()
@@ -591,7 +667,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       const binding = connectPanePty(
         pane as never,
         createManager(1) as never,
-        createDeps() as never
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks12)
       )
       await flushAsyncTicks(8)
 
@@ -632,6 +708,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     it('drops a queued relay replay instead of retagging it for a replacement PTY', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks13 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const transport = createMockTransport('remote:env-1@@terminal-old')
       const replayCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -647,7 +725,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       const binding = connectPanePty(
         pane as never,
         createManager(1) as never,
-        createDeps() as never
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks13)
       )
       await flushAsyncTicks(8)
 
@@ -668,6 +746,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
     it('requests snapshot recovery for one oversized live frame deferred by replay', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks14 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { deliverTerminalDataWithDeferredCredit } =
         await import('@/lib/pane-manager/terminal-delivery-credit')
       const transport = createMockTransport('pty-large-live')
@@ -688,7 +768,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       const binding = connectPanePty(
         pane as never,
         createManager(1) as never,
-        createDeps() as never
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks14)
       )
       await flushAsyncTicks(8)
       const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<

@@ -1,5 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
 import { codexCommandLineJoinsSharedServer } from '../../shared/codex-shared-server-command'
 import {
   collectDescendantsFromIndex,
@@ -8,7 +8,7 @@ import {
 } from '../../shared/process-table-index'
 import { getProcessTableSnapshot } from '../../shared/process-table-snapshot-reader'
 import { readWindowsProcessTable } from '../windows/windows-process-table'
-import { fishArgsSkipConfig } from '../fish-xdg-data-dirs-handoff'
+import { fishArgsSkipConfig } from '../pty/shell-startup/fish-xdg-data-dirs-handoff'
 import { getSystemCodexHomePath } from './codex-home-paths'
 import { getCodexPaneAccount } from './codex-pane-account-registry'
 import { probeCodexSharedServer } from './codex-shared-server-probe'

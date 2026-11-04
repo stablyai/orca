@@ -7,7 +7,7 @@ import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
 import { gitFetch } from '../../../git/remote'
 import { gitSyncForkDefaultBranch } from '../../../git/fork-sync'
-import { getUpstreamStatus } from '../../../git/upstream'
+import { getUpstreamStatus } from '../../../git/source-control/upstream'
 import { validateGitPushTarget } from '../../../git/push-target-validation'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
@@ -16,7 +16,7 @@ import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from '../..
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
-import { assertWslUncPathRunning } from '../../../wsl/wsl-unc-access-gate'
+import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
