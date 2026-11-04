@@ -3,8 +3,8 @@ import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-listener/c
 import { AGENT_HOOK_METADATA_CACHE_DIR } from '../../shared/agent-hook-listener/transport/agent-hook-spool'
 
 // Older curl needs C numeric parsing; keep the parent script's UTF-8 locale unchanged.
-export function posixCurlCommand(curlCommand = 'curl', options: { exec?: boolean } = {}): string {
-  return `LC_ALL= LC_NUMERIC=C ${options.exec ? 'exec ' : ''}${curlCommand}`
+export function posixCurlCommand(curlCommand = 'curl'): string {
+  return `LC_ALL= LC_NUMERIC=C ${curlCommand}`
 }
 
 const PACK_HOOK_METADATA = `printf '%s\\037%s\\037%s\\037%s\\037%s\\037%s' "$ORCA_PANE_KEY" "$ORCA_TAB_ID" "$ORCA_AGENT_LAUNCH_TOKEN" "$ORCA_WORKTREE_ID" "$ORCA_AGENT_HOOK_ENV" "$ORCA_AGENT_HOOK_VERSION" | base64 | tr -d '\\n'`
@@ -43,8 +43,6 @@ type PosixAgentHookPostOptions = {
   decisionHeaderVar?: string
   /** Take the header from `buildPosixHookMetadataCacheLines` instead of packing it every event. */
   cachedMetadata?: boolean
-  /** Exec curl in place of the caller's own subshell; only for a post inside `$(...)`. */
-  execCurl?: boolean
 }
 
 export function buildPosixAgentHookPostCommand(
@@ -66,17 +64,10 @@ export function buildPosixAgentHookPostCommand(
         `  orca_hook_metadata=$(${PACK_HOOK_METADATA}) && \\`,
         '  [ -n "$orca_hook_metadata" ] && \\'
       ]
-  const rawCurl = options.execCurl
-    ? `  ${posixCurlCommand(options.curlCommand, { exec: true })} -sS -X POST ${url} \\`
-    : `  printf '%s' "$payload" | ${curlCommand} -sS -X POST ${url} \\`
-  // A pipe would fork. The here-document needs a writable TMPDIR or /tmp, and its newline adds a body byte.
-  const rawBody = options.execCurl
-    ? [`  ${indent}--data-binary @- <<ORCA_HOOK_PAYLOAD`, '$payload', 'ORCA_HOOK_PAYLOAD']
-    : [`  ${indent}--data-binary @-`]
   return [
     `if [ "\${ORCA_AGENT_HOOK_TRANSPORT:-}" = "${ORCA_HOOK_RAW_JSON_TRANSPORT}" ] && command -v base64 >/dev/null 2>&1 && command -v tr >/dev/null 2>&1; then`,
     ...packMetadata,
-    rawCurl,
+    `  printf '%s' "$payload" | ${curlCommand} -sS -X POST ${url} \\`,
     `  ${indent}--connect-timeout "\${connect_timeout:-0.5}" --max-time "\${max_time:-1.5}" \\`,
     `  ${indent}--noproxy "127.0.0.1" \\`,
     `  ${indent}-H "Content-Type: application/json" \\`,
@@ -86,7 +77,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}-H "X-Orca-Agent-Process: \${orca_agent_process:-}" \\`,
     ...(tmux ? [`  ${indent}-H "X-Orca-Tmux-Pane: \${orca_tmux_pane:-}" \\`] : []),
     ...decision,
-    ...rawBody,
+    `  ${indent}--data-binary @-`,
     'else',
     `  printf '%s' "$payload" | ${curlCommand} -sS -X POST ${url} \\`,
     `  ${indent}--connect-timeout "\${connect_timeout:-0.5}" --max-time "\${max_time:-1.5}" \\`,

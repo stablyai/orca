@@ -110,8 +110,7 @@ export function getManagedScript(
       ? wrapPosixClaudeDecisionPost(
           buildPosixAgentHookPostCommand(source, {
             decisionHeaderVar: 'orca_hook_decides',
-            cachedMetadata: true,
-            execCurl: true
+            cachedMetadata: true
           })
         )
       : buildPosixAgentHookPostCommand(source, { cachedMetadata: true }).map(

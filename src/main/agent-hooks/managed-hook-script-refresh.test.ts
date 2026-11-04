@@ -73,7 +73,6 @@ import {
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS
 } from './managed-agent-hook-registry'
 import { ClaudeHookService } from '../claude/hook-service'
-import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -161,35 +160,34 @@ describe('managed hook script refresh', () => {
           writeFileSync(join(hooksDir, name), '#!/bin/sh\ncurl --connect-timeout 0.5\n')
         }
         await new ClaudeHookService().refreshManagedScripts()
-        // An executable, not a shell function: the hook execs curl.
-        const fakeBin = join(home, 'bin')
-        mkdirSync(fakeBin)
-        writeFileSync(
-          join(fakeBin, 'curl'),
-          '#!/bin/sh\nprintf "%s|%s" "$LC_ALL" "$LC_NUMERIC" > "$ORCA_TEST_CURL_LOCALE"\ncommand -p cat >/dev/null\n',
-          { mode: 0o755 }
-        )
         for (const name of ['claude-hook.sh', 'claude-statusline.sh']) {
           const observed = join(home, `${name}.locale`)
-          const result = spawnSync('/bin/sh', ['-c', '. "$1"', 'hook', join(hooksDir, name)], {
-            input: '{"hook_event_name":"Stop","rate_limits":{},"total_duration_ms":1000}',
-            encoding: 'utf8',
-            timeout: 5_000,
-            env: {
-              ...process.env,
-              PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
-              LC_ALL: 'de_DE.UTF-8',
-              LC_NUMERIC: 'de_DE.UTF-8',
-              TMPDIR: home,
-              CLAUDE_JOB_DIR: '',
-              ORCA_AGENT_HOOK_ENDPOINT: '',
-              ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT,
-              ORCA_AGENT_HOOK_PORT: '1',
-              ORCA_AGENT_HOOK_TOKEN: 'test-token',
-              ORCA_PANE_KEY: 'pane-1',
-              ORCA_TEST_CURL_LOCALE: observed
+          const result = spawnSync(
+            '/bin/sh',
+            [
+              '-c',
+              'curl() { printf "%s|%s" "$LC_ALL" "$LC_NUMERIC" > "$ORCA_TEST_CURL_LOCALE"; command -p cat >/dev/null; }; . "$1"',
+              'hook',
+              join(hooksDir, name)
+            ],
+            {
+              input: '{"hook_event_name":"Stop","rate_limits":{},"total_duration_ms":1000}',
+              encoding: 'utf8',
+              timeout: 5_000,
+              env: {
+                ...process.env,
+                LC_ALL: 'de_DE.UTF-8',
+                LC_NUMERIC: 'de_DE.UTF-8',
+                TMPDIR: home,
+                CLAUDE_JOB_DIR: '',
+                ORCA_AGENT_HOOK_ENDPOINT: '',
+                ORCA_AGENT_HOOK_PORT: '1',
+                ORCA_AGENT_HOOK_TOKEN: 'test-token',
+                ORCA_PANE_KEY: 'pane-1',
+                ORCA_TEST_CURL_LOCALE: observed
+              }
             }
-          })
+          )
           expect(result.error, name).toBeUndefined()
           expect(result.status, name).toBe(0)
           expect(existsSync(observed), `${name} delivered to curl`).toBe(true)
