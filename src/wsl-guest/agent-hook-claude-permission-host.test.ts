@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import type { normalizeHookPayload } from '../shared/agent-hook-listener'
 import {
   clearPaneCacheState,
   createHookListenerState
@@ -7,6 +7,7 @@ import {
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
 import type { AgentSubagentSnapshot } from '../shared/agent-status-types'
+import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import {
   decideRelayClaudePermission,
   relayClaudeReplayProjection
@@ -124,9 +125,10 @@ describe('relay execution-host permission state', () => {
   it('keeps one represented request and constant work however many silent helpers came before (N vs 10N)', () => {
     const measured = [50, 500].map((helpers) => {
       const state = createHookListenerState()
+      const provider = new RelayProviderHookNormalization()
       let cached: ReturnType<typeof normalizeHookPayload> = null
       const send = (hook_event_name: string, fields: Record<string, unknown> = {}) => {
-        const event = normalizeHookPayload(
+        const event = provider.normalize(
           state,
           'claude',
           { paneKey: pane, payload: { session_id: session, hook_event_name, ...fields } },
@@ -174,10 +176,11 @@ describe('relay execution-host permission state', () => {
     const id = (i: number) => `c${String(i).padStart(4, '0')}`
     const measured = [50, 500].map((children) => {
       const state = createHookListenerState()
+      const provider = new RelayProviderHookNormalization()
       // The relay's latest published row, held in an object since only the closures below assign it.
       const published: { event: ReturnType<typeof normalizeHookPayload> } = { event: null }
       const normalize = (hook_event_name: string, fields: Record<string, unknown> = {}) =>
-        normalizeHookPayload(
+        provider.normalize(
           state,
           'claude',
           { paneKey: pane, payload: { session_id: session, hook_event_name, ...fields } },
@@ -202,26 +205,48 @@ describe('relay execution-host permission state', () => {
       const request = () => state.claudePermissionRequestByPaneKey.get(pane)
       // One trigger's comparison work: the roster is materialized and sorted before counting starts.
       const measure = (hook_event_name: string, fields: Record<string, unknown>) => {
-        const event = normalize(hook_event_name, fields)!
+        const normalized = normalize(hook_event_name, fields)!
         const held = request()!
         const previous = held.payload.subagents
-        const next = event.payload.subagents
+        const next = normalized.payload.subagents
         // Each observation normalizes its own snapshot, so equal content is never a shared list.
         expect(next !== undefined && next === previous).toBe(false)
         const visits = { count: 0 }
         const countedPrevious = countedRoster(previous, visits)
         const countedNext = countedRoster(next, visits)
-        held.payload.subagents = countedPrevious
-        event.payload.subagents = countedNext
-        const decision = decide(event)
-        // Restore plain rosters wherever the counted ones landed, before any assertion reads them.
-        for (const row of [held, request()!, event, published.event!]) {
-          if (row.payload.subagents === countedPrevious) {
-            row.payload.subagents = previous
-          } else if (row.payload.subagents === countedNext) {
-            row.payload.subagents = next
+        // Cached rows are frozen: count on copies of the held request and the observation.
+        const requests = state.claudePermissionRequestByPaneKey
+        requests.set(pane, { ...held, payload: { ...held.payload, subagents: countedPrevious } })
+        const decision = decide({
+          ...normalized,
+          payload: { ...normalized.payload, subagents: countedNext }
+        })
+        // Put plain rosters back wherever the counted ones landed, before any assertion reads them.
+        const plain = (rows: AgentSubagentSnapshot[] | undefined) =>
+          rows === countedPrevious ? previous : rows === countedNext ? next : rows
+        const restore = (row: AgentHookEventPayload): AgentHookEventPayload => {
+          const projected = row.claudePermission?.row
+          return {
+            ...row,
+            payload: { ...row.payload, subagents: plain(row.payload.subagents) },
+            ...(projected && row.claudePermission
+              ? {
+                  claudePermission: {
+                    ...row.claudePermission,
+                    row: {
+                      ...projected,
+                      payload: {
+                        ...projected.payload,
+                        subagents: plain(projected.payload.subagents)
+                      }
+                    }
+                  }
+                }
+              : {})
           }
         }
+        requests.set(pane, restore(request()!))
+        published.event = restore(published.event!)
         expect(decision).toMatchObject({
           kind: 'publish',
           event: { claudePermission: { held: true } }
@@ -277,6 +302,66 @@ describe('relay execution-host permission state', () => {
     }
   })
 
+  it('builds no roster for a batch that ends nothing, and the full current row for one that releases (N vs 10N)', () => {
+    const schedules = ['no request', 'foreign owner', 'releasing'] as const
+    const measure = (children: number, schedule: (typeof schedules)[number]) => {
+      const state = createHookListenerState()
+      const provider = new RelayProviderHookNormalization()
+      let cached: ReturnType<typeof normalizeHookPayload> = null
+      const send = (hook_event_name: string, fields: Record<string, unknown> = {}) => {
+        const event = provider.normalize(
+          state,
+          'claude',
+          { paneKey: pane, payload: { session_id: session, hook_event_name, ...fields } },
+          'production'
+        )
+        const decision =
+          event && decideRelayClaudePermission(state, cached ?? undefined, event, false)
+        if (decision?.kind === 'publish') {
+          cached = decision.event
+        }
+        return decision
+      }
+      send('SessionStart', { source: 'startup' })
+      send('UserPromptSubmit', { prompt: 'Read the notes' })
+      for (let i = 0; i < children; i++) {
+        send('SubagentStart', { agent_id: `child-${i}`, agent_type: 'general-purpose' })
+      }
+      const owner = schedule === 'foreign owner' ? { agent_id: 'child-0' } : {}
+      if (schedule !== 'no request') {
+        send('PreToolUse', { ...read('/a'), tool_use_id: 'A', ...owner })
+        send('PermissionRequest', { ...read('/a'), ...owner })
+      }
+      // Every child the batch's normalization or decision visits in the live roster, counted test-side.
+      const visits = { count: 0 }
+      const rosters = state.claudeSubagentRosterByPaneKey
+      rosters.set(pane, new CountedMap(rosters.get(pane)!, visits))
+      const decision = send('PostToolBatch', { tool_calls: [{ ...read('/a'), tool_use_id: 'A' }] })
+      return {
+        visits: visits.count,
+        kind: decision?.kind,
+        state: decision?.kind === 'publish' ? decision.event.payload.state : undefined,
+        roster: decision?.kind === 'publish' ? decision.event.payload.subagents?.length : undefined
+      }
+    }
+    for (const schedule of schedules) {
+      const [small, large] = [50, 500].map((children) => measure(children, schedule))
+      if (schedule === 'releasing') {
+        // The release is the one batch that needs a new status: it builds the whole current roster.
+        expect(small).toMatchObject({ kind: 'publish', state: 'working', roster: 50 })
+        expect(large).toMatchObject({ kind: 'publish', state: 'working', roster: 500 })
+        expect(large.visits).toBeGreaterThanOrEqual(500)
+      } else {
+        expect({ schedule, small, large }).toEqual({
+          schedule,
+          small: { visits: small.visits, kind: small.kind, state: undefined, roster: undefined },
+          large: { visits: small.visits, kind: small.kind, state: undefined, roster: undefined }
+        })
+        expect({ schedule, visits: small.visits }).toEqual({ schedule, visits: 0 })
+      }
+    }
+  })
+
   it('reads a batch call’s input only for a request its scope admits, and ids alone for a provider id (B vs 10B)', () => {
     const write = (path: string) => ({ tool_name: 'Write', tool_input: { file_path: path } })
     /** A completed call whose input read is counted test-side: digesting it is the work measured. */
@@ -293,9 +378,10 @@ describe('relay execution-host permission state', () => {
     const schedules = ['no request', 'foreign owner', 'provider id', 'anonymous'] as const
     const measure = (calls: number, schedule: (typeof schedules)[number]) => {
       const state = createHookListenerState()
+      const provider = new RelayProviderHookNormalization()
       let cached: ReturnType<typeof normalizeHookPayload> = null
       const send = (hook_event_name: string, fields: Record<string, unknown> = {}) => {
-        const event = normalizeHookPayload(
+        const event = provider.normalize(
           state,
           'claude',
           { paneKey: pane, payload: { session_id: session, hook_event_name, ...fields } },

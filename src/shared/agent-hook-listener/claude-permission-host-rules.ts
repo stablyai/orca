@@ -5,6 +5,7 @@ import { claudeBatchListsRequest } from './claude-permission-facts'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import { buildClaudeCachedLeadStatusPayload } from './providers/claude-lifecycle-events'
+import { claudeRowHasUnlistedLiveWork } from './providers/claude-pane-hold-evidence'
 import { setClaudeMainAgentTurnState } from './providers/claude-roster-state'
 import {
   isClaudePermissionOwningChildEnding,
@@ -157,6 +158,10 @@ export function resumeClaudeRequestLead(
         : { state: 'working', ...(lead.taskWakeupTurn ? { taskWakeupTurn: true as const } : {}) }
     )
   }
+  // Built only here: a batch that ends no request costs no roster or live-work read.
   const payload = buildClaudeCachedLeadStatusPayload(state, 'PostToolBatch', batch.paneKey, {})
-  return payload ? { ...batch, payload } : batch
+  const claudeRunningNonAgentTask = claudeRowHasUnlistedLiveWork(state, batch.paneKey)
+  return payload
+    ? { ...batch, claudeRunningNonAgentTask, payload }
+    : { ...batch, claudeRunningNonAgentTask }
 }
