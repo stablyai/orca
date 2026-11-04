@@ -6,7 +6,9 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
 const TYPES_SOURCE = readFileSync(
-  fileURLToPath(new URL('../../src/shared/agent-status-types.ts', import.meta.url)),
+  fileURLToPath(
+    new URL('../../src/shared/agent-status/contracts/agent-status-types.ts', import.meta.url)
+  ),
   'utf8'
 )
 

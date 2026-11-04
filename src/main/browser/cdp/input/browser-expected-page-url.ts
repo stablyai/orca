@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { isRecord } from '../../../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import {
   BROWSER_EXPECTED_URL_MISMATCH_CODE,
   clipUrlForMismatch,

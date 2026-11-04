@@ -21,7 +21,7 @@ import { codexHookService } from '../codex/hook-service'
 import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
-} from '../agent-hooks/managed-agent-hook-controls'
+} from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { agentHookServer } from '../agent-hooks/server'
 import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
 import { installLocalHookRootEvidence } from '../agent-hooks/local-hook-root-evidence'

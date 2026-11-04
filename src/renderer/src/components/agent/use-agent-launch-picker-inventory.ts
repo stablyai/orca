@@ -18,7 +18,7 @@ import { callStructuredAgentSession } from '@/runtime/structured-agent-session-c
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/host-structured-agents'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
-import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import {

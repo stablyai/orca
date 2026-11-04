@@ -16,7 +16,7 @@ import {
   useStructuredChatTabConversationName,
   useStructuredChatTabNamingFailure
 } from '@/runtime/structured-conversation-name'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.

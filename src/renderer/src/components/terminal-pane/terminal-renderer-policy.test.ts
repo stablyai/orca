@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { resolvePaneRendererPolicy } from './terminal-renderer-policy'
 
 const GEMINI_WORKING = '✦'

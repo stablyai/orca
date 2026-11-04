@@ -5,7 +5,7 @@ import {
   type NativeChatSession,
   type NativeChatSessionStatus
 } from '../../../../shared/native-chat/native-chat-types'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   compareNativeChatDisplayMessages as compareMessages,
   orderNativeChatDisplayEntries as orderEntries,

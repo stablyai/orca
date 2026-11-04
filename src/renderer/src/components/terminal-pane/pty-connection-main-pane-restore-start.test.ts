@@ -9,7 +9,11 @@ import {
   leafIdForPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { TerminalPaneStart } from '@/store/terminals/terminal-state'
@@ -75,6 +79,7 @@ async function connectBound(
   transport = createMockTransport()
 ) {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   transportFactoryQueue.push(transport)
   setStore({
     tabsByWorktree: { 'wt-1': [{ id: TAB, ptyId: 'pty-old' }] },
@@ -88,6 +93,8 @@ async function connectBound(
     isVisibleRef: { current: visible }
   })
   const args = mockPanePtyArgs(createPane(1), createManager(1), deps)
+  bindPaneAgentTitleMocks(args[2], agentTitleMocks)
+
   const connection = connectPanePty(...args)
   await flushAsyncTicks()
   return { transport, deps, connection }

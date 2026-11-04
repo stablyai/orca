@@ -15,7 +15,7 @@ import type {
   RuntimeBrowserDriverState,
   RuntimeTerminalDriverState
 } from '../../../../shared/runtime-types'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
 

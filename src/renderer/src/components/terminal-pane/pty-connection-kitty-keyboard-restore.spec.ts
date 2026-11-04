@@ -14,7 +14,11 @@ import {
   createManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -60,6 +64,8 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
 
     async function reattachWithSnapshotFlags(kittyKeyboard: boolean) {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId
@@ -78,7 +84,9 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
-      connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks))
+      )
       await flushAsyncTicks(20)
       return { pane, mirror: deps.paneKittyKeyboardModesRef.current.get(pane.id) }
     }
@@ -106,6 +114,8 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
 
     it('grounds xterm and the mirror with one scanned write before a restart-in-place spawns', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       transportFactoryQueue.push(createMockTransport())
       const pane = createPane(91)
       // Use a unique tab ID to avoid other tests’ pending-spawn entries and force fresh spawn.
@@ -115,7 +125,9 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
       mirror.scan('\x1b[?1049h\x1b[>5u')
       deps.paneKittyKeyboardModesRef.current.set(pane.id, mirror)
 
-      connectPanePty(...mockPanePtyArgs(pane, createManager(91), deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, createManager(91), bindPaneAgentTitleMocks(deps, agentTitleMocks2))
+      )
       await flushAsyncTicks(20)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(

@@ -531,6 +531,28 @@
         "notPng": "リポジトリアイコンには PNG ファイルを使用してください。",
         "tooLarge": "リポジトリアイコンの画像は 256 KB 以下にしてください。"
       }
+    },
+    "editorFormatOnSave": {
+      "title": "保存時にフォーマット",
+      "description": "手動保存と自動保存の前にテキストをフォーマットします。設定 > プロジェクトでフォーマッターコマンドを設定してください。デフォルトではオフです。",
+      "keywords": "フォーマッター 保存時 フォーマット prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "末尾に改行を挿入",
+      "description": "空でないコードファイルを保存する際、末尾に改行がなければ追加します。デフォルトではオフです。",
+      "keywordNewline": "改行",
+      "keywordEndOfFile": "ファイルの末尾"
+    },
+    "repositoryFormatter": {
+      "title": "フォーマッターコマンド",
+      "description": "このプロジェクトのフォーマッターを保存時のフォーマットに使用します。",
+      "saveFailed": "フォーマッターの設定を保存できませんでした。",
+      "command": "コマンド",
+      "saving": "保存中…",
+      "save": "フォーマッターを保存",
+      "commandHelp": "ワークスペースのルートでファイルのホスト上で実行されます。バッファーを stdin から読み取り、フォーマット済みテキストのみを stdout に出力する必要があります。パスには ${file} または ${relativeFile} を使用します。引数はシェルを介さず直接渡されます。--write は使用しないでください。このプロジェクトで無効にするには空欄にします。",
+      "include": "対象の glob（1 行に 1 つ）",
+      "includeHelp": "ワークスペースのルートからの相対パスに一致させます。一致する glob がない場合はフォーマットしません。* と ** はドットで始まる名前を除外します。例: .github/**/*.yml のように明示的に指定してください。このコマンドを使用するには、一般 > エディターで保存時のフォーマットを有効にしてください。"
     }
   },
   "menu": {
@@ -7300,6 +7322,9 @@
           "browserExtensions": {
             "copy": "ローカルブラウザプロファイル向けに 設定 › ブラウザ › 拡張機能 を追加します。",
             "toggleLabel": "ブラウザ拡張機能を切り替え"
+          },
+          "orchestrationPanel": {
+            "toggleLabel": "オーケストレーションパネルを切り替え"
           }
         },
         "FloatingWorkspacePane": {
@@ -9490,6 +9515,14 @@
               "extension": "拡張機能",
               "chrome": "クローム",
               "password": "パスワードマネージャー"
+            },
+            "orchestrationPanel": {
+              "title": "オーケストレーションパネル",
+              "description": "各 Agent と連携している Agent を、チャットまたはターミナルの横に表示します。",
+              "orchestration": "オーケストレーション",
+              "agents": "Agent",
+              "workers": "ワーカー",
+              "manager": "マネージャー"
             }
           }
         },
@@ -10620,7 +10653,8 @@
                   "supportedAgents": "このレシピでサポートされている Agent: {{value0}}。",
                   "unsupportedSavedAgent": "{{value0}} はこのテキスト生成レシピを実行できません。以下からサポートされている Agent のいずれかを選択してください。",
                   "resolveComments": "選択した未解決の PR または MR コメントから Agent を開始します。",
-                  "fixPushFailure": "pre-pushフックまたはgit pushが失敗したときに Agent を起動します。"
+                  "fixPushFailure": "pre-pushフックまたはgit pushが失敗したときに Agent を起動します。",
+                  "commitMessageSharedModel": "PR の詳細、ブランチ名、チャット名も、それぞれのモデルを選択していない場合はこのモデルを使用できます。「デフォルトと同じ」には使用するモデルが表示されます。"
                 }
               }
             }
@@ -12399,13 +12433,16 @@
         "AppearanceThemeControl": {
           "useTerminalTheme": "このテーマのターミナル配色を使う",
           "matchTerminal": "ターミナルに合わせる",
-          "dynamic": "動的"
+          "dynamic": "動的",
+          "searchThemes": "テーマを検索…",
+          "noThemes": "検索に一致するテーマはありません。"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "アイコンテーマ",
             "description": "有効なプラグインのファイルとフォルダーのアイコンです。",
-            "builtIn": "組み込み"
+            "builtIn": "組み込み",
+            "search": "アイコンテーマを検索…"
           },
           "lightTheme": "ライトテーマ",
           "darkTheme": "ダークテーマ",
@@ -12741,6 +12778,9 @@
         },
         "PluginContributionActionNewFile": {
           "create": "作成"
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "一致する項目がありません。"
         }
       },
       "right": {
@@ -18901,8 +18941,11 @@
         "emptyAnswer": "空の回答",
         "cancelled": "キャンセル",
         "resolved": "解決済み",
-        "resolver": "{{device}} に回答しました",
-        "cancelledBy": "{{device}}にキャンセルされました"
+        "resolver": "{{device}} で回答しました",
+        "cancelledBy": "{{device}} でキャンセルされました",
+        "thisComputer": "このコンピュータ",
+        "computer": "コンピュータ",
+        "otherDevice": "別のデバイス"
       },
       "notices": {
         "contextCleared": "コンテキストをクリアしました",
@@ -19020,7 +19063,11 @@
         "handedOffToAgent": "Agentに引き継ぎました",
         "startedAgent": "Agentを開始しました",
         "taskFromCoordinator": "コーディネーターからのタスク",
-        "updateFromWorker": "ワーカーからの更新"
+        "updateFromWorker": "ワーカーからの更新",
+        "senderReplaced": "{{name}} はターミナルで実行されていません。現在は別の Agent が実行されています。必要に応じてサイドバーからターミナルを開いてください。",
+        "senderAmbiguous": "Orca は {{name}} がどのターミナルで実行されているか判別できません。サイドバーから開いてください。",
+        "senderNotRunning": "{{name}} は実行されていません。作業を続けるにはサイドバーから新規 Agent を起動してください。",
+        "unnamedSenderSubject": "Agent"
       },
       "goal": {
         "placeholder": "目標を説明し、最良の結果を得るために測定可能な結果を​​定義する",
@@ -19313,7 +19360,24 @@
         "scheduled": "Orca は {{time}} にこのチャットを続けます。",
         "cancel": "続けない"
       },
-      "settings": "チャット設定"
+      "settings": "チャット設定",
+      "textAttachmentPreview": {
+        "copiedContents": "内容をコピーしました",
+        "textAttachment": "テキストの添付ファイル",
+        "byteSize": "{{size}} バイト",
+        "copyContents": "内容をコピー",
+        "saveFile": "ファイルを保存",
+        "copyTooLarge": "このファイルは大きすぎるためコピーできません。代わりに保存してください。",
+        "exportError": "添付ファイルをエクスポートできません。もう一度お試しください。",
+        "unreadableReply": "添付ファイルの応答を読み取れません。もう一度お試しください。",
+        "incompleteReply": "添付ファイルが変更されたか、応答が不完全です。閉じてからもう一度お試しください。",
+        "notText": "このファイルはテキストとしてプレビューできません。保存して別のアプリで開いてください。",
+        "openFailed": "添付ファイルを開けません。もう一度お試しください。",
+        "hostUpdate": "このホストではまだテキストの添付ファイルを開けません。ホストの Orca を更新してから再試行してください。",
+        "hostUnavailable": "添付ファイルのホストを利用できません。再接続して再試行してください。",
+        "connectionChanged": "接続が変更されました。添付ファイルを閉じてから開き直してください。",
+        "readFailed": "ホスト上の添付ファイルを読み取れません。再接続してもう一度お試しください。ファイルが削除または変更された可能性があります。"
+      }
     },
     "tab": {
       "bar": {
@@ -19869,6 +19933,11 @@
     },
     "wslHostMark": {
       "runsOn": "WSL で実行: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "{{file}} をフォーマットできませんでした。フォーマットせずに保存します: {{reason}}"
+      }
     }
   },
   "dashboardPopout": {
@@ -21088,7 +21157,10 @@
         "uncheckedOther": "{{count}} 個のターミナルで Claude を確認できませんでした。そこで実行中の Claude は、再起動するまで {{previous}} のままになります。",
         "restartCount_other": "{{count}} 件のセッションを再起動",
         "reviewBody_other": "ほかの {{count}} 件の Claude セッションは {{next}} に移動されませんでした。",
-        "body_other": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中です。再起動すると、各会話が {{next}} で続行されます。処理中のセッションは待機状態になってから再起動します。"
+        "body_other": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中です。再起動すると、各会話が {{next}} で続行されます。処理中のセッションは待機状態になってから再起動します。",
+        "reasonSharedSession": "別のペインでも開いています",
+        "sharedOne": "別のペインで同じ会話が開いているため、1 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。",
+        "sharedOther": "別のペインで同じ会話が開いているため、{{count}} 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。"
       }
     },
     "hostSignIn": {
@@ -22340,7 +22412,11 @@
     "use": "使用",
     "select": "Agent を選択",
     "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
-    "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル"
+    "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル",
+    "workspaceStartupFailed": "{{agent}} を起動できませんでした。この設定の引数を確認して再試行してください。",
+    "sameAsTextDefault": "デフォルトと同じ · {{value0}}",
+    "chatChoicesNote": "CLI フラグがない {{agent}} のモデルまたは推論レベルの選択はチャットに適用されます。",
+    "composedChoicesNote": "{{agent}} の推論レベルと速度の選択はモデルの引数に含まれます。"
   },
   "wslMove": {
     "entry": {

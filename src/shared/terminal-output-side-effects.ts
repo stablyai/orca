@@ -2,17 +2,22 @@
 
 import {
   type AgentStatus,
+  isCursorNativeAgentTitle,
+  shouldSuppressCursorNativeTitle
+} from './agent-status/title/agent-title-core'
+import {
   type AgentIdleStatus,
-  clearWorkingIndicators,
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
+  normalizeTerminalTitle
+} from './agent-status/title/agent-title-status'
+import { clearWorkingIndicators } from './agent-status/title/agent-title-working-indicators'
+import {
   extractAllOscTitles,
-  isCursorNativeAgentTitle,
-  normalizeTerminalTitle,
-  shouldSuppressCursorNativeTitle
-} from './agent-detection'
-import type { ProgramActivityChange } from './agent-status-osc'
-import { extractAllOscTitleEntries } from './osc-title-extraction'
+  extractAllOscTitleEntries
+} from './agent-status/title/osc-title-extraction'
+import type { ProgramActivityChange } from './agent-status/transport/agent-status-osc'
+
 import { placeProgramActivityAmongTitles } from './program-status/title-activity-order'
 import { createBellDetector } from './terminal-bell-detector'
 import {

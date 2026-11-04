@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createAgentStatusExtensionHarness } from '../../src/main/pi/agent-status-extension-test-harness'
-import { normalizeHookPayload } from '../../src/shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../src/shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../src/shared/agent-hook-listener/listener-state'
 import { getAgentResumeArgv } from '../../src/shared/agent-launch/startup/agent-resume-argv'
 import { buildAgentResumeStartupPlan } from '../../src/shared/agent-launch/startup/tui-agent-resume-startup'

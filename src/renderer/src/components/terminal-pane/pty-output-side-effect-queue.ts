@@ -2,8 +2,8 @@ import {
   registerPtySideEffectPendingGauge,
   type PtySideEffectGauge
 } from './pty-side-effect-pending-census'
-import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
-import type { AgentStatus } from '../../../../shared/agent-title-core'
+import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
 const MAX_PTY_SIDE_EFFECTS_PER_DRAIN = 64
 export const MAX_PENDING_PTY_SIDE_EFFECTS = 512

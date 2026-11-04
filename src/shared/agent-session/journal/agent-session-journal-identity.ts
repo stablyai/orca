@@ -1,4 +1,4 @@
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { AgentSessionProviderHandle } from '../lifecycle/agent-session-provider-handle'
 
 /** Epoch-qualified position in one journal. `sequence` 0 means "before the first row". */

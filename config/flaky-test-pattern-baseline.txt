@@ -1079,9 +1079,9 @@
 1 test-no-wall-clock:src/renderer/src/store/slices/worktrees-terminal-reference-origins.test.ts
 1 test-no-wall-clock:src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts
 7 test-no-wall-clock:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
-1 test-no-wall-clock:src/shared/agent-hook-spool-drain.test.ts
-1 test-no-wall-clock:src/shared/agent-hook-spool-read.test.ts
-2 test-no-wall-clock:src/shared/agent-hook-status-cache.test.ts
+1 test-no-wall-clock:src/shared/agent-hook-listener/transport/agent-hook-spool-drain.test.ts
+1 test-no-wall-clock:src/shared/agent-hook-listener/transport/agent-hook-spool-read.test.ts
+2 test-no-wall-clock:src/shared/agent-hook-listener/state/agent-hook-status-cache.test.ts
 1 test-no-wall-clock:src/shared/automation-schedules.test.ts
 2 test-no-wall-clock:src/shared/crash-reporting.test.ts
 2 test-no-wall-clock:src/shared/fish-query-reply-child-stdin.node-pty.test.ts

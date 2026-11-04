@@ -3,7 +3,7 @@ import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
-import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   AgentLaunchPreferences,
   AgentSessionExecutionClaim,

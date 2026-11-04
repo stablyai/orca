@@ -8,7 +8,7 @@ import {
   type AgentPaneState,
   type SortStamps
 } from './sort-stamps'
-import { agentPhaseTransition, type AgentPhase } from '../agent-transitions'
+import { agentPhaseTransition, type AgentPhase } from '../agent-status/lifecycle/agent-transitions'
 
 const NOW = 1_000_000
 const IDLE: SortStamps = { recentAt: NOW - 60_000 }

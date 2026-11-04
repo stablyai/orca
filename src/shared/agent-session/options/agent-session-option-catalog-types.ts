@@ -1,5 +1,5 @@
 import type { AgentChoiceCliForm } from '../../agent-launch/choices/agent-launch-choices'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice,
