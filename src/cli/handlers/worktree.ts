@@ -30,7 +30,7 @@ import {
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
-import { printLineageSummary } from './worktree-lineage-summary'
+import { formatCrossStoreParentLine, printLineageSummary } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
 import {
@@ -236,6 +236,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
+    const parentFields = await resolveSetParentFields(flags, cwd, client)
     const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
@@ -245,7 +246,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       ...readFlags,
-      ...(await resolveSetParentFields(flags, cwd, client)),
+      ...parentFields,
       noParent: flags.get('no-parent') === true
     })
     const result = await withWorktreeSelectorRecovery(
@@ -260,6 +261,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     if (!json) {
       for (const warning of result.result.warnings ?? []) {
         console.error(`warning: ${warning.message}`)
+      }
+      // The same-store lineage fields stay null for a parent on another machine.
+      const crossStoreLineage = result.result.worktree.crossStoreLineage
+      if (parentFields.crossStoreParent && crossStoreLineage) {
+        console.error(formatCrossStoreParentLine(crossStoreLineage))
       }
     }
     printResult(result, json, formatWorktreeShow)
