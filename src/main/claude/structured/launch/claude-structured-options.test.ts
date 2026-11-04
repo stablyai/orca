@@ -558,21 +558,4 @@ describe('Claude Ultracode effort', () => {
       expect(claudeStructuredSessionOptionsFrom(session, null).current.effort).toBe('ultracode')
     }
   )
-
-  it('turns off a workflow observed from configured settings before confirming ordinary effort', async () => {
-    const session = sessionFor(vi.fn(async () => undefined))
-    session.appliedOptions = { effort: 'xhigh', ultracode: true }
-    session.connection.getSettings = async () => ({
-      effective: { effortLevel: 'xhigh' },
-      applied: { effort: 'xhigh', ultracode: true }
-    })
-    const apply = vi.fn(async () => {})
-    session.connection.applyFlagSettings = apply
-    await setClaudeStructuredOption(session, { key: 'effort', value: 'xhigh' }, undefined)
-    expect(apply).toHaveBeenCalledWith(
-      { effortLevel: 'xhigh', ultracode: false },
-      { timeoutMs: undefined }
-    )
-    expect(session.confirmedOptions.has('effort')).toBe(false)
-  })
 })
