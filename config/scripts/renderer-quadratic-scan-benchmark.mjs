@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Benchmark four projection workloads. Scenarios 1/3/4 compare current production with local baselines after checking equivalence.
-// Scenario 2 models both loops because its React hook cannot load without a renderer; it does not time production.
+// Benchmark three production workloads against local baselines after checking equivalence.
 import { spawnSync } from 'node:child_process'
 import { transformSync } from 'esbuild'
 import { performance } from 'node:perf_hooks'
@@ -69,8 +68,6 @@ function envInt(name, fallback) {
 
 const KEYSTROKES = envInt('ORCA_QUADRATIC_BENCH_KEYSTROKES', 12)
 const WORKTREES = envInt('ORCA_QUADRATIC_BENCH_WORKTREES', 300)
-const TABS = envInt('ORCA_QUADRATIC_BENCH_TABS', 60)
-const OPEN_FILES = envInt('ORCA_QUADRATIC_BENCH_OPEN_FILES', 120)
 const CHANGED_FILES = envInt('ORCA_QUADRATIC_BENCH_CHANGED_FILES', 5000)
 const SIDEBAR_ROWS = envInt('ORCA_QUADRATIC_BENCH_SIDEBAR_ROWS', 600)
 const SIDEBAR_REPOS = envInt('ORCA_QUADRATIC_BENCH_SIDEBAR_REPOS', 80)
@@ -137,55 +134,6 @@ compare({
   before: () => matchAll(undefined),
   // The hook memoizes the index on [worktrees, repoMap]; only the match reruns per keystroke.
   after: () => matchAll(buildWorkspaceBoardPaletteDocuments({ worktrees: boardWorktrees, repoMap }))
-})
-
-const groupTabs = Array.from({ length: TABS }, (_, index) => ({
-  id: `tab-${index}`,
-  entityId: `entity-${index}`,
-  contentType: index % 3 === 0 ? 'editor' : 'terminal'
-}))
-const openFiles = Array.from({ length: OPEN_FILES }, (_, index) => ({
-  id: `entity-${index}`,
-  path: `/tmp/file-${index}.ts`
-}))
-const tabOrder = groupTabs.map((tab) => tab.id)
-// Production memoizes each index on its own source list, so a unified-tab write reuses it.
-const openFileById = new Map(openFiles.map((item) => [item.id, item]))
-const groupTabById = new Map(groupTabs.map((item) => [item.id, item]))
-
-function tabProjections(findOpenFile, findGroupTab) {
-  const editorItems = groupTabs
-    .filter((item) => item.contentType === 'editor')
-    .map((item) => {
-      const file = findOpenFile(item.entityId)
-      return file ? { ...file, tabId: item.id } : null
-    })
-    .filter((file) => file !== null)
-  const order = tabOrder.map((itemId) => {
-    const item = findGroupTab(itemId)
-    return item && (item.contentType === 'terminal' || item.contentType === 'browser')
-      ? item.entityId
-      : itemId
-  })
-  return [editorItems, order]
-}
-
-compare({
-  label: 'tab-group projections (per unified-tab write)',
-  scale: `${TABS} tabs x ${OPEN_FILES} open files`,
-  drives: 'modelled',
-  before: repeat(200, () =>
-    tabProjections(
-      (id) => openFiles.find((candidate) => candidate.id === id),
-      (id) => groupTabs.find((candidate) => candidate.id === id)
-    )
-  ),
-  after: repeat(200, () =>
-    tabProjections(
-      (id) => openFileById.get(id),
-      (id) => groupTabById.get(id)
-    )
-  )
 })
 
 const importShared = (relativePath) =>
