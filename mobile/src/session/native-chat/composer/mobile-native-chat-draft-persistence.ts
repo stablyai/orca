@@ -26,6 +26,8 @@ type Workspace = {
   // Every read and write of the key runs in order, the load first.
   chain: Promise<void>
   loaded: boolean
+  // A shell that refuses this page the key refuses it for the whole page, so the load is not retried.
+  unreadable: boolean
   written: string | null
   timer: ReturnType<typeof setTimeout> | null
   retainedTabs: ReadonlySet<string> | null
@@ -98,6 +100,7 @@ function workspaceFor(hostId: string, worktreeId: string): Workspace {
       scopePrefix,
       chain: Promise.resolve(),
       loaded: false,
+      unreadable: false,
       written: null,
       timer: null,
       retainedTabs: null,
@@ -124,10 +127,16 @@ function enqueue(workspace: Workspace, step: () => Promise<void>): Promise<void>
 }
 
 async function load(workspace: Workspace): Promise<void> {
-  if (workspace.loaded || !source) {
+  if (workspace.loaded || workspace.unreadable || !source) {
     return
   }
-  const raw = await AsyncStorage.getItem(workspace.key)
+  let raw: string | null
+  try {
+    raw = await AsyncStorage.getItem(workspace.key)
+  } catch {
+    workspace.unreadable = true
+    return
+  }
   workspace.loaded = true
   workspace.written = raw
   for (const [tabId, draft] of parseSavedDrafts(raw)) {
@@ -148,7 +157,8 @@ async function write(workspace: Workspace): Promise<void> {
     return
   }
   await persistMirrored(workspace.key, value)
-  workspace.written = value
+  // Page stores can resolve a dropped write; recording what stuck makes the next save retry it.
+  workspace.written = await AsyncStorage.getItem(workspace.key)
 }
 
 function flush(workspace: Workspace): void {

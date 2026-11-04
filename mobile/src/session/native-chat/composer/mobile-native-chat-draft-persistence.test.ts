@@ -18,10 +18,15 @@ import {
 import { readMobileNativeChatDraftInputs } from './mobile-native-chat-draft-inputs'
 
 const storage = vi.hoisted(() => new Map<string, string>())
+// A host-area page reads the key over the bridge, so its load can land after the user acts.
+const slowRead = vi.hoisted(() => ({ gate: null as Promise<void> | null }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: async (key: string) => storage.get(key) ?? null,
+    getItem: async (key: string) => {
+      await slowRead.gate
+      return storage.get(key) ?? null
+    },
     setItem: async (key: string, value: string) => {
       storage.set(key, value)
     },
@@ -63,6 +68,7 @@ describe('mobile native-chat draft persistence', () => {
   afterEach(() => {
     resetMobileNativeChatDraftStoreForTests()
     storage.clear()
+    slowRead.gate = null
     vi.useRealTimers()
   })
 
@@ -95,6 +101,34 @@ describe('mobile native-chat draft persistence', () => {
 
     await relaunch()
 
+    expect(draftText(TAB_A)).toBe('')
+  })
+
+  it('keeps a send made before the saved drafts finished loading', async () => {
+    vi.useFakeTimers()
+    await loadMobileNativeChatDrafts('host-1', 'wt-1')
+    editMobileNativeChatDraft(TAB_A, 'old draft')
+    await settle()
+    resetMobileNativeChatDraftStoreForTests()
+    let release = (): void => {}
+    slowRead.gate = new Promise((resolve) => {
+      release = resolve
+    })
+    const loading = loadMobileNativeChatDrafts('host-1', 'wt-1')
+
+    editMobileNativeChatDraft(TAB_A, 'sent before load')
+    clearMobileNativeChatDraftForSend(
+      TAB_A,
+      readMobileNativeChatDraftEditGeneration(TAB_A),
+      'sent before load'
+    )
+    slowRead.gate = null
+    release()
+    await loading
+    await mobileNativeChatDraftWritesSettledForTests()
+
+    expect(draftText(TAB_A)).toBe('')
+    await relaunch()
     expect(draftText(TAB_A)).toBe('')
   })
 

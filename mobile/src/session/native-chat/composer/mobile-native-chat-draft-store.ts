@@ -209,7 +209,8 @@ setMobileNativeChatDraftSource({
   },
   restore: (scope, saved) => {
     const current = drafts.get(scope)
-    if (userText(scope) !== '') {
+    // Any write before the load finished, a clear or send included, outranks the saved draft; only untouched prefill yields.
+    if (current && current.text !== mobileNativeChatLaunchDraftSeeds.get(scope)?.text) {
       return
     }
     updateMobileNativeChatDraftInputs(scope, (inputs) => ({ ...inputs, skills: saved.skills }))
