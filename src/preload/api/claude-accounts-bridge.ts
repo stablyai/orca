@@ -1,5 +1,8 @@
 import { ipcRenderer } from 'electron'
-import type { ClaudeAccountSelectionChange } from '../../shared/managed-account-types'
+import type {
+  ClaudeAccountAutoSwitchUnavailable,
+  ClaudeAccountSelectionChange
+} from '../../shared/managed-account-types'
 import type { PreloadApi } from '../api-types'
 
 export const claudeAccountsApi = {
@@ -23,5 +26,13 @@ export const claudeAccountsApi = {
       callback(change)
     ipcRenderer.on('claudeAccounts:selectedElsewhere', listener)
     return () => ipcRenderer.removeListener('claudeAccounts:selectedElsewhere', listener)
+  },
+  onAutoSwitchUnavailable: (callback: (notice: ClaudeAccountAutoSwitchUnavailable) => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      notice: ClaudeAccountAutoSwitchUnavailable
+    ) => callback(notice)
+    ipcRenderer.on('claudeAccounts:autoSwitchUnavailable', listener)
+    return () => ipcRenderer.removeListener('claudeAccounts:autoSwitchUnavailable', listener)
   }
 } satisfies PreloadApi['claudeAccounts']

@@ -1,4 +1,5 @@
 import type {
+  ClaudeAccountAutoSwitchUnavailable,
   ClaudeAccountSelectionChange,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -64,6 +65,9 @@ export type ClaudeAccountsApi = {
     wslDistro?: string | null
   }) => Promise<ClaudeRateLimitAccountsState>
   onSelectedElsewhere?: (callback: (change: ClaudeAccountSelectionChange) => void) => () => void
+  onAutoSwitchUnavailable?: (
+    callback: (notice: ClaudeAccountAutoSwitchUnavailable) => void
+  ) => () => void
 }
 
 export type GrokAccountsApi = {

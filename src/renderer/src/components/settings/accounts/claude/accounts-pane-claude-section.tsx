@@ -8,6 +8,7 @@ import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
+import { ClaudeAccountAutoSwitchSetting } from './claude-account-auto-switch-setting'
 import {
   getProviderAccountRuntime,
   providerAccountIsActiveInView
@@ -387,7 +388,10 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
         </div>
       </SearchableSetting>
       {isRemoteAccountScope ? null : (
-        <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
+        <>
+          <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
+          <ClaudeAccountAutoSwitchSetting settings={settings} updateSettings={updateSettings} />
+        </>
       )}
     </section>
   )

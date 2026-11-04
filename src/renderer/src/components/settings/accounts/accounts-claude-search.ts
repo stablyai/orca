@@ -37,5 +37,22 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('accounts.claude.switchSessions.keyword.restart', 'restart'),
       ...translateSearchKeyword('accounts.claude.switchSessions.keyword.running', 'running')
     ]
+  },
+  {
+    title: translate(
+      'accounts.claude.autoSwitch.settingTitle',
+      'Switch accounts automatically when usage runs low'
+    ),
+    description: translate(
+      'accounts.claude.autoSwitch.settingDescription',
+      'Selects the Claude account with the most usage left when the selected account drops below a minimum. Running sessions are handled as for a manual switch.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
+      ...translateSearchKeyword('accounts.claude.autoSwitch.keyword.automatic', 'automatic'),
+      ...translateSearchKeyword('accounts.claude.autoSwitch.keyword.usage', 'usage')
+    ]
   }
 ])

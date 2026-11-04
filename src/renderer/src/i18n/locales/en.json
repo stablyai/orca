@@ -22019,6 +22019,20 @@
         "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "restartCount_one": "Restart {{count}} session"
+      },
+      "autoSwitch": {
+        "switched": "Switched Claude to {{account}} because {{previous}} ran low on usage.",
+        "unavailable": "{{account}} is low on Claude usage, and no other account has known usage above your minimums.",
+        "settingTitle": "Switch accounts automatically when usage runs low",
+        "settingDescription": "Selects the Claude account with the most usage left when the selected account drops below a minimum. Running sessions are handled as for a manual switch.",
+        "minSessionLabel": "Minimum 5-hour usage left",
+        "minSessionDescription": "Switch when less than this share of the 5-hour limit is left.",
+        "minWeeklyLabel": "Minimum weekly usage left",
+        "minWeeklyDescription": "Switch when less than this share of the weekly limit is left.",
+        "keyword": {
+          "automatic": "automatic",
+          "usage": "usage"
+        }
       }
     },
     "managedData": {

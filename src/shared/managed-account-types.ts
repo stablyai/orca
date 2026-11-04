@@ -135,6 +135,14 @@ export type ClaudeAccountSelectionChange = {
   target: CodexAccountSelectionTarget
   before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
+  /** Made by the usage-threshold auto-switch rather than a person. */
+  automatic?: true
+}
+
+/** The selected Claude account ran low and no other account qualified to replace it. */
+export type ClaudeAccountAutoSwitchUnavailable = {
+  state: ClaudeRateLimitAccountsState
+  accountId: string
 }
 
 export type ClaudeManagedAccountRuntimeSelection = {

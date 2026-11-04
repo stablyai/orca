@@ -207,7 +207,7 @@ export class RuntimeAccountController {
   /** Desktop switches go through IPC and handle their own sessions; this path tells the window. */
   async selectClaude(
     accountId: string | null,
-    options: { movesRunningSessions?: true } = {}
+    options: { movesRunningSessions?: true; automatic?: true } = {}
   ): Promise<ClaudeRateLimitAccountsState> {
     const { claudeAccounts } = this.requireServices()
     if (options.movesRunningSessions) {
@@ -222,7 +222,8 @@ export class RuntimeAccountController {
     this.getNotifier()?.claudeAccountSelected?.({
       target,
       before: { state: before, accountId: selectedClaudeAccountId(before, target) },
-      after: { state: after, accountId: selectedClaudeAccountId(after, target) }
+      after: { state: after, accountId: selectedClaudeAccountId(after, target) },
+      ...(options.automatic ? { automatic: true as const } : {})
     })
     return after
   }

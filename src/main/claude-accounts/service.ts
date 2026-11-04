@@ -76,6 +76,10 @@ export class ClaudeAccountService {
     return this.pendingSignInLink ?? Promise.resolve(null)
   }
 
+  hasPendingLogin(): boolean {
+    return this.cancelPendingClaudeLogin !== null
+  }
+
   cancelPendingLogin(): boolean {
     return this.cancelPendingClaudeLogin?.() ?? false
   }

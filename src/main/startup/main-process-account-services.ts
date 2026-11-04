@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { KeybindingService } from '../keybindings/keybinding-service'
 import { createProviderAccountServices } from '../providers/accounts/provider-account-services'
+import { startClaudeAccountAutoSwitch } from '../claude-accounts/claude-account-auto-switch'
 import { createCodexSessionMigrationScheduler } from '../codex/history/backfill/codex-session-migration-scheduler'
 import { startCodexSessionBackfillInBackground } from '../codex/history/backfill/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from '../codex/history/index/codex-session-index-heal'
@@ -61,6 +62,25 @@ export function initializeMainProcessAccountServices(): void {
   state.codexAccounts = services.codexAccounts
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
+  // Desktop only: a remote server keeps its own selection and the desktop hides this setting for it.
+  startClaudeAccountAutoSwitch({
+    getSettings: () => store.getSettings(),
+    rateLimits: services.rateLimits,
+    claudeAccounts: services.claudeAccounts,
+    // Why the runtime: its selectClaude tells the window, which moves running sessions.
+    select: async (accountId) => {
+      await state.runtime?.selectClaudeAccount(accountId, { automatic: true })
+    },
+    notifyNoCandidate: (accounts, accountId) => {
+      const window = state.mainWindow
+      if (window && !window.isDestroyed()) {
+        window.webContents.send('claudeAccounts:autoSwitchUnavailable', {
+          state: accounts,
+          accountId
+        })
+      }
+    }
+  })
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
