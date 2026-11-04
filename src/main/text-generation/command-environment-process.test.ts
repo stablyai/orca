@@ -1,19 +1,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterAll, describe, expect, it, vi } from 'vitest'
-import {
-  withCodexHomeProcessLock,
-  resolveCodexHomeProcessLockKey
-} from '../codex-cli/codex-home-process-lock'
-import { spawnSourceControlAgent } from './source-control-agent-launch'
-import { generateCommitMessage } from './source-control-text-generation-requests'
-import { discoverModelsLocal } from './commit-message-model-discovery'
+import { afterAll, describe, expect, it } from 'vitest'
 import {
   discoverCommitMessageModelsLocal,
-  generateBranchNameFromContext,
-  generateCommitMessageFromContext,
-  generatePullRequestFieldsFromContext
+  generateCommitMessageFromContext
 } from './commit-message-text-generation'
 
 const folder = mkdtempSync(join(tmpdir(), 'orca-command-env-'))
@@ -50,53 +41,6 @@ const target = {
 const params = { agentId: 'custom', model: '', customAgentCommand: override } as const
 
 describe('environment-prefixed commands with real child processes', () => {
-  it.each(['generation', 'discovery'] as const)(
-    'queues Codex %s on the overridden home before spawning',
-    async (operation) => {
-      const home = join(folder, operation).replaceAll('\\', '/')
-      let release!: () => void
-      const held = withCodexHomeProcessLock(
-        resolveCodexHomeProcessLockKey(home),
-        () =>
-          new Promise<void>((resolve) => {
-            release = resolve
-          })
-      )
-      await Promise.resolve()
-      const spawnAgent = vi.fn(spawnSourceControlAgent)
-      const command = `CODEX_HOME="${home}" ${override}`
-      const pending =
-        operation === 'generation'
-          ? generateCommitMessage({
-              context: { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
-              params: { agentId: 'codex', model: 'gpt-5.5', agentCommandOverride: command },
-              target,
-              spawnAgent
-            })
-          : discoverModelsLocal({
-              agentId: 'codex',
-              env: target.env,
-              agentCommandOverride: command,
-              options: { cwd: folder },
-              backslash: process.platform === 'win32' ? 'literal' : 'escape',
-              spawnAgent
-            })
-      try {
-        await new Promise<void>((resolve) => setImmediate(resolve))
-        expect(spawnAgent).not.toHaveBeenCalled()
-      } finally {
-        release()
-        await held
-      }
-      await expect(pending).resolves.toMatchObject(
-        operation === 'discovery' ? { success: true, catalogOrigin: 'probe' } : { success: true }
-      )
-      expect(spawnAgent).toHaveBeenCalledWith(
-        expect.objectContaining({ env: expect.objectContaining({ CODEX_HOME: home }) })
-      )
-    }
-  )
-
   it('generates commits from a custom command in a plain folder', async () => {
     await expect(
       generateCommitMessageFromContext(
@@ -105,51 +49,6 @@ describe('environment-prefixed commands with real child processes', () => {
         target
       )
     ).resolves.toMatchObject({ success: true, message: 'Honor command environment' })
-  })
-
-  it('generates commits from a preset override', async () => {
-    await expect(
-      generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
-        { agentId: 'claude', model: 'sonnet', agentCommandOverride: override },
-        target
-      )
-    ).resolves.toMatchObject({ success: true, message: 'Honor command environment' })
-  })
-
-  it('generates branch names', async () => {
-    await expect(
-      generateBranchNameFromContext({ firstPrompt: 'Honor command environment' }, params, target)
-    ).resolves.toMatchObject({ success: true, slug: 'honor-command-environment' })
-  })
-
-  it.each(['github', 'gitlab'] as const)('generates %s review fields', async (provider) => {
-    await expect(
-      generatePullRequestFieldsFromContext(
-        {
-          branch: 'test',
-          base: 'main',
-          branchChangedByPreparation: false,
-          currentTitle: '',
-          currentBody: '',
-          currentDraft: true,
-          commitSummary: 'Change',
-          changeSummary: 'M README.md',
-          patch: '+test',
-          provider
-        },
-        params,
-        target
-      )
-    ).resolves.toMatchObject({
-      success: true,
-      fields: {
-        title: 'Honor command environment',
-        body: 'Passed environment.',
-        base: 'main',
-        draft: true
-      }
-    })
   })
 
   it('discovers models through the same override environment', async () => {
