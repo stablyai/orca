@@ -1,12 +1,12 @@
 import {
   terminalOscColorQueryReplies,
   type TerminalOscColorQueryReplyColors
-} from './terminal-osc-color-reply'
+} from './terminal/protocol/queries/terminal-osc-color-reply'
 import { normalizeColorQueryReplyColors } from './pty-owner-color-query-colors'
 import {
   validateTerminalViewAttributes,
   type TerminalViewAttributes
-} from './terminal-view-attributes'
+} from './terminal/protocol/queries/terminal-view-attributes'
 
 export type PtyStartupIngressIntent = {
   colors: TerminalOscColorQueryReplyColors

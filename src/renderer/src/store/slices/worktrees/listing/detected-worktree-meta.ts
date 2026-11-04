@@ -1,10 +1,11 @@
-import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachment-mutation'
+import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { AppState } from '../../../types'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+
 import {
+  type ExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   parseExecutionHostId
@@ -20,13 +21,12 @@ import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../wor
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   type WorkspaceRecordState,
-  getFolderWorkspaceWorktree,
   resolveQualifiedIndexedFolderWorkspace,
   selectFolderWorkspaces,
   selectWorkspaceByHostTarget,
   selectWorktreesByRepo
 } from '../../../workspace-record-selectors'
-export { getFolderWorkspaceWorktree }
+import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 // Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the
 // row's identity to hold while the resolved directory is unchanged.
@@ -34,7 +34,7 @@ let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null 
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
 import { branchName } from '@/lib/git-utils'
-import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 
 export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],

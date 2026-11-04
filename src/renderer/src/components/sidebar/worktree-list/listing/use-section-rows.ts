@@ -144,6 +144,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     () =>
       planSidebarRows({
         groupBy: args.groupBy,
+        sortBy: args.sortBy,
         worktrees,
         repoMap,
         repoOfWorktree,
@@ -168,6 +169,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       }),
     [
       args.groupBy,
+      args.sortBy,
       worktrees,
       repoMap,
       repoOfWorktree,

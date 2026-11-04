@@ -6,7 +6,7 @@ import {
   ORCHESTRATION_WORKER_START_PROMPT_MAX_BYTES,
   ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES
 } from '../../../../../../shared/orchestration-worker-start-prompt-budget'
-import { getTerminalInputByteLength } from '../../../../../../shared/terminal-input'
+import { getTerminalInputByteLength } from '../../../../../../shared/terminal/input/terminal-input'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 
 describe('worker-start prompt budget', () => {

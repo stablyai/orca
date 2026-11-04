@@ -1,7 +1,7 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 
-import '../../../shared/paired-e2ee-fixed-key-test-fixture'
+import '../../../shared/remote-runtime/e2ee/paired-e2ee-fixed-key-test-fixture'
 import WebSocket, { WebSocketServer } from 'ws'
 import { WebRuntimeClient } from './web-runtime-client'
 import {
@@ -11,7 +11,7 @@ import {
   generateKeyPair,
   publicKeyToBase64,
   encryptBytes as encryptSharedBytes
-} from '../../../shared/e2ee-crypto'
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import '../../../shared/protocol-version'
 

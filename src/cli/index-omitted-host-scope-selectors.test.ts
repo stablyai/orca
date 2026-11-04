@@ -1,3 +1,4 @@
+import type * as RuntimeEnvironmentStore from '../shared/remote-runtime/host-store/runtime-environment-store'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'node:child_process'
 
@@ -31,10 +32,17 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
 }))
+
+vi.mock(
+  '../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+    listEnvironments: listEnvironmentsMock
+  })
+)
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()

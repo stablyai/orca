@@ -17,7 +17,6 @@ const releases: (() => void)[] = []
 
 beforeEach(() => {
   vi.useFakeTimers()
-  Object.defineProperty(process, 'platform', { value: 'win32' })
 })
 afterEach(() => {
   releases.splice(0).forEach((release) => release())
@@ -33,30 +32,49 @@ function retain() {
   return { notification, release, onRelease }
 }
 
-describe('Windows native notification lifetime', () => {
-  it('keeps Action Center clicks working after the banner times out', () => {
-    const { notification, release, onRelease } = retain()
-    const navigate = vi.fn(() => release())
-    notification.on('click', navigate)
+describe.each(['win32', 'linux'] as const)(
+  '%s notification history lifetime',
+  (historyPlatform) => {
+    beforeEach(() => {
+      Object.defineProperty(process, 'platform', { value: historyPlatform })
+    })
 
-    notification.emit('close', { reason: 'timedOut' })
-    vi.advanceTimersByTime(24 * 60 * 60 * 1000)
+    it('keeps history clicks working after the banner times out', () => {
+      const { notification, release, onRelease } = retain()
+      const navigate = vi.fn(() => release())
+      notification.on('click', navigate)
 
-    expect(onRelease).not.toHaveBeenCalled()
-    notification.emit('click')
-    expect(navigate).toHaveBeenCalledOnce()
-    expect(onRelease).toHaveBeenCalledOnce()
-    expect(activeNotifications.has(notification)).toBe(false)
-  })
+      if (historyPlatform === 'win32') {
+        notification.emit('close', { reason: 'timedOut' })
+      }
+      vi.advanceTimersByTime(24 * 60 * 60 * 1000)
 
-  it('closes and releases the oldest notification past the retention limit', () => {
-    const first = retain()
-    first.notification.emit('close', { reason: 'timedOut' })
-    for (let index = 0; index < 256; index++) {
-      retain()
-    }
-    expect(first.notification.close).toHaveBeenCalledOnce()
-    expect(first.onRelease).toHaveBeenCalledOnce()
-    expect(activeNotifications.size).toBe(256)
-  })
-})
+      expect(onRelease).not.toHaveBeenCalled()
+      notification.emit('click')
+      expect(navigate).toHaveBeenCalledOnce()
+      expect(onRelease).toHaveBeenCalledOnce()
+      expect(activeNotifications.has(notification)).toBe(false)
+    })
+    it('closes and releases the oldest notification past the retention limit', () => {
+      const first = retain()
+      for (let index = 0; index < 256; index++) {
+        retain()
+      }
+      expect(first.notification.close).toHaveBeenCalledOnce()
+      expect(first.onRelease).toHaveBeenCalledOnce()
+      expect(activeNotifications.size).toBe(256)
+    })
+
+    it('releases a notification removed by the user', () => {
+      const { notification, onRelease } = retain()
+
+      notification.emit(
+        'close',
+        historyPlatform === 'win32' ? { reason: 'userCanceled' } : undefined
+      )
+
+      expect(onRelease).toHaveBeenCalledOnce()
+      expect(activeNotifications.has(notification)).toBe(false)
+    })
+  }
+)

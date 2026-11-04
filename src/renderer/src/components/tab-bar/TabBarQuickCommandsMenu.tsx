@@ -12,7 +12,7 @@ import { TabBarQuickCommandsList } from './TabBarQuickCommandsList'
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { TabBarQuickCommandItem } from './TabBarQuickCommandItem'
 import { cn } from '@/lib/utils'

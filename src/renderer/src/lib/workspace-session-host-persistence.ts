@@ -10,15 +10,18 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  parseWorkspaceKey,
+  normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId
+} from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   attachHostSessionShadow,
   indexWorktreeHostClaims,
-  normalizeWorkspaceSessionKeyToWorktreeId,
   type HostSessionWriteMode,
   type WorktreeHostClaims
 } from './workspace-session-host-contention'
+
 import {
   contestedPartitionHosts,
   pickPrimaryHostForClaims

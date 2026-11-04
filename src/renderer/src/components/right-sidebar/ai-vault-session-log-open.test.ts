@@ -1,4 +1,7 @@
-import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { toastMock, toastErrorMock, getStateMock } = vi.hoisted(() => ({

@@ -9,18 +9,18 @@ import {
   resolveOrcaManagedCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
-} from '../codex/codex-home-paths'
-import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
+} from '../codex/configuration/homes/codex-home-paths'
+import { syncSystemConfigIntoManagedCodexHome } from '../codex/configuration/settings/codex-config-mirror'
 import {
   getWslSelectionKey,
   normalizeCodexRuntimeSelection,
   type CodexAccountSelectionTarget
 } from './runtime-selection'
-import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
+import { hasCustomCodexHomeOverrideForLaunch } from '../codex/configuration/homes/codex-real-home-path'
 import {
   hasRecordedLegacySharedCodexPane,
   getCodexPaneAccount
-} from '../codex/codex-pane-account-registry'
+} from '../codex/configuration/homes/codex-pane-account-registry'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'

@@ -5,8 +5,8 @@ import { useAppStore } from '@/store'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { buildActiveOpenFileSignature, buildActiveOpenRowKeys } from './active-open-file-keys'
 import type { FlatEntry } from './use-selection'
 import {

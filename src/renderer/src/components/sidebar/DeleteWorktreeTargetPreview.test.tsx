@@ -11,7 +11,7 @@ import {
   getDeleteWorktreeDirtyChangePreview,
   type DeleteWorktreeDirtyChangePreview
 } from './delete-worktree-dirty-change-counts'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 function buildHostLabels(

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type {
   TerminalPreviewReplayChunk,
   TerminalPreviewSnapshot
-} from '../../../../shared/terminal-preview'
+} from '../../../../shared/terminal/replay/terminal-preview'
 import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 
 function apply(

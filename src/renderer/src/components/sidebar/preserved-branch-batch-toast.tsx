@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { Button } from '../ui/button'
-import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
+import type { PreservedBranchCleanup } from '../../../../shared/git/branches/preserved-branch-cleanup'
 
 const BRANCH_REPO_DELETE_CONCURRENCY = 4
 

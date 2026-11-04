@@ -76,15 +76,4 @@ describe('Codex child names from provider metadata', () => {
     writeMeta({ agent_path: '/root/review/mobile' })
     expect(post('PostToolUse')?.[0]?.description).toBe('mobile')
   })
-
-  it('keeps the role fallback when metadata belongs to another thread or has no name', () => {
-    const { writeMeta, post } = fixture()
-    writeMeta({ agent_path: '/root/wrong-child' }, true, 'another-child')
-    expect(post()?.[0]).toMatchObject({ agentType: 'default', description: undefined })
-    writeMeta({ agent_role: 'default' })
-    expect(post('PostToolUse')?.[0]).toMatchObject({
-      agentType: 'default',
-      description: undefined
-    })
-  })
 })

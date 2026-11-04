@@ -16,8 +16,11 @@ import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
-import type { TerminalViewAttributes, TerminalViewRgb } from '../../shared/terminal-view-attributes'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type {
+  TerminalViewAttributes,
+  TerminalViewRgb
+} from '../../shared/terminal/protocol/queries/terminal-view-attributes'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 
 const QUERY_BATCH = '\x1b[c\x1b]11;?\x07\x1b[?996n'
 

@@ -3,7 +3,7 @@ import type { PRState } from '../../../../src/shared/github/pull-request-types'
 import {
   getProviderChecksOutcome,
   summarizeProviderChecks
-} from '../../../../src/shared/provider-check-summary'
+} from '../../../../src/shared/source-control/checks/provider-check-summary'
 import { prStateToken } from '../pr-state-token'
 import { translate } from '../../i18n/mobile-i18n'
 

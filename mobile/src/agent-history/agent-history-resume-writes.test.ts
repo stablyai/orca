@@ -5,7 +5,7 @@ import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from '../transport/rpc-d
 import { resumeAiVaultSessionInTerminal } from '../session/ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
 import type { RpcResponse } from '../transport/types'
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 
 // Compare bridged and direct RPC verdicts for resume writes when replies fail/disappear; corpus covers only refusal/locked terminal.
 // Assert shell-loss ambiguity separately because direct client has no bridge door to close.

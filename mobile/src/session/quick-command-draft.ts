@@ -2,15 +2,16 @@ import type {
   TerminalQuickCommand,
   TerminalQuickCommandAction,
   TerminalQuickCommandScope
-} from '../../../src/shared/terminal-quick-command-types'
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import '../terminal/quick-commands'
+import { getTerminalQuickCommandBodySize } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import {
-  getTerminalQuickCommandBodySize,
-  isAgentQuickCommand,
+  isTerminalAgentQuickCommand as isAgentQuickCommand,
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
   supportsTerminalAgentQuickCommand
-} from '../terminal/quick-commands'
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-commands'
 
 // Retain command and agent/prompt edits across Action switches so toggling cannot discard typing.
 export type QuickCommandDraft = {

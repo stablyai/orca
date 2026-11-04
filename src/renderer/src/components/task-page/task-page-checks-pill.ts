@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getProviderChecksLabel,
   getProviderChecksOutcome
-} from '../../../../shared/provider-check-summary'
+} from '../../../../shared/source-control/checks/provider-check-summary'
 import type { ProviderCheckSummary } from '../../../../shared/github/pull-request-types'
 
 type ChecksPillItem = { checksSummary?: ProviderCheckSummary }

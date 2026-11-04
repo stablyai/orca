@@ -1,9 +1,9 @@
-import { mergeGitConfigEnvProtocol } from '../../../shared/git-credential-prompt-env'
+import { mergeGitConfigEnvProtocol } from '../../../shared/git/commands/git-credential-prompt-env'
 import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
 import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
-} from '../../../shared/terminal-image-protocol'
+} from '../../../shared/terminal/images/terminal-image-protocol'
 import { removeAppImageRuntimeEnv } from '../../pty/shell-startup/appimage-terminal-env'
 import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
 import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-env'

@@ -1,5 +1,5 @@
-import type { GitStatusEntry } from '../../../shared/git-status-types'
-import { isWorktreeUndiscardableGitlink } from '../../../shared/source-control-discard-all-sequence'
+import type { GitStatusEntry } from '../../../shared/git/status/git-status-types'
+import { isWorktreeUndiscardableGitlink } from '../../../shared/source-control/listing/source-control-discard-all-sequence'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'

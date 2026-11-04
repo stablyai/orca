@@ -1,4 +1,4 @@
-import { getProviderChecksOutcome } from '../../../../shared/provider-check-summary'
+import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
 import React from 'react'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceReviewChecksSummary } from '../../../../shared/workspace-review-checks'

@@ -17,7 +17,7 @@ vi.mock('../../observability/instrumentation', () => ({
 }))
 vi.mock('../../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn: vi.fn() }))
 vi.mock('./git-read-cache-invalidation', () => ({ invalidateGitReadCaches: vi.fn() }))
-vi.mock('../../../shared/git-discard-path-safety', () => ({
+vi.mock('../../../shared/git/paths/git-discard-path-safety', () => ({
   removeSafeUntrackedDiscardTarget: vi.fn(),
   removeSafeUntrackedDiscardTargets: async (
     _worktreePath: string,

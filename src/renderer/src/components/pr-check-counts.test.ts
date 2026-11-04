@@ -3,7 +3,7 @@ import { getCheckCounts, getChecksSummaryLabel } from './pr-check-counts'
 import {
   getProviderChecksLabel,
   summarizeProviderChecks
-} from '../../../shared/provider-check-summary'
+} from '../../../shared/source-control/checks/provider-check-summary'
 import type { PRCheckDetail } from '../../../shared/github/check-types'
 
 function check(conclusion: PRCheckDetail['conclusion'], name = String(conclusion)): PRCheckDetail {

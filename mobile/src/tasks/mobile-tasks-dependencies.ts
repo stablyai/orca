@@ -156,7 +156,7 @@ export type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-ho
 export type { SparsePreset } from '../../../src/shared/worktree/create-types'
 
 export type { SshConnectionState } from '../../../src/shared/ssh-types'
-export type { HostedReviewDecision } from '../../../src/shared/hosted-review'
+
 export {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey

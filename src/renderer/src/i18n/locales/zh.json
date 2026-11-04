@@ -18811,8 +18811,6 @@
         "toggleDetails": "切换回合详情"
       },
       "jumpToLatest": "跳到最新消息",
-      "newRowsAnnouncement": "你离开期间有新消息",
-      "newRowsMarker": "新消息",
       "find": {
         "label": "在聊天中查找",
         "noResults": "没有结果",

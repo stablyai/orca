@@ -5,7 +5,7 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-iden
 import type { VisibleHostedReviewRefreshTarget } from '@/store/github/visible-hosted-review-refresh-scheduler'
 import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
   getWorkspaceReferenceRequest,
   getWorkspaceReferenceRuntimeVersion,

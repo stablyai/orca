@@ -5,7 +5,7 @@ import {
   getDiffViewerMonacoModelPaths,
   getDiffViewerMonacoModelPathPrefixes,
   type MonacoModelRegistry
-} from './diff-monaco-model-disposal'
+} from './diff/monaco-view/diff-monaco-model-disposal'
 
 const CLOSED_DIFF_TAB_COUNT = 100
 const RETAINED_MODEL_COUNT = 320

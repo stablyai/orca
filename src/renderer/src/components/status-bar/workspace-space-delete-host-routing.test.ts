@@ -1,7 +1,7 @@
 /** Space deletion must resolve each scan row on its host and carry the store’s instance identity; bare IDs can target another checkout. */
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getSelectedDeletableWorkspaceRows,

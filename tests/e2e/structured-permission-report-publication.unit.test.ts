@@ -2,7 +2,7 @@
 import {
   fakeCodex,
   THREAD_ID as CODEX_THREAD_ID
-} from '../../src/main/codex/codex-structured-session-adapter-fixture'
+} from '../../src/main/codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import { structuredAgentRuntimeRegistration } from '../../src/main/runtime/structured-agent-runtime-registrations'
 import { createStructuredAgentEnvironmentResolvers } from '../../src/main/runtime/structured-agent-shell-environment'
 import { act, renderHook, waitFor, cleanup } from '@testing-library/react'

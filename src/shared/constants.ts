@@ -21,7 +21,7 @@ import {
   defaultTerminalFontFamily,
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste
-} from './terminal-platform-defaults'
+} from './terminal/appearance/terminal-platform-defaults'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {

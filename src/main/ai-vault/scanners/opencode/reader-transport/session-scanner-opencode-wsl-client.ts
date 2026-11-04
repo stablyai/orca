@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   waitForPromiseWithSignal,
   throwIfSignalAborted
@@ -17,7 +17,7 @@ import { AiVaultScanIssueError } from '../../../session-scan-issues'
 import {
   AI_VAULT_SCAN_ISSUE_COPY,
   aiVaultScanIssueText
-} from '../../../../../shared/ai-vault-scan-issue-copy'
+} from '../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 
 const runtimes = new Map<string, OpenCodeWslRuntime>()
 const clients = new Map<string, OpenCodeSqliteWorkerClient>()

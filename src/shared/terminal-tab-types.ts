@@ -1,4 +1,4 @@
-import type { AiVaultSessionTitle } from './ai-vault-session-title'
+import type { AiVaultSessionTitle } from './ai-vault/contracts/ai-vault-session-title'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { AgentLaunchPaneOutcome } from './agent-launch/contracts/agent-launch-pane-verdict'
 

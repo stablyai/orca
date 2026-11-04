@@ -7,7 +7,7 @@ import {
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
 } from '../../../../shared/browser-runtime-capabilities'
-import type { KnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import { prepareBrowserClientHostPlacement } from './browser-client-host-placement-preparation'

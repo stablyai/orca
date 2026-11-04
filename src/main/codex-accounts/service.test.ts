@@ -14,10 +14,13 @@ import {
 import { createCanonicalHookTrustFixture } from './service-hook-trust-test-fixtures'
 
 // Keep asserted config bytes independent of platform socket-path limits.
-vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
-}))
+vi.mock(
+  '../codex/configuration/shared-server/codex-daemon-socket-path-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    applyCodexDaemonSocketGuard: (config: string) => config
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -103,8 +106,9 @@ describe('CodexAccountService config sync', () => {
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
-    const { readHookTrustEntries } = await import('../codex/config-toml-trust')
-    const { readCodexTrustGrantLedgerHome } = await import('../codex/codex-trust-grant-ledger')
+    const { readHookTrustEntries } = await import('../codex/trust/toml/config-toml-trust')
+    const { readCodexTrustGrantLedgerHome } =
+      await import('../codex/trust/grants/codex-trust-grant-ledger')
 
     const { CodexAccountService } = await import('./service')
     const service = new CodexAccountService(
@@ -176,7 +180,10 @@ describe('CodexAccountService config sync', () => {
 
   it('does not rewrite a managed config the previous mirror pass already settled', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
-    const { escapeTomlString } = await import('../codex/config-toml-trust')
+    const [, { escapeTomlBasicString: escapeTomlString }] = await Promise.all([
+      import('../codex/trust/toml/config-toml-trust'),
+      import('../codex/configuration/toml/config-toml-syntax')
+    ])
     const userHookKey = `${join(testState.fakeHomeDir, '.codex', 'user-hooks.json')}:stop:0:0`
     const canonicalConfig = [
       'approval_policy = "never"',

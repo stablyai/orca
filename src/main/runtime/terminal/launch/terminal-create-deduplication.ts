@@ -1,14 +1,17 @@
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+
 import { OrcaRuntimeWithCreateAgentSession } from '../../orca-runtime-create-agent-session'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-terminal-create-identity'
 import { withTimeoutResult } from '../../runtime-async-boundaries'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
-import { inferWorktreeIdFromPtyId } from '../../runtime-worktree-path-identity'
+import {
+  type ResolvedWorktree,
+  inferWorktreeIdFromPtyId
+} from '../../runtime-worktree-path-identity'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   getConnectionExecutionHostId,

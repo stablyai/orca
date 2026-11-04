@@ -1,6 +1,6 @@
 import type { DiffSource } from '@/store/slices/editor'
 import type { BranchCompareSnapshot } from '../../../../../../shared/editor-tab-view-types'
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import { getCompareVersion } from '@/store/slices/editor/git/git-status-reconciliation'
 
 const EMPTY_OPEN_ROW_KEYS: ReadonlySet<string> = new Set()

@@ -28,7 +28,10 @@ nodeModule.registerHooks({
 })
 
 const PRODUCTION_SOURCE = readFileSync(
-  new URL('../../src/shared/terminal-control-stripping.ts', import.meta.url),
+  new URL(
+    '../../src/shared/terminal/protocol/escape/terminal-control-stripping.ts',
+    import.meta.url
+  ),
   'utf8'
 )
 for (const marker of [
@@ -45,7 +48,10 @@ for (const marker of [
 }
 
 const { stripTerminalControl: stripAdaptive } = await import(
-  new URL('../../src/shared/terminal-control-stripping.ts', import.meta.url).href
+  new URL(
+    '../../src/shared/terminal/protocol/escape/terminal-control-stripping.ts',
+    import.meta.url
+  ).href
 )
 
 const ESC = String.fromCharCode(0x1b)

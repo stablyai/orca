@@ -11,7 +11,7 @@ import {
   normalizeTaskSourceContext,
   getTaskSourceCacheScope
 } from '../../../../shared/task-source-context'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { _clearHostedReviewRequestGenerationsForTest } from '@/store/slices/hosted-review-request-state'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import {

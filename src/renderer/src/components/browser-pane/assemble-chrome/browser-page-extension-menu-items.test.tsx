@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserExtensionContextMenuPayload } from '../../../../../shared/browser-extension-context-menu-types'
+import type { BrowserExtensionContextMenuPayload } from '../../../../../shared/browser/extensions/browser-extension-context-menu-types'
 import { BrowserPageExtensionMenuItems } from './browser-page-extension-menu-items'
 
 const VAULT = 'a'.repeat(32)
