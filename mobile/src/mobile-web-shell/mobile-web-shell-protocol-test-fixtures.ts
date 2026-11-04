@@ -61,7 +61,7 @@ vi.mock('../transport/rpc-operation', async (importOriginal) => {
     }
   }
 })
-vi.mock('../transport/mobile-web-bundle-fetch', () => ({
+vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: () => doubles.fetch()
 }))
 vi.mock('react-native', () => ({

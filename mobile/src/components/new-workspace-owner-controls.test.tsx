@@ -101,11 +101,11 @@ vi.mock(
       { get: (_target, name) => (typeof name === 'string' ? name : undefined), has: () => true }
     )
 )
-vi.mock('./BottomDrawer', () => ({
+vi.mock('./bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ visible, children }: { visible: boolean; children: ReactNode }) =>
     visible ? children : null
 }))
-vi.mock('./bottom-drawer-modal-host', () => ({
+vi.mock('./bottom-drawer/bottom-drawer-modal-host', () => ({
   BottomDrawerModalHost: ({ children }: { children: ReactNode }) => children
 }))
 vi.mock('./AutoHeight', () => ({ AutoHeight: 'AutoHeight' }))
