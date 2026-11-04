@@ -29,13 +29,16 @@ export const CollapsedProjectSummary = React.memo(function CollapsedProjectSumma
   const statuses = useWorktreeActivityStatuses(worktreeIds)
   const status = getMostUrgentStatus(statuses.values())
   return (
-    <span
-      className="ml-auto flex shrink-0 items-center gap-1 text-muted-foreground"
-      data-collapsed-project-summary=""
-    >
-      {status ? <StatusIndicator status={status} tooltipSide="right" /> : null}
-      <span className="text-2xs tabular-nums">{count}</span>
-      <ChevronRight className="size-3.5" aria-hidden />
-    </span>
+    <>
+      {status === 'working' ? <span aria-hidden data-project-block-running-wash="" /> : null}
+      <span
+        className="ml-auto flex shrink-0 items-center gap-1 text-muted-foreground"
+        data-collapsed-project-summary=""
+      >
+        {status ? <StatusIndicator status={status} tooltipSide="right" /> : null}
+        <span className="text-2xs tabular-nums">{count}</span>
+        <ChevronRight className="size-3.5" aria-hidden />
+      </span>
+    </>
   )
 })

@@ -39,7 +39,13 @@ function title(props: Readonly<Record<string, unknown>>, card: Card): React.Reac
       disabled={card.isDeleting || affiliateListMode}
       showUnreadEmphasis={card.showUnreadEmphasis}
       dimReadTitle={props.dimWhenRead === true}
-      activityEmphasis={card.activityStatus === 'inactive' ? 'idle' : undefined}
+      activityEmphasis={
+        card.activityStatus === 'inactive'
+          ? 'idle'
+          : card.activityStatus === 'working'
+            ? 'running'
+            : undefined
+      }
       className="text-[13px] leading-5"
       editingClassName="flex-1"
       titleWrapper={props.tooltip === false ? withoutTitleTooltip : undefined}

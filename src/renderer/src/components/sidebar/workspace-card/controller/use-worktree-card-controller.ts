@@ -16,7 +16,7 @@ import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-sta
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const { worktree, repo } = props
   const foundation = useWorktreeCardFoundation({ worktree, repo })
-  // Drives the muted title of idle workspaces.
+  // Drives the running wash and the muted title of idle workspaces.
   const activityStatus = useWorktreeActivityStatus(worktree.id)
   const review = useWorktreeCardReviewDetails({
     worktree,

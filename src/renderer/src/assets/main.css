@@ -1621,6 +1621,59 @@ html.native-shell .app-layout {
   background-color: var(--project-block-current-bg);
 }
 
+/* Running agents: a left-to-right agent-working wash that slowly breathes.
+   Opacity only (compositor), static under reduced motion; no shadow or ring. */
+@keyframes worktree-running-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+[data-worktree-card-surface][data-worktree-activity='working'] {
+  isolation: isolate;
+}
+
+[data-worktree-card-surface][data-worktree-activity='working']::after,
+[data-project-block-running-wash] {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--agent-working) 20%, transparent),
+    color-mix(in srgb, var(--agent-working) 6%, transparent) 55%,
+    transparent 92%
+  );
+  animation: worktree-running-breathe 2.4s ease-in-out infinite;
+  will-change: opacity;
+}
+
+/* Keep the wash on the parent's own rows, not across its nested child cards. */
+[data-worktree-card-surface][data-worktree-activity='working'][data-worktree-lineage-parent]::after {
+  mask-image: linear-gradient(to bottom, #000 48px, transparent 72px);
+}
+
+/* Collapsed running project: the wash fills the block interior below the top border. */
+[data-project-block-running-wash] {
+  inset: 0;
+  border-radius: calc(var(--radius-lg) - 1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-worktree-card-surface][data-worktree-activity='working']::after,
+  [data-project-block-running-wash] {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */
 [data-worktree-sleeping-dim] {
   color: color-mix(in oklab, var(--worktree-sidebar-foreground) 52%, var(--worktree-sidebar));

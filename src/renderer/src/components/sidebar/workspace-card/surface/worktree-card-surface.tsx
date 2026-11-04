@@ -91,6 +91,8 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         (isMultiSelected && !isActiveSurface && !isLineageDropTarget) || undefined
       }
       data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
+      data-worktree-activity={card.activityStatus}
+      data-worktree-lineage-parent={lineageChildren ? '' : undefined}
       onClick={handleClick}
       onPointerDown={affiliateListMode ? undefined : handlePointerDown}
       onPointerEnter={affiliateListMode ? undefined : handlePointerEnter}
