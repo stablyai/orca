@@ -73,8 +73,9 @@ export function deriveValidatedClonePath(args: { url: string; destination: strin
 /** Git reports checkout paths with symlinks resolved; registering the same spelling keeps a new
  *  project's own checkout selected instead of hidden as a discovered worktree. */
 export async function resolveExistingParentSymlinks(path: string): Promise<string> {
-  // WSL UNC paths must keep their spelling so later Git calls route through the WSL runner.
-  if (!isAbsolute(path) || parseWslUncPath(path)) {
+  // Windows Git reports the typed spelling (resolving would turn mapped drives into UNC paths),
+  // and WSL UNC paths must keep their spelling so later Git calls route through the WSL runner.
+  if (process.platform === 'win32' || !isAbsolute(path) || parseWslUncPath(path)) {
     return path
   }
   const missingTail: string[] = []
