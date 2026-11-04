@@ -269,7 +269,7 @@ function BrowserPasswordsProfile({
       <BrowserPasswordPreferences
         settings={settings}
         updateSettings={updateSettings}
-        canReauth={view.status?.reauthMethod === 'touch-id'}
+        reauthMethod={view.status?.reauthMethod ?? null}
       />
 
       {ready && view.entries.length === 0 ? (

@@ -1,4 +1,5 @@
 import { systemPreferences } from 'electron'
+import { runProcess } from '@orca/process-host'
 import { browserPasswordSettings } from './browser-password-vault-access'
 import type { BrowserPasswordReauthMethod } from '../../shared/browser-passwords-types'
 
@@ -6,9 +7,28 @@ import type { BrowserPasswordReauthMethod } from '../../shared/browser-passwords
 const REAUTH_VALIDITY_MS = 5 * 60 * 1000
 
 let lastReauthAt: number | null = null
+let touchIdEnrolled: Promise<boolean> | null = null
 
-export function browserPasswordReauthMethod(): BrowserPasswordReauthMethod {
-  return process.platform === 'darwin' && systemPreferences.canPromptTouchID() ? 'touch-id' : 'none'
+// Why enrollment, not canPromptTouchID: lockout or a closed lid also make that false, and those must
+// not count as a Mac without Touch ID.
+function isTouchIdEnrolled(): Promise<boolean> {
+  touchIdEnrolled ??= runProcess({ program: '/usr/bin/bioutil', args: ['-c'], timeoutMs: 5_000 })
+    .then(
+      (result) =>
+        result.code === 0 && Number(/(\d+) biometric template/.exec(result.stdout)?.[1]) > 0
+    )
+    .catch(() => false)
+  return touchIdEnrolled
+}
+
+export async function browserPasswordReauthMethod(): Promise<BrowserPasswordReauthMethod> {
+  if (process.platform !== 'darwin') {
+    return 'none'
+  }
+  if (systemPreferences.canPromptTouchID()) {
+    return 'touch-id'
+  }
+  return (await isTouchIdEnrolled()) ? 'touch-id-unavailable' : 'none'
 }
 
 /**
@@ -25,8 +45,9 @@ export async function confirmBrowserPasswordOwner(
   if (!options.always && lastReauthAt !== null && now - lastReauthAt < REAUTH_VALIDITY_MS) {
     return true
   }
-  if (browserPasswordReauthMethod() === 'none') {
-    return true
+  const method = await browserPasswordReauthMethod()
+  if (method !== 'touch-id') {
+    return method === 'none'
   }
   try {
     await systemPreferences.promptTouchID(reason)
@@ -37,9 +58,10 @@ export async function confirmBrowserPasswordOwner(
   return true
 }
 
-/** Test seam: forget the last successful check. */
+/** Test seam: forget the last successful check and the enrollment lookup. */
 export function resetBrowserPasswordReauthForTests(): void {
   lastReauthAt = null
+  touchIdEnrolled = null
 }
 
 export async function confirmBrowserPasswordFill(): Promise<boolean> {

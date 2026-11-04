@@ -40,12 +40,12 @@ export function registerBrowserPasswordsHandlers(store: BrowserPasswordsSettings
 
   handleBrowserPasswordsChannel(
     'browserPasswords:getStatus',
-    (event, raw): BrowserPasswordsStatus | null => {
+    async (event, raw): Promise<BrowserPasswordsStatus | null> => {
       const request = readBrowserPasswordsVaultRequest(event, raw)
       return request
         ? {
             availability: request.vault.availability(),
-            reauthMethod: browserPasswordReauthMethod()
+            reauthMethod: await browserPasswordReauthMethod()
           }
         : null
     }

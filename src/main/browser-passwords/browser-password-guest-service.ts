@@ -267,12 +267,24 @@ export async function fillBrowserPassword(input: {
     return { ok: false, reason: 'unavailable' }
   }
   // Why recheck now: the page may have navigated between showing the list and the click.
-  const origin = toBrowserPasswordOrigin(state.guest.mainFrame.origin)
+  const frame = state.guest.mainFrame
+  const origin = toBrowserPasswordOrigin(frame.origin)
   const matches = origin ? target.vault.findForOrigin(origin) : null
   const entry = matches?.ok
     ? [...matches.value.exact, ...matches.value.sameSite].find((item) => item.id === input.entryId)
     : undefined
   if (entry && !(await confirmBrowserPasswordFill())) {
+    return { ok: false, reason: 'unavailable' }
+  }
+  // Why again after Touch ID: the page can navigate while the prompt is up, and the password must
+  // reach only the frame and origin it was matched for, never whatever document replaced it.
+  if (
+    state.guest.isDestroyed() ||
+    frame.isDestroyed() ||
+    frame.detached ||
+    frame !== state.guest.mainFrame ||
+    toBrowserPasswordOrigin(frame.origin) !== origin
+  ) {
     return { ok: false, reason: 'unavailable' }
   }
   const password = entry ? target.vault.getPassword(entry.id) : null
@@ -293,7 +305,7 @@ export async function fillBrowserPassword(input: {
         resolve({ requestId: request.requestId, ok: false, reason: 'field-gone' })
       }, FILL_REPLY_TIMEOUT_MS)
     })
-    state.guest.mainFrame.send(BROWSER_PASSWORDS_TO_GUEST_CHANNELS.fill, request)
+    frame.send(BROWSER_PASSWORDS_TO_GUEST_CHANNELS.fill, request)
   })
   if (result.ok) {
     target.vault.markUsed(entry.id)

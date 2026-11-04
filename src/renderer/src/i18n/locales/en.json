@@ -894,6 +894,7 @@
         "fillReauth": "Ask for Touch ID before filling",
         "fillReauthDescription": "For a shared computer. Showing or copying a password already asks.",
         "noReauth": "This computer can’t confirm it’s you with Touch ID, so passwords show and fill without a check.",
+        "reauthUnavailable": "Touch ID can’t be used right now, so Orca won’t show, copy or fill a password that needs it.",
         "import": "Import",
         "importCsv": "From a CSV file…",
         "deleteAllTitle": "Delete all password data",

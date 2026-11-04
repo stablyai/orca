@@ -195,8 +195,11 @@ export type BrowserPasswordEntryEditResult =
   | { ok: true }
   | { ok: false; reason: 'invalid-site' | 'invalid-password' | 'duplicate' | 'unavailable' }
 
-/** How the OS confirms the user before a password is shown or copied. */
-export type BrowserPasswordReauthMethod = 'touch-id' | 'none'
+/**
+ * How the OS confirms the user before a password is shown or copied. `touch-id-unavailable`: Touch ID
+ * is set up but can't prompt right now (locked out, lid closed), so protected actions are refused.
+ */
+export type BrowserPasswordReauthMethod = 'touch-id' | 'touch-id-unavailable' | 'none'
 
 export type BrowserPasswordsStatus = {
   availability: BrowserPasswordsAvailability

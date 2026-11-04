@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { BrowserPasswordReauthMethod } from '../../../../../../shared/browser-passwords-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 
@@ -6,14 +7,14 @@ import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 export function BrowserPasswordPreferences({
   settings,
   updateSettings,
-  canReauth
+  reauthMethod
 }: {
   settings: Pick<
     GlobalSettings,
     'browserPasswordsOfferToSave' | 'browserPasswordsFillRequiresReauth'
   >
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  canReauth: boolean
+  reauthMethod: BrowserPasswordReauthMethod | null
 }): React.JSX.Element {
   const offerToSave = settings.browserPasswordsOfferToSave !== false
   const fillRequiresReauth = settings.browserPasswordsFillRequiresReauth === true
@@ -34,18 +35,23 @@ export function BrowserPasswordPreferences({
           'Ask for Touch ID before filling'
         )}
         description={
-          canReauth
+          reauthMethod === 'touch-id'
             ? translate(
                 'settings.browser.passwords.fillReauthDescription',
                 'For a shared computer. Showing or copying a password already asks.'
               )
-            : translate(
-                'settings.browser.passwords.noReauth',
-                'This computer can’t confirm it’s you with Touch ID, so passwords show and fill without a check.'
-              )
+            : reauthMethod === 'touch-id-unavailable'
+              ? translate(
+                  'settings.browser.passwords.reauthUnavailable',
+                  'Touch ID can’t be used right now, so Orca won’t show, copy or fill a password that needs it.'
+                )
+              : translate(
+                  'settings.browser.passwords.noReauth',
+                  'This computer can’t confirm it’s you with Touch ID, so passwords show and fill without a check.'
+                )
         }
-        checked={fillRequiresReauth && canReauth}
-        disabled={!canReauth}
+        checked={fillRequiresReauth && reauthMethod !== 'none'}
+        disabled={reauthMethod !== 'touch-id'}
         onChange={() => updateSettings({ browserPasswordsFillRequiresReauth: !fillRequiresReauth })}
       />
     </div>

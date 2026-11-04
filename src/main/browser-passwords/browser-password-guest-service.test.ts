@@ -13,7 +13,10 @@ vi.mock('electron', () => ({
   }
 }))
 vi.mock('../browser/browser-manager', () => ({
-  browserManager: { getRendererContextForGuest: () => ({ browserPageId: 'page', renderer }) }
+  browserManager: {
+    getRendererContextForGuest: () => ({ browserPageId: 'page', renderer }),
+    getGuestWebContentsId: () => 411
+  }
 }))
 vi.mock('../browser/cdp/input/agent-input-injection', () => ({ isAgentInjectingInput: injecting }))
 vi.mock('./browser-password-reauth', () => ({ confirmBrowserPasswordFill: vi.fn() }))
@@ -35,18 +38,25 @@ vi.mock('./browser-password-vault-access', () => ({
           exact: [{ id: 'entry', origin: 'https://example.com', username: 'ada' }],
           sameSite: []
         }
-      })
+      }),
+      getPassword: () => ({ ok: true, value: 'secret' })
     }
   })
 }))
+import { confirmBrowserPasswordFill } from './browser-password-reauth'
 import {
   attachBrowserPasswordGuest,
-  configureBrowserPasswords
+  configureBrowserPasswords,
+  fillBrowserPassword
 } from './browser-password-guest-service'
+
+function frame(origin: string) {
+  return { origin, send: vi.fn(), isDestroyed: () => false, detached: false }
+}
 
 class Guest extends EventEmitter {
   id = 411
-  mainFrame = { origin: 'https://example.com' }
+  mainFrame = frame('https://example.com')
   send = vi.fn()
   isDestroyed = () => false
 }
@@ -127,5 +137,26 @@ describe('native password picker keyboard handoff', () => {
     expect(preventDefault).not.toHaveBeenCalled()
     expect(renderer.focus).not.toHaveBeenCalled()
     expect(renderer.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('fill after Touch ID', () => {
+  it('refuses to send the password when the page navigated while the prompt was up', async () => {
+    const { guest } = setup()
+    const matched = guest.mainFrame
+    vi.mocked(confirmBrowserPasswordFill).mockImplementationOnce(async () => {
+      guest.mainFrame = frame('https://evil.test')
+      return true
+    })
+
+    const outcome = await fillBrowserPassword({
+      browserPageId: 'page',
+      fieldToken: 'field',
+      entryId: 'entry'
+    })
+
+    expect(outcome).toEqual({ ok: false, reason: 'unavailable' })
+    expect(matched.send).not.toHaveBeenCalled()
+    expect(guest.mainFrame.send).not.toHaveBeenCalled()
   })
 })
