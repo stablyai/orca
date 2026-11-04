@@ -65,6 +65,8 @@ export type AgentHookEventPayload = {
   stopHookActive?: true
   /** Provider turn identity folded into hostTurn; never stored or sent directly. */
   nativeTurnKey?: string
+  /** Source-only matching Codex root completion, before removing a success-shaped hook label. */
+  transcriptTurnEnd?: true
   /** Saved host-private turn record; snapshot/IPC/relay allow-lists exclude it. */
   hostTurn?: HostTurnRecord
   /** Claude live work the child list does not show (a shell, a cron, an owed task notification); rejects false input-based interrupts. */

@@ -1,8 +1,8 @@
-import type { HookListenerState } from '../../../shared/agent-hook-listener/listener-state'
-import { readClaudeTerminalUsageLimit } from '../../../shared/agent-hook-listener/claude-terminal-usage-limit'
-import { readJsonlCursor } from '../../../shared/codex-rollout-jsonl-cursor'
-import { isCodexStatusTranscriptLine } from '../../../shared/codex-status-transcript-line'
-import { reconcileCodexTerminalUsageLimit } from '../../../shared/codex-terminal-usage-limit'
+import type { HookListenerState } from './listener-state'
+import { readClaudeTerminalUsageLimit } from './claude-terminal-usage-limit'
+import { readJsonlCursor } from '../codex-rollout-jsonl-cursor'
+import { isCodexStatusTranscriptLine } from '../codex-status-transcript-line'
+import { reconcileCodexTerminalUsageLimit } from '../codex-terminal-usage-limit'
 
 export type TerminalUsageLimitCut = { sessionId: string; turnEndedAt: number }
 
@@ -17,6 +17,8 @@ export function terminalUsageLimitGuard(
     row !== undefined &&
     row.connectionId === null &&
     row.toolAgentId === undefined &&
+    row.providerSessionOnly !== true &&
+    row.agentPresence?.ended !== true &&
     row.structuredHost === undefined &&
     row.restoredUnconfirmed !== true &&
     row.providerSession?.id === expected.sessionId &&
@@ -31,6 +33,9 @@ export function terminalUsageLimitGuard(
     const current = state.lastStatusByPaneKey.get(paneKey)
     if (
       !matches(current) ||
+      current.launchToken !== original.launchToken ||
+      current.agentPresence?.process?.pid !== original.agentPresence?.process?.pid ||
+      current.agentPresence?.process?.startTime !== original.agentPresence?.process?.startTime ||
       current.hostTurn?.owner !== original.hostTurn?.owner ||
       current.hostTurn?.currentTurnKey !== original.hostTurn?.currentTurnKey
     ) {

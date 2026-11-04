@@ -3,9 +3,12 @@ import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/p
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import {
   hasPendingAgentResultText,
-  parseHookBodyPayloadRecord,
   preparePendingGrokResultDiscovery
 } from '../../../shared/agent-hook-listener/grok-result-discovery'
+import {
+  hasPendingClaudeUsageLimit,
+  isSameClaudeUsageLimitTurn
+} from '../../../shared/agent-hook-listener/claude-usage-limit-refinement'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import { pickHostTurnEnd } from '../../../shared/agent-status-types'
 import {
@@ -21,7 +24,10 @@ import {
   CODEX_SUBAGENT_POLL_MS
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
-import { terminalUsageLimitGuard, type TerminalUsageLimitCut } from './terminal-usage-limit-guard'
+import {
+  terminalUsageLimitGuard,
+  type TerminalUsageLimitCut
+} from '../../../shared/agent-hook-listener/terminal-usage-limit-guard'
 
 type TranscriptPoll = {
   source: AgentHookSource
@@ -32,22 +38,6 @@ type TranscriptPoll = {
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
   prepareTerminalUsageLimitContinuation(paneKey: string, expected: TerminalUsageLimitCut) {
     return terminalUsageLimitGuard(this.state, paneKey, expected)
-  }
-
-  private hasPendingClaudeUsageLimit(
-    source: AgentHookSource,
-    body: unknown,
-    event: EnrichedAgentHookEventPayload
-  ): boolean {
-    return (
-      source === 'claude' &&
-      event.hookEventName === 'StopFailure' &&
-      !event.toolAgentId &&
-      event.providerPromptId !== undefined &&
-      event.payload.mainAgent?.outcome === 'failure' &&
-      event.payload.mainAgent.usageLimit === undefined &&
-      parseHookBodyPayloadRecord(body)?.error === 'rate_limit'
-    )
   }
 
   private observedLocalHook?: { accepted: boolean; receivedAt?: number }
@@ -179,7 +169,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     attempt = 1,
     discoveryReady = false
   ): void {
-    const quotaPending = this.hasPendingClaudeUsageLimit(source, body, original)
+    const quotaPending = hasPendingClaudeUsageLimit(source, body, original)
     if (
       (!quotaPending && original.payload.lastAssistantMessage) ||
       (!quotaPending && !hasPendingAgentResultText(source, body)) ||
@@ -228,16 +218,10 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
-    const quotaPending = this.hasPendingClaudeUsageLimit(source, body, original)
-    const sameQuotaTurn =
-      current === original ||
-      (original.hostTurn !== undefined &&
-        current?.hostTurn?.owner === original.hostTurn.owner &&
-        current.hostTurn.currentTurnKey === original.hostTurn.currentTurnKey &&
-        current.payload.mainAgent?.outcome === 'failure')
+    const quotaPending = hasPendingClaudeUsageLimit(source, body, original)
     if (
       !current ||
-      (quotaPending && !sameQuotaTurn) ||
+      (quotaPending && !isSameClaudeUsageLimitTurn(original, current)) ||
       (requireExactOriginal && current !== original) ||
       current.payload.agentType !== original.payload.agentType ||
       current.payload.prompt !== original.payload.prompt ||

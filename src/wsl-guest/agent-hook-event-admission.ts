@@ -12,6 +12,7 @@ import type { HookListenerState } from '../shared/agent-hook-listener/listener-s
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 import { retainClaudeSettledRequests } from '../shared/agent-hook-listener/claude-settled-permission-requests'
+import { canRefineClaudeUsageLimit } from '../shared/agent-hook-listener/claude-usage-limit-refinement'
 import { reduceHostTurnEnd } from '../shared/agent-hook-turn-end-timing'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import type { RelayHookForward } from './agent-hook-server-contract'
@@ -117,6 +118,7 @@ export function applyRelayHookEvent(
   const {
     stopHookActive: _stopHookActive,
     nativeTurnKey: _nativeTurnKey,
+    transcriptTurnEnd: _transcriptTurnEnd,
     turnEndedAt: _turnEndedAt,
     turnEndDisposition: _turnEndDisposition,
     hostTurn: _hostTurn,
@@ -131,7 +133,10 @@ export function applyRelayHookEvent(
     host.clearPaneState(event.paneKey)
     return undefined
   }
-  if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
+  if (
+    event.payload.state !== 'done' ||
+    (event.payload.lastAssistantMessage && !canRefineClaudeUsageLimit(source, event))
+  ) {
     host.clearAssistantMessageRetry(event.paneKey)
   }
   // Retain PostCompact replay identity so reconnect can recheck ownership instead of resurrecting a retired pane.

@@ -58,13 +58,12 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
   if (!subagentsChanged && !leadChanged) {
     return undefined
   }
-  // Keep root Stop for remote turn-end derivation, but unlabel failures so clients cannot derive success.
-  const replayedStop =
-    polled.hookEventName === 'Stop' &&
-    original.payload.mainAgent?.state !== 'done' &&
-    polled.payload.mainAgent?.outcome !== 'failure'
+  // The source folds the verified root end before removing a success-shaped public label.
+  const endedRoot = polled.hookEventName === 'Stop' && original.payload.mainAgent?.state !== 'done'
+  const replayedStop = endedRoot && polled.payload.mainAgent?.outcome !== 'failure'
   return {
     ...polled,
+    ...(endedRoot && source === 'codex' ? { transcriptTurnEnd: true as const } : {}),
     hasExplicitPrompt: undefined,
     hookEventName: replayedStop ? 'Stop' : undefined
   }

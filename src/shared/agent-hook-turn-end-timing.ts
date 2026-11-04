@@ -119,7 +119,10 @@ export function reduceHostTurnEnd(
     !record ||
     !isLiveRoot ||
     event.payload.sessionBoundary === true ||
-    !isTurnEndEvent(source, event.hookEventName)
+    !(
+      isTurnEndEvent(source, event.hookEventName) ||
+      (source === 'codex' && event.transcriptTurnEnd === true && event.nativeTurnKey !== undefined)
+    )
   ) {
     if (
       record &&

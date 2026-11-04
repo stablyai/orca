@@ -156,6 +156,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     const {
       stopHookActive: _stopHookActive,
       nativeTurnKey: _nativeTurnKey,
+      transcriptTurnEnd: _transcriptTurnEnd,
       turnEndedAt: _turnEndedAt,
       turnEndDisposition: _turnEndDisposition,
       hostTurn: _hostTurn,

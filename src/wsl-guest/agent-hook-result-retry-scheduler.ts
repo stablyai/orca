@@ -1,3 +1,7 @@
+import {
+  hasPendingClaudeUsageLimit,
+  isSameClaudeUsageLimitTurn
+} from '../shared/agent-hook-listener/claude-usage-limit-refinement'
 import { ClaudeHelperKillPoller } from '../shared/agent-hook-listener/providers/claude-helper-kill-poller'
 import { pollCodexTranscriptStatus } from '../shared/agent-hook-listener/providers/codex-transcript-poll'
 // Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
@@ -178,9 +182,10 @@ export class AgentHookResultRetryScheduler {
     attempt = 1,
     discoveryReady = false
   ): void {
+    const quotaPending = hasPendingClaudeUsageLimit(source, body, original)
     if (
-      original.payload.lastAssistantMessage ||
-      !hasPendingAgentResultText(source, body) ||
+      (!quotaPending && original.payload.lastAssistantMessage) ||
+      (!quotaPending && !hasPendingAgentResultText(source, body)) ||
       attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
     ) {
       return
@@ -238,17 +243,21 @@ export class AgentHookResultRetryScheduler {
     requireExactOriginal: boolean
   ): void {
     const current = this.host.state.lastStatusByPaneKey.get(original.paneKey)
+    const quotaPending = hasPendingClaudeUsageLimit(source, body, original)
     if (
       !current ||
+      (quotaPending && !isSameClaudeUsageLimitTurn(original, current)) ||
       (requireExactOriginal && current !== original) ||
       current.payload.agentType !== original.payload.agentType ||
       current.payload.prompt !== original.payload.prompt ||
-      current.payload.lastAssistantMessage
+      (!quotaPending && current.payload.lastAssistantMessage)
     ) {
       return
     }
     const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
-    if (!event?.payload.lastAssistantMessage) {
+    const newText = !current.payload.lastAssistantMessage && event?.payload.lastAssistantMessage
+    const newQuota = quotaPending && event?.payload.mainAgent?.usageLimit
+    if (!newText && !newQuota) {
       this.scheduleAssistantMessageRetry(
         source,
         body,
@@ -260,7 +269,26 @@ export class AgentHookResultRetryScheduler {
       )
       return
     }
+    if (!event) {
+      return
+    }
     // Why: the retry only adds text to the same turn end, so it restates that end instead of minting one.
-    this.host.applyEvent({ ...event, ...pickHostTurnEnd(current) }, source, env, version)
+    const next = this.host.applyEvent(
+      { ...event, ...pickHostTurnEnd(current) },
+      source,
+      env,
+      version
+    )
+    if (next && quotaPending && !newQuota) {
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        next,
+        env,
+        version,
+        nextAttempt,
+        requireExactOriginal
+      )
+    }
   }
 }
