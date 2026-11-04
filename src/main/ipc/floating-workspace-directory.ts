@@ -29,10 +29,12 @@ async function canonicalizeAccessibleDirectory(dirPath: string): Promise<string 
   }
 }
 
+// Why no trim on read: entries are canonicalized real paths when stored, and a trailing
+// space is a legal POSIX directory name (Google Drive exports them) — trimming here would
+// break the trust match for those directories.
 function getTrustedFloatingWorkspaceDirectories(settings: FloatingTerminalSettings): Set<string> {
   return new Set(
     (settings.floatingTerminalTrustedCwds ?? [])
-      .map((trustedPath) => trustedPath.trim())
       .filter((trustedPath) => trustedPath.length > 0)
       .map(resolveFloatingWorkspaceInput)
   )
@@ -72,17 +74,23 @@ export async function resolveFloatingTerminalCwd(
   store: { getSettings(): FloatingTerminalSettings },
   args?: FloatingTerminalCwdRequest
 ): Promise<string> {
-  const configuredPath = typeof args?.path === 'string' ? args.path.trim() : ''
-  if (!configuredPath) {
+  const configuredPath = typeof args?.path === 'string' ? args.path : ''
+  if (!configuredPath.trim()) {
     return args?.requireTrusted === true
       ? ensureDefaultFloatingWorkspacePath()
       : resolveFloatingWorkspaceInput('~')
   }
 
-  const cwd = resolveFloatingWorkspaceInput(configuredPath)
-  const canonicalCwd = await canonicalizeAccessibleDirectory(cwd)
+  // Why raw first: a trailing space is a legal POSIX directory name, so a stored
+  // picker-verified path must resolve as typed; the trim only cleans typed typos.
+  let cwd = resolveFloatingWorkspaceInput(configuredPath)
+  let canonicalCwd = await canonicalizeAccessibleDirectory(cwd)
   if (!canonicalCwd) {
-    return ensureDefaultFloatingWorkspacePath()
+    cwd = resolveFloatingWorkspaceInput(configuredPath.trim())
+    canonicalCwd = await canonicalizeAccessibleDirectory(cwd)
+    if (!canonicalCwd) {
+      return ensureDefaultFloatingWorkspacePath()
+    }
   }
 
   // Only picker-approved directories may become terminal cwd.
@@ -122,8 +130,11 @@ export async function sanitizeFloatingWorkspaceDirectorySetting(
   if (trimmed === '~') {
     return '~'
   }
-  const resolvedDir = resolveFloatingWorkspaceInput(trimmed)
-  const canonicalDir = await canonicalizeAccessibleDirectory(resolvedDir)
+  // Why raw first: a trailing space is a legal POSIX directory name, so a picked
+  // directory must sanitize as typed; the trim only cleans typed typos.
+  const canonicalDir =
+    (await canonicalizeAccessibleDirectory(resolveFloatingWorkspaceInput(dirPath))) ??
+    (await canonicalizeAccessibleDirectory(resolveFloatingWorkspaceInput(trimmed)))
   if (!canonicalDir || !isTrustedFloatingWorkspaceDirectory(canonicalDir, store.getSettings())) {
     return ''
   }

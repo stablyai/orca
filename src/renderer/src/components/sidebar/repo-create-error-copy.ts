@@ -14,6 +14,12 @@ const COPY: Record<RepoCreateFailureCode, (values: CopyValues) => string | null>
   parentRequired: () => translate('sidebar.createProject.errors.parentRequired', EN.parentRequired),
   parentNotAbsolute: () =>
     translate('sidebar.createProject.errors.parentNotAbsolute', EN.parentNotAbsolute),
+  parentInaccessible: ({ detail }) =>
+    detail === null
+      ? null
+      : translate('sidebar.createProject.errors.parentInaccessible', EN.parentInaccessible, {
+          detail
+        }),
   targetInaccessible: ({ detail }) =>
     detail === null
       ? null
