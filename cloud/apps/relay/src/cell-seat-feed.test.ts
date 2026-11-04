@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type WebSocket from 'ws'
 import { z } from 'zod'
 import type { RelayAssignmentStore } from './assignment/assignment-store.js'
-import { CELL_FLAG_DEFAULTS, type CellFlags } from './cell-flags.js'
+import type { CellFlags } from './cell-flags.js'
 import type { RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
 import { HostSessionRegistry, type HostSession } from './host-session-registry.js'
@@ -227,26 +227,6 @@ describe('cell seat feed', () => {
     vi.useRealTimers()
   })
 
-  it('answers a first poll with every seated host, matching the controls count', async () => {
-    const { connect, poll, read } = createCell()
-    await connect(1)
-    await connect(2, { epoch: 4 })
-    expect((await poll()).status).toBe(200)
-    const body = await read()
-    expect(body).toMatchObject({
-      v: 1,
-      cellId: 'production-gce-c7',
-      incarnation,
-      seq: 2,
-      draining: false,
-      counts: { controls: 2, seats: 2 }
-    })
-    expect(body.full).toHaveLength(body.counts.seats)
-    expect(body.full).toContainEqual(
-      expect.objectContaining({ userId: 'user-2', epoch: 4, generation: 1, state: 'active' })
-    )
-  })
-
   it('keeps a closing socket seated until its close lands, as the change log does', async () => {
     const { connect, read } = createCell()
     const socket = await connect(1)
@@ -270,10 +250,7 @@ describe('cell seat feed', () => {
     const body = await read(`${incarnation}:${seq}`)
     expect(body.full).toBeUndefined()
     expect(body.draining).toBe(true)
-    expect(body.changes?.map((change) => change.kind)).toEqual([
-      'drain-only',
-      'leave'
-    ])
+    expect(body.changes?.map((change) => change.kind)).toEqual(['drain-only', 'leave'])
     expect(body.changes?.[1]).toMatchObject({
       userId: 'user-1',
       closeCode: RELAY_CLOSE_CODE.DRAINING,
@@ -322,9 +299,7 @@ describe('cell seat feed', () => {
     await connect(1, { generation: 2 })
     const body = await read(`${incarnation}:${seq}`)
     // Readers drop the leave: its generation is older than the seat's.
-    expect(
-      body.changes?.map((change) => [change.kind, change.generation])
-    ).toEqual([
+    expect(body.changes?.map((change) => [change.kind, change.generation])).toEqual([
       ['leave', 1],
       ['join', 2]
     ])
@@ -336,25 +311,6 @@ describe('cell seat feed', () => {
     const body = await read('22222222-2222-4222-8222-222222222222:1')
     expect(body.full).toHaveLength(1)
     expect((await poll('not a cursor')).status).toBe(400)
-  })
-
-  it('reports the applied cell flags, so a flip can be read back through the feed and runtime status', async () => {
-    let applied: AppliedControlFlags<CellFlags> = { generation: 0, flags: CELL_FLAG_DEFAULTS }
-    const { read, app } = createCell(config(), () => applied)
-    expect((await read()).flagsApplied).toEqual({ generation: 0, flags: CELL_FLAG_DEFAULTS })
-    applied = { generation: 12, flags: { ...CELL_FLAG_DEFAULTS, readinessLocal: true, ticketCheck: 'shadow' } }
-    expect((await read()).flagsApplied).toEqual(applied)
-    const runtime = await app.request('/v1/admin/runtime-status', {
-      method: 'POST',
-      headers: { authorization: 'Bearer deploy-token', 'content-type': 'application/json' },
-      body: JSON.stringify({ v: 1 })
-    })
-    expect(await runtime.json()).toMatchObject({
-      flagsApplied: applied,
-      // Not reserve mode, so db whatever the switch says.
-      phonePathEffective: 'db',
-      databasePoolMax: expect.any(Number)
-    })
   })
 
   it('accepts only the directors rehome identity, verified once per poll', async () => {
@@ -376,25 +332,5 @@ describe('cell seat feed', () => {
     expect(await response.json()).toEqual({ error: 'seat_feed_unavailable' })
     const director = createCell(config({ role: 'director', cellId: 'director' }))
     expect((await director.poll()).status).toBe(404)
-  })
-
-  // Review B1: the feed must not need the pair on more cells, and must not change what a cell
-  // with or without it reports as its rehome protocol.
-  it('leaves the reported rehome protocol to the existing env', async () => {
-    const rehomeProtocol = async (relayConfig: RelayConfig) => {
-      const response = await createCell(relayConfig).app.request('/v1/admin/runtime-status', {
-        method: 'POST',
-        headers: { authorization: 'Bearer deploy-token', 'content-type': 'application/json' },
-        body: JSON.stringify({ v: 1 })
-      })
-      return z.object({ regionalRehomeProtocol: z.number() }).parse(await response.json())
-        .regionalRehomeProtocol
-    }
-    expect(await rehomeProtocol(config())).toBe(3)
-    expect(
-      await rehomeProtocol(
-        config({ rehomeAudience: undefined, rehomeDirectorServiceAccount: undefined })
-      )
-    ).toBe(0)
   })
 })

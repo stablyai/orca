@@ -52,8 +52,8 @@ import { RepoRefMaintenance } from '../../../../shared/repo-ref-maintenance'
 import { createLocalRepoRefMaintenanceTarget } from './local-repo-ref-maintenance'
 import { clearRepoPackIndexMaintenanceCache } from './repo-pack-index-maintenance'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { GENERAL_CAP } from '../../../../shared/git-admission-state'
-import { GitAdmissionScheduler } from '../../../../shared/git-admission-scheduler'
+import { GENERAL_CAP } from '../../../../shared/git/admission/git-admission-state'
+import { GitAdmissionScheduler } from '../../../../shared/git/admission/git-admission-scheduler'
 import {
   acquireGitAdmission,
   _gitAdmissionSnapshotForTests,

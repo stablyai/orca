@@ -4,8 +4,8 @@ import { useActiveWorktree } from '@/store/selectors'
 import type { GitLabProjectRef } from '../../../../../shared/gitlab-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../shared/github/check-types'
 import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
-import { sortChecksBySeverity } from '../../../../../shared/pr-check-severity-order'
-import { summarizeProviderChecks } from '../../../../../shared/provider-check-summary'
+import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
+import { summarizeProviderChecks } from '../../../../../shared/source-control/checks/provider-check-summary'
 import { createCheckRunDetailsRequestId } from '@/components/editor/check-run-details-tab'
 import { translate } from '@/i18n/i18n'
 import { useCheckDetailsResize } from '../check-details-resize'
@@ -67,10 +67,12 @@ export function useChecksListState({
   // Share the pill's classifier for skipped passes and completed-without-verdict unresolved checks.
   const {
     passed: passingCount,
-    failed: failingCount,
+    failed: inclusiveFailingCount,
+    cancelled: cancelledCount = 0,
     pending: pendingCount,
     neutral: neutralCount
   } = summarizeProviderChecks(checks)
+  const failingCount = inclusiveFailingCount - cancelledCount
 
   useEffect(() => {
     const validKeys = new Set(rows.map((row) => row.key))
@@ -344,6 +346,7 @@ export function useChecksListState({
     rows,
     passingCount,
     failingCount,
+    cancelledCount,
     pendingCount,
     neutralCount,
     toggleCheckExpanded,

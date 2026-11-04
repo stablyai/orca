@@ -5,7 +5,7 @@ import type {
   NativeChatSubscriptionFrame,
   PreloadApi
 } from '../api-types'
-import type { AgentType } from '../../shared/agent-status-types'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import {
   NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH,
   type NativeChatVisualTheme

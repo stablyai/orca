@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExactWorkerProviderSession } from '../../../shared/orchestration-worker-output'
 import {
   isWslHookRelayConnectionId,

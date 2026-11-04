@@ -6,10 +6,12 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
-  buildAiVaultResumeStartupForWorktree,
-  type AiVaultResumeCommandSession,
-  type AiVaultResumeStartup
+  buildAiVaultResumeStartupForWorktree
 } from '@/lib/ai-vault-resume-command'
+import type {
+  AiVaultResumeCommandSession,
+  AiVaultResumeStartup
+} from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import {
   assertAiVaultCopiedSessionLaunchAllowed,
   buildAiVaultCopiedSessionStartupForWorktree,
@@ -17,7 +19,10 @@ import {
 } from '@/lib/ai-vault-session-fork-startup'
 import { launchAiVaultSessionAndReveal } from '@/lib/launch-ai-vault-session-and-reveal'
 import { useAppStore } from '@/store'
-import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   dropDeletedRemoteResumeCwd,
   prepareAiVaultSessionForFork,

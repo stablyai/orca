@@ -12,10 +12,10 @@ import {
 } from './launch-agent-in-new-tab-test-fixture'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 
-import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { planAgentSessionLaunch } from './agent-session-launch-plan'
 import { openDeclinedTerminal } from './agent-session/launch/structured-agent-session-action-launch'
-import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 afterEach(() => vi.restoreAllMocks())
 

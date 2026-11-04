@@ -5,7 +5,7 @@ import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup
 import type { GitWorktreeInfo, GitPushTarget, Worktree } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveWorktreeIncludePaths } from '../git/worktrees/content-paths/worktree-include-file'
 import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
 import { getWorktreeCreationLayout } from '../ipc/worktree-logic'

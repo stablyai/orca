@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>

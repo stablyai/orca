@@ -17,11 +17,14 @@ vi.mock('electron', () => ({
       hoisted.handlers.set(channel, handler)
   }
 }))
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  resolveEnvironment: () => hoisted.environment,
-  listEnvironments: () => [hoisted.environment]
-}))
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    resolveEnvironment: () => hoisted.environment,
+    listEnvironments: () => [hoisted.environment]
+  })
+)
 vi.mock('./runtime-environment-request-connections', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getRuntimeEnvironmentStatusOwner: () => ({ activate: vi.fn() }),

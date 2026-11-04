@@ -15,7 +15,7 @@ vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: (args: string[], options: { stdin?: string }) => gitExecFileAsync(args, options)
 }))
 vi.mock('./git-read-cache-invalidation', () => ({ invalidateGitReadCaches: vi.fn() }))
-vi.mock('../../../shared/git-discard-path-safety', () => ({
+vi.mock('../../../shared/git/paths/git-discard-path-safety', () => ({
   removeSafeUntrackedDiscardTarget: vi.fn(),
   removeSafeUntrackedDiscardTargets: async (
     _worktreePath: string,

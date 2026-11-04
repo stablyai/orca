@@ -1,5 +1,5 @@
 // OSC 7501 done/error survives program exit until user input, unlike agents’ frozen Done. Derive retention from the row so moves/remounts/reloads cannot strand results.
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 
 // Why the state parameter: callers outside React read the store directly; this module must not import it.

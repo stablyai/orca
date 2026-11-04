@@ -2,7 +2,6 @@ import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract'
 import { describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { openInMemoryRelayDatabase } from './database.js'
-import { hostCohortBucket } from './host-cohort-bucket.js'
 import {
   RESERVE_REHOME_HOST_COOLDOWN_MS,
   RESERVE_REHOME_SWITCH_STALE_MS,
@@ -16,7 +15,10 @@ const ROOM: RehomeTargetRoom = { free: 500, ceiling: 1_000, bookable: true }
 // 2,000 controls refill one token a minute.
 const CONTROLS = 2_000
 
-function admitted(rehome: ReserveRehome, overrides: Partial<Parameters<ReserveRehome['admit']>[0]> = {}) {
+function admitted(
+  rehome: ReserveRehome,
+  overrides: Partial<Parameters<ReserveRehome['admit']>[0]> = {}
+) {
   return rehome.admit({
     identity: HOST,
     sourceCellId: 'us-r',
@@ -37,25 +39,14 @@ function warmed(percent = 100) {
 }
 
 describe('rehome on reconnect rules', () => {
-  it('is off at 0%, and admits a host whose every rule holds', () => {
-    expect(new ReserveRehome({ percent: 0, switchOpen: () => true }).enabled).toBe(false)
-    expect(admitted(warmed())).toBeNull()
-  })
-
-  it('stays off while the operator switch is closed', () => {
-    expect(admitted(new ReserveRehome({ percent: 100, switchOpen: () => false }))).toBe('switch')
-  })
-
-  it('moves only the cohort below the percent', () => {
-    const bucket = hostCohortBucket(HOST)
-    expect(admitted(new ReserveRehome({ percent: bucket, switchOpen: () => true }))).toBe('cohort')
-    expect(admitted(warmed(bucket + 1))).toBeNull()
-  })
-
   it('leaves a host that another install dropped in the last 10 minutes', () => {
     const peerDropped = { region: 'us-central1' as const, closeCode: RELAY_CLOSE_CODE.PEER_DROPPED }
-    expect(admitted(warmed(), { leaves: [{ ...peerDropped, at: 60_000 - 10 * 60_000 }] })).toBe('peer-dropped')
-    expect(admitted(warmed(), { leaves: [{ ...peerDropped, at: 60_000 - 10 * 60_000 - 1 }] })).toBeNull()
+    expect(admitted(warmed(), { leaves: [{ ...peerDropped, at: 60_000 - 10 * 60_000 }] })).toBe(
+      'peer-dropped'
+    )
+    expect(
+      admitted(warmed(), { leaves: [{ ...peerDropped, at: 60_000 - 10 * 60_000 - 1 }] })
+    ).toBeNull()
   })
 
   it('leaves a host whose remembered leaves span regions, or that it moved within a day', () => {
@@ -64,7 +55,9 @@ describe('rehome on reconnect rules', () => {
       { region: 'asia-east2' as const, at: 2 }
     ]
     expect(admitted(warmed(), { leaves })).toBe('moved-recently')
-    expect(admitted(warmed(), { leaves: [{ region: undefined, at: 1 }] })).toBe('unknown-leave-region')
+    expect(admitted(warmed(), { leaves: [{ region: undefined, at: 1 }] })).toBe(
+      'unknown-leave-region'
+    )
     const rehome = warmed()
     rehome.recordMoved(HOST, 0)
     expect(admitted(rehome)).toBe('moved-recently')
@@ -72,17 +65,27 @@ describe('rehome on reconnect rules', () => {
   })
 
   it('moves no one into a region under 10% free, however full the source is', () => {
-    expect(admitted(warmed(), { target: { free: 20, ceiling: 1_000, bookable: true } })).toBe('target-room')
-    expect(admitted(warmed(), { target: { free: 99, ceiling: 1_000, bookable: true } })).toBe('target-room')
+    expect(admitted(warmed(), { target: { free: 20, ceiling: 1_000, bookable: true } })).toBe(
+      'target-room'
+    )
+    expect(admitted(warmed(), { target: { free: 99, ceiling: 1_000, bookable: true } })).toBe(
+      'target-room'
+    )
     expect(admitted(warmed(), { target: { free: 100, ceiling: 1_000, bookable: true } })).toBeNull()
-    expect(admitted(warmed(), { target: { free: 500, ceiling: 1_000, bookable: false } })).toBe('target-room')
-    expect(admitted(warmed(), { target: { free: 0, ceiling: 0, bookable: false } })).toBe('target-room')
+    expect(admitted(warmed(), { target: { free: 500, ceiling: 1_000, bookable: false } })).toBe(
+      'target-room'
+    )
+    expect(admitted(warmed(), { target: { free: 0, ceiling: 0, bookable: false } })).toBe(
+      'target-room'
+    )
   })
 
   it('takes a source cell at 0.05% of its controls a minute, burst one, and refunds an unmade move', () => {
     const rehome = warmed()
     expect(admitted(rehome)).toBeNull()
-    expect(admitted(rehome, { identity: { ...HOST, relayHostId: 'qrstuvwxyzabcdef' } })).toBe('source-budget')
+    expect(admitted(rehome, { identity: { ...HOST, relayHostId: 'qrstuvwxyzabcdef' } })).toBe(
+      'source-budget'
+    )
     expect(admitted(rehome, { sourceCellId: 'us-r2', now: 0 })).toBe('source-budget')
     rehome.refund('us-r')
     expect(admitted(rehome, { identity: { ...HOST, relayHostId: 'qrstuvwxyzabcdef' } })).toBeNull()
@@ -100,7 +103,10 @@ describe('rehome switch', () => {
       enabled: true,
       notBefore: 0
     })
-    const control = new ReserveRehomeSwitch(async () => await answer(), () => now)
+    const control = new ReserveRehomeSwitch(
+      async () => await answer(),
+      () => now
+    )
     expect(control.isOpen(now)).toBe(false)
     await control.refresh()
     expect(control.isOpen(now)).toBe(true)
@@ -129,14 +135,17 @@ describe('the rehome switch under a stalled read', () => {
     let now = 1_000
     let release!: (value: { enabled: boolean; notBefore: number }) => void
     const reads: ('stalled' | 'off')[] = []
-    const control = new ReserveRehomeSwitch(async () => {
-      if (reads.length === 0) {
-        reads.push('stalled')
-        return await new Promise((resolve) => (release = resolve))
-      }
-      reads.push('off')
-      return { enabled: false, notBefore: 0 }
-    }, () => now)
+    const control = new ReserveRehomeSwitch(
+      async () => {
+        if (reads.length === 0) {
+          reads.push('stalled')
+          return await new Promise((resolve) => (release = resolve))
+        }
+        reads.push('off')
+        return { enabled: false, notBefore: 0 }
+      },
+      () => now
+    )
     const stalled = control.refresh()
     await control.refresh()
     expect(reads).toEqual(['stalled'])

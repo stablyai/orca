@@ -9,7 +9,7 @@ import type {
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanError,
   WorkspaceCleanupScanResult
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   handleRepoWorktreeListError,
   listCleanupGitWorktrees

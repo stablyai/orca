@@ -1,5 +1,5 @@
 import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/NativeChatVisualGuestThemePublisher'
-import { normalizeBrowserGuestSrc } from '../../../../../shared/browser-extension-url'
+import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { parkBrowserPageViewport } from './browser-page-viewport'
 import { subscribeBrowserSystemResume } from './browser-system-resume'

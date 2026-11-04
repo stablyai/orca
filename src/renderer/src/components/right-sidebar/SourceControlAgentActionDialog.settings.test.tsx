@@ -3,11 +3,9 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
-import {
-  agentPickerChoiceSeeds,
-  type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { agentPickerChoiceSeeds } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { mountSourceDialog } from './source-control-action-dialog.test-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'

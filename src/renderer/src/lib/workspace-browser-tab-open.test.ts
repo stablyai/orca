@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import '../../../shared/constants'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import '../../../shared/browser-client-hosting-eligibility'
+import '../../../shared/browser/client-hosting/browser-client-hosting-eligibility'
 import './client-creation-action-policy'
 import { openWorkspaceBrowserTab } from './workspace-browser-tab-open'
 

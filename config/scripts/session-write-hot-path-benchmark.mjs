@@ -50,7 +50,7 @@ const { capTerminalScrollbackSessionBuffer } = await import(
   pathToFileURL(path.join(ROOT, 'src/shared/workspace-session-terminal-buffers.ts')).href
 )
 const { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } = await import(
-  pathToFileURL(path.join(ROOT, 'src/shared/terminal-scrollback-limits.ts')).href
+  pathToFileURL(path.join(ROOT, 'src/shared/terminal/replay/terminal-scrollback-limits.ts')).href
 )
 const { remapAcknowledgedAgentPaneKeys } = await import(
   pathToFileURL(path.join(ROOT, 'src/main/persistence/restoring-sessions/pane-key-remapping.ts'))

@@ -2,7 +2,7 @@ import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-sess
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
-} from '../../shared/agent-status-child-work-evidence'
+} from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { CodexBackgroundCommandChange } from './codex-background-command-tracker'
 import type {
   CodexBackgroundTaskEvent,

@@ -124,4 +124,85 @@ describe('browser tab create with a split pane', () => {
       expect.objectContaining({ split: expect.objectContaining({ sourceGroupId: 'g-terminal' }) })
     )
   })
+  it('adds the tab to a browser pane already beside the caller instead of splitting again', () => {
+    const state = storeState()
+    mocks.getState.mockReturnValue({
+      ...state,
+      groupsByWorktree: { [WT]: [...state.groupsByWorktree[WT], { id: 'g-browser' }] },
+      activeBrowserTabIdByWorktree: { [WT]: 'browser-1' },
+      unifiedTabsByWorktree: {
+        [WT]: [
+          ...state.unifiedTabsByWorktree[WT],
+          { id: 'u-browser', entityId: 'browser-1', groupId: 'g-browser', contentType: 'browser' }
+        ]
+      }
+    })
+
+    mocks.createListener?.({
+      requestId: 'r5',
+      worktreeId: WT,
+      url: 'https://example.com/next',
+      split: 'right',
+      splitFromTabId: 'term-1'
+    })
+
+    const options = mocks.createBrowserTab.mock.calls[0]?.[2]
+    expect(options).toMatchObject({
+      targetGroupId: 'g-browser',
+      activate: false,
+      showInGroup: true
+    })
+    expect(options).not.toHaveProperty('split')
+  })
+
+  it("still splits when the only browser tab shares the caller's pane", () => {
+    const state = storeState()
+    mocks.getState.mockReturnValue({
+      ...state,
+      activeBrowserTabIdByWorktree: { [WT]: 'browser-1' },
+      unifiedTabsByWorktree: {
+        [WT]: [
+          ...state.unifiedTabsByWorktree[WT],
+          { id: 'u-browser', entityId: 'browser-1', groupId: 'g-terminal', contentType: 'browser' }
+        ]
+      }
+    })
+
+    mocks.createListener?.({
+      requestId: 'r6',
+      worktreeId: WT,
+      url: 'https://example.com',
+      split: 'right',
+      splitFromTabId: 'term-1'
+    })
+
+    expect(mocks.createBrowserTab.mock.calls[0]?.[2]).toMatchObject({
+      split: { sourceGroupId: 'g-terminal', splitDirection: 'right' }
+    })
+  })
+  it('splits beside the active pane when the caller is unknown, even if that pane holds a browser tab', () => {
+    const state = storeState()
+    mocks.getState.mockReturnValue({
+      ...state,
+      activeBrowserTabIdByWorktree: { [WT]: 'browser-1' },
+      unifiedTabsByWorktree: {
+        [WT]: [
+          ...state.unifiedTabsByWorktree[WT],
+          { id: 'u-browser', entityId: 'browser-1', groupId: 'g-active', contentType: 'browser' }
+        ]
+      }
+    })
+
+    mocks.createListener?.({
+      requestId: 'r7',
+      worktreeId: WT,
+      url: 'https://example.com',
+      split: 'right',
+      splitFromTabId: 'stale-tab'
+    })
+
+    expect(mocks.createBrowserTab.mock.calls[0]?.[2]).toMatchObject({
+      split: { sourceGroupId: 'g-active', splitDirection: 'right' }
+    })
+  })
 })

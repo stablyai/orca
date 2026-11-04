@@ -5,7 +5,7 @@ import {
   readAgentInventoryForWorktree,
   readAgentInventoryForTarget
 } from '@/lib/agent-detection-target-inventory'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { sourceControlLaunchWorkspace } from './source-control-launch-agent-args-applicability'
 import { acquireAgentLaunchChoices, useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { agentsOfferedForLaunch } from '@/lib/host-chat-program'

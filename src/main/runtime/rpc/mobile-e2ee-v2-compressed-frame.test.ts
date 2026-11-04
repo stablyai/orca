@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   COMPRESSED_FRAMES_CLIENT_CAPABILITY,
   readCompressedFrame
-} from '../../../shared/paired-e2ee-compressed-frame'
+} from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import { compressMobileE2EEV2Item } from './mobile-e2ee-v2-compressed-frame'
 
 const capable = [COMPRESSED_FRAMES_CLIENT_CAPABILITY]

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
+import type { AgentStatusObservation } from '../../../shared/agent-status/contracts/agent-status-observation'
 
 const { setAgentStatusMock } = vi.hoisted(() => ({ setAgentStatusMock: vi.fn() }))
 

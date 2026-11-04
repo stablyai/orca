@@ -197,6 +197,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
           ...current,
           record: cloneStructuredAgentSessionOptionRecord(current.record),
           reportedPermissionMode: undefined,
+          reportedModel: undefined,
           reportedEffort: undefined,
           ...(current.acceptedInputSources ? { acceptedInputSources: {} } : {})
         }
@@ -214,6 +215,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
                 ...current,
                 record: cloneStructuredAgentSessionOptionRecord(current.record),
                 reportedPermissionMode: undefined,
+                reportedModel: undefined,
                 reportedEffort: undefined
               }
             : context.seed()

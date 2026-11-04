@@ -2,7 +2,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AppState } from '@/store/types'
 import {
   buildAgentLaunchRouteInput,

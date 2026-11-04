@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 import { afterEach, expect, it, vi } from 'vitest'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
@@ -225,9 +225,11 @@ it.each(fixtures)('conserves $name through the actual web create adapter', async
     await import('@/runtime/agent-launch-settings/use-host-agent-launch-preferences')
   const { RUNTIME_CAPABILITIES } = await import('../../../shared/protocol-version')
   const { resolveAgentStartupPlanInputs } =
-    await import('../../../shared/agent-startup-plan-inputs')
-  const { buildAgentStartupPlan } = await import('../../../shared/tui-agent-startup')
-  const { tokenizeStartupCommand } = await import('../../../shared/tui-agent-startup-shell')
+    await import('../../../shared/agent-launch/startup/agent-startup-plan-inputs')
+  const { buildAgentStartupPlan } =
+    await import('../../../shared/agent-launch/startup/tui-agent-startup')
+  const { tokenizeStartupCommand } =
+    await import('../../../shared/agent-launch/startup/tui-agent-startup-shell')
   const { launchAgentInWebHostTab } = await import('@/lib/launch-agent-web-host-tab')
   vi.spyOn(capabilities, 'hostSupportsLaunchChoices').mockResolvedValue(fixture.capable)
   vi.spyOn(preferences, 'ensureAgentLaunchPreferences').mockResolvedValue({

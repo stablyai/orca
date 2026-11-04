@@ -15,8 +15,8 @@ import {
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
-import { readTerminalCursorLineContext } from '../../../../shared/terminal-cursor-line-context'
-import { readTerminalComposerTypedText } from '../../../../shared/terminal-composer-draft'
+import { readTerminalCursorLineContext } from '../../../../shared/terminal/input/terminal-cursor-line-context'
+import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {

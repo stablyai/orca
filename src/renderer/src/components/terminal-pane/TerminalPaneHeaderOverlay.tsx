@@ -11,6 +11,7 @@ import type { PtyTransport } from './pty-transport-types'
 import { TerminalPaneHeaderDropSurface } from './TerminalPaneHeaderDropSurface'
 import { TerminalPaneResumeInChatButton } from './TerminalPaneResumeInChatButton'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { NativeChatSettingsButton } from '../native-chat/NativeChatSettingsButton'
 
 export type PaneTitleOverlayRect = {
   left: number
@@ -338,6 +339,7 @@ export default function TerminalPaneHeaderOverlay({
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
+                  {canShowTerminal && isActivePane ? <NativeChatSettingsButton /> : null}
                 </div>
               </>
             )}

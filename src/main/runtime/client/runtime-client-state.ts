@@ -6,8 +6,12 @@ import {
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { LOCAL_EXECUTION_HOST_ID, getRepoExecutionHostId } from '../../../shared/execution-host'
+
+import {
+  type ExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  getRepoExecutionHostId
+} from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import { killAllProcessesForWorktree } from '../worktree-teardown'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
@@ -15,9 +19,9 @@ import { collectMemorySnapshot } from '../../memory/collector'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import type { RuntimeClientSettingsUpdate } from '../runtime-client-settings-shape'
-import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch-settings'
-import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
-import type { TerminalQuickCommandMutation } from '../../../shared/terminal-quick-commands'
+import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch/choices/agent-launch-settings'
+import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import type { TerminalQuickCommandMutation } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { WorktreeTerminalStopOptions } from '../terminal/stop/worktree-terminal-stop-options'
 import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'

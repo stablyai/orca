@@ -48,7 +48,6 @@ export class RpcClientRequestTracker {
     if (requestOptions?.signal && this.options.getState() !== 'connected') {
       throw new Error(`Not connected: ${method}`)
     }
-    requestOptions?.beforeSend?.()
     if (!wasConnected) {
       console.log('[net] sendRequest waited for connect', {
         method,
@@ -56,6 +55,7 @@ export class RpcClientRequestTracker {
       })
     }
 
+    requestOptions?.beforeSend?.()
     return this.sendConnectedRequest(
       method,
       params,

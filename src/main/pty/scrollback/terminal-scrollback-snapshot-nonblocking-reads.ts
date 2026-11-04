@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
-import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
 import {
   decodeFromFirstUtf8Boundary,
   snapshotReadPaths,

@@ -4,7 +4,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { CombinedDiffFileTreeRow as CombinedDiffFileTreeRowComponent } from './combined-diff-file-tree-row'
 
 const mountedRows = vi.hoisted(() => ({ count: 0 }))

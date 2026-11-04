@@ -18,7 +18,7 @@ import { callStructuredAgentSession } from '@/runtime/structured-agent-session-c
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/host-structured-agents'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
-import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import {
@@ -28,14 +28,16 @@ import {
   observeAgentPickerAcquisition,
   type AgentPickerInventorySource
 } from './agent-launch-picker-acquisition'
-import { usableAgentPickerDefaultSettings as usable } from '../../../../shared/agent-launch-picker-defaults'
-import { isAgentChatPermissionChoice } from '../../../../shared/agent-chat-permission-mode'
+import {
+  usableAgentPickerDefaultSettings as usable,
+  agentPickerChoiceSeeds,
+  type AgentPickerDefaultSettings
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
+import { isAgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   agentPickerEntriesFromRows,
-  agentPickerChoiceSeeds,
-  type AgentPickerDefaultSettings,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 export { useAgentPickerInventoryEntries, type AgentPickerInventorySource }
 

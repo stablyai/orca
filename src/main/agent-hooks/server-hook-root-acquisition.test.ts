@@ -25,7 +25,9 @@ import {
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: vi.fn() }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: vi.fn()
+}))
 
 registerRootTestHarness()
 

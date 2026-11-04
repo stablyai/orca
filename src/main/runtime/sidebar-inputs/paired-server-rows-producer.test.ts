@@ -3,7 +3,7 @@ import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import type { MobileDesktopRelayHosts } from '../mobile-desktop-relay/mobile-desktop-relay-hosts'

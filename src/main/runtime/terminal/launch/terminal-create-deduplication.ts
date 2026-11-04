@@ -1,14 +1,17 @@
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+
 import { OrcaRuntimeWithCreateAgentSession } from '../../orca-runtime-create-agent-session'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-terminal-create-identity'
 import { withTimeoutResult } from '../../runtime-async-boundaries'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
-import { inferWorktreeIdFromPtyId } from '../../runtime-worktree-path-identity'
+import {
+  type ResolvedWorktree,
+  inferWorktreeIdFromPtyId
+} from '../../runtime-worktree-path-identity'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   getConnectionExecutionHostId,
@@ -17,7 +20,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from '../../worktree-launch-host-repo'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 
 export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {
