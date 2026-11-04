@@ -6,10 +6,7 @@ import {
 import type { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import { piRpcDialogPresentation, type PiRpcDialogPresentation } from './rpc-extension-dialogs'
-import {
-  PI_BACKGROUND_WORK_ACTIVE,
-  PI_BACKGROUND_WORK_STATUS_KEY
-} from './rpc-background-work-bridge-source'
+import { PiRpcBackgroundWork } from './rpc-background-work'
 
 type Callback = { presentation: PiRpcDialogPresentation; claimed: boolean; bytes: number }
 const DECORATION = new Set(['notify', 'setStatus', 'setWidget', 'setTitle', 'setEditorText'])
@@ -17,17 +14,25 @@ const DECORATION = new Set(['notify', 'setStatus', 'setWidget', 'setTitle', 'set
 export class PiRpcDialogCallbacks {
   private readonly pending = new Map<string, Callback>()
   private pendingBytes = 0
-  /** The bridge's last report; kept while the reader is paused, since silence is not idleness. */
-  backgroundWork = false
+  /** Its frames never reach presentation, the pending cap, or cancelAll at turn end. */
+  readonly backgroundWork: PiRpcBackgroundWork
   constructor(
     private readonly lane: JsonlRpcTimelineLane,
     private readonly send: (frame: JsonlRpcRecord) => Promise<void>,
-    private readonly onFailed: (error: Error) => void
-  ) {}
+    private readonly onFailed: (error: Error) => void,
+    backgroundWorkDirectory: string | null = null
+  ) {
+    this.backgroundWork = new PiRpcBackgroundWork(backgroundWorkDirectory)
+  }
+
+  /** The child exited: its dialogs and any probe awaiting an answer can never be answered. */
+  close(): void {
+    this.cancelAll()
+    this.backgroundWork.end()
+  }
 
   receive(frame: JsonlRpcRecord): void {
-    if (frame.method === 'setStatus' && frame.statusKey === PI_BACKGROUND_WORK_STATUS_KEY) {
-      this.backgroundWork = frame.statusText === PI_BACKGROUND_WORK_ACTIVE
+    if (this.backgroundWork.receive(frame)) {
       return
     }
     if (typeof frame.method === 'string' && DECORATION.has(frame.method)) {

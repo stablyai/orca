@@ -3,12 +3,15 @@
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type { AgentSessionIdleConfirmation } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import {
   heldStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkHost
 } from './structured-agent-session-host-current-work'
+
+type RunningChild = NonNullable<StructuredAgentSessionHostSession['child']>
 
 export const STRUCTURED_AGENT_SESSION_IDLE_SWEEP_INTERVAL_MS = 5 * 60_000
 export const STRUCTURED_AGENT_SESSION_IDLE_MS = 30 * 60_000
@@ -27,8 +30,8 @@ export type StructuredAgentSessionIdleSweepDeps = {
   hasOpenDispatch: (sessionId: string) => boolean
   /** Provider-retained, unanswered sends. */
   providerHoldsDispatch: (sessionId: string) => boolean
-  /** Provider-declared background work that only idle release honors. */
-  providerHoldsBackgroundWork: (sessionId: string) => boolean
+  /** Provider-declared background work, asked fresh before a running child's idle stop. */
+  confirmIdle: (sessionId: string) => Promise<AgentSessionIdleConfirmation> | undefined
   store: StructuredAgentSessionCurrentWorkHost['store']
   /** Already inside nonreentrant session serialization. */
   stopAgent: (sessionId: string) => Promise<void>
@@ -95,15 +98,13 @@ export class StructuredAgentSessionIdleSweep {
     try {
       await Promise.allSettled(
         [...this.deps.sessions.keys()].map((sessionId) =>
-          this.deps
-            .serialize(sessionId, () => this.tickUnderSerialize(sessionId))
-            .catch((error: unknown) =>
-              this.deps.logger.warn('an idle sweep step failed', {
-                scope: 'idle-sweep',
-                sessionId,
-                error
-              })
-            )
+          this.sweepSession(sessionId).catch((error: unknown) =>
+            this.deps.logger.warn('an idle sweep step failed', {
+              scope: 'idle-sweep',
+              sessionId,
+              error
+            })
+          )
         )
       )
     } finally {
@@ -111,29 +112,57 @@ export class StructuredAgentSessionIdleSweep {
     }
   }
 
-  /** Recheck under serialization to include queued acceptance. */
-  private async tickUnderSerialize(sessionId: string): Promise<void> {
+  /** Ask outside serialization so a slow provider never delays user actions; recheck before stopping. */
+  private async sweepSession(sessionId: string): Promise<void> {
+    const unconfirmed = await this.deps.serialize(sessionId, () =>
+      this.tickUnderSerialize(sessionId, null)
+    )
+    if (!unconfirmed) {
+      return
+    }
+    const answer = (await this.deps.confirmIdle(sessionId)) ?? 'idle'
+    if (answer === 'unknown') {
+      return
+    }
+    await this.deps.serialize(sessionId, async () => {
+      if (answer === 'idle') {
+        await this.tickUnderSerialize(sessionId, unconfirmed)
+      } else if (this.deps.sessions.get(sessionId)?.child === unconfirmed) {
+        this.deps.sessions.touch(sessionId)
+      }
+    })
+  }
+
+  /** Recheck under serialization to include queued acceptance; a running child must be confirmed idle. */
+  private async tickUnderSerialize(
+    sessionId: string,
+    confirmed: RunningChild | null
+  ): Promise<RunningChild | null> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.deps.isDisposed()) {
-      return
+      return null
     }
     // Renew owed work every tick to allow a full window for the lead’s post-child wake-up.
     if (session.child && session.child.phase !== 'starting' && this.owesWork(sessionId, session)) {
       this.deps.sessions.touch(sessionId)
-      return
+      return null
     }
     const lastActivityAt = this.deps.sessions.lastActivityAt(sessionId) ?? this.deps.now()
     if (this.deps.now() - lastActivityAt < (this.deps.idleMs ?? STRUCTURED_AGENT_SESSION_IDLE_MS)) {
-      return
+      return null
     }
     if (session.child) {
       if (session.child.phase === 'starting') {
         await this.deps.stopStartingAgent(sessionId)
-        return
+        return null
+      }
+      if (session.child !== confirmed) {
+        return session.child
       }
       await this.deps.stopAgent(sessionId)
     }
     await this.deps.closeConversation(sessionId)
+    return null
   }
 
   private queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {
@@ -147,7 +176,6 @@ export class StructuredAgentSessionIdleSweep {
   private owesWork(sessionId: string, session: StructuredAgentSessionHostSession): boolean {
     return (
       this.queuedOrDelivering(sessionId, session) ||
-      this.deps.providerHoldsBackgroundWork(sessionId) ||
       structuredAgentSessionChildHasOpenWork({
         currentWork: () =>
           heldStructuredAgentSessionCurrentWork(

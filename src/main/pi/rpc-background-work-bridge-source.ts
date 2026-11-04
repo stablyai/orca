@@ -1,11 +1,13 @@
-// Relay Pi's shared session-liveness registry to the RPC host: in-process hosts read it before
-// idle eviction, but native chat runs Pi as a child, so a status line carries the answer out.
+// Answer the RPC host's idle-eviction probe from Pi's shared session-liveness registry. In-process
+// hosts ask it before evicting; native chat runs Pi as a child, so the question arrives as a file in
+// a private folder (never a prompt or dialog, which other extensions and the model would see) and
+// the answer leaves as a status line.
 
 export const PI_BACKGROUND_WORK_STATUS_KEY = 'orca-background-work'
-export const PI_BACKGROUND_WORK_ACTIVE = 'active'
+export const PI_BACKGROUND_WORK_DIR_ENV = 'ORCA_PI_BACKGROUND_WORK_DIR'
 export const PI_BACKGROUND_WORK_BRIDGE_FILE = 'orca-background-work.ts'
+export const PI_BACKGROUND_WORK_REQUEST_SUFFIX = '.probe'
 const SESSION_LIVENESS_REGISTRY_KEY = '@agegr/pi-web/session-liveness/v1'
-const REPORT_INTERVAL_MS = 5_000
 
 export function getPiBackgroundWorkBridgeSource(): string {
   return [
@@ -52,35 +54,64 @@ export function getPiBackgroundWorkBridgeSource(): string {
     '',
     'export default function (pi) {',
     '  const registry = sessionLivenessRegistry()',
-    '  let timer = null',
-    '  let reported = null',
-    '  function stop() {',
-    '    if (timer) clearInterval(timer)',
-    '    timer = null',
-    '  }',
-    // Report only changes; the host keeps the last answer, since a paused reader is not idle work.
+    `  const dir = process.env.${PI_BACKGROUND_WORK_DIR_ENV}`,
+    '  let close = null',
     "  pi.on('session_start', (_event, ctx) => {",
-    '    stop()',
-    '    reported = null',
-    '    const tick = () => {',
+    '    close?.()',
+    '    close = null',
+    '    if (!dir) return',
+    "    const fs = require('fs')",
+    "    const path = require('path')",
+    // Each instance answers only requests named for it, so a reloaded predecessor cannot answer.
+    "    const instance = require('crypto').randomUUID()",
+    '    let live = true',
+    '    const answer = () => {',
+    '      if (!live) return',
+    '      let names = []',
     '      try {',
-    '        const manager = ctx.sessionManager',
-    '        const active = registry.hasActiveProvider({ sessionId: manager.getSessionId(), sessionFile: manager.getSessionFile() })',
-    `        const next = active ? ${JSON.stringify(PI_BACKGROUND_WORK_ACTIVE)} : undefined`,
-    '        if (next === reported) return',
-    '        ctx.ui.setStatus(STATUS_KEY, next)',
-    '        reported = next',
-    // Keep ticking after a failure so the next answer is re-derived; shutdown retires the timer.
+    '        names = fs.readdirSync(dir)',
+    '      } catch {',
+    '        return',
+    '      }',
+    '      for (const name of names) {',
+    `        if (!name.startsWith(instance + '.') || !name.endsWith(${JSON.stringify(PI_BACKGROUND_WORK_REQUEST_SUFFIX)})) continue`,
+    `        const nonce = name.slice(instance.length + 1, -${PI_BACKGROUND_WORK_REQUEST_SUFFIX.length})`,
+    '        try {',
+    '          fs.rmSync(path.join(dir, name))',
+    '        } catch {',
+    '          continue',
+    '        }',
+    '        try {',
+    '          const manager = ctx.sessionManager',
+    '          const active = registry.hasActiveProvider({ sessionId: manager.getSessionId(), sessionFile: manager.getSessionFile() })',
+    "          ctx.ui.setStatus(STATUS_KEY, 'answer:' + instance + ':' + nonce + (active ? ':active' : ':idle'))",
+    '        } catch {}',
+    '      }',
+    '    }',
+    // Watch events are only hints to rescan; a watcher that cannot start leaves the host without readiness.
+    '    let watcher',
+    '    try {',
+    '      watcher = fs.watch(dir, answer)',
+    "      watcher.on('error', () => {})",
+    '    } catch {',
+    '      return',
+    '    }',
+    '    close = () => {',
+    '      live = false',
+    '      try {',
+    '        watcher.close()',
     '      } catch {}',
     '    }',
-    '    tick()',
-    `    timer = setInterval(tick, ${REPORT_INTERVAL_MS})`,
-    "    if (typeof timer.unref === 'function') timer.unref()",
+    '    try {',
+    "      ctx.ui.setStatus(STATUS_KEY, 'ready:' + instance)",
+    '    } catch {}',
+    '    answer()',
     '  })',
     "  pi.on('session_shutdown', (_event, ctx) => {",
-    '    stop()',
+    '    close?.()',
+    '    close = null',
     '    try {',
-    '      ctx.ui.setStatus(STATUS_KEY, undefined)',
+    "      ctx.ui.setStatus(STATUS_KEY, 'gone')",
     '    } catch {}',
     '  })',
     '}',

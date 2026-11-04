@@ -6,6 +6,8 @@ import {
 } from '../native-chat/native-chat-visuals-delivery'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import type { PiBackgroundWorkLaunch } from './rpc-background-work-bridge'
+import { PI_BACKGROUND_WORK_DIR_ENV } from './rpc-background-work-bridge-source'
 
 export type PiRpcLaunchOptions = {
   command: string
@@ -17,8 +19,8 @@ export type PiRpcLaunchOptions = {
   envToDelete?: readonly string[]
   sessionFile?: string
   forkFile?: string
-  /** Orca-owned extensions loaded only into this launch. */
-  extensionPaths?: readonly string[]
+  /** Orca's background-work bridge for this launch; absent when it could not be prepared. */
+  backgroundWork?: PiBackgroundWorkLaunch
 }
 
 const CALLER_ENV_TO_DELETE = [
@@ -113,11 +115,16 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
       '--mode',
       'rpc',
       ...args,
-      ...(options.extensionPaths ?? []).flatMap((path) => ['--extension', path]),
+      ...(options.backgroundWork ? ['--extension', options.backgroundWork.extension] : []),
       ...(options.sessionFile ? ['--session', options.sessionFile] : []),
       ...(options.forkFile ? ['--fork', options.forkFile] : [])
     ],
-    env: { ...options.env },
+    env: {
+      ...options.env,
+      ...(options.backgroundWork
+        ? { [PI_BACKGROUND_WORK_DIR_ENV]: options.backgroundWork.directory }
+        : {})
+    },
     envToDelete: [...(options.envToDelete ?? [])]
   }
 }

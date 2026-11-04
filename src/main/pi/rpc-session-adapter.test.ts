@@ -15,34 +15,10 @@ import {
   setup
 } from './rpc-session-adapter.test-fixture'
 import { agentSessionLaunchFolderMissing } from '../runtime/agent-session/agent-session-launch-directory'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 
 afterEach(closePiRpcAdapterFixtures)
 
 describe('Pi RPC session ownership and delivery', () => {
-  // Recorded on Windows from Pi 1.5.0 + pi-subagents 0.84.0 + the bridge: idle, a worker starts, its wake turn settles, shutdown.
-  it('holds the chat for background work the bridge reports until it reports none or Pi exits', async () => {
-    const recorded = readFileSync(
-      join(import.meta.dirname, '__fixtures__', 'background-work.jsonl'),
-      'utf8'
-    )
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => JSON.parse(JSON.parse(line).raw))
-    const h = await setup()
-    const held = recorded.map((frame) => {
-      h.connection.receive(frame)
-      return h.adapter.holdsBackgroundWork(sessionId)
-    })
-    expect(held).toEqual([false, true, false, false])
-    expect(h.connection.sent).toEqual([])
-
-    h.connection.receive(recorded[1])
-    h.connection.exit()
-    expect(h.adapter.holdsBackgroundWork(sessionId)).toBe(false)
-  })
-
   it('keeps passive, request-scoped actual separate from future picks and raw successful controls', async () => {
     const h = await setup({}, undefined, { thinkingLevel: 'medium' })
     await vi.waitFor(() => expect(h.connection.requests).toContain('get_commands'))

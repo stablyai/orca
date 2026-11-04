@@ -32,7 +32,10 @@ import {
   withoutPiCallerEnv,
   type PiRpcLaunchOptions
 } from './rpc-launch'
-import { ensurePiBackgroundWorkBridge } from './rpc-background-work-bridge'
+import {
+  ensurePiBackgroundWorkBridge,
+  type PiBackgroundWorkLaunch
+} from './rpc-background-work-bridge'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
@@ -45,7 +48,7 @@ export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
   probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
-  ensureBackgroundWorkBridge?: () => Promise<string | null>
+  ensureBackgroundWorkBridge?: () => Promise<PiBackgroundWorkLaunch | null>
   logger?: StructuredAgentSessionLogger
 }
 
@@ -208,7 +211,7 @@ export function piRpcLaunchPart(
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
-    const bridge = await (
+    const backgroundWork = await (
       deps.ensureBackgroundWorkBridge ??
       (() =>
         ensurePiBackgroundWorkBridge((error) =>
@@ -230,7 +233,7 @@ export function piRpcLaunchPart(
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
         ...(replacement ? { replacement } : {}),
-        ...(bridge ? { extensionPaths: [bridge] } : {})
+        ...(backgroundWork ? { backgroundWork } : {})
       },
       env: withoutPiCallerEnv(env),
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
