@@ -17,8 +17,35 @@ import type { Translate } from '@/i18n/use-translate'
 import { getProjectPromptTemplateOwner } from '../../../../../shared/project-prompt-template-owner'
 import type { SettingsRenderContext } from './settings-render-context'
 
+export type ProjectSettingsRenderContext = {
+  model: Pick<
+    SettingsRenderContext['model'],
+    | 'settingsProjectList'
+    | 'settingsProjectHostSelection'
+    | 'settingsProjectSetupSelection'
+    | 'repos'
+    | 'projectHostSetups'
+    | 'repoHooksMap'
+    | 'updateRepo'
+    | 'removeProjectAllHosts'
+    | 'updateProject'
+  >
+  navigation: Pick<
+    SettingsRenderContext['navigation'],
+    'projectByRepoId' | 'getSectionSearchEntries'
+  >
+  terminal: Pick<SettingsRenderContext['terminal'], 'isWindowsTerminalHost'> & {
+    windowsTerminalCapabilities: Pick<
+      SettingsRenderContext['terminal']['windowsTerminalCapabilities'],
+      'wslAvailable' | 'wslDistros' | 'isLoading'
+    >
+  }
+  interactions: Pick<SettingsRenderContext['interactions'], 'writeSourceControlAiSettings'>
+  view: Pick<SettingsRenderContext['view'], 'isSectionMounted'>
+}
+
 export function renderProjectSettingsSections(
-  context: SettingsRenderContext,
+  context: ProjectSettingsRenderContext,
   t: Translate = translate
 ): React.ReactNode {
   const { model, navigation, terminal, view, interactions } = context
