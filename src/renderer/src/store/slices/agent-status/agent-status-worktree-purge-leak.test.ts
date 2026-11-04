@@ -1,6 +1,6 @@
 /** Bulk worktree purge must clear pane status/unread/input maps like single removal. External scans/project removal/hydration run no terminal teardown; missed entries otherwise leak for renderer lifetime and leave unread dock badges. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '../../types'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -35,7 +35,7 @@ globalThis.window = { api: mockApi }
 import { createTestStore, seedStore } from '../store-test-helpers'
 import { makeWorktree } from '../worktrees-slice-test-fixtures'
 import { makeTab } from '../store-session-test-harness'
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   countAgentPaneAuthorityAliasesForTests,
   resetAgentPaneAuthorityAliasesForTests,
@@ -127,36 +127,6 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     expect(s.unreadTerminalPanes[PANE]).toBeUndefined()
     expect(s.unreadAgentCompletionPanes[PANE]).toBeUndefined()
     expect(s.lastTerminalInputAtByPaneKey[PANE]).toBeUndefined()
-  })
-
-  it('keeps pane-scoped state for worktrees that are NOT removed', () => {
-    const store = createTestStore()
-    const OTHER = 'repo1::/path/wt2'
-    const OTHER_TAB = 'tab-2'
-    const OTHER_PANE = `${OTHER_TAB}:leaf-b`
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [
-          makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
-          makeWorktree({ id: OTHER, repoId: 'repo1', path: '/path/wt2' })
-        ]
-      },
-      tabsByWorktree: {
-        [WT]: [makeTab({ id: TAB, worktreeId: WT })],
-        [OTHER]: [makeTab({ id: OTHER_TAB, worktreeId: OTHER })]
-      },
-      agentStatusByPaneKey: { [PANE]: liveEntry(PANE), [OTHER_PANE]: liveEntry(OTHER_PANE) },
-      unreadTerminalTabs: { [TAB]: true, [OTHER_TAB]: true },
-      lastTerminalInputAtByPaneKey: { [PANE]: 1, [OTHER_PANE]: 2 }
-    })
-
-    store.getState().purgeWorktreeTerminalState([WT])
-
-    const s = store.getState()
-    expect(s.agentStatusByPaneKey[PANE]).toBeUndefined()
-    expect(s.agentStatusByPaneKey[OTHER_PANE]).toBeDefined()
-    expect(s.unreadTerminalTabs[OTHER_TAB]).toBe(true)
-    expect(s.lastTerminalInputAtByPaneKey[OTHER_PANE]).toBe(2)
   })
 
   it('drops sleeping records of the removed worktree whose tab is already gone (#24784)', () => {

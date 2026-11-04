@@ -9,8 +9,8 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   addEnvironmentFromPairingCode,
   resolveEnvironment
-} from '../../../shared/runtime-environment-store'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
 import { makeStore, SESSION_WORKTREE_ID } from '../../runtime/paired-client-navigation-test-harness'

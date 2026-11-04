@@ -9,7 +9,8 @@ const MESSAGE = 'continuation-1'
 
 let submission: AgentJournalSubmission
 const journal = {
-  submissions: (): AgentJournalSubmission[] => [submission],
+  submission: (id: string): AgentJournalSubmission | undefined =>
+    id === MESSAGE ? submission : undefined,
   cursor: () => ({ epoch: 'epoch-1', sequence: 1 }),
   activeTurnId: () => null
 }

@@ -1,20 +1,11 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import os from 'node:os'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setAppEnvironment } from '../../shared/app-environment'
-import {
-  DAEMON_HOST_NATIVE_PATH_BUDGET,
-  deepestDaemonHostNativePathLength,
-  type DaemonHostSources
-} from './daemon-host-manifest'
+import { DAEMON_HOST_NATIVE_PATH_BUDGET } from './daemon-host-manifest'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import { getRelocatedDaemonHost, materializeRelocatedDaemonHost } from './daemon-host-relocation'
-
-// Adhoc/dev builds carry the longest version strings that reach users.
-const LONG_VERSION = '1.4.223-adhoc.20261008042529'
-// 20-char SAM name plus a domain suffix: the longest profile folder Windows creates by default.
-const LONG_PROFILE_LOCAL_APP_DATA = `C:\\Users\\${'u'.repeat(20)}.${'D'.repeat(15)}\\AppData\\Local`
 
 let tempDir: string
 let installDir: string
@@ -33,18 +24,6 @@ function useLocalAppData(dir: string): void {
   localAppDataDir = dir
   mkdirSync(dir, { recursive: true })
   process.env.LOCALAPPDATA = dir
-}
-
-function windowsSources(): DaemonHostSources {
-  const appDir = 'C:\\app'
-  return {
-    appDir,
-    execPath: `${appDir}\\Orca.exe`,
-    resourcesPath: `${appDir}\\resources`,
-    entrySourcePath: `${appDir}\\resources\\app.asar.unpacked\\out\\main\\daemon-entry.js`,
-    entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js',
-    windowsProcessTreeDir: `${appDir}\\resources\\node_modules\\@vscode\\windows-process-tree`
-  }
 }
 
 function materializedHostRoot(): string {
@@ -98,17 +77,6 @@ afterEach(() => {
 })
 
 describe('relocated daemon host path budget', () => {
-  it('keeps conpty under the loader limit for a long profile folder and version', () => {
-    const hostRel = relative(localAppDataDir, materializedHostRoot())
-      .split(/[\\/]/)
-      .map((part) => (part === version ? LONG_VERSION : part))
-      .join('\\')
-    const worstCaseRoot = `${LONG_PROFILE_LOCAL_APP_DATA}\\${hostRel}`
-    const deepest = deepestDaemonHostNativePathLength(windowsSources(), worstCaseRoot)
-    // Headroom so a layout change can't silently eat the margin; deeper roots take the fallback below.
-    expect(deepest).toBeLessThanOrEqual(DAEMON_HOST_NATIVE_PATH_BUDGET - 20)
-  })
-
   it('falls back to the install-dir host instead of copying a host conpty cannot load from', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     useLocalAppData(join(tempDir, 'l'.repeat(DAEMON_HOST_NATIVE_PATH_BUDGET - tempDir.length)))

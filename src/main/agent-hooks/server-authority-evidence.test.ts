@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServer } from './server'
 
 const PANE_KEY = makePaneKey('tab-authority', '11111111-1111-4111-8111-111111111111')

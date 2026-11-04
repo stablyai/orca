@@ -1,27 +1,27 @@
-import { CHROME_WEB_STORE_ORIGIN } from '../../../shared/browser-extension-webstore'
+import { CHROME_WEB_STORE_ORIGIN } from '../../../shared/browser/extensions/browser-extension-webstore'
 import {
   installBrowserSessionHeadersReceived,
   installBrowserSessionRequestLifecycle,
   removeBrowserSessionHeadersReceived,
   removeBrowserSessionRequestLifecycle
-} from '../browser-session-request-decisions'
+} from '../sessions/requests/browser-session-request-decisions'
 import {
   setBrowserSessionWebRequestObserver,
   type ObservedWebRequestDetails,
   type ObservedWebRequestEvent
-} from '../browser-session-web-request-observer'
+} from '../sessions/requests/browser-session-web-request-observer'
 import { chromeFrameDocument } from './api/web-navigation'
 import { browserExtensionHostPatternsInSession } from './api/permissions'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession
-} from './browser-extension-api-host'
-import { browserExtensionEventHasListener } from './browser-extension-contexts'
-import { matchesExtensionMatchPattern } from './browser-extension-match-pattern'
-import { extensionHasPermission } from './browser-extension-namespace-registry'
-import { hasBrowserExtensionHostPermission } from './browser-extension-permission-grants'
-import { canExtensionAccessRequest } from './browser-extension-request-host-access'
-import { resolveBrowserExtensionTab } from './browser-extension-tab-model'
+} from './api-runtime/browser-extension-api-host'
+import { browserExtensionEventHasListener } from './api-runtime/browser-extension-contexts'
+import { matchesExtensionMatchPattern } from './permissions/browser-extension-match-pattern'
+import { extensionHasPermission } from './api-runtime/browser-extension-namespace-registry'
+import { hasBrowserExtensionHostPermission } from './permissions/browser-extension-permission-grants'
+import { canExtensionAccessRequest } from './permissions/browser-extension-request-host-access'
+import { resolveBrowserExtensionTab } from './tabs-and-windows/browser-extension-tab-model'
 
 /**
  * chrome.webRequest, observed rather than blocking. Electron 43 delivers no webRequest events to

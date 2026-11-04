@@ -1,4 +1,4 @@
-import type { PairedE2EEAuthReply } from '../../../shared/paired-e2ee-client-handshake'
+import type { PairedE2EEAuthReply } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import { INSECURE_WEB_ORIGIN_AUTH_CODE } from '../../../shared/web-origin-security'
 import type { WebRuntimeAuthFailureReason } from './web-runtime-client-error'
 import type {

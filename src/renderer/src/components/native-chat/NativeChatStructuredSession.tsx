@@ -72,9 +72,7 @@ import {
   useNativeChatClaudeSignIn
 } from './native-chat-claude-sign-in'
 
-export function NativeChatStructuredSession(
-  props: Omit<NativeChatStructuredViewProps, 'mode'>
-): React.JSX.Element {
+export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
@@ -157,7 +155,7 @@ export function NativeChatStructuredSession(
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
-  const fileLinkProps = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
+  const links = { onLinkClick, allowFileUriLinks: onLinkClick !== undefined }
   const handOff = useNativeChatHandOff({
     pane: props,
     directory: fileLinkContext,
@@ -168,6 +166,7 @@ export function NativeChatStructuredSession(
   const paneCommands = useStructuredNativeChatPaneCommands({
     pane: props,
     handOff,
+    sessionContext: controller,
     ownerWorktreeId,
     rootRef,
     composerRef,
@@ -320,7 +319,7 @@ export function NativeChatStructuredSession(
                     awaitingInput={prompt === null ? null : 'shown'}
                     turnActivity={controller.turnActivity}
                     stopping={stopControls.stopping}
-                    {...fileLinkProps}
+                    {...{ ...links, structuredAttachments: true }}
                     runtimeContext={imageRuntimeContext}
                     deliveryNotices={deliveryNotices}
                   />
@@ -352,6 +351,7 @@ export function NativeChatStructuredSession(
           {prompt ? null : (
             <NativeChatStructuredComposerTabStrips
               tabId={props.tabId}
+              runtimeContext={imageRuntimeContext}
               threadGoal={controller.threadGoal}
               transport={transport}
               isWorking={controller.isWorking}
@@ -371,7 +371,7 @@ export function NativeChatStructuredSession(
               isSubmitting={promptResponse.holds(prompt)}
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
-              {...fileLinkProps}
+              {...links}
             />
           ) : null}
           {prompt && questionBody ? (
@@ -383,9 +383,10 @@ export function NativeChatStructuredSession(
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
               answerInputRef={questionAnswerInputRef}
+              {...links}
             />
           ) : null}
-          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
+          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits, links)}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer

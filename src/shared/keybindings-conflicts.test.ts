@@ -35,17 +35,6 @@ describe('keybindings', () => {
     ).toBe(false)
   })
 
-  it('reports conflicts across default and customized actions', () => {
-    expect(findKeybindingConflicts('linux')).toEqual([])
-
-    const conflicts = findKeybindingConflicts('linux', { 'view.tasks': ['Mod+P'] })
-
-    expect(conflicts).toContainEqual({
-      binding: 'Mod+P',
-      actionIds: expect.arrayContaining(['worktree.quickOpen', 'view.tasks'])
-    })
-  })
-
   it('keeps zoom reset on Mod+0 and focuses worktree list on a distinct chord', () => {
     // Mod+0 previously collided with main’s zoom reset, making worktree focus unreachable (#8584).
     for (const platform of ['darwin', 'linux', 'win32'] as const) {

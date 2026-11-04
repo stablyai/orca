@@ -93,9 +93,9 @@ it.each(['@orca/unknown', '@orca/process-host/private'])(
 it.each([
   [
     'an assigned native loader',
-    'src/main/windows-native-registry.ts',
+    'src/main/windows/windows-native-registry.ts',
     "import { createRequire } from 'node:module'; const requireFromMain = createRequire(__filename); export const loadWindowsNativeRegistry = () => requireFromMain('@orca/windows-registry')",
-    'src/main/windows-registry-addon.test.ts',
+    'src/main/windows/windows-registry-addon.test.ts',
     "import { loadWindowsNativeRegistry } from './windows-native-registry'"
   ],
   [

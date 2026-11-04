@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi, describe, expect, it } from 'vitest'
-import type * as GitBashModule from '../git-bash'
+import type * as GitBashModule from '../pty/shell-startup/git-bash'
 
 vi.mock('electron', () => ({
   app: {
@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
 }))
 
 const { gitBashAvailableMock } = vi.hoisted(() => ({ gitBashAvailableMock: { value: true } }))
-vi.mock('../git-bash', async (importOriginal) => ({
+vi.mock('../pty/shell-startup/git-bash', async (importOriginal) => ({
   ...(await importOriginal<typeof GitBashModule>()),
   isGitBashAvailable: () => gitBashAvailableMock.value
 }))

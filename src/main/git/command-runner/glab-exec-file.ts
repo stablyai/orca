@@ -1,4 +1,4 @@
-import { addWslEnvKeys } from '../../wsl-env'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
 import { extractExecError, parseRetryAfterMs } from '../exec-error'
 import { resolveCommand } from './wsl-command-resolution'
 import { resolveDefaultWslCliFallback } from './default-wsl-cli-fallback'

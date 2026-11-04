@@ -1,12 +1,10 @@
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { PaneManagerHost } from './pane-manager-host'
 import { movePanesToMatchTree } from './pane-tree-match-moves'
 import { applyDividerStyles, disposeDivider } from './pane-divider'
 import { findPaneChildren } from './pane-tree-equalization'
 import { refitPanesUnder } from './pane-tree-ops'
 import { readSplitRatio, SPLIT_RATIO_TOLERANCE } from './pane-split-ratio'
-
-export type { TerminalPaneLayoutNode }
 
 type GeometryWrite = {
   split: HTMLElement

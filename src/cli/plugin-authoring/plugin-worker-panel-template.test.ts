@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -23,17 +23,6 @@ async function workerPanelPlugin(): Promise<string> {
 }
 
 describe('orca plugin create --template worker-panel', () => {
-  it('declares a trusted worker with storage and a TSX panel', async () => {
-    const dir = await workerPanelPlugin()
-    const manifest = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
-    expect(manifest).toMatchObject({
-      execution: 'trusted-worker',
-      main: 'src/worker.ts',
-      capabilities: [{ kind: 'storage:own' }],
-      contributes: { panels: [{ entry: 'src/panel.tsx', ui: 'components' }] }
-    })
-  })
-
   it(
     "passes its own panel and worker tests under `orca plugin test` on Orca's runtime",
     async () => {

@@ -1,18 +1,18 @@
 import type React from 'react'
 import { toast } from 'sonner'
-import type { DiffSection } from '@/components/editor/diff-section-types'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { addPRReviewCommentForRepo } from '@/components/github/github-work-item-comment-mutations'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
+import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff/sections/diff-section-height-cache'
 import {
   getStoredTextDiffContent,
   getStoredTextDiffResult
-} from '@/components/editor/large-diff-section-content'
+} from '@/components/editor/diff/large-files/large-diff-section-content'
 import {
   getPRFileContentsRenderLimit,
   getPRFileDiffResult
 } from '@/components/github/pr-file-diff-mapping'
-import type { GitDiffResult } from '../../../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
 import type {
   GitHubOwnerRepo,
   GitHubPRFile,

@@ -1,7 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { reportedChildWork } from './structured-agent-session-reported-child-work.test-support'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
+import {
+  CAPTURED_COMPACT_SESSION_ID,
+  CAPTURED_COMPACT_STOPPED_THEN_SEND
+} from '../../claude/claude-captured-compact-frames.test-fixture'
+import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
@@ -490,7 +500,7 @@ describe('a /compact that waits in line', () => {
     await eventually(() => expect(rig.starts.mock.calls.length).toBeGreaterThan(startsBefore))
     rig.crashRestartHostProcess()
     release()
-    // In-flight commands need a fresh user request after restart.
+    // Only the earlier unconfirmed message is recoverable; the command must be run again.
     expect(await rig.drafts()).toEqual([])
     expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected' })
   })
@@ -536,6 +546,201 @@ describe('a /compact that waits in line', () => {
     expect(await rig.queuePause()).toBeNull()
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
     expect(rig.store.listRecords()).toHaveLength(1)
+  })
+})
+
+describe('a queued /compact that fails', () => {
+  async function compactThenCard() {
+    const working = await rig.workingSend()
+    const compactId = await queuedCompact()
+    const later = await rig.send('sent after the compact', 'queue-if-active').result
+    if (!later.ok || !('queued' in later.value)) {
+      throw new Error('expected a queued receipt')
+    }
+    return { working, compactId, laterId: later.value.queued.messageId }
+  }
+
+  async function handedOver() {
+    await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+    const { command } = rig.compact.mock.calls.at(-1)![0]
+    return { ...command, itemId: agentJournalItemKey(command.identity) }
+  }
+
+  async function held(laterId: string) {
+    await settleMs()
+    expect(await rig.handoff(laterId)).toBeUndefined()
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(journal.queuedMessages.pauses()).toContainEqual(
+      expect.objectContaining({ reason: 'failed' })
+    )
+  }
+
+  it("lets the next card run after Claude's recorded failed compaction", async () => {
+    const { working, laterId } = await compactThenCard()
+    await rig.settleAccepted(working, 'a')
+    const command = await handedOver()
+    const sink = rig.providerEvents()
+    const translator = createClaudeJournalTranslator({ sink })
+    const capture = CAPTURED_COMPACT_STOPPED_THEN_SEND.filter((event) => !('interrupt' in event))
+    const end = capture.findIndex((event) => 'frame' in event && event.frame.type === 'result')
+    for (const event of capture.slice(0, end + 1)) {
+      if ('sent' in event) {
+        const start = { providerSessionId: CAPTURED_COMPACT_SESSION_ID, sentUuid: event.sent.uuid }
+        translator.beginCommand({ ...command, ...start })
+      } else if ('frame' in event) {
+        translator.handle({
+          type: 'message',
+          sessionId: SESSION,
+          observedAt: event.at,
+          message: { session_id: CAPTURED_COMPACT_SESSION_ID, ...event.frame }
+        })
+      }
+    }
+    translator.dispose()
+    await sink.written?.()
+    await eventually(async () => expect(await rig.handoff(laterId)).toBeDefined())
+    const { items } = await rig.host.journalSnapshot(SESSION)
+    const turn = items.find((item) => item.itemId === command.itemId)
+    expect(turn?.body).toMatchObject({ state: 'completed', outcome: 'failure' })
+    expect(items).toContainEqual(
+      expect.objectContaining({ body: expect.objectContaining({ tone: 'error' }) })
+    )
+  })
+
+  it('keeps an older failure holding the other card when Send runs the /compact into a refusal', async () => {
+    rig.compact.mockResolvedValue({
+      state: 'rejected',
+      ...agentSessionFailureWords(
+        agentSessionFailureFact('providerRejected', {
+          detail: { text: 'Not enough messages to compact.', audience: 'person' }
+        }),
+        { surface: 'rejection' }
+      )
+    })
+    const { working, compactId, laterId } = await compactThenCard()
+    await openRigTurnFor(rig, working)
+    await rig.settleAccepted(working, 'a')
+    await openRigTurnFor(rig, working, 'completed', 'failure')
+    await held(laterId)
+    expect(await rig.sendNow(compactId)).toMatchObject({ ok: true })
+    await eventually(async () =>
+      expect(await rig.handoff(compactId)).toMatchObject({ dispatchState: 'rejected' })
+    )
+    await held(laterId)
+    await rig.restartHostProcess()
+    await held(laterId)
+    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+    await eventually(async () => expect(await rig.handoff(laterId)).toBeDefined())
+  })
+
+  it.each(['before', 'after'] as const)(
+    'holds when a usage limit lands %s the compaction ends, across a restart',
+    async (order) => {
+      const { working, laterId } = await compactThenCard()
+      await rig.settleAccepted(working, 'a')
+      const command = await handedOver()
+      const events = rig.providerEvents()
+      const limit = () =>
+        events.appendItem(
+          { provider: 'orca', clientMessageId: `terminal-failure:claude:${command.itemId}` },
+          {
+            kind: 'status',
+            tone: 'warning',
+            ...agentSessionFailureWords(agentSessionFailureFact('usageLimitReached'), {
+              surface: 'row'
+            })
+          },
+          { turnScope: { kind: 'turn', turnItemId: command.itemId } }
+        )
+      if (order === 'before') {
+        limit()
+      }
+      events.appendLifecycleBatch!(
+        `turn-completed:${command.clientMessageId}`,
+        [
+          {
+            kind: 'item',
+            identity: command.identity,
+            body: { ...command.running, state: 'completed', outcome: 'failure', completedAt: 2 },
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE
+          }
+        ],
+        { lifecycle: true }
+      )
+      if (order === 'after') {
+        limit()
+      }
+      await held(laterId)
+      await rig.restartHostProcess()
+      await held(laterId)
+      expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+      await eventually(async () => expect(await rig.handoff(laterId)).toBeDefined())
+    }
+  )
+})
+
+describe('/compact instructions', () => {
+  const INSTRUCTIONS = 'keep the open decisions\nand the plan'
+  function instructedCompact(delivery?: 'queue-if-active') {
+    const id = hostTestOperationId()
+    const fields = {
+      command: 'compact' as const,
+      instructions: INSTRUCTIONS,
+      ...(delivery ? { delivery } : {})
+    }
+    return {
+      id,
+      result: rig.host.conversationCommand(CALLER, {
+        envelope: rig.envelope(fields, 'agentSession.conversationCommand', id),
+        ...fields,
+        userSend: true
+      })
+    }
+  }
+  async function useClaude() {
+    await rig.dispose()
+    rig = await createQueuedMessageTestRig({ restartable: true, agent: 'claude' })
+  }
+  const handedOver = () => rig.compact.mock.calls[0]?.[0].command.instructions
+
+  it('reach an agent that takes them, and the row shows what was typed', async () => {
+    await useClaude()
+    const { id, result } = instructedCompact()
+    expect(await result).toMatchObject({ ok: true, value: { state: 'completed' } })
+    await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+    expect(handedOver()).toBe(INSTRUCTIONS)
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(journal.itemBody(agentJournalSubmissionKey(id))).toMatchObject({
+      blocks: [{ type: 'text', text: `/compact ${INSTRUCTIONS}` }],
+      command: { name: 'compact', instructions: INSTRUCTIONS }
+    })
+  })
+
+  it('survive waiting in line behind a running turn', async () => {
+    await useClaude()
+    const working = await rig.workingSend()
+    const { result } = instructedCompact('queue-if-active')
+    expect(await result).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
+    await rig.settleAccepted(working, 'a')
+    await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+    expect(handedOver()).toBe(INSTRUCTIONS)
+  })
+
+  it('are refused, never dropped, for an agent that would ignore them', async () => {
+    const { result } = instructedCompact()
+    expect(await result).toMatchObject({
+      ok: true,
+      value: { command: 'compact', state: 'completed', error: expect.any(String) }
+    })
+    expect(rig.compact).not.toHaveBeenCalled()
+  })
+
+  it('are refused on a /clear at the wire', () => {
+    const base = { envelope: rig.envelope({}, 'agentSession.conversationCommand', 'op-schema') }
+    const parse = (fields: Record<string, unknown>) =>
+      ConversationCommandParams.safeParse({ ...base, ...fields }).success
+    expect(parse({ command: 'compact', instructions: 'keep' })).toBe(true)
+    expect(parse({ command: 'clear', instructions: 'keep' })).toBe(false)
   })
 })
 

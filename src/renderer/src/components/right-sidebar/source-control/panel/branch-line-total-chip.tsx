@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
+import type { GitBranchLineTotal } from '../../../../../../shared/git/status/git-status-types'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'

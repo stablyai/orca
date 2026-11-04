@@ -3,7 +3,7 @@ import type { SearchOptions, SearchResult } from '../../../shared/code-search-ty
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import { resolveDesktopAuthorizedPath } from '../local-file-access-resolution'
+import { resolveDesktopAuthorizedPath } from './access/local-file-access-resolution'
 import { createSenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
 import { stopBundledRipgrep } from '../../ripgrep/bundled-ripgrep-stop'
 import { runBundledRipgrepTextSearch } from '../../ripgrep/bundled-ripgrep-text-search'

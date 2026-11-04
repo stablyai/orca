@@ -1,5 +1,5 @@
-import { toAiVaultProjectKey } from '../../shared/ai-vault-project-key'
-import type { AiVaultSearchScopeIdentity } from '../../shared/ai-vault-search-scope'
+import { toAiVaultProjectKey } from '../../shared/ai-vault/scanning/ai-vault-project-key'
+import type { AiVaultSearchScopeIdentity } from '../../shared/ai-vault/search/ai-vault-search-scope'
 import {
   getRepoIdFromWorktreeId,
   getRepoMainWorktreeId,

@@ -6,12 +6,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   computeAgentLaunchFingerprint,
   deriveAgentLaunchChildOperationId,
   type AgentLaunchFingerprintInput
-} from '../../../../shared/agent-launch-operation'
+} from '../../../../shared/agent-launch/contracts/agent-launch-operation'
 import {
   agentSessionOperationKey,
   claimAgentSessionOperation,
@@ -26,7 +26,7 @@ import {
   readPersistedTestAgentSessionStore
 } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
-import { terminalStartError } from '../../../../shared/terminal-start-failure'
+import { terminalStartError } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import {
