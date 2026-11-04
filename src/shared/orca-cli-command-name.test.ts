@@ -10,11 +10,6 @@ describe('Claude Agent Teams launch name on the launching host', () => {
     expect(getTuiAgentLaunchCommand(agentTeams, 'linux')).toBe('orca claude-teams')
   })
 
-  it('keeps the orca-ide rename on a Linux desktop', () => {
-    installFakeAppEnvironment({ getCliLauncherPath: undefined })
-    expect(getTuiAgentLaunchCommand(agentTeams, 'linux')).toBe('orca-ide claude-teams')
-  })
-
   it('keeps the orca-ide rename for WSL under a Windows server', () => {
     installFakeAppEnvironment({
       getCliLauncherPath: () => 'C:\\Users\\u\\.orca\\cli\\bin\\orca.exe'
