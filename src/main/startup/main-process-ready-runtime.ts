@@ -14,7 +14,7 @@ import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-realtime-schedu
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
-import { startCodexHooks } from '../codex/codex-hook-reconcile'
+import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
 import { hydrateAgentCliShellPath } from '../agent-hooks/local-agent-cli-presence'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/managed-agent-hook-startup'

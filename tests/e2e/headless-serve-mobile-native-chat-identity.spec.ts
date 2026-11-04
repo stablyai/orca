@@ -11,7 +11,7 @@ import {
 } from './helpers/headless-paired-runtime-host'
 import { pairMobileClient, type PairedMobileClient } from './helpers/paired-mobile-client'
 import { getManagedScript as getClaudeManagedScript } from '../../src/main/claude/hook-script'
-import { getManagedScript as getCodexManagedScript } from '../../src/main/codex/codex-hook-script'
+import { getManagedScript as getCodexManagedScript } from '../../src/main/codex/hooks/definitions/codex-hook-script'
 import type { AgentStatusEntry } from '../../src/shared/agent-status/contracts/agent-status-types'
 import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
