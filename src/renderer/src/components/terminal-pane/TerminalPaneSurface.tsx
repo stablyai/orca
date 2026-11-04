@@ -20,6 +20,7 @@ import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { TerminalQuickCommandEditorDialog } from './TerminalQuickCommandEditorDialog'
 import { TerminalPaneNativeChatPortal } from './TerminalPaneNativeChatPortal'
 import { TerminalPaneSleepingPortals } from './TerminalPaneSleepingPortals'
+import { TerminalPaneUsageLimitPortals } from './TerminalPaneUsageLimitPortals'
 import {
   TerminalPaneCodexRestartPortals,
   TerminalPaneMobileDriverPortals,
@@ -384,6 +385,7 @@ export function TerminalPaneSurface({
       />
       <TerminalPaneRecoveryPortals controller={controller} />
       <TerminalPaneSleepingPortals controller={controller} />
+      <TerminalPaneUsageLimitPortals controller={controller} />
       <TerminalPaneMobileDriverPortals controller={controller} />
       <CloseTerminalDialog
         open={pendingCloseConfirmation !== null}
