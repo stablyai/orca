@@ -21,6 +21,8 @@ export function terminalUsageLimitCutMatches(
     row.payload.sessionBoundary !== true &&
     (row.payload.agentType === 'claude' || row.payload.agentType === 'codex') &&
     row.providerSession?.id === expected.sessionId &&
+    row.payload.state === 'done' &&
+    row.turnEndDisposition === 'identified' &&
     row.turnEndedAt === expected.turnEndedAt &&
     row.payload.mainAgent?.state === 'done' &&
     row.payload.mainAgent.outcome === 'failure' &&
@@ -36,7 +38,11 @@ export function terminalUsageLimitGuard(
 ): (() => boolean) | null {
   const original = state.lastStatusByPaneKey.get(paneKey)
   const matches = (row: AgentHookEventPayload | undefined): row is AgentHookEventPayload =>
-    terminalUsageLimitCutMatches(row, expected) && row.connectionId === null
+    terminalUsageLimitCutMatches(row, expected) &&
+    row.connectionId === null &&
+    row.hostTurn?.owner === `${row.payload.agentType}:${expected.sessionId}` &&
+    row.hostTurn.completed?.turnKey === row.hostTurn.currentTurnKey &&
+    row.hostTurn.completed?.endedAt === expected.turnEndedAt
   if (!matches(original)) {
     return null
   }
@@ -80,6 +86,10 @@ export function terminalUsageLimitGuard(
     }
     const turn = { ...transcript.usageLimitTurn }
     reconcileCodexTerminalUsageLimit(turn, records)
-    return turn.turnId === transcript.usageLimitTurn.turnId && turn.usageLimit !== undefined
+    return (
+      turn.turnId === transcript.usageLimitTurn.turnId &&
+      current.hostTurn?.currentTurnKey === `turn:${turn.turnId}` &&
+      turn.usageLimit !== undefined
+    )
   }
 }

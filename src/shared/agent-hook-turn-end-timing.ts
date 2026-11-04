@@ -37,15 +37,6 @@ export function readHostTurnSignals(
   }
 }
 
-// Why: a settled cancellation ends the open turn, so that turn's late end is a repeat, not an end.
-function endsTurnByCancellation(row: TurnEndTimingRow | undefined): boolean {
-  return (
-    row?.payload.state === 'done' &&
-    row.turnEndDisposition === undefined &&
-    agentMainAgentVerdict(row.payload) === 'cancellation'
-  )
-}
-
 export function isTurnEndedAt(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
@@ -76,10 +67,13 @@ export function reduceHostTurnEnd(
   at: number,
   canMint: boolean
 ): HostTurnEnd {
-  const shown = previous?.payload.state === 'done' ? pickHostTurnEnd(previous) : {}
   const done = event.payload.state === 'done'
+  const rootDone = done || event.payload.mainAgent?.state === 'done'
+  const previousRootDone =
+    previous?.payload.state === 'done' || previous?.payload.mainAgent?.state === 'done'
+  let shown = previousRootDone ? pickHostTurnEnd(previous!) : {}
   // Restate an already-derived/replayed end, except over an inferred-cancel segment that has none.
-  if (!canMint || event.isReplay === true || event.turnEndDisposition !== undefined) {
+  if (!canMint || event.isReplay === true) {
     const shownWithoutEnd =
       previous?.payload.state === 'done' && previous.turnEndDisposition === undefined
     return {
@@ -111,9 +105,45 @@ export function reduceHostTurnEnd(
       record = { ...record, currentTurnKey: `opened:${at}` }
     }
   }
+  const sameRoot =
+    record?.owner === previous?.hostTurn?.owner &&
+    record?.currentTurnKey === previous?.hostTurn?.currentTurnKey
+  if (
+    !sameRoot &&
+    (source === 'claude' ||
+      source === 'codex' ||
+      (source !== undefined && isNewTurnEvent(source, event.hookEventName)))
+  ) {
+    shown = {}
+  }
+  if (
+    isLiveRoot &&
+    event.payload.sessionBoundary === true &&
+    (source === 'claude' || source === 'codex')
+  ) {
+    return { hostTurn: { owner: record!.owner, currentTurnKey: UNOPENED_TURN } }
+  }
   const kept = record ? { hostTurn: record } : {}
-  if (!done) {
+  if (!rootDone) {
     return kept
+  }
+  // Cancellation consumes the root even while children keep its pane working.
+  if (record && agentMainAgentVerdict(event.payload) === 'cancellation') {
+    return {
+      ...(isLiveRoot &&
+      isTurnEndEvent(source, event.hookEventName) &&
+      record.completed?.turnKey === record.currentTurnKey
+        ? { turnEndDisposition: 'ambiguous' as const }
+        : {}),
+      hostTurn:
+        record.completed?.turnKey === record.currentTurnKey
+          ? record
+          : { ...record, completed: { turnKey: record.currentTurnKey, endedAt: at } }
+    }
+  }
+  // Result enrichment carries raw source facts; process lifecycle before restating them.
+  if (sameRoot && event.turnEndDisposition !== undefined) {
+    return { ...pickHostTurnEnd(event), ...kept }
   }
   if (
     !record ||
@@ -124,14 +154,6 @@ export function reduceHostTurnEnd(
       (source === 'codex' && event.transcriptTurnEnd === true && event.nativeTurnKey !== undefined)
     )
   ) {
-    if (
-      record &&
-      record.completed?.turnKey !== record.currentTurnKey &&
-      endsTurnByCancellation(event)
-    ) {
-      const completed = { turnKey: record.currentTurnKey, endedAt: at }
-      return { ...shown, hostTurn: { ...record, completed } }
-    }
     return { ...shown, ...kept }
   }
   const completed = record.completed

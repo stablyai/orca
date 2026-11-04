@@ -115,9 +115,15 @@ export function normalizeHookPayload(
   if (tuiAdmission !== 'preserve-poster') {
     trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
   }
+  const previousRoot = state.lastStatusByPaneKey.get(paneKey)
+  const claudeChild =
+    source === 'claude' &&
+    (readString(hookPayloadRecord, 'agent_id') !== undefined || eventName === 'TeammateIdle')
   const providerPromptId =
     source === 'claude'
-      ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)
+      ? claudeChild && previousRoot?.providerSession?.id === providerSession?.id
+        ? previousRoot?.providerPromptId
+        : normalizeClaudePromptId(hookPayloadRecord.prompt_id)
       : source === 'grok'
         ? normalizeGrokPromptId(hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
         : undefined

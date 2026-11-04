@@ -3,7 +3,7 @@ import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-r
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import {
-  pickHostTurnEnd,
+  projectHostTurnEnd,
   type AgentStatusIpcPayload,
   type AgentType
 } from '../../../shared/agent-status-types'
@@ -63,7 +63,7 @@ export function toAgentStatusIpcPayload(
       : {}),
     stateStartedAt: entry.stateStartedAt,
     ...(entry.turnStartedAt !== undefined ? { turnStartedAt: entry.turnStartedAt } : {}),
-    ...pickHostTurnEnd(entry),
+    ...projectHostTurnEnd(entry),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),

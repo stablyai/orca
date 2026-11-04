@@ -64,6 +64,7 @@ async function start(kind: 'local' | 'guest') {
   return {
     path,
     local,
+    replay: () => relay.replayCachedPayloadsForPanes(),
     validate: (value: unknown) => relay.validateTerminalUsageLimit(value),
     read: () => (kind === 'guest' ? latest : local.getStatusSnapshotForPane(paneKey)[0]),
     post: async (source: 'claude' | 'codex', payload: Record<string, unknown>) => {
@@ -250,5 +251,224 @@ it.each(['refine', 'new-meta-root', 'new-session'] as const)(
       const row = host.read()!
       expect('payload' in row && row.payload.mainAgent?.usageLimit).toBeUndefined()
     }
+  }
+)
+
+it.each(['local', 'guest'] as const)(
+  '%s preserves a failed root end while a child holds the visible turn working',
+  async (kind) => {
+    const host = await start(kind)
+    const child = '019fa65f-3144-7151-9c02-cff7a28f316f'
+    const childPath = join(host.path, '..', `rollout-child-${child}.jsonl`)
+    writeFileSync(host.path, jsonl(event({ type: 'task_started', turn_id: 'root' })))
+    writeFileSync(childPath, jsonl(event({ type: 'task_started', turn_id: 'child-turn' })))
+    await host.post('codex', {
+      hook_event_name: 'UserPromptSubmit',
+      turn_id: 'root',
+      prompt: 'Finish'
+    })
+    appendFileSync(
+      host.path,
+      jsonl(
+        event({
+          type: 'sub_agent_activity',
+          agent_thread_id: child,
+          agent_path: '/root/child',
+          kind: 'started',
+          occurred_at_ms: 1_793_751_000_000
+        })
+      )
+    )
+    await host.post('codex', {
+      hook_event_name: 'PostToolUse',
+      turn_id: 'root',
+      tool_name: 'spawn_agent'
+    })
+    appendFileSync(
+      host.path,
+      jsonl(
+        event({
+          type: 'task_complete',
+          turn_id: 'root',
+          error: { codex_error_info: 'usage_limit_exceeded' }
+        })
+      )
+    )
+    await vi.advanceTimersByTimeAsync(1000)
+    const held = host.read()!
+    const heldPayload = 'payload' in held ? held.payload : held
+    expect(heldPayload).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done', outcome: 'failure', usageLimit: {} }
+    })
+    expect(held.turnEndedAt).toBeUndefined()
+    expect(held.turnEndDisposition).toBeUndefined()
+    await host.post('codex', { hook_event_name: 'Stop', turn_id: 'root' })
+    expect(host.read()?.turnEndedAt).toBeUndefined()
+    appendFileSync(childPath, jsonl(event({ type: 'task_complete', turn_id: 'child-turn' })))
+    await vi.advanceTimersByTimeAsync(1000)
+    const ended = host.read()!
+    expect('payload' in ended ? ended.payload.state : ended.state).toBe('done')
+    expect(ended.turnEndedAt).toBe(1_793_751_001_000)
+    expect(ended.turnEndDisposition).toBe('identified')
+    expect(host.local.getStatusSnapshotForPane(paneKey)[0]?.turnEndedAt).toBe(ended.turnEndedAt)
+    if (kind === 'guest') {
+      expect(
+        host.validate({ paneKey, sessionId, turnEndedAt: ended.turnEndedAt, source: 'codex' })
+      ).toEqual({ status: 'current' })
+    }
+    await host.post('codex', { hook_event_name: 'Stop', turn_id: 'root' })
+    expect(host.read()?.turnEndedAt).toBe(ended.turnEndedAt)
+    appendFileSync(host.path, jsonl(event({ type: 'task_started', turn_id: 'new-root' })))
+    await host.post('codex', {
+      hook_event_name: 'UserPromptSubmit',
+      turn_id: 'new-root',
+      prompt: 'Finish'
+    })
+    await host.post('codex', { hook_event_name: 'Stop', turn_id: 'root' })
+    const current = host.read()!
+    expect('payload' in current ? current.payload.mainAgent?.state : current.mainAgent?.state).toBe(
+      'working'
+    )
+    expect(current.turnEndedAt).toBeUndefined()
+    if (kind === 'guest') {
+      expect(
+        host.validate({ paneKey, sessionId, turnEndedAt: ended.turnEndedAt, source: 'codex' })
+      ).toEqual({ status: 'changed' })
+    }
+  }
+)
+
+it.each([
+  ['local', 'before-release'],
+  ['guest', 'before-release'],
+  ['local', 'after-release'],
+  ['guest', 'after-release']
+] as const)('%s refines held Claude quota %s without replaying its end', async (kind, timing) => {
+  const host = await start(kind)
+  const user = {
+    type: 'user',
+    sessionId,
+    promptId,
+    uuid: 'user',
+    parentUuid: null,
+    isSidechain: false,
+    message: { content: 'Finish' }
+  }
+  const answer = {
+    type: 'assistant',
+    sessionId,
+    uuid: 'answer',
+    parentUuid: 'user',
+    isSidechain: false,
+    message: { role: 'assistant', content: [{ type: 'text', text: 'Usage limit reached' }] }
+  }
+  writeFileSync(host.path, jsonl(user, answer))
+  await host.post('claude', {
+    hook_event_name: 'UserPromptSubmit',
+    prompt_id: promptId,
+    prompt: 'Finish'
+  })
+  await host.post('claude', { hook_event_name: 'SubagentStart', agent_id: 'areviewer-1' })
+  await host.post('claude', {
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    tool_response: 'Usage limit reached'
+  })
+  await vi.advanceTimersByTimeAsync(10)
+  await host.post('claude', {
+    hook_event_name: 'StopFailure',
+    prompt_id: promptId,
+    error: 'rate_limit'
+  })
+  expect(host.read()?.turnEndedAt).toBeUndefined()
+  // Progress from a child has no StopFailure label but must not cancel the root's bounded flush retry.
+  await host.post('claude', {
+    hook_event_name: 'PreToolUse',
+    agent_id: 'areviewer-1',
+    tool_name: 'Bash'
+  })
+  if (timing === 'after-release') {
+    await host.post('claude', { hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
+    expect(host.read()?.turnEndedAt).toBe(1_793_751_000_010)
+  }
+  appendFileSync(
+    host.path,
+    jsonl({
+      ...answer,
+      uuid: 'quota',
+      parentUuid: 'answer',
+      apiError: 'usage_limit_reached',
+      error: 'rate_limit'
+    })
+  )
+  await vi.advanceTimersByTimeAsync(100)
+  const refined = host.read()!
+  expect(
+    'payload' in refined ? refined.payload.mainAgent?.usageLimit : refined.mainAgent?.usageLimit
+  ).toEqual({})
+  if (timing === 'before-release') {
+    expect(refined.turnEndedAt).toBeUndefined()
+    if (kind === 'guest') {
+      host.replay()
+      expect(host.read()?.turnEndedAt).toBeUndefined()
+    }
+    await host.post('claude', { hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
+  }
+  expect(host.read()?.turnEndedAt).toBe(1_793_751_000_010)
+  expect(host.read()?.turnEndDisposition).toBe('identified')
+  if (kind === 'guest') {
+    expect(
+      host.validate({ paneKey, sessionId, turnEndedAt: 1_793_751_000_010, source: 'claude' })
+    ).toEqual({ status: 'current' })
+    host.replay()
+    expect(host.read()?.turnEndedAt).toBe(1_793_751_000_010)
+  }
+})
+
+it.each(['ambiguous', 'cancelled', 'new-root', 'session-restart'] as const)(
+  'guest child release never promotes a %s Claude root end',
+  async (mode) => {
+    const host = await start('guest')
+    await host.post('claude', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt_id: promptId,
+      prompt: 'Finish'
+    })
+    await host.post('claude', { hook_event_name: 'SubagentStart', agent_id: 'areviewer-1' })
+    await host.post('claude', {
+      hook_event_name: 'StopFailure',
+      prompt_id: promptId,
+      error: 'rate_limit'
+    })
+    if (mode === 'ambiguous' || mode === 'cancelled') {
+      await host.post('claude', {
+        hook_event_name: 'Stop',
+        prompt_id: promptId,
+        ...(mode === 'cancelled' ? { is_interrupt: true } : {})
+      })
+    } else if (mode === 'new-root') {
+      await host.post('claude', {
+        hook_event_name: 'UserPromptSubmit',
+        prompt_id: '33333333-3333-4333-8333-333333333333',
+        prompt: 'Finish'
+      })
+    } else {
+      await host.post('claude', { hook_event_name: 'SessionStart', source: 'startup' })
+    }
+    await host.post('claude', { hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
+    const ended = host.read()!
+    expect(ended.turnEndDisposition).not.toBe('identified')
+    if (mode === 'ambiguous') {
+      expect(ended.turnEndDisposition).toBe('ambiguous')
+      expect(ended.turnEndedAt).toBe(1_793_751_000_000)
+    } else {
+      expect(ended.turnEndedAt).toBeUndefined()
+    }
+    await vi.advanceTimersByTimeAsync(300)
+    expect(host.read()?.turnEndDisposition).not.toBe('identified')
+    expect(
+      host.validate({ paneKey, sessionId, turnEndedAt: 1_793_751_000_000, source: 'claude' })
+    ).toEqual({ status: 'changed' })
   }
 )

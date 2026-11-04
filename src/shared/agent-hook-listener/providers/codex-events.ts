@@ -292,12 +292,7 @@ export function codexHookEventForEndedTurn(
   hookPayload: Record<string, unknown>
 ): unknown {
   const turnId = readString(hookPayload, 'turn_id')
-  if (
-    !turnId ||
-    eventName === 'Stop' ||
-    eventName === 'Interrupt' ||
-    readString(hookPayload, 'agent_id')
-  ) {
+  if (!turnId || eventName === 'Interrupt' || readString(hookPayload, 'agent_id')) {
     return eventName
   }
   if (!codexTranscriptTurnEnd(state.codexSubagentTranscriptByPaneKey.get(paneKey), turnId)) {

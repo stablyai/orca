@@ -264,6 +264,13 @@ export function pickHostTurnEnd(row: HostTurnEndFacts): HostTurnEndFacts {
   }
 }
 
+/** Public completion clocks follow the aggregate; source rows retain the root's own end. */
+export function projectHostTurnEnd(
+  row: HostTurnEndFacts & { payload: { state: AgentStatusState } }
+): HostTurnEndFacts {
+  return row.payload.state === 'done' ? pickHostTurnEnd(row) : {}
+}
+
 export function isAgentStatusState(value: unknown): value is AgentStatusState {
   return typeof value === 'string' && VALID_STATES.has(value)
 }
