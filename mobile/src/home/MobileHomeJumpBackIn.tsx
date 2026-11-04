@@ -71,7 +71,9 @@ function JumpBackInRow(props: {
   useMobileColorScheme()
   const { row } = props
   const desktopName = useHostDisplay(props.host).title
-  const name = row.worktree.displayName || row.worktree.repo
+  const workspace = row.worktree.displayName || row.worktree.repo
+  const conversation = row.worktree.conversationName
+  const title = conversation ?? workspace
   const labelState = LABEL_STATE[row.worktree.dotStatus]
   const status = row.lastOpened
     ? row.actionable
@@ -82,6 +84,10 @@ function JumpBackInRow(props: {
       : ''
   const where = props.nameDesktop ? desktopName : row.worktree.repo
   const showWhere = Boolean(where) && (row.actionable || !row.lastOpened)
+  // A named conversation takes the title and moves the workspace to the subtitle (#38007).
+  const details = [...new Set([conversation ? workspace : null, showWhere ? where : null])].filter(
+    Boolean
+  )
   const statusColor =
     !row.lastOpened && TINTED_STATUSES.has(row.worktree.dotStatus)
       ? agentStatusColors()[row.worktree.dotStatus]
@@ -94,7 +100,7 @@ function JumpBackInRow(props: {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={[name, status, showWhere ? where : null, time].filter(Boolean).join(', ')}
+      accessibilityLabel={[title, status, ...details, time].filter(Boolean).join(', ')}
       accessibilityState={{ disabled: !row.actionable }}
       disabled={!row.actionable}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -105,11 +111,11 @@ function JumpBackInRow(props: {
       </View>
       <View style={[styles.text, !row.actionable && styles.rowDisabled]}>
         <Text style={styles.title} numberOfLines={1}>
-          {name}
+          {title}
         </Text>
         <Text style={styles.subtitle} numberOfLines={1}>
           <Text style={{ color: statusColor }}>{status}</Text>
-          {showWhere ? ` · ${where}` : ''}
+          {details.map((detail) => ` · ${detail}`).join('')}
         </Text>
       </View>
       <View style={styles.trailing}>
