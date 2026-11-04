@@ -9,6 +9,7 @@ import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-h
 import type { BrowserHostLease } from '../../browser-host/leases/browser-host-lease-records'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
+import { BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES } from '../../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import {
   browserNetworkExecutionHostKey,
   type BrowserNetworkExecutionRoute,
@@ -554,7 +555,11 @@ describe('network.browserTunnel RPC', () => {
       expect.objectContaining({
         ok: true,
         streaming: true,
-        result: { type: 'ready', tunnelGeneration: 1 }
+        result: {
+          type: 'ready',
+          tunnelGeneration: 1,
+          hostMaxWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
+        }
       })
     ])
     cleanups.values().next().value?.()
@@ -624,7 +629,8 @@ describe('network.browserTunnel RPC', () => {
     await vi.waitFor(() => expect(secondReplies).toHaveLength(1))
     expect(JSON.parse(secondReplies[0]!).result).toEqual({
       type: 'ready',
-      tunnelGeneration: 2
+      tunnelGeneration: 2,
+      hostMaxWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
     })
     getBrowserHostLeaseRegistry(hostRuntime)
       .attach({

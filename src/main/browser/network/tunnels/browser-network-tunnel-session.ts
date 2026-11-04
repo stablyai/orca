@@ -30,6 +30,7 @@ export class BrowserNetworkTunnelSession {
   private readonly frameSender: BrowserNetworkTunnelFrameSender
   private readonly onClose: BrowserNetworkTunnelSessionOptions['onClose']
   private readonly resourceBudget: ReturnType<typeof createBrowserNetworkTunnelResourceBudget>
+  private readonly receiveWindowBytes: number
   private readonly streams = new Map<number, BrowserNetworkTunnelStream>()
   private readonly openedStreamIds = new Set<number>()
   private closed = false
@@ -38,6 +39,8 @@ export class BrowserNetworkTunnelSession {
     validateBrowserNetworkTunnelGeneration(options.tunnelGeneration)
     this.tunnelGeneration = options.tunnelGeneration
     this.connect = options.connect
+    this.receiveWindowBytes =
+      options.receiveWindowBytes ?? BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
     this.frameSender = new BrowserNetworkTunnelFrameSender(
       options.tunnelGeneration,
       options.sendBinary,
@@ -145,7 +148,7 @@ export class BrowserNetworkTunnelSession {
     this.frameSender.send(
       BrowserNetworkTunnelOpcode.WindowUpdate,
       stream.id,
-      encodeBrowserNetworkTunnelWindowUpdate(BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
+      encodeBrowserNetworkTunnelWindowUpdate(this.receiveWindowBytes)
     )
   }
 
@@ -187,7 +190,7 @@ export class BrowserNetworkTunnelSession {
     stream: BrowserNetworkTunnelStream,
     payload: Uint8Array<ArrayBufferLike>
   ): void {
-    const error = grantBrowserNetworkDestinationCredit(stream, payload)
+    const error = grantBrowserNetworkDestinationCredit(stream, payload, this.receiveWindowBytes)
     if (error) {
       this.failProtocolStream(stream, error)
       return

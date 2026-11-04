@@ -1,5 +1,7 @@
-export const BROWSER_NETWORK_TUNNEL_HOST_MAX_OUTBOUND_BYTES = 32 * 1024 * 1024
-export const BROWSER_NETWORK_TUNNEL_PROCESS_MAX_OUTBOUND_BYTES = 128 * 1024 * 1024
+// Sized so the larger negotiated per-stream window (2 MB) keeps room for Chromium's per-host
+// socket pool of concurrent streams before retained-byte admission starts shedding streams.
+export const BROWSER_NETWORK_TUNNEL_HOST_MAX_OUTBOUND_BYTES = 64 * 1024 * 1024
+export const BROWSER_NETWORK_TUNNEL_PROCESS_MAX_OUTBOUND_BYTES = 256 * 1024 * 1024
 
 const DEFAULT_HOST_MAX_CLAIMS = 16_384
 const DEFAULT_PROCESS_MAX_CLAIMS = 65_536

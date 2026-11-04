@@ -1,7 +1,30 @@
+// Legacy per-stream flow-control window. It also caps per-stream throughput to window/RTT:
+// invisible on a LAN, but a hard ceiling on a high-latency paired link (e.g. ~2.9 MB/s at 90ms).
+// Peers that advertise support negotiate up to BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES instead;
+// this value stays the floor and the default when either side does not advertise.
 export const BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES = 256 * 1024
+// Largest window two advertising peers negotiate. Raises the high-RTT ceiling ~8x; bounds the
+// retained buffers and outbound memory a single stream can pin.
+export const BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES = 2 * 1024 * 1024
 export const BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS = 10_000
-export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES = 256 * 1024
+// Must cover the largest negotiated window, or in-window data would be rejected as overflow.
+export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES =
+  BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
 export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS = 256
+
+/** The effective window is each side's own maximum capped by what the peer advertises (legacy floor). */
+export function negotiateBrowserNetworkTunnelWindowBytes(
+  peerMaxWindowBytes: number | undefined
+): number {
+  if (
+    typeof peerMaxWindowBytes !== 'number' ||
+    !Number.isSafeInteger(peerMaxWindowBytes) ||
+    peerMaxWindowBytes < BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
+  ) {
+    return BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
+  }
+  return Math.min(BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES, peerMaxWindowBytes)
+}
 export const BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS = 65_536
 // Chromium's per-session socket pool; a lower cap refuses a heavy page's own connections.
 export const BROWSER_NETWORK_TUNNEL_MAX_STREAMS = 256
@@ -64,6 +87,8 @@ export type BrowserNetworkTunnelSessionOptions = {
   tunnelGeneration: number
   connect: (target: BrowserNetworkTunnelOpen) => BrowserNetworkTunnelSocket
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
+  /** Negotiated per-stream receive window; defaults to the legacy window. */
+  receiveWindowBytes?: number
   onClose?: () => void
   now?: () => number
   claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null
