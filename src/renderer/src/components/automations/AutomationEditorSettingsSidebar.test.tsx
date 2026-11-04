@@ -493,6 +493,46 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     expect(saved.extraAgentArgs).toBe(next.extraAgentArgs)
   })
 
+  it('carries pending legacy text through capability arrival and an agent rebind', () => {
+    const capabilities = vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    const changed = vi.fn()
+    const initial: AutomationDraft = {
+      ...DRAFT,
+      agentId: 'claude',
+      extraAgentArgs: '--add-dir docs',
+      launchPreferences: { model: 'sonnet' }
+    }
+    const form = renderSidebar(changed, initial, {
+      kind: 'runtime',
+      environmentId: 'old',
+      pairingRevision: 1
+    })
+    const pending = '--model sonnet --add-dir "new'
+    fireEvent.change(screen.getByLabelText('Extra agent arguments'), { target: { value: pending } })
+    capabilities.mockReturnValue(AUTOMATION_RUNTIME_CAPABILITIES)
+    form.refresh()
+    for (const agent of ['Codex', 'Claude']) {
+      openPicker()
+      fireEvent.click(screen.getByRole('menuitem', { name: agent }))
+      expect(screen.getByLabelText('Extra agent arguments')).toHaveProperty('value', pending)
+    }
+    fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
+      target: { value: '--model sonnet --add-dir "new"' }
+    })
+    const next = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
+    const saved = applyAutomationLaunchSetupPatch(
+      {
+        agentId: 'claude',
+        reuseSession: false,
+        ...automationDraftLaunchSetup(next, 'terminal', null)
+      },
+      initial
+    )
+    expect(saved.launchPreferences).toBeUndefined()
+    expect(saved.extraAgentArgs).toBe('--model sonnet --add-dir "new"')
+    expect(() => assertAutomationExtraAgentArgs(saved)).not.toThrow()
+  })
+
   it('sends a legacy argument edit after an earlier surface pick', () => {
     vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
     const changed = vi.fn()

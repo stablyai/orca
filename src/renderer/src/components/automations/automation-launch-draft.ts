@@ -12,6 +12,17 @@ import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
+export function editsSupplementalArguments(draft: AutomationDraft, modern: boolean): boolean {
+  const input = draft.launchArgumentsInput
+  return (
+    modern &&
+    !(
+      input?.kind === 'legacy' &&
+      !parseExtraAgentArgs({ agent: draft.agentId, extraAgentArgs: input.value }).ok
+    )
+  )
+}
+
 export function pickAutomationLaunch(
   current: AutomationDraft,
   agentId: TuiAgent,
@@ -34,7 +45,7 @@ export function pickAutomationLaunch(
   let setup = automationCanonicalLaunchSetup(current)
   let patch: AutomationLaunchEdit = { ...current.launchSetupPatch }
   if (rebound) {
-    const extraAgentArgs = modern
+    const extraAgentArgs = editsSupplementalArguments(current, modern)
       ? current.extraAgentArgs
       : current.launchArgumentsInput?.kind === 'legacy'
         ? current.launchArgumentsInput.value

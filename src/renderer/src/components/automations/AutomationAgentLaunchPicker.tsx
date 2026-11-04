@@ -21,10 +21,7 @@ import type { AutomationAuthorityRef } from '../../../../shared/automation-owner
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { draftExtraAgentArgsNeedFreshSession } from './automation-draft-model'
-import {
-  mergeExtraAgentArgs,
-  parseExtraAgentArgs
-} from '../../../../shared/automation-extra-agent-args'
+import { mergeExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import type { NewTabAgentMenuModel } from '@/components/tab-bar/new-tab-agent-menu-model'
@@ -32,19 +29,12 @@ import { automationChatSupport } from './automation-launch-surface'
 import { AutomationExtraAgentArgsField } from './AutomationExtraAgentArgsField'
 import { AutomationSurfaceField } from './AutomationSurfaceField'
 import type { AutomationDraft } from './AutomationEditorDialog'
-import { pickAutomationLaunch, editAutomationLegacyDraft } from './automation-launch-draft'
+import {
+  pickAutomationLaunch,
+  editAutomationLegacyDraft,
+  editsSupplementalArguments
+} from './automation-launch-draft'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-
-function editsSupplementalArguments(draft: AutomationDraft, modern: boolean): boolean {
-  const input = draft.launchArgumentsInput
-  return (
-    modern &&
-    !(
-      input?.kind === 'legacy' &&
-      !parseExtraAgentArgs({ agent: draft.agentId, extraAgentArgs: input.value }).ok
-    )
-  )
-}
 
 function legacyArgumentsDraft(draft: AutomationDraft): AutomationDraft {
   return {
