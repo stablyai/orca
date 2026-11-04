@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PluginDeclarativeNode } from '../../../../shared/plugins/declarative/plugin-declarative-catalog'
-import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../shared/plugins/declarative/plugin-declarative-message-names'
+import type { PluginDeclarativeNode } from '../../../../../../shared/plugins/declarative/plugin-declarative-catalog'
+import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../../../shared/plugins/declarative/plugin-declarative-message-names'
 import {
   parsePluginDeclarativeRender,
   pluginDeclarativeErrorPayloadSchema,
   pluginDeclarativeRenderIdentity,
   type PluginDeclarativeAckPayload
-} from '../../../../shared/plugins/declarative/plugin-declarative-messages'
+} from '../../../../../../shared/plugins/declarative/plugin-declarative-messages'
 import { translate } from '@/i18n/i18n'
-import type { PluginFrameDeclarativeChannel } from './plugin-frame-host'
+import type { PluginFrameDeclarativeChannel } from '../../../plugins/frames/plugin-frame-host'
 import {
   createPluginDeclarativeGestureStability,
   PLUGIN_DECLARATIVE_SETTLE_MS

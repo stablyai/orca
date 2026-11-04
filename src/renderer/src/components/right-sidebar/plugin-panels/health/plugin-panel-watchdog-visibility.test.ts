@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPanelWatchdog } from './plugin-panel-watchdog'
-import { resetStaleDocumentVisibilityForTesting } from '../terminal-pane/stale-document-visibility'
+import { resetStaleDocumentVisibilityForTesting } from '../../../terminal-pane/stale-document-visibility'
 
 function setVisibility(state: 'visible' | 'hidden'): void {
   Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })

@@ -1,21 +1,21 @@
-import { PLUGIN_DECLARATIVE_RENDER_LANE } from '../../../../shared/plugins/declarative/plugin-declarative-limits'
-import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../shared/plugins/declarative/plugin-declarative-message-names'
-import type { PluginFrameHello } from '../../../../shared/plugins/frames/plugin-frame-bridge'
-import { PLUGIN_FRAME_IPC_CHANNEL } from '../../../../shared/plugins/frames/plugin-frame-guest'
+import { PLUGIN_DECLARATIVE_RENDER_LANE } from '../../../../../shared/plugins/declarative/plugin-declarative-limits'
+import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../../shared/plugins/declarative/plugin-declarative-message-names'
+import type { PluginFrameHello } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
+import { PLUGIN_FRAME_IPC_CHANNEL } from '../../../../../shared/plugins/frames/plugin-frame-guest'
 import {
   createPanelMessageBudget,
   type PanelMessageBudget
-} from '../../../../shared/plugins/frames/plugin-panel-message-budget'
-import { PLUGIN_PROTOCOL_VERSION } from '../../../../shared/plugins/frames/plugin-protocol'
-import { isPluginJsonObject } from '../../../../shared/plugins/manifest/plugin-json-object'
+} from '../../../../../shared/plugins/frames/plugin-panel-message-budget'
+import { PLUGIN_PROTOCOL_VERSION } from '../../../../../shared/plugins/frames/plugin-protocol'
+import { isPluginJsonObject } from '../../../../../shared/plugins/manifest/plugin-json-object'
 import {
   getPluginHostMethodSpec,
   PLUGIN_FRAME_USER_METHODS,
   PLUGIN_SAVE_AS_MAX_BYTES,
   pluginFrameMethodsFor,
   pluginHostApiMinorFor
-} from '../../../../shared/plugins/workers/plugin-host-api'
-import { PLUGIN_HOST_API_MAJOR } from '../../../../shared/plugins/workers/plugin-host-api-major'
+} from '../../../../../shared/plugins/workers/plugin-host-api'
+import { PLUGIN_HOST_API_MAJOR } from '../../../../../shared/plugins/workers/plugin-host-api-major'
 import { getIntlLocale } from '@/i18n/i18n'
 import { currentPluginFrameTheme } from './plugin-panel-design-token-css'
 

@@ -1,7 +1,7 @@
 import { Plug } from 'lucide-react'
 import type { ActivePluginPanel } from '@/store/plugin-panels'
-import type { ActivityBarItem } from './activity-bar-buttons'
-import { resolvePluginIconGlyph } from '../plugins/plugin-icon-glyphs'
+import type { ActivityBarItem } from '../activity-bar-buttons'
+import { resolvePluginIconGlyph } from '../../plugins/plugin-icon-glyphs'
 
 type PluginPanelIcon = ActivityBarItem['icon']
 

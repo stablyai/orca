@@ -1,23 +1,23 @@
 import React, { useCallback, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
-import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../shared/plugins/declarative/plugin-declarative-message-names'
-import type { PluginFrameGuest } from '../../../../shared/plugins/frames/plugin-frame-bridge'
-import { pluginEvent } from '../../../../shared/plugins/frames/plugin-protocol'
-import { PLUGIN_FRAME_USER_METHODS } from '../../../../shared/plugins/workers/plugin-host-api'
+import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../../../shared/plugins/declarative/plugin-declarative-message-names'
+import type { PluginFrameGuest } from '../../../../../../shared/plugins/frames/plugin-frame-bridge'
+import { pluginEvent } from '../../../../../../shared/plugins/frames/plugin-protocol'
+import { PLUGIN_FRAME_USER_METHODS } from '../../../../../../shared/plugins/workers/plugin-host-api'
 import { PluginDeclarativeView } from '@/components/plugins/declarative/PluginDeclarativeView'
 import type { PluginDeclarativeEmit } from '@/components/plugins/declarative/PluginDeclarativeControls'
-import { callPanelActionViaPreload } from './plugin-frame-host'
+import { callPanelActionViaPreload } from '../../../plugins/frames/plugin-frame-host'
 import {
   PluginFrameView,
   pluginFrameWindowOf,
   type PluginFrameElement
-} from './plugin-frame-element'
-import { usePluginFrameHost } from './use-plugin-frame-host'
+} from '../../../plugins/frames/plugin-frame-element'
+import { usePluginFrameHost } from '../../../plugins/frames/use-plugin-frame-host'
 import { usePluginDeclarativeTree } from './use-plugin-declarative-tree'
 import { usePluginDeclarativeState } from './use-plugin-declarative-state'
-import { useReportDeclarativePanelDraw } from './use-plugin-panel-draw-report'
+import { useReportDeclarativePanelDraw } from '../health/use-plugin-panel-draw-report'
 import { usePluginDeclarativeImages } from './use-plugin-declarative-images'
-import { usePluginPanelActDriver } from './plugin-panel-act-driver'
-import { useAppStore } from '@/store'
+import { usePluginPanelActDriver } from '../health/plugin-panel-act-driver'
+import { useAppStore } from '@/store/index'
 import {
   PluginDeclarativeIssueNotice,
   PluginDeclarativeReloadedNotice

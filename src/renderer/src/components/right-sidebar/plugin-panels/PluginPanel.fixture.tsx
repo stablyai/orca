@@ -1,6 +1,6 @@
-import { defineFixture } from '../../component-fixtures/component-fixture'
+import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { usePluginPanelsStore } from '@/store/plugin-panels'
-import { buildPluginPanelShellHtml } from '../../../../shared/plugins/frames/plugin-panel-shell'
+import { buildPluginPanelShellHtml } from '../../../../../shared/plugins/frames/plugin-panel-shell'
 import PluginPanel from './PluginPanel'
 
 export const compact = defineFixture({

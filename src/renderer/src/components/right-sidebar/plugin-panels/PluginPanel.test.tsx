@@ -28,7 +28,7 @@ vi.mock('@/store/plugin-panels', () => ({
   ) => selector({ setPanelHealth: setPanelHealthMock })
 }))
 
-vi.mock('./plugin-panel-watchdog', () => ({
+vi.mock('./health/plugin-panel-watchdog', () => ({
   createPanelWatchdog: (options: { onUnresponsive: () => void }) => {
     watchdogCallbacks.onUnresponsive = options.onUnresponsive
     return {
@@ -238,7 +238,7 @@ describe('PluginPanel', () => {
 
   it('validates only the newest of a burst of declarative renders', async () => {
     const { pluginDeclarativeRenderPayloadSchema } =
-      await import('../../../../shared/plugins/declarative/plugin-declarative-messages')
+      await import('../../../../../shared/plugins/declarative/plugin-declarative-messages')
     const parse = vi.spyOn(pluginDeclarativeRenderPayloadSchema, 'safeParse')
     readPanelEntryMock.mockResolvedValue({
       html: '',

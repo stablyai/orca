@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import { isPluginJsonObject } from '../../../../shared/plugins/manifest/plugin-json-object'
-import type { PluginHostCallOutcome } from '../../../../shared/plugins/frames/plugin-protocol'
+import { isPluginJsonObject } from '../../../../../shared/plugins/manifest/plugin-json-object'
+import type { PluginHostCallOutcome } from '../../../../../shared/plugins/frames/plugin-protocol'
 import {
   createPanelMessageBudget,
   type PanelMessageBudget
-} from '../../../../shared/plugins/frames/plugin-panel-message-budget'
+} from '../../../../../shared/plugins/frames/plugin-panel-message-budget'
 import {
   createPluginFrameEnvelopeHandler,
   createPluginFrameMessageHandler,
-  pluginWebviewFrameWindow,
   type PluginFrameHostOptions
 } from './plugin-frame-host'
+import { pluginWebviewFrameWindow } from './plugin-frame-host-lanes'
 
 vi.mock('./plugin-panel-design-token-css', () => ({
   currentPluginFrameTheme: () => ({ colorScheme: 'dark', tokens: '--orca-background:#000' })

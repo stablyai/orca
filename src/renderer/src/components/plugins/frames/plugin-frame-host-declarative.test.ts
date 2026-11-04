@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parsePluginDeclarativeTree } from '../../../../shared/plugins/declarative/plugin-declarative-tree'
-import {
-  createPluginFrameEnvelopeHandler,
-  pluginWebviewFrameWindow,
-  type PluginFrameHostOptions
-} from './plugin-frame-host'
+import { parsePluginDeclarativeTree } from '../../../../../shared/plugins/declarative/plugin-declarative-tree'
+import { createPluginFrameEnvelopeHandler, type PluginFrameHostOptions } from './plugin-frame-host'
+import { pluginWebviewFrameWindow } from './plugin-frame-host-lanes'
 
 vi.mock('./plugin-panel-design-token-css', () => ({
   currentPluginFrameTheme: () => ({ colorScheme: 'dark', tokens: '' })
