@@ -246,8 +246,9 @@ export function useMarkdownPreviewAnnotationRenderers({
       )
       if (!controls) {
         // Without review controls there is no wrapper, so the block itself names its source lines.
-        return isValidElement(rendered) && typeof rendered.type === 'string'
-          ? cloneElement(rendered as React.ReactElement<Record<string, unknown>>, {
+        return isValidElement<Record<string, unknown>>(rendered) &&
+          typeof rendered.type === 'string'
+          ? cloneElement(rendered, {
               'data-source-line': range.startLine,
               'data-source-end-line': range.endLine
             })
