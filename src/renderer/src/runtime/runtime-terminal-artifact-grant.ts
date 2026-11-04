@@ -147,8 +147,8 @@ export function hostOpensGrantedFilesInPlace(environmentId: string): Promise<boo
 }
 
 /**
- * Whether a grant can stand in for the workspace holding its file: it reads and saves only text
- * within 512 KB, while the holder pages large files, stages large saves and serves bytes editors.
+ * Whether a grant can stand in for the workspace holding its file: it reads and saves only small
+ * text, while the holder pages large files, stages large saves and serves bytes editors.
  */
 export function grantServesInPlace(grant: { byteLength?: number; binary?: true }): boolean {
   return (

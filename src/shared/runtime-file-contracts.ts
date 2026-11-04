@@ -87,8 +87,11 @@ export const TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY =
 export const TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY =
   'files.resolve-terminal-path.in-place-files.v1' as const
 
-/** The largest file a grant both reads and saves: hosts cap grants here, and a save must fit one request frame. */
-export const TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES = 512 * 1024
+/**
+ * The largest file opened in place through a grant. Hosts cap grant reads and saves at 512 KB and a save
+ * must fit one request frame; half that leaves room to edit before a save outgrows the grant.
+ */
+export const TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES = 256 * 1024
 
 /** SSH workspaces on a server grant no file outside them; the one refusal that means "open it where it lives". */
 export const SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE =

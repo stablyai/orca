@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import * as filePreview from '@/lib/file-preview'
-import { TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES } from '../../../../shared/runtime-file-contracts'
+import {
+  SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,
+  TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES
+} from '../../../../shared/runtime-file-contracts'
 
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -27,11 +30,6 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
-}))
-
-const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn(() => null as unknown))
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
-  findWorkspaceFileRoute: findWorkspaceFileRouteMock
 }))
 
 vi.mock('./terminal-remote-file-download-open', () => ({
@@ -65,7 +63,6 @@ describe('a paired-server link outside its own workspace', () => {
       isDirectory: false,
       openTarget: {
         kind: 'absolute-file',
-        byteLength: 100,
         provider: 'local',
         absolutePath: '/tmp/report.html',
         grantId: 'file-grant'
@@ -102,7 +99,6 @@ describe('a paired-server link outside its own workspace', () => {
       isDirectory: false,
       openTarget: {
         kind: 'absolute-file',
-        byteLength: 100,
         provider: 'local',
         absolutePath: '/tmp/report.html',
         grantId: 'file-grant',
@@ -236,180 +232,104 @@ describe('a paired-server link outside its own workspace', () => {
     expect(openFileMock).not.toHaveBeenCalled()
     expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'missing' }))
   })
+})
 
-  it('opens a file another workspace holds in the clicked workspace through a grant', async () => {
-    hostAnswers({
-      worktree: 'wt-feat',
-      relativePath: null,
-      absolutePath: '/repo/src/index.ts',
-      exists: true,
-      isDirectory: false,
-      openTarget: {
-        kind: 'absolute-file',
-        byteLength: 100,
-        provider: 'local',
-        absolutePath: '/repo/src/index.ts',
-        grantId: 'grant-main'
-      }
-    })
+describe('a paired-server link to a file another workspace holds', () => {
+  const FILE = '/repo/src/index.ts'
 
-    openDetectedFilePath('/repo/src/index.ts', null, null, featureWorktree)
-    await flushDoubleRaf()
-
-    // Why: asking for the holding workspace is what switched the user away from the click.
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledTimes(1)
-    expect(runtimeEnvironmentCallMock.mock.calls[0]![0].params).not.toHaveProperty('crossWorkspace')
-    expect(activateAndRevealWorkspace).not.toHaveBeenCalledWith('wt-main', expect.anything())
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/repo/src/index.ts',
-        relativePath: '/repo/src/index.ts',
-        worktreeId: 'wt-feat',
-        terminalArtifactGrantId: 'grant-main'
-      }),
-      expect.anything()
-    )
-    expect(openFileMock.mock.calls[0]![0]).not.toHaveProperty('readOnly')
-  })
-
-  it('opens a file too large for one grant reply in the workspace holding it', async () => {
-    hostAnswers({
-      worktree: 'wt-feat',
-      relativePath: null,
-      absolutePath: '/repo/package-lock.json',
-      exists: true,
-      isDirectory: false,
-      openTarget: {
-        kind: 'absolute-file',
-        byteLength: TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES + 1,
-        provider: 'local',
-        absolutePath: '/repo/package-lock.json',
-        grantId: 'grant-main'
-      }
-    })
-    hostAnswers({
-      worktree: 'wt-main',
-      relativePath: 'package-lock.json',
-      absolutePath: '/repo/package-lock.json',
-      exists: true,
-      isDirectory: false
-    })
-
-    openDetectedFilePath('/repo/package-lock.json', null, null, featureWorktree)
-    await flushDoubleRaf()
-
-    expect(runtimeEnvironmentCallMock.mock.calls[1]![0].params).toMatchObject({
-      crossWorkspace: true
-    })
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ relativePath: 'package-lock.json', worktreeId: 'wt-main' }),
-      expect.anything()
-    )
-  })
-
-  it('opens in the holding workspace when the host refuses a grant here', async () => {
-    runtimeEnvironmentCallMock.mockResolvedValueOnce({
-      id: 'rpc-1',
-      ok: false,
-      error: {
-        code: 'runtime_error',
-        message: "Files outside an SSH workspace can't be opened from another device yet."
-      },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
+  function holderAnswers(): void {
     hostAnswers({
       worktree: 'wt-main',
       relativePath: 'src/index.ts',
-      absolutePath: '/repo/src/index.ts',
+      absolutePath: FILE,
       exists: true,
       isDirectory: false
     })
+  }
 
-    openDetectedFilePath('/repo/src/index.ts', null, null, featureWorktree)
-    await flushDoubleRaf()
-
-    expect(runtimeEnvironmentCallMock.mock.calls[1]![0].params).toMatchObject({
-      crossWorkspace: true
-    })
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ relativePath: 'src/index.ts', worktreeId: 'wt-main' }),
-      expect.anything()
-    )
-  })
-
-  it('resolves a folder another workspace holds there, since hosts grant only files', async () => {
+  function grantAnswers(extra: { byteLength: number; binary?: true }): void {
     hostAnswers({
       worktree: 'wt-feat',
       relativePath: null,
-      absolutePath: '/repo/docs',
+      absolutePath: FILE,
       exists: true,
-      isDirectory: true
+      isDirectory: false,
+      openTarget: {
+        kind: 'absolute-file',
+        provider: 'local',
+        absolutePath: FILE,
+        grantId: 'grant-here',
+        ...extra
+      }
     })
-    hostAnswers({
-      worktree: 'wt-main',
-      relativePath: 'docs',
-      absolutePath: '/repo/docs',
-      exists: true,
-      isDirectory: true
-    })
-    const onOpenFailure = vi.fn()
+  }
 
-    openDetectedFilePath('/repo/docs', null, null, { ...featureWorktree, onOpenFailure })
-    await flushDoubleRaf()
-
-    expect(runtimeEnvironmentCallMock.mock.calls[1]![0].params).toMatchObject({
-      crossWorkspace: true
-    })
-    expect(onOpenFailure).not.toHaveBeenCalled()
-    expect(openFileMock).not.toHaveBeenCalled()
-  })
-
-  it('waits once, not twice, when the host does not answer', async () => {
+  function hostRefuses(message: string): void {
     runtimeEnvironmentCallMock.mockResolvedValueOnce({
       id: 'rpc-1',
       ok: false,
-      error: { code: 'runtime_timeout', message: 'timed out' },
+      error: { code: 'runtime_error', message },
       _meta: { runtimeId: 'remote-runtime' }
     })
-    const onOpenFailure = vi.fn()
+  }
 
-    openDetectedFilePath('/repo/src/index.ts', null, null, { ...featureWorktree, onOpenFailure })
+  function expectOpenedIn(worktreeId: string, fields: Record<string, unknown> = {}): void {
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: FILE, worktreeId, ...fields }),
+      expect.anything()
+    )
+  }
+
+  it('opens it in the clicked workspace through a grant', async () => {
+    holderAnswers()
+    grantAnswers({ byteLength: 100 })
+
+    openDetectedFilePath(FILE, null, null, featureWorktree)
     await flushDoubleRaf()
 
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledTimes(1)
-    expect(openFileMock).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'unverifiable' }))
-  })
-
-  it("reports a missing file another workspace holds as missing, never this computer's copy", async () => {
-    findWorkspaceFileRouteMock.mockReturnValueOnce({
-      worktreeId: 'wt-main',
-      relativePath: 'src/gone.ts',
-      executionHostId: 'runtime:env-1'
-    })
-    hostAnswers({
-      worktree: 'wt-feat',
-      relativePath: null,
-      absolutePath: '/repo/src/gone.ts',
-      exists: false,
-      isDirectory: false
-    })
-    hostAnswers({
-      worktree: 'wt-main',
-      relativePath: 'src/gone.ts',
-      absolutePath: '/repo/src/gone.ts',
-      exists: false,
-      isDirectory: false
-    })
-    const onOpenFailure = vi.fn()
-
-    openDetectedFilePath('/repo/src/gone.ts', null, null, { ...featureWorktree, onOpenFailure })
-    await flushDoubleRaf()
-
-    expect(runtimeEnvironmentCallMock.mock.calls[1]![0].params).toMatchObject({
+    // Why: the holder answers first, so every other path resolves exactly as before.
+    expect(runtimeEnvironmentCallMock.mock.calls[0]![0].params).toMatchObject({
       crossWorkspace: true
     })
+    expect(runtimeEnvironmentCallMock.mock.calls[1]![0].params).not.toHaveProperty('crossWorkspace')
+    expect(activateAndRevealWorkspace).not.toHaveBeenCalledWith('wt-main', expect.anything())
+    expectOpenedIn('wt-feat', { relativePath: FILE, terminalArtifactGrantId: 'grant-here' })
+    expect(openFileMock.mock.calls[0]![0]).not.toHaveProperty('readOnly')
+  })
+
+  it.each([
+    [
+      'too large to edit through a grant',
+      () => grantAnswers({ byteLength: TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES + 1 })
+    ],
+    [
+      'binary, which its bytes editors read from the workspace',
+      () => grantAnswers({ byteLength: 100, binary: true })
+    ],
+    [
+      'outside what an SSH workspace can grant',
+      () => hostRefuses(SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE)
+    ]
+  ])('opens it in the holding workspace when it is %s', async (_label, answerHere) => {
+    holderAnswers()
+    answerHere()
+
+    openDetectedFilePath(FILE, null, null, featureWorktree)
+    await flushDoubleRaf()
+
+    expectOpenedIn('wt-main', { relativePath: 'src/index.ts' })
+  })
+
+  it('surfaces any other host failure instead of switching workspaces', async () => {
+    holderAnswers()
+    hostRefuses('EIO: i/o error')
+    const onOpenFailure = vi.fn()
+
+    openDetectedFilePath(FILE, null, null, { ...featureWorktree, onOpenFailure })
+    await flushDoubleRaf()
+
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledTimes(2)
     expect(openFileMock).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'missing' }))
+    expect(onOpenFailure).toHaveBeenCalledTimes(1)
   })
 })

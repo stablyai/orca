@@ -14,14 +14,13 @@ import {
   type RuntimeTerminalPathResolution
 } from '../../../../shared/runtime-file-contracts'
 import { HostFileRefusal, hostAbsentRefusal } from './host-file-refusal'
+import { isHtmlFilePath } from './local-html-file-destinations'
 import {
   grantServesInPlace,
   hostOpensGrantedFilesInPlace,
   hostSavesGrantedFiles,
   isSshWorkspaceGrantRefusal
 } from '@/runtime/runtime-terminal-artifact-grant'
-import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
-import { useAppStore } from '@/store'
 
 export type HostWorkspaceFile = {
   kind: 'host'
@@ -98,31 +97,38 @@ async function statClientLocalFile(
   return { kind: 'client', isDirectory: stat.isDirectory }
 }
 
-/** Opens a file another workspace holds in the clicked one, through a grant; the user can already run anything on the host, so its workspace boundary guards nothing. Falls back to the holding workspace where no editable grant is possible. */
+/**
+ * Opens a file another workspace holds in the clicked one, through a grant: the user can already run
+ * anything on the host, so its workspace boundary guards nothing. The holder answers first, as before,
+ * so missing paths, folders and this computer's files resolve unchanged; only an existing file another
+ * workspace holds asks again for a grant here, and keeps the holder where a grant can't serve it.
+ */
 async function resolveInClickedWorkspace(
   resolveOnHost: (crossWorkspace: boolean) => Promise<RuntimeTerminalPathResolution>,
-  isInKnownWorkspace: () => boolean
+  clickedWorktreeId: string
 ): Promise<RuntimeTerminalPathResolution> {
+  const holder = await resolveOnHost(true)
+  if (
+    holder.relativePath === null ||
+    holder.worktree === clickedWorktreeId ||
+    !holder.exists ||
+    holder.isDirectory
+  ) {
+    return holder
+  }
   let inPlace: RuntimeTerminalPathResolution
   try {
     inPlace = await resolveOnHost(false)
   } catch (error) {
-    // Why: only the host's SSH refusal opens it where it lives; a timeout or a passing file error
-    // would just wait twice or switch the user's workspace.
+    // Why: only the host's SSH refusal means "no grant here"; any other failure surfaces, not a switch.
     if (isSshWorkspaceGrantRefusal(error)) {
-      return resolveOnHost(true)
+      return holder
     }
     throw error
   }
-  if (inPlace.relativePath !== null) {
-    return inPlace
-  }
-  if (inPlace.openTarget?.kind === 'absolute-file') {
-    return grantServesInPlace(inPlace.openTarget) ? inPlace : resolveOnHost(true)
-  }
-  // Why: hosts grant files, not folders, and a missing file a workspace holds must read as missing on
-  // its host, never as this computer's same-path file; the holding workspace answers both.
-  return inPlace.exists || isInKnownWorkspace() ? resolveOnHost(true) : inPlace
+  return inPlace.openTarget?.kind === 'absolute-file' && grantServesInPlace(inPlace.openTarget)
+    ? inPlace
+    : holder
 }
 
 /** An unanswered probe opens the file where it lives, as before. */
@@ -138,7 +144,12 @@ async function opensInPlace(environmentId: string): Promise<boolean> {
 export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
   absolutePath: string,
-  source: { terminalHandle?: string | null; hostFileOnly?: boolean; existenceOnly?: boolean } = {}
+  source: {
+    terminalHandle?: string | null
+    hostFileOnly?: boolean
+    existenceOnly?: boolean
+    openWithSystemDefault?: boolean
+  } = {}
 ): Promise<HostWorkspaceFile | HostGrantedFile | ClientLocalFile | null> {
   const environmentId = runtimeTargetEnvironmentId(context.target)
   if (
@@ -162,18 +173,15 @@ export async function resolveHostWorkspaceFile(
       },
       { timeoutMs: 15_000 }
     )
-  // Why existence asks for the holder: a hover needs only a stat, and a grant hashes the file.
+  // Why the holder: a hover needs only a stat (a grant hashes the file); a download reads the holding
+  // workspace's file, which a grant can't hand to the default app; and an HTML page already previews
+  // in the clicked workspace, with its relative assets served from the holder.
   const resolved =
-    !source.existenceOnly && (await opensInPlace(environmentId))
-      ? await resolveInClickedWorkspace(
-          resolveOnHost,
-          () =>
-            findWorkspaceFileRoute(
-              useAppStore.getState(),
-              toRuntimeExecutionHostId(environmentId),
-              absolutePath
-            ) !== null
-        )
+    !source.existenceOnly &&
+    !source.openWithSystemDefault &&
+    !isHtmlFilePath(absolutePath) &&
+    (await opensInPlace(environmentId))
+      ? await resolveInClickedWorkspace(resolveOnHost, context.worktreeId)
       : await resolveOnHost(true)
   const relativePath = resolved.relativePath
   if (relativePath === null || !resolved.absolutePath) {

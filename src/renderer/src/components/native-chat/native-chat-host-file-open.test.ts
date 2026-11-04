@@ -55,7 +55,7 @@ it.each([false, true])(
     expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'files.resolveTerminalPath',
-        params: { worktree: 'id:wt-feat', pathText: path }
+        params: { worktree: 'id:wt-feat', pathText: path, crossWorkspace: true }
       })
     )
     expect(statMock).not.toHaveBeenCalled()
