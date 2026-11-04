@@ -41,7 +41,6 @@ export type NativeChatQuestionCardProps = {
   /** Paste target while the card replaces the composer. */
   answerInputRef?: RefObject<HTMLInputElement | null>
   onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
 }
 
 // Reserve a non-option index so single-select holds either an option or typed text.
@@ -65,8 +64,7 @@ export function NativeChatQuestionCard({
   onCollapse,
   shouldFocus = false,
   answerInputRef,
-  onLinkClick,
-  allowFileUriLinks = false
+  onLinkClick
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
@@ -259,7 +257,7 @@ export function NativeChatQuestionCard({
               data-testid="native-chat-question-card-title"
               content={q.question}
               onLinkClick={onLinkClick}
-              allowFileUriLinks={allowFileUriLinks}
+              allowFileUriLinks={onLinkClick !== undefined}
               linkifyFilePaths={onLinkClick !== undefined}
               className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-2"
             />

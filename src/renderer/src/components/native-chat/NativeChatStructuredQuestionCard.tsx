@@ -14,8 +14,7 @@ export function NativeChatStructuredQuestionCard({
   isSubmitting,
   shouldFocus,
   answerInputRef,
-  onLinkClick,
-  allowFileUriLinks
+  onLinkClick
 }: {
   questions: readonly AgentJournalQuestion[]
   onAnswer: (response: AgentSessionPromptResponse) => void
@@ -23,7 +22,7 @@ export function NativeChatStructuredQuestionCard({
   isSubmitting?: boolean
   shouldFocus?: boolean
   answerInputRef?: RefObject<HTMLInputElement | null>
-} & Pick<NativeChatQuestionCardProps, 'onLinkClick' | 'allowFileUriLinks'>): React.JSX.Element {
+} & Pick<NativeChatQuestionCardProps, 'onLinkClick'>): React.JSX.Element {
   const card = structuredQuestionCard(questions)
   return (
     <NativeChatQuestionCard
@@ -41,7 +40,6 @@ export function NativeChatStructuredQuestionCard({
       shouldFocus={shouldFocus}
       answerInputRef={answerInputRef}
       onLinkClick={onLinkClick}
-      allowFileUriLinks={allowFileUriLinks}
     />
   )
 }

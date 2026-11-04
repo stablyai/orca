@@ -57,7 +57,6 @@ function QuestionControls({
           ]
         }}
         onLinkClick={onLinkClick}
-        allowFileUriLinks={onLinkClick !== undefined}
         onAnswer={() => {}}
         onCancel={() => {}}
       />

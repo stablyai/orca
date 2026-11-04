@@ -42,7 +42,6 @@ it('opens bare host-confirmed paths and web links without answering or dismissin
         onAnswer={onAnswer}
         onCancel={onCancel}
         onLinkClick={onLinkClick}
-        allowFileUriLinks
       />
     </NativeChatFileLinkExistenceContext.Provider>
   )
@@ -84,7 +83,6 @@ it('routes explicit file links and preserves a multiline question without enabli
       onAnswer={vi.fn()}
       onCancel={vi.fn()}
       onLinkClick={onLinkClick}
-      allowFileUriLinks
     />
   )
   const file = screen.getByRole('link', { name: 'the mock' })

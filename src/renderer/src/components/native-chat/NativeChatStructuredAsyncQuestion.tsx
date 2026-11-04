@@ -20,7 +20,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
-type QuestionLinkProps = Pick<NativeChatQuestionCardProps, 'onLinkClick' | 'allowFileUriLinks'>
+type QuestionLinkProps = Pick<NativeChatQuestionCardProps, 'onLinkClick'>
 
 /** Async questions leave the composer usable; the next ordinary send answers them and Cancel only hides them. */
 export function NativeChatStructuredAsyncQuestion({
