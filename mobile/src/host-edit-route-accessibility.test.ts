@@ -42,6 +42,11 @@ vi.mock('./transport/host-store', () => ({
   updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
 }))
 
+vi.mock(
+  './settings/settings-screen-frame',
+  async () => (await import('./test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+
 vi.mock('./transport/host-client-hooks', () => ({
   usePrimeHosts: () => dependencies.primeHosts,
   useRefreshHostClient: () => dependencies.refreshHostClient

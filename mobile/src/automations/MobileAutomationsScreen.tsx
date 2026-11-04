@@ -2,8 +2,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useState } from 'react'
 import { useLocalSearchParams } from 'expo-router'
-import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
+import { View } from 'react-native'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { firstParam } from '../navigation/route-param-reader'
@@ -11,7 +10,7 @@ import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostClient } from '../transport/host-client-hooks'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useReachableServerClients } from '../worktree/use-reachable-server-clients'
-import { colors, pressedStyle } from '../theme/mobile-theme'
+import { SettingsNavBar } from '../settings/settings-screen-frame'
 import { AutomationChoice } from './AutomationControls'
 import { AutomationManager } from './AutomationManager'
 import { automationStyles as styles } from './automation-styles'
@@ -32,20 +31,10 @@ export function MobileAutomationsScreen() {
   const insets = useSafeAreaInsets()
   return (
     <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <View style={styles.header}>
-        <Pressable
-          style={({ pressed }) => pressed && pressedStyle}
-          accessibilityRole="button"
-          accessibilityLabel={t('automations.mobile.back', 'Back')}
-          onPress={() => router.back()}
-          hitSlop={8}
-        >
-          <ChevronLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={[styles.title, styles.grow]}>
-          {t('automations.mobile.automations', 'Automations')}
-        </Text>
-      </View>
+      <SettingsNavBar
+        title={t('automations.mobile.automations', 'Automations')}
+        onBack={() => router.back()}
+      />
       {servers?.length || authority !== 'paired' ? (
         <View style={styles.header}>
           <View style={styles.grow}>
