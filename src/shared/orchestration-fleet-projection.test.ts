@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from './agent-status/contracts/agent-status-ipc-payload'
 import { mintFleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
 import {
   ORCHESTRATION_FLEET_PAGE_MAX,
@@ -7,7 +7,7 @@ import {
   refreshOrchestrationFleetLivenessAttention,
   type FleetDurableWorker
 } from './orchestration-fleet-projection'
-import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status/contracts/agent-status-freshness'
 
 function worker(id: string, overrides: Partial<FleetDurableWorker> = {}): FleetDurableWorker {
   return {

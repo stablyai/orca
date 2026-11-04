@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { Profiler, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
-import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 
 afterEach(() => {

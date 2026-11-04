@@ -125,7 +125,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
-} from '../../shared/agent-hook-scrub-safe-env'
+} from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { STRUCTURED_WORKER_HANDLE_PREFIX } from '../../shared/structured-worker-handle'
 import { YOLO_TUI_AGENT_ARGS } from '../../shared/agent-launch/permissions/tui-agent-permissions'
 import { agentChatPermissionModes } from '../../shared/agent-launch/permissions/agent-chat-permission-support'

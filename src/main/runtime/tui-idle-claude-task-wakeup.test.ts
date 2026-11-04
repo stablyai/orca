@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  normalizeAgentStatusPayload,
-  type AgentStatusIpcPayload
-} from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
+import { normalizeAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import { evaluateHookTurn, readTuiIdleHookTurn } from './tui-idle-hook-lane'
 

@@ -4,9 +4,10 @@ import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-sessi
 import {
   getAgentRowConversationName,
   type ConversationNameTab
-} from '../../../shared/agent-row-conversation-name'
-import type { AgentStatusIpcPayload, AgentType } from '../../../shared/agent-status-types'
-import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
+} from '../../../shared/agent-status/presentation/agent-row-conversation-name'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
+import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import { structuredChatDisplayName } from '../../../shared/structured-chat-row-name'
 import type { Tab } from '../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'

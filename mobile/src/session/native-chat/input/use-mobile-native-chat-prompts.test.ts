@@ -2,7 +2,7 @@ import { asyncQuestionSourceScope } from '../../../../../src/shared/native-chat/
 import { createElement } from 'react'
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { useMobileAsyncQuestionHides } from './use-mobile-native-chat-prompt-dismiss'
 import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'

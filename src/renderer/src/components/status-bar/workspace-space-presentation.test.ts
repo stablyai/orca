@@ -23,7 +23,7 @@ import {
   getWorkspaceSpaceDeleteState,
   getWorkspaceSpaceGitStatusForScan
 } from './workspace-space-state-resolution'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'

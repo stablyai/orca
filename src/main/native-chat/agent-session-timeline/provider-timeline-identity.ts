@@ -1,7 +1,7 @@
 // Pure identity spelling preserves existing legacy shapes; the assembler decides row equivalence.
 
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import { boundPayload, digestPayload } from '../agent-session-journal/journal-payload-bounds'
 
 /** Minted keys are acquisition-unique and need no provider namespace. */

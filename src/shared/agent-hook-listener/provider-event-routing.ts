@@ -1,4 +1,4 @@
-import type { AgentHookSource } from '../agent-hook-relay'
+import type { AgentHookSource } from './transport/agent-hook-relay'
 import { isKnownHarnessInjectedUserTurnText } from '../harness-injected-user-turns'
 import type { ToolSnapshot } from './listener-event'
 import type { ExtractedPromptText } from './prompt-fields'

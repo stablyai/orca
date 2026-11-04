@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { migrationUnsupportedToAgentStatusEntry } from './migration-unsupported-agent-entry'
-import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from './agent-status/contracts/agent-status-ipc-payload'
 
 describe('migrationUnsupportedToAgentStatusEntry', () => {
   it('returns a stable synthetic entry for the same migration record', () => {

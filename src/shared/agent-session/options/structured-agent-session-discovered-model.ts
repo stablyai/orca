@@ -1,7 +1,7 @@
 import type { CatalogModel, CatalogOption } from './agent-session-option-catalog-types'
 import type { AgentSessionOptionChoice } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
 
 function effortOption(

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { useAppStore } from '@/store'
 import { createTestStore } from '@/store/slices/store-test-helpers'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { buildWindowApi } from '../ipc-events-agent-status-window-test-fixtures'

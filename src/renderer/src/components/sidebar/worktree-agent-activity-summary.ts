@@ -4,18 +4,16 @@ import {
   type VisibleOrchestrationState
 } from '@/runtime/visible-agent-orchestration'
 import type { AppState } from '@/store'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import {
   mergeAgentStatusOrchestration,
   parseAgentStatusPaneIdentity,
   resolveAgentStatusWorktreeId
-} from '../../../../shared/agent-status-worktree-attribution'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
-import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+} from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { applyAgentPaneActivityFlags } from '../../../../shared/worktree-status-rollup'
 
 export type WorktreeAgentActivitySummary = {

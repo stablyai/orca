@@ -1,4 +1,4 @@
-import type { AgentStatus } from '../../../shared/agent-detection'
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import type { OrchestrationDb } from './db'
 
 /** A live terminal mail pointers are typed into, keyed by its PTY rather than any window pane. */

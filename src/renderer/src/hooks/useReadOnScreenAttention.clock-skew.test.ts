@@ -7,7 +7,7 @@ import { useReadOnScreenAttention } from './useReadOnScreenAttention'
 import { useAppStore } from '../store'
 import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 
 // Synchronous ack re-entry once repeated forever when remote turn time led local clock and scans crossed millisecond boundaries (React #185); slice guards retained pre-write snapshots.
 

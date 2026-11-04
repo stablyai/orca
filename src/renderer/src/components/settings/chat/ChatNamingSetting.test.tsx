@@ -13,7 +13,7 @@ import {
 import { toast } from 'sonner'
 import { startTransition, StrictMode, Suspense } from 'react'
 
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import '../__fixtures__/settings-persistence-test-fixture'
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 

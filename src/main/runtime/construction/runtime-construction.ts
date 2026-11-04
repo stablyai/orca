@@ -25,7 +25,7 @@ import type { StatsCollector } from '../../stats/collector'
 
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
 
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 import { installRuntimeFileCommandSurface } from '../runtime-file-command-surface'
 import { installRuntimeGitCommandSurface } from '../runtime-git-command-surface'

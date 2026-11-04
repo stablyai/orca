@@ -1,5 +1,5 @@
 import type { AgentMessageSender, AgentMessageSource } from './agent-session-message-source'
-import type { AgentStatusEntry } from '../agent-status-types'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { agentMessageTranscriptText } from './agent-message-display-text'
 

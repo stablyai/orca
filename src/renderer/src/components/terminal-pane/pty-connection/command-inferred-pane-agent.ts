@@ -1,13 +1,14 @@
-import { detectAgentStatusFromTitle, isClaudeAgent } from '@/lib/agent-status'
+import { detectAgentStatusFromTitle as detectAgentStatusFromTitleDefault } from '../../../../../shared/agent-status/title/agent-title-status'
+import { isClaudeAgent as isClaudeAgentDefault } from '../../../../../shared/agent-status/title/agent-title-identity'
 import { useAppStore } from '@/store'
-import {
-  isFreshNonDoneAgentStatus,
-  type AgentStatusEntry,
-  type AgentType
-} from '../../../../../shared/agent-status-types'
+import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { registerAgentHookTerminalLifecycleHandler } from '../agent-hook-terminal-lifecycle'
 import type { AgentCompletionStatusSnapshot } from '../agent-completion-coordinator-types'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-status/title/agent-title-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { recognizeAgentLaunchCommand } from '../../../../../shared/agent-launch/startup/agent-command-line-intent'
 import type { TerminalAgent } from '../../../../../shared/terminal-agent'
@@ -18,6 +19,9 @@ import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installCommandInferredPaneAgent(session: ConnectPanePtySession): void {
+  const detectAgentStatusFromTitle =
+    session.deps.detectAgentStatusFromTitle ?? detectAgentStatusFromTitleDefault
+  const isClaudeAgent = session.deps.isClaudeAgent ?? isClaudeAgentDefault
   // Shadow typed shell commands to infer manual agent launches without launch metadata.
   session.commandInferredPaneAgent = null
   session.pendingShellCommandLine = ''
