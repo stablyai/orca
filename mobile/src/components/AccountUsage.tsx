@@ -1,4 +1,4 @@
-import { View, Text, ActivityIndicator } from 'react-native'
+import { View, Text, ActivityIndicator, type StyleProp, type ViewStyle } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -18,6 +18,7 @@ export {
   decodeAccountsSnapshot,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getOtherUsageProviders,
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
@@ -30,13 +31,18 @@ export function UsageBar({
   usedPercent,
   unavailable,
   loading,
-  resetText
+  resetText,
+  wideLabel = false,
+  style
 }: {
   label: string
   usedPercent: number | null
   unavailable: boolean
   loading?: boolean
   resetText?: string | null
+  /** For long pool names: the label sits on its own line above the track. */
+  wideLabel?: boolean
+  style?: StyleProp<ViewStyle>
 }) {
   useMobileColorScheme()
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
@@ -51,43 +57,58 @@ export function UsageBar({
           ? colors.statusAmber
           : colors.statusGreen
   return (
-    <View style={styles.usageBarColumn}>
-      <View style={styles.usageBar}>
-        <Text style={styles.usageLabel}>{label}</Text>
-        <View style={styles.usageTrack}>
-          <View
-            style={[
-              styles.usageFill,
-              {
-                width: `${used ?? 0}%`,
-                backgroundColor: unavailable ? colors.textMuted : barColor
-              }
-            ]}
-          />
+    <View style={[wideLabel ? styles.usageBarStack : styles.usageBarRow, style]}>
+      <Text style={styles.usageLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <View style={[styles.usageBarBody, !wideLabel && styles.usageBarBodyBeside]}>
+        <View style={styles.usageBar}>
+          <View style={styles.usageTrack}>
+            <View
+              style={[
+                styles.usageFill,
+                {
+                  width: `${used ?? 0}%`,
+                  backgroundColor: unavailable ? colors.textMuted : barColor
+                }
+              ]}
+            />
+          </View>
+          {loading ? (
+            <ActivityIndicator
+              size="small"
+              color={colors.textSecondary}
+              style={styles.usageSpinner}
+            />
+          ) : (
+            <Text style={styles.usageValue}>{unavailable || used == null ? '—' : `${used}%`}</Text>
+          )}
         </View>
-        {loading ? (
-          <ActivityIndicator
-            size="small"
-            color={colors.textSecondary}
-            style={styles.usageSpinner}
-          />
-        ) : (
-          <Text style={styles.usageValue}>{unavailable || used == null ? '—' : `${used}%`}</Text>
-        )}
+        {resetText ? (
+          <Text style={styles.usageResetText} numberOfLines={1}>
+            {resetText}
+          </Text>
+        ) : null}
       </View>
-      {resetText ? (
-        <Text style={styles.usageResetText} numberOfLines={1}>
-          {resetText}
-        </Text>
-      ) : null}
     </View>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  usageBarColumn: {
+  usageBarRow: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs
+  },
+  usageBarStack: {
     gap: 2
+  },
+  usageBarBody: {
+    gap: 2
+  },
+  usageBarBodyBeside: {
+    flex: 1
   },
   usageBar: {
     flexDirection: 'row',
@@ -97,7 +118,7 @@ const styles = themedStyleSheet(() => ({
   usageLabel: {
     fontSize: typography.metaSize,
     color: colors.textMuted,
-    width: 22
+    minWidth: 22
   },
   usageTrack: {
     flex: 1,
@@ -119,10 +140,8 @@ const styles = themedStyleSheet(() => ({
   usageSpinner: {
     width: 36
   },
-  // Indent countdown past window label to align with track.
   usageResetText: {
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginLeft: 22 + spacing.xs
+    color: colors.textMuted
   }
 }))

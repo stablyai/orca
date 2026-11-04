@@ -1,10 +1,13 @@
 // Keep shapes aligned with shared types/rate-limit-types without pulling Electron-coupled desktop graph into mobile.
 // Pure RN-free selectors stay directly testable; AccountUsage re-exports them with UsageBar.
 import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
-import type {
-  AccountsSnapshot,
-  InactiveAccountUsage,
-  ProviderRateLimits
+import { hasUsageData } from '../../../src/shared/usage-provider-windows'
+import {
+  ProviderRateLimitsSchema,
+  type AccountsSnapshot,
+  type InactiveAccountUsage,
+  type ProviderRateLimits,
+  type RateLimitWindow
 } from './accounts-snapshot'
 
 export {
@@ -67,10 +70,9 @@ export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boole
 // Determine availability per window because transient provider errors retain successful window data.
 export function getUsageBarState(
   limits: ProviderRateLimits | null,
-  windowKey: 'session' | 'weekly',
+  window: RateLimitWindow | null,
   isFetchingOverride?: boolean
 ): UsageBarState {
-  const window = limits?.[windowKey] ?? null
   const fetching =
     isFetchingOverride ?? (limits?.status === 'fetching' || limits?.status === 'idle')
   return {
@@ -81,16 +83,27 @@ export function getUsageBarState(
 }
 
 // Use desktop formatResetCountdown copy with injectable now; return null without reset timestamp to retain bars-only UI.
-export function getWindowResetLabel(
-  limits: ProviderRateLimits | null,
-  windowKey: 'session' | 'weekly',
-  now: number
-): string | null {
-  const resetsAt = limits?.[windowKey]?.resetsAt
-  if (resetsAt == null) {
+export function getWindowResetLabel(window: RateLimitWindow | null, now: number): string | null {
+  if (window?.resetsAt == null) {
     return null
   }
-  return formatResetCountdown(resetsAt - now)
+  return formatResetCountdown(window.resetsAt - now)
+}
+
+/** Every other provider the host reports usage for, in the host's order; Claude and Codex have their own sections. */
+export function getOtherUsageProviders(snapshot: AccountsSnapshot): ProviderRateLimits[] {
+  const providers: ProviderRateLimits[] = []
+  for (const [slot, value] of Object.entries(snapshot.rateLimits)) {
+    if (slot === 'claude' || slot === 'codex') {
+      continue
+    }
+    const parsed = ProviderRateLimitsSchema.safeParse(value)
+    // Hidden or signed-out providers come back idle or unavailable with no windows.
+    if (parsed.success && (hasUsageData(parsed.data) || parsed.data.status === 'error')) {
+      providers.push(parsed.data)
+    }
+  }
+  return providers
 }
 
 // Show provider with managed accounts or active system-default quota; management is not required for usage UI.

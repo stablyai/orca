@@ -1,40 +1,9 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
+import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 import { describeOwnerNotSetUp, getOwnerNotSetUpLabel } from './owner-not-set-up-copy'
 
-export function getProviderDisplayName(provider: ProviderRateLimits['provider']): string {
-  if (provider === 'claude') {
-    return 'Claude'
-  }
-  if (provider === 'codex') {
-    return 'Codex'
-  }
-  if (provider === 'gemini') {
-    return 'Gemini'
-  }
-  if (provider === 'opencode-go') {
-    return 'OpenCode Go'
-  }
-  if (provider === 'kimi') {
-    return 'Kimi'
-  }
-  if (provider === 'antigravity') {
-    return 'Antigravity'
-  }
-  if (provider === 'minimax') {
-    return 'MiniMax'
-  }
-  if (provider === 'grok') {
-    return 'Grok'
-  }
-  if (provider === 'zcode') {
-    return 'ZCode'
-  }
-  if (provider === 'cursor') {
-    return 'Cursor'
-  }
-  return provider
-}
+export { getProviderDisplayName }
 
 function isUsageRateLimitError(p: ProviderRateLimits): boolean {
   const failureKind = p.usageMetadata?.failureKind

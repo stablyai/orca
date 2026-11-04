@@ -7,7 +7,8 @@ const AccountIdSchema = z.string().min(1)
 const RateLimitWindowSchema = z
   .object({
     usedPercent: z.number().finite().min(0).max(100),
-    windowMinutes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    // agy reports windows of unknown length as 0.
+    windowMinutes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     resetsAt: TimestampSchema.nullable(),
     resetDescription: z.string().nullable()
   })
@@ -32,17 +33,8 @@ const RateLimitResetCreditsSchema = z
 
 export const ProviderRateLimitsSchema = z
   .object({
-    provider: z.enum([
-      'claude',
-      'codex',
-      'gemini',
-      'opencode-go',
-      'kimi',
-      'minimax',
-      'grok',
-      'antigravity',
-      'cursor'
-    ]),
+    // Any provider the host polls, so a provider added on desktop decodes here too.
+    provider: z.string().min(1),
     session: RateLimitWindowSchema.nullable(),
     weekly: RateLimitWindowSchema.nullable(),
     fableWeekly: RateLimitWindowSchema.nullable().optional(),
@@ -57,10 +49,15 @@ export const ProviderRateLimitsSchema = z
   })
   .passthrough()
 
+// The slots that carry accounts; their exact identity is checked against the slot below.
+const AccountProviderRateLimitsSchema = ProviderRateLimitsSchema.extend({
+  provider: z.enum(['claude', 'codex'])
+})
+
 const InactiveAccountUsageSchema = z
   .object({
     accountId: AccountIdSchema,
-    rateLimits: ProviderRateLimitsSchema.nullable(),
+    rateLimits: AccountProviderRateLimitsSchema.nullable(),
     updatedAt: TimestampSchema,
     isFetching: z.boolean()
   })
@@ -174,8 +171,8 @@ export const AccountsSnapshotSchema = z
       .passthrough(),
     rateLimits: z
       .object({
-        claude: ProviderRateLimitsSchema.nullable(),
-        codex: ProviderRateLimitsSchema.nullable(),
+        claude: AccountProviderRateLimitsSchema.nullable(),
+        codex: AccountProviderRateLimitsSchema.nullable(),
         // Older compatible hosts omit runtime target fields and retain host-only selection semantics.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
         codexTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
