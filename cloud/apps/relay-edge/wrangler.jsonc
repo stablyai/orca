@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orca-relay-edge-spike",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "HOST_RELAY", "class_name": "HostRelay" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HostRelay"] }],
+  "vars": {
+    // Local spike only. Real deployments read JWKS from the auth service.
+    "RELAY_JWT_AUDIENCE": "orca-relay",
+    "PING_INTERVAL_MS": "30000",
+    "SILENCE_TIMEOUT_MS": "75000",
+    "ORPHAN_GRACE_MS": "30000"
+  }
+}
