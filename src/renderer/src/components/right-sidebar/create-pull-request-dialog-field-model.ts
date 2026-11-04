@@ -1,4 +1,4 @@
-import type { WorkspaceAttachmentMetadata } from '../../../../shared/workspace-attachment-legacy'
+import type { WorkspaceAttachmentMetadata } from '../../../../shared/workspace-attachments/workspace-attachment-legacy'
 import type { AppState } from '@/store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {

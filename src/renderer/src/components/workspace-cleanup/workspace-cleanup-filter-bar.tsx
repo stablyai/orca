@@ -9,7 +9,7 @@ import {
   useAppliedWorkspaceCleanupFilters,
   WorkspaceCleanupAppliedFilterChips
 } from './workspace-cleanup-applied-filter-chips'
-import type { WorkspaceCleanupAppliedFilter } from '../../../../shared/workspace-cleanup-applied-filters'
+import type { WorkspaceCleanupAppliedFilter } from '../../../../shared/workspace-cleanup/workspace-cleanup-applied-filters'
 import { WorkspaceCleanupGitReviewFacets } from './workspace-cleanup-git-review-facets'
 import { WorkspaceCleanupLifecycleFacets } from './workspace-cleanup-lifecycle-facets'
 import type { WorkspaceCleanupFacetGroupProps } from './workspace-cleanup-facet-panel-model'

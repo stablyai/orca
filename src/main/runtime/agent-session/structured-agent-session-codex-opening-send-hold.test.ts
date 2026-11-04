@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { CODEX_TURN_OPEN_WAIT_MS } from '../../codex/codex-structured-turn-open-wait'
+import { CODEX_TURN_OPEN_WAIT_MS } from '../../codex/structured/turns/codex-structured-turn-open-wait'
 import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat/transcript/native-chat-turn-grouping'
@@ -16,9 +16,9 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../../codex/app-server/codex-app-server-connection'
-import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
-import { settledWithin } from '../../codex/codex-structured-dispatch-test-support'
-import type * as CodexTurnOpenWait from '../../codex/codex-structured-turn-open-wait'
+import { codexTurnLifecycleFake } from '../../codex/structured/journal/codex-turn-lifecycle-fake'
+import { settledWithin } from '../../codex/structured/turns/codex-structured-dispatch-test-support'
+import type * as CodexTurnOpenWait from '../../codex/structured/turns/codex-structured-turn-open-wait'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
@@ -47,7 +47,7 @@ const openWaits = vi.hoisted(() => {
   } = { turnIds: [], ended: [], began: null, releaseAll: null }
   return state
 })
-vi.mock('../../codex/codex-structured-turn-open-wait', async (importOriginal) => {
+vi.mock('../../codex/structured/turns/codex-structured-turn-open-wait', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexTurnOpenWait>()
   return {
     ...actual,

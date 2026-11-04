@@ -20,7 +20,7 @@ vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({
   closeBrowserTabInRenderer: vi.fn()
 }))
 
-const wire = await import('../../../../shared/browser-extension-worker-api')
+const wire = await import('../../../../shared/browser/extensions/browser-extension-worker-api')
 const registry = await import('./browser-extension-namespace-registry')
 const host = await import('./browser-extension-api-host')
 const { getBrowserExtensionWorkerToken } = await import('./browser-extension-worker-api-host')

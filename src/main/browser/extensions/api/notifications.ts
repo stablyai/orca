@@ -4,7 +4,7 @@ import { z } from 'zod'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
-} from '../../../../shared/browser-extension-url'
+} from '../../../../shared/browser/extensions/browser-extension-url'
 import { isBackgroundLaunch } from '../../../window/foreground-activation-policy'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import { resolveInsideExtensionDirectory } from '../installation/browser-extension-manifest'

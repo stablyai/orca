@@ -1,6 +1,7 @@
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { ServeReadiness } from '../../server/serve-readiness'
 

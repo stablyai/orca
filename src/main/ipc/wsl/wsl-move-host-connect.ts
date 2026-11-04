@@ -4,7 +4,7 @@
  * startup recovery) never boots it (A1, E9). Neither reconnects a host that is already serving,
  * and a host with a Remove still pending is never touched.
  */
-import { findWslHostDeployment } from '../../../shared/runtime-environment-wsl-host-store'
+import { findWslHostDeployment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import type { WslHostService } from '../../wsl/host-lifecycle/wsl-host-service'
 import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 

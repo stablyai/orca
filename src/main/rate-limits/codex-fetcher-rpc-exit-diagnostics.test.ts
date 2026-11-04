@@ -42,11 +42,11 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
-vi.mock('../codex/codex-state-db', () => ({
+vi.mock('../codex/history/index/codex-state-db', () => ({
   isCodexStateDbBackfillPending: vi.fn(() => false)
 }))
 
-vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn(() => Promise.resolve(null))
 }))
 

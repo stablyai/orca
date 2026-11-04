@@ -1,7 +1,7 @@
 import {
   BrowserClientPageRendererIdentity,
   type BrowserClientPageRendererIdentity as RendererPageIdentity
-} from '../../../../shared/browser-client-page-renderer-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import {
   createBrowserClientPageRetainedHost,
   createBrowserClientPageRetainedRoot,

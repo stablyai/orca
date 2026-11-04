@@ -4,7 +4,7 @@ import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus,
   type RuntimeHostStatusSnapshot
-} from '../../../../shared/runtime-host-status'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 
 type PairedRuntimeParkingCapability = { capabilities?: readonly string[] }
 

@@ -1,24 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   aiVaultResumeInSessionWorkspaceLabel,
   aiVaultSessionOwnerWorkspaces,
   aiVaultSessionWorkspaceHeading,
-  aiVaultWorktreeCompactPath,
   aiVaultWorktreeStatusLabel,
   aiVaultWorktreeJumpTooltip,
-  canJumpToAiVaultSessionWorktree,
   isAiVaultSessionInCurrentWorktree,
+  shouldShowAiVaultWorktreeStatusBadge,
+  shouldShowAiVaultSessionWorktreeLine
+} from './ai-vault-session-worktree'
+import {
+  aiVaultWorktreeCompactPath,
+  canJumpToAiVaultSessionWorktree,
   resolveAiVaultSessionWorktreeDisplay,
   resolveAiVaultSessionWorktreeInfo,
-  shouldShowAiVaultWorktreeStatusBadge,
-  shouldShowAiVaultSessionWorktreeLine,
-  type AiVaultSessionWorktreeInfo
-} from './ai-vault-session-worktree'
-import { extractWorktreePathFromSessionTitle } from '../../../../shared/ai-vault-session-worktree'
+  type AiVaultSessionWorktreeInfo,
+  extractWorktreePathFromSessionTitle
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
 const baseSession: AiVaultSession = {
   id: 'codex:session-1',

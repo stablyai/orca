@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GitDiffResult } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { LargeDiffRenderLimit } from '../../large-diff-render-limit'
+import type { LargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
 import {
   isUnchangedDiffSectionReload,
   shouldRequestCombinedDiffSectionLoad

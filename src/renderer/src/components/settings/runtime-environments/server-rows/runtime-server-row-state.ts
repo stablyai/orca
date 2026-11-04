@@ -2,23 +2,23 @@ import {
   runtimePairingRepairRoute,
   type PublicKnownRuntimeEnvironment,
   type RuntimePairingRepairRoute
-} from '../../../../../../shared/runtime-environments'
+} from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { resolveHostDisplay } from '../../../../../../shared/host-display-resolution'
-import { lastVerifiedRuntimeStatus } from '../../../../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import { translate } from '@/i18n/i18n'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
 import {
   isConnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+  type RuntimeHostConnectionState as RuntimeServerConnectionState
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { useAppStore } from '@/store/index'
 import {
   evaluateHostDetails,
   getHostDetailsDescription,
   getRuntimeServerConnectionState,
   isRuntimeServerTransportConnected,
-  type RuntimeHostDetails,
-  type RuntimeServerConnectionState
+  type RuntimeHostDetails
 } from '../catalog/runtime-environment-host-details'
 
 export type RuntimeServerRowState = {

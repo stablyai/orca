@@ -34,10 +34,10 @@ import {
   THREAD_ID as THREAD,
   adapterFor,
   fakeCodex
-} from '../../codex/codex-structured-session-adapter-fixture'
-import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
+import { codexTurnLifecycleFake } from '../../codex/structured/journal/codex-turn-lifecycle-fake'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
+import type { CodexStructuredSessionAdapter } from '../../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'
 import {

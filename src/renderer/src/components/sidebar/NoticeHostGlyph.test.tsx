@@ -11,7 +11,7 @@ import ja from '../../i18n/locales/ja.json'
 import ko from '../../i18n/locales/ko.json'
 import zh from '../../i18n/locales/zh.json'
 import { useAppStore } from '@/store'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 
 const original = useAppStore.getState()

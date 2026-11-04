@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
-import * as correspondence from '../../../../shared/ai-vault-session-cwd-aliases'
+import { searchHit } from '../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
+import * as correspondence from '../../../../shared/ai-vault/scanning/ai-vault-session-cwd-aliases'
 import { resolveAiVaultSessionResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import {
   aiVaultSearchHitToSession,

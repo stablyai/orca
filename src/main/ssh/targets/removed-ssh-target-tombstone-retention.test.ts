@@ -4,7 +4,7 @@ import {
   collectSshTargetRemovalEvidenceDependencies
 } from './removed-ssh-target-tombstone-retention'
 import type { RemovedSshTargetTombstone } from '../../../shared/ssh-types'
-import type { FolderWorkspaceHostState } from '../../../shared/folder-workspace-execution-host'
+import type { FolderWorkspaceHostState } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 
 function tombstones(count: number): RemovedSshTargetTombstone[] {
   return Array.from({ length: count }, (_, index) => ({

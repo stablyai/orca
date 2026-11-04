@@ -7837,9 +7837,6 @@
           "browserExtensions": {
             "copy": "Ajoute Paramètres › Navigateur › Extensions pour les profils de navigateur locaux.",
             "toggleLabel": "Activer ou désactiver les extensions de navigateur"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Activer ou désactiver le panneau d’orchestration"
           }
         },
         "FloatingWorkspacePane": {
@@ -10041,14 +10038,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "gestionnaire de mots de passe"
-            },
-            "orchestrationPanel": {
-              "title": "Panneau d’orchestration",
-              "description": "Affiche les agents avec lesquels chaque agent travaille, à côté de son chat ou de son terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "agents exécutants",
-              "manager": "gestionnaire"
             }
           }
         },
@@ -19554,8 +19543,6 @@
         "toggleDetails": "Basculer les détails du tour"
       },
       "jumpToLatest": "Aller au dernier message",
-      "newRowsAnnouncement": "De nouveaux messages sont arrivés en votre absence",
-      "newRowsMarker": "Nouveau",
       "find": {
         "label": "Rechercher dans le chat",
         "noResults": "Aucun résultat",

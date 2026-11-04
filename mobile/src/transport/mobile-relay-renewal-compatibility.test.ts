@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DeviceResumeConfirmed } from '../../../src/shared/mobile-relay-credential-contract'
+import type { DeviceResumeConfirmed } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'

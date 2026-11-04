@@ -176,6 +176,14 @@ it("lists the page key bar's shell and agent rows, whatever the strip's height",
     ...arrows,
     'moreKeys'
   ])
+  // A page with one live input and no composer reports canCompose false, and gets no mode key.
+  expect(terminalKeyRailKeys(100, { ...SHELL_TOOLBAR, canCompose: false })).toEqual([
+    'toggleKeyboard',
+    'toggleDisplayMode',
+    ...shellRow,
+    ...arrows,
+    'moreKeys'
+  ])
   expect(terminalKeyRailKeys(0, SHELL_TOOLBAR)).toEqual([])
   expect(terminalKeyRailKeys(100)).toEqual([])
 })

@@ -41,7 +41,7 @@ import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-ide
 import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/repo-worktree-resolution-scan'
 import { openMobileAgentHistoryChat } from '../../mobile/src/agent-history/open-mobile-agent-history-chat'
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'
-import type { AiVaultSession } from '../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vault-types'
 
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined

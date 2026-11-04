@@ -1,4 +1,5 @@
 import { DOC_PREVIEW_PARTITION } from '../../../../../shared/doc-preview-scheme'
+import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/NativeChatVisualGuestThemePublisher'
 import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
 import {
   moveFocusToRendererBeforeWebviewDetach,
@@ -51,6 +52,7 @@ export function attachDocPreviewWebview({
   webview.addEventListener('console-message', onViewportMessage)
   // Register before append so a guest attached mid-drag cannot swallow the pointer stream.
   registerPersistentWebview(previewId, webview)
+  publishNativeChatVisualGuestTheme()
   container.appendChild(webview)
   webview.setAttribute('src', url)
 

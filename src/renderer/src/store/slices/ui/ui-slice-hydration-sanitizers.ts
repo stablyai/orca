@@ -8,8 +8,11 @@ import type {
   VisibleWorkspaceHostIds,
   StatusBarItem
 } from '../../../../../shared/ui-chrome-types'
-import type { WorkspaceCleanupDismissal } from '../../../../../shared/workspace-cleanup'
-import { WORKSPACE_CLEANUP_CLASSIFIER_VERSION } from '../../../../../shared/workspace-cleanup'
+
+import {
+  type WorkspaceCleanupDismissal,
+  WORKSPACE_CLEANUP_CLASSIFIER_VERSION
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { isTopLevelView } from '../../../../../shared/top-level-view'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'

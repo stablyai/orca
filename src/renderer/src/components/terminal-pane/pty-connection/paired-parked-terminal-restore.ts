@@ -5,7 +5,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-str
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus
-} from '../../../../../shared/runtime-host-status'
+} from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 
 export function canRestorePairedParkedTerminal(ptyId: string): boolean {
   const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)

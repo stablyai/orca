@@ -5,7 +5,7 @@ import { Link2 } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
   canUseWorkspaceReviewForChecks,
   isWorkspaceRepositoryAttachment,

@@ -1,4 +1,4 @@
-import { BrowserClientProfileMetadata } from '../../../../shared/browser-client-profile-switch-protocol'
+import { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 import { installBrowserRoutePartitionPolicies } from './browser-session-route-policies'
 import { session, webContents } from 'electron'
 import { setBrowserClientRouteWebContentsProbe } from '../../client-hosts/file-transfers/browser-client-download-routing'

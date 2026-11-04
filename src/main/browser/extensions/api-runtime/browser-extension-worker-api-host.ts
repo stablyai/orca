@@ -2,13 +2,13 @@ import { randomBytes } from 'node:crypto'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
-} from '../../../../shared/browser-extension-url'
+} from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   BROWSER_EXTENSION_API_CALL_URL,
   BROWSER_EXTENSION_API_EVENTS_URL,
   decodeBrowserExtensionWireJson,
   encodeBrowserExtensionWireJson
-} from '../../../../shared/browser-extension-worker-api'
+} from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import type { BrowserExtensionCaller } from './browser-extension-namespace-registry'
 import {
   ensureWorkerContext,

@@ -27,7 +27,7 @@ import {
 import {
   recordManagedWslCodexHome,
   wslRuntimeHomePathsEqual
-} from '../codex/managed-wsl-codex-home-registry'
+} from '../codex/configuration/homes/managed-wsl-codex-home-registry'
 import {
   createWslRelayRecoveryForManager,
   markWslRelayFailed,

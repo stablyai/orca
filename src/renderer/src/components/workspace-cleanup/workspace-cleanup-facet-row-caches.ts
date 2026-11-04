@@ -1,6 +1,6 @@
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   buildWorkspaceCleanupFacets,
   type WorkspaceCleanupFacetSources,
@@ -12,11 +12,12 @@ import {
   type WorkspaceCleanupReviewInfo,
   type WorkspaceCleanupReviewLookup
 } from './workspace-cleanup-presentation'
+import './workspace-cleanup-host-identity'
 import {
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
-} from './workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 
 /** Cache by candidate identity and reuse unchanged row arrays. useMemo owns invalidation; content-addressed/idempotent fills survive discarded renders without unsafe ref mutation. */

@@ -11,7 +11,7 @@ import type { FeatureInteractionTelemetryBucketState } from './feature-interacti
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
 import type { ChatUiLaunchTipAudience } from './native-chat/chat-ui-launch-tip-audience'
 import type { DiffComment } from './diff-comment-types'
-import type { FolderWorkspace, WorkspaceKey } from './folder-workspace-types'
+import type { FolderWorkspace, WorkspaceKey } from './folder-workspaces/folder-workspace-types'
 import type { GlobalSettings } from './global-settings-types'
 import type { IssueInfo, PRInfo } from './github/pull-request-types'
 import type { OnboardingState } from './onboarding-state-types'

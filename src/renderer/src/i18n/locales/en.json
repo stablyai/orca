@@ -8123,9 +8123,6 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -10336,14 +10333,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestration panel",
-              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "workers",
-              "manager": "manager"
             }
           }
         },
@@ -19753,6 +19742,7 @@
         "availableAfterSessionStarts": "Available after the session starts.",
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
+          "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",
           "low": "Low",
@@ -19965,8 +19955,6 @@
         "stateUnverifiableCount_other": "{{value0}} with status unavailable"
       },
       "jumpToLatest": "Jump to latest",
-      "newRowsAnnouncement": "New messages arrived while you were away",
-      "newRowsMarker": "New",
       "find": {
         "label": "Find in chat",
         "noResults": "No results",

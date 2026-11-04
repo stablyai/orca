@@ -146,3 +146,20 @@ describe('a Claude chat launched with its saved options', () => {
     }
   )
 })
+
+it.each(['/repo/claude.json', '{"customInstructions":"keep","fastMode":true}'])(
+  'compiles saved Ultracode without replacing configured settings %s',
+  (settings) => {
+    const spawn = launched(
+      { effort: 'ultracode', fastMode: 'true' },
+      {
+        base: { ...CLAUDE_STRUCTURED_BASE_OPTIONS, extraArgs: { settings } }
+      }
+    )
+    expect(spawn.sdkOptions.effort).toBe('xhigh')
+    expect(spawn.sdkOptions.extraArgs?.settings).toBe(settings)
+    expect(spawn.sdkOptions.settings).toBeUndefined()
+    expect(spawn.options.get('effort')).toBe('ultracode')
+    expect(spawn.fastModeAtStart).toBe(true)
+  }
+)

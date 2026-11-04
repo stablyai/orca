@@ -1,10 +1,10 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 // Replayed watches miss reconnect-gap changes; ready must trigger conservative overflow so consumers rescan.
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
-import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
-import { createFixedKeyLegacyHandshakeForTest } from '../../../shared/paired-e2ee-fixed-key-test-fixture'
+import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
+import { createFixedKeyLegacyHandshakeForTest } from '../../../shared/remote-runtime/e2ee/paired-e2ee-fixed-key-test-fixture'
 import { WebRuntimeClient } from './web-runtime-client'
-import { encrypt } from '../../../shared/e2ee-crypto'
+import { encrypt } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 
 const fakeSockets: FakeWebSocket[] = []
 

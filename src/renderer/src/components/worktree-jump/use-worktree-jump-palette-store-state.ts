@@ -12,12 +12,12 @@ import {
 } from './worktree-jump-palette-status-inputs'
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
 import {
-  getFolderWorkspaceWorktree,
   resolveQualifiedIndexedFolderWorkspace,
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
+import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 export function useWorktreeJumpPaletteStoreState({
   visible,

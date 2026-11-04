@@ -30,10 +30,6 @@ function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
     captures.push(text)
   }
   const liveInputRef: RefObject<TextInput | null> = { current: null }
-  const liveInputTerminalHandles = new Set([activeHandle])
-  const liveInputTerminalHandlesRef: RefObject<Set<string>> = {
-    current: new Set([activeHandle])
-  }
   const sent: string[] = []
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
     current: async (handle, bytes, origin) => {
@@ -52,8 +48,6 @@ function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
       activeSessionTabTypeRef,
       connected: true,
       liveInputRef,
-      liveInputTerminalHandles,
-      liveInputTerminalHandlesRef,
       sendLiveTerminalInputRef,
       setLiveInputCapture
     })
@@ -78,8 +72,6 @@ function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
     changeHandle: (handle) => {
       activeHandle = handle
       activeHandleRef.current = handle
-      liveInputTerminalHandles.add(handle)
-      liveInputTerminalHandlesRef.current.add(handle)
       act(() => renderer?.update(createElement(Harness)))
     },
     unmount: () => {
