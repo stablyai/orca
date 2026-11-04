@@ -38,7 +38,8 @@ export const TERMINAL_USAGE_LIMIT_METHODS = [
             runtime.getLiveTerminalPaneKey(params.terminal) === paneKey,
           terminalInputSourceForClient(params.client, caller),
           signal,
-          remote && guest ? () => guest.validateSource(remote.request, signal) : undefined
+          remote && guest ? () => guest.validateSource(remote.request, signal) : undefined,
+          source.agent
         )
       } finally {
         source.dispose()

@@ -133,24 +133,26 @@ function isStockPlaceholder(
   return /^Try\s+["\u201C]/.test(text) || STOCK_PLACEHOLDERS.has(text)
 }
 
-// Why: Claude's default caret hides the native cursor and parks it at a painted caret cell. That paint
-// drops on focus-out, so it is required only where another program's alternate-screen frame could
-// mimic the box; a complete frame with the cursor inside is always required.
+// Caret paint disappears on blur; a current Claude owner still needs a complete frame at the cursor.
 function isHiddenComposerCaret(
   context: TerminalCursorContext,
   cursorOnPromptRow: boolean,
-  closedByFrame: boolean
+  closedByFrame: boolean,
+  agent?: 'claude' | 'codex'
 ): boolean {
   return (
     closedByFrame &&
     (!cursorOnPromptRow || /^\s*\u276F/.test(context.beforeCursor)) &&
-    (context.activeBuffer === 'normal' || context.cursorInverse === true)
+    (context.activeBuffer === 'normal' ||
+      context.cursorInverse === true ||
+      (agent === 'claude' && context.activeBuffer === 'alternate'))
   )
 }
 
 function detectTerminalComposer(
   context: TerminalCursorContext | null | undefined,
-  typedOnly = false
+  typedOnly = false,
+  agent?: 'claude' | 'codex'
 ): TerminalComposerMatch | null {
   if (!context || context.rows.length === 0) {
     return null
@@ -189,7 +191,7 @@ function detectTerminalComposer(
           (!COMPOSER_FRAME_LINE.test(top) &&
             (!COMPOSER_TOP_FRAME_PREFIX.test(top.trimStart()) || !closedByFrame)) ||
           (context.cursorHidden &&
-            !isHiddenComposerCaret(context, index === cursorIndex, closedByFrame))
+            !isHiddenComposerCaret(context, index === cursorIndex, closedByFrame, agent))
         ) {
           return null
         }
@@ -303,10 +305,11 @@ export function detectTerminalComposerDraft(
 
 /** The user's own text in the composer, '' when it holds only a placeholder or a dim suggestion, null when no composer is visible. */
 export function readTerminalComposerTypedText(
-  context: TerminalCursorContext | null | undefined
+  context: TerminalCursorContext | null | undefined,
+  agent?: 'claude' | 'codex'
 ): string | null {
   const boxed = context ? detectBoxedComposerDraft(context) : null
-  return boxed ? boxed.text : (detectTerminalComposer(context, true)?.text ?? null)
+  return boxed ? boxed.text : (detectTerminalComposer(context, true, agent)?.text ?? null)
 }
 
 export function hasTerminalComposerPlaceholder(

@@ -40,7 +40,7 @@ afterEach(() => {
   }
 })
 
-async function setup(agent: TuiAgent = 'claude', draft = '') {
+async function setup(agent: TuiAgent = 'claude', draft = '', hiddenAlternate = false) {
   vi.useFakeTimers()
   const runtime = new OrcaRuntimeService()
   runtimes.push(runtime)
@@ -78,6 +78,9 @@ async function setup(agent: TuiAgent = 'claude', draft = '') {
   })
   runtime.registerPreAllocatedHandleForPty(PTY, HANDLE)
   runtime.onPtyData(PTY, `\x1b]0;${agent} idle\x07`, Date.now())
+  if (hiddenAlternate) {
+    runtime.onPtyData(PTY, '\x1b[?1049h\x1b[?25l', Date.now())
+  }
   paint(draft)
   await runtime.serializeMainTerminalBuffer(PTY)
   return { runtime, write, paint }
@@ -86,8 +89,15 @@ async function setup(agent: TuiAgent = 'claude', draft = '') {
 it.each(['claude', 'codex'] as const)(
   'submits the plugin-rewritten continuation through %s settlement',
   async (agent) => {
-    const { runtime, write } = await setup(agent)
-    const result = runtime.continueTerminalUsageLimit(HANDLE, () => true, 'desktop')
+    const { runtime, write } = await setup(agent, '', agent === 'claude')
+    const result = runtime.continueTerminalUsageLimit(
+      HANDLE,
+      () => true,
+      'desktop',
+      undefined,
+      undefined,
+      agent
+    )
     await vi.advanceTimersByTimeAsync(10_000)
     expect(await result).toEqual({ status: 'turn-started' })
     expect(write.mock.calls.map(([, bytes]) => bytes)).toEqual([
@@ -99,15 +109,33 @@ it.each(['claude', 'codex'] as const)(
 )
 
 it('writes zero bytes into a draft or a dialog', async () => {
-  const { runtime, write, paint } = await setup('claude', 'My unsent question')
-  expect(await runtime.continueTerminalUsageLimit(HANDLE, () => true, 'desktop')).toEqual({
+  const { runtime, write, paint } = await setup('claude', 'My unsent question', true)
+  expect(
+    await runtime.continueTerminalUsageLimit(
+      HANDLE,
+      () => true,
+      'desktop',
+      undefined,
+      undefined,
+      'claude'
+    )
+  ).toEqual({
     status: 'refused',
     reason: 'draft'
   })
   paint('')
   runtime.onPtyData(PTY, '\x1b[5;1HEnter to select · Esc to cancel\x1b[2;3H', Date.now())
   await runtime.serializeMainTerminalBuffer(PTY)
-  expect(await runtime.continueTerminalUsageLimit(HANDLE, () => true, 'desktop')).toEqual({
+  expect(
+    await runtime.continueTerminalUsageLimit(
+      HANDLE,
+      () => true,
+      'desktop',
+      undefined,
+      undefined,
+      'claude'
+    )
+  ).toEqual({
     status: 'refused',
     reason: 'permission'
   })
@@ -199,7 +227,11 @@ it.each(
 )(
   'retires an attributed root action on $outcome with $panes unrelated panes',
   async ({ panes, outcome }) => {
-    const { runtime, write } = await setup('claude', outcome === 'refuse' ? 'Unsent draft' : '')
+    const { runtime, write } = await setup(
+      'claude',
+      outcome === 'refuse' ? 'Unsent draft' : '',
+      true
+    )
     const directory = mkdtempSync(join(tmpdir(), 'orca-root-dispatch-'))
     const server = new AgentHookServer()
     try {

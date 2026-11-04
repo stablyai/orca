@@ -4,6 +4,7 @@ import {
   hasTerminalComposerPlaceholder,
   readTerminalComposerTypedText
 } from './terminal-composer-draft'
+import type { TerminalCursorContext } from './terminal-composer-draft'
 
 describe('detectTerminalComposerDraft', () => {
   it.each([
@@ -395,6 +396,75 @@ describe('detectTerminalComposerDraft', () => {
 })
 
 describe('readTerminalComposerTypedText', () => {
+  const blurredClaude: TerminalCursorContext = {
+    rows: [
+      '   ✘ Auto-update failed: no write permissio…',
+      '──────────────────────────────────────────────',
+      '❯\u00a0'
+    ],
+    typedRows: [
+      '   ✘ Auto-update failed: no write permissio…',
+      '──────────────────────────────────────────────',
+      '❯'
+    ],
+    promptGlyphBoldRows: [false, false, false],
+    rowsBelow: [
+      '──────────────────────────────────────────────',
+      '  ⏵⏵ auto mode on (shift+tab to cycle)'
+    ],
+    typedRowsBelow: [
+      '──────────────────────────────────────────────',
+      '  ⏵⏵ auto mode on (shift+tab to cycle)'
+    ],
+    beforeCursor: '❯\u00a0',
+    afterCursor: '',
+    rawAfterCursor: '',
+    cursorHidden: true,
+    cursorViewportRow: 40,
+    activeBuffer: 'alternate',
+    cursorInverse: false
+  }
+
+  it('reads the recorded blurred alternate composer only for its current Claude owner', () => {
+    expect(readTerminalComposerTypedText(blurredClaude)).toBeNull()
+    expect(readTerminalComposerTypedText(blurredClaude, 'codex')).toBeNull()
+    expect(readTerminalComposerTypedText(blurredClaude, 'claude')).toBe('')
+    expect(
+      readTerminalComposerTypedText(
+        {
+          ...blurredClaude,
+          rows: ['──────────────────────────────────────────────', '❯ first line', '  next line'],
+          typedRows: [
+            '──────────────────────────────────────────────',
+            '❯ first line',
+            '  next line'
+          ],
+          beforeCursor: '  next',
+          afterCursor: ' line'
+        },
+        'claude'
+      )
+    ).toBe('first line\nnext line')
+  })
+
+  it('still rejects an incomplete, unknown-buffer or off-prompt hidden frame for Claude', () => {
+    expect(
+      readTerminalComposerTypedText(
+        { ...blurredClaude, rowsBelow: [], typedRowsBelow: [] },
+        'claude'
+      )
+    ).toBeNull()
+    expect(
+      readTerminalComposerTypedText({ ...blurredClaude, activeBuffer: undefined }, 'claude')
+    ).toBeNull()
+    expect(
+      readTerminalComposerTypedText(
+        { ...blurredClaude, beforeCursor: '', afterCursor: '❯ ' },
+        'claude'
+      )
+    ).toBeNull()
+  })
+
   const suggestionOnly = {
     rows: ['────────', '❯'],
     typedRows: ['────────', '❯'],

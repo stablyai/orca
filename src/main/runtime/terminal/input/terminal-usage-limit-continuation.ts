@@ -25,7 +25,8 @@ export abstract class OrcaRuntimeWithTerminalUsageLimitContinuation extends Orca
     isCurrent: () => boolean,
     inputSource: TerminalInputSource,
     signal?: AbortSignal,
-    validateSource?: () => Promise<TerminalUsageLimitSourceResult>
+    validateSource?: () => Promise<TerminalUsageLimitSourceResult>,
+    agent?: 'claude' | 'codex'
   ): Promise<TerminalUsageLimitContinuationResult> {
     const binding = this.getTerminalPromptRequestBinding(handle)
     const { ptyId } = binding
@@ -79,7 +80,7 @@ export abstract class OrcaRuntimeWithTerminalUsageLimitContinuation extends Orca
       ) {
         throw new ContinuationRefused('changed')
       }
-      const text = readTerminalComposerTypedText(model.emulator.getCursorLineContext())
+      const text = readTerminalComposerTypedText(model.emulator.getCursorLineContext(), agent)
       if (text === null || text !== (accepted === 0 ? '' : preparedPrompt)) {
         throw new ContinuationRefused(text ? 'draft' : 'unavailable')
       }

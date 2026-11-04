@@ -130,6 +130,7 @@ describe('readTerminalCursorLineContext', () => {
         })
         expect(detectTerminalComposerDraft(context)).toBeNull()
         if (completeFrame && context) {
+          expect(readTerminalComposerTypedText(context, 'claude')).not.toBe('')
           // The buffer type alone keeps this otherwise complete frame out.
           expect(detectTerminalComposerDraft({ ...context, activeBuffer: 'normal' })?.text).toMatch(
             /^Use/

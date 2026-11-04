@@ -65,6 +65,7 @@ export abstract class AgentHookServerTerminalUsageLimit extends AgentHookServerA
       }
     })
     return {
+      agent: source,
       ...(remote && sourceOwner
         ? {
             remote: {
