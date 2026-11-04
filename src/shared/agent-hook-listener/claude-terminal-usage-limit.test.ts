@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it } from 'vitest'
 import { readClaudeTerminalUsageLimit } from './claude-terminal-usage-limit'
 import { createHookListenerState } from './listener-state'
@@ -35,7 +36,7 @@ const root = {
   message: { role: 'user', content: 'Finish the task' }
 }
 
-// Source-shaped typed branch; the recorded real-CLI 429 lacked apiError and is tested separately.
+// Typed fields from the installed CLI's synthetic-provider quota response.
 const quota = {
   type: 'assistant',
   uuid: 'quota',
@@ -48,6 +49,26 @@ const quota = {
     rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour', resetsAt: RESET_SECONDS }
   }
 }
+
+it('reads the recorded CLI quota through attachment parents and trailing bookkeeping', () => {
+  const path = new URL(
+    '../__fixtures__/claude-2.1.316-synthetic-usage-limit.jsonl',
+    import.meta.url
+  )
+  expect(
+    readClaudeTerminalUsageLimit(
+      fileURLToPath(path),
+      {
+        sessionId: 'adb0b3c4-cc53-417c-8be3-8d4d362ed82b',
+        promptId: '73ec42fc-abbc-40b1-8efc-6a3bdc8f0983'
+      },
+      NOW
+    )
+  ).toEqual({
+    messageId: 'a6f622a6-8e77-46ef-99bf-a7483dd18952',
+    usageLimit: { window: 'session', resetsAt: 1_793_760_846_000 }
+  })
+})
 
 it('attributes a camelCase typed quota row without assistant promptId through its parent chain', () => {
   expect(

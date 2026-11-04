@@ -8,10 +8,12 @@ import { readString } from './tool-input-preview'
 
 type JsonRecord = Record<string, unknown>
 
-function record(value: unknown): JsonRecord | undefined {
+function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as JsonRecord)
-    : undefined
+}
+
+function record(value: unknown): JsonRecord | undefined {
+  return isRecord(value) ? value : undefined
 }
 
 export type ClaudeTerminalUsageLimit = {

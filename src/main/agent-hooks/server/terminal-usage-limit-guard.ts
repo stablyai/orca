@@ -1,5 +1,4 @@
 import type { HookListenerState } from '../../../shared/agent-hook-listener/listener-state'
-import type { EnrichedAgentHookEventPayload } from './server-types'
 import { readClaudeTerminalUsageLimit } from '../../../shared/agent-hook-listener/claude-terminal-usage-limit'
 import { readJsonlCursor } from '../../../shared/codex-rollout-jsonl-cursor'
 import { isCodexStatusTranscriptLine } from '../../../shared/codex-status-transcript-line'
@@ -13,9 +12,7 @@ export function terminalUsageLimitGuard(
   paneKey: string,
   expected: TerminalUsageLimitCut
 ): (() => boolean) | null {
-  const original = state.lastStatusByPaneKey.get(paneKey) as
-    | EnrichedAgentHookEventPayload
-    | undefined
+  const original = state.lastStatusByPaneKey.get(paneKey)
   const matches = (row: typeof original): row is NonNullable<typeof original> =>
     row !== undefined &&
     row.connectionId === null &&
@@ -31,7 +28,7 @@ export function terminalUsageLimitGuard(
     return null
   }
   return () => {
-    const current = state.lastStatusByPaneKey.get(paneKey) as typeof original
+    const current = state.lastStatusByPaneKey.get(paneKey)
     if (
       !matches(current) ||
       current.hostTurn?.owner !== original.hostTurn?.owner ||
