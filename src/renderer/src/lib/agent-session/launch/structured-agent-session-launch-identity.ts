@@ -1,6 +1,6 @@
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import type { StructuredAgentLaunchOptions } from '../../structured-agent-session-launch-callers'
+import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
 
 // Key by agent for concurrent Claude/Codex starts, and conversation so resumes never join unrelated blank launches.
 export function structuredLaunchIdentity(

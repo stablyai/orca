@@ -1,6 +1,6 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { agentVerdictFields } from '../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { agentVerdictFields } from '../../shared/agent-main-agent-verdict'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionAgentTabStatus
@@ -8,7 +8,7 @@ import type {
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 
 /** A chat tab with the state it shows: the host's own structured row for its session, as desktop draws it. */
 export function withStructuredChatStatus(

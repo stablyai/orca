@@ -1,18 +1,19 @@
 import type { SideChatPermission } from '../../../src/shared/agent-session-side-chat'
-import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
-import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../src/shared/agent-session-wire'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session-definitive-refusal'
+} from '../../../src/shared/agent-session/agent-session-wire'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionCreateParams
-} from '../../../src/shared/structured-agent-session-create'
-import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
-import { structuredAgentSessionSendBody } from '../../../src/shared/structured-agent-session-send-mutation'
+} from '../../../src/shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentCreateSupportReply } from '../../../src/shared/agent-session/structured-agent-create-support-reply'
+import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
+import { structuredAgentSessionSendBody } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'
@@ -23,10 +24,8 @@ import {
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
-type StructuredCreateSupport = {
-  supported?: boolean
-  reason?: 'agent' | 'remote' | 'wsl'
-}
+// Partial: the reply is read before it is checked.
+type StructuredCreateSupport = Partial<StructuredAgentCreateSupportReply>
 
 const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'
 const CREATE_SUPPORT_RETRY_DELAYS_MS: readonly number[] = [50, 150, 300]

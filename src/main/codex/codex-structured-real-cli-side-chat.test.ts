@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { resolveCodexCommand } from '../codex-cli/command'
-import { openCodexAppServerConnection } from './codex-app-server-connection'
-import { openCodexThread } from './codex-structured-thread-open'
+import { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
+import { openCodexThread } from './structured/threads/codex-structured-thread-open'
 
 it.skipIf(process.env.ORCA_REAL_CODEX_CLI_TEST !== '1')(
   'forks actual provider history and cold-resumes the independent child with selected permissions',

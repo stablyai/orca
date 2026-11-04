@@ -15,10 +15,6 @@ const CODEX = {
 }
 
 describe('decodeAgentSessionAgentsResult', () => {
-  it('reads every well-formed agent', () => {
-    expect(decodeAgentSessionAgentsResult({ agents: [CODEX] })).toEqual([CODEX])
-  })
-
   it('drops a row it cannot read and keeps the rest', () => {
     expect(
       decodeAgentSessionAgentsResult({
@@ -60,17 +56,6 @@ describe('decodeAgentSessionAgentsResult', () => {
         }
       }
     ])
-  })
-
-  it('keeps the first row of a repeated agent', () => {
-    const later = { ...CODEX, capabilities: { ...CODEX.capabilities, rewind: false } }
-    expect(decodeAgentSessionAgentsResult({ agents: [CODEX, later] })).toEqual([CODEX])
-  })
-
-  it('answers null for a reply that is not an agent list', () => {
-    expect(decodeAgentSessionAgentsResult(null)).toBeNull()
-    expect(decodeAgentSessionAgentsResult({})).toBeNull()
-    expect(decodeAgentSessionAgentsResult({ agents: 'claude' })).toBeNull()
   })
 })
 

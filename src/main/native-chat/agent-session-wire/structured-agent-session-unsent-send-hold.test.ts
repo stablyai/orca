@@ -1,11 +1,11 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
@@ -24,6 +24,7 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
+import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 const MAIL_SOURCE: AgentMessageSource = {
   kind: 'agent',
@@ -43,8 +44,6 @@ const CHAT_CLOSED = agentSessionFailureWords(agentSessionFailureFact('chatClosed
   surface: 'rejection'
 })
 const KEPT = { state: 'waiting' }
-
-import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 let rig: QueuedMessageTestRig
 const observationClock = createStructuredSessionObservationClock(() => rig.host, SESSION)
@@ -611,7 +610,9 @@ describe("the reopen's mark", () => {
       await observationClock.observe(100)
       expect(await rig.handoff(queued.id)).toBeUndefined()
       expect(dispatchedTexts()).toEqual(['work on this'])
-      void working
+      expect(await rig.deleteQueued(`recovery:${working}`)).toMatchObject({
+        value: { deleted: false }
+      })
 
       const next = rig.send('after the reopen')
       await next.result

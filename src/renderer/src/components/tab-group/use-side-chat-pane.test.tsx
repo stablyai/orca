@@ -15,7 +15,7 @@ import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.
 import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { endLayoutFramePositions } from '@/runtime/layout-frame-position'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
-import { openStructuredAgentSessionProvisionalTab } from '@/lib/structured-agent-session-launch-surface'
+import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import {
   readStructuredAgentLaunchRecord,
   writeStructuredAgentLaunchRecord,

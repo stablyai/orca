@@ -98,6 +98,14 @@ export function registerRuntimeClientIpcBridge(
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
+    if (event.type === 'notificationAttentionAcknowledged') {
+      void window.api.notifications
+        .acknowledgeAttention(event.acknowledgement, toRuntimeExecutionHostId(environmentId))
+        .catch((error: unknown) =>
+          console.warn('[notifications] Remote acknowledgement failed', error)
+        )
+      return
+    }
     if (event.type === 'worktreeTerminalSleepState') {
       applyHostWorktreeTerminalSleepState(environmentId, event)
       return
@@ -175,6 +183,9 @@ export function registerRuntimeClientIpcBridge(
     }
     // This window builds its sidebar from its own store, never from a host's phone feed.
     if (event.type === 'sidebarInputsChanged') {
+      return
+    }
+    if (event.type !== 'activateWorktree') {
       return
     }
     // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.

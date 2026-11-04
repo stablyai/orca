@@ -1,4 +1,4 @@
-import { readWslDistroRunningState } from '../wsl-background-distro-gate'
+import { readWslDistroRunningState } from '../wsl/discovery/wsl-background-distro-gate'
 import { wslDistroHoldMessage } from '../../shared/wsl-distro-stopped-hold'
 import type { PtySpawnOptions } from '../providers/pty-provider-contract'
 

@@ -1,15 +1,15 @@
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-freshness'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { isFreshNonDoneAgentStatus } from '../../shared/agent-status/contracts/agent-status-freshness'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { AgentHookServer, _internals } from './server'
 import { PANE } from './server.test-fixtures'
 

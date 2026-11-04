@@ -1,6 +1,12 @@
+import { isClaudeQueryClosed } from '../claude-agent-sdk-control-requests'
+import { claudeStartFailure } from '../claude-startup-failure'
+import {
+  startupAcquisitionRefusal,
+  providerExitObserved
+} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 // Initialize gates host open after process publication; settings enrichment runs independently.
 
-import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
 import type { StructuredAgentSessionProviderOpenResult } from '../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
@@ -17,15 +23,20 @@ import {
 import {
   claudeStructuredSessionPublicationOptions,
   prepareClaudeStructuredSessionAcquisitionOptions
-} from '../claude-structured-session-acquisition-options'
+} from './launch/claude-structured-session-acquisition-options'
 import {
   claudeStructuredSessionOptionsFrom,
+  claudeObservedEffort,
   observeClaudeSettingsApplied,
   readClaudeSettingsApplied,
   readClaudeFastModeFacts,
   readClaudeSettingsEffort
-} from '../claude-structured-session-options'
-import { claudeExecutionObservations } from '../claude-structured-execution-observations'
+} from './launch/claude-structured-session-options'
+import { claudeExecutionObservations } from './claude-structured-execution-observations'
+import {
+  claudeExitForReport,
+  claudeStartupAnswerAfterExit
+} from './claude-structured-session-startup-exit'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeSession,
@@ -64,22 +75,41 @@ export async function readClaudeStartupFacts(input: {
   emit: (event: ClaudeStructuredSessionEvent) => void
 }): Promise<ClaudeInitializeFacts> {
   let timer: ReturnType<typeof setTimeout> | undefined
+  const control = input.connection.initializationResult().then((result) => {
+    const authError = claudeInitializationAuthError(result, input.account)
+    if (authError) {
+      throw authError
+    }
+    return result
+  })
   const initialization = await Promise.race([
-    input.connection
-      .initializationResult()
-      .catch((error: unknown) => {
-        // The SDK may replace the child's own exit diagnostic with a generic closed-query error.
+    control.catch(async (error: unknown) => {
+      let proof: unknown
+      try {
         input.initProof.seen()
+      } catch (proofError) {
+        // A refusal, or what closed the query before Claude identified itself, is an answer.
+        proof =
+          startupAcquisitionRefusal(proofError) || isClaudeQueryClosed(error) ? proofError : null
+      }
+      throw claudeStartFailure([
+        input.connection.startupFailure?.(),
+        proof,
+        error,
+        await claudeExitForReport(input.connection, error)
+      ])
+    }),
+    Promise.race([
+      input.initProof.promise.then(() => new Promise<never>(() => {})),
+      input.connection.exited?.then((error) => {
         throw error
-      })
-      .then((result) => {
-        const authError = claudeInitializationAuthError(result, input.account)
-        if (authError) {
-          throw authError
-        }
-        return result
-      }),
-    input.initProof.promise.then(() => new Promise<never>(() => {})),
+      }) ?? new Promise<never>(() => {})
+    ]).catch(async (error: unknown) => {
+      if (startupAcquisitionRefusal(error) || !providerExitObserved(error)) {
+        throw error
+      }
+      throw await claudeStartupAnswerAfterExit(input.connection, control, error)
+    }),
     new Promise<never>((_resolve, reject) => {
       timer = setTimeout(
         () =>
@@ -97,7 +127,10 @@ export async function readClaudeStartupFacts(input: {
     })
   ]).finally(() => clearTimeout(timer))
   if (input.connection.closed) {
-    throw new Error('claude session closed before startup completed')
+    throw (
+      input.connection.startupFailure?.() ??
+      new Error('claude session closed before startup completed')
+    )
   }
   input.emit({
     type: 'options',
@@ -127,9 +160,7 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
   const fastModeFacts = readClaudeFastModeFacts(initialization)
   if (session.fastModeState === undefined && fastModeFacts.state) {
     session.fastModeState = fastModeFacts.state
-    session.fastModeReportedMutation = 0
   }
-  session.fastModeDisabledReason ??= fastModeFacts.disabledReason
   session.capabilities = readClaudeCapabilities(session.capabilities, initialization, init?.message)
   // Streamed catalog updates take precedence over initialize.
   if (session.commands.commands === undefined) {
@@ -172,14 +203,15 @@ function applyClaudeSettingsFacts(
   }
   // A launch `--effort` shows only in `applied`, never in `effective` (measured on 2.1.280).
   const launchedEffort = session.options.get('effort')
-  if (launchedEffort !== undefined && session.appliedOptions?.effort === launchedEffort) {
+  if (
+    launchedEffort !== undefined &&
+    claudeObservedEffort(session.appliedOptions?.effort, session.appliedOptions?.ultracode) ===
+      launchedEffort
+  ) {
     session.confirmedOptions.add('effort')
   }
   if (published.fastMode !== null) {
     session.reportedOptions.fastMode = published.fastMode
-    if (!published.fastMode) {
-      delete session.fastModeReportedMutation
-    }
     if (agrees('fastMode', String(published.fastMode))) {
       session.confirmedOptions.add('fastMode')
     }
@@ -215,7 +247,10 @@ export async function openClaudeSession(input: {
   const { session } = input
   const initialized = await input.facts
   if (!input.isCurrent()) {
-    throw new Error('claude session closed before startup completed')
+    throw (
+      session.connection.startupFailure?.() ??
+      new Error('claude session closed before startup completed')
+    )
   }
   initialized.initProof.onRefusal = (error) => {
     if (input.isCurrent()) {

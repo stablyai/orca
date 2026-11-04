@@ -1,10 +1,8 @@
-import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
-import {
-  agentSessionBackgroundTasksEqual,
-  type AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
-import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import { agentSessionBackgroundTasksEqual } from '../../../shared/agent-session/agent-session-background-task-wire'
+import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-status/lifecycle/agent-lead-status-fold'
+import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import { structuredStatusChildrenEqual } from './structured-agent-session-status-child-work'
 
 export function structuredStatusSummariesEqual(
@@ -14,6 +12,9 @@ export function structuredStatusSummariesEqual(
   return (
     a.workspaceId === b.workspaceId &&
     a.sideChatOf === b.sideChatOf &&
+    a.usageLimitContinue?.turnItemId === b.usageLimitContinue?.turnItemId &&
+    a.usageLimitContinue?.resetsAt === b.usageLimitContinue?.resetsAt &&
+    a.usageLimitContinue?.state === b.usageLimitContinue?.state &&
     a.agent === b.agent &&
     a.status === b.status &&
     a.hostExecutionOwned === b.hostExecutionOwned &&
@@ -27,6 +28,7 @@ export function structuredStatusSummariesEqual(
       (a.statusStartedAt !== undefined && !isIdleHeldOpenByChildWork(b))) &&
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
+    a.reportedModel === b.reportedModel &&
     a.permissionMode === b.permissionMode &&
     a.runtimePermission?.fence === b.runtimePermission?.fence &&
     a.runtimePermission?.mode === b.runtimePermission?.mode &&

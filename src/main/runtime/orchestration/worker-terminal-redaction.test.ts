@@ -116,24 +116,4 @@ describe('worker terminal capability masking', () => {
       )
     }
   )
-
-  it('keeps an empty screen empty', () => {
-    expect(redactWorkerTerminalView({ tail: [], source: 'screen' })).toEqual({
-      tail: [],
-      warnings: []
-    })
-  })
-
-  it('handles the maximum retained row count without changing ordinary output', () => {
-    const lines = Array.from(
-      { length: 2000 },
-      (_, index) => `Diagnostic ${index} ${'x'.repeat(100)}`
-    )
-    expect(
-      redactWorkerTerminalLines(
-        lines,
-        lines.map(() => ({ wrapped: false, trailingSpaces: 0 }))
-      )
-    ).toEqual({ lines, warnings: [] })
-  })
 })

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check, CircleHelp } from 'lucide-react-native'
-import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
+import { MobileNativeChatCardHeaderAction } from '../MobileNativeChatCardHeaderAction'
 import { colors, concentricRadius, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'

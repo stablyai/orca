@@ -19,7 +19,7 @@ import {
 } from '../../../../../shared/workspace-layout/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
-import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { createdTabPreviewFlag } from './tab-preview-flag'
 import { selectFolderWorkspaces } from '../../workspace-record-selectors'
 
@@ -129,7 +129,8 @@ export function createTabsCreateActions(
           isPinned: init?.isPinned
         }
 
-        const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
+        const nextActiveTabId =
+          shouldActivate || init?.showInGroup ? created.id : (group.activeTabId ?? created.id)
         const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
         // Automation-created browsers paint without stealing the visible group selection.
         const nextRecent = shouldActivate

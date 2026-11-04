@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronUp } from 'lucide-react-native'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -23,7 +23,7 @@ export function MobileNativeChatPromptStrip({
         accessibilityLabel={t('chat.promptStrip.expand', 'Expand')}
         accessibilityState={{ expanded: false }}
         hitSlop={8}
-        style={styles.action}
+        style={({ pressed }) => [styles.action, pressed && pressedStyle]}
         onPress={onExpand}
       >
         <ChevronUp size={16} color={colors.textMuted} />

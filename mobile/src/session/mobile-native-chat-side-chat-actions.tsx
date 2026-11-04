@@ -1,6 +1,6 @@
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { agentChatPermissionModes } from '../../../src/shared/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { CornerDownRight, Eye, GitFork } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'

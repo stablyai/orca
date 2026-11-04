@@ -1,4 +1,4 @@
-import { agentChatPermissionModes } from '../../../../shared/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { SideChatPermission } from '../../../../shared/agent-session-side-chat'
 import { AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY } from '../../../../shared/agent-session-side-chat'
 import { useStructuredAgentSessionHostCapability } from '@/runtime/structured-agent-session-host-capability'

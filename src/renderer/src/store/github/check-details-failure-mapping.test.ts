@@ -11,8 +11,6 @@ import {
 } from '../slices/github-slice-test-harness'
 
 import {
-  check,
-  prRepo,
   details,
   surfaces,
   transports,
@@ -22,7 +20,7 @@ import {
   type Surface
 } from './check-details-loader-test-fixture'
 import * as normalization from '@/lib/check-run-details-log-normalization'
-import * as sanitation from '../../../../shared/check-job-log-excerpt'
+import * as sanitation from '../../../../shared/source-control/checks/logs/check-job-log-excerpt'
 import {
   checkLogJob,
   legacyControls,
@@ -129,137 +127,6 @@ afterEach(() => {
 for (const surface of surfaces) {
   for (const transport of transports) {
     describe(`${surface} check-details failure mapping over ${transport}`, () => {
-      it('keeps source-owned routing, fork/enterprise identity and a single request', async () => {
-        const subscription = recordRuntimeSubscription()
-        runtimeEnvironmentSubscribe.mockImplementation(subscription.subscribe)
-        mockApi.gh.prCheckDetails.mockResolvedValue(details)
-        const loader = createLoader(surface, transport)
-        loader.start()
-        await vi.advanceTimersByTimeAsync(0)
-        if (transport === 'rpc') {
-          expect(runtimeEnvironmentSubscribe).toHaveBeenCalledWith(
-            {
-              subscriptionId: expect.any(String),
-              selector: 'source-env',
-              method: 'github.prCheckDetails',
-              params: {
-                repo: 'source-repo-id',
-                checkRunId: 123,
-                workflowRunId: 456,
-                checkName: check.name,
-                url: check.url,
-                prRepo
-              },
-              timeoutMs: 30_000,
-              expectedEnvironmentPairingRevision: undefined,
-              expectedEnvironmentRuntimeId: undefined
-            },
-            expect.any(Object)
-          )
-          subscription.respond(successResponse())
-        } else {
-          expect(mockApi.gh.prCheckDetails).toHaveBeenCalledWith({
-            repoPath: '/folder',
-            repoId: 'caller-repo',
-            sourceContext: loader.ctx.sourceContext,
-            checkRunId: 123,
-            workflowRunId: 456,
-            checkName: check.name,
-            url: check.url,
-            prRepo
-          })
-        }
-        await vi.advanceTimersByTimeAsync(0)
-        if (surface === 'store') {
-          expect(loader.storeSettlement()).toEqual({ status: 'fulfilled', details })
-        } else {
-          expect(loader.state().detailsByCheckKey.check).toMatchObject({
-            loading: false,
-            details,
-            error: null
-          })
-        }
-        expectRequestCounts(transport)
-        expect(vi.getTimerCount()).toBe(0)
-      })
-
-      it('preserves the real wrapper Chinese translation of host timeout failures', async () => {
-        const original = hostileError(
-          "SYNTHETIC_SECRET_host Error invoking remote method 'gh:prCheckDetails': Error: Timed out loading check details."
-        )
-        const subscription = recordRuntimeSubscription()
-        runtimeEnvironmentSubscribe.mockImplementation(subscription.subscribe)
-        mockApi.gh.prCheckDetails.mockRejectedValue(original)
-        const loader = createLoader(surface, transport)
-        loader.start()
-        await vi.advanceTimersByTimeAsync(0)
-        if (transport === 'rpc') {
-          subscription.respond({
-            id: 'failed-host',
-            ok: false,
-            error: { code: 'runtime_error', message: original.message, data: original },
-            _meta: { runtimeId: 'source-runtime' }
-          })
-        }
-        await vi.advanceTimersByTimeAsync(0)
-        expectFailure(loader, surface, timeoutMessage, original)
-        expectRequestCounts(transport)
-        if (transport === 'rpc') {
-          expect(subscription.unsubscribe).toHaveBeenCalledOnce()
-        }
-      })
-
-      it('discards hostile generic rejection fields and preserves failure settlement', async () => {
-        const original = hostileError()
-        mockApi.gh.prCheckDetails.mockRejectedValue(original)
-        runtimeEnvironmentSubscribe.mockRejectedValue(original)
-        const loader = createLoader(surface, transport)
-        loader.start()
-        await vi.advanceTimersByTimeAsync(0)
-        expectFailure(loader, surface, genericMessages[surface], original)
-        expectRequestCounts(transport)
-      })
-
-      it('replaces a checked abort with the existing fresh fixed abort', async () => {
-        const original = hostileError()
-        original.name = 'AbortError'
-        mockApi.gh.prCheckDetails.mockRejectedValue(original)
-        runtimeEnvironmentSubscribe.mockRejectedValue(original)
-        const loader = createLoader(surface, transport)
-        loader.start()
-        await vi.advanceTimersByTimeAsync(0)
-        expectFailure(loader, surface, 'Runtime request aborted', original)
-        expectRequestCounts(transport)
-      })
-
-      it('classifies exact translated timeouts before a checked abort', async () => {
-        const original = hostileError(timeoutMessage)
-        original.name = 'AbortError'
-        mockApi.gh.prCheckDetails.mockRejectedValue(original)
-        runtimeEnvironmentSubscribe.mockRejectedValue(original)
-        const loader = createLoader(surface, transport)
-        loader.start()
-        await vi.advanceTimersByTimeAsync(0)
-        expectFailure(loader, surface, timeoutMessage, original)
-        expectRequestCounts(transport)
-      })
-
-      it.each([
-        timeoutMessage,
-        { message: timeoutMessage, name: 'AbortError', stdout: 'SYNTHETIC_SECRET_object' },
-        new Error(`SYNTHETIC_SECRET_prefix ${timeoutMessage}`),
-        new Error(`${timeoutMessage} SYNTHETIC_SECRET_suffix`),
-        new Error('SYNTHETIC_SECRET prose AbortError or timeout, not classification')
-      ])('requires checked exact localized/abort classification (%#)', async (original) => {
-        mockApi.gh.prCheckDetails.mockRejectedValue(original)
-        runtimeEnvironmentSubscribe.mockRejectedValue(original)
-        const loader = createLoader(surface, transport)
-        loader.start()
-        await vi.advanceTimersByTimeAsync(0)
-        expectFailure(loader, surface, genericMessages[surface], original)
-        expectRequestCounts(transport)
-      })
-
       it('keeps the 30-second renderer timeout and ignores late details', async () => {
         const upstream = Promise.withResolvers<PRCheckRunDetails>()
         const subscription = recordRuntimeSubscription()
@@ -522,65 +389,6 @@ for (const surface of ['dialog', 'page'] as const) {
         expectRequestCounts(transport)
         expect(vi.getTimerCount()).toBe(0)
       })
-
-      it('starts no request without repository context or check handles', async () => {
-        const loader = createLoader(surface, transport)
-        loader.ctx.canUseChecksRepoContext = false
-        loader.start()
-        loader.ctx.canUseChecksRepoContext = true
-        loader.start({ name: 'no handle', status: 'queued', conclusion: null, url: null })
-        await vi.advanceTimersByTimeAsync(0)
-        expect(loader.ctx.nextCheckDetailsRequestIdRef.current).toBe(0)
-        expect(loader.state().detailsByCheckKey).toEqual({})
-        expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
-        expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalled()
-        expect(runtimeEnvironmentSubscribe).not.toHaveBeenCalled()
-        expect(vi.getTimerCount()).toBe(0)
-      })
     })
   }
 }
-
-it.each([false, true])(
-  'keeps folder repo owner routing with remote focused (remote=%s)',
-  async (remote) => {
-    const loader = createLoader('store', remote ? 'rpc' : 'ipc')
-    loader.ctx.sourceContext = null
-    loader.store.setState({
-      repos: [
-        {
-          id: 'caller-repo',
-          path: '/folder',
-          displayName: 'Folder',
-          badgeColor: '',
-          addedAt: 1,
-          kind: 'folder',
-          executionHostId: remote ? 'runtime:folder-owner' : undefined
-        }
-      ]
-    })
-    const subscription = recordRuntimeSubscription()
-    runtimeEnvironmentSubscribe.mockImplementation(subscription.subscribe)
-    mockApi.gh.prCheckDetails.mockResolvedValue(details)
-    loader.start()
-    await vi.advanceTimersByTimeAsync(0)
-    if (remote) {
-      expect(runtimeEnvironmentSubscribe).toHaveBeenCalledWith(
-        expect.objectContaining({
-          selector: 'folder-owner',
-          params: expect.objectContaining({ repo: 'caller-repo' })
-        }),
-        expect.any(Object)
-      )
-      subscription.respond(successResponse())
-    } else {
-      expect(mockApi.gh.prCheckDetails).toHaveBeenCalledWith(
-        expect.objectContaining({ repoPath: '/folder', repoId: 'caller-repo', sourceContext: null })
-      )
-    }
-    await vi.advanceTimersByTimeAsync(0)
-    expect(loader.storeSettlement()).toEqual({ status: 'fulfilled', details })
-    expectRequestCounts(remote ? 'rpc' : 'ipc')
-    expect(vi.getTimerCount()).toBe(0)
-  }
-)

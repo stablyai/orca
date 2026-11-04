@@ -1,4 +1,4 @@
-import { isPowerShellProcess } from '../../shared/shell-process-detection'
+import { isPowerShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
 export type PowerShellPromptRepaintDeps = {

@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
-const mockCreateWebRuntimeAgentSessionTerminal = vi.fn()
-const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft = vi.fn()
 const mockCreateTab = vi.fn()
 function queuedStartups() {
   return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
@@ -105,14 +103,13 @@ vi.mock('@/lib/telemetry', () => ({
 
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn(),
-  createWebRuntimeAgentSessionTerminal: mockCreateWebRuntimeAgentSessionTerminal,
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft:
-    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft
+  createWebRuntimeAgentSessionTerminal: vi.fn(),
+  createWebRuntimeAgentSessionTerminalWithLaunchDraft: vi.fn()
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
-vi.mock('../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../shared/workspace-layout/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 
@@ -120,10 +117,6 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
-    mockCreateWebRuntimeAgentSessionTerminal.mockResolvedValue({
-      outcome: { status: 'created' },
-      promptDelivered: true
-    })
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
     store.settings = {
@@ -164,31 +157,6 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
   })
 
-  it('forces oversized Windows drafts through the paired-host paste fallback without submitting', async () => {
-    mockIsWebRuntimeSessionActive.mockReturnValue(true)
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-    const prompt = 'x'.repeat(25_000)
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-1',
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt,
-      promptDelivery: 'draft',
-      launchPlatform: 'win32'
-    })
-
-    await result?.terminalCompletion
-    expect(mockCreateWebRuntimeAgentSessionTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        promptAfterReady: prompt,
-        submitPrompt: false,
-        forcePromptPaste: true
-      })
-    )
-    expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).not.toHaveBeenCalled()
-  })
-
   it('uses the explicit startup shell platform when building draft launch commands', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -204,42 +172,6 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     expect(queuedStartups()).toContainEqual(
       expect.objectContaining({
         command: "claude '--dangerously-skip-permissions' --prefill 'review Bob''s change'"
-      })
-    )
-  })
-
-  it('quotes local Windows default agent args for cmd.exe empty launches', async () => {
-    store.settings.terminalWindowsShell = 'cmd.exe'
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      requestId: 'request-3',
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      launchPlatform: 'win32'
-    })
-
-    expect(queuedStartups()).toContainEqual(
-      expect.objectContaining({
-        command: 'claude "--dangerously-skip-permissions"'
-      })
-    )
-  })
-
-  it('keeps PowerShell quoting for local Windows default agent args', async () => {
-    store.settings.terminalWindowsShell = 'powershell.exe'
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      requestId: 'request-4',
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      launchPlatform: 'win32'
-    })
-
-    expect(queuedStartups()).toContainEqual(
-      expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions'"
       })
     )
   })

@@ -4,14 +4,15 @@ import {
   type ParsedExecutionHost
 } from '../../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from './connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
 import { CLIENT_PLATFORM } from './new-workspace'
+import type { ResolvedAgentBackgroundTarget } from './agent-background-session-contract'
 import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
@@ -143,8 +144,17 @@ export function resolveRepoExecutionHostPlatform(
 export function resolveWorktreeExecutionHostPlatform(
   state: WorktreeHostFactsState,
   worktreeId: string,
-  workspacePath: string | null | undefined
+  workspacePath: string | null | undefined,
+  resolvedTarget?: ResolvedAgentBackgroundTarget
 ): ExecutionHostPlatformFact {
+  if (resolvedTarget) {
+    return resolveRepoWorktreePlatformFact(
+      state,
+      resolvedTarget.repo,
+      resolvedTarget.worktree,
+      resolvedTarget
+    )
+  }
   // Why the routing default: an owner-less row launches where routing sends it, so read that host.
   const host = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
   return resolveHostPlatform(state, {
@@ -179,6 +189,16 @@ export function resolveRepoWorktreeLaunchPlatform(
     runtimeOwnerEnvironmentId?: string | null
   }
 ): NodeJS.Platform | undefined {
+  const fact = resolveRepoWorktreePlatformFact(state, repo, worktree)
+  return fact.kind === 'known' ? fact.platform : undefined
+}
+
+function resolveRepoWorktreePlatformFact(
+  state: WorktreeHostFactsState,
+  repo: Parameters<typeof resolveRepoWorktreeLaunchPlatform>[1],
+  worktree: Parameters<typeof resolveRepoWorktreeLaunchPlatform>[2],
+  resolvedTarget?: ResolvedAgentBackgroundTarget
+): ExecutionHostPlatformFact {
   const repoHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   const ownHost = parseExecutionHostId(worktree.hostId)
   // Why: a per-worktree host (e.g. a local checkout of a server project) outranks the repo's.
@@ -186,16 +206,22 @@ export function resolveRepoWorktreeLaunchPlatform(
   const serverOwner =
     worktree.runtimeOwnerEnvironmentId?.trim() ||
     (repoHost?.kind === 'runtime' ? repoHost.environmentId : null)
-  const fact = resolveHostPlatform(state, {
+  return resolveHostPlatform(state, {
     host,
     nestedSshTargetId:
       host?.kind === 'runtime' && host === repoHost ? repo.connectionId?.trim() || null : null,
     // Why: a server-projected SSH worktree is reached through that server's own connection.
     sshOwnerEnvironmentId: host?.kind === 'ssh' ? serverOwner : null,
     workspacePath: worktree.path ?? repo.path,
-    projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, worktree.id)
+    projectRuntime: () =>
+      getLocalProjectExecutionRuntimeContext(
+        state,
+        worktree.id,
+        undefined,
+        undefined,
+        resolvedTarget
+      )
   })
-  return fact.kind === 'known' ? fact.platform : undefined
 }
 
 export function requireExecutionHostPlatform(fact: ExecutionHostPlatformFact): NodeJS.Platform {

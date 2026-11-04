@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -86,7 +86,8 @@ describe('main’s startup pass over the host census, layout-owner build', () =>
         workspace: FOLDER_KEY,
         adopt: { ptyId: 'pty-agent', incarnationId: 'inc-1' }
       }),
-      ['local']
+      ['local'],
+      {}
     )
   })
 

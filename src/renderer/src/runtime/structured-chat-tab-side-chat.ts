@@ -1,5 +1,5 @@
 import type { Tab } from '../../../shared/tab-types'
-import { isAgentSessionId } from '../../../shared/agent-session-record'
+import { isAgentSessionId } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AppState } from '@/store/types'
 import { readStructuredAgentLaunchRecord } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import {

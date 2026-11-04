@@ -11,7 +11,7 @@ import {
 import { i18n } from '@/i18n/i18n'
 import type { TabBarItem } from './tab-bar-item-model'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   renderTabBarItems,
   type TabBarItemSurfaceProps,
@@ -22,7 +22,7 @@ import { useTabBarItemActions } from './use-tab-bar-item-actions'
 import type {
   AgentSessionStatusSummary,
   AgentSessionConversationName
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import type * as StatusFeedModule from '@/runtime/structured-agent-session-status-feed'
 
 const sideStatus = vi.hoisted(() => ({

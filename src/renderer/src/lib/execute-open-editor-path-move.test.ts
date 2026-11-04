@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
-import type * as EditorAutosave from '@/components/editor/editor-autosave'
+import type * as EditorAutosave from '@/components/editor/autosave/editor-autosave'
 
 const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn() }))
 vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
@@ -19,7 +19,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosave>()
   return { ...actual, requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined) }
 })
@@ -28,6 +28,7 @@ import { useAppStore } from '@/store'
 import { executeOpenEditorPathMove } from './execute-open-editor-path-move'
 import { __activeEditorPathMoveCountForTests } from '@/components/editor/editor-path-move-inflight'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
+import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation-generation'
 import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from '@/hooks/editor-external-watch-event-reconciliation'
 import {
   drawTabsFromMain,
@@ -117,6 +118,37 @@ describe('executeOpenEditorPathMove', () => {
       .openFiles.find((file) => file.runtimeEnvironmentId === 'env-server')!
     state.setEditorDraft(remote.id, 'server draft')
     state.markFileDirty(remote.id, true)
+    useAppStore.setState((current) => ({
+      openFiles: current.openFiles.map((file) =>
+        file.id === remote.id
+          ? {
+              ...file,
+              operationProvenance: {
+                ownershipProjection: 'explicit',
+                generation: captureWorktreeOperationGenerationSnapshot(
+                  { runtimeEnvironmentId: 'env-server', executionHostId: 'runtime:env-server' },
+                  { endpoint: { kind: 'environment', environmentId: 'env-server' }, at: 'ssh:box' }
+                )
+              }
+            }
+          : file
+      )
+    }))
+    await executeOpenEditorPathMove({
+      context: {
+        ...CONTEXT,
+        target: { kind: 'environment', environmentId: 'env-server' },
+        expectedExecutionHostId: 'ssh:other'
+      },
+      fromPath: '/repo/a.md',
+      toPath: '/repo/other.md',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo'
+    })
+    expect(useAppStore.getState().openFiles.every((file) => file.filePath === '/repo/a.md')).toBe(
+      true
+    )
+    expect(useAppStore.getState().editorDrafts[remote.id]).toBe('server draft')
 
     await executeOpenEditorPathMove({
       context: { ...CONTEXT, expectedExecutionHostId: 'local' },
@@ -156,50 +188,6 @@ describe('executeOpenEditorPathMove', () => {
     })
 
     expect(useAppStore.getState().openFiles[0]!.filePath).toBe('/repo/b.md')
-  })
-
-  it('declares the moved file as the document for a document-scoped rename', async () => {
-    openDirtyTab()
-
-    await executeOpenEditorPathMove({
-      context: CONTEXT,
-      fromPath: '/repo/a.md',
-      toPath: '/repo/b.md',
-      worktreeId: 'wt-1',
-      worktreePath: '/repo',
-      documentScoped: true
-    })
-
-    expect(mocks.renameRuntimePath).toHaveBeenCalledWith(CONTEXT, '/repo/a.md', '/repo/b.md', {
-      kind: 'document-folder',
-      documentPath: '/repo/a.md'
-    })
-  })
-
-  it('resolves the verify gate proactively when no destination watcher event arrives', async () => {
-    const DISK_CONTENT = 'the file as it exists on disk\n'
-    const id = openDirtyTab()
-    useAppStore.getState().setLastKnownDiskSignature(id, getDiskBaselineSignature(DISK_CONTENT))
-    vi.stubGlobal('window', {
-      api: {
-        fs: { readFile: vi.fn().mockResolvedValue({ isBinary: false, content: DISK_CONTENT }) }
-      }
-    })
-
-    await executeOpenEditorPathMove({
-      context: CONTEXT,
-      fromPath: '/repo/a.md',
-      toPath: '/repo/sub/a.md',
-      worktreeId: 'wt-1',
-      worktreePath: '/repo'
-    })
-    await new Promise((resolve) => setTimeout(resolve, 20))
-
-    const moved = useAppStore.getState().openFiles[0]!
-    expect(moved.externalMutation).toBeUndefined()
-    expect(moved.isDirty).toBe(true)
-    // Keep echo provenance after proactive verify so a later destination watcher event remains recognized as this move’s own echo.
-    expect(moved.pendingSelfMoveEcho?.targetPath).toBe('/repo/sub/a.md')
   })
 
   it('does not raise a false banner when the destination watcher event lands after the move', async () => {

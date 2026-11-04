@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 /** Minimal lineage input for real dashboard rows and synthetic thread-list rows. */
 export type AgentLineageSourceRow = {

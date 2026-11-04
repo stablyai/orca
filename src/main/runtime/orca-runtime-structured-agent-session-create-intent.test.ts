@@ -1,3 +1,4 @@
+import type { AgentLaunchChoices } from '../../shared/agent-launch/choices/agent-launch-choices'
 import {
   createRestTestRig,
   REST_TEST_CALLER
@@ -6,9 +7,8 @@ import {
   hostTestAttachParams,
   HOST_TEST_SESSION
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { AgentLaunchChoices } from '../../shared/agent-launch-choices'
 import { prepareStructuredAgentSessionCreateForWorktree } from './rpc/methods/structured-agent-session-create'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { prepareAdoptedTranscript } from '../native-chat/agent-session-wire/structured-agent-session-adopted-import'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -16,12 +16,12 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const applyAgentWorkspaceTrust = vi.hoisted(() => vi.fn(async () => ({})))
-vi.mock('../agent-workspace-trust', () => ({ applyAgentWorkspaceTrust }))
+vi.mock('../agent-launch/trust/agent-workspace-trust', () => ({ applyAgentWorkspaceTrust }))
 
 import { OrcaRuntimeService } from './orca-runtime'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 
@@ -243,7 +243,7 @@ describe('structured agent-session create intent', () => {
       }
     })
     expect(support).not.toHaveBeenCalled()
-    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1', undefined)
+    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1')
   })
 
   it('refuses a switch out of a live terminal before naming the chat that owns the conversation', async () => {
@@ -273,10 +273,7 @@ describe('structured agent-session create intent', () => {
     await expect(intent()).rejects.toMatchObject({
       refusal: { details: { owner: { sessionId: record.sessionId } } }
     })
-    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1', {
-      workspaceId: 'another-workspace',
-      paneKey: 'pane-1'
-    })
+    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1')
   })
 
   it('pins the selected Codex launch home after normal launch preparation', async () => {

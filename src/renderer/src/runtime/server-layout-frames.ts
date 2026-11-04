@@ -2,7 +2,7 @@
 
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   LAYOUT_INTENTS_RUNTIME_CAPABILITY,
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY

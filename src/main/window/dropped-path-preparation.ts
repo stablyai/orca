@@ -1,4 +1,4 @@
-import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../shared/agent-session-attachments'
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../shared/agent-session/agent-session-attachments'
 import { basename } from 'node:path'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 import type { NativeFileDropCopyFailureReason } from '../../shared/native-file-drop'

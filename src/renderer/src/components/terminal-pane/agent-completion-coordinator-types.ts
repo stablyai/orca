@@ -1,9 +1,9 @@
 import type {
   ParsedAgentStatusPayload,
   TurnEndDisposition
-} from '../../../../shared/agent-status-types'
-import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { RecognizedAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
+import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
   stateStartedAt?: number

@@ -1,8 +1,8 @@
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -50,6 +50,9 @@ function installRestoreHost(
   const visible = new Set(index?.present ? index.sessionIds : records.keys())
   let present = index?.present ?? visible.size > 0
   vi.spyOn(host.deps.store, 'getConversation').mockImplementation((id) => records.get(id) ?? null)
+  vi.spyOn(host, 'getSessionTabId').mockImplementation((id) =>
+    visible.has(id) ? `structured-agent-session-${id}` : null
+  )
   vi.spyOn(host.deps.store, 'isSessionTabVisible').mockImplementation(
     (id) => visible.has(id) && records.has(id)
   )
@@ -104,6 +107,7 @@ describe('structured session cold restoration', () => {
     let name: string | undefined = 'auth/login'
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: title projection reads only the record and replacement list from this host stub.
     setStructuredAgentSessionHost({
+      getSessionTabId: () => null,
       deps: {
         agents: { capabilities: () => undefined },
         store: {
@@ -452,7 +456,10 @@ describe('structured session cold restoration', () => {
 
     expect(closeSessionTab).toHaveBeenCalledWith('agent-session:restored-session', 'workspace-1')
     expect(closeStructuredSession).toHaveBeenCalledWith('restored-session', 'user-close')
-    expect(setSessionTabVisibility).toHaveBeenCalledWith('restored-session', false)
+    expect(setSessionTabVisibility).toHaveBeenCalledWith('restored-session', false, undefined, {
+      deferHiddenNotice: true,
+      check: expect.any(Function)
+    })
     expect(setSessionTabVisibility.mock.invocationCallOrder[0]).toBeLessThan(
       closeStructuredSession.mock.invocationCallOrder[0]!
     )

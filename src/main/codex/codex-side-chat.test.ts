@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { openCodexThread } from './codex-structured-thread-open'
+import { openCodexThread } from './structured/threads/codex-structured-thread-open'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import {
   acquireReadyCodexForTest,
@@ -9,7 +9,7 @@ import {
   identityFor,
   THREAD_ID,
   USER_MESSAGE
-} from './codex-structured-session-adapter-fixture'
+} from './structured/session-lifecycle/codex-structured-session-adapter-fixture'
 
 const launch = { cwd: '/workspace', resumeThreadId: null, forkThreadId: 'parent', sideChat: true }
 
@@ -56,7 +56,7 @@ describe('Codex side conversations', () => {
         identity: identityFor('session-1'),
         fence: 7,
         spawnToken: 'side-chat-child',
-        permissionMode: 'full-access'
+        permissionMode: mode === 'own' ? 'own' : 'full-access'
       })
       const connection = codex.connections[0]!
       const acquiredCalls = connection.calls.length

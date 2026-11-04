@@ -28,7 +28,7 @@ describe('relay host proof failures', () => {
   })
 
   // A verifyCellAssignment connect-timeout rejection once escaped beginProof and crashed whole cells.
-  it('contains a database timeout during host hello to one socket', async () => {
+  it.each(['cell', 'combined'] as const)('contains %s host hello database timeouts', async (role) => {
     const keys = await generateKeyPair('ES256')
     const publicJwk = await exportJWK(keys.publicKey)
     const jwksServer: Server = createServer((_request, response) => {
@@ -64,7 +64,7 @@ describe('relay host proof failures', () => {
       authAudience: 'orca-relay',
       jwksUrl: issuer,
       assignmentSigningKey: new Uint8Array(32),
-      role: 'cell',
+      role,
       cellId: 'production-gce-c3',
       cells: [{ id: 'production-gce-c3', url: relayUrl, capacityRequests: 4_000 }],
       adminAudience: `${relayUrl}/admin`,

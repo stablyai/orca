@@ -1,13 +1,13 @@
-import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session-record-launch-directory'
+import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session/records/agent-session-record-launch-directory'
 import { isFloatingWorkspaceId } from '../../shared/floating-workspace-worktree'
-import { activeProviderContext } from '../../shared/agent-session-provider-context'
-import { isAgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
-import { agentSessionExecutionLocationsEqual } from '../../shared/agent-session-record'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import { activeProviderContext } from '../../shared/agent-session/agent-session-provider-context'
+import { isAgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { agentSessionExecutionLocationsEqual } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-host'
 import type { AgentSessionAttachParams } from './agent-session-wire/structured-agent-session-attach'
-import type { StructuredAgentSessionCreateIntentInput } from '../runtime/structured-agent-session-create-adoption'
+import type { StructuredAgentSessionCreateIntentInput } from '../runtime/agent-session/structured-agent-session-create-adoption'
 
 export function structuredSideChatCreateIntent(
   input: StructuredAgentSessionCreateIntentInput & {

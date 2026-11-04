@@ -13,16 +13,22 @@ export function useMobileNativeChatStructuredComposer(args: {
   acceptsFiles: boolean
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined
   sideChat?: boolean
+  compactInstructions?: boolean
   files: MobileNativeChatFileAttachments
 }): MobileNativeChatStructuredComposer | null {
-  const { structured, acceptsFiles, files } = args
+  const { structured, acceptsFiles, compactInstructions, files } = args
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
   const { commands, refresh, setMenuOpen } = args.sessionCommands
   const { files: pendingFiles, attachFiles, removeFiles } = files
   // Memoize commands separately so attachment changes cannot rebuild the menu catalog.
   const catalog = useMemo(
-    () => ({ reported: commands, conversationCommands, sideChat: args.sideChat }),
-    [commands, conversationCommands, args.sideChat]
+    () => ({
+      reported: commands,
+      conversationCommands,
+      compactInstructions,
+      sideChat: args.sideChat
+    }),
+    [commands, compactInstructions, conversationCommands, args.sideChat]
   )
   return useMemo(
     () =>

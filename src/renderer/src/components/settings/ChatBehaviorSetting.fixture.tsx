@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { useAppStore } from '@/store'
-import { ChatBehaviorSetting } from './ChatBehaviorSetting'
+import { ChatBehaviorSetting } from './chat/ChatBehaviorSetting'
 
 function ChatBehaviorPreview(): React.JSX.Element | null {
   const settings = useAppStore((state) => state.settings)

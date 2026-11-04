@@ -1,5 +1,5 @@
 import type { SideChatPermission } from '../../../../shared/agent-session-side-chat'
-import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { useCallback, useMemo } from 'react'
 import { useHostStructuredAgent } from '@/runtime/use-host-structured-agent'
 import { useStructuredAgentSessionHostCapability } from '@/runtime/structured-agent-session-host-capability'

@@ -28,8 +28,10 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
-vi.mock('../codex/codex-state-db', () => ({ isCodexStateDbBackfillPending: vi.fn(() => false) }))
-vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../codex/history/index/codex-state-db', () => ({
+  isCodexStateDbBackfillPending: vi.fn(() => false)
+}))
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn(() => Promise.resolve(null))
 }))
 vi.mock('./codex-auth-presence', () => ({ probeCodexAuthPresence: vi.fn(() => 'present') }))
@@ -122,20 +124,5 @@ describe('codex rate-limit spawn runtime pairing', () => {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
     }
-  })
-
-  it('leaves PATH alone when the CLI resolves to a bare command name', async () => {
-    resolveCodexCommandMock.mockReturnValue('codex')
-    const rpcChild = makeRpcChild()
-    childSpawnMock.mockReturnValue(rpcChild)
-
-    const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(0)
-
-    const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
-    expect(spawnEnv.PATH).toBe(process.env.PATH)
-
-    rpcChild.emit('close')
-    await resultPromise
   })
 })

@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
 import type { StarNagPromptSource } from '../../shared/star-nag-telemetry'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 
 type StarNagConsoleEvent = 'star_nag_shown' | 'star_nag_dismissed' | 'star_nag_later'

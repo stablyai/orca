@@ -1,12 +1,12 @@
-import { optionSession } from '../../../codex/codex-structured-option-session.test-fixture'
-import { resolvedCodexMessageOptions } from '../../../codex/codex-structured-message-options'
-import { startCodexTurn } from '../../../codex/codex-structured-turn-start'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { optionSession } from '../../../codex/structured/catalog/codex-structured-option-session.test-fixture'
+import { resolvedCodexMessageOptions } from '../../../codex/structured/turns/codex-structured-message-options'
+import { startCodexTurn } from '../../../codex/structured/turns/codex-structured-turn-start'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { structuredAgentSessionCreateParams } from '../../../../shared/structured-agent-session-create'
+import { structuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/mobile-runtime-client-capabilities'
-import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { resolveStructuredSideChatSource } from '../../../native-chat/structured-side-chat-source'
 import {
   createRestTestRig,
@@ -21,7 +21,7 @@ import {
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { call } from './structured-agent-session-rpc.test-fixture'
-import type { StructuredAgentSessionCreateIntentInput } from '../../structured-agent-session-create-adoption'
+import type { StructuredAgentSessionCreateIntentInput } from '../../agent-session/structured-agent-session-create-adoption'
 
 let rig: RestTestRig
 const CHILD = 'codex_side_child'

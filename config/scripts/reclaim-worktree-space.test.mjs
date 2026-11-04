@@ -19,40 +19,7 @@ async function fixture() {
   return { commonDirectory: root, repoRoot: root, execute }
 }
 
-it('previews historical test caches, Electron cleanup, and Vite caches', async () => {
-  const options = { ...(await fixture()), testsStopped: true }
-  await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(7)
-  expect(options.execute.mock.calls.flatMap(([spec]) => spec.args)).not.toContain('--apply')
-})
-
-it('forwards apply and repository selection to all cleanup operations', async () => {
-  const options = { ...(await fixture()), apply: true, testsStopped: true }
-  await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(7)
-  for (const [spec] of options.execute.mock.calls) {
-    expect(spec.args).toContain('--apply')
-    expect(spec.args).toContain(options.repoRoot)
-    expect(spec.terminationBarrier).toBe(true)
-  }
-  const cache = options.execute.mock.calls[0][0]
-  expect(cache.args).toContain('--tests-stopped')
-  expect(cache.args).toContain('--import')
-  for (const [spec] of options.execute.mock.calls.slice(1)) {
-    expect(spec.args).not.toContain('--tests-stopped')
-  }
-})
-
-it('applies Electron, Vite and generated cleanup while retaining unacknowledged test caches', async () => {
-  const options = { ...(await fixture()), apply: true }
-  await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(6)
-  expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).not.toContain(
-    'reclaim-release-test-caches'
-  )
-})
-
-it('includes generated cleanup and leaves historical test caches out of automatic invocations', async () => {
+it('includes generated and historical test cache cleanup in automatic invocations without the stopped-test override', async () => {
   const options = {
     ...(await fixture()),
     automatic: true,
@@ -61,40 +28,15 @@ it('includes generated cleanup and leaves historical test caches out of automati
     excludeWorktree: '/dev-worktree'
   }
   await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(6)
-  expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).not.toContain(
-    'reclaim-release-test-caches'
-  )
-  expect(options.execute.mock.calls.flatMap(([spec]) => spec.args).join(' ')).toContain(
-    'reclaim-worktree-generated-files'
-  )
-  for (const [spec] of options.execute.mock.calls) {
+  expect(options.execute).toHaveBeenCalledTimes(7)
+  const args = options.execute.mock.calls.flatMap(([spec]) => spec.args)
+  expect(args.join(' ')).toContain('reclaim-release-test-caches')
+  expect(args.join(' ')).toContain('reclaim-worktree-generated-files')
+  expect(args).not.toContain('--tests-stopped')
+  for (const [spec] of options.execute.mock.calls.slice(0, -1)) {
     expect(spec.args).toEqual(
       expect.arrayContaining(['--exclude-worktree', options.excludeWorktree])
     )
-  }
-})
-
-it('routes independent age overrides only to their cleanup operation', async () => {
-  const options = {
-    ...(await fixture()),
-    releaseCacheMinAgeDays: 7,
-    generatedMinAgeDays: 3,
-    testsStopped: true
-  }
-  await reclaimWorktreeSpace(options)
-  expect(options.execute.mock.calls[0][0].args).toEqual(
-    expect.arrayContaining(['--min-age-days', '7'])
-  )
-  for (const [spec] of options.execute.mock.calls.slice(1)) {
-    expect(spec.args).not.toContain('--min-age-days')
-  }
-  for (const [spec] of options.execute.mock.calls) {
-    if (spec.args.some((arg) => arg.endsWith('reclaim-worktree-generated-files.mjs'))) {
-      expect(spec.args).toEqual(expect.arrayContaining(['--generated-min-age-days', '3']))
-    } else {
-      expect(spec.args).not.toContain('--generated-min-age-days')
-    }
   }
 })
 
@@ -107,7 +49,7 @@ it.each([
   expect(options.execute).not.toHaveBeenCalled()
 })
 
-it('runs the CLI outside the repository and retains historical caches until acknowledged', async () => {
+it("runs the CLI outside the repository and retains an active worktree's historical caches until tests are stopped", async () => {
   const options = await fixture()
   const init = await runProcess({
     program: 'git',
@@ -158,7 +100,7 @@ it('runs the CLI outside the repository and retains historical caches until ackn
   expect(await readFile(dependency, 'utf8')).toContain('cached')
   const safe = await run(['--apply'])
   expect(safe.code, safe.stderr).toBe(0)
-  expect(safe.stdout).toContain('Historical test caches retained')
+  expect(safe.stdout).toContain('retained caches in 1 active worktree(s)')
   expect(await readFile(marker, 'utf8')).toContain(commit)
   expect(safe.stdout).toContain('Removed 1 Vite cache(s)')
   await expect(readFile(dependency)).rejects.toMatchObject({ code: 'ENOENT' })

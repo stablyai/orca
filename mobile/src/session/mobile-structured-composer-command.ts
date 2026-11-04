@@ -1,15 +1,16 @@
-import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
-import type {
-  AgentSessionConversationCommand,
-  AgentSessionConversationCommandResult
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import {
+  agentSessionConversationCommandFields,
+  type AgentSessionConversationCommand,
+  type AgentSessionConversationCommandResult
 } from '../../../src/shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import {
   dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,
   type StructuredAgentSessionCommandRefusalCause,
   type StructuredAgentSessionComposerOptions
-} from '../../../src/shared/structured-agent-session-composer'
+} from '../../../src/shared/agent-session/view/structured-agent-session-composer'
 import {
   conversationCommandReply,
   heldConversationCommandParts,
@@ -73,7 +74,7 @@ export async function dispatchMobileStructuredCommand(input: {
     input.text,
     {
       ...input.controller,
-      runConversationCommand: async (command) => {
+      runConversationCommand: async (command, instructions) => {
         const held = (hold: Parameters<typeof heldConversationCommandParts>[1]) =>
           mobileAgentSessionWriteNoticeText(heldConversationCommandParts(command, hold))
         // A command on its way is the agent's work in flight.
@@ -109,7 +110,10 @@ export async function dispatchMobileStructuredCommand(input: {
               expectedRuntimeFence: input.fence,
               method: 'agentSession.conversationCommand',
               fingerprintMethod: 'agentSession.conversationCommand',
-              fields: waitsInLine ? { command, delivery: 'queue-if-active' } : { command },
+              fields: agentSessionConversationCommandFields(command, {
+                instructions,
+                delivery: waitsInLine ? 'queue-if-active' : undefined
+              }),
               timeoutMs: Math.max(input.timeoutMs, 195_000)
             })
           if (

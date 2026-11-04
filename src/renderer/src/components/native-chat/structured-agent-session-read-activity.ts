@@ -1,6 +1,6 @@
-import { structuredAgentSessionSettledSends } from '../../../../shared/structured-agent-session-send-settlement'
-import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../shared/structured-agent-session-send-evidence'
-import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
+import { structuredAgentSessionSettledSends } from '../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
+import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
+
 import type { StructuredAgentSessionReadOwner } from './structured-agent-session-read-owner-contract'
 
 /** Transient work and consent holders belong to the existing read owner, independently of its view transport. */
@@ -24,9 +24,7 @@ export function createStructuredAgentSessionReadActivity(
   const observe = (state: StructuredAgentSessionState): void => {
     if (operations.size) {
       const { cards, recorded } = structuredAgentSessionSettledSends(
-        state.submissions.filter(
-          (row) => row.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
-        ),
+        state.submissions,
         state.queuedMessages?.map((card) => card.messageId) ?? []
       )
       for (const id of operations.keys()) {

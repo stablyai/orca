@@ -5,8 +5,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/main/ipc/preflight*'
-      - 'src/main/ipc/agent-detection-shell-path.ts'
-      - 'src/main/ipc/command-path-resolver*'
+      - 'src/main/ipc/command-path/agent-detection-shell-path.ts'
+      - 'src/main/ipc/command-path/command-path-resolver*'
       - 'src/main/preflight/**'
       - 'src/main/startup/*shell*'
       - 'src/packages/process-host/**'

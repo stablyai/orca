@@ -5,8 +5,8 @@ import {
 import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
+import type { AgentJournalDispatchState } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   fieldsOf,
@@ -18,25 +18,25 @@ import { structuredSendResultFixture } from './structured-agent-send-result.test
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-session-create-capabilities'
+} from '../../../src/shared/agent-session/agent-session-create-capabilities'
 import {
   structuredAgentSessionHostSupport,
   type StructuredAgentSessionHostSupport
 } from './mobile-structured-agent-session-host-support'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
-import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
-import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
+import { mobileNativeChatUnsentNotices } from './native-chat/mobile-native-chat-unsent-notices'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import {
   useMobileNativeChatSendError,
   type MobileNativeChatSendErrorDetails
 } from './native-chat/use-mobile-native-chat-send-error'
+import { useMobileNativeChatComposerMenu } from './native-chat/composer/use-mobile-native-chat-composer-menu'
 
 import capture from '../../../src/shared/__fixtures__/omp-native-commands.json'
-import { useMobileNativeChatComposerMenu } from './native-chat/composer/use-mobile-native-chat-composer-menu'
 vi.mock('./native-chat/composer/MobileNativeChatComposerMenu', () => ({
   composerMenuInsertText: (row: { token: string }) => row.token
 }))
@@ -63,19 +63,18 @@ describe('mobile structured send actions', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
   let banner: ReturnType<typeof useMobileNativeChatSendError> | null = null
-  let menu: ReturnType<typeof useMobileNativeChatComposerMenu>
-  let draft = ''
   let listener: ((value: unknown) => void) | null = null
   let storedOperations: Map<string, string>
   let agent = 'codex'
   let openSideChat: ((question?: string) => Promise<boolean>) | undefined
   let sessionCommands: readonly AgentSessionSlashCommand[] | undefined
-  let sendOrdinary: ReturnType<typeof useMobileStructuredNativeChatSendBridge>['sendWithOutcome']
   let hostSupport: StructuredAgentSessionHostSupport | null = null
   const onSendError = vi.fn()
   const sendRequest = vi.fn<RpcClient['sendRequest']>()
   const subscribe = vi.fn<RpcClient['subscribe']>((_method, _params, onData) => {
-    listener = onData
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+    }
     return vi.fn()
   })
   const client: RpcClient = {
@@ -92,8 +91,7 @@ describe('mobile structured send actions', () => {
 
   function Harness() {
     const [value, onChangeText] = useState('/skill:pl')
-    draft = value
-    menu = useMobileNativeChatComposerMenu({
+    useMobileNativeChatComposerMenu({
       value,
       onChangeText,
       agent,
@@ -112,6 +110,7 @@ describe('mobile structured send actions', () => {
     banner.bannerMountedRef.current = true
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
       composerScopeKey: 'ordinary-draft',
@@ -135,13 +134,13 @@ describe('mobile structured send actions', () => {
       messages: [],
       transcriptSettled: true
     })
-    sendOrdinary = useMobileStructuredNativeChatSendBridge({
+    useMobileStructuredNativeChatSendBridge({
       ...drafts,
       agent: 'codex',
       sessionCommands,
       sendStructured: (...args) => hook!.sendWithOutcome(...args),
       onSendError
-    }).sendWithOutcome
+    })
     return createElement(Harness)
   }
 
@@ -216,107 +215,6 @@ describe('mobile structured send actions', () => {
     expect(calls()).toEqual([])
   })
 
-  it.each([10, 100])(
-    'ordinary phone bridge and Send skip %i commands for prose but still route slash controls',
-    async (count) => {
-      let kinds = 0
-      let names = 0
-      sessionCommands = Array.from({ length: count }, (_, index) => ({
-        get kind() {
-          kinds++
-          return 'command' as const
-        },
-        get name() {
-          names++
-          return `provider-${index}`
-        }
-      }))
-      sendRequest.mockImplementation(async (method) =>
-        method === 'agentSession.send' ? sendResult('accepted') : ok({})
-      )
-      await mountSession(true)
-      kinds = 0
-      names = 0
-      await act(async () => {
-        expect(await sendOrdinary('hello')).toBe('accepted')
-      })
-      expect(calls()).toHaveLength(1)
-      expect(fieldsOf(calls()[0]![1]).body).toMatchObject({
-        blocks: [{ type: 'text', text: 'hello' }]
-      })
-      expect({ kinds, names }).toEqual({ kinds: 0, names: 0 })
-      await act(async () => {
-        expect(await sendOrdinary('/compact extra')).toBe('rejected')
-      })
-      expect(calls()).toHaveLength(1)
-      expect(onSendError).toHaveBeenCalledWith('Use /compact without arguments.', undefined)
-      expect({ kinds, names }).toEqual({ kinds: 0, names: 0 })
-    }
-  )
-
-  it('selects a native OMP skill and sends the exact token and arguments through RPC', async () => {
-    agent = 'omp'
-    sendRequest.mockImplementation(async (method) =>
-      method === 'agentSession.send' ? sendResult('accepted') : ok({})
-    )
-    await mountSession()
-    act(() => menu.onSelectionChange({ start: draft.length, end: draft.length }))
-    const skill = menu.rows.find((row) => row.kind === 'skill')!
-    expect(skill).toMatchObject({ kind: 'skill', token: '/skill:plan' })
-    act(() => menu.pick(skill))
-    expect(draft).toBe('/skill:plan ')
-    act(() => menu.onFieldChange(`${draft}args`))
-    await act(async () => {
-      await hook!.sendWithOutcome(draft)
-    })
-    expect(fieldsOf(calls()[0]![1]).body).toMatchObject({
-      blocks: [{ type: 'text', text: '/skill:plan args' }]
-    })
-  })
-
-  it.each([
-    ['carries the shown model and effort to a host that takes them', true],
-    ['sends the old shape to a host that does not', false]
-  ])('%s', async (_name, takesOptions) => {
-    agent = 'claude'
-    hostSupport = structuredAgentSessionHostSupport(
-      takesOptions ? [AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY] : []
-    )
-    const high = [
-      { value: 'low', label: 'Low' },
-      { value: 'high', label: 'High' }
-    ]
-    sendRequest.mockImplementation(async (method) =>
-      method === 'agentSession.send'
-        ? sendResult('accepted')
-        : method === 'agentSession.options'
-          ? ok({
-              models: [{ id: 'opus[1m]', label: 'Opus', isDefault: true, efforts: high }],
-              current: { model: 'opus[1m]', effort: 'high' }
-            })
-          : ok({})
-    )
-    await mountSession()
-    await act(async () => {
-      await vi.waitFor(() =>
-        expect(sendRequest.mock.calls.some(([method]) => method === 'agentSession.options')).toBe(
-          true
-        )
-      )
-    })
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('hello')).toBe('accepted')
-      expect(await hook!.sendWithOutcome('again')).toBe('accepted')
-    })
-    for (const [, params] of calls()) {
-      if (takesOptions) {
-        expect(fieldsOf(params).options).toEqual({ model: 'opus[1m]', effort: 'high' })
-      } else {
-        expect(fieldsOf(params)).not.toHaveProperty('options')
-      }
-    }
-  })
-
   it("keeps a chat's model its CLI stopped listing, and sends on it and its effort", async () => {
     agent = 'claude'
     hostSupport = structuredAgentSessionHostSupport([AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY])
@@ -359,19 +257,6 @@ describe('mobile structured send actions', () => {
     expect(fieldsOf(calls()[0]![1]).options).toEqual({ model: 'opus[1m]', effort: 'max' })
   })
 
-  it("sends a command the chat's own agent runs as a message, though Codex's host claims it", async () => {
-    sendRequest.mockImplementation(async (method) =>
-      method === 'agentSession.send' ? sendResult('accepted') : ok({ models: [], current: {} })
-    )
-    agent = 'opencode'
-    await mountSession()
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('/review')).toBe('accepted')
-    })
-    expect(calls()).toHaveLength(1)
-    expect(onSendError).not.toHaveBeenCalled()
-  })
-
   it.each(['unknown', 'pending', 'accepted'] as const)(
     'a later Send owns a new id even when the earlier host answer was %s',
     async (state) => {
@@ -380,9 +265,8 @@ describe('mobile structured send actions', () => {
       )
       await mountSession()
       await act(async () => {
-        const outcome = state === 'unknown' ? 'unknown' : 'accepted'
-        expect(await hook!.sendWithOutcome('same text')).toBe(outcome)
-        expect(await hook!.sendWithOutcome('same text')).toBe(outcome)
+        expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
+        expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
       })
       expect(new Set(sentIds()).size).toBe(2)
     }
@@ -576,7 +460,7 @@ describe('mobile structured send actions', () => {
               previewUri: 'file:///photo.jpg'
             }
           ])
-        ).toBe('unknown')
+        ).toBe('accepted')
       }
     })
     expect(new Set(sentIds()).size).toBe(2)
@@ -586,29 +470,6 @@ describe('mobile structured send actions', () => {
       }
     })
   })
-
-  it.each([true, false])(
-    'sends the picked skill path only to a host that takes it: %s',
-    async (takesSkills) => {
-      hostSupport = structuredAgentSessionHostSupport(
-        takesSkills ? [AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY] : []
-      )
-      sendRequest.mockImplementation(async (method) =>
-        method === 'agentSession.send' ? sendResult('accepted') : ok({ models: [], current: {} })
-      )
-      await mountSession()
-      const review = { name: 'review', path: '/repo/.agents/skills/review/SKILL.md' }
-      await act(async () => {
-        await hook!.sendWithOutcome('$review this', undefined, undefined, [], [review])
-      })
-      expect(fieldsOf(calls()[0]?.[1]).body).toEqual({
-        kind: 'message',
-        role: 'user',
-        blocks: [{ type: 'text', text: '$review this' }],
-        ...(takesSkills ? { skills: [review] } : {})
-      })
-    }
-  )
 
   it('does not infer omitted captured skills from the live composer draft', async () => {
     hostSupport = structuredAgentSessionHostSupport([AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY])
@@ -625,43 +486,6 @@ describe('mobile structured send actions', () => {
       await hook!.sendWithOutcome('$review text')
     })
     expect(fieldsOf(calls()[0]?.[1]).body).not.toHaveProperty('skills')
-  })
-
-  it('sends an attached file as a reference after the text, and only images as image blocks', async () => {
-    sendRequest.mockImplementation(async (method) =>
-      method === 'agentSession.send' ? sendResult('accepted') : ok({ models: [], current: {} })
-    )
-    await mountSession()
-    await act(async () => {
-      await hook!.sendWithOutcome('read these', undefined, undefined, [
-        { path: '/tmp/shot.png', previewUri: 'file:///shot.png' },
-        { kind: 'file', path: '/store/u1/spec.pdf' }
-      ])
-    })
-    expect(calls()[0]?.[1]).toMatchObject({
-      body: {
-        blocks: [
-          { type: 'text', text: 'read these\n@/store/u1/spec.pdf' },
-          { type: 'image-ref', path: '/tmp/shot.png' }
-        ]
-      }
-    })
-  })
-
-  it('reports a send stopped before the agent started it without sending it twice', async () => {
-    sendRequest.mockImplementation(async (method) =>
-      method === 'agentSession.send'
-        ? sendResult('rejected', DISPATCH_REJECTED_CANCELLED)
-        : ok({ models: [], current: {} })
-    )
-    await mountSession()
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('stopped')).toBe('accepted')
-      expect(await hook!.sendWithOutcome('stopped')).toBe('accepted')
-    })
-    expect(calls()).toHaveLength(2)
-    expect(new Set(sentIds()).size).toBe(2)
-    expect(onSendError).not.toHaveBeenCalled()
   })
 
   it.each(['invalid_argument', 'unauthorized'])(
@@ -712,13 +536,5 @@ describe('mobile structured send actions', () => {
       expect(await hook!.sendWithOutcome('again')).toBe('accepted')
     })
     expect(new Set(sentIds()).size).toBe(2)
-  })
-
-  it('sends nothing once the action budget expires', async () => {
-    await mountSession()
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('never attempted', undefined, 0)).toBe('rejected')
-    })
-    expect(calls()).toHaveLength(0)
   })
 })

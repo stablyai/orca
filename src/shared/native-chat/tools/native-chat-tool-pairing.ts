@@ -7,7 +7,7 @@ import type {
   NativeChatBlock,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from '../../native-chat-types'
+} from '../native-chat-types'
 
 export type NativeChatToolPairing = {
   /** The result each call owns. A call still running has none. */

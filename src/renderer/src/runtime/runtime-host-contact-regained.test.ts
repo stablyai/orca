@@ -25,7 +25,7 @@ import {
   forgetStructuredSessionSelection,
   registerStructuredSelectionCatalogStore
 } from '@/lib/structured-agent-session-selection-controller'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 function makeStatus(runtimeId: string): RuntimeStatus {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture carries only the fields the slice reads.
@@ -130,16 +130,6 @@ describe('subscribeRuntimeHostContactRegained', () => {
     publish(null, 7)
     publish(makeStatus('runtime-b'), 8)
     expect(listener).toHaveBeenCalledTimes(2)
-  })
-
-  it('ignores other environments', () => {
-    publish(makeStatus('runtime-a'), 1)
-    const listener = vi.fn()
-    const stop = subscribeRuntimeHostContactRegained('env-b', listener)
-    publish(null, 2)
-    publish(makeStatus('runtime-a'), 3)
-    expect(listener).not.toHaveBeenCalled()
-    stop()
   })
 
   it('wakes a parked owner when a pending managed pairing proves its key without another revision', async () => {

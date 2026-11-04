@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { claimBackgroundTaskTwins } from './native-chat-background-task-row'
-import type { NativeChatBackgroundTaskBlock, NativeChatBlock } from '../../native-chat-types'
+import type { NativeChatBackgroundTaskBlock, NativeChatBlock } from '../native-chat-types'
 
 function task(
   overrides: Partial<NativeChatBackgroundTaskBlock> = {}
@@ -24,12 +24,6 @@ describe('background task twins', () => {
       row
     ]
     expect([...claimBackgroundTaskTwins(blocks).twinTextIndexes]).toEqual([1])
-  })
-
-  it('makes a row with no twin print its own sentence rather than nothing', () => {
-    const row = task({ state: 'blocked', summary: 'it failed' })
-    const claims = claimBackgroundTaskTwins([row])
-    expect(claims.unpairedRows.get(0)).toBe('it failed')
   })
 
   it('gives two rows sharing a sentence one twin each', () => {

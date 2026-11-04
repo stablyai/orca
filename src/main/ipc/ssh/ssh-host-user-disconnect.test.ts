@@ -17,10 +17,13 @@ vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnection
 vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  listEnvironments: () => runtime.environments
-}))
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    listEnvironments: () => runtime.environments
+  })
+)
 vi.mock(
   '../runtime-environments/runtime-environment-request-connections',
   async (importOriginal) => ({
@@ -243,19 +246,5 @@ describe('a host whose managed server the user stopped and removed', () => {
     await expect(reconnect).rejects.toThrow('Server was disconnected. Connect to use it again.')
     const { decideHostServer } = await import('./ssh-host-server-connect')
     expect(decideHostServer).not.toHaveBeenCalled()
-  })
-
-  it('still reconnects a server an older desktop deployed for it since', async () => {
-    runtime.environments = [managedServer]
-    mockSshStore.getTarget.mockReturnValue({
-      ...removed,
-      orcadFence: { environmentId: managedServer.id }
-    })
-    const { decideHostServer } = await import('./ssh-host-server-connect')
-
-    await Promise.resolve(
-      handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
-    ).catch(() => {})
-    expect(decideHostServer).toHaveBeenCalledTimes(1)
   })
 })

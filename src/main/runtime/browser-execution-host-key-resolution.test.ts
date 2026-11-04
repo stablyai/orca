@@ -2,8 +2,8 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import { parseBrowserNetworkExecutionHostKey } from '../browser/browser-network-execution-route'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
+import { parseBrowserNetworkExecutionHostKey } from '../browser/network/execution-routes/browser-network-execution-route'
 import { OrcaRuntimeService } from './orca-runtime'
 
 // Use the real resolver: adoption retires missing workspaces but preserves pages awaiting an offline host.
@@ -24,7 +24,12 @@ describe('browser execution host key resolution', () => {
   })
 
   it('holds a resolvable workspace whose execution host cannot be minted yet', async () => {
-    const runtime = createRuntime({ executionHostId: 'runtime:environment-1' })
+    const runtime = createRuntime()
+    Object.defineProperty(runtime, 'resolveBrowserNetworkExecutionHostForWorktree', {
+      value: async () => {
+        throw new Error('Host provider is not ready')
+      }
+    })
 
     await expect(runtime.resolveBrowserExecutionHostKeyForWorkspace(WORKSPACE_ID)).resolves.toEqual(
       { status: 'unavailable' }

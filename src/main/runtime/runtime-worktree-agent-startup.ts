@@ -1,16 +1,22 @@
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
-import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import type { Repo } from '../../shared/repo-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import { repoIsRemote } from '../../shared/agent-launch-remote'
+import { repoIsRemote } from '../../shared/agent-launch/startup/agent-launch-remote'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
-import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  isTuiAgentEnabled,
+  pickTuiAgent
+} from '../../shared/agent-launch/catalog/tui-agent-selection'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
 import type { resolveStartupAgentLaunchRuntime } from './agent-launch-scope-runtime'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan
+} from '../../shared/agent-launch/startup/tui-agent-startup'
 import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
 import {
   launchHostProvesAgentInFront,

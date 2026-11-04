@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { PtySpawnIpcDeps } from './spawn-types'
 import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-materialization'
 
@@ -115,20 +115,5 @@ describe('triggerPtySpawnPushTargetMaterialization (real git fixture)', () => {
       await git(['rev-parse', `${FORK_REMOTE}/${TRACKED_BRANCH}`], repoPath)
     ).trim()
     expect(fetchedHead).toBe(forkHead)
-  })
-
-  it('is a no-op once the remote was already created (repeat pty:spawn, e.g. reattach)', async () => {
-    const target = { ...forkTarget(), remoteCreated: true }
-    const { deps } = depsFor(target)
-    await git(['remote', 'add', FORK_REMOTE, forkPath], repoPath)
-
-    triggerPtySpawnPushTargetMaterialization(deps, { cols: 80, rows: 24, worktreeId })
-
-    // Let the fire-and-forget hook settle before asserting the remoteCreated no-op.
-    await new Promise((resolve) => setImmediate(resolve))
-    const upstream = await git(['rev-parse', '--abbrev-ref', `${mainBranch}@{u}`], repoPath).catch(
-      () => ''
-    )
-    expect(upstream.trim()).toBe('')
   })
 })

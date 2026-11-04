@@ -5,9 +5,9 @@ import { AgentStatusObservedPaneIdentities } from './agent-status-observed-pane-
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { hostTestState } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { scaleStore } from './agent-session-scale.test-fixture'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
-import type { AgentStatusStore } from '../../shared/agent-status-store'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
+import type { AgentStatusStore } from '../../shared/agent-status/store/agent-status-store'
 
 class CountedServer extends AgentHookServer {
   builds = 0

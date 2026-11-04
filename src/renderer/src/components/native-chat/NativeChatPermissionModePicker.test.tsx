@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentChatPermissionChoice } from '../../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
@@ -82,8 +82,8 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
   }
 })
 
-import { structuredAgentSessionPermissionDescriptor } from '../../../../shared/structured-agent-session-permission-option'
-import { createStructuredAgentSessionOptionState } from '../../../../shared/structured-agent-session-options'
+import { structuredAgentSessionPermissionDescriptor } from '../../../../shared/agent-session/options/structured-agent-session-permission-option'
+import { createStructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   NativeChatComposerPermissionPicker,
@@ -211,61 +211,52 @@ describe('NativeChatComposerPermissionPicker', () => {
     ['codex', 'full-access', 'Full access'],
     ['claude', 'plan', 'Plan mode'],
     ['codex', 'read-only', 'Read only']
-  ])(
-    'checks only an offered reported mode for %s/%s and clears on report loss',
-    (agent, mode, label) => {
-      const options = surface()
-      const state = createStructuredAgentSessionOptionState(agent, null)
-      const snapshot = (reportedPermissionMode?: string | null) => {
-        const row = structuredAgentSessionPermissionDescriptor({
-          ...state,
-          permissionMode: 'own',
-          permissionOwnSupported: true,
-          reportedPermissionMode
-        })
-        return row ? [row] : []
-      }
-      const { rerender } = render(
-        <NativeChatComposerPermissionPicker surface={options} snapshot={snapshot()} agent={agent} />
-      )
-      expect(screen.getByTestId('permission-trigger').getAttribute('data-disabled')).toBe('true')
-      for (const report of [mode, null, mode, undefined]) {
-        rerender(
-          <NativeChatComposerPermissionPicker
-            surface={options}
-            snapshot={snapshot(report)}
-            agent={agent}
-          />
-        )
-        expect(
-          screen.getByRole('button', { name: `Permissions ${report ? label : 'Permissions'}` })
-        ).toBeTruthy()
-        expect(screen.getByTestId('permission-trigger').getAttribute('data-disabled')).toBe(
-          report ? null : 'true'
-        )
-        expect(
-          screen
-            .getAllByRole('radio')
-            .filter((row) => row.getAttribute('aria-checked') === 'true')
-            .map((row) => row.getAttribute('data-value'))
-        ).toEqual(
-          report && ['read-only', 'accept-edits', 'full-access'].includes(report) ? [report] : []
-        )
-        expect(
-          screen.getAllByRole('radio').some((row) => row.getAttribute('data-value') === 'own')
-        ).toBe(false)
-      }
+  ])('keeps Own selected and editable for %s despite report %s', (agent, mode) => {
+    const options = surface()
+    const state = createStructuredAgentSessionOptionState(agent, null)
+    const snapshot = (reportedPermissionMode?: string | null) => {
+      const row = structuredAgentSessionPermissionDescriptor({
+        ...state,
+        permissionMode: 'own',
+        permissionOwnSupported: true,
+        reportedPermissionMode
+      })
+      return row ? [row] : []
+    }
+    const { rerender } = render(
+      <NativeChatComposerPermissionPicker surface={options} snapshot={snapshot()} agent={agent} />
+    )
+    expect(screen.getByTestId('permission-trigger').getAttribute('data-disabled')).toBe(null)
+    for (const report of [mode, null, mode, undefined]) {
       rerender(
         <NativeChatComposerPermissionPicker
           surface={options}
-          snapshot={snapshot(mode)}
+          snapshot={snapshot(report)}
           agent={agent}
         />
       )
-      fireEvent.click(option('full-access'))
-      expect(options.setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
+      expect(screen.getByRole('button', { name: "Permissions Agents' own settings" })).toBeTruthy()
+      expect(screen.getByTestId('permission-trigger').getAttribute('data-disabled')).toBe(null)
+      expect(
+        screen
+          .getAllByRole('radio')
+          .filter((row) => row.getAttribute('aria-checked') === 'true')
+          .map((row) => row.getAttribute('data-value'))
+      ).toEqual([])
+      expect(
+        screen.getAllByRole('radio').some((row) => row.getAttribute('data-value') === 'own')
+      ).toBe(false)
     }
-  )
+    rerender(
+      <NativeChatComposerPermissionPicker
+        surface={options}
+        snapshot={snapshot(mode)}
+        agent={agent}
+      />
+    )
+    fireEvent.click(option('full-access'))
+    expect(options.setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
+  })
 
   it('renders nothing without a permission descriptor', () => {
     const { container } = render(

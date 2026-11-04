@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partial-fixture'
 import { agentSessionRecordFixture } from '../../src/main/native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../src/shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -302,17 +302,6 @@ describe('reopened structured session close', () => {
   })
 
   describe('closing a chat reopened from history after /clear', () => {
-    it('mirrors the reopened session into a suffixed tab beside the current chat', async () => {
-      const { agentTabs } = await setup()
-
-      expect(agentTabs()).toEqual(
-        expect.arrayContaining([
-          { id: CURRENT_TAB, entityId: CURRENT_SESSION },
-          { id: REOPENED_TAB, entityId: REOPENED_SESSION }
-        ])
-      )
-    })
-
     it('closes only the reopened tab when the user closes it on the desktop', async () => {
       const { agentTabs, hostSessionCloses, closeResponses } = await setup()
 

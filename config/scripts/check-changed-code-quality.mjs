@@ -7,12 +7,16 @@ import { runProcessSync } from '@orca/process-host'
 import { scanAstGrep } from './ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
+import { createExistingTypeAssertionMatcher } from './existing-type-assertions.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
 const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
 const CASTING_RULE = 'typescript/consistent-type-assertions'
 const CASTING_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*typescript\/consistent-type-assertions/
+// Interpolated so this line is not itself a casting directive the gate would scan.
+const CASTING_SUPPRESSION_FORM = `// oxlint-disable-next-line ${CASTING_RULE} -- SAFETY: <why this cast is sound>`
+const CASTING_HINT = `Use a type annotation, \`satisfies\`, or a type guard instead (\`as const\` is allowed). If a cast is unavoidable, put \`${CASTING_SUPPRESSION_FORM}\` on the line above it.`
 const ANTI_SLOP_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\banti-slop\//
 const REACT_DOCTOR_DISABLE_PATTERN =
@@ -84,7 +88,7 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
     new Set([
       'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts',
       // The open-cycle reset effect predates this entry; it surfaced when its body changed.
-      'src/renderer/src/components/right-sidebar/useSourceControlAgentActionDialog.ts'
+      'src/renderer/src/components/right-sidebar/source-control/ai/useSourceControlAgentActionDialog.ts'
     ])
   ],
   [
@@ -291,7 +295,7 @@ function readBaseSourceBatch(root, comparisonBase, files) {
       if (!Number.isSafeInteger(size) || output[offset + size] !== 10) {
         return null
       }
-      sources.push(output.subarray(offset, offset + size).toString('utf8'))
+      sources.push({ file, source: output.subarray(offset, offset + size).toString('utf8') })
       offset += size + 1
     }
     return offset === output.length ? sources : null
@@ -301,14 +305,14 @@ function readBaseSourceBatch(root, comparisonBase, files) {
   }
 }
 
-export function collectBaseLineBlocks(root, comparisonBase, files = null) {
+function collectBaseSources(root, comparisonBase, files = null) {
   // Read all touched base paths including deletions/rename sources; split code may no longer exist under current paths.
   const paths =
     files ??
     splitNullDelimited(
       runGit(root, ['diff', '--name-only', '--no-renames', '-z', comparisonBase, '--'])
     ).filter((file) => SOURCE_FILE_PATTERN.test(file))
-  const blocks = []
+  const records = []
   for (let start = 0; start < paths.length; start += 32) {
     const batch = paths.slice(start, start + 32)
     let sources = readBaseSourceBatch(root, comparisonBase, batch)
@@ -324,7 +328,7 @@ export function collectBaseLineBlocks(root, comparisonBase, files = null) {
             timeoutMs: null
           })
           if (result.code === 0) {
-            sources.push(result.stdout)
+            sources.push({ file, source: result.stdout })
           }
         } catch {
           // Failed source reads were already skipped by the per-file implementation.
@@ -332,11 +336,15 @@ export function collectBaseLineBlocks(root, comparisonBase, files = null) {
         }
       }
     }
-    for (const source of sources) {
-      blocks.push(source.split(/\r?\n/).map(normalizeSourceLine).filter(Boolean))
-    }
+    records.push(...sources)
   }
-  return blocks
+  return records
+}
+
+export function collectBaseLineBlocks(root, comparisonBase, files = null) {
+  return collectBaseSources(root, comparisonBase, files).map(({ source }) =>
+    source.split(/\r?\n/).map(normalizeSourceLine).filter(Boolean)
+  )
 }
 
 export function isMovedCode(highlightedLines, baseBlocks) {
@@ -400,7 +408,8 @@ export function diagnosticTouchesAddedLines(
   rangesByFile,
   root = process.cwd(),
   baseBlocks = [],
-  movedCodeMatcher = isMovedCode
+  movedCodeMatcher = isMovedCode,
+  existingAssertionMatcher = () => false
 ) {
   const file = normalizedDiagnosticPath(root, diagnostic.filename)
   const ranges = rangesByFile.get(file)
@@ -411,6 +420,21 @@ export function diagnosticTouchesAddedLines(
     const lineRange = diagnosticLineRange(root, diagnostic.filename, label.span)
     if (lineRange === null || !overlapsAddedLines(lineRange.start, lineRange.end, ranges)) {
       return false
+    }
+    if (diagnostic.code === 'typescript(consistent-type-assertions)') {
+      const { offset, length } = label.span
+      if (Number.isInteger(offset) && offset >= 0 && Number.isInteger(length) && length > 0) {
+        const absolute = path.isAbsolute(diagnostic.filename)
+          ? diagnostic.filename
+          : path.join(root, diagnostic.filename)
+        const source = readFileSync(absolute)
+        if (offset + length <= source.length) {
+          const fragment = source.subarray(offset, offset + length).toString('utf8')
+          if (existingAssertionMatcher(fragment)) {
+            return false
+          }
+        }
+      }
     }
     return !movedCodeMatcher(
       diagnosticHighlightedLines(root, diagnostic.filename, label.span),
@@ -427,14 +451,18 @@ function printDiagnostic(diagnostic, root) {
   const file = normalizedDiagnosticPath(root, diagnostic.filename)
   const line = diagnostic.labels?.[0]?.span?.line ?? 1
   const code = diagnostic.code ?? 'oxlint'
+  const message =
+    code === 'typescript(consistent-type-assertions)'
+      ? `${diagnostic.message} ${CASTING_HINT}`
+      : diagnostic.message
   console.error(
-    `::error file=${annotationValue(file)},line=${line},title=${annotationValue(code)}::${annotationValue(diagnostic.message)}`
+    `::error file=${annotationValue(file)},line=${line},title=${annotationValue(code)}::${annotationValue(message)}`
   )
-  console.error(`${file}:${line} ${code}: ${diagnostic.message}`)
+  console.error(`${file}:${line} ${code}: ${message}`)
 }
 
 // Why: only the casting scan enforces `assertionStyle: never`, so under the root config an
-// `as` cast is legal and the SAFETY: directive AGENTS.md mandates reads as unused. The untyped
+// `as` cast is legal and the required SAFETY: directive reads as unused. The untyped
 // scan reports that as a warning, which the gate counts, so exempt exactly those directives.
 export function isCastingDirectiveUnusedWarning(diagnostic, root) {
   if (!/^Unused (?:oxlint|eslint)-disable/.test(diagnostic.message ?? '')) {
@@ -482,7 +510,7 @@ export function isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scanLab
   )
 }
 
-// Why: oxlint cannot see the AGENTS.md requirement that every casting suppression carry a
+// Why: oxlint cannot require that every casting suppression carry a
 // line-specific SAFETY: rationale, so the directive text itself is checked over added lines.
 export function findCastingDirectivesMissingSafety(root, rangesByFile) {
   const findings = []
@@ -503,7 +531,7 @@ export function findCastingDirectivesMissingSafety(root, rangesByFile) {
           findings.push({
             filename: file,
             code: `${CASTING_RULE} (missing SAFETY:)`,
-            message: `Suppressing ${CASTING_RULE} requires a line-specific "SAFETY:" explanation.`,
+            message: `Suppressing ${CASTING_RULE} requires a line-specific "SAFETY:" explanation, e.g. \`${CASTING_SUPPRESSION_FORM}\`.`,
             labels: [{ span: { line } }]
           })
         }
@@ -566,8 +594,12 @@ export function main(
     return 0
   }
 
-  const baseBlocks = collectBaseLineBlocks(root, comparisonBase)
+  const baseSources = collectBaseSources(root, comparisonBase)
+  const baseBlocks = baseSources.map(({ source }) =>
+    source.split(/\r?\n/).map(normalizeSourceLine).filter(Boolean)
+  )
   const movedCodeMatcher = createMovedCodeMatcher(baseBlocks)
+  const existingAssertionMatcher = createExistingTypeAssertionMatcher(baseSources)
 
   let failures = 0
   for (const scan of OXLINT_SCANS) {
@@ -576,7 +608,14 @@ export function main(
         !isSuppressedDiagnostic(diagnostic, root) &&
         !isCastingDirectiveUnusedWarning(diagnostic, root) &&
         !isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scan.label) &&
-        diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks, movedCodeMatcher)
+        diagnosticTouchesAddedLines(
+          diagnostic,
+          rangesByFile,
+          root,
+          baseBlocks,
+          movedCodeMatcher,
+          existingAssertionMatcher
+        )
     )
     for (const diagnostic of diagnostics) {
       printDiagnostic(diagnostic, root)

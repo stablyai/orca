@@ -1,11 +1,14 @@
 import { useCallback } from 'react'
-import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
-import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
-import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
+import type { StructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+
+import type {
+  MobileNativeChatSendIntent,
+  MobileNativeChatSendOutcome
+} from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
-import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   readMobileNativeChatPickedSkills,
   restoreMobileNativeChatPickedSkills
@@ -13,14 +16,14 @@ import {
 
 export function useMobileStructuredNativeChatSendBridge(args: {
   agent: StructuredAgentId | undefined
-  sideChat?: boolean
   sessionCommands?: readonly AgentSessionSlashCommand[]
   sendStructured: (
     text: string,
     images?: string[],
     deadline?: number,
     attachments?: readonly StructuredMobileSendAttachment[],
-    skills?: readonly AgentJournalSkillRef[]
+    skills?: readonly AgentJournalSkillRef[],
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
@@ -32,12 +35,13 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredMobileSendAttachment[]
+    attachments?: readonly StructuredMobileSendAttachment[],
+    sentAt?: number,
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
 } {
   const {
     agent,
-    sideChat = false,
     captureSendOrigin,
     clearDraftForSend,
     onSendError,
@@ -50,24 +54,22 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      _sentAt?: number,
+      intent?: MobileNativeChatSendIntent
     ): Promise<MobileNativeChatSendOutcome> => {
       const origin = captureSendOrigin(text.trimEnd())
       if (!origin) {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
-      const isHostCommand = isStructuredAgentSessionComposerCommand(
-        text,
-        agent,
-        sessionCommands,
-        sideChat
-      )
       const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
-      const outcome = await sendStructured(text, images, deadline, attachments, skills)
-      // Accepted messages remain host-owned; restore commands whose reply was lost.
-      if (outcome === 'rejected' || (outcome === 'unknown' && isHostCommand)) {
+      const outcome = await (intent
+        ? sendStructured(text, images, deadline, attachments, skills, intent)
+        : sendStructured(text, images, deadline, attachments, skills))
+      // Only a definite refusal returns input; uncertainty remains ordinary transcript content.
+      if (outcome === 'rejected') {
         restoreRejectedDraft(origin, text)
         restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
       }
@@ -75,7 +77,6 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     },
     [
       agent,
-      sideChat,
       captureSendOrigin,
       clearDraftForSend,
       onSendError,

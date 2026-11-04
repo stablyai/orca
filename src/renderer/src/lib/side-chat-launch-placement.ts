@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { pendingTabGroupId } from '@/runtime/layout-owner-pending-tabs'
 import { structuredChatTabIsSideChat } from '@/runtime/structured-chat-tab-side-chat'
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { readStructuredAgentLaunchRecords } from './agent-session/launch/structured-agent-session-launch-persistence'
 import { sideChatOnlyGroup } from '@/components/tab-group/side-chat-pane-placement'
 import { getTabGroupPanelRect } from '@/components/tab-group/tab-group-panel-split-target'

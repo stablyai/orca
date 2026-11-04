@@ -1,16 +1,18 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
+import type { ITerminalOptions } from '@xterm/xterm'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TERMINAL_PASTE_CHUNK_MAX_BYTES,
   TERMINAL_PASTE_DIRECT_MAX_BYTES
 } from '@/components/terminal-pane/terminal-paste-limits'
+import '@/components/terminal-pane/terminal-bracketed-paste'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START
-} from '@/components/terminal-pane/terminal-bracketed-paste'
+} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { dispatchAppMenuPasteEvent } from '@/lib/app-menu-paste'
 import { dispatchAppMenuSelectionAction } from '@/lib/app-menu-selection-actions'
 
@@ -83,6 +85,7 @@ vi.mock('@xterm/xterm', () => ({
     element = document.createElement('div')
     unicode = { activeVersion: '6', versions: ['6', '11'], register: vi.fn() }
     loadAddon = vi.fn()
+    options: ITerminalOptions = {}
     attachCustomWheelEventHandler = vi.fn()
     scrollToTop = vi.fn()
     scrollToBottom = vi.fn()

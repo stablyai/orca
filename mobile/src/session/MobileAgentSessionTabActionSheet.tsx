@@ -5,7 +5,7 @@ import {
 } from './mobile-native-chat-side-chat-actions'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { getMobileNativeChatCliForkActions } from './mobile-native-chat-cli-fork'
+import { getMobileNativeChatCliForkActions } from './native-chat/mobile-native-chat-cli-fork'
 import { useMobileAllowAutoCloseActions, workerSubjectOf } from './mobile-worker-auto-close'
 import type { MobileSessionController } from './use-mobile-session-controller'
 

@@ -1,29 +1,30 @@
+import type { RuntimePtyWorktreeRecord, RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
-import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
-import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
+import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
+import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
-import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   AgentLaunchPreferences,
   AgentSessionExecutionClaim,
   RuntimeCreateAgentSessionResult
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrchestrationCompatibilityHostStamp } from '../../shared/orchestration-compatibility-evidence'
-import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type {
   RuntimeTerminalPresentation,
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'
@@ -93,6 +94,9 @@ export type TerminalCreateOptions = {
   startFailure?: Error
   /** Main-owned sleep wake publishes resume outcomes instead of relying on window restore. */
   resumesSleepingRecord?: true
+  /** May start an existing pane again rather than new work in the workspace: a saved pane's
+   *  restore, a lost pane's recovery, or a paired window mounting its panes. */
+  reopensPane?: true
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
   requireFreshPane?: boolean
   sessionId?: string
@@ -189,7 +193,17 @@ export type HookLiveAgentRow = Pick<
   | 'programStatus'
 >
 
-export type TerminalHandleRecord = {
+export type TerminalHandlePty = {
+  record: TerminalHandleRecord
+  pty: RuntimePtyWorktreeRecord
+}
+
+export type TerminalHandleLeaf = {
+  record: TerminalHandleRecord
+  leaf: RuntimeLeafRecord
+}
+
+export type TerminalHandleRecord = Readonly<{
   handle: string
   runtimeId: string
   rendererGraphEpoch: number
@@ -200,7 +214,7 @@ export type TerminalHandleRecord = {
   ptyGeneration: number
   /** Issue-time stamp of the pane main bound a terminal handle for; read only by recoverTerminalPane. */
   issuedForPaneKey?: string
-}
+}>
 
 export type OrchestrationCompatibilityTerminalAuthority = {
   runtimeId: string

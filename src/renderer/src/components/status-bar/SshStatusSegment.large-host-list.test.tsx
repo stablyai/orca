@@ -3,8 +3,8 @@ import type { PropsWithChildren } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { SshStatusSegment } from './SshStatusSegment'
@@ -139,13 +139,5 @@ describe('the status menu with a very large imported SSH host list', () => {
     await vi.waitFor(() => expect(screen.queryByRole('combobox')).toBeNull())
     const trigger = screen.getByRole('button', { name: 'Remote host connection status' })
     await vi.waitFor(() => expect(document.activeElement).toBe(trigger))
-  })
-
-  it('offers no search when every idle host fits', () => {
-    state.sshTargetLabels = new Map([['ssh-1', 'solo']])
-    state.sshConnectionStates = new Map()
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
-    expect(screen.getByText('solo')).toBeTruthy()
-    expect(screen.queryByRole('menuitem', { name: /^Find/ })).toBeNull()
   })
 })

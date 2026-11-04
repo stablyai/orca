@@ -1,6 +1,6 @@
 import { translate } from '../i18n/mobile-i18n'
 import type { SideChatPermission } from '../../../src/shared/agent-session-side-chat'
-import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { useCallback } from 'react'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'

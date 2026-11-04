@@ -12,7 +12,7 @@ import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { resolveHookCommandSourcePolicy } from '../../../../../../shared/hook-command-source-policy'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
-import { SearchableSetting } from '../../SearchableSetting'
+import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { getRepositoryLocalCommandsSectionId } from '../repository-settings-targets'
 import {
   getLocalHookFields,
@@ -27,8 +27,8 @@ import {
   RepositorySetupPolicySetting
 } from './RepositoryHookPolicySettings'
 import { RepositoryIssueCommandSetting } from './RepositoryIssueCommandSetting'
-import { useRepositoryHookSettingsDraft } from '../../use-repository-hook-settings-draft'
-import { useRepositoryIssueCommand } from '../../use-repository-issue-command'
+import { useRepositoryHookSettingsDraft } from './use-repository-hook-settings-draft'
+import { useRepositoryIssueCommand } from './use-repository-issue-command'
 
 type RepositoryHooksSectionProps = {
   repo: Repo

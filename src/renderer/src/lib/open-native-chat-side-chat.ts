@@ -1,6 +1,6 @@
-import { agentChatPermissionModes } from '../../../shared/agent-chat-permission-mode'
-import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
-import type { AgentJournalSkillRef } from '../../../shared/agent-session-journal-types'
+import { agentChatPermissionModes } from '../../../shared/agent-launch/permissions/agent-chat-permission-support'
+import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { AgentJournalSkillRef } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { useAppStore } from '@/store'
 import { newAgentLaunchRequestId } from './agent-launch-request-id'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
@@ -15,7 +15,7 @@ import {
   supportsStructuredAgentSessionReadOnlySideChat
 } from '@/runtime/structured-agent-session-client'
 import { prepareSideChatPane } from './side-chat-launch-placement'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   captureWebSessionIntentOwner,
   matchesWebSessionIntentOwner

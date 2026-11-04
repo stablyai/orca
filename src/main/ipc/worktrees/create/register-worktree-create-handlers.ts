@@ -1,5 +1,5 @@
 import { ipcMain, app } from 'electron'
-import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
+import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
@@ -22,17 +22,18 @@ import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-er
 import { track } from '../../../telemetry/client'
 import { classifyWorkspaceCreateError } from '../../workspace-create-error-classifier'
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
-import { adoptProvisionedRootSshCheckout } from '../../../provisioned-root-ssh-adoption'
+import { adoptProvisionedRootSshCheckout } from '../../../workspaces/catalog/provisioned-root-ssh-adoption'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
-import { requireWorktreeCreateRoute } from '../../../worktree-create-execution-host-route'
+import { requireWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { workspaceLifecycleKey } from '../../../runtime/workspaces/workspace-lifecycle-commands'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
-import { beginWorkspaceCreateTelemetry } from '../../../workspace-create-telemetry'
+import { beginWorkspaceCreateTelemetry } from '../../../workspaces/creation/workspace-create-telemetry'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -55,9 +56,12 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           repo,
           request: args.automationProvenanceRequest
         })
-        const createArgs: CreateWorktreeArgsWithSystemProvenance = {
-          ...args,
-          automationProvenance
+        let createArgs: CreateWorktreeArgsWithSystemProvenance = { ...args, automationProvenance }
+        try {
+          createArgs = await applyWorkspaceCreatePluginHook(createArgs, repo)
+        } catch (error) {
+          releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
+          throw error
         }
 
         let result: CreateWorktreeResult

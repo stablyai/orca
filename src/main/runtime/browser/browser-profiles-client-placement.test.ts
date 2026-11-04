@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   ipcMain: { on: mocks.on, removeListener: mocks.removeListener }
 }))
-vi.mock('../../browser/browser-session-registry', () => ({
+vi.mock('../../browser/sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: mocks.getProfile,
     getDefaultProfile: mocks.getDefaultProfile
@@ -22,7 +22,7 @@ vi.mock('../../browser/browser-session-registry', () => ({
 vi.mock('../../browser/browser-manager', () => ({
   browserManager: { getSessionProfileIdForTab: mocks.getLocalProfile }
 }))
-vi.mock('../../ipc/browser-tab-registration-wait', () => ({
+vi.mock('../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: mocks.wait
 }))
 import { RuntimeBrowserProfiles } from './browser-profiles'

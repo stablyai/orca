@@ -17,14 +17,14 @@ import {
   CUSTOM_AGENT_ID,
   isCustomAgentId,
   listCommitMessageAgentCapabilities
-} from '../../../../../../shared/commit-message-agent-spec'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control-ai'
-import { formatLinkedIssueTemplateValue } from '../../../../../../shared/source-control-ai-action-variables'
-import type { SourceControlTextActionId } from '../../../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control-ai-recipe-save'
+} from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
+import { formatLinkedIssueTemplateValue } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
+import type { SourceControlTextActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { toast } from 'sonner'
 import { SourceControlActionVariableChips } from '../../../source-control/SourceControlActionVariableChips'
 import { sourceControlTextGenerationDefaultsMatchTarget } from './text-generation-defaults'
@@ -311,7 +311,7 @@ export function SourceControlTextGenerationDialogForm({
               setCommandTemplate(event.target.value)
               setGenerationError(null)
             }}
-            className="box-border min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+            className="box-border min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
           />
           <SourceControlActionVariableChips
             actionId={actionId}

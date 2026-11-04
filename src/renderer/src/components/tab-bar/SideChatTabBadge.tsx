@@ -9,3 +9,7 @@ export function SideChatTabBadge({ className }: { className?: string }): React.J
     </Badge>
   )
 }
+
+export function sideChatTabLabel(sideChat: boolean | undefined): string | undefined {
+  return sideChat ? translate('components.native-chat.sideChat.title', 'Side chat') : undefined
+}
