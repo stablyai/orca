@@ -36,7 +36,7 @@ export class JournalNewestTurn {
     const turns: AgentJournalRenderItem[] = []
     const reported = new Set<string>()
     for (const item of state.items.values()) {
-      this.index(state, item.itemId, item, reported)
+      this.index(item.itemId, item, reported)
       if (isTurnOrClear(item)) {
         turns.push(item)
       }
@@ -72,7 +72,7 @@ export class JournalNewestTurn {
         this.sources.delete(itemId)
         this.root = putTurnSource(this.root, prior, true)
       }
-      this.index(state, itemId, item, touched)
+      this.index(itemId, item, touched)
       if (isTurnOrClear(item)) {
         touched.add(itemId)
       }
@@ -113,12 +113,11 @@ export class JournalNewestTurn {
   }
 
   private index(
-    state: JournalReducerState,
     itemId: string,
     item: AgentJournalRenderItem | undefined,
     touched: Set<string>
   ): void {
-    const turn = item ? reportedTurn(state, item) : null
+    const turn = item ? reportedTurn(item) : null
     const prior = this.evidence.get(itemId) ?? null
     if (turn === prior) {
       return
@@ -171,7 +170,7 @@ const NOT_REPORTS: ReadonlySet<string> = new Set([
 
 /** The turn a root failure row reports for, unless it is a command's own verdict: one of the kinds
  * above, or anything Orca wrote on a command's result identity (its refusals). */
-function reportedTurn(state: JournalReducerState, item: AgentJournalRenderItem): string | null {
+function reportedTurn(item: AgentJournalRenderItem): string | null {
   const { body, turnScope } = item
   if (
     body.kind !== 'status' ||
@@ -185,7 +184,5 @@ function reportedTurn(state: JournalReducerState, item: AgentJournalRenderItem):
   if (identity?.provider === 'orca' && identity.clientMessageId.startsWith('command-result:')) {
     return null
   }
-  return state.items.has(turnScope.turnItemId)
-    ? turnScope.turnItemId
-    : (state.aliases.get(turnScope.turnItemId) ?? turnScope.turnItemId)
+  return turnScope.turnItemId
 }

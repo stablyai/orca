@@ -1,3 +1,4 @@
+import { isPublicJournalExecution } from './journal-execution-view'
 import { journalChangedItemIds } from './journal-item-address'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
@@ -20,6 +21,8 @@ export class JournalUsageLimitCutIndex {
   private reports = new Map<string, { target: string; source: TurnSource }>()
   private limits = new Map<string, TurnSourceNode | undefined>()
   private dependents = new Map<string, Set<string>>()
+  private dependency = new Map<string, string>()
+  private heads = new Map<string, string>()
   constructor(state: JournalReducerState) {
     for (const itemId of state.items.keys()) {
       this.update(state, itemId)
@@ -31,9 +34,35 @@ export class JournalUsageLimitCutIndex {
       row.kind === 'submission' || row.kind === 'dispatch'
         ? [agentJournalSubmissionKey(row.clientMessageId)]
         : journalChangedItemIds(state, row)
-    for (const id of ids) {
+    const changed = new Set(ids)
+    const mutations =
+      row.kind === 'item' || row.kind === 'tombstone'
+        ? [row]
+        : row.kind === 'lifecycle-batch'
+          ? row.mutations
+          : []
+    for (const mutation of mutations) {
+      changed.add(mutation.itemId)
+      const provider =
+        mutation.kind === 'item' && readAgentJournalTurn(mutation.body)
+          ? (mutation.executionOrigin?.providerItemId ?? mutation.itemId)
+          : undefined
+      if (provider !== undefined) {
+        changed.add(provider)
+        const previous = this.heads.get(provider)
+        if (previous !== undefined) {
+          changed.add(previous)
+        }
+        const next = state.aliases.get(provider) ?? provider
+        changed.add(next)
+        this.heads.set(provider, next)
+      }
+    }
+    for (const id of changed) {
       this.update(state, id)
-      for (const dependent of this.dependents.get(id) ?? []) {
+      // update removes and re-adds dependencies, so iterate a stable snapshot.
+      const dependents = Array.from(this.dependents.get(id) ?? [])
+      for (const dependent of dependents) {
         this.update(state, dependent)
       }
     }
@@ -63,6 +92,19 @@ export class JournalUsageLimitCutIndex {
   private update(state: JournalReducerState, itemId: string): void {
     const item = state.items.get(itemId)
     const turn = readAgentJournalTurn(item?.body)
+    if (turn && item) {
+      const provider = item.executionOrigin?.providerItemId ?? item.itemId
+      this.heads.set(provider, state.aliases.get(provider) ?? provider)
+    }
+    const previousDependency = this.dependency.get(itemId)
+    if (previousDependency !== undefined) {
+      const users = this.dependents.get(previousDependency)
+      users?.delete(itemId)
+      if (users?.size === 0) {
+        this.dependents.delete(previousDependency)
+      }
+      this.dependency.delete(itemId)
+    }
     if (turn?.userItemId !== undefined) {
       const id = state.aliases.get(turn.userItemId) ?? turn.userItemId
       let users = this.dependents.get(id)
@@ -71,6 +113,7 @@ export class JournalUsageLimitCutIndex {
         this.dependents.set(id, users)
       }
       users.add(itemId)
+      this.dependency.set(itemId, id)
     }
     const commandTurns = {
       has: (id: string) =>
@@ -82,6 +125,7 @@ export class JournalUsageLimitCutIndex {
     const relevant =
       item &&
       isRootAgentJournalItem(item) &&
+      isPublicJournalExecution(state, item) &&
       !isStructuredAgentSessionNonRequestRow(item, commandTurns) &&
       (turn || (item.body.kind === 'message' && item.body.role === 'user'))
     const previous = this.sources.get(itemId)
@@ -111,9 +155,7 @@ export class JournalUsageLimitCutIndex {
       item.turnScope?.kind === 'turn' &&
       fact?.kind === 'usageLimitReached'
     ) {
-      const target = state.items.has(item.turnScope.turnItemId)
-        ? item.turnScope.turnItemId
-        : (state.aliases.get(item.turnScope.turnItemId) ?? item.turnScope.turnItemId)
+      const target = item.turnScope.turnItemId
       const source = { item, failedAt: 0, ordinary: true, relevant: true }
       this.reports.set(itemId, { target, source })
       this.limits.set(target, putTurnSource(this.limits.get(target), source, false))

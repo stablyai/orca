@@ -1,3 +1,4 @@
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { journalExecutionAddress, journalExecutionOriginForItem } from './journal-execution-item'
 import { journalWriteTurnScope } from './journal-write-turn-scope'
 import { journalItemExecutionFence, journalItemOwnerFence } from './journal-item-provenance'
@@ -104,27 +105,49 @@ export function journalLifecycleMutationForState(
   mutation: JournalLifecycleMutationInput,
   fence: number,
   revisions: Map<string, number>
-): JournalLifecycleMutation {
+): JournalLifecycleMutation | null {
   const itemId = journalLifecycleMutationItemId(mutation)
+  if (mutation.itemId !== undefined) {
+    if (mutation.kind === 'tombstone' && !state.items.has(itemId) && state.aliases.has(itemId)) {
+      return null
+    }
+    if (
+      state.tombstones.has(itemId) &&
+      !state.items.has(itemId) &&
+      (mutation.kind === 'tombstone' || readAgentJournalTurn(mutation.body))
+    ) {
+      return null
+    }
+    if (mutation.kind === 'item') {
+      const next = readAgentJournalTurn(mutation.body)
+      const previous = readAgentJournalTurn(state.items.get(itemId)?.body)
+      if (
+        next &&
+        (!previous ||
+          (previous.state !== 'running' &&
+            previous.state !== 'unverifiable' &&
+            (next.state !== previous.state || next.completedAt !== previous.completedAt)))
+      ) {
+        return null
+      }
+    }
+  }
   const address =
     mutation.kind === 'item'
       ? journalExecutionAddress(
           state,
-          itemId,
+          { kind: mutation.itemId === undefined ? 'provider' : 'exact', itemId },
           mutation.body,
           {
             fence,
             ownerFence: mutation.ownerFence,
             executionOwner: mutation.executionOwner
-          },
-          mutation.itemId !== undefined
+          }
         )
       : undefined
   const resolved =
     address?.itemId ??
-    (mutation.itemId !== undefined && state.items.has(itemId)
-      ? itemId
-      : (state.aliases.get(itemId) ?? itemId))
+    (mutation.itemId !== undefined ? itemId : (state.aliases.get(itemId) ?? itemId))
   const revision = nextJournalItemRevision(state, resolved, revisions)
   const ownerFence = journalItemOwnerFence(state, resolved, {
     fence,
@@ -138,7 +161,7 @@ export function journalLifecycleMutationForState(
             state,
             mutation.turnScope,
             mutation.executionOwner ?? mutation.ownerFence ?? fence,
-            mutation.itemId !== undefined
+            mutation.itemId !== undefined ? 'exact' : 'provider'
           ),
           ...(mutation.itemId === undefined
             ? {}

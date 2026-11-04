@@ -59,6 +59,18 @@ for (const nextFence of [0, 1]) {
         { fence: nextFence, executionOwner: nextFence, turnScope: { kind: 'thread' } }
       )
       const freshId = journal.canonicalItemId(oldId)
+      await journal.appendLifecycleBatch({
+        settlementId: 'exact-old-history',
+        fence: nextFence,
+        mutations: [
+          {
+            kind: 'item',
+            itemId: oldId,
+            body: { kind: 'turn', turnId: 'B', state: 'completed' },
+            turnScope: { kind: 'thread' }
+          }
+        ]
+      })
       await journal.appendItem(
         { provider: 'claude', sessionId: 'thread', uuid: 'fresh-limit' },
         {

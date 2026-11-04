@@ -154,13 +154,13 @@ export function registerJournalLifecycleBatchAppenderTests(): void {
       'rejects repeated items across %s before any row is written',
       (repeatedAs) => {
         const state = createJournalReducerState('session', 'epoch')
-        state.aliases.set('alias', 'saved')
+        state.aliases.set('orca:alias', 'saved')
         const rows: JournalRow[] = []
         const appender = new JournalLifecycleBatchAppender({
           state: () => state,
           cursor: () => ({ epoch: state.epoch, sequence: state.lastSequence }),
           enqueueRows: async (plan) => {
-            const built = plan().map((build, index) => build(index + 1, 1_000))
+            const built = plan(1, 1_000).map((build, index) => build(index + 1, 1_000))
             rows.push(...built)
             return built
           }
@@ -169,7 +169,10 @@ export function registerJournalLifecycleBatchAppenderTests(): void {
           item('saved', repeatedAs === 'oversized' ? 'x'.repeat(1_500_001) : 'first'),
           ...Array.from({ length: 200 }, (_, index) => item(`filler-${index}`)),
           repeatedAs === 'alias'
-            ? { kind: 'tombstone' as const, itemId: 'alias' }
+            ? {
+                kind: 'tombstone' as const,
+                identity: { provider: 'orca' as const, clientMessageId: 'alias' }
+              }
             : item('saved', 'second')
         ]
         expect(() =>

@@ -6,6 +6,7 @@ import { JournalWriteProjection } from './journal-write-projection'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { retireCoveredJournalFloor } from './journal-commit'
+import { journalLifecycleItems } from './journal-public-read'
 import { createJournalPublicReader, visitJournalItemsWithLinkage } from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -189,6 +190,8 @@ export class AgentSessionJournal {
     sequence: this.state.lastSequence
   })
 
+  lifecycleItems = (): AgentJournalRenderItem[] => journalLifecycleItems(this.state)
+
   snapshot = (): AgentJournalSnapshot => this.publicRead().snapshot
 
   publicRead = () =>
@@ -337,9 +340,8 @@ export class AgentSessionJournal {
     }
   }
 
-  appendLifecycleBatch(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
-    return this.lifecycleBatchAppender.append(input)
-  }
+  appendLifecycleBatch = (input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> =>
+    this.lifecycleBatchAppender.append(input)
 
   appendPlannedLifecycleBatch = (input: JournalPlannedLifecycleBatchInput) =>
     this.lifecycleBatchAppender.appendPlanned(input)

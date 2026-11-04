@@ -1,11 +1,11 @@
+export { renderJournalState } from './journal-render-state'
 import { resolveJournalItemId } from './journal-item-address'
 export {
   resolveJournalItemId,
   isProviderUserMessageEcho,
   journalEchoClaimant
 } from './journal-item-address'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { publicJournalItem, type JournalOwnedItem } from './journal-execution-interruption'
+import type { JournalOwnedItem } from './journal-execution-interruption'
 import { recordStopCancellations } from './journal-stop-cancellation'
 import {
   journalInputOrder,
@@ -19,12 +19,10 @@ import type { JournalInputEntry, JournalInputCard } from './journal-input-lineag
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalRenderItem,
-  AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalHistoryOrigin, type JournalHistoryOrigin } from './journal-history-origin'
 import { journalBatchMutationProducer, journalRenderItem } from './journal-render-item'
-import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import { removeJournalItem, statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import { resolveJournalExecutionItem } from './journal-execution-item'
@@ -33,7 +31,6 @@ import { observeJournalProviderActivity } from './journal-provider-activity'
 import { isJournalStopOrResumeRow, type JournalRow } from './journal-row-schema'
 import { acceptSubmissionFromProviderItem, applyJournalSubmission } from './journal-submission-fold'
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
-import { projectJournalStopNote } from './journal-stop-note-projection'
 import { journalItemExecutionFence } from './journal-item-provenance'
 import { retireRewoundJournalSubmission } from './journal-rewind-submission-retirement'
 import {
@@ -205,45 +202,7 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
       return
     }
     for (const [sequenceIndex, mutation] of row.mutations.entries()) {
-      if (mutation.kind === 'item') {
-        if (!state.itemEchoes.has(mutation.itemId) && Object.hasOwn(mutation, 'echoOf')) {
-          state.itemEchoes.set(mutation.itemId, mutation.echoOf)
-        }
-        const { revision, body } = mutation
-        let itemId = resolveJournalItemId(state, mutation.itemId, body)
-        if (!state.itemEchoes.has(mutation.itemId)) {
-          acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
-        }
-        const producer = journalBatchMutationProducer(row, mutation)
-        const scope = statedOrDerivedTurnScope(state, mutation)
-        let item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
-        if (mutation.executionInterruption) {
-          item.executionInterruption = mutation.executionInterruption
-        }
-        if (mutation.executionOrigin) {
-          item.executionOrigin = mutation.executionOrigin
-        }
-        const resolved = resolveJournalExecutionItem(state, mutation.itemId, item, {
-          fence: row.fence,
-          ownerFence: mutation.ownerFence,
-          executionOwner: mutation.executionOwner
-        })
-        if (!resolved || journalItemRevisionIsStale(state, resolved.itemId, revision)) {
-          continue
-        }
-        itemId = resolved.itemId
-        item = { ...resolved.item, itemId }
-        item.observedAt = mutation.observedAt ?? row.ts
-        upsertJournalItem(state, itemId, revision, item, {
-          fence: row.fence,
-          ownerFence: mutation.ownerFence,
-          executionOwner: mutation.executionOwner
-        })
-        const fence = journalItemExecutionFence(state, itemId) ?? row.fence
-        observeJournalProviderActivity(state, row, mutation.itemId, body, savedAt, fence)
-      } else {
-        removeJournalItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
-      }
+      applyJournalLifecycleMutation(state, row, mutation, sequenceIndex, savedAt)
     }
     rememberAppliedSettlementId(state, row.settlementId)
     return
@@ -274,24 +233,56 @@ export function rememberAppliedSettlementId(
 }
 
 function resolveItemId(state: JournalReducerState, itemId: string): string {
-  return state.items.has(itemId) ? itemId : (state.aliases.get(itemId) ?? itemId)
+  return state.items.has(itemId) || state.tombstones.has(itemId)
+    ? itemId
+    : (state.aliases.get(itemId) ?? itemId)
 }
 
-export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
-  // Map insertion order changes on recreation; journal position alone orders the timeline.
-  const items = [...state.items.values()]
-    .filter(
-      (item) =>
-        !readAgentJournalTurn(item.body) ||
-        !state.aliases.has(item.itemId) ||
-        state.aliases.get(item.itemId) === item.itemId
-    )
-    .map((item) => projectJournalStopNote(publicJournalItem(item), state.items))
-    .sort(compareAgentJournalItems)
-  return {
-    sessionId: state.sessionId,
-    cursor: { epoch: state.epoch, sequence: state.lastSequence },
-    items,
-    submissions: [...state.submissions.values()].sort((a, b) => a.submittedAt - b.submittedAt)
+/** Planning and replay share exact mutation order inside a lifecycle batch. */
+export function applyJournalLifecycleMutation(
+  state: JournalReducerState,
+  row: Extract<JournalRow, { kind: 'lifecycle-batch' }>,
+  mutation: Extract<JournalRow, { kind: 'lifecycle-batch' }>['mutations'][number],
+  sequenceIndex: number,
+  savedAt = row.ts
+): void {
+  if (mutation.kind === 'item') {
+    if (!state.itemEchoes.has(mutation.itemId) && Object.hasOwn(mutation, 'echoOf')) {
+      state.itemEchoes.set(mutation.itemId, mutation.echoOf)
+    }
+    const { revision, body } = mutation
+    let itemId = resolveJournalItemId(state, mutation.itemId, body)
+    if (!state.itemEchoes.has(mutation.itemId)) {
+      acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
+    }
+    const producer = journalBatchMutationProducer(row, mutation)
+    const scope = statedOrDerivedTurnScope(state, mutation)
+    let item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
+    if (mutation.executionInterruption) {
+      item.executionInterruption = mutation.executionInterruption
+    }
+    if (mutation.executionOrigin) {
+      item.executionOrigin = mutation.executionOrigin
+    }
+    const resolved = resolveJournalExecutionItem(state, mutation.itemId, item, {
+      fence: row.fence,
+      ownerFence: mutation.ownerFence,
+      executionOwner: mutation.executionOwner
+    })
+    if (!resolved || journalItemRevisionIsStale(state, resolved.itemId, revision)) {
+      return
+    }
+    itemId = resolved.itemId
+    item = { ...resolved.item, itemId }
+    item.observedAt = mutation.observedAt ?? row.ts
+    upsertJournalItem(state, itemId, revision, item, {
+      fence: row.fence,
+      ownerFence: mutation.ownerFence,
+      executionOwner: mutation.executionOwner
+    })
+    const fence = journalItemExecutionFence(state, itemId) ?? row.fence
+    observeJournalProviderActivity(state, row, mutation.itemId, body, savedAt, fence)
+  } else {
+    removeJournalItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
   }
 }

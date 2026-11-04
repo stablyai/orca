@@ -27,14 +27,7 @@ import { agentJournalLinkageFields } from '../../../shared/agent-session/journal
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalItemExecutionFence, journalItemOwnerFence } from './journal-item-provenance'
 import type { JournalReducerState } from './journal-reducer'
-import {
-  type JournalDispatchRow,
-  type JournalItemRow,
-  type JournalLifecycleBatchRow,
-  type JournalSubmissionRow,
-  MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
-  MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
-} from './journal-row-schema'
+import type { JournalDispatchRow, JournalItemRow, JournalSubmissionRow } from './journal-row-schema'
 import {
   boundInlineText,
   boundRunningToolOutput,
@@ -46,9 +39,7 @@ import { nextJournalItemRevision } from './journal-item-revision'
 import type { ResolveDispatchInput, JournalSubmissionInput } from './journal-store-contracts'
 import {
   journalLifecycleMutationItemId,
-  journalLifecycleMutationForState,
-  type JournalItemAddress,
-  type JournalLifecycleMutationInput
+  type JournalItemAddress
 } from './journal-lifecycle-mutation'
 export {
   journalLifecycleItemMutation,
@@ -165,42 +156,7 @@ function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   return boundInlineText(input.reason, JOURNAL_DISPATCH_REASON_LIMITS).text
 }
 
-export function journalLifecycleBatchRowBuilder(
-  state: () => JournalReducerState,
-  settlementId: string,
-  mutations: readonly JournalLifecycleMutationInput[],
-  /** Each mutation owns producer linkage; whole-row stamping would misattribute mixed-agent batches. */
-  options: { fence: number; recovered?: true },
-  revisions?: Map<string, number>
-): RowBuilder<JournalLifecycleBatchRow> {
-  return (seq, ts) => {
-    if (mutations.length === 0 || mutations.length > MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
-      throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
-    }
-    const current = state()
-    const runningRevisions = revisions ?? new Map<string, number>()
-    const built = mutations.map((mutation) =>
-      journalLifecycleMutationForState(current, mutation, options.fence, runningRevisions)
-    )
-    const row: JournalLifecycleBatchRow = {
-      kind: 'lifecycle-batch',
-      settlementId,
-      mutations: built,
-      ...journalRowBase(
-        current.epoch,
-        seq,
-        options.fence,
-        ts,
-        built.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
-      ),
-      ...(options.recovered ? { recovered: options.recovered } : {})
-    }
-    if (Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 > MAX_JOURNAL_LIFECYCLE_BATCH_BYTES) {
-      throw new Error('journal_lifecycle_batch_byte_bound_exceeded')
-    }
-    return row
-  }
-}
+export { journalLifecycleBatchRowBuilder } from './journal-lifecycle-row'
 
 export function journalRowBase(
   epoch: string,
@@ -233,10 +189,9 @@ export function buildJournalItemRow(
   const itemId = journalLifecycleMutationItemId(input)
   const address = journalExecutionAddress(
     input.state,
-    itemId,
+    { kind: input.itemId === undefined ? 'provider' : 'exact', itemId },
     input.body,
-    input,
-    input.itemId !== undefined
+    input
   )
   const resolved = address.itemId ?? itemId
   // Recreated items must outrank tombstones or the reducer will discard them.
@@ -276,7 +231,7 @@ export function buildJournalItemRow(
       input.state,
       input.turnScope,
       input.executionOwner ?? input.ownerFence ?? input.fence,
-      input.itemId !== undefined
+      input.itemId !== undefined ? 'exact' : 'provider'
     ),
     ...agentJournalLinkageFields(input.linkage)
   }

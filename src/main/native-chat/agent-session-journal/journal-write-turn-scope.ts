@@ -7,9 +7,9 @@ export function journalWriteTurnScope(
   state: JournalReducerState,
   scope: AgentJournalTurnScope,
   ownerFence: number,
-  exact: boolean
+  domain: 'exact' | 'provider'
 ): AgentJournalTurnScope {
-  if (scope.kind !== 'turn' || (exact && state.items.has(scope.turnItemId))) {
+  if (scope.kind !== 'turn' || domain === 'exact') {
     return scope
   }
   const itemId =

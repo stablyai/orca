@@ -36,6 +36,7 @@ import { isInProgressStructuredAgentSessionItem } from './structured-agent-sessi
 
 export type StaleStructuredAgentSessionStateJournal = Pick<
   AgentSessionJournal,
+  | 'lifecycleItems'
   | 'snapshot'
   | 'itemFence'
   | 'itemBody'
@@ -88,7 +89,7 @@ export function planStaleStructuredAgentSessionState(
   const { journal, below } = input
   const ended = (fence: number | undefined) =>
     below === undefined || (fence !== undefined && fence < below)
-  const items = providerTimelineExecutionItems(journal.snapshot().items).filter((item) =>
+  const items = providerTimelineExecutionItems(journal.lifecycleItems()).filter((item) =>
     ended(journal.itemFence(item.itemId))
   )
   const dispatches =
@@ -145,7 +146,12 @@ function staleMutations(
     ...proven
   ]
   mutations.push(...turnEnds)
-  const stopRow = staleStopRow(input, items, (item) => {
+  const visible = new Set(journal.snapshot().items.map((item) => item.itemId))
+  const visibleItems = items.filter((item) => visible.has(item.itemId))
+  const visibleEnds = turnEnds.filter(
+    (mutation) => mutation.itemId !== undefined && visible.has(mutation.itemId)
+  )
+  const stopRow = staleStopRow(input, visibleItems, (item) => {
     const unverifiable = isUnverifiableTurn(item)
     if (!unverifiable && !isInProgressStructuredAgentSessionItem(item)) {
       return null
@@ -162,8 +168,8 @@ function staleMutations(
       ? { by: 'replaced', fence }
       : null
   })
-  if (stopRow && !endedByPersonsStop(journal, turnEnds)) {
-    mutations.unshift({ ...stopRow, turnScope: settledRootTurnScope(items, turnEnds) })
+  if (stopRow && !endedByPersonsStop(journal, visibleEnds)) {
+    mutations.unshift({ ...stopRow, turnScope: settledRootTurnScope(visibleItems, visibleEnds) })
   }
   return mutations
 }

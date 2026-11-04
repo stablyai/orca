@@ -14,7 +14,7 @@ import {
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 import { journalItemProvenance } from './journal-item-provenance'
-import { isJournalExecutionAlias } from './journal-execution-item'
+import { isJournalExecutionAlias, journalExecutionOriginForItem } from './journal-execution-item'
 
 /** A retained provider slot also retains the earlier executions hidden behind that slot. */
 export function journalExecutionRestatements(
@@ -32,7 +32,7 @@ export function journalExecutionRestatements(
       !readAgentJournalTurn(item.body) ||
       !head ||
       head === item.itemId ||
-      !selected.has(head) ||
+      (!selected.has(head) && !previous.tombstones.has(head)) ||
       selected.has(item.itemId)
     ) {
       continue
@@ -46,7 +46,7 @@ export function journalExecutionRestatements(
   }
   return [...retained, ...items].map((item) => {
     const id = agentJournalItemKey(item.identity)
-    const origin = previous.items.get(id)?.executionOrigin
+    const origin = journalExecutionOriginForItem(previous, id)
     return origin && !item.executionOrigin ? { ...item, executionOrigin: origin } : item
   })
 }
@@ -58,7 +58,7 @@ export function copyJournalExecutionRemovals(
 ): void {
   for (const [alias, itemId] of previous.aliases) {
     const revision = previous.tombstones.get(itemId)
-    if (isJournalExecutionAlias(alias) && revision !== undefined) {
+    if ((isJournalExecutionAlias(alias) || previous.items.has(alias)) && revision !== undefined) {
       state.aliases.set(alias, itemId)
       state.tombstones.set(itemId, revision)
     }

@@ -17,6 +17,10 @@ export const executionOriginSchema = z.object({
   clientMessageId: z.string().optional()
 })
 export type JournalExecutionOrigin = z.infer<typeof executionOriginSchema>
+export type JournalExecutionSelection =
+  | { kind: 'exact'; itemId: string }
+  | { kind: 'provider'; itemId: string }
+
 type ExecutionWriter = { fence: number; ownerFence?: number; executionOwner?: number }
 const EXECUTION_ALIAS = '@execution:'
 
@@ -59,13 +63,12 @@ export function readJournalExecutionAlias(alias: string) {
 /** Pure lookup is shared by write preparation and replay, before classifying any terminal result. */
 export function journalExecutionAddress(
   state: JournalReducerState,
-  itemId: string,
+  selection: JournalExecutionSelection,
   body: AgentJournalItemBody,
-  writer: ExecutionWriter,
-  exact = false
+  writer: ExecutionWriter
 ): { itemId?: string; ownerFence: number; opener?: string } {
-  const currentId =
-    exact && state.items.has(itemId) ? itemId : (state.aliases.get(itemId) ?? itemId)
+  const { itemId } = selection
+  const currentId = selection.kind === 'exact' ? itemId : (state.aliases.get(itemId) ?? itemId)
   const current = state.items.get(currentId)
   let ownerFence =
     writer.executionOwner ??
@@ -75,7 +78,7 @@ export function journalExecutionAddress(
   const turn = readAgentJournalTurn(body)
   if (
     !turn ||
-    (exact && state.items.has(itemId)) ||
+    selection.kind === 'exact' ||
     (current?.executionOrigin && itemId === current.itemId)
   ) {
     return { itemId: currentId, ownerFence }
@@ -157,10 +160,17 @@ export function resolveJournalExecutionItem(
     return { itemId: next.itemId, item: next }
   }
   if (next.executionOrigin) {
-    rememberOrigin(state, itemId, next.executionOrigin)
+    rememberOrigin(
+      state,
+      itemId,
+      next.executionOrigin,
+      next.executionOrigin.epoch === state.epoch &&
+        next.executionOrigin.sequence === next.sequence &&
+        !state.items.has(itemId)
+    )
     return { itemId, item: { ...next, itemId } }
   }
-  const address = journalExecutionAddress(state, itemId, next.body, writer)
+  const address = journalExecutionAddress(state, { kind: 'provider', itemId }, next.body, writer)
   if (address.itemId !== undefined) {
     if (!state.items.has(address.itemId) && state.tombstones.has(address.itemId)) {
       return null
@@ -186,22 +196,37 @@ export function resolveJournalExecutionItem(
     provider: 'orca',
     clientMessageId: `execution:${state.epoch}:${next.sequence}:${next.sequenceIndex ?? 0}`
   })
-  rememberOrigin(state, canonical, origin)
+  rememberOrigin(state, canonical, origin, true)
   return { itemId: canonical, item: { ...next, itemId: canonical, executionOrigin: origin } }
 }
 
 function rememberOrigin(
   state: JournalReducerState,
   itemId: string,
-  origin: JournalExecutionOrigin
+  origin: JournalExecutionOrigin,
+  birth = false
 ): void {
-  state.aliases.set(
-    journalExecutionAlias(origin.providerItemId, origin.ownerFence, origin.clientMessageId),
-    itemId
+  const ownerAlias = journalExecutionAlias(
+    origin.providerItemId,
+    origin.ownerFence,
+    origin.clientMessageId
   )
+  if (origin.clientMessageId !== undefined || !state.aliases.has(ownerAlias)) {
+    state.aliases.set(ownerAlias, itemId)
+  }
   const headId = state.aliases.get(origin.providerItemId) ?? origin.providerItemId
   const head = state.items.get(headId)
-  if (!head || head.itemId === itemId || !state.items.has(itemId)) {
+  const headOrigin = head?.executionOrigin
+  const restoringNewer =
+    !state.items.has(itemId) &&
+    headOrigin?.epoch === origin.epoch &&
+    origin.sequence >= headOrigin.sequence
+  if (
+    headId === itemId ||
+    birth ||
+    (!state.aliases.has(origin.providerItemId) && !head) ||
+    restoringNewer
+  ) {
     if (headId !== origin.providerItemId && headId !== itemId) {
       state.aliases.set(headId, itemId)
     }
@@ -216,7 +241,7 @@ export function carryJournalExecutionAliases(
 ): void {
   for (const [alias, itemId] of previous.aliases) {
     if (
-      isJournalExecutionAlias(alias) &&
+      (isJournalExecutionAlias(alias) || previous.items.has(alias)) &&
       (state.items.has(itemId) || state.tombstones.has(itemId))
     ) {
       state.aliases.set(alias, itemId)

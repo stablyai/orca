@@ -75,8 +75,7 @@ export function lastProvenTurnLiveAt(
   journal: Pick<AgentSessionJournal, 'stopMarks' | 'itemFence' | 'lastProviderActivityAt'>,
   item: AgentJournalRenderItem
 ): number | undefined {
-  const turnId = readAgentJournalTurn(item.body)?.turnId
-  const stoppedAt = turnId === undefined ? 0 : (journal.stopMarks.observedLiveAt(turnId) ?? 0)
+  const stoppedAt = journal.stopMarks.observedLiveAtItem(item.itemId) ?? 0
   const fence = journal.itemFence(item.itemId)
   const providerAt = fence === undefined ? 0 : (journal.lastProviderActivityAt(fence) ?? 0)
   return Math.max(stoppedAt, providerAt) || undefined
@@ -87,13 +86,21 @@ export function endedByPersonsStop(
   journal: Pick<AgentSessionJournal, 'stopMarks'>,
   turnEnds: readonly JournalLifecycleMutationInput[]
 ): boolean {
-  const interrupted = turnEnds.flatMap((mutation) => {
-    const turn = mutation.kind === 'item' ? readAgentJournalTurn(mutation.body) : undefined
-    return turn?.state === 'interrupted' ? [turn] : []
-  })
+  const interrupted = turnEnds.filter(
+    (mutation) =>
+      mutation.kind === 'item' && readAgentJournalTurn(mutation.body)?.state === 'interrupted'
+  )
   return (
     interrupted.length > 0 &&
-    interrupted.every((turn) => journal.stopMarks.personStopDecides(turn.turnId, turn.completedAt))
+    interrupted.every(
+      (mutation) =>
+        mutation.kind === 'item' &&
+        mutation.itemId !== undefined &&
+        journal.stopMarks.personStopDecidesItem(
+          mutation.itemId,
+          readAgentJournalTurn(mutation.body)?.completedAt
+        )
+    )
   )
 }
 

@@ -39,6 +39,24 @@ export class JournalStopMarks {
     return state.derivedTurnScope.cancellations.history(state, itemId)?.userStop !== undefined
   }
 
+  observedLiveAtItem(itemId: string): number | undefined {
+    const fact = this.deps.state().derivedTurnScope.cancellations.history(this.deps.state(), itemId)
+    return fact?.observedAt ?? fact?.first.event.at
+  }
+
+  personStopDecidesItem(itemId: string, endedAt?: number): boolean {
+    const state = this.deps.state()
+    const target = state.derivedTurnScope.cancellations.forItem(itemId)
+    return (
+      target?.executionId !== undefined &&
+      activeCancellations(state).some(
+        (entry) =>
+          entry.target?.executionId === target.executionId &&
+          (endedAt === undefined || endedAt >= entry.event.at)
+      )
+    )
+  }
+
   observedLiveAt(turnId: string): number | undefined {
     const fact = executionCancellation(this.deps.state(), turnId)
     return fact ? (fact.observedAt ?? fact.event.at) : undefined

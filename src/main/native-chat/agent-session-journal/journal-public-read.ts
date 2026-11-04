@@ -72,3 +72,8 @@ function journalNormalizationKey(state: JournalReducerState): string {
   })
   return corrections.length === 0 ? '' : JSON.stringify([state.epoch, corrections])
 }
+
+/** Canonical retained owners for recovery; visibility never decides lifecycle ownership. */
+export function journalLifecycleItems(state: JournalReducerState) {
+  return [...state.items.values()].map(publicJournalItem)
+}

@@ -35,15 +35,19 @@ export class JournalStepWriter {
     return this.deps.serialize(() => {
       const wrote: boolean[] = []
       for (const step of steps) {
-        wrote.push(this.deps.writeRows(() => this.plan(step)).length > 0)
+        wrote.push(this.deps.writeRows((seq, ts) => this.plan(step, seq, ts)).length > 0)
       }
       return wrote
     })
   }
 
-  private plan(step: JournalStep): ((seq: number, ts: number) => JournalRow)[] {
+  private plan(
+    step: JournalStep,
+    seq: number,
+    ts: number
+  ): ((seq: number, ts: number) => JournalRow)[] {
     if (step.kind === 'settlement') {
-      return this.deps.planSettlement(step.batch)
+      return this.deps.planSettlement(step.batch, seq, ts)
     }
     const resolved = step.resolve()
     return resolved === null
