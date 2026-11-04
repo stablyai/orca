@@ -189,9 +189,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: writeWebClipboardImage,
     writeClipboardFile: () => Promise.resolve({ ok: false, reason: 'unsupported-platform' }),
-    performNativePaste: () => {
-      document.execCommand?.('paste')
-    },
+    performNativePaste: () => void document.execCommand?.('paste'),
     performNativeSelectionAction: (action) => {
       document.execCommand?.(action === 'copy' ? 'copy' : 'selectAll')
     },
@@ -233,6 +231,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
     onOpenWorkspaceBoard: () => noopUnsubscribe,
     onToggleAgentDashboard: () => noopUnsubscribe,
+    onOpenHome: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onJumpToTabIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,

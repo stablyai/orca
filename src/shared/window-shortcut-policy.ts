@@ -41,6 +41,7 @@ export type WindowShortcutAction =
   | { type: 'openWorkspaceBoard' }
   | { type: 'openTasks' }
   | { type: 'toggleAgentDashboard' }
+  | { type: 'openHome' }
   | { type: 'switchRecentTab' }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'jumpToTabIndex'; index: number }
@@ -121,15 +122,7 @@ export function isRecentTabSwitcherCommitRelease(input: WindowShortcutInput): bo
   return isTabKey(input) && control === false
 }
 
-function actionMatches(
-  actionId: KeybindingActionId,
-  input: WindowShortcutInput,
-  platform: NodeJS.Platform,
-  keybindings: KeybindingOverrides | undefined,
-  options: WindowShortcutResolveOptions
-): boolean {
-  return keybindingMatchesAction(actionId, input, platform, keybindings, options)
-}
+const actionMatches = keybindingMatchesAction
 
 export function nativeZoomCommandMatchesKeybindings(
   direction: 'in' | 'out',
@@ -170,17 +163,11 @@ export function resolveWindowShortcutAction(
   options: WindowShortcutResolveOptions = {}
 ): WindowShortcutAction | null {
   if (actionMatches('worktree.history.back', input, platform, keybindings, options)) {
-    return {
-      type: 'worktreeHistoryNavigate',
-      direction: 'back'
-    }
+    return { type: 'worktreeHistoryNavigate', direction: 'back' }
   }
 
   if (actionMatches('worktree.history.forward', input, platform, keybindings, options)) {
-    return {
-      type: 'worktreeHistoryNavigate',
-      direction: 'forward'
-    }
+    return { type: 'worktreeHistoryNavigate', direction: 'forward' }
   }
 
   if (actionMatches('floatingTerminal.toggle', input, platform, keybindings, options)) {
@@ -246,6 +233,10 @@ export function resolveWindowShortcutAction(
 
   if (actionMatches('dashboard.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleAgentDashboard' }
+  }
+
+  if (actionMatches('home.open', input, platform, keybindings, options)) {
+    return { type: 'openHome' }
   }
 
   if (actionMatches('tab.previousRecent', input, platform, keybindings, options)) {
@@ -317,6 +308,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'view.tasks'
     case 'toggleAgentDashboard':
       return 'dashboard.toggle'
+    case 'openHome':
+      return 'home.open'
     case 'switchRecentTab':
       return 'tab.previousRecent'
     case 'worktreeHistoryNavigate':
