@@ -14,7 +14,9 @@ import {
 } from './image-actions-contract'
 
 // Whole four-character groups per chunk keep each one canonical base64 and its byte offset exact.
-async function stageInChunks(verbs: NativeVerbs, base64: string): Promise<number> {
+async function stageInChunks(verbs: NativeVerbs, unpadded: string): Promise<number> {
+  // Browsers draw unpadded data URIs, but the shell takes only canonical base64.
+  const base64 = unpadded.padEnd(Math.ceil(unpadded.length / 4) * 4, '=')
   const chunkChars = MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
   for (let start = 0; start < base64.length; start += chunkChars) {
     await verbs.stageImage((start / 4) * 3, base64.slice(start, start + chunkChars))
@@ -57,7 +59,7 @@ function imageAction(verbs: NativeVerbs, uri: string): ImageAction | null {
   }
 }
 
-// Older shells lack native.image, so callers get null and offer no image actions.
+// Older shells lack native.image.act, so callers get null and offer no image actions.
 export function useImageActions(): ImageActions | null {
   const verbs = useNativeVerbs()
   return useMemo(

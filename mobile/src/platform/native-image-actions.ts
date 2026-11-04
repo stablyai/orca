@@ -39,7 +39,10 @@ function tooLarge(): BridgeNativeVerbRefusedError {
 // Photos and share targets pick the format from the extension, so the file is named after its type.
 function namedForMime(file: FsFile, folder: Directory, mime: string): FsFile {
   const named = new FsFile(folder, `image.${mobileFileExtensionForMime(mime)}`)
-  file.move(named)
+  // A download can already carry the name; moving a file onto itself throws on iOS.
+  if (named.uri !== file.uri) {
+    file.move(named)
+  }
   return named
 }
 
@@ -59,13 +62,21 @@ function sharedUri(file: FsFile): string {
   return Platform.OS === 'android' ? file.contentUri : file.uri
 }
 
-// Serves native.image for one page session: staged chunks, then one copy, save or share on the user's tap.
+// Serves native.image.act for one page session: staged chunks, then one copy, save or share on the user's tap.
 export function createNativeImageActions(isFocused: () => boolean) {
   let staged: Staged | null = null
+  let disposals = 0
 
   const dropStaged = () => {
     staged?.handle.close()
     staged = null
+  }
+
+  // A covered or replaced page must not raise a share sheet or permission prompt over another screen, even after a slow download.
+  const assertLive = (generation: number) => {
+    if (generation !== disposals || !isFocused()) {
+      throw new Error('the image page is no longer shown')
+    }
   }
 
   const stage = (offset: number, base64: string) => {
@@ -107,14 +118,13 @@ export function createNativeImageActions(isFocused: () => boolean) {
   }
 
   const run = async ({ operation, source }: BridgeImageRunParams) => {
-    // A covered or replaced page must not raise a share sheet or permission prompt over another screen.
-    if (!isFocused()) {
-      throw new Error('the image page is not focused')
-    }
+    const generation = disposals
+    assertLive(generation)
     const { file, mime } =
       source.kind === 'staged'
         ? takeStaged(source.mime, source.byteLength)
         : await download(source.url)
+    assertLive(generation)
     if (operation === 'copy') {
       await Clipboard.setImageAsync(await file.base64())
     } else if (operation === 'save') {
@@ -134,7 +144,10 @@ export function createNativeImageActions(isFocused: () => boolean) {
       }
       return {}
     },
-    dispose: dropStaged
+    dispose: () => {
+      disposals += 1
+      dropStaged()
+    }
   }
 }
 

@@ -143,7 +143,7 @@ export function MobileWebShellScreen({
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
       : verb === 'native.pdf.view'
         ? servePdfView(params)
-        : verb === 'native.image'
+        : verb === 'native.image.act'
           ? serveImageAction(params)
           : serveDeviceVerb(verb, params)
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.

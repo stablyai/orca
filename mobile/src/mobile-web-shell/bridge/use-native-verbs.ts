@@ -169,12 +169,12 @@ export function useNativeVerbs(): NativeVerbs {
       cancelPdf: async () => {
         await call('native.pdf.view', { action: 'cancel' }, pdfViewResultSchema)
       },
-      canActOnImages: has('native.image'),
+      canActOnImages: has('native.image.act'),
       stageImage: async (offset, base64) => {
-        await call('native.image', { action: 'stage', offset, base64 }, imageResultSchema)
+        await call('native.image.act', { action: 'stage', offset, base64 }, imageResultSchema)
       },
       runImageAction: async (params) => {
-        await call('native.image', { action: 'run', ...params }, imageResultSchema)
+        await call('native.image.act', { action: 'run', ...params }, imageResultSchema)
       }
     }
   }, [client])

@@ -37,7 +37,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.stop',
   'native.storage.read',
   'native.pdf.view',
-  'native.image'
+  'native.image.act'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -132,7 +132,7 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
     params: pdfViewParamsSchema,
     result: pdfViewResultSchema
   },
-  'native.image': {
+  'native.image.act': {
     params: imageParamsSchema,
     result: imageResultSchema
   }

@@ -62,6 +62,16 @@ describe('the page routes the manifest declares', () => {
    * stay in the page. Bounded by what one route can be granted, so that grant never outgrows one route's.
    */
 
+  // The phone refuses the whole manifest over one bad route, which takes every page down.
+  it('declares only routes the manifest schema accepts', () => {
+    for (const route of MOBILE_WEB_PAGE_ROUTES) {
+      expect(
+        MobileWebBundleRouteSchema.safeParse(route).error?.issues ?? [],
+        route.pathname
+      ).toEqual([])
+    }
+  })
+
   it('holds the optional lane to the manifest grammar and its own ceiling', () => {
     // Released shells read each list against the ceiling on its own, so the writer bounds each the same way.
     const withOptional = (optionalGrants, grants = []) =>

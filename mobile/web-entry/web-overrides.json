@@ -143,7 +143,7 @@
     },
     {
       "file": "src/platform/image-actions.web.ts",
-      "reason": "The page cannot reach the clipboard, Photos or the share sheet: the shell origin is not a secure context on iOS and Android WebView has no Web Share. This one stages a base64 image to the shell a chunk at a time over native.image, because a chat image passes the 640 KiB frame cap, then asks the shell to copy, save or share it; web images go by URL because the page cannot read cross-origin pixels. Shells that do not grant the verb get null, so the viewer offers no actions."
+      "reason": "The page cannot reach the clipboard, Photos or the share sheet: the shell origin is not a secure context on iOS and Android WebView has no Web Share. This one stages a base64 image to the shell a chunk at a time over native.image.act, because a chat image passes the 640 KiB frame cap, then asks the shell to copy, save or share it; web images go by URL because the page cannot read cross-origin pixels. Shells that do not grant the verb get null, so the viewer offers no actions."
     },
     {
       "file": "src/platform/media-picker.web.ts",
