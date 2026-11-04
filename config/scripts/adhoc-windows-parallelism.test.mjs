@@ -49,7 +49,10 @@ describe('adhoc Windows compilation overlaps Mac without publishing early', () =
     )
   })
 
-  it('falls back for older refs and retains official bundle support', () => {
+  it.each([
+    'config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs',
+    'config/scripts/release-javascript-artifact.mjs'
+  ])('falls back for older refs and retains official bundle support: %s', (artifactScript) => {
     const source = bundleWorkflow.jobs.bundle.steps.find((step) => step.id === 'source').run
     const script = source.split('node <<\'NODE\' >> "$GITHUB_OUTPUT"\n')[1].split('\nNODE')[0]
     const current = JSON.parse(readFileSync('package.json', 'utf8'))
@@ -70,7 +73,19 @@ describe('adhoc Windows compilation overlaps Mac without publishing early', () =
     ]) {
       const lines = []
       runInNewContext(script, {
-        require: (name) => (name === 'node:fs' ? { readFileSync } : manifest),
+        require: (name) =>
+          name === 'node:fs'
+            ? {
+                existsSync: (file) => file === artifactScript,
+                readFileSync: (file) => {
+                  expect(file).toBe(artifactScript)
+                  return readFileSync(
+                    'config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs',
+                    'utf8'
+                  )
+                }
+              }
+            : manifest,
         process: { env: { DEV_BUILD: String(dev) } },
         console: { log: (line) => lines.push(line) }
       })

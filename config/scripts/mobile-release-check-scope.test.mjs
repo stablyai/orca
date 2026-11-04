@@ -95,9 +95,11 @@ function fixture(detectorStep = detector) {
     'config/scripts/pr-package-test-paths.mjs',
     'config/scripts/pr-layout-oracle-route.mjs',
     'config/scripts/pr-shell-contract-prefixes.mjs',
+    'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs',
     'config/scripts/mobile-release-check-scope.mjs',
     'config/scripts/mobile-test-change-scope.mjs'
   ]) {
+    mkdirSync(dirname(join(directory, file)), { recursive: true })
     copyFileSync(join(root, file), join(directory, file))
   }
   const commit = () => {

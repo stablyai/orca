@@ -246,6 +246,7 @@ function createMobileCiScopeRepository(
     'config/scripts/pr-package-test-paths.mjs',
     'config/scripts/pr-layout-oracle-route.mjs',
     'config/scripts/pr-shell-contract-prefixes.mjs',
+    'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs',
     'config/scripts/git-pull-request-diff-base.mjs',
     'config/scripts/pr-e2e-source-routing.mjs',
     'config/scripts/pr-browser-e2e-source-routes.mjs',
