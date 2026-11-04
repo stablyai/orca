@@ -1,4 +1,5 @@
 import type { ComponentProps } from 'react'
+import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 
 type QuestionTextProps = Pick<
@@ -14,6 +15,7 @@ export function NativeChatQuestionText({
     <NativeChatMarkdown
       {...props}
       variant="document"
+      renderCodeBlock={NativeChatCodeBlock}
       onLinkClick={onLinkClick}
       allowFileUriLinks={onLinkClick !== undefined}
       linkifyFilePaths={onLinkClick !== undefined}
