@@ -42,7 +42,7 @@ export function MobileHomeTabBar(props: {
   return (
     <View
       style={[styles.bar, { paddingBottom: Math.max(props.bottomInset, spacing.sm) }]}
-      accessibilityRole="tabbar"
+      accessibilityRole="tablist"
     >
       {props.tabs.map((tab) => (
         <TabButton
