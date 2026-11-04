@@ -137,7 +137,7 @@ export async function hostSavesGrantedFiles(environmentId: string): Promise<bool
   }
 }
 
-/** Whether this host serves a desktop client a granted file as large as a workspace one; rejects when unanswered. */
+/** Whether this host reports what a grant can serve, so a file another workspace holds may open in place; rejects when unanswered. */
 export function hostOpensGrantedFilesInPlace(environmentId: string): Promise<boolean> {
   return runtimeEnvironmentSupportsCapability(
     environmentId,
