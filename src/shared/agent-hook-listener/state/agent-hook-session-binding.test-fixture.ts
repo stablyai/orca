@@ -1,5 +1,5 @@
 import type { AgentStatusIpcPayload } from '../../agent-status/contracts/agent-status-ipc-payload'
-import type { TerminalTab } from '../../terminal-tab-types'
+import type { TerminalTab } from '../../workspace-layout/terminal-tab-types'
 
 export type HookSessionBindingRendererFixture = {
   expectReturnedRenderer: (

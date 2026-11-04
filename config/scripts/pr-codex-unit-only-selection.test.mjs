@@ -33,9 +33,9 @@ describe('per-job path classification', () => {
       'src/main/codex/app-server/codex-app-server-client.ts',
       'src/main/codex/app-server/codex-app-server-client-other.test.ts',
       'src/main/codex/app-server/codex-app-server-client.test-fixture.ts',
-      'src/main/codex/codex-index-heal-binary-contract.test.ts',
+      'src/main/codex/history/index/codex-index-heal-binary-contract.test.ts',
       'src/main/pty/shell-startup/codex-no-daemon-binary-contract.test.ts',
-      'src/main/codex/codex-hook-file-entry-binary-contract.test.ts',
+      'src/main/codex/hooks/definitions/codex-hook-file-entry-binary-contract.test.ts',
       'src/main/agent-launch/trust/agent-trust-presets.test.ts',
       '.github/workflows/pr.yml'
     ]) {

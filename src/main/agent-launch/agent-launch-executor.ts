@@ -4,7 +4,7 @@ import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
 import { assertAgentPromptRequestActive } from '../runtime/orca-runtime-core'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   type AgentLaunchResult,
   withoutReservedAgentCreateFields,

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
-import type { EditorToggleValue } from './EditorViewToggle'
+import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 
 vi.mock('./useEditorPanelContentState', () => ({
   useEditorPanelContentState: () => ({

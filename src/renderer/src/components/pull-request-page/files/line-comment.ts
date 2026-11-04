@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { addPRReviewCommentForRepo } from '@/components/github/github-work-item-comment-mutations'
 import { translate } from '@/i18n/i18n'
-import type { DiffSection } from '@/components/editor/diff-section-types'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'

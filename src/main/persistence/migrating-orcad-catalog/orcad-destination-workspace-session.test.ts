@@ -3,10 +3,10 @@ import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../s
 import {
   CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION,
   type PersistedClientHostedBrowserPage
-} from '../../../shared/client-hosted-browser-page-record'
+} from '../../../shared/workspace-session/client-hosted-browser-page-record'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import { prepareOrcadMigrationWorkspaceSession } from './orcad-destination-workspace-session'
 
 const OWNER = 'repo-1::/srv/worktree'

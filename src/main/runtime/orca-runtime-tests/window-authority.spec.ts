@@ -6,7 +6,7 @@ import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   electronMocks
 } from '../orca-runtime-test-mocks.spec'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,

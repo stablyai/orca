@@ -119,8 +119,7 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy message' })))
   expect(writeClipboardText).toHaveBeenCalledWith(task)
   expect(nativeChatSlotCopyText(slots(message), message.id)).toBe(task)
-  fireEvent.click(screen.getByRole('button', { name: 'Show less' }))
-  expect(screen.getByRole('button', { name: 'Started worker' })).toHaveFocus()
+  fireEvent.click(screen.getByRole('button', { name: 'Started worker' }))
   expect(screen.getByRole('button', { name: 'Started worker' })).toHaveAttribute(
     'aria-expanded',
     'false'

@@ -3,7 +3,7 @@ import { seedNativeChatAppliedSessionOptions } from '../../../shared/native-chat
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 

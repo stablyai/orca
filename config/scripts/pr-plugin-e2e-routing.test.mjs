@@ -71,7 +71,7 @@ describe('plugin PR E2E routing', () => {
       'plugin-components-hot-reload'
     ],
     [
-      'src/renderer/src/components/right-sidebar/PluginDeclarativePanelNotices.tsx',
+      'src/renderer/src/components/right-sidebar/plugin-panels/declarative/PluginDeclarativePanelNotices.tsx',
       'plugin-components-hot-reload'
     ],
     ['src/main/plugins/plugin-dev-watcher.ts', 'plugin-components-hot-reload'],
@@ -82,7 +82,10 @@ describe('plugin PR E2E routing', () => {
     ['src/renderer/src/store/plugin-shot-replay.ts', 'plugin-shot'],
     ['src/main/plugins/testing/plugin-test-register.ts', 'plugin-shot'],
     ['src/renderer/src/components/plugins/view/plugin-view-request-handler.ts', 'plugin-shot'],
-    ['src/renderer/src/components/right-sidebar/plugin-panel-draw-status.ts', 'plugin-shot'],
+    [
+      'src/renderer/src/components/right-sidebar/plugin-panels/health/plugin-panel-draw-status.ts',
+      'plugin-shot'
+    ],
     ['src/main/runtime/rpc/methods/plugin-view.ts', 'plugin-shot'],
     ['src/cli/handlers/plugin-view.ts', 'plugin-shot'],
     ['src/cli/handlers/plugin-shot-default-dir.ts', 'plugin-shot'],

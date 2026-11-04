@@ -1,7 +1,7 @@
 /** After removed-runtime purge, host lookup falls back to local and session writes must stop targeting the retired partition (#8881). */
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionPatch } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionPatch } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { patchWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 
 vi.mock('sonner', () => ({

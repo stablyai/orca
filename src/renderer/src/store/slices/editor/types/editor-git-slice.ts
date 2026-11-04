@@ -12,7 +12,7 @@ import type {
   GitStatusResult,
   GitUpstreamStatus
 } from '../../../../../../shared/git/status/git-status-types'
-import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import type { PendingEditorFocusRequest, PendingEditorReveal } from './pending-editor-reveal'
 import type { FileSearchWorktreeState } from './file-search-worktree-state'

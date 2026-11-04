@@ -41,8 +41,9 @@ const {
   markKimiWorkspaceTrusted
 } = await import('./agent-trust-presets')
 const { runExclusivelyForCodexTrustConfig } =
-  await import('../../codex/codex-trust-config-mutation-queue')
-const { getLocalCodexTrustConfigFiles } = await import('../../codex/codex-home-paths')
+  await import('../../codex/trust/toml/codex-trust-config-mutation-queue')
+const { getLocalCodexTrustConfigFiles } =
+  await import('../../codex/configuration/homes/codex-home-paths')
 
 // Real-binary tests prove Codex consumes the key; CI requires the binary instead of skipping.
 const codexTrustContract = {

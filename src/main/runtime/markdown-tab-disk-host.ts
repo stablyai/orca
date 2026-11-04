@@ -17,7 +17,7 @@ import {
 import { utf8ByteLength } from '../../shared/mobile-markdown-document'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { assertFileMutationOwnershipCapability } from '../../shared/file-mutation-ownership'
-import type { PersistedOpenFile } from '../../shared/workspace-session-state-types'
+import type { PersistedOpenFile } from '../../shared/workspace-session/workspace-session-state-types'
 import { extraRootsForPersistedOpenFile } from './files/chat-scratch-file-root'
 import { readLocalRuntimeFilePrefix } from './files/file-reads'
 import {

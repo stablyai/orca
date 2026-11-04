@@ -1,8 +1,11 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
 import { isResumableTuiAgent } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
 import { isLiveResumeAnchorForCompletedAgent } from '../../../shared/agent-session/lifecycle/live-resume-anchor-record'

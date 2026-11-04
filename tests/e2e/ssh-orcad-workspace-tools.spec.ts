@@ -15,7 +15,7 @@ import {
   typeInTerminal,
   withManagedHost
 } from './helpers/orcad-managed-workspace'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 import { createServer } from 'node:net'
 import { waitForSessionReady } from './helpers/store'
 

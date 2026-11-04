@@ -1,4 +1,8 @@
-import { verifyPreloadSource, verifyPreloadOutput } from './preload-output-contract.mjs'
+import {
+  preloadRuntimeImports,
+  verifyPreloadSource,
+  verifyPreloadOutput
+} from './preload-output-contract.mjs'
 import * as nodeFs from 'node:fs'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import * as nodePath from 'node:path'
@@ -8,7 +12,7 @@ import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { PreloadConfigFactory } from 'electron-vite'
-import { resolveConfig } from 'vite'
+import { build, resolveConfig } from 'vite'
 import { electronViteConfig } from '../../electron.vite.config'
 import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
@@ -16,6 +20,8 @@ import {
   createBootstrapFatalExitBanner
 } from '../build-plugins/bootstrap-fatal-exit-banner'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
+import { createSandboxedScriptBundlesPlugin } from '../build-plugins/sandboxed-script-bundles'
+import { MAIN_BUILD_ENTRY_POINTS } from '../build-plugins/main-build-entry-points'
 
 type BootstrapProcessMock = EventEmitter & {
   env: Record<string, string>
@@ -68,6 +74,41 @@ function failBootstrapWithBanner(options: {
 }
 
 describe('Electron Vite output contract', () => {
+  it('builds browser and document guest preloads without sandbox-inaccessible chunks', async () => {
+    const fixtureId = '\0sandbox-bundle-fixture'
+    const result = await build({
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [
+        createSandboxedScriptBundlesPlugin(),
+        {
+          name: 'sandbox-bundle-fixture',
+          resolveId: (id) => (id === fixtureId ? fixtureId : null),
+          load: (id) => (id === fixtureId ? 'export default 0' : null)
+        }
+      ],
+      build: { write: false, rollupOptions: { input: fixtureId } }
+    })
+    const emitted = new Map<string, string>()
+    for (const bundle of Array.isArray(result) ? result : [result]) {
+      if ('output' in bundle) {
+        for (const asset of bundle.output) {
+          if (asset.type === 'asset' && typeof asset.source === 'string') {
+            emitted.set(asset.fileName, asset.source)
+          }
+        }
+      }
+    }
+    for (const name of ['browser-window-close-preload', 'doc-preview-link-preload']) {
+      expect(MAIN_BUILD_ENTRY_POINTS).not.toHaveProperty(name)
+      const source = emitted.get(`${name}.js`)
+      if (!source) {
+        throw new Error(`Missing guest preload ${name}`)
+      }
+      expect(await preloadRuntimeImports(source)).toEqual(['electron'])
+    }
+  })
+
   it('bundles ordinary preload dependencies while retaining sandbox builtins', async () => {
     expect(electronViteConfig.preload?.build?.externalizeDeps).toBe(false)
     const preload = await new PreloadConfigFactory(electronViteConfig.preload ?? {}, {}, {}).build()
@@ -90,6 +131,7 @@ describe('Electron Vite output contract', () => {
   it('rejects unsupported lazy, dynamic, indirect and chunked sandbox output', async () => {
     for (const source of [
       'require("smol-toml")',
+      'require("./chunks/native-chat-visual-guest-theme.js")',
       'function later(){ return require("node:fs") }',
       'require(name)',
       'const load = require; load("smol-toml")',

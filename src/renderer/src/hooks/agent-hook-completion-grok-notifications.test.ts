@@ -4,7 +4,7 @@ import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contrac
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { normalizeAgentStatusEvent } from './ipc-events/normalize-agent-status-event'
 
 const dispatchTerminalNotification = vi.fn()

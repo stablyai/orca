@@ -34,7 +34,7 @@ import {
   SYNTHETIC_AGENT_TITLE_AGENTS,
   SYNTHETIC_AGENT_TITLE_PROFILES
 } from './synthetic-agent-title'
-import type { TerminalAgent } from '../../terminal-agent'
+import type { TerminalAgent } from '../identity/terminal-agent'
 import {
   agentForNativeFrame,
   agentForNamedTitlePrefix,

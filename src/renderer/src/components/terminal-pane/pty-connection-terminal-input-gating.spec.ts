@@ -1,7 +1,7 @@
 import { registerPtyConnectionCodexRestartInputLookupTests } from './pty-connection-codex-restart-input-lookup.spec'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   createKeyboardEventTarget,

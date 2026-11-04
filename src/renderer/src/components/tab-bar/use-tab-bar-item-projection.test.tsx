@@ -2,7 +2,7 @@
 
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TabBarProps } from './tab-bar-props'
 import { useTabBarItemProjection } from './use-tab-bar-item-projection'
 
