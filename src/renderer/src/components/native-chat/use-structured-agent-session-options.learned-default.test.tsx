@@ -219,7 +219,7 @@ describe('declared context at the desktop consumer', () => {
         seedsModel: false,
         worktree: '/declared-folder'
       })
-      expect(structuredAgentSessionMessageSelection(first)).toEqual({ model })
+      expect(structuredAgentSessionMessageSelection(first)).toEqual({})
       expect(pill(structuredAgentSessionShownSnapshot(first))).toEqual({
         model,
         effort: display ?? null
@@ -234,6 +234,8 @@ describe('declared context at the desktop consumer', () => {
               ? answer
               : new Promise(() => {})
         )
+        // Only the chats that saved the model send it.
+        const sent = answer === launch ? {} : { model }
         const chat = renderChat(
           agent,
           `declaration-${input}-${answer === live ? 'live' : 'rest'}`,
@@ -255,11 +257,11 @@ describe('declared context at the desktop consumer', () => {
         } else {
           expect(effort).toBeUndefined()
         }
-        expect(chat.result.current.capture()).toEqual({ selection: { model } })
+        expect(chat.result.current.capture()).toEqual({ selection: sent })
         mocks.call.mockImplementation(() => new Promise(() => {}))
         chat.rerender({ running: { fence: 2 } })
         expect(chat.frames.at(-1)).toEqual({ model, effort: shown ?? null })
-        expect(chat.result.current.capture()).toEqual({ selection: { model } })
+        expect(chat.result.current.capture()).toEqual({ selection: sent })
         chat.unmount()
       }
     }
