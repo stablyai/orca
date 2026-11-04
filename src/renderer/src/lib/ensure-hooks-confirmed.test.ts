@@ -295,7 +295,7 @@ describe('ensureHooksConfirmed', () => {
     expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
       selector: 'owner-env',
       method: 'repo.hooksCheck',
-      params: { repo: 'repo-1' },
+      params: { repo: 'repo-1', wakeWslDistro: true },
       timeoutMs: 15_000
     })
     expect(hooksCheckMock).not.toHaveBeenCalled()

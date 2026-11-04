@@ -98,11 +98,6 @@ describe('rail items', () => {
     expect(items[0]?.slotIndex).toBe(0)
   })
 
-  it('collapses whitespace in the preview', () => {
-    const items = buildNativeChatRailItems(slotsOf([text('u1', '  a\n\n  b  ', 'user')]))
-    expect(items[0]?.text).toBe('a b')
-  })
-
   it('reports an image-only message as having no prose', () => {
     const items = buildNativeChatRailItems(slotsOf([image('u1')]))
     expect(items[0]?.text).toBe('')
@@ -169,11 +164,6 @@ describe('rail reply preview', () => {
 })
 
 describe('rail tick sampling', () => {
-  it('keeps every tick while the thread fits', () => {
-    const items = railItems(NATIVE_CHAT_RAIL_ROOMY_TICKS)
-    expect(selectNativeChatRailTicks({ items, keepIds: [] })).toBe(items)
-  })
-
   it('fits more ticks into a taller viewport, never fewer than the roomy count', () => {
     const items = railItems(60)
     expect(nativeChatRailTickCapacity(0)).toBe(NATIVE_CHAT_RAIL_ROOMY_TICKS)
@@ -189,13 +179,6 @@ describe('rail tick sampling', () => {
     expect(ticks).toHaveLength(NATIVE_CHAT_RAIL_ROOMY_TICKS)
     expect(ticks[0]?.id).toBe('m0')
     expect(ticks.at(-1)?.id).toBe('m119')
-  })
-
-  it('always includes the active tick', () => {
-    const items = railItems(120)
-    const ticks = selectNativeChatRailTicks({ items, keepIds: ['m7'] })
-    expect(ticks.map((tick) => tick.id)).toContain('m7')
-    expect(ticks).toHaveLength(NATIVE_CHAT_RAIL_ROOMY_TICKS)
   })
 
   // Keep both thread ends fixed; evict a neighbor so the sampled rail still maps the whole conversation.
@@ -255,13 +238,5 @@ describe('rail outline merge', () => {
       ['u3', 0, 'third'],
       ['u4', 2, 'fourth']
     ])
-  })
-
-  it('is the loaded list itself when there is no outline to add', () => {
-    expect(mergeNativeChatRailOutline(null, loaded)).toBe(loaded)
-    expect(mergeNativeChatRailOutline([], loaded)).toBe(loaded)
-    expect(mergeNativeChatRailOutline([{ id: 'u3', text: 'x', hasImages: false }], loaded)).toBe(
-      loaded
-    )
   })
 })

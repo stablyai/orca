@@ -673,6 +673,11 @@
   align-items: center;
   justify-content: center;
 }
+/* Sit left of the diagram's own expand button instead of over it. */
+.code-block-wrapper-diagram > .code-block-copy-btn {
+  top: 0;
+  right: 28px;
+}
 .code-block-wrapper:hover .code-block-copy-btn {
   opacity: 1;
 }

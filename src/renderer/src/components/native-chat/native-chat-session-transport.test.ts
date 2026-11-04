@@ -59,9 +59,11 @@ describe('getNativeChatSessionTransport — selection', () => {
     nativeChatReadSession.mockResolvedValue({ messages: [] })
     const transport = getNativeChatSessionTransport(null)
 
-    await transport.readSession('claude', 'sess-1', 40, '/t/path')
+    await transport.readSession('claude', 'sess-1', 40, '/t/path', { wakeWslDistro: true })
 
-    expect(nativeChatReadSession).toHaveBeenCalledWith('claude', 'sess-1', 40, '/t/path')
+    expect(nativeChatReadSession).toHaveBeenCalledWith('claude', 'sess-1', 40, '/t/path', {
+      wakeWslDistro: true
+    })
     expect(runtimeEnvironmentsCall).not.toHaveBeenCalled()
   })
 

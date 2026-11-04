@@ -317,7 +317,8 @@ describe('restart observation and disposal', () => {
 
 // The provider is scripted; queue ownership, journal, catch-up and publication are real.
 describe('real host queue publication and operation bounds', () => {
-  it.each([100, 1000])(
+  // Two history sizes pin every per-history coefficient below; 1000 turns only made seeding outlast the timeout under load.
+  it.each([20, 100])(
     'observes Q→S at %i prior turns without token-triggered history scans',
     async (history) => {
       const totals: number[][] = []

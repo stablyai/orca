@@ -1,9 +1,13 @@
-import { memo, useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Maximize2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { readableMermaidFlowchartSvg } from '../../../../src/shared/mermaid-flowchart-contrast'
+import { readSvgIntrinsicSize, svgMarkupDataUri } from '../../../../src/shared/svg-document'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { MobileNativeChatImageViewer } from '../../session/native-chat/visual/MobileNativeChatImageViewer'
 import { mermaidDiagramConfig } from './mermaid-diagram-config'
 import { loadPageMermaid } from './mermaid-page-engine'
 
@@ -24,6 +28,10 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
   const suffix = useId().replace(/[^\w-]/g, '')
   const id = `orca-mermaid-${suffix}`
   const failed = failedSource === source
+  // The drawn diagram, kept by source so a new source never expands a stale drawing.
+  const [drawn, setDrawn] = useState<{ source: string; svg: string } | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  const drawnSvg = drawn?.source === source ? drawn.svg : null
 
   useEffect(() => {
     // react-native-web renders View as a div and forwards the ref to it.
@@ -41,7 +49,14 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
           return
         }
         // Only mermaid sanitizes its serialization; strict mode already made returned SVG safe to parse.
-        host.innerHTML = readableMermaidFlowchartSvg(svg, colors.textPrimary, colors.bgRaised)
+        const readable = readableMermaidFlowchartSvg(svg, colors.textPrimary, colors.bgRaised)
+        host.innerHTML = readable
+        // An image is an XML document: re-serialize the parsed drawing so HTML-only output like <br> and &nbsp; still loads.
+        const drawing = host.querySelector('svg')
+        setDrawn({
+          source,
+          svg: drawing ? new XMLSerializer().serializeToString(drawing) : readable
+        })
       } catch {
         if (!disposed) {
           setFailedSource(source)
@@ -71,19 +86,53 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
   }
 
   return (
-    <MermaidFrame>
-      <View ref={hostRef} style={styles.host} />
+    <MermaidFrame onExpand={drawnSvg ? () => setExpanded(true) : undefined}>
+      {/* The header button is the accessible control; the drawing is a tap shortcut. */}
+      <Pressable accessible={false} disabled={!drawnSvg} onPress={() => setExpanded(true)}>
+        <View ref={hostRef} style={styles.host} />
+      </Pressable>
+      {expanded && drawnSvg ? (
+        <ExpandedDiagram svg={drawnSvg} onClose={() => setExpanded(false)} />
+      ) : null}
     </MermaidFrame>
   )
 })
 
+function ExpandedDiagram({ svg, onClose }: { svg: string; onClose: () => void }) {
+  const t = useMobileTranslation()
+  // An <img> never runs the markup, and the viewer redraws the vector at every zoom.
+  const uri = useMemo(() => svgMarkupDataUri(svg), [svg])
+  const size = useMemo(() => readSvgIntrinsicSize(svg), [svg])
+  return (
+    <MobileNativeChatImageViewer
+      uri={uri}
+      size={size}
+      upscale
+      label={t('components.mermaidDiagram.label', 'Mermaid diagram')}
+      onClose={onClose}
+    />
+  )
+}
+
 /** The frame and label, so a diagram and its fallback sit in the same box. */
-function MermaidFrame({ children }: { children: ReactNode }) {
+function MermaidFrame({ children, onExpand }: { children: ReactNode; onExpand?: () => void }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
+  const expandLabel = t('components.mermaidDiagram.expand', 'Expand diagram')
   return (
     <View style={styles.frame} testID="mermaid-diagram">
       <View style={styles.label}>
         <Text style={styles.labelText}>mermaid</Text>
+        {onExpand ? (
+          <Pressable
+            onPress={onExpand}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={expandLabel}
+          >
+            <Maximize2 size={13} color={colors.textSecondary} strokeWidth={2} />
+          </Pressable>
+        ) : null}
       </View>
       {children}
     </View>
@@ -101,6 +150,9 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised
   },
   label: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderBottomWidth: StyleSheet.hairlineWidth,

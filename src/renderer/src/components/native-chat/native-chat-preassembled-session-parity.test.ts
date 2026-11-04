@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
+import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat/native-chat-agent-profiles'
 import { surfaceSkillInvocationUserTurns } from '../../../../shared/native-chat/native-chat-command-envelope'
 import {
   createIncrementalAssembler,

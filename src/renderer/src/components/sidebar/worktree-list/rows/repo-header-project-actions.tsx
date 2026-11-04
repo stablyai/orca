@@ -95,7 +95,7 @@ export type RepoHeaderProjectActions = {
   onMoveProjectToGroup: (operation: ProjectGroupOperation, groupId: string) => void
   onRemoveProjectFromGroup: (operation: ProjectGroupOperation) => void
   onRemoveProject: (repo: Repo, scope?: GroupHeaderRow['projectScope']) => void
-  /** `pinHost`: the header heads one host section, so its repo is that host's own registration. */
+  /** `pinHost`: the header's rows all sit on its repo's host, so that registration names the host. */
   onCreateForRepo: (
     repo: Repo,
     options: { pinHost: boolean; projectScope?: GroupHeaderRow['projectScope'] }

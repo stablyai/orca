@@ -66,11 +66,14 @@ function prepareProjectSection(ctx: SectionAppendContext, key: string, group: Wo
     }
   }
   const observedHostIds = new Set<ExecutionHostId>()
+  const shownIdentities = new Set<string>()
+  const show = (repo: Repo | undefined) => repo && shownIdentities.add(getRepoHostIdentity(repo))
   offer(group.repo)
   for (const worktree of group.items) {
     const repo = ctx.repoOf(worktree)
     observedHostIds.add(getWorktreeExecutionHostId(worktree, repo, ctx.defaultHostId))
     offer(repo)
+    show(repo)
   }
   const repoIds =
     group.repoIds.size > 0
@@ -125,6 +128,7 @@ function prepareProjectSection(ctx: SectionAppendContext, key: string, group: Wo
       )
       observedHostIds.add(getRepoExecutionHostIdOrDefault(imported.repo, ctx.defaultHostId))
       retainFirstRepoForHost(imported.repo)
+      show(imported.repo)
     }
     for (const external of externalById.get(id) ?? []) {
       externalRows.push(
@@ -135,6 +139,7 @@ function prepareProjectSection(ctx: SectionAppendContext, key: string, group: Wo
       )
       observedHostIds.add(getRepoExecutionHostIdOrDefault(external.repo, ctx.defaultHostId))
       retainFirstRepoForHost(external.repo)
+      show(external.repo)
     }
   }
   for (const hosts of pendingHostsByRepo.values()) {
@@ -152,6 +157,7 @@ function prepareProjectSection(ctx: SectionAppendContext, key: string, group: Wo
   for (const row of pendingRows) {
     if (row.type === 'pending-creation') {
       offer(row.repo)
+      show(row.repo)
     }
   }
   return {
@@ -165,7 +171,9 @@ function prepareProjectSection(ctx: SectionAppendContext, key: string, group: Wo
           registrations,
           context: (() => {
             const context = firstRepoByHost.values().next().value
-            if (!context) {
+            // Only a checkout the header shows is its context; an unshown one is just the
+            // registration the catalog kept, so creation falls to the requested host's member.
+            if (!context || !shownIdentities.has(getRepoHostIdentity(context))) {
               return undefined
             }
             const hostId = getRepoExecutionHostId(context)

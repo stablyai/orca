@@ -4,6 +4,8 @@ import { translate } from '@/i18n/i18n'
 import { displayIpcErrorMessage } from '@/lib/ipc-error'
 import { isFileTooLargeCodeMessage } from '../../../../shared/file-write-disk-precondition'
 import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
+import { useStoppedWslHost } from '../wsl-host-stopped/use-stopped-wsl-host'
+import { WslHostStoppedNotice } from '../wsl-host-stopped/WslHostStoppedNotice'
 
 // Localize by machine code; stored English remains readable for logs without coupling upstream state checks to UI language.
 function localizeFileLoadError(message: string, code: string | undefined): string {
@@ -28,12 +30,28 @@ function localizeFileLoadError(message: string, code: string | undefined): strin
 export function EditorFileLoadErrorView({
   message,
   code,
+  worktreeId,
   onRetry
 }: {
   message: string
   code?: string
+  /** The file's workspace; a stopped WSL host there gets Start instead of this error. */
+  worktreeId?: string
   onRetry: () => void
 }): React.JSX.Element {
+  const stoppedWslHost = useStoppedWslHost(worktreeId)
+  if (stoppedWslHost) {
+    return (
+      <div className="flex h-full items-center justify-center bg-editor-surface p-6 text-sm">
+        <WslHostStoppedNotice
+          environmentId={stoppedWslHost.environmentId}
+          distro={stoppedWslHost.distro}
+          size="sm"
+          onStarted={onRetry}
+        />
+      </div>
+    )
+  }
   return (
     <div className="flex h-full items-center justify-center bg-editor-surface p-6 text-sm text-muted-foreground">
       <div className="flex max-w-xl items-start gap-3 rounded-md border border-border bg-background p-4">

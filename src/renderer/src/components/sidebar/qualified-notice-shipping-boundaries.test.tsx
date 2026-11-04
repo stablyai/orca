@@ -31,6 +31,32 @@ function hasConcreteRepoUpdates(
   )
 }
 
+/** The preload surface the new-workspace composer reads while it opens. */
+function installComposerApi(): void {
+  Object.assign(window, {
+    api: {
+      ...window.api,
+      platform: { get: () => ({ platform: 'darwin' }) },
+      preflight: { detectAgents: async () => [], detectRemoteAgents: async () => [] },
+      worktrees: { listRetiredNames: async () => EMPTY_RETIRED_NAME_REGISTRY },
+      repos: {
+        getSlug: async () => null,
+        getHooks: async () => ({ hooks: null, hasHooks: false }),
+        getBaseRefDefault: async () => ({ defaultBaseRef: 'main', remoteCount: 1 })
+      },
+      sparsePresets: { list: async () => [] },
+      gh: {
+        repoSlug: async () => null,
+        listWorkItems: async () => ({ items: [], hasMore: false })
+      },
+      hooks: {
+        check: async () => ({ hooks: null, hasHooks: false, mayNeedUpdate: false }),
+        readIssueCommand: async () => ({ status: 'ok', localContent: null, sharedContent: null })
+      }
+    }
+  })
+}
+
 it('keeps beta recoverable after its real Keep hidden action through the shipping merged header and one exact recovery list', async () => {
   const alpha = {
     ...local,
@@ -151,28 +177,7 @@ it('opens the shipping logical-group composer despite a disconnected raw SSH ord
   const sshTwin = { ...alpha, connectionId: 'box', path: '/ssh', badgeColor: '#654321' }
   const repos = [alpha, beta, sshTwin]
   const projection = projectHostSetupProjectionFromRepos(repos)
-  Object.assign(window, {
-    api: {
-      ...window.api,
-      platform: { get: () => ({ platform: 'darwin' }) },
-      preflight: { detectAgents: async () => [], detectRemoteAgents: async () => [] },
-      worktrees: { listRetiredNames: async () => EMPTY_RETIRED_NAME_REGISTRY },
-      repos: {
-        getSlug: async () => null,
-        getHooks: async () => ({ hooks: null, hasHooks: false }),
-        getBaseRefDefault: async () => ({ defaultBaseRef: 'main', remoteCount: 1 })
-      },
-      sparsePresets: { list: async () => [] },
-      gh: {
-        repoSlug: async () => null,
-        listWorkItems: async () => ({ items: [], hasMore: false })
-      },
-      hooks: {
-        check: async () => ({ hooks: null, hasHooks: false, mayNeedUpdate: false }),
-        readIssueCommand: async () => ({ status: 'ok', localContent: null, sharedContent: null })
-      }
-    }
-  })
+  installComposerApi()
   useAppStore.setState({
     repos,
     projects: projection.projects,
@@ -198,11 +203,9 @@ it('opens the shipping logical-group composer despite a disconnected raw SSH ord
   expect(header?.getAttribute('aria-expanded')).toBe('true')
   expect(create).toHaveProperty('disabled', false)
   await user.click(create)
+  // The SSH twin shows no rows here, so it is not the header's contextual checkout.
   expect(useAppStore.getState().modalData).toMatchObject({
-    initialProjectScope: {
-      key: 'project:github:org/harbor',
-      context: { repoId: 'same', hostId: 'ssh:box' }
-    }
+    initialProjectScope: { key: 'project:github:org/harbor', context: undefined }
   })
   expect(useAppStore.getState().modalData).not.toHaveProperty('initialRepoId')
   await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
@@ -381,4 +384,137 @@ it('routes the shipping merged Remove Project menu to current Settings scope and
     await closeTestStores()
     rmSync(directory, { recursive: true, force: true })
   }
+})
+
+const harbor = {
+  ...local,
+  id: 'same',
+  displayName: 'Harbor',
+  path: '/alpha',
+  upstream: { owner: 'org', repo: 'harbor' }
+}
+
+function openHarborSidebar(
+  repos: Repo[],
+  worktreesByRepo: AppState['worktreesByRepo'],
+  visibleWorkspaceHostIds: AppState['visibleWorkspaceHostIds'] = null
+) {
+  cleanup()
+  installComposerApi()
+  const projection = projectHostSetupProjectionFromRepos(repos)
+  useAppStore.setState({
+    repos,
+    projects: projection.projects,
+    projectHostSetups: projection.setups,
+    settings: getDefaultSettings('/tmp'),
+    groupBy: 'repo',
+    sortBy: 'manual',
+    projectOrderBy: 'manual',
+    workspaceHostScope: 'all',
+    activeRepoId: null,
+    activeModal: 'none',
+    modalData: {},
+    detectedAgentIds: [],
+    sshTargetLabels: new Map([['box', 'Box']]),
+    sshConnectionStates: new Map(),
+    visibleWorkspaceHostIds,
+    worktreesByRepo
+  })
+  render(<ShippingSidebar />)
+  return projection
+}
+
+it('keeps a project whose rows all sit on its disconnected SSH anchor on the group chooser, seeding the anchor when reconnected', async () => {
+  // repoMap keeps the later SSH registration of `same` as the header's anchor; local has no rows.
+  const sshAnchor = { ...harbor, connectionId: 'box', path: '/ssh' }
+  openHarborSidebar([harbor, sshAnchor], {
+    same: [
+      { ...worktree, id: 'ssh-one', repoId: 'same', hostId: 'ssh:box' },
+      { ...worktree, id: 'ssh-two', repoId: 'same', hostId: 'ssh:box', path: '/ssh/two' }
+    ]
+  })
+  const user = userEvent.setup()
+  const create = screen.getByRole('button', { name: 'Create workspace for Harbor' })
+  expect(create).toHaveProperty('disabled', false)
+  await user.click(create)
+  const opened = useAppStore.getState().modalData
+  expect(opened).toMatchObject({
+    initialProjectScope: {
+      key: 'project:github:org/harbor',
+      context: { repoId: 'same', hostId: 'ssh:box' }
+    }
+  })
+  expect(opened).not.toHaveProperty('initialRepoId')
+  expect(opened).not.toHaveProperty('initialWorkspaceTarget')
+  // The configured Box stays selectable, so its shown seed is preselected behind Connect; local can be chosen.
+  await waitFor(() => expect(screen.getByRole('dialog').textContent).toContain('Connect Harbor'))
+  await user.click(screen.getByRole('combobox', { name: 'Run on' }))
+  await user.click(screen.getByRole('option', { name: /\/alpha/ }))
+  expect(document.querySelector('[data-run-target-combobox-root]')?.textContent).toContain('Local')
+  expect(screen.getByRole('dialog').textContent).not.toContain('Connect Harbor')
+
+  act(() => {
+    useAppStore.getState().closeModal()
+    useAppStore.setState({
+      sshConnectionStates: new Map([
+        ['box', { targetId: 'box', status: 'connected', error: null, reconnectAttempt: 0 }]
+      ])
+    })
+  })
+  await user.click(screen.getByRole('button', { name: 'Create workspace for Harbor' }))
+  // Reconnected, the shown anchor still wins only as the chooser's context, never as an explicit pin.
+  expect(useAppStore.getState().modalData).toEqual(opened)
+  await waitFor(() =>
+    expect(document.querySelector('[data-run-target-combobox-root]')?.textContent).toContain('Box')
+  )
+})
+
+it('keeps the gate of a disconnected Box copy in host sections while its local copy stays creatable', () => {
+  const sshMember = { ...harbor, connectionId: 'box', path: '/ssh' }
+  openHarborSidebar(
+    [harbor, sshMember],
+    {
+      same: [
+        { ...worktree, id: 'local-one', repoId: 'same', hostId: 'local' },
+        { ...worktree, id: 'ssh-one', repoId: 'same', hostId: 'ssh:box', path: '/ssh/one' }
+      ]
+    },
+    ['local', 'ssh:box']
+  )
+  // Each host section's copy is an explicit host action; only Box's waits for its connection.
+  expect(
+    screen.getByRole('button', {
+      name: 'Reconnect SSH target before creating workspaces for Harbor'
+    })
+  ).toHaveProperty('disabled', true)
+  expect(screen.getByRole('button', { name: 'Create new worktree for Harbor' })).toHaveProperty(
+    'disabled',
+    false
+  )
+})
+
+it('opens same-host clones whose anchor shows no rows on the group chooser with no header seed', async () => {
+  const hiddenAnchor = { ...harbor, id: 'clone-a', connectionId: 'box', path: '/box/a' }
+  const shownClone = { ...hiddenAnchor, id: 'clone-b', path: '/box/b' }
+  const emptyLocal = { ...harbor, id: 'clone-c', path: '/local/c' }
+  const projection = openHarborSidebar([hiddenAnchor, shownClone, emptyLocal], {
+    'clone-b': [{ ...worktree, id: 'b-main', repoId: 'clone-b', hostId: 'ssh:box' }]
+  })
+  const user = userEvent.setup()
+  const create = screen.getByRole('button', { name: 'Create workspace for Harbor' })
+  expect(create).toHaveProperty('disabled', false)
+  await user.click(create)
+  expect(useAppStore.getState().modalData).toMatchObject({
+    initialProjectScope: { key: 'project:github:org/harbor', context: undefined }
+  })
+  expect(useAppStore.getState().modalData).not.toHaveProperty('initialRepoId')
+  expect(projection.setups.map((setup) => setup.repoId)).toEqual(['clone-a', 'clone-b', 'clone-c'])
+  // With no header seed and no other context, the all-hosts chooser falls to the local member.
+  await waitFor(() =>
+    expect(document.querySelector('[data-run-target-combobox-root]')?.textContent).toContain(
+      'Local'
+    )
+  )
+  await user.click(screen.getByRole('combobox', { name: 'Run on' }))
+  expect(screen.getByRole('option', { name: /\/box\/b/ })).toBeTruthy()
 })

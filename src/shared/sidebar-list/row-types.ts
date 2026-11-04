@@ -143,3 +143,15 @@ export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {
 export type ProjectSectionNotice =
   | { kind: 'imported'; candidate: ImportedWorktreesCardCandidate }
   | { kind: 'external'; candidate: NewExternalWorktreesInboxCandidate }
+
+/** A project header whose rows all sit on its own repo's host; one spanning hosts still lists them in hostRepos.
+ * A header with no rows is not one: its repo is whichever registration repoMap kept, not proof of a host.
+ * A logical project (projectScope) offers its whole group unless a host section or filter gave it a hostId. */
+export function isSingleHostProjectHeader(row: GroupHeaderRow): boolean {
+  return (
+    row.repo !== undefined &&
+    row.hostRepos === undefined &&
+    (row.hostId !== undefined || row.projectScope === undefined) &&
+    (row.hostId !== undefined || row.count > 0)
+  )
+}

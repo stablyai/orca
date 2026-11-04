@@ -3,7 +3,7 @@
 
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
-import type { NativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
+import type { NativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 
 export type LegacyIdentityTracker = {
   /** Observe every raw line, including discarded ones, to keep decoder identities aligned. */

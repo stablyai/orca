@@ -5,7 +5,7 @@ import type { AgentSessionProviderContextBoundary } from './agent-session-provid
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
-} from './agent-session-background-task-wire'
+} from './agent-session/agent-session-background-task-wire'
 import type { AgentSessionTokenUsage } from './agent-session-context-usage'
 import type { AgentSessionOrcaStop } from './agent-session-orca-stop'
 import type { AgentSessionFailureFact } from './agent-session-failure'

@@ -14,6 +14,7 @@ import {
   clipboardHasImage,
   readClipboardImageThumbnail,
   saveWebClipboardImageAsTempFile,
+  writeWebClipboardImage,
   writeWebClipboardText
 } from './web-clipboard-api'
 import {
@@ -163,7 +164,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    writeClipboardImage: () => Promise.resolve(),
+    writeClipboardImage: writeWebClipboardImage,
     writeClipboardFile: () => Promise.resolve({ ok: false, reason: 'unsupported-platform' }),
     performNativePaste: () => {
       document.execCommand?.('paste')

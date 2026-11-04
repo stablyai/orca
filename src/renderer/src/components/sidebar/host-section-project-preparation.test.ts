@@ -641,3 +641,70 @@ it('retains own display and original beta-first context when host-mode ordering 
   expect(header.projectScope?.context).toMatchObject({ repoId: 'beta', hostId: 'ssh:gpu-vm' })
   expect(header.projectScope?.registrations.map((setup) => setup.repoId)).toEqual(['same', 'beta'])
 })
+
+it('seeds header Create only from its first admitted checkout when the section shows that exact checkout', () => {
+  const a = { ...repo, id: 'a', path: '/a' }
+  const beta = { ...repo, id: 'beta', path: '/beta' }
+  const b = { ...remoteRepo, id: 'b', path: '/ssh/b' }
+  const d = { ...remoteRepo, id: 'd', path: '/ssh/d', connectionId: 'other-vm' }
+  const key = `project:${project.id}`
+  const contextOf = (
+    entries: Repo[],
+    rows: (typeof worktree)[],
+    extra: Parameters<typeof prepareSections>[2] = {}
+  ) => {
+    const plan = prepareSections(entries, rows, { projectGrouping: groupingFor(entries), ...extra })
+    return [new Set<string>(), new Set([key])].map((collapsed) => {
+      const header = plan.render(collapsed).find((row) => row.type === 'header' && row.key === key)
+      // A missing or unscoped header must not pass as "no context".
+      return header?.type === 'header' && header.projectScope
+        ? header.projectScope.context
+        : 'no scoped header'
+    })
+  }
+  const seedA = { repoId: a.id, hostId: 'local', setupId: `local:${a.id}` }
+  const rowOf = (entry: Repo, id: string) => ({
+    ...worktree,
+    id,
+    repoId: entry.id,
+    hostId: getRepoExecutionHostId(entry)
+  })
+
+  // Pending, imported and external activity of A is that checkout's activity, expanded or collapsed.
+  for (const extra of [
+    { pendingCreations: [{ creationId: 'a-new', repoId: a.id, hostId: 'local' }] },
+    { importedWorktreesByRepo: new Map([[a.id, { repo: a, hiddenWorktrees: [] }]]) },
+    { newExternalWorktreesInboxByRepo: new Map([[a.id, { repo: a, inboxWorktrees: [] }]]) }
+  ]) {
+    expect(contextOf([a, beta], [], { placeholderRepoIds: new Set([a.id]), ...extra })).toEqual([
+      seedA,
+      seedA
+    ])
+  }
+  expect(contextOf([a, beta], [rowOf(a, 'a-main')])).toEqual([seedA, seedA])
+  // A shown same-host clone does not replace the hidden first candidate.
+  // As in the sidebar: manual order puts A first and its empty registration opens the section.
+  const hiddenA = {
+    placeholderRepoIds: new Set([a.id]),
+    repoOrder: new Map([a, beta, b, d].map((entry, index) => [entry.id, index]))
+  }
+  expect(contextOf([a, beta], [rowOf(beta, 'beta-main')], hiddenA)).toEqual([undefined, undefined])
+  // Neither row order elects a replacement for hidden A.
+  expect(contextOf([a, b, d], [rowOf(b, 'b-main'), rowOf(d, 'd-main')], hiddenA)).toEqual([
+    undefined,
+    undefined
+  ])
+  expect(contextOf([a, b, d], [rowOf(d, 'd-main'), rowOf(b, 'b-main')], hiddenA)).toEqual([
+    undefined,
+    undefined
+  ])
+  // Activity is host-qualified: the shown SSH twin keeps its own host, not the raw-ID local twin's.
+  const sshTwin = { ...remoteRepo, id: a.id, path: '/ssh/a' }
+  const seedSshTwin = { repoId: a.id, hostId: 'ssh:gpu-vm', setupId: `ssh:gpu-vm:${a.id}` }
+  expect(
+    contextOf([a, sshTwin], [rowOf(sshTwin, 'twin-main')], {
+      ...hiddenA,
+      repoMap: new Map([[a.id, a]])
+    })
+  ).toEqual([seedSshTwin, seedSshTwin])
+})

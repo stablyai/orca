@@ -27,7 +27,7 @@ const darkColors = {
 
   // --foreground, --muted-foreground, --chat-foreground-faint
   textPrimary: '#fafafa',
-  textSecondary: '#a1a1a1',
+  textSecondary: '#acacac',
   textMuted: '#898989',
 
   // --primary: the filled primary-action surface.
@@ -41,6 +41,8 @@ const darkColors = {
   statusGreen: '#86efac',
   statusAmber: '#eab308',
   statusRed: '#ff6568',
+  // Desktop's --destructive-foreground: dark ink on the light-red dark fill.
+  onStatusRed: '#450a0a',
   // Match desktop’s merge CTA fill and text.
   mergeGreen: '#16a34a',
   onMergeGreen: '#ffffff',
@@ -93,17 +95,18 @@ const lightColors: MobilePalette = {
   chatForegroundStrong: '#1e1e1e',
 
   textPrimary: '#0a0a0a',
-  textSecondary: '#737373',
-  textMuted: '#737373',
+  textSecondary: '#696969',
+  textMuted: '#696969',
 
   surfaceBright: '#171717',
 
   accentBlue: '#2563eb',
   onAccent: '#ffffff',
 
-  statusGreen: '#15803d',
+  statusGreen: '#147638',
   statusAmber: '#ca8a04',
   statusRed: '#e40014',
+  onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',
   onMergeGreen: '#ffffff',
   statusPurple: '#9333ea',

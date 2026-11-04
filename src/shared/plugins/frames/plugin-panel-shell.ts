@@ -202,6 +202,8 @@ export function buildPluginPanelShellHtml(
     '<meta charset="utf-8">\n' +
     `<meta http-equiv="Content-Security-Policy" content="${PLUGIN_PANEL_CSP}">\n` +
     `<style id="${PANEL_SHELL_TOKENS_STYLE_ID}">:root{${PANEL_SHELL_TOKENS_PLACEHOLDER}}</style>\n` +
+    // Why: matching the host frame's inherited color-scheme avoids Chromium's opaque mismatch backdrop.
+    '<style>:where(html.light){color-scheme:light}:where(html.dark){color-scheme:dark}</style>\n' +
     '<script>\n' +
     "'use strict'\n" +
     '// Host policy: plugin panels are documents, never browsing contexts.\n' +

@@ -2,7 +2,7 @@
 
 Plugins contribute three kinds of theme through `orca-plugin.json` `contributes`:
 `themes` (app colors), `terminalThemes` (an ANSI palette) and, separately, icon themes.
-Each entry is `{ "id", "label", "path" }` pointing at a JSON file of at most 16 KiB.
+Each entry is `{ "id", "title", "path" }` pointing at a JSON file of at most 16 KiB.
 
 ## App themes
 

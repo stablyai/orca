@@ -149,6 +149,8 @@
   --color-workspace-status-progress: var(--workspace-status-progress);
   --color-tab-group-split-divider: var(--tab-group-split-divider);
   --color-tab-group-split-divider-strong: var(--tab-group-split-divider-strong);
+  --color-tab-active: var(--tab-active);
+  --color-tab-inactive: var(--tab-inactive);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -192,7 +194,7 @@
   --orca-security-secondary: #f5f5f5;
   --orca-security-secondary-foreground: #171717;
   --orca-security-muted: #f5f5f5;
-  --orca-security-muted-foreground: #737373;
+  --orca-security-muted-foreground: #696969;
   --orca-security-accent: #f5f5f5;
   --orca-security-accent-foreground: #171717;
   --orca-security-border: #e5e5e5;
@@ -230,7 +232,7 @@
   --secondary: #f5f5f5;
   --secondary-foreground: #171717;
   --muted: #f5f5f5;
-  --muted-foreground: #737373;
+  --muted-foreground: #696969;
   --accent: #f5f5f5;
   --accent-foreground: #171717;
   --border: #e5e5e5;
@@ -295,6 +297,9 @@
   /* Split dividers must clear 3:1 against --card even before hover; --border is too faint. */
   --tab-group-split-divider: #868690;
   --tab-group-split-divider-strong: #71717a;
+  /* White --card can't be lifted, so light mode recesses inactive tabs to keep the active one lighter. */
+  --tab-active: var(--card);
+  --tab-inactive: color-mix(in srgb, var(--foreground) 4%, var(--card));
 }
 
 .dark {
@@ -309,7 +314,7 @@
   --orca-security-secondary: #262626;
   --orca-security-secondary-foreground: #f0f0f0;
   --orca-security-muted: #262626;
-  --orca-security-muted-foreground: #a1a1a1;
+  --orca-security-muted-foreground: #acacac;
   --orca-security-accent: #404040;
   --orca-security-accent-foreground: #f0f0f0;
   --orca-security-border: rgb(255 255 255 / 0.07);
@@ -346,7 +351,7 @@
   --secondary: #262626;
   --secondary-foreground: #f0f0f0;
   --muted: #262626;
-  --muted-foreground: #a1a1a1;
+  --muted-foreground: #acacac;
   --accent: #404040;
   --accent-foreground: #f0f0f0;
   --border: rgb(255 255 255 / 0.07);
@@ -409,14 +414,18 @@
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;
+  --tab-active: color-mix(in srgb, var(--foreground) 6%, var(--card));
+  --tab-inactive: var(--card);
 }
 
 /* Status and diff colors follow the chat scheme without copying the app palette. */
 :root,
 .native-chat-appearance[data-native-chat-scheme='light'] {
+  /* Native scrollbars and form controls follow the scheme instead of Chromium's light default. */
+  color-scheme: light;
   --destructive: #e40014;
-  --destructive-foreground: #fcf3f3;
-  --status-success: #15803d;
+  --destructive-foreground: #fff;
+  --status-success: #147638;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   /* Needs-attention states use yellow, separate from errors and working states. */
@@ -446,8 +455,10 @@
 
 .dark,
 .native-chat-appearance[data-native-chat-scheme='dark'] {
+  color-scheme: dark;
   --destructive: #ff6568;
-  --destructive-foreground: #df2225;
+  /* Dark --destructive is a light red, so its label needs dark ink to clear AA. */
+  --destructive-foreground: #450a0a;
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
@@ -770,7 +781,6 @@ body[data-modal-overlay-open]
 /* Radix owns the available-height variable on PopoverContent. Make that same
    node scrollable so Chromium scrollbar hit-testing stays inside the layer. */
 .popover-scroll-content {
-  color-scheme: dark;
   max-height: min(15rem, var(--radix-popover-content-available-height, 15rem));
   overflow-x: hidden;
   overflow-y: auto;

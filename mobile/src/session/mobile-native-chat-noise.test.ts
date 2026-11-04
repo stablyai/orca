@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { isNoiseMessage, stripNoiseMessages } from '../../../src/shared/native-chat-noise'
+import {
+  isNoiseMessage,
+  stripNoiseMessages
+} from '../../../src/shared/native-chat/native-chat-noise'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 function msg(

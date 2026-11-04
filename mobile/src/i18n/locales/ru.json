@@ -1090,6 +1090,16 @@
       "title": "Что-то пошло не так",
       "tryAgain": "Повторить",
       "home": "Главная"
+    },
+    "svgPreview": {
+      "drawFailed": "Не удалось отобразить этот SVG",
+      "label": "Рисунок {{title}}",
+      "previewDrawing": "Просмотр рисунка",
+      "viewSource": "Показать исходный код SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Развернуть диаграмму",
+      "label": "Диаграмма Mermaid"
     }
   },
   "connection": {

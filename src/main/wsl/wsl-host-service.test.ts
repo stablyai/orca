@@ -412,7 +412,7 @@ describe('WslHostService', () => {
     connector.connect.mockClear()
 
     // The focused host's polls get a refusal, not a boot, however often they come.
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu is stopped')
     expect(connector.connect).not.toHaveBeenCalled()
 
     // Switching back to one of its workspaces is navigation: it re-checks, never starts it.
@@ -480,7 +480,7 @@ describe('WslHostService', () => {
       .ensureForRuntimeCall('wsl:ubuntu')
       .catch((error: unknown) => error)
     expect(refusal).not.toBeInstanceOf(RemoteRuntimeClientError)
-    expect(String(refusal)).toContain('Ubuntu was stopped')
+    expect(String(refusal)).toContain('Ubuntu is stopped')
     expect(isRecoverableRemoteRuntimeConnectionError({ message: String(refusal) })).toBe(false)
   })
 
@@ -492,10 +492,10 @@ describe('WslHostService', () => {
     await connector.disconnect('Ubuntu')
     connector.distro.state = 'stopped'
     connector.connect.mockClear()
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu is stopped')
     // Running again (started some other way) is not enough while parked: still no boot from a poll.
     connector.distro.state = 'running'
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu is stopped')
     expect(connector.connect).not.toHaveBeenCalled()
   })
 
@@ -522,7 +522,7 @@ describe('WslHostService', () => {
       recovering: false
     })
     connector.isSettling.mockReturnValue(false)
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu is stopped')
     expect(connector.connect).not.toHaveBeenCalled()
   })
 

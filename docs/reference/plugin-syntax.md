@@ -5,7 +5,7 @@ A plugin adds highlighting for a language through `contributes.syntaxes` in `orc
 ```json
 {
   "id": "typst",
-  "label": "Typst",
+  "title": "Typst",
   "scopeName": "source.typst",
   "path": "syntaxes/typst.tmLanguage.json",
   "configuration": "syntaxes/language-configuration.json",

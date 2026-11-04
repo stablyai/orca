@@ -37,7 +37,7 @@ import { projectStructuredItemToNativeChat } from '../../../../shared/structured
 import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session-journal-schemas'
 import { agentMessageHeading } from '../../../../shared/agent-session/agent-message-presentation'
 import { nativeChatTurnFoldRow } from '../../../../shared/native-chat/transcript/native-chat-turn-fold'
-import { isNoiseMessage } from '../../../../shared/native-chat-noise'
+import { isNoiseMessage } from '../../../../shared/native-chat/native-chat-noise'
 import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 

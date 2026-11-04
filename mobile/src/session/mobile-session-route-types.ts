@@ -113,6 +113,7 @@ export type FileDocState =
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'ready'; kind: 'image'; dataUri: string }
   | { status: 'ready'; kind: 'html'; content: string }
+  | { status: 'ready'; kind: 'svg'; content: string; truncated: boolean; byteLength: number }
   | { status: 'error'; message: string }
 
 export type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>

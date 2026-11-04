@@ -1,16 +1,18 @@
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { GroupHeaderRow } from '../../../../shared/sidebar-list/row-types'
 import {
   getRepoHostIdentity,
   getRepoRegistrationHostIds
 } from '../../../../shared/repo-host-identity'
 import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
+import { useAppStore } from '@/store'
 import {
   getRepoWorkspaceCreationTargetHint,
   type WorkspaceCreationTargetHint
 } from '@/lib/project-host-workspace-target'
 
-/** A host-section header's create target, when its repo id alone can't pick the host. */
+/** A single-host project header's create target, when its repo id alone can't pick the host. */
 export function getHeaderCreateWorkspaceTarget(
   repo: Repo,
   repos: readonly Repo[],
@@ -27,4 +29,25 @@ export function getHeaderCreateWorkspaceTarget(
   )
     ? { initialWorkspaceTarget: getRepoWorkspaceCreationTargetHint(repo, projectHostSetups) }
     : {}
+}
+
+/** A project header's Create: an unpinned project opens its group chooser; otherwise the composer
+ * is seeded with its repo, pinned to that repo's host when `pinHost`. */
+export function openHeaderCreateComposer(
+  repo: Repo,
+  { pinHost, projectScope }: { pinHost: boolean; projectScope?: GroupHeaderRow['projectScope'] }
+): void {
+  const { repos, projectHostSetups, openModal } = useAppStore.getState()
+  if (!pinHost && projectScope) {
+    openModal('new-workspace-composer', {
+      initialProjectScope: projectScope,
+      telemetrySource: 'sidebar'
+    })
+    return
+  }
+  openModal('new-workspace-composer', {
+    initialRepoId: repo.id,
+    ...(pinHost ? getHeaderCreateWorkspaceTarget(repo, repos, projectHostSetups) : {}),
+    telemetrySource: 'sidebar'
+  })
 }

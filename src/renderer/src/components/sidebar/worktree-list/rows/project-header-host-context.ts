@@ -85,20 +85,32 @@ export function getProjectHeaderHostContexts(args: {
       const projectHosts = row.projectScope
         ? new Set(row.projectScope.registrations.map((setup) => canonicalHostId(setup.hostId)))
         : hostsByProjectKey.get(row.key)
-      if (projectHosts && projectHosts.size > 1) {
+      // Row hosts also catch a repo id registered on two machines, which repoMap holds only once;
+      // aliases of one machine (SSH and runtime ids) still count once.
+      const rowHosts = row.hostRepos
+        ? new Set([...row.hostRepos.keys()].map(canonicalHostId))
+        : undefined
+      if ((rowHosts?.size ?? 0) > 1 || (projectHosts?.size ?? 0) > 1) {
         const visibleRepoIds = args.visibleProjectRepoIdsBySection?.get(row.key)
-        const visibleProjectHosts = visibleRepoIds
-          ? [...visibleRepoIds].flatMap((repoId) => {
-              const repo = args.repoMap.get(repoId)
-              return repo ? [repoHostId(repo)] : []
-            })
-          : projectHosts
+        const visibleProjectHosts = rowHosts
+          ? rowHosts
+          : visibleRepoIds
+            ? [...visibleRepoIds].flatMap((repoId) => {
+                const repo = args.repoMap.get(repoId)
+                return repo ? [repoHostId(repo)] : []
+              })
+            : (projectHosts ?? [])
         for (const hostId of visibleProjectHosts) {
           labelHosts.add(hostId)
         }
         continue
       }
-      ownerHostId = projectHosts?.values().next().value ?? getRepoExecutionHostId(displayRepo)
+      // A host copy names its own host; repoMap's registration may be another host's twin.
+      ownerHostId =
+        row.hostId ??
+        rowHosts?.values().next().value ??
+        projectHosts?.values().next().value ??
+        getRepoExecutionHostId(displayRepo)
     } else if (
       row.projectGroup &&
       'createdFrom' in row.projectGroup &&

@@ -634,6 +634,16 @@ it('keeps an absent scoped group out of the legacy fallback and qualifies a cont
     status: 'ready',
     target: { repo: alpha, hostId: 'local' }
   })
+  // A header that supplies no seed leaves the existing active checkout's contextual precedence.
+  const unseeded = { ...input, projectScope: { ...input.projectScope, context: undefined } }
+  expect(resolveWorkspaceCreationTarget(unseeded)).toMatchObject({
+    status: 'ready',
+    target: { repo: alpha, hostId: 'local' }
+  })
+  expect(resolveWorkspaceCreationTarget({ ...unseeded, activeRepoId: beta.id })).toMatchObject({
+    status: 'ready',
+    target: { repo: beta, hostId: 'local' }
+  })
   expect(
     resolveWorkspaceCreationTarget({
       ...input,
