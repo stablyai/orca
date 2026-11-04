@@ -96,6 +96,7 @@ function WorkspaceShell(): React.JSX.Element {
 
 const expectedFolderWorkspaceId =
   process.platform === 'win32' ? 'repo-1::\\workspace\\feature' : 'repo-1::/workspace/feature'
+const initialApiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
 const initialState = useAppStore.getState()
 let main: TabsDrawnFromMain | undefined
 afterEach(() => {
@@ -104,6 +105,11 @@ afterEach(() => {
   main = undefined
   useAppStore.setState(initialState, true)
   vi.restoreAllMocks()
+  if (initialApiDescriptor) {
+    Object.defineProperty(window, 'api', initialApiDescriptor)
+  } else {
+    Reflect.deleteProperty(window, 'api')
+  }
 })
 
 describe('worktree creation chat handoff', () => {
@@ -112,7 +118,13 @@ describe('worktree creation chat handoff', () => {
     const previous = { ...worktree, id: 'previous-workspace', path: '/workspace/previous' }
     seedEmptyActivatableWorktree(worktree, { extraWorktrees: [previous] })
     useAppStore.getState().createTab(previous.id)
-    vi.spyOn(window.api.pty, 'listSessions').mockReturnValue(new Promise(() => {}))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        runtime: { call: vi.fn() },
+        pty: { listSessions: () => new Promise(() => {}) }
+      }
+    })
     const checkout = Promise.withResolvers<{
       worktree: typeof worktree
       startupTerminal: { spawned: boolean }
