@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { expect, it, vi } from 'vitest'
+import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { captureHostShellEnvironment } from '../runtime/structured-agent-shell-environment'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
@@ -46,6 +47,21 @@ const sessionFile = (folder: string, suffix: string) =>
   join(folder, 'antigravity-acp', 'conversations', `${SESSION}${suffix}`)
 
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof fs>()) }))
+
+vi.mock('../provider-process/provider-process-teardown', () => ({
+  terminateProviderProcessTree: vi.fn<typeof terminateProviderProcessTree>(
+    async () => 'unverifiable'
+  )
+}))
+
+vi.mock('../startup/login-shell-environment', () => ({
+  resolveLoginShellEnvironment: async (options?: { startedAfter?: number }) => {
+    if (options?.startedAfter !== undefined) {
+      checkingShell.path = checkingShell.next
+    }
+    return { PATH: checkingShell.path }
+  }
+}))
 
 it("shows the helper's link, reads signed in only once a session starts, then removes it", async () => {
   const { agent, folder, flowId, finishBrowser, openSession } = await signInAgainst(() =>

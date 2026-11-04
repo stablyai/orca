@@ -9,7 +9,6 @@ import { PassThrough } from 'node:stream'
 import { afterEach, vi } from 'vitest'
 import { z } from 'zod'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
-import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
 import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
@@ -30,21 +29,7 @@ import {
   startAntigravityChatSignIn
 } from './antigravity-chat-sign-in'
 
-vi.mock('../provider-process/provider-process-teardown', () => ({
-  terminateProviderProcessTree: vi.fn<typeof terminateProviderProcessTree>(
-    async () => 'unverifiable'
-  )
-}))
-
-const checkingShell = vi.hoisted(() => ({ path: '/fixture', next: '/fixture' }))
-vi.mock('../startup/login-shell-environment', () => ({
-  resolveLoginShellEnvironment: async (options?: { startedAfter?: number }) => {
-    if (options?.startedAfter !== undefined) {
-      checkingShell.path = checkingShell.next
-    }
-    return { PATH: checkingShell.path }
-  }
-}))
+const checkingShell = { path: '/fixture', next: '/fixture' }
 
 // Use a fake pin even on hosts without a published server build.
 const PIN = {
