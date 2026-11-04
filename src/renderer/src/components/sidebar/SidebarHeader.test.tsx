@@ -37,6 +37,7 @@ type MockState = {
     projectGroupId?: string
     path?: string
     connectionId?: string
+    executionHostId?: string
   }[]
   activeWorktreeId: string | null
   activeWorkspaceKey: string | null
