@@ -89,12 +89,9 @@ describe('NativeChatApprovalCard', () => {
       const toggle = screen.getByRole('button', { name: 'Details' })
       const content = document.querySelector<HTMLElement>('[data-native-chat-approval-content]')!
       Object.defineProperty(content, 'clientHeight', { value: 288 })
-      vi.spyOn(content, 'getBoundingClientRect').mockReturnValue({ top: 0 } as DOMRect)
+      vi.spyOn(content, 'getBoundingClientRect').mockReturnValue(new DOMRect())
       vi.spyOn(toggle, 'getBoundingClientRect').mockImplementation(
-        () =>
-          ({
-            bottom: rowBottom - content.scrollTop
-          }) as DOMRect
+        () => new DOMRect(0, rowBottom - content.scrollTop, 0, 0)
       )
       toggle.focus()
       fireEvent.click(toggle)
