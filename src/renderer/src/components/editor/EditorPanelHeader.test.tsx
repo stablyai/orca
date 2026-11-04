@@ -54,7 +54,7 @@ vi.mock('@/components/artifacts/ArtifactPublishButton', () => ({
   ArtifactPublishButton: () => <button data-artifact-publish />
 }))
 
-vi.mock('./diff-navigation-context', () => ({
+vi.mock('./diff/review/diff-navigation-context', () => ({
   useDiffNavigation: () => ({
     changeCount: 2,
     goToPreviousDiff: vi.fn(),

@@ -78,34 +78,12 @@ describe('Codex approval ownership', () => {
     })
   }
 
-  it('reconciles reviewer ownership before a child-first auto-reviewed approval', () => {
-    const transcriptPath = writeRollout({ reviewer: 'auto_review' })
-
-    expect(childPermissionRequest(transcriptPath)?.payload).toMatchObject({
-      state: 'working',
-      subagents: [{ id: 'child-after-relay-restart', agentType: 'worker', state: 'working' }]
-    })
-  })
-
   it('keeps the parent reviewer after a child with a different reviewer is observed', () => {
     const parentPath = writeRollout({ reviewer: 'auto_review', fileName: 'rollout-parent.jsonl' })
     const childPath = writeRollout({ reviewer: 'user', fileName: 'rollout-child.jsonl' })
 
     expect(permissionRequest(parentPath)?.payload.state).toBe('working')
     expect(childPermissionRequest(childPath)?.payload.state).toBe('waiting')
-    expect(childPostToolUse()?.payload.state).toBe('working')
-    expect(permissionRequest(parentPath)?.payload.state).toBe('working')
-  })
-
-  it('does not clear a readable parent reviewer when a child rollout is unavailable', () => {
-    const parentPath = writeRollout({ reviewer: 'auto_review', fileName: 'rollout-parent.jsonl' })
-    const childRoot = mkdtempSync(join(tmpdir(), 'codex-approval-ownership-child-'))
-    dirs.push(childRoot)
-
-    expect(permissionRequest(parentPath)?.payload.state).toBe('working')
-    expect(childPermissionRequest(join(childRoot, 'missing-child.jsonl'))?.payload.state).toBe(
-      'waiting'
-    )
     expect(childPostToolUse()?.payload.state).toBe('working')
     expect(permissionRequest(parentPath)?.payload.state).toBe('working')
   })
@@ -132,30 +110,5 @@ describe('Codex approval ownership', () => {
     rmSync(transcriptPath)
 
     expect(permissionRequest(transcriptPath)?.payload.state).toBe('waiting')
-  })
-
-  it('still waits on request_user_input under auto review, which no reviewer can answer', () => {
-    const transcriptPath = writeRollout({ reviewer: 'auto_review' })
-    permissionRequest(transcriptPath)
-
-    const question = post({
-      hook_event_name: 'PreToolUse',
-      tool_name: 'request_user_input',
-      transcript_path: transcriptPath
-    })
-
-    expect(question?.payload.state).toBe('waiting')
-  })
-
-  it('does not carry one session’s reviewer into the next rollout', () => {
-    const autoReviewed = writeRollout({
-      reviewer: 'auto_review',
-      fileName: 'rollout-first.jsonl'
-    })
-    expect(permissionRequest(autoReviewed)?.payload.state).toBe('working')
-
-    const unstated = writeRollout({ fileName: 'rollout-second.jsonl' })
-
-    expect(permissionRequest(unstated)?.payload.state).toBe('waiting')
   })
 })

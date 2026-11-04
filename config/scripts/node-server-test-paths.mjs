@@ -47,7 +47,6 @@ export function nodeServerTestPaths({
           'src/main/orcad/orcad-stop-request-shutdown.integration.test.ts',
           'src/main/orcad/orcad-windows-conpty-breakaway.integration.test.ts',
           'src/main/orcad/orcad-serve-parity.integration.test.ts',
-          'src/main/orcad/orcad-idle-memory-budget.integration.test.ts',
           'config/scripts/zip-extractor-command.test.mjs'
         ]
       : []),

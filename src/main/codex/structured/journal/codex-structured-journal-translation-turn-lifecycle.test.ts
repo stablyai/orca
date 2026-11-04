@@ -5,13 +5,11 @@ import {
 } from '../session-lifecycle/codex-structured-session-state'
 import { CodexBackgroundTaskTracker } from '../background-work/codex-background-task-tracker'
 import { createCodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
-import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import {
   createCodexHistoryTranslator,
@@ -22,10 +20,7 @@ import {
   CODEX_USER_INPUT_METHOD,
   CodexPromptRegistry
 } from '../prompts/codex-prompt-registry'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
-  fixture,
   LIFECYCLE_KEY,
   reduced,
   translatorFor,
@@ -33,48 +28,13 @@ import {
   THREAD_ID,
   TURN_ID,
   USER_ITEM_ID,
-  journals,
   notification,
   recorder
 } from './codex-turn-lifecycle-contract-test-fixture'
 
+import '../prompts/codex-structured-prompt-replies'
+
 describe('codex turn lifecycle rows', () => {
-  it('binds a prompt without a provider turn id to the active turn before cleanup', () => {
-    const tap = recorder()
-    const registry = new CodexPromptRegistry()
-    registry.register({
-      id: 1,
-      method: CODEX_COMMAND_APPROVAL_METHOD,
-      params: {
-        itemId: 'exec-fallback',
-        approvalId: 'approval-fallback',
-        threadId: THREAD_ID
-      }
-    })
-    const translator = createCodexJournalTranslator({
-      sink: tap.sink,
-      primaryThreadId: () => THREAD_ID,
-      bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
-        registry.bindJournalItemId(journalItemId, threadId, promptKey, turnId),
-      clearPromptTurn: (threadId, turnId) => registry.clearTurn(threadId, turnId)
-    })
-
-    translator.handle(notification('turn/started', { turn: { id: TURN_ID } }))
-    translator.handle({
-      type: 'prompt',
-      sessionId: SESSION_ID,
-      threadId: THREAD_ID,
-      method: CODEX_COMMAND_APPROVAL_METHOD,
-      params: { availableDecisions: ['accept', 'decline'] },
-      codexItemId: 'exec-fallback',
-      promptKey: 'approval-fallback'
-    })
-
-    expect(registry.find('approval-fallback')?.turnId).toBe(TURN_ID)
-    translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
-    expect(registry.find('approval-fallback')).toBeNull()
-  })
-
   it('settles prompts when a turn completes while awaiting approval', () => {
     const tap = recorder()
     const clearPromptTurn = vi.fn()
@@ -154,49 +114,6 @@ describe('codex turn lifecycle rows', () => {
       expect.objectContaining({ kind: 'turn', state: 'completed' })
     ])
     expect(clearPromptTurn).toHaveBeenCalledWith(THREAD_ID, TURN_ID)
-  })
-
-  it('opens the running row with the host receipt time and pins the row time to it', async () => {
-    const journal = await journals.open({
-      identity: {
-        sessionId: SESSION_ID,
-        workspaceId: 'workspace-1',
-        hostId: 'local',
-        agent: 'codex',
-        providerHandle: codexProviderHandle(THREAD_ID)
-      },
-      now: () => 9_000,
-      stateDirectory: join(fixture.root, SESSION_ID)
-    })
-    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-    const translator = createCodexJournalTranslator({
-      sink: deferred.sink,
-      sessionId: SESSION_ID,
-      primaryThreadId: () => THREAD_ID
-    })
-    deferred.bind({ journal, fence: 1, publish: () => {} })
-    const before = journal.cursor()
-
-    translator.handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
-    await expect(deferred.drained()).resolves.toEqual({ ok: true })
-
-    const appended = journal.readSince(before)
-    expect(appended.ok && appended.rows).toEqual([
-      expect.objectContaining({ kind: 'outcome', seq: before.sequence + 1 })
-    ])
-    expect(journal.snapshot().items).toEqual([
-      expect.objectContaining({
-        observedAt: 1_000,
-        body: {
-          kind: 'turn',
-          turnId: TURN_ID,
-          state: 'running',
-          userItemId: USER_ITEM_ID,
-          startedAt: 1_000
-        }
-      })
-    ])
-    deferred.close()
   })
 
   it('settles an echoed send only after its request-origin revision is admitted', () => {

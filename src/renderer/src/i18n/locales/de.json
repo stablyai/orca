@@ -19642,8 +19642,6 @@
         "stateUnverifiableCount_other": "{{value0}} mit nicht verfügbarem Status"
       },
       "jumpToLatest": "Zur neuesten Nachricht springen",
-      "newRowsAnnouncement": "Während der Abwesenheit sind neue Nachrichten eingegangen",
-      "newRowsMarker": "Neu",
       "find": {
         "label": "Im Chat suchen",
         "noResults": "Keine Ergebnisse",

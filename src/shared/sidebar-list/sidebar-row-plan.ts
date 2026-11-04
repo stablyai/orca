@@ -54,12 +54,14 @@ import type {
 import { orderMainWorktreeFirst, getRenderedNaturalAnchorRepoIds } from './section-order'
 import { withRepoSectionDisplayLabels } from '../project-section-order'
 import { buildOrderedGroups } from './worktree-grouping'
+import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
 
 /** Everything the row builder reads. Pure data: no store, clock or client-specific state. */
 export type SidebarRowPlanInputs = {
   groupBy: WorktreeGroupBy
+  sortBy: WorkspaceSortBy
   /** Visible worktrees in the frozen sort order. */
   worktrees: Worktree[]
   repoMap: Map<string, Repo>
@@ -89,6 +91,7 @@ export type SidebarRowPlanInputs = {
 export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const {
     groupBy,
+    sortBy,
     worktrees,
     repoMap,
     repoOfWorktree,
@@ -168,7 +171,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           placement: key === PINNED_GROUP_KEY ? 'pinned' : 'natural',
           items:
             groupBy === 'repo' && key !== PINNED_GROUP_KEY
-              ? orderMainWorktreeFirst(group.items)
+              ? orderMainWorktreeFirst(group.items, sortBy)
               : group.items,
           revealPath: { key, parent: revealPath }
         }
