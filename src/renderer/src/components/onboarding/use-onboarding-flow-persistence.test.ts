@@ -2,7 +2,7 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { toast } from 'sonner'
 import { createElement, useEffect, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

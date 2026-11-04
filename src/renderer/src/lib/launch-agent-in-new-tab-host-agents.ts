@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { structuredAgentLabel } from './agent-session/launch/structured-agent-session-launch-label'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { agentTabLaunchStore } from '@/lib/launch-agent-execution-context'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'

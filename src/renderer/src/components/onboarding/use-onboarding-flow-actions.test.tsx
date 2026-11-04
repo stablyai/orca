@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useCloseWith } from './use-onboarding-flow-persistence'
