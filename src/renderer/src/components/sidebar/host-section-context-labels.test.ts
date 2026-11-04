@@ -23,6 +23,7 @@ function rowsFor(groupBy: WorktreeGroupBy) {
   const worktrees = [worktree, { ...remoteWorktree, isPinned: true }]
   return planSidebarRows({
     groupBy,
+    sortBy: 'smart',
     worktrees,
     repoMap: new Map([
       [repo.id, repo],

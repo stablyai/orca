@@ -78,24 +78,19 @@ export function useNativeChatRevealLatest(): {
 
 function ignoreFindMatch(): void {}
 
-/** Notify onSent for conversation answers; ordinary jumps to latest do not count as sends. */
 export function useNativeChatMessageListHandle(
   ref: React.Ref<NativeChatMessageListHandle> | undefined,
   jumpToLatest: () => void,
   revealFindMatch: NativeChatMessageListHandle['revealFindMatch'] = ignoreFindMatch,
-  onSent?: () => void,
   slots: readonly NativeChatTranscriptSlot[] = []
 ): void {
   useImperativeHandle(
     ref,
     () => ({
-      revealLatest: () => {
-        onSent?.()
-        jumpToLatest()
-      },
+      revealLatest: jumpToLatest,
       revealFindMatch,
       messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId)
     }),
-    [jumpToLatest, revealFindMatch, onSent, slots]
+    [jumpToLatest, revealFindMatch, slots]
   )
 }
