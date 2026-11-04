@@ -10,7 +10,10 @@ import {
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
 } from '../../../../shared/browser-network-tunnel-protocol'
-import { BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES } from './browser-network-tunnel-stream-state'
+import {
+  BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+  BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS
+} from './browser-network-tunnel-stream-state'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 
 function frame(
@@ -230,8 +233,8 @@ describe('BrowserNetworkTunnelClient', () => {
     const socket = await opening
     socket.on('error', () => {})
 
-    for (let index = 0; index < 257; index += 1) {
-      client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([index])))
+    for (let index = 0; index <= BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS; index += 1) {
+      client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([index & 0xff])))
     }
 
     expect(socket.destroyed).toBe(true)

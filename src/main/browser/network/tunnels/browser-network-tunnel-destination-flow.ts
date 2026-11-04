@@ -73,6 +73,7 @@ export function writeBrowserNetworkDestination(
   return null
 }
 
+/** Applies client send credit, reporting a protocol error if the total ever exceeds the negotiated window. */
 export function grantBrowserNetworkDestinationCredit(
   stream: BrowserNetworkTunnelStream,
   payload: Uint8Array<ArrayBufferLike>,

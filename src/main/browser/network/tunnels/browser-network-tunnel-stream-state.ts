@@ -10,7 +10,10 @@ export const BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS = 10_000
 // Must cover the largest negotiated window, or in-window data would be rejected as overflow.
 export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES =
   BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
-export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS = 256
+// Covers the largest negotiated window at 1 KiB frames — the same pairing the legacy 256-chunk
+// cap had with the 256 KiB window. Tinier frames still trip it, keeping the flood bound.
+export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS =
+  BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES / 1024
 
 /** The effective window is each side's own maximum capped by what the peer advertises (legacy floor). */
 export function negotiateBrowserNetworkTunnelWindowBytes(

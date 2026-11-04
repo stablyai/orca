@@ -216,6 +216,7 @@ export class PairedRuntimeBrowserNetworkTransport {
     }
   }
 
+  /** Retains the host's tunnel once per generation, sizing the receive window from its advertisement. */
   private acceptReady(
     tunnelGeneration: number,
     hostMaxWindowBytes: number | undefined,

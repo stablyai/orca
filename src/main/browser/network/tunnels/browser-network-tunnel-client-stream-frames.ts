@@ -43,6 +43,7 @@ export function handleBrowserNetworkTunnelClientStreamFrame(
   })
 }
 
+/** Marks the stream open and grants the negotiated receive window, keeping tracked credit equal to the announcement. */
 function openedStream(
   stream: BrowserNetworkTunnelClientStream,
   actions: BrowserNetworkTunnelClientStreamFrameActions
@@ -68,6 +69,7 @@ function openedStream(
   stream.resolveOpen(stream.socket)
 }
 
+/** Applies peer send credit, fencing the tunnel if the total ever exceeds the negotiated window. */
 function grantStreamCredit(
   stream: BrowserNetworkTunnelClientStream,
   payload: Uint8Array<ArrayBufferLike>,

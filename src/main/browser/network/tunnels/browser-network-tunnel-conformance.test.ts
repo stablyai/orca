@@ -177,32 +177,36 @@ describe('browser network tunnel conformance', () => {
     await teardown(tunnel)
   })
 
-  it('carries a full negotiated window in both directions before any settlement', async () => {
+  it('carries a full negotiated window of small frames in both directions before any settlement', async () => {
     const tunnel = createConformanceTunnel({
       receiveWindowBytes: BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
     })
     const { duplex, destination } = await openStream(tunnel)
-    const consumer = consumeDuplex(duplex, { autoSettle: false })
-    const windowChunks = BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES / CHUNK_BYTES
+    // 1 KiB frames fill the window with far more frames than the legacy 256-chunk cap allowed.
+    const smallChunkBytes = 1024
+    const windowChunks = BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES / smallChunkBytes
 
     // A full negotiated window outstanding toward the destination, nothing settled yet.
     destination.autoSettleWrites = false
     for (let index = 0; index < windowChunks; index += 1) {
-      await writeChunk(duplex, new Uint8Array(CHUNK_BYTES).fill(index))
+      await writeChunk(duplex, new Uint8Array(smallChunkBytes).fill(index % 0xff))
     }
     await settle()
     expect(totalBytes(destination.written)).toBe(BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES)
 
-    // A full negotiated window outstanding toward the client, no reads settled yet.
+    // A full negotiated window outstanding toward an unread client duplex, frame by frame.
     for (let index = 0; index < windowChunks; index += 1) {
-      destination.emit('data', new Uint8Array(CHUNK_BYTES).fill(index))
-      await settle()
+      destination.emit('data', new Uint8Array(smallChunkBytes).fill(index % 0xff))
     }
-    expect(consumer.byteLength()).toBe(BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES)
+    await settle()
 
-    // The whole announced window must be usable without tripping credit validation.
+    // The whole announced window must be usable without tripping credit or chunk validation.
     expect(tunnel.closures).toEqual([])
     expect(tunnel.onSessionClose).not.toHaveBeenCalled()
+
+    const consumer = consumeDuplex(duplex, { autoSettle: false })
+    await settle()
+    expect(consumer.byteLength()).toBe(BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES)
 
     destination.settleWrites()
     consumer.settleAll()
