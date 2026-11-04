@@ -633,7 +633,9 @@ describe("the reopen's mark", () => {
   it('an idle-sweep eviction of a stopped chat writes nothing, and its Stop row stays', async () => {
     await observationClock.restoreBeforeCleanup(() => rig.dispose())
     observationClock.start()
-    rig = await createQueuedMessageTestRig({ idleSweep: { idleMs: 0, intervalMs: 60 * 60 * 1000 } })
+    rig = await createQueuedMessageTestRig({
+      idleSweep: { idleMs: () => 0, intervalMs: 60 * 60 * 1000 }
+    })
     const marks = vi.spyOn(AgentSessionJournal.prototype, 'appendQueueReopen')
     const working = await rig.workingSend()
     const held = rig.send('held by the Stop', 'queue-if-active')

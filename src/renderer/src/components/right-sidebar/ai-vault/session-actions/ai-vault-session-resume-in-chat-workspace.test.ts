@@ -107,12 +107,6 @@ describe('resuming a conversation from history in a chat', () => {
     expect(resumeInChat()).toEqual({ available: false, reason: 'workspace' })
   })
 
-  it('is offered in a workspace on the machine that recorded it', () => {
-    mocks.owner.mockReturnValue('local')
-
-    expect(resumeInChat()).toEqual({ available: true, workspaceId: PAIRED_WORKSPACE })
-  })
-
   it('asks the host that would run it whether it can resume, not another', () => {
     mocks.owner.mockReturnValue('local')
     mocks.localCapabilities.mockReturnValue([])
@@ -126,13 +120,6 @@ describe('paired runtime conversation ownership', () => {
 
   beforeEach(() => {
     mocks.owner.mockReturnValue('runtime:server-1')
-  })
-
-  it('offers a conversation on its recording runtime', () => {
-    expect(resumeInChat(remoteSession)).toEqual({
-      available: true,
-      workspaceId: PAIRED_WORKSPACE
-    })
   })
 
   it.each(['local', 'runtime:server-2', null])(

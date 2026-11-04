@@ -21182,6 +21182,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Ставить следующие сообщения в очередь",
+        "scrollToLatestOnSendTitle": "Прокручивать к последнему сообщению при отправке",
+        "scrollToLatestOnSendCopy": "Отправка при прокрутке вверх переносит к последнему сообщению и следит за ответом. Отключите, чтобы остаться на месте.",
+        "scrollToLatestOnSendSearchPosition": "позиция",
         "inlineVisualsTitle": "Визуализации в чате",
         "inlineVisualsCopy": "Агент сможет показывать графики, схемы и макеты прямо в ответах. Применяется к новым чатам.",
         "inlineVisualsToggleLabel": "Включить визуализации в чате",
@@ -21193,7 +21196,13 @@
         "queueSearchSteer": "направить агента",
         "shellEnvSearchVariables": "переменные окружения",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "прокси"
+        "shellEnvSearchProxy": "прокси",
+        "idleStopTitle": "Останавливать неактивных агентов через",
+        "idleStopCopy": "Завершает агента чата, когда чат простаивает столько времени, чтобы освободить память. Чат сохраняется, а следующее сообщение снова запускает агента. Выберите «Никогда» для агентов, которые продолжают работать в фоне между ходами.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "тайм-аут",
+        "idleStopSearchKeepAlive": "поддерживать активным",
+        "idleStopNever": "Никогда"
       }
     },
     "agentChildRow": {

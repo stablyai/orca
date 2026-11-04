@@ -19790,6 +19790,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "将后续消息加入队列",
+        "scrollToLatestOnSendTitle": "发送时滚动到最新消息",
+        "scrollToLatestOnSendCopy": "向上滚动时发送消息会跳到最新消息并跟随回复。关闭后将保持当前位置。",
+        "scrollToLatestOnSendSearchPosition": "位置",
         "followUpBehaviorCopy": "智能体工作时发送的消息会以卡片形式等待到回合结束，而不是进入正在进行的回合。Cmd/Ctrl+Enter 会对单条消息采取相反做法。",
         "inlineVisualsTitle": "内联可视化",
         "inlineVisualsCopy": "允许智能体在其回复中显示图表、示意图和原型图。适用于新启动的聊天。",
@@ -19806,7 +19809,13 @@
         "usageLimitContinueCopy": "额度重置后，Orca 会发送“Continue where you left off.”。适用于所有已知重置时间的聊天。",
         "usageLimitContinueSearchLimit": "使用额度",
         "usageLimitContinueSearchReset": "重置",
-        "usageLimitContinueToggleLabel": "切换使用额度重置后自动继续聊天"
+        "usageLimitContinueToggleLabel": "切换使用额度重置后自动继续聊天",
+        "idleStopTitle": "空闲多久后停止智能体",
+        "idleStopCopy": "聊天空闲达到此时长后，结束该聊天的智能体以释放内存。聊天会保留，你发送下一条消息时智能体会重新启动。如果智能体在轮次之间仍会在后台继续工作，请选择“从不”。",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "超时",
+        "idleStopSearchKeepAlive": "保持活动",
+        "idleStopNever": "从不"
       }
     },
     "agentChildRow": {

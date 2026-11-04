@@ -1,4 +1,4 @@
-import { formatResetDuration } from '../../../shared/rate-limit-reset-format'
+import { formatResetDuration } from './rate-limit-reset-format'
 
 /** Format usage-window duration; retain 10080 minutes → wk compatibility with the original status bar. */
 export function formatWindowLabel(windowMinutes: number): string {
