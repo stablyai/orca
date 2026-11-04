@@ -12,7 +12,7 @@ type Tagged = {
   getAttribute: (name: string) => string | null
   querySelectorAll: (selector: string) => ArrayLike<Tagged>
 }
-type Sibling = Tagged & { nextElementSibling: Sibling | null }
+type Sibling = Tagged & { children?: ArrayLike<Sibling>; nextElementSibling: Sibling | null }
 type RowBox = Sibling & { children: ArrayLike<Sibling> }
 export type MobileNativeChatScrollNode = Tagged & {
   scrollTop: number
@@ -22,6 +22,15 @@ export type MobileNativeChatScrollNode = Tagged & {
 }
 
 type Keys = Pick<MobileNativeChatRowKeys, 'current' | 'placement'>
+
+export type MobileNativeChatDrawnWindow = {
+  scope: string
+  firstKey: string | null
+  count: number
+  fromStart?: boolean
+  detached?: boolean
+  automatic?: boolean
+}
 
 export type MobileNativeChatReadingUnit = {
   key: string
@@ -33,6 +42,7 @@ export type MobileNativeChatReadingUnit = {
 const ROW = 'chat-row:'
 const MEMBER = 'chat-member:'
 const ROWS = 'data-chat-rows'
+const PAGE_ROW = 'data-native-chat-page-row'
 
 // Lets the reading place index rows instead of searching the page.
 export const mobileNativeChatRowBoxProps = { [ROWS]: '' }
@@ -98,7 +108,9 @@ function drawnRows(scroller: MobileNativeChatScrollNode): Sibling[] {
   if (!box) {
     return []
   }
-  const rows = Array.from(box.children)
+  const rows = Array.from(box.children).flatMap((row) =>
+    row.getAttribute(PAGE_ROW) !== null ? Array.from(row.children ?? []) : [row]
+  )
   for (let next = box.nextElementSibling; next; next = next.nextElementSibling) {
     if (rowIdOf(next) !== undefined) {
       rows.push(next)
@@ -210,4 +222,29 @@ export function mobileNativeChatReadingDrift(
     }
   }
   return 0
+}
+
+export function measureMobileNativeChatPageRows(
+  scroller: MobileNativeChatScrollNode,
+  heights: Map<string, number>
+): void {
+  for (const row of Array.from(scroller.querySelectorAll(`[${PAGE_ROW}]`))) {
+    const key = row.getAttribute(PAGE_ROW)
+    if (key !== null) {
+      const box = row.getBoundingClientRect()
+      heights.set(key, box.bottom - box.top)
+    }
+  }
+}
+
+export function mobileNativeChatUndrawnHeight(
+  keys: readonly string[],
+  first: number,
+  heights: ReadonlyMap<string, number>
+): number {
+  let height = 0
+  for (let index = 0; index < first; index += 1) {
+    height += heights.get(keys[index]!) ?? 0
+  }
+  return height
 }

@@ -545,6 +545,73 @@ describe('older history auto-load', () => {
     expect(scroller.scrollTop).toBe(TOP_GUTTER_PX + 90 * ROW_PITCH_PX + 17)
   })
 
+  it('retains the visible row when async paging supplies a settled turn opener, then scrolls down normally', async () => {
+    const messages = markers(0, 100).map((message, index) =>
+      index === 0 ? { ...message, role: 'user' as const } : message
+    )
+    const settledTurns = new Map([['message-0', { startedAt: 1, workedSeconds: 10 }]])
+    const loadEarlier = lands()
+    const draw = (rows: NativeChatMessage[]) => (
+      <NativeChatMessageList
+        session={{ ...session(rows), hasMore: true, loadEarlier }}
+        isWorking={false}
+        expandSignal={false}
+        settledTurns={settledTurns}
+      />
+    )
+    const { container, rerender } = render(draw(messages.slice(50)))
+    paint(container)
+    const scroller = scrollRoot(container)
+    scrollTranscript(container, TOP_GUTTER_PX + 10 * ROW_PITCH_PX + 17)
+    paint(container)
+    const before = rowTop(container, 'marker-60') - scroller.scrollTop
+    await settle()
+    rerender(draw(messages))
+    paint(container)
+    expect(rowTop(container, 'marker-60') - scroller.scrollTop).toBe(before)
+    const extent = scroller.scrollHeight
+    scrollTranscript(container, scroller.scrollTop + ROW_PITCH_PX)
+    paint(container)
+    expect(rowTop(container, 'marker-60') - scroller.scrollTop).toBe(before - ROW_PITCH_PX)
+    expect(scroller.scrollHeight).toBe(extent)
+  })
+
+  it('keeps a visible work run in place when an older page supplies its new head', () => {
+    const call = (index: number): NativeChatMessage => ({
+      ...marker(index),
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'shell',
+          input: { command: `call-${index}` },
+          state: 'completed',
+          callId: `call-${index}`
+        }
+      ]
+    })
+    const base = [call(100), call(101), ...markers(102, 200)]
+    const loadEarlier = lands()
+    const { container, rerender } = render(paging({ messages: base, loadEarlier }))
+    paint(container)
+    scrollTranscript(container, TOP_GUTTER_PX + 17)
+    paint(container)
+    const scroller = scrollRoot(container)
+    expect(container.querySelector('[data-index="0"]')).not.toBeNull()
+
+    rerender(
+      paging({
+        messages: [...markers(49, 98), { ...marker(98), role: 'user' }, call(99), ...base],
+        loadEarlier
+      })
+    )
+    paint(container)
+
+    const retained = container.querySelector<HTMLElement>('[data-index="50"]')
+    expect(retained).not.toBeNull()
+    const spacer = container.querySelector<HTMLElement>('[data-native-chat-window]')
+    expect((spacer?.offsetTop ?? 0) + (retained?.offsetTop ?? 0) - scroller.scrollTop).toBe(-17)
+  })
+
   // Removing in-flow older-history chrome would move every row when the last page lands.
   it('keeps the reader in place when the last page lands and the older-history row leaves', async () => {
     const loadEarlier = lands()

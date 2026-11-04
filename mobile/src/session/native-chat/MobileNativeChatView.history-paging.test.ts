@@ -132,10 +132,10 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
     expect(onLoadEarlier).toHaveBeenCalledOnce()
   })
 
-  it('anchors the first visible row, which the header above it is not', async () => {
+  it('anchors the first message with and without older-history chrome', async () => {
     const folded = [assistantTurn('a1', 'History')]
     await render({ folded, hasMore: true })
-    expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 1 })
+    expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 })
 
     await update({ folded, hasMore: false })
     expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 })
@@ -153,6 +153,7 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
 
     afterEach(() => {
       platform.OS = 'ios'
+      vi.useRealTimers()
     })
 
     function readerScrollsTo(y: number) {
@@ -188,6 +189,7 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
     })
 
     it('asks for older history ahead of the top, and after a failure only the retry asks', async () => {
+      vi.useFakeTimers()
       const onLoadEarlier = vi.fn()
       const folded = [assistantTurn('a1', 'Latest')]
       await render({ folded, hasMore: true, onLoadEarlier })
@@ -202,6 +204,10 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
       await update({ folded, hasMore: true, olderPages: 'failed', onLoadEarlier })
       readerScrollsTo(-19_500)
       expect(onLoadEarlier).not.toHaveBeenCalled()
+
+      act(() => {
+        vi.advanceTimersByTime(300)
+      })
 
       const retry = root().find(
         (node) => hostType(node) === 'Pressable' && node.props.accessibilityRole === 'button'
