@@ -3,7 +3,7 @@ import { TerminalRunFactsRegister } from '../../../runtime/terminal-run-facts'
 import { ptyOwnership } from '../provider/ownership-state'
 import { createPtyWriteInput } from './write-input'
 
-import { type WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 const PTY_ID = 'pty-user-input'
 
