@@ -1,6 +1,7 @@
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AgentSessionWorkspaceKind } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { projectGroupIdFromRepoId } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { RepoIcon } from '../../../shared/repo-icon'
 import type { AgentSessionRestartActivity } from '../../../shared/agent-session/lifecycle/agent-session-restart-activity'
@@ -125,14 +126,18 @@ export type ResumeWorkspaceNode = {
 export function nestResumeWorkspaces(
   workspaces: readonly ResumeWorkspaceGroup[],
   ancestorsOf: (key: string) => readonly string[],
-  keyOf: (group: ResumeWorkspaceGroup) => string = (group) => group.workspaceId
+  keyOf: (group: ResumeWorkspaceGroup) => string = (group) => group.workspaceId,
+  canNest: (child: ResumeWorkspaceGroup, parent: ResumeWorkspaceGroup) => boolean = () => true
 ): ResumeWorkspaceNode[] {
   const nodes = new Map<string, ResumeWorkspaceNode>(
     workspaces.map((group) => [keyOf(group), { group, children: [] }])
   )
   const parentOf = new Map<ResumeWorkspaceNode, ResumeWorkspaceNode>()
   for (const [key, node] of nodes) {
-    const parentId = ancestorsOf(key).find((id) => id !== key && nodes.has(id))
+    const parentId = ancestorsOf(key).find((id) => {
+      const candidate = id === key ? undefined : nodes.get(id)
+      return candidate !== undefined && canNest(node.group, candidate.group)
+    })
     const parent = parentId === undefined ? undefined : nodes.get(parentId)
     if (parent) {
       parentOf.set(node, parent)
@@ -162,23 +167,41 @@ export function nestResumeWorkspaces(
   return roots
 }
 
-/** Nest over every machine first so a child follows its parent into the parent's machine section. */
+/** The offer's own machine and workspace; never a catalog row, so twins on two machines stay apart. */
+export function resumeWorkspaceKey(group: ResumeWorkspaceGroup): string {
+  return composeWorktreeHostIdentity(resumeWorkspaceHostId(group), group.workspaceId)
+}
+
+export type ResumeMachineSection = {
+  hostId: ExecutionHostId
+  projects: { repoGroup: ResumeRepoGroup; roots: ResumeWorkspaceNode[] }[]
+}
+
+/** Per-machine, per-project nesting; only a parent on another machine (a cross-store link) pulls a child out of its own section. */
 export function nestResumeMachines(
   machines: readonly { hostId: ExecutionHostId; workspaces: readonly ResumeWorkspaceGroup[] }[],
   ancestorsOf: (key: string) => readonly string[],
-  keyOf: (group: ResumeWorkspaceGroup) => string
-): { hostId: ExecutionHostId; roots: ResumeWorkspaceNode[] }[] {
+  repoIdOf: (group: ResumeWorkspaceGroup) => string | null
+): ResumeMachineSection[] {
   const roots = nestResumeWorkspaces(
     machines.flatMap((machine) => machine.workspaces),
     ancestorsOf,
-    keyOf
+    resumeWorkspaceKey,
+    (child, parent) =>
+      resumeWorkspaceHostId(child) !== resumeWorkspaceHostId(parent) ||
+      repoIdOf(child) === repoIdOf(parent)
   )
   return machines
     .map((machine) => ({
       hostId: machine.hostId,
-      roots: roots.filter((root) => machine.workspaces.includes(root.group))
+      projects: groupResumeWorkspacesByRepo(machine.workspaces, repoIdOf)
+        .map((repoGroup) => ({
+          repoGroup,
+          roots: roots.filter((root) => repoGroup.workspaces.includes(root.group))
+        }))
+        .filter((project) => project.roots.length > 0)
     }))
-    .filter((section) => section.roots.length > 0)
+    .filter((section) => section.projects.length > 0)
 }
 
 export function resumeWorkspaceCandidates(node: ResumeWorkspaceNode): ResumeCandidate[] {

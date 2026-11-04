@@ -178,6 +178,15 @@ describe('nesting child workspaces', () => {
 })
 
 describe('nesting across machines', () => {
+  const layout = (sections: ReturnType<typeof nestResumeMachines>): unknown =>
+    sections.map((section) => [
+      section.hostId,
+      section.projects.map((project) => [
+        project.repoGroup.repoId,
+        project.roots.map((root) => resumeWorkspaceCandidates(root).map((c) => c.sessionId))
+      ])
+    ])
+
   it("puts a server child under its local parent, not the server's same-id workspace", () => {
     const local = groupResumeCandidates([candidate({ sessionId: 'l', workspaceId: 'p' })])
     const server = groupResumeCandidates([
@@ -191,17 +200,34 @@ describe('nesting across machines', () => {
         { hostId: 'runtime:srv', workspaces: server }
       ],
       (key) => ancestors[key] ?? [],
-      (group) => `${group.candidates[0]?.executionHostId}|${group.workspaceId}`
+      () => 'repo'
     )
 
-    expect(
-      sections.map((section) => [
-        section.hostId,
-        section.roots.map((root) => resumeWorkspaceCandidates(root).map((c) => c.sessionId))
-      ])
-    ).toEqual([
-      ['local', [['l', 's2']]],
-      ['runtime:srv', [['s1']]]
+    expect(layout(sections)).toEqual([
+      ['local', [['repo', [['l', 's2']]]]],
+      ['runtime:srv', [['repo', [['s1']]]]]
+    ])
+  })
+
+  it('keeps a same-machine child in its own project', () => {
+    const local = groupResumeCandidates([
+      candidate({ sessionId: 'a1', workspaceId: 'a' }),
+      candidate({ sessionId: 'b1', workspaceId: 'b' })
+    ])
+    const sections = nestResumeMachines(
+      [{ hostId: 'local', workspaces: local }],
+      (key) => (key === 'local|b' ? ['local|a'] : []),
+      (group) => (group.workspaceId === 'a' ? 'repo-a' : 'repo-b')
+    )
+
+    expect(layout(sections)).toEqual([
+      [
+        'local',
+        [
+          ['repo-a', [['a1']]],
+          ['repo-b', [['b1']]]
+        ]
+      ]
     ])
   })
 })
