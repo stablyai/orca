@@ -1,4 +1,3 @@
-import { observeSubmittedRun } from './automation-run-submitted-observation'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type {
@@ -218,9 +217,9 @@ export function createRuntimeAutomationRunTerminalObserver(
   return {
     resolveRunTerminal: (run) =>
       run.terminalPaneKey ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey) : null,
-    observeCompletion: async (handle, { signal, run, submission }) => {
-      if (submission && run) {
-        return observeSubmittedRun(runtime, handle, run, submission, signal)
+    observeCompletion: async (handle, { signal, run, recovery }) => {
+      if (recovery) {
+        return null
       }
       const startedAt = Date.now()
       const judged = evidence && run?.terminalPaneKey ? { evidence, run } : null

@@ -10,7 +10,6 @@ import {
 export type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver,
-  AutomationRunSubmission,
   AutomationRunWatchReservation
 } from './automation-run-completion-contract'
 export { describeStrandedAutomationRun } from './automation-run-completion-contract'
@@ -19,7 +18,6 @@ import {
   type AutomationDispatchResult,
   type AutomationRun
 } from '../../shared/automations-types'
-import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { RetainedRunReconciler } from './retained-run-reconciliation'
 import { isAutomationRunHistory } from '../../shared/automation-run-retention'
 
@@ -59,16 +57,15 @@ export class AutomationRunCompletionWatcher {
     })
   }
 
-  /** Reserve cancellation and buffering before invoking the launch owner. */
-  reserve(run: AutomationRun, prompt: string, agent: TuiAgent): AutomationRunWatchReservation {
+  /** Reserve delivery cancellation before invoking the launch owner. */
+  reserve(run: AutomationRun): AutomationRunWatchReservation {
     this.forget(run.id)
     const entry: AutomationRunWatchEntry = {
       controller: new AbortController(),
       run,
       adopted: false,
-      submission: { prompt, agent, submitted: false }
+      result: null
     }
-    entry.submission!.current = () => this.current(entry)
     this.watching.set(run.id, entry)
     if (this.disposed) {
       this.forget(run.id)
@@ -89,22 +86,11 @@ export class AutomationRunCompletionWatcher {
         entry.run = { ...entry.run, ...bound }
         entry.handle = handle
         entry.targetCurrent = current
-        entry.result = undefined
-        this.startWatch(entry, handle)
-      },
-      submitted: () => {
-        if (!this.current(entry) || !entry.submission) {
-          return
-        }
-        entry.submission.submitted = true
-        entry.submission.onSubmit?.()
+        entry.result = null
       },
       deliverySettled: () => {
         if (!this.current(entry)) {
           this.forget(run.id)
-          return
-        }
-        if (this.watching.get(run.id) !== entry || entry.submission?.submitted) {
           return
         }
         entry.observationController?.abort()
@@ -193,6 +179,10 @@ export class AutomationRunCompletionWatcher {
   }
 
   private startWatch(entry: AutomationRunWatchEntry, handle: string): void {
+    if (!this.current(entry)) {
+      this.forget(entry.run.id)
+      return
+    }
     const controller = new AbortController()
     entry.observationController = controller
     const abort = () => controller.abort()
@@ -201,7 +191,6 @@ export class AutomationRunCompletionWatcher {
       .observeCompletion(handle, {
         signal: controller.signal,
         run: entry.run,
-        submission: entry.submission,
         recovery: entry.recovery
       })
       .then(
@@ -221,7 +210,7 @@ export class AutomationRunCompletionWatcher {
             return
           }
           entry.result =
-            entry.submission || (entry.recovery && entry.run.sessionKind !== 'chat')
+            entry.recovery && entry.run.sessionKind !== 'chat'
               ? null
               : { status: 'dispatch_failed', error: describeObservationError(error) }
           return entry.adopted ? this.finish(entry) : undefined
@@ -242,7 +231,7 @@ export class AutomationRunCompletionWatcher {
     }
     const result = entry.result
     try {
-      if (result && entry.submission?.sourceCurrent?.() !== false) {
+      if (result) {
         await this.finalize(entry.run, result)
       }
     } finally {
@@ -257,9 +246,6 @@ export class AutomationRunCompletionWatcher {
     this.watching.delete(runId)
     entry?.controller.abort()
     entry?.observationController?.abort()
-    if (entry?.submission) {
-      entry.submission.onSubmit = undefined
-    }
   }
 
   /** Reattach surviving sessions; defer unresolved runs until the ready-surface grace expires. */

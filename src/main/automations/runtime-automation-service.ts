@@ -71,9 +71,6 @@ export function createRuntimeAutomationService(input: {
         )
       },
       observeCompletion: async (handle, options) => {
-        if (options.submission) {
-          return observer.observeCompletion(handle, options)
-        }
         let run = options.run
         if (run && handle.startsWith('automation:')) {
           if (!run.chatSessionId) {
@@ -113,7 +110,7 @@ export function createRuntimeAutomationService(input: {
               return { status: 'dispatch_failed', error: run.error }
             }
             if (receipt.kind === 'terminal') {
-              handle = receipt.launch.outcome.handle
+              return null
             }
           }
           if (run.sessionKind === 'chat') {
@@ -135,9 +132,6 @@ export function createRuntimeAutomationService(input: {
               }
             }
           }
-        }
-        if (options.recovery && run?.sessionKind !== 'chat') {
-          return null
         }
         const observation = await observer.observeCompletion(handle, { ...options, run })
         if (options.run && observation?.error === AGENT_HOOKS_REVIEW_BLOCKED_ERROR) {
@@ -169,11 +163,7 @@ export function createRuntimeAutomationService(input: {
     },
     headlessDispatcher: async (request) => {
       const observation = request.automation.reuseSession
-        ? service.reserveTerminalRun(
-            request.run,
-            request.automation.prompt,
-            request.automation.agentId
-          )
+        ? service.reserveTerminalRun(request.run)
         : undefined
       let result
       try {

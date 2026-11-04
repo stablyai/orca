@@ -114,9 +114,6 @@ async function launchAutomationAgent(
     },
     onSubmitWritten: () => {
       submitted = true
-      if (request.observation) {
-        request.observation.submitted()
-      }
     },
     onSurfacePublished: (result: AgentLaunchResult) => {
       published = publishedLaunchTarget(runtime, result)

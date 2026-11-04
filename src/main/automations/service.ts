@@ -28,7 +28,6 @@ import {
   AutomationRunCompletionWatcher,
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
-import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
@@ -204,8 +203,8 @@ export class AutomationService {
     })
   }
 
-  reserveTerminalRun(run: AutomationRun, prompt: string, agent: TuiAgent) {
-    return this.completionWatcher?.reserve(run, prompt, agent)
+  reserveTerminalRun(run: AutomationRun) {
+    return this.completionWatcher?.reserve(run)
   }
 
   private async evaluateDueRuns(): Promise<void> {
@@ -316,7 +315,9 @@ export class AutomationService {
           resolveTarget: (current) => this.resolveTarget(current),
           runPrecheck: () => this.runPrecheck(automation.id, run.id),
           markDispatchResult: (result) => this.markDispatchResult(result),
-          watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
+          // Only this live ordinary launch may use legacy terminal completion; no-proof sends never rearm it.
+          watchRun: (dispatched) =>
+            this.completionWatcher?.watch(dispatched, automation.reuseSession)
         },
         automation,
         run,

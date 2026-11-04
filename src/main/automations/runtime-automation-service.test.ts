@@ -189,14 +189,13 @@ describe('host-owned automation execution', () => {
         }
       }
     })
-    runtime.waitForTerminal.mockRejectedValueOnce(new Error('ordinary-terminal-observer'))
     const observer = captured.options.terminalObserver!
     await expect(
       observer.observeCompletion(observer.resolveRunTerminal(run)!, {
         run,
         signal: new AbortController().signal
       })
-    ).rejects.toThrow('ordinary-terminal-observer')
+    ).resolves.toBeNull()
     expect(captured.markDispatchResult).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'dispatched',
@@ -204,7 +203,7 @@ describe('host-owned automation execution', () => {
         terminalPtyId: 'pty-1'
       })
     )
-    expect(runtime.waitForTerminal).toHaveBeenCalledWith('term-fallback', expect.anything())
+    expect(runtime.waitForTerminal).not.toHaveBeenCalled()
     expect(captured.observeChat).not.toHaveBeenCalled()
     expect(captured.launch).not.toHaveBeenCalled()
   })

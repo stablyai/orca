@@ -53,8 +53,7 @@ export async function readIncrementalTranscriptMessages(
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
   signal?: AbortSignal,
-  sourceOrder = false,
-  onRecord?: (line: string | null, offset: number) => void
+  sourceOrder = false
 ): Promise<NativeChatMessage[]> {
   const end = (await transcriptFileStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
@@ -77,8 +76,6 @@ export async function readIncrementalTranscriptMessages(
         retainPart(chunk.subarray(segmentStart, newline))
         if (!state.droppingOversizedRecord) {
           decodeLine()
-        } else {
-          onRecord?.(null, state.pendingStart)
         }
         resetPendingLine(absoluteOffset + newline + 1)
         segmentStart = newline + 1
@@ -128,7 +125,6 @@ export async function readIncrementalTranscriptMessages(
     if (!line) {
       return
     }
-    onRecord?.(line, state.pendingStart)
     const fallbackId = transcriptFallbackId(filePath, state.pendingStart)
     const lifecycle = decodeLifecycle?.(line, fallbackId)
     if (lifecycle) {

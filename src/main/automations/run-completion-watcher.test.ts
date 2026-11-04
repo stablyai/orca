@@ -12,6 +12,7 @@ import {
 } from '../runtime/agent-transcript-pane-test-harness'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
 import { AutomationService } from './service'
+import { AutomationRunCompletionWatcher } from './run-completion-watcher'
 import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
@@ -360,62 +361,97 @@ describe('automationsChanged publication', () => {
     expect(seen.every((entry) => entry.payload.selector?.kind === 'self')).toBe(true)
     service.stop()
   })
-  it.each(['complete', 'detach', 'argv', 'raw-startup', 'delete', 'stop'] as const)(
-    'owns a prearmed result through dispatch acknowledgement: %s',
+  it.each(['delivered', 'delete', 'stop', 'replace'] as const)(
+    'keeps no-proof delivery detached through acknowledgement and recovery: %s',
     async (outcome) => {
       const store = await createStore()
       const automation = createAutomation(store)
-      const completed = Promise.withResolvers<AutomationRunCompletionObservation | null>()
+      store.updateAutomation(automation.id, { reuseSession: true })
+      const runtime = {
+        getTerminalHandleForPaneKey: () => 'handle-1',
+        waitForTerminal: vi.fn(async () => ({ satisfied: true })),
+        readTerminal: vi.fn(async () => ({ tail: ['old answer'] }))
+      }
       let reservation: ReturnType<AutomationService['reserveTerminalRun']>
       let service: AutomationService
-      service = new AutomationService(store, {
+      const options = {
         allowRemoteHostScheduling: true,
-        terminalObserver: {
-          resolveRunTerminal: () => 'handle-1',
-          observeCompletion: () => completed.promise
-        },
+        terminalObserver: createRuntimeAutomationRunTerminalObserver(runtime)
+      }
+      service = new AutomationService(store, {
+        ...options,
         headlessDispatcher: async ({ run }) => {
-          reservation = service.reserveTerminalRun(run, automation.prompt, automation.agentId)
-          reservation!.bind({ ...LAUNCH_TARGET, sessionKind: 'terminal' }, 'handle-1')
-          if (outcome === 'argv' || outcome === 'raw-startup') {
-            reservation!.deliverySettled()
-          } else {
-            reservation!.submitted()
-          }
-          completed.resolve(
-            outcome === 'complete' || outcome === 'delete' || outcome === 'stop'
-              ? { status: 'completed' }
-              : null
+          reservation = service.reserveTerminalRun(run)
+          let current = true
+          reservation!.bind(
+            { ...LAUNCH_TARGET, sessionKind: 'terminal' },
+            'handle-1',
+            () => current
           )
-          await Promise.resolve()
+          if (outcome === 'replace') {
+            current = false
+            expect(() => reservation!.assertCurrent()).toThrow('request_aborted')
+          }
           if (outcome === 'delete') {
             store.deleteAutomation(automation.id)
           }
           if (outcome === 'stop') {
             service.stop()
           }
+          reservation!.deliverySettled()
           return { ...LAUNCH_TARGET, sessionKind: 'terminal' }
         }
       })
       try {
-        if (outcome === 'delete' || outcome === 'stop') {
-          await service.runNow(automation.id).catch(() => {})
-          expect(reservation!.signal.aborted).toBe(true)
+        const result = await service.runNow(automation.id).catch(() => null)
+        if (result) {
+          expect(readRun(store, automation.id, result.id).status).toBe('dispatched')
+        }
+        expect(reservation!.signal.aborted).toBe(true)
+        expect(runtime.waitForTerminal).not.toHaveBeenCalled()
+        expect(runtime.readTerminal).not.toHaveBeenCalled()
+        service.stop()
+        if (outcome !== 'delete') {
+          // Today's definition must not turn retained terminal delivery into legacy idle completion.
+          store.updateAutomation(automation.id, { reuseSession: false })
+          service = new AutomationService(store, options)
+          service.start()
+          service.setRendererReady()
+          await Promise.resolve()
+          await Promise.resolve()
+          expect(runtime.waitForTerminal).not.toHaveBeenCalled()
+          expect(runtime.readTerminal).not.toHaveBeenCalled()
           expect(
             store.listAutomationRuns(automation.id).some((run) => run.status === 'completed')
           ).toBe(false)
-        } else {
-          const result = await service.runNow(automation.id)
-          await vi.waitFor(() =>
-            expect(readRun(store, automation.id, result.id).status).toBe(
-              outcome === 'complete' ? 'completed' : 'dispatched'
-            )
-          )
-          expect(reservation!.signal.aborted).toBe(true)
         }
       } finally {
         service.stop()
       }
     }
   )
+  it('revokes an evicted reservation before effects and never rearms a stale retained row', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store)
+    const run = store.createAutomationRun(automation, Date.now(), 'manual')
+    let retained: AutomationRun | null = run
+    const observe = vi.fn(async () => ({ status: 'completed' as const }))
+    const mark = vi.fn(async () => {})
+    const watcher = new AutomationRunCompletionWatcher({
+      readRun: () => retained,
+      markDispatchResult: mark,
+      observer: { resolveRunTerminal: () => 'handle-1', observeCompletion: observe }
+    })
+    const reservation = watcher.reserve(run)
+    reservation.bind(LAUNCH_TARGET, 'handle-1')
+    retained = null
+    watcher.retain([])
+    expect(reservation.signal.aborted).toBe(true)
+    expect(() => reservation.assertCurrent()).toThrow('request_aborted')
+    watcher.watch({ ...run, ...LAUNCH_TARGET, status: 'dispatched' }, true)
+    await Promise.resolve()
+    expect(observe).not.toHaveBeenCalled()
+    expect(mark).not.toHaveBeenCalled()
+    watcher.dispose()
+  })
 })

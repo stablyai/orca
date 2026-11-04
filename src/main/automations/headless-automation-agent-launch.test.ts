@@ -219,7 +219,10 @@ describe('headless automation agent launch', () => {
     expect(runtime.launchAgentTerminal).toHaveBeenCalledTimes(1)
     runtime.launchAgentTerminal.mockClear()
     runtime.getPtyExecutionHostMetadata.mockReturnValue({ executionHostId: 'ssh:old' })
-    await launch(runtime, { reuseSession: true }, [previousRun()])
+    await launch(runtime, { reuseSession: true }, [previousRun()], {
+      ...RUN,
+      id: 'live-host-conflict'
+    })
     expect(deliverTerminalAgentLaunchPrompt).not.toHaveBeenCalled()
     expect(runtime.launchAgentTerminal).toHaveBeenCalledTimes(1)
     runtime.launchAgentTerminal.mockClear()
