@@ -82,3 +82,16 @@ export function moveTabToNewPaneColumn(args: {
   }
   return moved
 }
+
+// Why: activeTabId is a terminal entity id, so active commands resolve through the active group.
+export function resolveActiveTabPaneColumnMove(
+  state: TabMovePaneColumnState &
+    Pick<ReturnType<typeof useAppStore.getState>, 'activeWorktreeId' | 'getActiveTab'>
+): { unifiedTabId: string; groupId: string } | null {
+  const worktreeId = state.activeWorktreeId
+  const tab = worktreeId ? state.getActiveTab(worktreeId) : null
+  if (!tab || !canMoveTabToNewPaneColumnFromState(state, tab.id, tab.groupId)) {
+    return null
+  }
+  return { unifiedTabId: tab.id, groupId: tab.groupId }
+}

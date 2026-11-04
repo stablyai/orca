@@ -10,8 +10,31 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-reac
 import type { TabSplitDirection } from '../../store/slices/tabs'
 import { translate } from '@/i18n/i18n'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { TAB_MOVE_TO_SPLIT_COMMANDS, type KeybindingActionId } from '../../../../shared/keybindings'
 
-const PANE_COLUMN_DIRECTIONS: TabSplitDirection[] = ['right', 'left', 'down', 'up']
+/** Keeps user-assigned chords visible where each move direction is chosen. */
+function PaneColumnDirectionItem({
+  actionId,
+  direction,
+  shortcutLabel,
+  onSelect
+}: {
+  actionId: KeybindingActionId
+  direction: TabSplitDirection
+  shortcutLabel?: string
+  onSelect: () => void
+}): React.JSX.Element {
+  const assignedShortcut = useOptionalShortcutLabel(actionId)
+  const shortcut = shortcutLabel ?? assignedShortcut
+  return (
+    <ContextMenuItem onSelect={onSelect}>
+      {paneColumnDirectionIcon(direction)}
+      {paneColumnDirectionLabel(direction)}
+      {shortcut ? <ContextMenuShortcut>{shortcut}</ContextMenuShortcut> : null}
+    </ContextMenuItem>
+  )
+}
 
 function paneColumnDirectionIcon(direction: TabSplitDirection): React.JSX.Element {
   switch (direction) {
@@ -71,19 +94,16 @@ export function TabWorkspaceLayoutMenuSection({
           animation="none"
           className="max-w-[calc(100vw-1rem)] whitespace-nowrap"
         >
-          {PANE_COLUMN_DIRECTIONS.map((direction) => (
-            <ContextMenuItem
-              key={direction}
+          {TAB_MOVE_TO_SPLIT_COMMANDS.map(({ id, direction }) => (
+            <PaneColumnDirectionItem
+              key={id}
+              actionId={id}
+              direction={direction}
+              shortcutLabel={shortcutLabels?.[direction]}
               onSelect={() => {
                 moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
               }}
-            >
-              {paneColumnDirectionIcon(direction)}
-              {paneColumnDirectionLabel(direction)}
-              {shortcutLabels?.[direction] ? (
-                <ContextMenuShortcut>{shortcutLabels[direction]}</ContextMenuShortcut>
-              ) : null}
-            </ContextMenuItem>
+            />
           ))}
         </ContextMenuSubContent>
       </ContextMenuSub>

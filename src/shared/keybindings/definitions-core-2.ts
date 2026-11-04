@@ -1,5 +1,6 @@
 import type { KeybindingDefinition } from './types'
 import { platformBindings } from './definitions-support'
+import { buildTabMoveToSplitKeybindingDefinitions } from './tab-move-to-split-definitions'
 
 export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
   {
@@ -174,6 +175,7 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'tab', 'reopen', 'restore', 'closed'],
     defaultBindings: platformBindings(['Mod+Shift+T'])
   },
+  ...buildTabMoveToSplitKeybindingDefinitions(),
   {
     id: 'tab.nextSameType',
     title: 'Next tab (same type)',

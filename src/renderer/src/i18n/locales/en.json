@@ -22924,7 +22924,11 @@
       "terminalSwitchInputSource": "Switch input source / language (native)",
       "newAgentTab": "New {{agent}} tab",
       "tabNewBrowserSplitRight": "New browser tab in right split",
-      "viewPlugins": "Open Plugins"
+      "viewPlugins": "Open Plugins",
+      "tabMoveToSplitRight": "Move tab to split right",
+      "tabMoveToSplitLeft": "Move tab to split left",
+      "tabMoveToSplitDown": "Move tab to split down",
+      "tabMoveToSplitUp": "Move tab to split up"
     },
     "group": {
       "global": "Global",
