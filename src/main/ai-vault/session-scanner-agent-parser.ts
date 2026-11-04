@@ -150,5 +150,7 @@ export async function parseAgentSessionFile(
       return parseJcodeSessionFile(candidate.file, platform, messages)
     case 'kiro':
       return parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords)
+    case 'mcode':
+      return null
   }
 }

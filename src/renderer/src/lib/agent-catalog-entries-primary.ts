@@ -142,6 +142,12 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.691dd11789', 'Antigravity'),
       cmd: 'agy',
       homepageUrl: 'https://antigravity.google/docs/cli-overview'
+    },
+    {
+      id: 'mcode',
+      label: translate('auto.lib.agent.catalog.mcode_label', 'MiniMax Code'),
+      cmd: 'mcode',
+      homepageUrl: 'https://minimax.io'
     }
   ]
 }

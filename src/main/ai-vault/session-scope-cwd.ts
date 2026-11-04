@@ -143,7 +143,8 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
   devin: PARSE,
   kimi: PARSE,
   muse: PARSE,
-  jcode: PARSE
+  jcode: PARSE,
+  mcode: PARSE
 }
 
 export function scopeWalksAgentFiles(

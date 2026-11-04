@@ -34,7 +34,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'dsh',
   'jcode',
   'kiro',
-  'hermes'
+  'hermes',
+  'mcode'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -273,28 +274,19 @@ export function extractAgentProviderSession(
         : null
       return providerSession?.transcriptPath ? providerSession : null
     }
-    case 'grok': {
+    // Why: Copilot's hook `session_id` is also its `~/.copilot/session-state/<id>/`
+    // directory name, so the same id is the CLI's resume locator.
+    case 'grok':
+    case 'devin':
+    case 'jcode':
+    case 'copilot': {
       const id = readSessionId(payload, ['sessionId', 'session_id'])
-      return id ? { key: 'session_id', id } : null
-    }
-    case 'devin': {
-      const id = readSessionId(payload, ['session_id', 'sessionId'])
-      return id ? { key: 'session_id', id } : null
-    }
-    case 'jcode': {
-      const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
     // OMP keeps id-based resume while optionally locating its native-chat transcript.
     case 'omp': {
       const id = readSessionId(payload, ['session_id'])
       return id ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file']) : null
-    }
-    // Why: Copilot's hook `session_id` is also its `~/.copilot/session-state/<id>/`
-    // directory name, so the same id is the CLI's resume locator.
-    case 'copilot': {
-      const id = readSessionId(payload, ['session_id', 'sessionId'])
-      return id ? { key: 'session_id', id } : null
     }
     case 'cursor': {
       const id = readSessionId(payload, ['conversation_id'])

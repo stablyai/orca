@@ -8,6 +8,7 @@ import {
   AiderIcon,
   CopilotIcon,
   KiloIcon,
+  MiniMaxIcon,
   OmpIcon,
   OpenCodeIcon,
   PiIcon
@@ -78,6 +79,9 @@ export function AgentIcon({
   }
   if (agent === 'opencode' || agent === 'opencode2') {
     return <OpenCodeIcon size={size} className={className} />
+  }
+  if (agent === 'mcode') {
+    return <MiniMaxIcon size={size} className={className} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
   // Prefer bundled favicons for offline use and regions where Google’s service is unreachable (#8451).
