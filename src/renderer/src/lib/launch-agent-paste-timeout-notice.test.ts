@@ -8,7 +8,10 @@ import {
 } from './launch-agent-paste-timeout-notice'
 
 vi.mock('sonner', () => ({ toast: { message: vi.fn() } }))
-const registered = vi.hoisted(() => ({ calls: [] as unknown[], keeps: true }))
+const registered = vi.hoisted((): { calls: unknown[]; keeps: boolean } => ({
+  calls: [],
+  keeps: true
+}))
 // This window's runtime: registration keeps the notice, or (keeps false) cannot.
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: async (_target: unknown, method: string, params: unknown) => {
