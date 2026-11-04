@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronRight, ListTodo, type LucideIcon } from 'lucide-react-native'
+import { ChevronRight, ListTodo, type LucideIcon } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { PickerModal } from '../components/PickerModal'
@@ -8,56 +8,41 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../transport/types'
 import { homeListStyles as styles } from './home-list-styles'
 
-/** Home's Tasks and Automations sections, each opening on a connected desktop. */
-export function MobileHomeTasksAndAutomations(props: {
+type HomeHostSectionProps = {
   connectedHosts: HostProfile[]
-  onOpenTasks: (hostId: string) => void
-  onOpenAutomations: (hostId: string) => void
-}) {
+  onOpen: (hostId: string) => void
+}
+
+/** Home's Tasks section, opening on a connected desktop. */
+export function MobileHomeTasksSection(props: HomeHostSectionProps) {
   const t = useMobileTranslation()
   return (
-    <>
-      <HomeSection
-        icon={ListTodo}
-        title={t('home.sections.tasks', 'Tasks')}
-        subtitle={t('home.sections.tasksSubtitle', 'Browse your issues and reviews')}
-        pickerTitle={t('home.listFooter.hostPickerTitle', 'Open Tasks On')}
-        connectedHosts={props.connectedHosts}
-        onOpen={props.onOpenTasks}
-      />
-      <HomeSection
-        icon={CalendarClock}
-        title={t('home.listFooter.automationsHeading', 'Automations')}
-        subtitle={t(
-          'automations.mobile.scheduleAgentWorkAndViewRuns',
-          'Schedule agent work and view runs'
-        )}
-        pickerTitle={t('home.listFooter.automationsHostPickerTitle', 'Open Automations On')}
-        connectedHosts={props.connectedHosts}
-        onOpen={props.onOpenAutomations}
-      />
-    </>
+    <HomeSection
+      {...props}
+      icon={ListTodo}
+      title={t('home.sections.tasks', 'Tasks')}
+      subtitle={t('home.sections.tasksSubtitle', 'Browse your issues and reviews')}
+      pickerTitle={t('home.listFooter.hostPickerTitle', 'Open Tasks On')}
+    />
   )
 }
 
-function HomeSection(props: {
-  icon: LucideIcon
-  title: string
-  subtitle: string
-  pickerTitle: string
-  connectedHosts: HostProfile[]
-  onOpen: (hostId: string) => void
-}) {
+function HomeSection(
+  props: HomeHostSectionProps & {
+    icon: LucideIcon
+    title: string
+    subtitle: string
+    pickerTitle: string
+  }
+) {
   useMobileColorScheme()
   const hostPicker = useConnectedHostPicker(props.connectedHosts)
   const enabled = props.connectedHosts.length > 0
   const Icon = props.icon
   return (
     <>
-      <Text style={styles.sectionHeading} accessibilityRole="header">
-        {props.title}
-      </Text>
-      <View style={styles.group}>
+      {/* The row already says Tasks, so it needs no heading of its own. */}
+      <View style={[styles.group, styles.headinglessGroup]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${props.title}, ${props.subtitle}`}
@@ -70,8 +55,8 @@ function HomeSection(props: {
           ]}
           onPress={() => hostPicker.pickHost(props.onOpen)}
         >
-          <View style={styles.status}>
-            <Icon size={18} color={colors.textSecondary} />
+          <View style={styles.tile}>
+            <Icon size={17} strokeWidth={1.8} color={colors.textPrimary} />
           </View>
           <View style={styles.text}>
             <Text style={styles.title} numberOfLines={1}>
