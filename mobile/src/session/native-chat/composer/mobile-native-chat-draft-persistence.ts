@@ -28,7 +28,8 @@ type Workspace = {
   loaded: boolean
   // A shell that refuses this page the key refuses it for the whole page, so the load is not retried.
   unreadable: boolean
-  written: string | null
+  // What storage holds; undefined after a write that failed partway, so the next save cannot match it.
+  written: string | null | undefined
   timer: ReturnType<typeof setTimeout> | null
   retainedTabs: ReadonlySet<string> | null
   closedTabs: Set<string>
@@ -156,6 +157,7 @@ async function write(workspace: Workspace): Promise<void> {
   if (value === workspace.written) {
     return
   }
+  workspace.written = undefined
   await persistMirrored(workspace.key, value)
   // Page stores can resolve a dropped write; recording what stuck makes the next save retry it.
   workspace.written = await AsyncStorage.getItem(workspace.key)
@@ -169,8 +171,26 @@ function flush(workspace: Workspace): void {
   void enqueue(workspace, () => write(workspace))
 }
 
+// The app going to the background may be the last chance before it is killed, so pending typing saves then.
+function flushPendingOnHide(): void {
+  if (document.visibilityState !== 'hidden') {
+    return
+  }
+  for (const workspace of workspaces.values()) {
+    if (workspace.timer !== null) {
+      flush(workspace)
+    }
+  }
+}
+
+let flushOnHideInstalled = false
+
 /** Restores a workspace's saved chat drafts once per page; later calls wait for that load. */
 export function loadMobileNativeChatDrafts(hostId: string, worktreeId: string): Promise<void> {
+  if (!flushOnHideInstalled && typeof document !== 'undefined') {
+    flushOnHideInstalled = true
+    document.addEventListener('visibilitychange', flushPendingOnHide)
+  }
   const workspace = workspaceFor(hostId, worktreeId)
   return enqueue(workspace, () => load(workspace))
 }
