@@ -2,6 +2,7 @@ import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusState
