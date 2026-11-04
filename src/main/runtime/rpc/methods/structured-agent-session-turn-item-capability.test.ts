@@ -144,8 +144,10 @@ describe('turn item capability at the RPC boundary', () => {
           throw new Error('Expected a subscription frame')
         }
         const payload =
-          event.type === 'batch' && 'batch' in event
-            ? event.batch
+          event.type === 'batch'
+            ? 'batch' in event
+              ? event.batch
+              : null
             : 'page' in event
               ? event.page
               : null
