@@ -29,6 +29,9 @@ type MockState = {
   openModal: (modal: string, data?: unknown) => void
   updateSettings: (patch: Record<string, unknown>) => void
   activeContextualTourId: string | null
+  sidebarCollapsibleGroupKeys: string[]
+  collapsedGroups: Set<string>
+  setGroupsCollapsed: (keys: readonly string[], collapsed: boolean) => void
   settings?: {
     experimentalAgentDashboardPopout?: boolean
     agentsSidebarIntroShown?: boolean
@@ -119,6 +122,9 @@ beforeEach(() => {
     openModal: vi.fn(),
     updateSettings: vi.fn(),
     activeContextualTourId: null,
+    sidebarCollapsibleGroupKeys: [],
+    collapsedGroups: new Set(),
+    setGroupsCollapsed: vi.fn(),
     settings: {}
   }
   container = document.createElement('div')
@@ -199,5 +205,22 @@ describe('SidebarHeader', () => {
 
     expect(mockState.openModal).toHaveBeenCalledWith('add-repo')
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('collapses every rendered section, then expands them once all are collapsed', () => {
+    mockState.sidebarCollapsibleGroupKeys = ['repo:a', 'repo:b']
+    mockState.collapsedGroups = new Set(['repo:a'])
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+    act(() => headerButton('Collapse all').click())
+    expect(mockState.setGroupsCollapsed).toHaveBeenLastCalledWith(['repo:a', 'repo:b'], true)
+
+    mockState.collapsedGroups = new Set(['repo:a', 'repo:b'])
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+    act(() => headerButton('Expand all').click())
+    expect(mockState.setGroupsCollapsed).toHaveBeenLastCalledWith(['repo:a', 'repo:b'], false)
   })
 })

@@ -50,6 +50,12 @@ export function appendProjectGroupSections(
         compareRecentRank(getRecentRank(left), getRecentRank(right))
       )
     }
+    if (projectOrderBy === 'name') {
+      return [...entries].sort(
+        (left, right) =>
+          compareSidebarText(left[1].label, right[1].label) || compareCodePoints(left[0], right[0])
+      )
+    }
     // Use projectGroupOrder with repoOrder fallback so drag midpoint ranks match rendered order.
     return [...entries].sort((left, right) => {
       const leftRank = getEffectiveProjectGroupManualRank(left[1].repo, repoOrder)
