@@ -95,7 +95,8 @@ describe('OrcaRuntimeService', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(createTerminal).toHaveBeenCalledWith(
       `id:${result.worktree.id}`,
-      expect.objectContaining({ command: 'codex', viewMode: 'chat' })
+      expect.objectContaining({ command: 'codex', viewMode: 'chat' }),
+      undefined
     )
     expect(result.worktree).toEqual(
       expect.objectContaining({

@@ -23,6 +23,8 @@ vi.mock('../runtime/rpc/methods/agent-launch-terminal-prompt', () => ({
 
 let ledgerDirectory: string
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(Date.UTC(2026, 10, 3))
   ledgerDirectory = mkdtempSync(join(tmpdir(), 'orca-33492-merge-'))
   setAgentLaunchRecordStore(await openTestAgentSessionRecordStore(ledgerDirectory))
   deliverTerminalAgentLaunchPrompt.mockClear()
@@ -30,6 +32,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
   setAgentLaunchRecordStore(null)
   await closeTestJournalHostDatabases()
   rmSync(ledgerDirectory, { recursive: true, force: true })
@@ -136,7 +139,7 @@ function automation(overrides: Record<string, unknown>) {
 const RUN = {
   id: 'run-1',
   title: 'Nightly',
-  createdAt: Date.now(),
+  createdAt: Date.UTC(2026, 10, 3),
   scheduledFor: Date.UTC(2026, 9, 9, 3),
   trigger: 'scheduled' as const
 }

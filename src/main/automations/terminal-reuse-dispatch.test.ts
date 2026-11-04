@@ -20,8 +20,7 @@ import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-r
 import { launchHeadlessAutomationAgent } from './headless-automation-agent-launch'
 import { AutomationService } from './service'
 import { readAutomationRunReceipt } from './automation-run-receipt'
-import { normalizeHookPayload } from '../../shared/agent-hook-listener'
-import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
+import { _internals as hookListener } from '../agent-hooks/server'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 
 vi.mock('electron', () => ({
@@ -47,6 +46,7 @@ vi.mock('../git/worktrees/catalog/worktree-listing', () => ({
 }))
 const directories: string[] = []
 afterEach(async () => {
+  hookListener.resetCachesForTests()
   vi.useRealTimers()
   setAgentLaunchRecordStore(null)
   vi.restoreAllMocks()
@@ -173,7 +173,7 @@ it.each([
     }
     let monitor: AgentHookEventPayload | null = null
     if (agent === 'claude') {
-      const listener = createHookListenerState()
+      hookListener.resetCachesForTests()
       const captured: { scenario: string; t: number; payload?: Record<string, unknown> }[] =
         readFileSync(
           join(__dirname, '../../shared/__fixtures__/claude-task-notification-hooks.jsonl'),
@@ -185,8 +185,7 @@ it.each([
       for (const record of captured) {
         if (record.scenario === 'monitor-events' && record.t <= 6.882 && record.payload) {
           monitor =
-            normalizeHookPayload(
-              listener,
+            hookListener.normalizeHookPayload(
               'claude',
               { paneKey: pane, payload: record.payload },
               'production'
