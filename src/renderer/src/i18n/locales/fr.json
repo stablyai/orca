@@ -20506,31 +20506,32 @@
         "keepGoing": "Non, continue"
       },
       "theme": {
-        "modeLabel": "Mode d’apparence",
+        "hints": {
+          "system": "Faire correspondre le système d'exploitation",
+          "dark": "Agréable pour les yeux",
+          "light": "Lumineux et net"
+        },
         "looks": {
           "activeNow": "actuel",
-          "appThemes": "Thèmes de l’app",
-          "appliesTo": "Chaque style colore l’app, l’éditeur et le terminal ensemble.",
+          "browsePlugins": "Parcourir les plugins",
+          "browseThemePlugins": "Parcourir les plugins de thèmes",
+          "customize": "Personnaliser",
+          "customizeCaption": "Facultatif. Les thèmes et palettes de terminal recolorent tout Orca.",
           "darkLook": "Style sombre",
           "darkLooks": "Styles sombres",
           "lightLook": "Style clair",
           "lightLooks": "Styles clairs",
+          "moreThemes": "Plus de thèmes",
+          "next": "Plus de styles",
           "orcaDark": "Orca sombre",
           "orcaLight": "Orca clair",
-          "previewDone": "Terminé en",
-          "previewEdited": "3 fichiers modifiés",
-          "previewPrompt": "refaire le style de la page des réglages",
-          "previewRead": "Lu",
-          "previewStatus": "accepter les modifications activé",
-          "previewWorkspaces": "Espaces de travail",
+          "pluginsHint": "D’autres thèmes sont disponibles sous forme de plugins.",
+          "previous": "Styles précédents",
           "showsWhenDark": "Affiché quand votre système est en mode sombre",
           "showsWhenLight": "Affiché quand votre système est en mode clair",
           "slotLabel": "Style à modifier",
           "sourceBuiltIn": "Intégré",
-          "sourceCommunity": "Palette de terminal",
-          "systemCaption": "Orca suit votre système et alterne entre un style sombre et un style clair.",
-          "terminalPalettes": "Palettes de terminal",
-          "terminalPalettesCaption": "Orca adapte ses couleurs en conséquence"
+          "sourceCommunity": "Palette de terminal"
         }
       },
       "integrations": {

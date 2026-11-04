@@ -19648,31 +19648,32 @@
         "keepGoing": "Нет, продолжить"
       },
       "theme": {
-        "modeLabel": "Режим оформления",
+        "hints": {
+          "system": "Как в ОС",
+          "dark": "Комфортная для глаз",
+          "light": "Светлая и чёткая"
+        },
         "looks": {
           "activeNow": "сейчас",
-          "appThemes": "Темы приложения",
-          "appliesTo": "Каждый стиль окрашивает приложение, редактор и терминал вместе.",
+          "browsePlugins": "Обзор плагинов",
+          "browseThemePlugins": "Обзор плагинов тем",
+          "customize": "Настроить",
+          "customizeCaption": "Необязательно. Темы и палитры терминала перекрашивают весь Orca.",
           "darkLook": "Тёмный стиль",
           "darkLooks": "Тёмные стили",
           "lightLook": "Светлый стиль",
           "lightLooks": "Светлые стили",
+          "moreThemes": "Ещё темы",
+          "next": "Ещё стили",
           "orcaDark": "Orca Тёмная",
           "orcaLight": "Orca Светлая",
-          "previewDone": "Готово за",
-          "previewEdited": "Изменено 3 файла",
-          "previewPrompt": "переоформить страницу настроек",
-          "previewRead": "Прочитано",
-          "previewStatus": "принятие правок вкл.",
-          "previewWorkspaces": "Рабочие пространства",
+          "pluginsHint": "Больше тем доступно в виде плагинов.",
+          "previous": "Предыдущие стили",
           "showsWhenDark": "Показывается, когда система в тёмном режиме",
           "showsWhenLight": "Показывается, когда система в светлом режиме",
           "slotLabel": "Изменяемый стиль",
           "sourceBuiltIn": "Встроенная",
-          "sourceCommunity": "Палитра терминала",
-          "systemCaption": "Orca следует за ОС и переключается между тёмным и светлым стилем.",
-          "terminalPalettes": "Палитры терминала",
-          "terminalPalettesCaption": "Orca перекрашивается в тон"
+          "sourceCommunity": "Палитра терминала"
         }
       },
       "integrations": {

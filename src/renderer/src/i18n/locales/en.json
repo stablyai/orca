@@ -19372,31 +19372,32 @@
         "keepGoing": "No, keep going"
       },
       "theme": {
-        "modeLabel": "Appearance mode",
+        "hints": {
+          "system": "Match OS",
+          "dark": "Easy on the eyes",
+          "light": "Bright & crisp"
+        },
         "looks": {
           "activeNow": "now",
-          "appThemes": "App themes",
-          "appliesTo": "Each look colors the app, editor, and terminal together.",
+          "browsePlugins": "Browse plugins",
+          "browseThemePlugins": "Browse theme plugins",
+          "customize": "Customize",
+          "customizeCaption": "Optional. Themes and terminal palettes recolor all of Orca.",
           "darkLook": "Dark look",
           "darkLooks": "Dark looks",
           "lightLook": "Light look",
           "lightLooks": "Light looks",
+          "moreThemes": "More themes",
+          "next": "More looks",
           "orcaDark": "Orca Dark",
           "orcaLight": "Orca Light",
-          "previewDone": "Done in",
-          "previewEdited": "Edited 3 files",
-          "previewPrompt": "restyle the settings page",
-          "previewRead": "Read",
-          "previewStatus": "accept edits on",
-          "previewWorkspaces": "Workspaces",
+          "pluginsHint": "More themes are available as plugins.",
+          "previous": "Previous looks",
           "showsWhenDark": "Shows when your system is dark",
           "showsWhenLight": "Shows when your system is light",
           "slotLabel": "Look to edit",
           "sourceBuiltIn": "Built in",
-          "sourceCommunity": "Terminal palette",
-          "systemCaption": "Orca follows your OS, switching between a dark and a light look.",
-          "terminalPalettes": "Terminal palettes",
-          "terminalPalettesCaption": "Orca recolors itself to match"
+          "sourceCommunity": "Terminal palette"
         }
       },
       "integrations": {

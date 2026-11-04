@@ -19988,31 +19988,32 @@
         "keepGoing": "Não, continuar"
       },
       "theme": {
-        "modeLabel": "Modo de aparência",
+        "hints": {
+          "system": "Seguir o sistema",
+          "dark": "Suave para os olhos",
+          "light": "Claro e nítido"
+        },
         "looks": {
           "activeNow": "agora",
-          "appThemes": "Temas do app",
-          "appliesTo": "Cada visual colore o app, o editor e o terminal juntos.",
+          "browsePlugins": "Explorar plugins",
+          "browseThemePlugins": "Explorar plugins de temas",
+          "customize": "Personalizar",
+          "customizeCaption": "Opcional. Temas e paletas do terminal recolorem todo o Orca.",
           "darkLook": "Visual escuro",
           "darkLooks": "Visuais escuros",
           "lightLook": "Visual claro",
           "lightLooks": "Visuais claros",
+          "moreThemes": "Mais temas",
+          "next": "Mais visuais",
           "orcaDark": "Orca escuro",
           "orcaLight": "Orca claro",
-          "previewDone": "Concluído em",
-          "previewEdited": "3 arquivos editados",
-          "previewPrompt": "reestilizar a página de configurações",
-          "previewRead": "Lido",
-          "previewStatus": "aceitar edições ativado",
-          "previewWorkspaces": "Workspaces",
+          "pluginsHint": "Há mais temas disponíveis como plugins.",
+          "previous": "Visuais anteriores",
           "showsWhenDark": "Aparece quando o sistema está no modo escuro",
           "showsWhenLight": "Aparece quando o sistema está no modo claro",
           "slotLabel": "Visual a editar",
           "sourceBuiltIn": "Integrado",
-          "sourceCommunity": "Paleta do terminal",
-          "systemCaption": "O Orca segue o seu sistema, alternando entre um visual escuro e um claro.",
-          "terminalPalettes": "Paletas do terminal",
-          "terminalPalettesCaption": "O Orca ajusta as cores para combinar"
+          "sourceCommunity": "Paleta do terminal"
         }
       },
       "integrations": {

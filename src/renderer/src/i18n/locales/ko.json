@@ -18416,31 +18416,32 @@
         "keepGoing": "아니요, 계속하기"
       },
       "theme": {
-        "modeLabel": "모양 모드",
+        "hints": {
+          "system": "OS 설정에 맞춤",
+          "dark": "눈이 편안한 화면",
+          "light": "밝고 선명한 화면"
+        },
         "looks": {
           "activeNow": "현재",
-          "appThemes": "앱 테마",
-          "appliesTo": "각 룩은 앱, 편집기, 터미널의 색상을 함께 바꿉니다.",
+          "browsePlugins": "플러그인 둘러보기",
+          "browseThemePlugins": "테마 플러그인 둘러보기",
+          "customize": "사용자 지정",
+          "customizeCaption": "선택 사항. 테마와 터미널 팔레트가 Orca 전체 색상을 바꿉니다.",
           "darkLook": "다크 룩",
           "darkLooks": "다크 룩",
           "lightLook": "라이트 룩",
           "lightLooks": "라이트 룩",
+          "moreThemes": "더 많은 테마",
+          "next": "더 많은 룩",
           "orcaDark": "Orca 다크",
           "orcaLight": "Orca 라이트",
-          "previewDone": "완료 시간",
-          "previewEdited": "파일 3개 편집됨",
-          "previewPrompt": "설정 페이지 스타일 변경",
-          "previewRead": "읽음",
-          "previewStatus": "편집 수락 켜짐",
-          "previewWorkspaces": "워크스페이스",
+          "pluginsHint": "더 많은 테마를 플러그인으로 사용할 수 있습니다.",
+          "previous": "이전 룩",
           "showsWhenDark": "시스템이 다크 모드일 때 표시",
           "showsWhenLight": "시스템이 라이트 모드일 때 표시",
           "slotLabel": "편집할 룩",
           "sourceBuiltIn": "기본 제공",
-          "sourceCommunity": "터미널 팔레트",
-          "systemCaption": "Orca는 OS 설정에 따라 다크 룩과 라이트 룩을 전환합니다.",
-          "terminalPalettes": "터미널 팔레트",
-          "terminalPalettesCaption": "Orca 색상도 이에 맞춰집니다"
+          "sourceCommunity": "터미널 팔레트"
         }
       },
       "integrations": {

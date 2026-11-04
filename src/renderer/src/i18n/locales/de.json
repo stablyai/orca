@@ -19074,31 +19074,32 @@
         "keepGoing": "Nein, fortfahren"
       },
       "theme": {
-        "modeLabel": "Darstellungsmodus",
+        "hints": {
+          "system": "An Betriebssystem anpassen",
+          "dark": "Angenehm für die Augen",
+          "light": "Hell & klar"
+        },
         "looks": {
           "activeNow": "jetzt",
-          "appThemes": "App-Designs",
-          "appliesTo": "Jeder Look färbt App, Editor und Terminal gemeinsam ein.",
+          "browsePlugins": "Plugins durchsuchen",
+          "browseThemePlugins": "Design-Plugins durchsuchen",
+          "customize": "Anpassen",
+          "customizeCaption": "Optional. Designs und Terminal-Paletten färben ganz Orca neu ein.",
           "darkLook": "Dunkler Look",
           "darkLooks": "Dunkle Looks",
           "lightLook": "Heller Look",
           "lightLooks": "Helle Looks",
+          "moreThemes": "Weitere Designs",
+          "next": "Weitere Looks",
           "orcaDark": "Orca Dunkel",
           "orcaLight": "Orca Hell",
-          "previewDone": "Fertig in",
-          "previewEdited": "3 Dateien bearbeitet",
-          "previewPrompt": "Einstellungsseite neu gestalten",
-          "previewRead": "Gelesen",
-          "previewStatus": "Änderungen annehmen an",
-          "previewWorkspaces": "Workspaces",
+          "pluginsHint": "Weitere Designs gibt es als Plugins.",
+          "previous": "Vorherige Looks",
           "showsWhenDark": "Wird angezeigt, wenn dein System dunkel ist",
           "showsWhenLight": "Wird angezeigt, wenn dein System hell ist",
           "slotLabel": "Zu bearbeitender Look",
           "sourceBuiltIn": "Integriert",
-          "sourceCommunity": "Terminal-Palette",
-          "systemCaption": "Orca folgt deinem Betriebssystem und wechselt zwischen einem dunklen und einem hellen Look.",
-          "terminalPalettes": "Terminal-Paletten",
-          "terminalPalettesCaption": "Orca passt seine Farben daran an"
+          "sourceCommunity": "Terminal-Palette"
         }
       },
       "integrations": {

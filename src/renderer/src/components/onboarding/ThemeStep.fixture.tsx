@@ -26,13 +26,13 @@ function ThemeStepHarness({ initialTheme }: { initialTheme: GlobalSettings['them
   )
 }
 
-export const gallery = defineFixture({
+export const darkMode = defineFixture({
   width: 1036,
   setup: seedPluginThemes,
   render: () => <ThemeStepHarness initialTheme="dark" />
 })
 
-export const gallerySystem = defineFixture({
+export const systemNarrow = defineFixture({
   width: 760,
   setup: seedPluginThemes,
   render: () => <ThemeStepHarness initialTheme="system" />

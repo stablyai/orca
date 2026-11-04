@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Settings2 } from 'lucide-react'
+import { ExternalLink, Puzzle, Settings2 } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import { toast } from 'sonner'
 import { track } from '@/lib/telemetry'
@@ -8,13 +8,9 @@ import { GhosttyDiscoveryRow } from './GhosttyDiscoveryRow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
 import { i18n, translate } from '@/i18n/i18n'
-import {
-  ThemeLookList,
-  ThemeModeControl,
-  ThemeSlotControl,
-  useThemeLooks
-} from './ThemeLookGallery'
-import { ThemeLookHero } from './ThemeLookPreview'
+import { ThemeSlotControl, useThemeLooks } from './ThemeLookGallery'
+import { ThemeLookCarousel, openThemePluginDirectory } from './ThemeLookCarousel'
+import { ThemeModeTiles } from './ThemeModeTiles'
 import type { ThemeLook, ThemeLookBase } from './onboarding-theme-looks'
 import { themeLookSettingsUpdate } from './onboarding-theme-look-settings'
 import {
@@ -196,12 +192,9 @@ export function ThemeStep({
   const systemPrefersDark = useSystemPrefersDark()
   const osBase: ThemeLookBase = systemPrefersDark ? 'dark' : 'light'
   const [systemSlot, setSystemSlot] = useState<ThemeLookBase | null>(null)
-  const [previewLook, setPreviewLook] = useState<ThemeLook | null>(null)
   const { looks, selected, pluginTerminalThemes } = useThemeLooks(settings, lookBaseline)
   // Why a slot picker under System: both looks persist, and only the OS chooses which one shows.
   const base: ThemeLookBase = theme === 'system' ? (systemSlot ?? osBase) : theme
-  const selectedLook = looks[base].find((look) => look.id === selected[base]) ?? null
-  const shownLook = previewLook?.base === base ? previewLook : selectedLook
 
   const pickLook = (look: ThemeLook): void => {
     if (settings && lookBaseline) {
@@ -211,56 +204,54 @@ export function ThemeStep({
     }
   }
 
-  const groups = [
-    {
-      id: 'app',
-      title: translate('components.onboarding.theme.looks.appThemes', 'App themes'),
-      looks: looks[base].filter((look) => look.kind !== 'terminal')
-    },
-    {
-      id: 'terminal',
-      title: translate('components.onboarding.theme.looks.terminalPalettes', 'Terminal palettes'),
-      caption: translate(
-        'components.onboarding.theme.looks.terminalPalettesCaption',
-        'Orca recolors itself to match'
-      ),
-      looks: looks[base].filter((look) => look.kind === 'terminal')
-    }
-  ]
-  const heroLabels = {
-    workspaces: translate('components.onboarding.theme.looks.previewWorkspaces', 'Workspaces'),
-    agentPrompt: translate(
-      'components.onboarding.theme.looks.previewPrompt',
-      'restyle the settings page'
-    ),
-    agentRead: translate('components.onboarding.theme.looks.previewRead', 'Read'),
-    agentEdited: translate('components.onboarding.theme.looks.previewEdited', 'Edited 3 files'),
-    agentDone: translate('components.onboarding.theme.looks.previewDone', 'Done in'),
-    statusMode: translate('components.onboarding.theme.looks.previewStatus', 'accept edits on')
-  }
-
   return (
     <div className="space-y-5">
-      <div className="space-y-1.5">
-        <ThemeModeControl
-          value={theme}
-          onChange={(id) => {
-            setSystemSlot(null)
-            applyOnboardingThemeSelection(id, onThemeChange, updateSettings)
-          }}
-        />
-        <p className="px-0.5 text-xs text-muted-foreground">
-          {theme === 'system'
-            ? translate(
-                'components.onboarding.theme.looks.systemCaption',
-                'Orca follows your OS, switching between a dark and a light look.'
-              )
-            : translate(
-                'components.onboarding.theme.looks.appliesTo',
-                'Each look colors the app, editor, and terminal together.'
-              )}
-        </p>
-      </div>
+      <ThemeModeTiles
+        value={theme}
+        onChange={(id) => {
+          setSystemSlot(null)
+          applyOnboardingThemeSelection(id, onThemeChange, updateSettings)
+        }}
+      />
+
+      <ThemeLookCarousel
+        looks={looks[base]}
+        selectedId={selected[base]}
+        onPick={pickLook}
+        ariaLabel={
+          base === 'dark'
+            ? translate('components.onboarding.theme.looks.darkLooks', 'Dark looks')
+            : translate('components.onboarding.theme.looks.lightLooks', 'Light looks')
+        }
+        header={
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <div className="text-sm font-medium text-foreground">
+              {translate('components.onboarding.theme.looks.customize', 'Customize')}
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                {theme === 'system' && base !== osBase
+                  ? base === 'dark'
+                    ? translate(
+                        'components.onboarding.theme.looks.showsWhenDark',
+                        'Shows when your system is dark'
+                      )
+                    : translate(
+                        'components.onboarding.theme.looks.showsWhenLight',
+                        'Shows when your system is light'
+                      )
+                  : translate(
+                      'components.onboarding.theme.looks.customizeCaption',
+                      'Optional. Themes and terminal palettes recolor all of Orca.'
+                    )}
+              </span>
+            </div>
+            {theme === 'system' && (
+              <div className="w-60 shrink-0">
+                <ThemeSlotControl value={base} osBase={osBase} onChange={setSystemSlot} />
+              </div>
+            )}
+          </div>
+        }
+      />
 
       <GhosttyDiscoveryRow
         discovery={discovery}
@@ -269,62 +260,40 @@ export function ThemeStep({
         onImport={importGhostty}
       />
 
-      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_17rem]">
-        <figure className="min-w-0 space-y-2.5">
-          <div className="aspect-[16/10] max-h-[min(340px,32vh)] w-full overflow-hidden rounded-xl border border-border shadow-xs">
-            {shownLook && <ThemeLookHero palette={shownLook.palette} labels={heroLabels} />}
-          </div>
-          <figcaption className="flex min-h-5 items-baseline gap-2 px-0.5">
-            <span className="truncate text-sm font-medium text-foreground">{shownLook?.label}</span>
-            <span className="truncate text-2xs text-muted-foreground">{shownLook?.source}</span>
-            {theme === 'system' && base !== osBase && (
-              <span className="ml-auto shrink-0 text-2xs text-muted-foreground">
-                {base === 'dark'
-                  ? translate(
-                      'components.onboarding.theme.looks.showsWhenDark',
-                      'Shows when your system is dark'
-                    )
-                  : translate(
-                      'components.onboarding.theme.looks.showsWhenLight',
-                      'Shows when your system is light'
-                    )}
-              </span>
+      <div className="space-y-1.5 px-1 text-[12px] text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Puzzle className="size-3.5" />
+          <span>
+            {translate(
+              'components.onboarding.theme.looks.pluginsHint',
+              'More themes are available as plugins.'
             )}
-          </figcaption>
-        </figure>
-
-        <div className="min-w-0 space-y-3">
-          {theme === 'system' && (
-            <ThemeSlotControl value={base} osBase={osBase} onChange={setSystemSlot} />
-          )}
-          <div className="scrollbar-sleek -mx-1 px-1 md:max-h-[min(340px,32vh)] md:overflow-y-auto">
-            <ThemeLookList
-              groups={groups}
-              selectedId={selected[base]}
-              onPick={pickLook}
-              onPreview={setPreviewLook}
-              ariaLabel={
-                base === 'dark'
-                  ? translate('components.onboarding.theme.looks.darkLooks', 'Dark looks')
-                  : translate('components.onboarding.theme.looks.lightLooks', 'Light looks')
-              }
-            />
-          </div>
+          </span>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 hover:underline"
+            onClick={openThemePluginDirectory}
+          >
+            {translate(
+              'components.onboarding.theme.looks.browseThemePlugins',
+              'Browse theme plugins'
+            )}
+            <ExternalLink className="size-3" />
+          </button>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2 px-1 text-[12px] text-muted-foreground">
-        <Settings2 className="size-3.5" />
-        <span>
-          <Trans
-            i18n={i18n}
-            defaults={translate(
-              'auto.components.onboarding.ThemeStep.moreTerminalOptions',
-              'More terminal options, including font, cursor, and palette, in <settings>Settings → Terminal</settings>'
-            )}
-            components={{ settings: <span className="font-medium text-foreground" /> }}
-          />
-        </span>
+        <div className="flex items-center gap-2">
+          <Settings2 className="size-3.5" />
+          <span>
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'auto.components.onboarding.ThemeStep.moreTerminalOptions',
+                'More terminal options, including font, cursor, and palette, in <settings>Settings → Terminal</settings>'
+              )}
+              components={{ settings: <span className="font-medium text-foreground" /> }}
+            />
+          </span>
+        </div>
       </div>
     </div>
   )

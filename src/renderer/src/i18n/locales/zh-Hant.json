@@ -18815,31 +18815,32 @@
         "keepGoing": "不，繼續"
       },
       "theme": {
-        "modeLabel": "外觀模式",
+        "hints": {
+          "system": "與作業系統一致",
+          "dark": "柔和護眼",
+          "light": "明亮清晰"
+        },
         "looks": {
           "activeNow": "目前",
-          "appThemes": "App 主題",
-          "appliesTo": "每種外觀會同時為 App、編輯器和終端機配色。",
+          "browsePlugins": "瀏覽外掛程式",
+          "browseThemePlugins": "瀏覽主題外掛程式",
+          "customize": "自訂",
+          "customizeCaption": "選用。主題和終端機調色盤會為整個 Orca 重新配色。",
           "darkLook": "深色外觀",
           "darkLooks": "深色外觀",
           "lightLook": "淺色外觀",
           "lightLooks": "淺色外觀",
+          "moreThemes": "更多主題",
+          "next": "更多外觀",
           "orcaDark": "Orca 深色",
           "orcaLight": "Orca 淺色",
-          "previewDone": "完成於",
-          "previewEdited": "已編輯 3 個檔案",
-          "previewPrompt": "重新設計設定頁面樣式",
-          "previewRead": "已讀取",
-          "previewStatus": "接受編輯：開啟",
-          "previewWorkspaces": "工作區",
+          "pluginsHint": "更多主題以外掛程式形式提供。",
+          "previous": "上一組外觀",
           "showsWhenDark": "系統為深色時顯示",
           "showsWhenLight": "系統為淺色時顯示",
           "slotLabel": "要編輯的外觀",
           "sourceBuiltIn": "內建",
-          "sourceCommunity": "終端機調色盤",
-          "systemCaption": "Orca 會跟隨作業系統，在深色與淺色外觀之間切換。",
-          "terminalPalettes": "終端機調色盤",
-          "terminalPalettesCaption": "Orca 會隨之重新配色"
+          "sourceCommunity": "終端機調色盤"
         }
       },
       "integrations": {
