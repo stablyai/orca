@@ -1,5 +1,5 @@
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
-import { hasCheckReadingLayout } from '@/components/right-sidebar/check-log-initial-diagnostic-position'
+import { hasCheckReadingLayout } from '@/components/right-sidebar/checks-panel/logs/check-log-initial-diagnostic-position'
 import type { CheckDetailsReadingOwner } from './check-details-reading-owner'
 
 export function attachCheckReadingViewport({
