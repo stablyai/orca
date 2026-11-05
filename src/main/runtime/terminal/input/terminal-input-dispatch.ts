@@ -149,10 +149,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
-      const reattach = this.waitForPtyEndpointReattach(pty.pty.ptyId)
-      if (reattach) {
-        await reattach
-      }
+      await this.waitForPtyEndpointReattach(pty.pty.ptyId, options.signal)
       if (!(await this.launchComposerAdmitsSubmit(pty.pty.ptyId, action, options))) {
         return { handle, accepted: false, bytesWritten: 0 }
       }
@@ -186,10 +183,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
-    const reattach = this.waitForPtyEndpointReattach(leaf.ptyId)
-    if (reattach) {
-      await reattach
-    }
+    await this.waitForPtyEndpointReattach(leaf.ptyId, options.signal)
     if (!(await this.launchComposerAdmitsSubmit(leaf.ptyId, action, options))) {
       return { handle, accepted: false, bytesWritten: 0 }
     }
@@ -259,6 +253,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       }
       const payload = payloadFor(pty.pty.ptyId)
       await assertTerminalInputWithinLimitWithYield(payload)
+      await this.waitForPtyEndpointReattach(pty.pty.ptyId, agentPromptObservationSignal(options))
       // Only opted-in calls take the extra layer, so every default caller's timing is untouched.
       if (agentPromptWriteOptsIn(options)) {
         return await this.submitTerminalAgentPrompt(handle, pty.pty.ptyId, prompt, payload, options)
@@ -295,6 +290,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
+    await this.waitForPtyEndpointReattach(leaf.ptyId, agentPromptObservationSignal(options))
     if (agentPromptWriteOptsIn(options)) {
       return await this.submitTerminalAgentPrompt(handle, leaf.ptyId, prompt, payload, options)
     }

@@ -195,20 +195,16 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   >()
 
   protected readonly mainDaemonAttachments = new MainDaemonAttachments({
-    isUnattachedLocalCandidate: (ptyId) => {
-      if (
-        this.headlessTerminals.has(ptyId) ||
-        this.providerSnapshotPreferredPtys.has(ptyId) ||
-        this.pendingPtyRegistrationIncarnations.has(ptyId) ||
-        parseAppSshPtyId(ptyId)
-      ) {
+    isAttachableLocalSession: (ptyId) => {
+      if (this.pendingPtyRegistrationIncarnations.has(ptyId) || parseAppSshPtyId(ptyId)) {
         return false
       }
       const pty = this.ptysById.get(ptyId)
       return pty !== undefined && pty.connectionId === null && pty.connected
     },
-    attachProvider: (ptyId) => this.ptyController?.attach?.(ptyId) ?? null,
-    hasRemoteView: (ptyId) => this.terminalViewSubscribers.hasRemote(ptyId)
+    hasMainTerminalState: (ptyId) =>
+      this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId),
+    attachProvider: (ptyId) => this.ptyController?.attach?.(ptyId) ?? null
   })
 
   // Remote xterms own query replies; ref-count streams and retain suppression through mobile soft-leave grace (terminal-query-authority.md).

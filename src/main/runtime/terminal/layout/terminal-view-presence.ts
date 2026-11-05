@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { OrcaRuntimeWithRecordAgentPromptLifecycleState } from '../output/terminal-output-generation'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
@@ -72,25 +73,33 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     return this.mainDaemonAttachments.isKnownUnattachedLocal(ptyId)
   }
 
-  /** The local provider lost this PTY's endpoint; a remote view re-attaches it once the daemon is back. */
+  /** The local provider lost this PTY's endpoint; main re-attaches it so its output and input resume. */
   notePtyEndpointLoss(ptyId: string): void {
     this.mainDaemonAttachments.noteEndpointLoss(ptyId)
   }
 
-  /** Input for a PTY an endpoint loss detached re-attaches it and waits for that, bounded, instead of being
-   *  refused; null (no wait at all) when no re-attach is owed. */
-  protected waitForPtyEndpointReattach(ptyId: string): Promise<void> | null {
-    const reattached = this.mainDaemonAttachments.reattachForInput(ptyId)
-    if (!reattached) {
-      return null
+  /** Input waits, bounded, for main's in-flight re-attach after an endpoint loss instead of being refused. */
+  protected async waitForPtyEndpointReattach(ptyId: string, signal?: AbortSignal): Promise<void> {
+    const deadline = performance.now() + ENDPOINT_REATTACH_INPUT_WAIT_MS
+    // A further loss mid-attach starts another attempt; keep waiting within the same bound.
+    let reattach = this.mainDaemonAttachments.pendingReattach(ptyId)
+    while (reattach && signal?.aborted !== true) {
+      const remainingMs = deadline - performance.now()
+      if (remainingMs <= 0) {
+        return
+      }
+      const stopWaiting = new AbortController()
+      const waitSignal = signal ? AbortSignal.any([signal, stopWaiting.signal]) : stopWaiting.signal
+      const settled = await Promise.race([
+        reattach.then(() => true),
+        delay(remainingMs, false, { signal: waitSignal }).catch(() => false)
+      ])
+      stopWaiting.abort()
+      if (!settled) {
+        return
+      }
+      reattach = this.mainDaemonAttachments.pendingReattach(ptyId)
     }
-    let timer: ReturnType<typeof setTimeout> | undefined
-    return Promise.race([
-      reattached,
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, ENDPOINT_REATTACH_INPUT_WAIT_MS)
-      })
-    ]).finally(() => clearTimeout(timer))
   }
 
   /** Mark a raw-output viewer without transferring terminal query authority. */
