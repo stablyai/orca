@@ -25,7 +25,7 @@ const { lookup, rows, rerun } = vi.hoisted(() => ({
 vi.mock('@/store', async () => {
   const { getDefaultSettings } = await import('../../../shared/constants')
   const state = {
-    settings: getDefaultSettings(),
+    settings: getDefaultSettings('/tmp/pr-check-tab-actions'),
     repos: [],
     projects: [],
     runtimeStatusByEnvironmentId: new Map()

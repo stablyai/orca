@@ -4,7 +4,8 @@ import { item as makeItem } from './github-task-identity.test-fixture'
 import { githubTaskKey } from './github-task-identity'
 import { recordRuntimeStatusProbe } from '../transport/runtime-status-probe'
 import type { RpcClient } from '../transport/rpc-client'
-import type { DetailPayload, TaskItem } from './mobile-tasks-project-workspace-types'
+import type { ActionableTaskItem, TaskItem } from './mobile-tasks-project-workspace-types'
+import type { DetailPayload } from './mobile-tasks-provider-detail-types'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY as complete } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 import { isCompletePRCheckOwner } from '../../../src/shared/github/complete-pr-check-owner'
 
@@ -23,7 +24,7 @@ it.each(['owner', 'rows', 'adoption'])(
     const item = makeItem('acme')
     const source = { ...item.source, headSha: 'h1' }
     const selected = { ...item, source }
-    let action: TaskItem | null = selected
+    let action: ActionableTaskItem | null = selected
     let items: TaskItem[] = [selected]
     let details: DetailPayload | null = {
       provider: 'github',

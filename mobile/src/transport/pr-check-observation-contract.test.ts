@@ -82,13 +82,11 @@ it('uses the executing host verdict when a new relay points at an old host', asy
 it('does not certify a capable execution host through an unproven old intermediary', async () => {
   const relay = host([])
   const execution = host([complete, exact])
-  const contract = await captureMobilePRCheckContract(
-    {
-      ...relay.client,
-      requestRoute: () => ({ client: execution.client, intermediary: relay.client })
-    },
-    { repo: 'id:server-repo' }
-  )
+  const routed = {
+    ...relay.client,
+    requestRoute: () => ({ client: execution.client, intermediary: relay.client })
+  }
+  const contract = await captureMobilePRCheckContract(routed, { repo: 'id:server-repo' })
   expect(contract.complete).toBe(false)
   contract.retire()
 })
@@ -108,7 +106,9 @@ it('refresh relearns a relayed runtime restart without a phone connection edge',
   const fresh = await captureMobilePRCheckContract(execution.client, { repo: 'id:repo' }, true)
   expect(old.current()).toBe(false)
   expect(fresh.complete && fresh.current()).toBe(true)
-  expect(fresh.options.envelope?.expectedRuntimeSource?.runtimeId).toBe('runtime-2')
+  expect(
+    'envelope' in fresh.options && fresh.options.envelope?.expectedRuntimeSource?.runtimeId
+  ).toBe('runtime-2')
   old.retire()
   fresh.retire()
 })
@@ -121,7 +121,7 @@ it('retires a repository route switch while both clients stay connected', async 
   const pending = await captureMobilePRCheckContract(router, { repo: 'id:repo' })
   selected = second.client
   expect(pending.current()).toBe(false)
-  expect(() => pending.options.beforeSend?.()).toThrow()
+  expect(() => 'beforeSend' in pending.options && pending.options.beforeSend()).toThrow()
   pending.retire()
 })
 

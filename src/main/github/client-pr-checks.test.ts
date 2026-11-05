@@ -774,6 +774,7 @@ describe('getPRChecks', () => {
 })
 
 it('carries the actual matching GraphQL commit identity rather than the requested head', async () => {
+  vi.clearAllMocks()
   getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
   ghExecFileAsyncMock.mockResolvedValueOnce(
     graphQLChecksResponse({
@@ -802,6 +803,7 @@ it('carries the actual matching GraphQL commit identity rather than the requeste
 })
 
 it('carries immutable REST endpoint identity through useful incomplete enrichment', async () => {
+  vi.clearAllMocks()
   ghExecFileAsyncMock
     .mockResolvedValueOnce({
       stdout: JSON.stringify({
