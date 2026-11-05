@@ -59,16 +59,16 @@ export function waitForDaemonConnectionAttempt(
   timeoutMs: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
+    const cancelDeadline = startResponsiveDeadline(timeoutMs, () => {
       reject(new DaemonProtocolError('Connection attempt wait timed out'))
-    }, timeoutMs)
+    })
     attempt.then(
       () => {
-        clearTimeout(timer)
+        cancelDeadline()
         resolve()
       },
       (error) => {
-        clearTimeout(timer)
+        cancelDeadline()
         reject(error)
       }
     )

@@ -194,7 +194,7 @@ describe('process-owned terminal startup failure', () => {
       pending.add('start', {
         resolve: rejection.resolve,
         reject: rejection.resolve,
-        timer: setTimeout(() => {}, 1000)
+        cancelDeadline: () => {}
       })
       pending.settle(response)
       const error = await rejection.promise
