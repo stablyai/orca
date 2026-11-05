@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   TEST_FOLDER_WORKSPACE_PATH,
   TEST_REPO_ID,
@@ -13,7 +12,7 @@ import {
   createRuntime,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', () => {
@@ -423,26 +422,23 @@ describe('OrcaRuntimeService', () => {
       leaves: Map<string, unknown>
       leavesByPtyId: Map<string, { preview?: string; lastOutputAt?: number | null }[]>
     }
-    const originalLeaves = runtimePrivate.leaves
-    runtimePrivate.leaves = new Proxy(originalLeaves, {
-      get(target, prop) {
-        if (
-          prop === 'values' ||
-          prop === 'entries' ||
-          prop === 'keys' ||
-          prop === Symbol.iterator
-        ) {
-          return () => {
-            throw new Error('onPtyData should use the PTY leaf index')
-          }
-        }
-        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
-        const value = Reflect.get(target, prop, target)
-        return typeof value === 'function' ? value.bind(target) : value
-      }
-    })
+    const rejectTraversal = () => {
+      throw new Error('onPtyData should use the PTY leaf index')
+    }
+    const traversalSpies = [
+      vi.spyOn(runtimePrivate.leaves, 'values').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, 'entries').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, 'keys').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, Symbol.iterator).mockImplementation(rejectTraversal)
+    ]
 
-    runtime.onPtyData(`pty-${targetIndex}`, 'hello indexed\n', 123)
+    try {
+      runtime.onPtyData(`pty-${targetIndex}`, 'hello indexed\n', 123)
+    } finally {
+      for (const spy of traversalSpies) {
+        spy.mockRestore()
+      }
+    }
 
     const [targetLeaf] = runtimePrivate.leavesByPtyId.get(`pty-${targetIndex}`) ?? []
     expect(targetLeaf).toMatchObject({

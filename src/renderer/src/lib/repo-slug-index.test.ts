@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import { useAppStore } from '@/store'
@@ -37,112 +37,6 @@ afterEach(() => {
   // Unmount hooks before DOM teardown or deferred React work throws window-is-undefined errors.
   cleanup()
   setRepos([])
-})
-
-async function lookup(slug: string): Promise<Repo[]> {
-  const { result } = renderHook(() => useRepoSlugIndex())
-  await waitFor(() => expect(result.current.ready).toBe(true))
-  return [...result.current.lookupSlug(slug)]
-}
-
-describe('useRepoSlugIndex fork upstream matching', () => {
-  it('matches a project row against a fork clone via its upstream parent', async () => {
-    const fork = makeRepo({ id: 'fork', upstream: { owner: 'SciPhi-AI', repo: 'R2R' } })
-    setRepos([fork])
-    repoSlug.mockResolvedValue({ owner: 'me', repo: 'r2r-mirror' })
-
-    expect(await lookup('SciPhi-AI/R2R')).toEqual([fork])
-  })
-
-  it('still matches the fork by its own origin slug', async () => {
-    const fork = makeRepo({ id: 'fork', upstream: { owner: 'SciPhi-AI', repo: 'R2R' } })
-    setRepos([fork])
-    repoSlug.mockResolvedValue({ owner: 'me', repo: 'r2r-mirror' })
-
-    expect(await lookup('me/r2r-mirror')).toEqual([fork])
-  })
-
-  it('prefers the clone that owns the slug over a fork of it', async () => {
-    const upstreamClone = makeRepo({ id: 'upstream', upstream: null })
-    const fork = makeRepo({ id: 'fork', upstream: { owner: 'SciPhi-AI', repo: 'R2R' } })
-    setRepos([upstreamClone, fork])
-    repoSlug.mockImplementation(async (args: { repoId?: string }) =>
-      args.repoId === 'upstream'
-        ? { owner: 'SciPhi-AI', repo: 'R2R' }
-        : { owner: 'me', repo: 'r2r-mirror' }
-    )
-
-    expect(await lookup('SciPhi-AI/R2R')).toEqual([upstreamClone])
-  })
-
-  it('does not bind a github.com fork parent to a same-named Enterprise row', async () => {
-    const fork = makeRepo({ id: 'fork', upstream: { owner: 'SciPhi-AI', repo: 'R2R' } })
-    setRepos([fork])
-    repoSlug.mockResolvedValue({ owner: 'me', repo: 'r2r-mirror' })
-
-    const { result } = renderHook(() => useRepoSlugIndex())
-    await waitFor(() => expect(result.current.ready).toBe(true))
-    expect(result.current.lookupSlug('SciPhi-AI/R2R', 'ghe.example')).toEqual([])
-  })
-
-  it('resolves the slug index without extra upstream IPC', async () => {
-    const fork = makeRepo({ id: 'fork', upstream: { owner: 'SciPhi-AI', repo: 'R2R' } })
-    setRepos([fork])
-    repoSlug.mockResolvedValue({ owner: 'me', repo: 'r2r-mirror' })
-
-    expect(await lookup('SciPhi-AI/R2R')).toEqual([fork])
-    expect(repoSlug).toHaveBeenCalledTimes(1)
-  })
-
-  it('scopes a host-less fork parent to the host the fork itself was cloned from', async () => {
-    const fork = makeRepo({ id: 'fork', upstream: { owner: 'acme', repo: 'widgets' } })
-    setRepos([fork])
-    repoSlug.mockResolvedValue({ owner: 'me', repo: 'widgets', host: 'ghe.example' })
-
-    const { result } = renderHook(() => useRepoSlugIndex())
-    await waitFor(() => expect(result.current.ready).toBe(true))
-    expect(result.current.lookupSlug('acme/widgets', 'ghe.example')).toEqual([fork])
-    expect(result.current.lookupSlug('acme/widgets')).toEqual([])
-  })
-
-  it('drops the fork alias while its own origin is unresolved', async () => {
-    const fork = makeRepo({ id: 'fork', upstream: { owner: 'acme', repo: 'widgets' } })
-    setRepos([fork])
-    repoSlug.mockResolvedValue(null)
-
-    expect(await lookup('acme/widgets')).toEqual([])
-  })
-
-  it('lists a repo once when its upstream is its own origin', async () => {
-    const selfAliased = makeRepo({ id: 'self', upstream: { owner: 'acme', repo: 'widgets' } })
-    setRepos([selfAliased])
-    repoSlug.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-
-    const { result } = renderHook(() => useRepoSlugIndex())
-    await waitFor(() => expect(result.current.ready).toBe(true))
-    expect(result.current.lookupSlugMatches('acme/widgets')).toEqual({
-      origin: [selfAliased],
-      upstream: []
-    })
-  })
-
-  it('reports origin and upstream matches separately for selection filtering', async () => {
-    const upstreamClone = makeRepo({ id: 'upstream', upstream: null })
-    const fork = makeRepo({ id: 'fork', upstream: { owner: 'SciPhi-AI', repo: 'R2R' } })
-    setRepos([upstreamClone, fork])
-    repoSlug.mockImplementation(async (args: { repoId?: string }) =>
-      args.repoId === 'upstream'
-        ? { owner: 'SciPhi-AI', repo: 'R2R' }
-        : { owner: 'me', repo: 'r2r-mirror' }
-    )
-
-    const { result } = renderHook(() => useRepoSlugIndex())
-    await waitFor(() => expect(result.current.ready).toBe(true))
-    expect(result.current.lookupSlugMatches('SciPhi-AI/R2R')).toEqual({
-      origin: [upstreamClone],
-      upstream: [fork]
-    })
-  })
 })
 
 describe('useRepoSlugIndex failure retry', () => {

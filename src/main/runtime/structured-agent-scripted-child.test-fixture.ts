@@ -1,6 +1,6 @@
 // Drive each registered real adapter/host/store/journal with a scripted child behind its transport seam; registrations without fixtures fail the matrix.
 
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 export type ScriptedAgentChild = {
   /** Override every launch/transport path to the scripted child; reaching any real binary is a fixture bug. */
@@ -11,6 +11,8 @@ export type ScriptedAgentChild = {
   releaseHandshake(): void
   /** Fails the held handshake of the newest spawn with this provider error; its process exits. */
   failHandshake(message: string): void
+  /** The child dies without answering the pending startup request. */
+  exitHandshake?: (message: string) => void
   /** Default prompts complete immediately; false keeps turns running until interrupt or child exit, modeling background work. */
   completeTurns: boolean
   /** The text of every prompt any spawn received, in order. */

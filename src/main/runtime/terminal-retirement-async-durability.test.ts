@@ -37,7 +37,7 @@ itSwitchOff('withholds the acknowledged close until its host retirement is durab
   await gate.started.promise
   expect(acknowledged).toBe(false)
   gate.finish.resolve()
-  await expect(closing).resolves.toEqual({ closed: true })
+  await expect(closing).resolves.toEqual({ closed: true, retirementConfirmed: true })
   expect(f.hasTab()).toBe(false)
 })
 

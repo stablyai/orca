@@ -1,10 +1,21 @@
+import { decideAgentLaunchIntentMode } from '../../../agent-launch/agent-launch-intent-mode'
 /** Resolve selectors and validate terminal reuse without creating a surface. */
 
-import type { AgentLaunchIntent, AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
+import type {
+  AgentLaunchIntent,
+  AgentLaunchTarget,
+  AgentLaunchModeReceipt
+} from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
+import { assertTerminalLaunchAdmissible } from '../../../agent-launch/agent-launch-surface-factories'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
+import { resolveAgentLaunchModeOnHost } from '../../../agent-launch/agent-launch-mode'
+
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
+
+type ResolvedAgentLaunchIntent = Omit<AgentLaunchIntent, 'sessionOptions'> & {
+  sessionOptions?: Readonly<NonNullable<AgentLaunchParams['sessionOptions']>>
+}
 
 /** Resolve the selector once to avoid id:id: prefixes below the executor.
  * Use launch scope: floating workspaces have no Git worktree record, and folder rows are synthetic. */
@@ -29,13 +40,14 @@ async function agentLaunchIntent(
   runtime: OrcaRuntimeService,
   /** The pane of a tab already shown for this launch; the spawn must land in it. */
   publishedPaneKey: string | undefined
-): Promise<AgentLaunchIntent> {
+): Promise<ResolvedAgentLaunchIntent> {
   const paneKey = publishedPaneKey ?? params.paneKey
   return {
     agent: params.agent,
     target: await agentLaunchTarget(params, runtime),
     ...(params.prompt ? { prompt: params.prompt } : {}),
     ...(params.sessionOptions ? { sessionOptions: params.sessionOptions } : {}),
+    ...(params.chatOptions ? { chatOptions: params.chatOptions } : {}),
     ...(params.reuseTerminal ? { reuseTerminal: params.reuseTerminal } : {}),
     // `null` means "no arguments" and must survive; only absence falls back to the settings default.
     ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {}),
@@ -74,12 +86,28 @@ async function validateReusedTerminal(
 export async function resolveUnlaunchedIntent(
   params: AgentLaunchParams,
   runtime: OrcaRuntimeService,
-  early: EarlyAgentLaunchTab | null
-): Promise<AgentLaunchIntent> {
-  if (params.reuseTerminal || params.target.kind === 'create-worktree') {
-    assertOpenCodeModelLaunchPreferencesAbsent(params.agent, params.sessionOptions)
-  }
+  early: EarlyAgentLaunchTab | null,
+  modeOptions: { terminalOnly?: boolean; callerRendersStructured?: boolean } = {}
+): Promise<{ intent: ResolvedAgentLaunchIntent; decidedMode: AgentLaunchModeReceipt }> {
   const intent = await agentLaunchIntent(params, runtime, early?.paneKey)
   await validateReusedTerminal(intent, runtime)
-  return intent
+  const preflight = decideAgentLaunchIntentMode({ intent, runtime, ...modeOptions })
+  const decidedMode =
+    intent.target.kind === 'existing'
+      ? await resolveAgentLaunchModeOnHost(
+          runtime,
+          preflight,
+          intent.target.worktree,
+          intent.agent,
+          undefined,
+          {
+            phase: 'before-effects',
+            agent: intent.agent,
+            workspacePath: intent.target.workspacePath,
+            cwd: intent.cwd
+          }
+        )
+      : preflight
+  assertTerminalLaunchAdmissible(intent, decidedMode.mode)
+  return { intent, decidedMode }
 }

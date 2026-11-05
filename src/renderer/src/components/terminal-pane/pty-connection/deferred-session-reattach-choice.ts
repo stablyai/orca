@@ -1,7 +1,7 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
-import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
+import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { getEagerPtyBufferHandle } from '../pty-dispatcher'
 
 import {
@@ -9,10 +9,8 @@ import {
   pendingSpawnGenerationByPaneKey,
   recordPtyConnectDiagnostic
 } from './pty-connect-limits'
-import {
-  canRestorePairedParkedTerminal,
-  isSessionOwnedByWorktree
-} from './paired-parked-terminal-restore'
+import { canRestorePairedParkedTerminal } from './paired-parked-terminal-restore'
+import { isPtySessionIdOwnedByWorktree as isSessionOwnedByWorktree } from '../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { startDeferredSessionReattachUnlessHiddenAgentResume } from './hidden-agent-resume-deferral'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'

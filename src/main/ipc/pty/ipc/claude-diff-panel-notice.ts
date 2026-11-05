@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getPtyIpc } from '../pty-host-bindings'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'

@@ -6,7 +6,7 @@ import type { CookiesGetFilter } from 'electron'
 const {
   appGetPathMock,
   createDecipherivMock,
-  runProcessSyncMock,
+  runProcessMock,
   sessionFromPartitionMock,
   dialogShowOpenDialogMock,
   setPendingCookieImportMock,
@@ -15,7 +15,7 @@ const {
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   createDecipherivMock: vi.fn(),
-  runProcessSyncMock: vi.fn(),
+  runProcessMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
   dialogShowOpenDialogMock: vi.fn(),
   setPendingCookieImportMock: vi.fn(),
@@ -28,14 +28,14 @@ vi.mock('node:crypto', async (importOriginal) => {
   createDecipherivMock.mockImplementation(original.createDecipheriv)
   return { ...original, createDecipheriv: createDecipherivMock }
 })
-vi.mock('../../browser-session-registry', () => ({
+vi.mock('../../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
 vi.mock('@orca/process-host', () => ({
-  runProcessSync: runProcessSyncMock
+  runProcess: runProcessMock
 }))
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof NodeFs>()) }))
 vi.mock('electron', () => ({
@@ -63,7 +63,7 @@ vi.mock('../browser-cookie-clear-store', () => ({
 }))
 
 import { importCookiesFromBrowser } from '../browser-cookie-import'
-import type { DetectedBrowser } from './browser-cookie-detection-types'
+import type { DetectedBrowser } from './browser-cookie-source-profiles'
 import { createChromiumCookieTestDatabase } from '../browser-cookie-import-test-database'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -128,20 +128,18 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
       getStoragePath: vi.fn().mockReturnValue(join(tmpDir, 'userData', 'Partitions', 'test'))
     })
     platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-    runProcessSyncMock.mockImplementation(() => {
-      throw new Error('secret-tool: no such service')
-    })
+    runProcessMock.mockRejectedValue(new Error('secret-tool: no such service'))
   })
 
   afterEach(() => {
     try {
-      expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
-      expect(runProcessSyncMock).toHaveBeenNthCalledWith(1, {
+      expect(runProcessMock).toHaveBeenCalledTimes(2)
+      expect(runProcessMock).toHaveBeenNthCalledWith(1, {
         program: 'secret-tool',
         args: ['lookup', 'service', 'Chrome Safe Storage', 'account', 'Chrome'],
         timeoutMs: 5_000
       })
-      expect(runProcessSyncMock).toHaveBeenNthCalledWith(2, {
+      expect(runProcessMock).toHaveBeenNthCalledWith(2, {
         program: 'secret-tool',
         args: ['lookup', 'application', 'chrome'],
         timeoutMs: 5_000
@@ -171,6 +169,9 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
   }
 
   it('does not attempt v11 CBC decryption without a keyring, even with valid wrong-key padding', async () => {
+    runProcessMock.mockRejectedValue(
+      Object.assign(new Error('spawn secret-tool failed'), { code: 'ENOENT' })
+    )
     const sourceCookiesPath = seedProfile(
       encryptLinuxChromiumCookie('wrong-key-garbage', 'peanuts', 'v11')
     )
@@ -186,13 +187,14 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     expect(result.summary.warning).toEqual({
       code: 'cookies-undecryptable',
       failedCookies: 1,
-      reason: 'linux-keyring-unavailable'
+      reason: 'linux-keyring-unavailable',
+      keyringFailure: { cause: 'secret-tool-missing', browser: 'Google Chrome' }
     })
     expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 
   it.each([0, 1])(
-    'preserves an unreadable family with %i unrelated cookies imported',
+    'imports readable siblings alongside %i unrelated cookies despite an unreadable row',
     async (unrelatedCount) => {
       const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
       const sourceDb = createChromiumCookieTestDatabase(sourceCookiesPath, [
@@ -236,21 +238,21 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
       expect(clearDataMock).not.toHaveBeenCalled()
       expect(cookiesRemoveMock).not.toHaveBeenCalledWith(expect.any(String), 'live-session')
       expect(targetJar).toEqual([expect.objectContaining({ name: 'live-session' })])
-      expect(writeCookieIdentityMock).toHaveBeenCalledTimes(unrelatedCount)
+      expect(writeCookieIdentityMock).toHaveBeenCalledTimes(unrelatedCount + 1)
       if (unrelatedCount) {
         expect(writeCookieIdentityMock).toHaveBeenCalledWith(
           expect.objectContaining({ name: 'plain', value: 'plain-value' })
         )
       }
-      expect(writeCookieIdentityMock).not.toHaveBeenCalledWith(
+      expect(writeCookieIdentityMock).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'readable-sibling' })
       )
       expect(result.summary).toMatchObject({
         totalCookies: 2 + unrelatedCount,
-        importedCookies: unrelatedCount,
-        skippedCookies: 2,
-        partitionSkippedCookies: 2,
-        partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 1 },
+        importedCookies: unrelatedCount + 1,
+        skippedCookies: 1,
+        partitionSkippedCookies: 1,
+        partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 0 },
         warning: {
           code: 'cookies-undecryptable',
           failedCookies: 1,

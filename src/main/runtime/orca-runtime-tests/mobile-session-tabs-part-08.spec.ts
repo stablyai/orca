@@ -1,10 +1,12 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { durableSessionLayoutApply } from '../__fixtures__/main-layout-close-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { registerBoundPty } from '../bind-first-pane.test-fixture'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
-import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -13,8 +15,8 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
-import { makePendingAgentTabActivationRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { makePendingAgentTabActivationRuntime } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('materializes a plain shell when the pending tab has no launch agent', async () => {
@@ -651,7 +653,7 @@ describe('OrcaRuntimeService', () => {
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expect(
         runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
-      ).resolves.toEqual({ closed: true })
+      ).resolves.toEqual({ closed: true, retirementConfirmed: true })
       expect(closeTerminalTab).not.toHaveBeenCalled()
       expect(kill).toHaveBeenCalledWith(servePtyId)
       expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()

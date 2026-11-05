@@ -1,9 +1,10 @@
 import { useBundledSkillInstallAction } from '@/hooks/use-bundled-skill-install-action'
-import { bundledSkillSetupActionLabel } from '../settings/bundled-skill-setup-copy'
+import { bundledSkillSetupActionLabel } from '../skills/setup/bundled-skill-setup-copy'
 import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
 import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
+import { buildSkillCommandForRuntime } from '../../lib/skill-runtime-command'
 import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import { useCallback, useState } from 'react'
 import { ArrowUpRight, Download, Loader2 } from 'lucide-react'
@@ -17,7 +18,7 @@ import {
   bundledSkillInstallNeedsAttention,
   useBundledSkillInstall
 } from '@/hooks/use-bundled-skill-install'
-import { BundledSkillInstallStatus } from '../settings/BundledSkillInstallStatus'
+import { BundledSkillInstallStatus } from '../skills/setup/BundledSkillInstallStatus'
 import {
   onboardingFeatureSetupRunTelemetry,
   runOnboardingFeatureSetup,
@@ -99,18 +100,27 @@ const BROWSER_ONLY_FEATURE_SETUP: OnboardingFeatureSetupSelection = {
 }
 
 function BrowserSkillInstallButton(): React.JSX.Element {
+  const runtime = useOnboardingSkillRuntime()
+  return <BrowserSkillInstallForRuntime key={runtime.setupKey} activeRuntime={runtime} />
+}
+
+function BrowserSkillInstallForRuntime({
+  activeRuntime
+}: {
+  activeRuntime: ReturnType<typeof useOnboardingSkillRuntime>
+}): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [busy, setBusy] = useState(false)
-  const activeRuntime = useActiveProjectSkillRuntime()
   const [wslSetup, setWslSetup] = useState<{
     command: string
     runtime: OnboardingFeatureSetupRuntimeContext
   } | null>(null)
   const legacyWsl = activeRuntime.agentRuntime?.runtime === 'wsl'
-  const skillInstall = useBundledSkillInstall()
+  const skillInstall = useBundledSkillInstall({ target: activeRuntime.bundledSkillTarget })
   const installSkills = skillInstall.install
   const installAction = useBundledSkillInstallAction([ORCA_CLI_SKILL_NAME], {
     enabled: !legacyWsl,
+    target: activeRuntime.bundledSkillTarget,
     refreshKey: skillInstall.state.kind
   })
 
@@ -125,7 +135,9 @@ function BrowserSkillInstallButton(): React.JSX.Element {
       // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
       if (legacyWsl) {
         const command = buildAgentFeatureSkillInstallCommand(result.skillNames)
-        await window.api.ui.writeClipboardText(command)
+        await window.api.ui.writeClipboardText(
+          buildSkillCommandForRuntime(command, activeRuntime.agentRuntime)
+        )
         setWslSetup({ command, runtime: activeRuntime })
         return
       }

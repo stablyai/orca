@@ -1,8 +1,7 @@
+import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CircleDashed } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel/check-presentation'
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
@@ -11,8 +10,8 @@ import {
 } from '@/components/github-checks-tab-state'
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
 import { getCheckCounts, getChecksSummaryLabel } from '@/components/pr-check-counts'
-import { getBrokenChecks } from '@/components/pr-checks-fix-prompt'
-import { sortChecksBySeverity } from '../../../../../shared/pr-check-severity-order'
+import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
+import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
@@ -24,7 +23,7 @@ import {
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { resolveRepoExecutionHostPlatform } from '@/lib/execution-host-facts'
-import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control-ai'
+import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
@@ -62,7 +61,7 @@ export function ChecksTab({
 }): React.JSX.Element {
   const targetRepoId = repoId ?? item.repoId
   const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const repo = useAppStore((s) =>
     targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
@@ -162,27 +161,7 @@ export function ChecksTab({
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
   const summaryLabel = getChecksSummaryLabel(list)
-  // All-neutral checks remain unresolved; list length alone cannot justify a green tick.
-  const SummaryIcon =
-    counts.failing > 0
-      ? CHECK_ICON.failure
-      : counts.needsAction > 0
-        ? CHECK_ICON.action_required
-        : counts.pending > 0
-          ? CHECK_ICON.pending
-          : counts.passing > 0
-            ? CHECK_ICON.success
-            : CircleDashed
-  const summaryColor =
-    counts.failing > 0
-      ? CHECK_COLOR.failure
-      : counts.needsAction > 0
-        ? CHECK_COLOR.action_required
-        : counts.pending > 0
-          ? CHECK_COLOR.pending
-          : counts.passing > 0
-            ? CHECK_COLOR.success
-            : 'text-muted-foreground'
+  const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(counts)
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
   const handleRefresh = useCallback(
@@ -343,7 +322,7 @@ export function ChecksTab({
       repoConnectionId={repo?.connectionId ?? null}
       targetRepoId={targetRepoId}
       item={item}
-      updateSettings={updateSettings}
+      updateSettings={updateSettingsOrThrow}
       updateRepo={updateRepo}
     />
   )

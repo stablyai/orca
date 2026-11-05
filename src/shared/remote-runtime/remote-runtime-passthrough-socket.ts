@@ -1,17 +1,17 @@
 import WebSocket from 'ws'
-import type { PairedRuntimeConnection } from '../paired-runtime-connection'
+import type { PairedRuntimeConnection } from './pairing/paired-runtime-connection'
 import type { RuntimeCapability } from '../protocol-version'
 import {
   formatRemoteRuntimeCloseMessage,
   sendRemoteRuntimeTokenAuth
-} from '../remote-runtime-client-handshake'
-import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
+} from './remote-runtime-client-handshake'
+import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { openRemoteRuntimeWebSocket } from './requests/remote-runtime-request-websocket'
 import { closeRemoteRuntimeSocket } from './remote-runtime-socket-close'
 import {
   startRemoteRuntimeSocketLiveness,
   type RemoteRuntimeSocketLivenessOptions
-} from '../remote-runtime-socket-liveness'
+} from './remote-runtime-socket-liveness'
 import { RemoteRuntimeSubscriptionOutbound } from './requests/remote-runtime-subscription-outbound'
 
 export type RemoteRuntimePassthroughSocket = {

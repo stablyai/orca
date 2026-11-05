@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn, registerLivePty } from '../bind-first-pane.test-fixture'
-import {
-  OrcaRuntimeService,
-  getDefaultWorkspaceSession,
-  join,
-  makePaneKey,
-  mkdtemp,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
+import { committingSpawn, registerLivePty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { join } from 'node:path'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import {
   HEADLESS_LEAF_ID,
   TEST_FOLDER_PROJECT_GROUP_ID,
@@ -22,11 +21,11 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
 
 describe('OrcaRuntimeService', () => {
   it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(

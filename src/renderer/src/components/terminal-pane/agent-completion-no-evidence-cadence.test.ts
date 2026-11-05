@@ -6,9 +6,9 @@ import {
 } from './agent-completion-coordinator'
 import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
 import { isAgentProcessInspectionCostly } from './agent-process-inspection-cost'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 
 function processResult(

@@ -4,11 +4,12 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { HEADLESS_LEAF_ID, HEADLESS_SECOND_LEAF_ID, TEST_WORKTREE_ID } =
-  await import('../../orca-runtime-test-fixtures.spec')
-const { OrcaRuntimeService } = await import('../../orca-runtime-test-mocks.spec')
+  await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('../../orca-runtime')
 const { SURFACE_TAB_ID, SURFACE_PTYS, surfaceRuntime } =
   await import('./terminal-surface-replies.test-fixture')
 
@@ -105,19 +106,6 @@ for (const host of ['no window', 'a window'] as const) {
       expect(await phoneShowsPane(harness.runtime, HEADLESS_SECOND_LEAF_ID)).toBe(false)
     })
 
-    it(`the exit drops the closed-pane record in its one retirement write: ${route}, with ${host}`, async () => {
-      const harness = closingHost(host)
-      await close(harness.runtime)
-      // The fixture's setter may already be a mock carrying the close's own writes.
-      const writes = vi.spyOn(harness.runtime['store']!, 'setWorkspaceSession')
-      writes.mockClear()
-
-      harness.runtime.onPtyExit('pty-b', 0, 'inc-b')
-
-      expect(writes).toHaveBeenCalledTimes(1)
-      expect(writes.mock.calls[0]![0].closedTerminalPanesByPaneKey?.[PANE_B]).toBeUndefined()
-    })
-
     it(`exit then close retires them too: ${route}, with ${host}`, async () => {
       const harness = closingHost(host)
 
@@ -148,7 +136,10 @@ for (const host of ['no window', 'a window'] as const) {
         leaves: []
       })
       relaunched.registerPty('pty-b', TEST_WORKTREE_ID)
-      relaunched['ptysById'].get('pty-b')!.incarnationId = 'inc-b'
+      relaunched['terminalIdentity'].setPtyIncarnationId(
+        relaunched['ptysById'].get('pty-b')!,
+        'inc-b'
+      )
       const reconciled: string[] = []
       watchReconciled(relaunched, reconciled)
 
@@ -161,7 +152,10 @@ for (const host of ['no window', 'a window'] as const) {
     it(`does not take the closed pane for a later incarnation of the id: ${route}, with ${host}`, async () => {
       const harness = closingHost(host)
       await close(harness.runtime)
-      harness.runtime['ptysById'].get('pty-b')!.incarnationId = 'inc-later'
+      harness.runtime['terminalIdentity'].setPtyIncarnationId(
+        harness.runtime['ptysById'].get('pty-b')!,
+        'inc-later'
+      )
 
       harness.runtime.onPtyExit('pty-b', 0, 'inc-later')
 

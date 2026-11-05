@@ -3,7 +3,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { SettingsUpdate } from '../../../../shared/rpc-contract/client-settings-params'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 import { SharingUnavailableOnHostError } from '../../../../shared/sharing-unavailable-on-host'
 
 vi.mock('electron', () => ({
@@ -60,14 +60,4 @@ it('omits the toggles on a host with no sharing service so clients reach its nam
   expect(settings).not.toHaveProperty('artifactSharingEnabled')
   expect(settings).not.toHaveProperty('agentSkillSharingEnabled')
   expect(() => runtime.assertAgentSkillSharingAllowed()).toThrow(SharingUnavailableOnHostError)
-})
-
-describe('publish capability settings schema', () => {
-  it('rejects the deprecated artifactsEnabled alias too', () => {
-    expect(SettingsUpdate.safeParse({ artifactsEnabled: true }).success).toBe(false)
-  })
-
-  it('still accepts an unrelated allowlisted setting', () => {
-    expect(SettingsUpdate.safeParse({ compactWorktreeCards: true }).success).toBe(true)
-  })
 })

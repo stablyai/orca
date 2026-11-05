@@ -2,7 +2,7 @@ import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
   BrowserClientFileChannelWriteParams
-} from '../../../../shared/browser-client-file-channel-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { getBrowserClientDownloadTransferStore } from '../../browser-client-download-transfer-store'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'

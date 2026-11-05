@@ -1,26 +1,23 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi, type MockInstance } from 'vitest'
-import { readFile } from 'node:fs/promises'
-import { _settlePendingWorktreeRemovalsForTests } from '../../worktree-background-removal'
+import { readFile, lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { _settlePendingWorktreeRemovalsForTests } from '../../workspaces/removal/worktree-background-removal'
 
+import './runtime-test-module-registration.spec'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
 import {
-  assertWorktreeCleanForRemoval,
   closeLocalWatcherForWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   forceDeleteLocalBranchMock,
-  gitRunner,
   invalidateAuthorizedRootsCacheMock,
-  join,
-  listWorktrees,
-  lstat,
-  mkdir,
-  mkdtemp,
-  removeWorktree,
-  rm,
-  runHook,
-  setPlatform,
-  tmpdir,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
+  setPlatform
+} from '../orca-runtime-test-mocks/setup.spec'
+import { join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
+import { runHook } from '../../workspace-hooks/hooks'
+import { tmpdir } from 'node:os'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -28,8 +25,8 @@ import {
   createStaleRuntimeWorktreeStore,
   deferred,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // Connected SSH fixtures need the host HOME for removal guards.
@@ -59,7 +56,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(removeWorktree).mockResolvedValue({
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
-    const gitExec = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+    const gitExec = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
     })
@@ -357,7 +354,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
     const notifier = { worktreesChanged: vi.fn() }
     runtime.setNotifier(notifier as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'status') {
         throw new Error('fatal: not a git repository')
       }

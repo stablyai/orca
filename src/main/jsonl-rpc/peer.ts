@@ -6,26 +6,16 @@ import {
 } from '../../shared/main-process-ndjson-framer'
 import { detachProviderStreamErrorHandler } from '../provider-process/provider-stdio-error-boundary'
 import { ProviderStdioWriteQueue } from '../provider-process/provider-stdio-write-queue'
+import { ProviderOutputEnd } from '../provider-process/provider-output-end'
 import {
   jsonlRpcRequestTimeout,
   resolveJsonlRpcPeerOptions,
   type JsonlRpcPeerOptions
 } from './peer-limits'
-import {
-  JsonlRpcReplyTooLargeError,
-  oversizedReplyRequest,
-  type JsonlRpcRequestOptions
-} from './peer-oversized-reply'
+import { settleOversizedJsonlRecord, type JsonlRpcRequestOptions } from './peer-oversized-record'
+import { settleJsonlRpcReply, type JsonlRpcPendingRequest } from './peer-reply'
 
 const recordSchema = z.looseObject({ type: z.string() })
-const responseSchema = z.looseObject({
-  type: z.literal('response'),
-  id: z.string().optional(),
-  command: z.string(),
-  success: z.boolean(),
-  data: z.unknown().optional(),
-  error: z.string().optional()
-})
 
 export type JsonlRpcRecord = z.infer<typeof recordSchema>
 export class JsonlRpcStreamClosedError extends Error {
@@ -34,43 +24,34 @@ export class JsonlRpcStreamClosedError extends Error {
     this.name = 'JsonlRpcStreamClosedError'
   }
 }
-export class JsonlRpcResponseError extends Error {
-  constructor(
-    readonly command: string,
-    message: string
-  ) {
-    super(message)
-    this.name = 'JsonlRpcResponseError'
-  }
-}
+export { JsonlRpcResponseError } from './peer-reply'
 export type JsonlRpcPeerHandlers = {
   /** Includes id-less deferred prompt acknowledgements; dialect failures are fatal to preserve lifecycle evidence. */
   onRecord?: (record: JsonlRpcRecord) => void
+  /** An event over the line limit was dropped, leaving only its bounded prefix; the stream stays open. */
+  onOversizedEvent?: (type: string, prefix: string) => void
   onClose?: (error: Error) => void
   onDiagnostic?: (message: string) => void
-}
-type PendingRequest = {
-  command: string
-  resolve: (value: unknown) => void
-  reject: (error: Error) => void
-  timer?: ReturnType<typeof setTimeout>
+  /** Holds the close at the end of the agent's output, as for its exit report; `finish` closes. */
+  onInputEnd?: (finish: () => void) => void
 }
 
 /** Transport only: a dialect owns turns, dialogs, and session handles. */
 export class JsonlRpcPeer {
   private readonly limits: Required<JsonlRpcPeerOptions>
-  private readonly pending = new Map<string, PendingRequest>()
+  private readonly pending = new Map<string, JsonlRpcPendingRequest>()
   private readonly writer: ProviderStdioWriteQueue
   private readonly framer: ReturnType<typeof createIncrementalNdjsonFramer>
   private nextId = 0
   private nextOptionalId = 0
   private terminalError?: Error
   private inputEndError?: Error
+  private readonly outputEnd: ProviderOutputEnd
   private readingPaused = false
 
   constructor(
     private readonly input: Readable,
-    private readonly output: Writable,
+    output: Writable,
     private readonly handlers: JsonlRpcPeerHandlers = {},
     options: JsonlRpcPeerOptions = {}
   ) {
@@ -78,7 +59,7 @@ export class JsonlRpcPeer {
     this.writer = new ProviderStdioWriteQueue(
       output,
       this.limits.maxQueuedWriteBytes,
-      (error) => this.close(error),
+      (error) => this.endOutput(error),
       {
         capacity: () => new Error('JSON-lines RPC write queue capacity exceeded'),
         closed: () => new Error('JSON-lines RPC output is not writable')
@@ -88,20 +69,17 @@ export class JsonlRpcPeer {
       (record) => this.dispatch(record),
       (rejected) => {
         if (rejected.kind === 'line-too-long') {
-          const id = oversizedReplyRequest(rejected, this.nextOptionalId)
-          if (id) {
-            const request = this.pending.get(id)
-            if (request) {
-              const error = new JsonlRpcReplyTooLargeError(
-                request.command,
-                rejected.observedBytes,
-                this.limits.maxLineBytes
-              )
-              this.rejectPending(id, error)
-            }
-          } else {
-            this.close(new Error('JSON-lines RPC record exceeded the size limit'))
-          }
+          settleOversizedJsonlRecord(rejected, {
+            highestOptionalAssigned: this.nextOptionalId,
+            maxLineBytes: this.limits.maxLineBytes,
+            pendingCommand: (id) => this.pending.get(id)?.command,
+            rejectPending: (id, error) => this.rejectPending(id, error),
+            skipEvent: (type) => {
+              this.diagnose(`Skipped oversized agent RPC event: ${type}`)
+              this.handlers.onOversizedEvent?.(type, rejected.prefix)
+            },
+            close: (error) => this.close(error)
+          })
         } else {
           this.diagnose('Ignored non-JSON agent output')
         }
@@ -116,11 +94,15 @@ export class JsonlRpcPeer {
     input.on('end', this.onEnd)
     input.on('close', this.onEnd)
     input.on('error', this.onError)
-    output.on('finish', this.onEnd)
-    output.on('close', this.onEnd)
-    output.on('error', this.onError)
-    if (input.destroyed || input.readableEnded || output.destroyed || !output.writable) {
+    this.outputEnd = new ProviderOutputEnd(
+      output,
+      (error) => this.endOutput(error),
+      () => this.inputEndError ?? new JsonlRpcStreamClosedError()
+    )
+    if (input.destroyed || input.readableEnded) {
       this.onEnd()
+    } else if (output.destroyed || !output.writable) {
+      this.endOutput(new JsonlRpcStreamClosedError())
     }
   }
 
@@ -158,8 +140,8 @@ export class JsonlRpcPeer {
     params: Record<string, unknown> = {},
     options: JsonlRpcRequestOptions = {}
   ): Promise<unknown> {
-    if (this.terminalError) {
-      return Promise.reject(this.terminalError)
+    if (this.terminalError ?? this.outputEnd.error) {
+      return Promise.reject(this.terminalError ?? this.outputEnd.error)
     }
     if (this.pending.size >= this.limits.maxPendingRequests) {
       return Promise.reject(new Error('JSON-lines RPC pending request capacity exceeded'))
@@ -195,7 +177,10 @@ export class JsonlRpcPeer {
       this.pending.set(id, { command, resolve, reject, timer })
       void this.send({ ...params, type: command, id }, controller.signal).catch(
         (error: unknown) => {
-          this.rejectPending(id, error instanceof Error ? error : new Error(String(error)))
+          // A write lost to the agent no longer reading leaves the call to the output drain.
+          if (!this.outputEnd.error) {
+            this.rejectPending(id, error instanceof Error ? error : new Error(String(error)))
+          }
         }
       )
     })
@@ -222,9 +207,7 @@ export class JsonlRpcPeer {
     this.input.removeListener('end', this.onEnd)
     this.input.removeListener('close', this.onEnd)
     detachProviderStreamErrorHandler(this.input, this.onError)
-    this.output.removeListener('finish', this.onEnd)
-    this.output.removeListener('close', this.onEnd)
-    detachProviderStreamErrorHandler(this.output, this.onError)
+    this.outputEnd.detach()
     this.framer.reset()
     this.writer.close(error)
     for (const id of this.pending.keys()) {
@@ -244,8 +227,25 @@ export class JsonlRpcPeer {
       this.close(error instanceof Error ? error : new Error(String(error)))
     }
   }
-  private readonly onEnd = (): void =>
-    this.close(this.inputEndError ?? new JsonlRpcStreamClosedError())
+  private readonly onEnd = (): void => {
+    const finish = (): void =>
+      this.close(this.inputEndError ?? this.outputEnd.error ?? new JsonlRpcStreamClosedError())
+    if (this.inputEndError || !this.handlers.onInputEnd) {
+      finish()
+    } else {
+      this.handlers.onInputEnd(finish)
+    }
+  }
+
+  private endOutput(error: Error): void {
+    if (this.terminalError || !this.outputEnd.begin(error)) {
+      return
+    }
+    this.writer.close(error)
+    this.outputEnd.settle(this.pending.size > 0, this.input, () =>
+      this.close(this.inputEndError ?? error)
+    )
+  }
   private readonly onError = (error: Error): void => this.close(error)
 
   private diagnose(message: string): void {
@@ -280,37 +280,9 @@ export class JsonlRpcPeer {
       return
     }
     const record = parsed.data
-    if (
-      record.type !== 'response' &&
-      record.type !== 'extension_ui_request' &&
-      typeof record.id === 'string' &&
-      this.pending.has(record.id) &&
-      (Object.hasOwn(record, 'command') || Object.hasOwn(record, 'success'))
-    ) {
-      this.rejectPending(record.id, new Error('Invalid agent RPC response'))
-      return
-    }
-    if (record.type === 'response' && typeof record.id === 'string') {
-      const pending = this.pending.get(record.id)
-      if (!pending) {
-        return
-      }
-      const response = responseSchema.safeParse(record)
-      if (!response.success || response.data.command !== pending.command) {
-        this.rejectPending(record.id, new Error('Invalid agent RPC response'))
-        return
-      }
-      this.pending.delete(record.id)
-      clearTimeout(pending.timer)
-      if (response.data.success) {
-        pending.resolve(response.data.data)
-      } else {
-        pending.reject(
-          new JsonlRpcResponseError(
-            pending.command,
-            response.data.error ?? `Agent rejected ${pending.command}`
-          )
-        )
+    if (settleJsonlRpcReply(record, this.pending, (id, error) => this.rejectPending(id, error))) {
+      if (this.outputEnd.error && this.pending.size === 0) {
+        this.close(this.inputEndError ?? this.outputEnd.error)
       }
       return
     }

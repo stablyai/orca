@@ -20,10 +20,14 @@ export function resolveMobileNativeChatTerminalStreamAction(args: {
     // Rearm missing covered streams or the composer loses its input lease indefinitely.
     return args.streamActive ? 'none' : 'rearm'
   }
+  if (!args.webViewReady) {
+    return 'none'
+  }
   // Tab switching can open a lease before uncovering the terminal; resume output once its WebView is ready.
-  return (args.streamCovered || args.streamIsLeaseOnly || !args.streamActive) && args.webViewReady
-    ? 'resume'
-    : 'none'
+  if (args.streamCovered || args.streamIsLeaseOnly) {
+    return 'resume'
+  }
+  return args.streamActive ? 'none' : 'rearm'
 }
 
 export function isTerminalCoveredByNativeChat(

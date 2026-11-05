@@ -11,15 +11,15 @@ export default withWorkspaceRoute(function MobileSourceControlScreen() {
     hostId?: string | string[]
     worktreeId?: string | string[]
     name?: string | string[]
-    origin?: string | string[]
     tab?: string | string[]
   }>()
+  const hostId = firstParam(params.hostId)
+  const worktreeId = firstParam(params.worktreeId)
   return (
     <MobileSourceControlPanel
-      hostId={firstParam(params.hostId)}
-      worktreeId={firstParam(params.worktreeId)}
+      hostId={hostId}
+      worktreeId={worktreeId}
       name={firstParam(params.name)}
-      origin={firstParam(params.origin)}
       initialTab={parseSourceControlHubTab(firstParam(params.tab))}
       embedded={false}
     />

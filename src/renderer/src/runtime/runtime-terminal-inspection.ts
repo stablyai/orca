@@ -1,5 +1,5 @@
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
-import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
+import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal/input/terminal-input'
 import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import {
@@ -7,17 +7,16 @@ import {
   getRemoteRuntimePtyOwner
 } from './runtime-terminal-stream'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   classifyTerminalProcessInspectionFailure,
   clientOnlyUnverifiableInspection,
   isClientOnlyUnverifiableInspection,
-  type TerminalProcessInspection
-} from '../../../shared/terminal-process-inspection'
+  type TerminalProcessInspection,
+  type TerminalProcessInspection as RuntimeTerminalProcessInspection
+} from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
-
-export type RuntimeTerminalProcessInspection = TerminalProcessInspection
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 function isRuntimePtyInputTooLarge(data: string): boolean | Promise<boolean> {

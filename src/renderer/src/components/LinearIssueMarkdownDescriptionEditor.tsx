@@ -5,15 +5,15 @@ import type { Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import { LoaderCircle } from 'lucide-react'
 
-import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown-extensions'
-import { setRichMarkdownImageResolverContext } from '@/components/editor/rich-markdown-image-context'
-import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/raw-markdown-html'
+import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown/schema/rich-markdown-extensions'
+import { setRichMarkdownImageResolverContext } from '@/components/editor/rich-markdown/images/rich-markdown-image-context'
+import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/rich-markdown/raw-source/raw-markdown-html'
 import {
   createRichMarkdownEditorCodec,
   type RichMarkdownEditorCodec
-} from '@/components/editor/rich-markdown-source-transport'
+} from '@/components/editor/rich-markdown/document/rich-markdown-source-transport'
 import { LinearIssueMarkdownToolbar } from '@/components/LinearIssueMarkdownToolbar'
-import { RichMarkdownTableControls } from '@/components/editor/RichMarkdownTableControls'
+import { RichMarkdownTableControls } from '@/components/editor/rich-markdown/tables/RichMarkdownTableControls'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -21,7 +21,7 @@ import { useAppStore } from '@/store'
 import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
-} from '@/components/editor/rich-markdown-spellcheck'
+} from '@/components/editor/rich-markdown/instance/rich-markdown-spellcheck'
 
 type LinearIssueMarkdownDescriptionEditorProps = {
   value: string
@@ -85,7 +85,10 @@ export function LinearIssueMarkdownDescriptionEditor({
         attributes: {
           class: 'rich-markdown-editor',
           spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled),
-          'aria-label': 'Issue description'
+          'aria-label': translate(
+            'auto.components.LinearIssueWorkspace.issueDescriptionLabel',
+            'Issue description'
+          )
         },
         handleKeyDown: (_view, event) => {
           if (!isScreenSubmitShortcut(event)) {

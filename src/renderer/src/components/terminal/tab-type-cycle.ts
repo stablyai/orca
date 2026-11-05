@@ -1,4 +1,5 @@
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import { sanitizeRecentTabIds } from '../../store/slices/tab-group-state'
 
 export type TabCycleType = WorkspaceVisibleTabType
 
@@ -122,4 +123,22 @@ export function getNextTabWithinActiveType({
   return tabsOfActiveType[
     (currentIndex + direction + tabsOfActiveType.length) % tabsOfActiveType.length
   ]
+}
+
+/** Ctrl+Tab quick-toggle target: the visible tab used just before the active one. */
+export function getPreviousRecentTab(
+  tabs: readonly TypeCyclableTab[],
+  recentTabIds: string[] | undefined,
+  activeGroupTabId: string | null
+): TypeCyclableTab | null {
+  if (!activeGroupTabId) {
+    return null
+  }
+  const visibleTabIds = tabs.flatMap((entry) => (entry.tabId ? [entry.tabId] : []))
+  const recent = sanitizeRecentTabIds(recentTabIds, visibleTabIds)
+  const currentIndex = recent.lastIndexOf(activeGroupTabId)
+  if (currentIndex <= 0) {
+    return null
+  }
+  return tabs.find((entry) => entry.tabId === recent[currentIndex - 1]) ?? null
 }

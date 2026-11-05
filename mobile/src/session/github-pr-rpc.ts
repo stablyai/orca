@@ -1,7 +1,14 @@
+import type { RpcClient } from '../transport/rpc-client'
+import { withGitHubTargetOperation } from '../tasks/github-work-item-operation'
+import { requireGitHubWorkItemTargetDetails } from '../../../src/shared/github/work-item-target'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../src/shared/github/check-types'
-import type { GitHubAssignableUser, PRInfo } from '../../../src/shared/github/pull-request-types'
+import type {
+  GitHubAssignableUser,
+  GitHubOwnerRepo,
+  PRInfo
+} from '../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcResponse } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'
@@ -18,6 +25,7 @@ import {
 import type { GitHubPrSettleableOperation } from './github-pr-mutation-outcome'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { translate } from '../i18n/mobile-i18n'
 
 export {
   buildGithubPrParams,
@@ -39,7 +47,9 @@ async function settleGithubPrRead<Value>(
   read: GitHubPrSettleableOperation<Value>,
   send: () => Promise<RpcResponse>
 ): Promise<GitHubPrReadOutcome<Value>> {
-  const fallback = `Request failed: ${read.operation.method}`
+  const fallback = translate('session.githubPrRpc.requestFailed', 'Request failed: {{method}}', {
+    method: read.operation.method
+  })
   let reply: RpcResponse
   try {
     reply = await send()
@@ -88,7 +98,12 @@ export function fetchHostedReviewForBranch(
 export function fetchPRForBranch(
   client: RpcOperationSender,
   worktreeId: string,
-  args: { branch: string; linkedPRNumber?: number | null }
+  args: {
+    branch: string
+    linkedPRNumber?: number | null
+    fallbackPRNumber?: number | null
+    currentHeadOid?: string | null
+  }
 ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
   return settleGithubPrRead(
     {
@@ -100,7 +115,9 @@ export function fetchPRForBranch(
         client,
         githubPrRequestParams(githubPrForBranchRead.operation.method, worktreeId, {
           branch: args.branch,
-          linkedPRNumber: args.linkedPRNumber ?? null
+          linkedPRNumber: args.linkedPRNumber ?? null,
+          fallbackPRNumber: args.fallbackPRNumber ?? null,
+          currentHeadOid: args.currentHeadOid ?? null
         })
       )
   )
@@ -116,20 +133,46 @@ function resolveGithubPrForBranchOutcome(outcome: GitHubPrForBranchOutcome | nul
   return outcome.kind === 'found' ? outcome.pr : null
 }
 
-export function fetchWorkItemDetails(
-  client: RpcOperationSender,
+export async function fetchWorkItemDetails(
+  client: RpcClient,
   worktreeId: string,
-  args: { prNumber: number }
+  args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null; refresh?: boolean }
 ): Promise<GitHubPrReadOutcome<GitHubWorkItemDetails | null>> {
-  return settleGithubPrRead(githubPrWorkItemDetailsRead, () =>
-    githubPrWorkItemDetailsRead.request(
-      client,
-      githubPrRequestParams(githubPrWorkItemDetailsRead.operation.method, worktreeId, {
-        number: args.prNumber,
-        type: 'pr'
-      })
-    )
+  const params = githubPrRequestParams(githubPrWorkItemDetailsRead.operation.method, worktreeId, {
+    number: args.prNumber,
+    type: 'pr'
+  })
+  const outcome = await settleGithubPrRead(githubPrWorkItemDetailsRead, () =>
+    args.prRepo
+      ? withGitHubTargetOperation({
+          client,
+          params: { repo: mobileRepoSelectorFromWorktreeId(worktreeId) },
+          ownerRepo: args.prRepo,
+          read: true,
+          canonical: args.refresh === true,
+          send: (selected, exact, options) =>
+            githubPrWorkItemDetailsRead.request(selected, { ...params, ...exact }, options)
+        })
+      : githubPrWorkItemDetailsRead.request(client, params)
   )
+  if (outcome.ok && args.prRepo) {
+    try {
+      return {
+        ok: true,
+        result: requireGitHubWorkItemTargetDetails(outcome.result, {
+          repository: args.prRepo,
+          type: 'pr',
+          number: args.prNumber
+        })
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Unable to load pull request details.'
+      }
+    }
+  }
+  return outcome
 }
 
 export function fetchPRChecks(
@@ -185,13 +228,25 @@ export function fetchPRCheckDetails(
 }
 
 export function fetchAssignableUsers(
-  client: RpcOperationSender,
-  worktreeId: string
+  client: RpcClient,
+  worktreeId: string,
+  prRepo: GitHubOwnerRepo | null
 ): Promise<GitHubPrReadOutcome<GitHubAssignableUser[]>> {
-  return settleGithubPrRead(githubPrAssignableUsersRead, () =>
-    githubPrAssignableUsersRead.request(
-      client,
-      githubPrRequestParams(githubPrAssignableUsersRead.operation.method, worktreeId, {})
+  return settleGithubPrRead(githubPrAssignableUsersRead, () => {
+    if (!prRepo) {
+      throw new Error('Unable to identify this pull request. Open it again.')
+    }
+    const params = githubPrRequestParams(
+      githubPrAssignableUsersRead.operation.method,
+      worktreeId,
+      {}
     )
-  )
+    return withGitHubTargetOperation({
+      client,
+      params,
+      ownerRepo: prRepo,
+      send: (selected, exact, options) =>
+        githubPrAssignableUsersRead.request(selected, { ...params, ...exact }, options)
+    })
+  })
 }

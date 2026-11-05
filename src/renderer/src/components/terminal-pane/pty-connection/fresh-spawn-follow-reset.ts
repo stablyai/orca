@@ -7,8 +7,8 @@ import {
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   buildKittyKeyboardRestore
-} from '../../../../../shared/terminal-mode-reset-profiles'
-import { buildFreshShellViewportBlankingSequence } from '../../../../../shared/terminal-fresh-shell-viewport'
+} from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { buildFreshShellViewportBlankingSequence } from '../../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import {
   getTerminalScrollIntentKind,
@@ -151,7 +151,8 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     payload: string,
     ownerProcessEnded = false,
     isAlternateScreen?: boolean,
-    terminalOwner?: 'shell'
+    terminalOwner?: 'shell',
+    imageTitle?: string
   ): string => {
     // Cold restore replaces the dead process despite persisted agent titles/status; clear stale mouse/focus/paste modes before the fresh shell (#12101).
     if (ownerProcessEnded) {
@@ -162,7 +163,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
         ? POST_REPLAY_DEAD_TUI_RESET
         : POST_REPLAY_REATTACH_RESET
     }
-    if (session.shouldPreserveAgentReattachModes()) {
+    if (session.shouldPreserveAgentReattachModes(imageTitle)) {
       return buildPostReplayLiveAgentReattachReset(payload)
     }
     // Alt-screen panes can be live unrecognized TUIs; preserve mouse modes the replay restored (#8291).

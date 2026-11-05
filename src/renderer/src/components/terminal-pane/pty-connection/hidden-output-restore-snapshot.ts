@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
@@ -9,7 +9,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_AFTER_BYTE_GAP,
   buildKittyKeyboardRestore
-} from '../../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   discardTerminalOutput,
   writeTerminalOutput
@@ -33,6 +33,8 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession): void {
   // Abandonment discards bytes the mirror already scanned; restore its Kitty flags into xterm after grounding.
   session.writeAbandonedRestoreGap = function (): void {
+    // The CAN-led reset moves xterm's parser off the stream.
+    session.streamPosition.invalidate({ grounded: true })
     session.writePtyOutputToXterm(
       `${RESET_AFTER_BYTE_GAP}${buildKittyKeyboardRestore(session.kittyKeyboardModes.snapshotFlags)}`,
       true
@@ -82,6 +84,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
     pendingEscapeTailAnsi?: string
     kittyKeyboardFlags?: number
     terminalOwner?: 'shell'
+    lastTitle?: string
   }): Promise<void> {
     const restorePtyId = session.transport.getPtyId()
     const restoreGeneration = session.hiddenOutputRestoreGeneration
@@ -165,7 +168,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               session.writeReplayData(replayChunk)
             }
           }
-          const hasLiveAgent = session.hasLiveAgentReattachStatusOrTitleSignal()
+          const hasLiveAgent = session.hasLiveAgentReattachStatusOrTitleSignal(snapshot.lastTitle)
           // Match reattach’s live-pane fallback when alternateScreen is absent; even same-buffer ?1049l runs cursor restore.
           const postReplayReset =
             snapshot.terminalOwner === 'shell'
@@ -182,6 +185,10 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           }
           session.hiddenRendererStateDirty = false
           session.recordRendererOrderedSeq(snapshot)
+          if (typeof snapshot.seq === 'number' && restorePtyId) {
+            // The replay, pending escape tail included, leaves xterm exactly at the snapshot's position.
+            session.streamPosition.anchor(restorePtyId, snapshot.seq)
+          }
           recordTerminalOutput(session.pane.terminal)
           await waitForTerminalReplayWritesParsed(session.pane.terminal)
           if (session.deps.isVisibleRef.current) {

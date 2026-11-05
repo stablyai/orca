@@ -22,6 +22,7 @@ export function installPreviewTerminalKeyHandler(args: {
   claimImeKeyEvent: (event: KeyboardEvent) => boolean
   pasteClipboardText: (activeElement: Element | null, source: 'keyboard') => void
   sendInput: (data: string) => void
+  requestClose?: () => void
   /** Everything but optionKeyLocations, which this installer tracks itself. */
   getShortcutContext: () => Omit<PreviewShortcutContext, 'optionKeyLocations'>
 }): () => void {
@@ -191,10 +192,13 @@ export function installPreviewTerminalKeyHandler(args: {
         nativeOnlyShortcutTracker.armKeyDown(event)
         event.stopImmediatePropagation()
         return false
+      // Why: the focused terminal swallows Escape and Tab, so Cmd/Ctrl+W is the only keyboard exit.
+      case 'closeActivePane':
+        args.requestClose?.()
+        return consumeEvent(event)
       // Swallow pane-only actions rather than encoding shell bytes such as Ctrl+D; list each so new actions require explicit classification.
       case 'clearActivePane':
       case 'clearPaneTitle':
-      case 'closeActivePane':
       case 'copySelection':
       case 'equalizePaneSizes':
       case 'focusPane':

@@ -25,6 +25,28 @@ export function formatCopiedSelectionWithContext({
   return `File: ${relativePath}\n${lineLabel}\n\n\`\`\`${codeFenceLanguage}\n${codeBlock}\`\`\``
 }
 
+/** `path:start-end` and the lines in a code block, as a chat quote names a file selection. */
+export function formatSelectionReference({
+  relativePath,
+  language,
+  selection,
+  selectedText
+}: FormatCopiedSelectionArgs): string {
+  const { startLine, endLine } = getContextualCopyLineRange(selection)
+  const range = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`
+  return `${relativePath}:${range}\n${fencedCode(selectedText, getCodeFenceLanguage(language))}`
+}
+
+/** A fence longer than any backtick run in the text, so the text can't close it. */
+export function fencedCode(text: string, language = ''): string {
+  let longest = 0
+  for (const run of text.matchAll(/`+/g)) {
+    longest = Math.max(longest, run[0].length)
+  }
+  const fence = '`'.repeat(Math.max(3, longest + 1))
+  return `${fence}${language}\n${text.replace(/\n$/, '')}\n${fence}`
+}
+
 export function canCopySelectionWithContext(selection: IRange): boolean {
   return (
     selection.startLineNumber !== selection.endLineNumber &&
@@ -40,6 +62,19 @@ export function getContextualCopyLineRange(selection: IRange): {
     startLine: selection.startLineNumber,
     endLine: getInclusiveEndLine(selection)
   }
+}
+
+export function getRemoteUrlLineRange(
+  line: number,
+  selection: IRange | null
+): { line: number; endLine?: number } {
+  if (selection) {
+    const { startLine, endLine } = getContextualCopyLineRange(selection)
+    if (endLine > startLine && line >= startLine && line <= endLine) {
+      return { line: startLine, endLine }
+    }
+  }
+  return { line }
 }
 
 export function getInclusiveEndLine(selection: IRange): number {

@@ -1,14 +1,17 @@
 import { useMemo } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type {
+  NativeChatBlock,
+  NativeChatMessage
+} from '../../../../shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import {
   nativeChatWorkRunEditKey,
   nativeChatWorkRunEntries
-} from '../../../../shared/native-chat-work-run'
+} from '../../../../shared/native-chat/native-chat-work-run'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
-import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
+import type { NativeChatDiffReveal } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
 export type NativeChatWorkRun = {
   /** Every member's tool blocks, in order: the run's one block list. */

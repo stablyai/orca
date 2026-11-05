@@ -1,10 +1,10 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 // Inspect stale-account state only after a concrete PTY attaches.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
-import { createTerminalGitHubPRLinkDetector } from '../../../../../shared/terminal-github-pr-link-detector'
+import { createTerminalGitHubPRLinkDetector } from '../../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import { setRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
 import { AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS } from '../agent-task-complete-policy'
 import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
@@ -72,7 +72,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
         return false
       }
     }
-    session.bindProcessExitState(ptyId, replacementPtyId)
+    session.bindProcessExitState(ptyId, options.replacePtyId)
     if (session.activePanePtyBinding && session.activePanePtyBinding !== ptyId) {
       session.reportPanePtyVisibility(session.activePanePtyBinding, false)
     }
@@ -159,6 +159,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       return
     }
     session.remotePtyIncarnationId = incarnationId ?? null
+    session.noteBoundProcessIncarnation(incarnationId)
     // Handle rotation replaces store identity within the same pane/session generation, without fresh-spawn exit semantics.
     session.bindActivePanePty(ptyId, { replacePtyId: replacedPtyId })
   }

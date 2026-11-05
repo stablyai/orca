@@ -5,7 +5,7 @@ import { readTerminalKittyFile } from './terminal-kitty-file-read'
 import type {
   TerminalKittyFileRequest,
   TerminalKittyFileResult
-} from '../../shared/terminal-kitty-file'
+} from '../../shared/terminal/images/terminal-kitty-file'
 
 export abstract class OrcaRuntimeWithReadKittyFile extends RuntimeWorkspaceSelectors {
   async readKittyFile(
@@ -29,7 +29,7 @@ export abstract class OrcaRuntimeWithReadKittyFile extends RuntimeWorkspaceSelec
     }
     const workspacePath = isFloatingWorkspaceId(pty.worktreeId)
       ? null
-      : (await this.resolveWorktreeSelector(`id:${pty.worktreeId}`)).path
+      : (await this.resolveWorkspaceSelector(`id:${pty.worktreeId}`)).path
     const result = await readTerminalKittyFile(
       request,
       {

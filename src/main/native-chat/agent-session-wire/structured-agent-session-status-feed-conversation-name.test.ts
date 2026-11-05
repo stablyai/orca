@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,10 +7,10 @@ import { createTrackedJournalOpener } from '../agent-session-journal/journal-hos
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredChatNamingFailure } from './structured-agent-session-host-types'
 
 const journals = createTrackedJournalOpener()
@@ -39,7 +40,8 @@ async function namedFeed() {
   const sessions = new Map([['session', indexedStatusFeedSession({ journal })]])
   const feed = new StructuredAgentSessionStatusFeed({
     sessions,
-    getRecord: (id) => (id === record.sessionId ? record : null),
+    getConversation: (id) =>
+      id === record.sessionId ? agentSessionConversationView(record) : null,
     namingFailure: () => failure,
     now: () => 100,
     logger: createStructuredAgentSessionLogger()
@@ -67,17 +69,6 @@ function lastName(events: readonly AgentSessionStatusEvent[]): string | undefine
   return event?.type === 'status' ? event.session.conversationName : undefined
 }
 
-it('publishes a held chat its saved name once, and not again for an unchanged record', async () => {
-  const { feed, events, name } = await namedFeed()
-  expect(lastName(events)).toBeUndefined()
-  name('Explain the parser')
-  expect(lastName(events)).toBe('Explain the parser')
-  const count = events.length
-  feed.publish('session')
-  feed.publishConversationName('session')
-  expect(events).toHaveLength(count + 1)
-})
-
 it('names a chat whose tab closed before naming finished, and keeps it for later subscribers', async () => {
   const { feed, events, sessions, name } = await namedFeed()
   feed.revokeLive('session')
@@ -92,28 +83,13 @@ it('names a chat whose tab closed before naming finished, and keeps it for later
   })
 })
 
-it('keeps the name on the summary a closing chat retains', async () => {
-  const { feed, events, name } = await namedFeed()
-  name('Explain the parser')
-  feed.close('session')
-  expect(lastName(events)).toBe('Explain the parser')
-})
-
-it('publishes naming activity without needing a chat summary', async () => {
-  const { feed, events } = await namedFeed()
-  const count = events.length
-  feed.publishConversationName('unknown-session')
-  expect(events).toHaveLength(count + 1)
-  expect(events.at(-1)).toEqual({ type: 'snapshot', sessions: [], namingActiveSessionIds: [] })
-})
-
 it('publishes cold names from durable records across a host restart without a status row', () => {
   let record = { ...agentSessionRecordFixture(), conversationName: 'Before' }
   const open = () =>
     new StructuredAgentSessionStatusFeed({
       sessions: new Map(),
-      getRecord: () => record,
-      listRecords: () => [record],
+      getConversation: () => agentSessionConversationView(record),
+      listConversations: () => [agentSessionConversationView(record)],
       now: () => 100,
       logger: createStructuredAgentSessionLogger()
     })

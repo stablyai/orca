@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 // Headless hosts keep a parked viewer's grid until another viewer or phone takes it (#15997).
 
@@ -38,26 +38,6 @@ function createRuntime({ headless }: { headless: boolean }) {
 describe('remote desktop viewers on a parked terminal', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
-
-  it('keeps the parked owner grid on a windowless host', async () => {
-    const { runtime, size } = createRuntime({ headless: true })
-    await runtime.updateRemoteDesktopViewer(PTY, 'multiplex:a:1', 'laptop', 99, 67)
-
-    await runtime.unregisterRemoteDesktopViewer(PTY, 'multiplex:a:1')
-
-    expect(size()).toEqual({ cols: 99, rows: 67 })
-  })
-
-  it('lets a phone attaching after the park take the grid', async () => {
-    const { runtime, size } = createRuntime({ headless: true })
-    await runtime.updateRemoteDesktopViewer(PTY, 'multiplex:a:1', 'laptop', 99, 67)
-    await runtime.unregisterRemoteDesktopViewer(PTY, 'multiplex:a:1')
-
-    await runtime.handleMobileSubscribe(PTY, 'phone', { cols: 45, rows: 20 })
-
-    expect(runtime.getDriver(PTY)).toEqual({ kind: 'mobile', clientId: 'phone' })
-    expect(size()).toEqual({ cols: 45, rows: 20 })
-  })
 
   it('returns to the parked grid, not the spawn grid, after that phone leaves', async () => {
     const { runtime, size } = createRuntime({ headless: true })

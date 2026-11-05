@@ -1,3 +1,4 @@
+import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
@@ -20,9 +21,15 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import type { WslMovedProject } from '../../shared/wsl-move/wsl-moved-project'
+import type { HostRepoCatalogSnapshot } from '../../shared/host-repo-catalog-snapshot'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
+  /** Local projects a WSL host now owns: read-only, listed only for their existing chats. */
+  listWslMoved: () => Promise<WslMovedProject[]>
+  /** Saved WSL host project lists by environment id; desktop-only, never contacts a host. */
+  listHostCatalogSnapshots: () => Promise<Record<string, HostRepoCatalogSnapshot>>
   add: (args: {
     path: string
     kind?: 'git' | 'folder'
@@ -45,6 +52,7 @@ export type RepositoryApi = {
         | 'repoIcon'
         | 'upstream'
         | 'hookSettings'
+        | 'editorFormatter'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
@@ -76,7 +84,7 @@ export type RepositoryApi = {
     parentPath: string
     name: string
     kind: 'git' | 'folder'
-  }) => Promise<{ repo: Repo } | { error: string }>
+  }) => Promise<{ repo: Repo } | RepoCreateFailure>
   isGitAvailable: () => Promise<boolean>
   getDefaultCreateProjectParent: () => Promise<string>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void

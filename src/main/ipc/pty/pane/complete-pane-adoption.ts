@@ -1,12 +1,17 @@
+import { readTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
 } from '../../../runtime/terminal-model-query-authority'
 import { registerPty } from '../../../memory/pty-registry'
-import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { StablePaneSpawnContext, StablePaneOwner } from './stable-owner'
-import { persistAdmittedStablePaneBinding } from './stable-owner'
+import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/workspace-session/terminal-session-state-save-failure'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+
+import {
+  type StablePaneSpawnContext,
+  type StablePaneOwner,
+  persistAdmittedStablePaneBinding
+} from './stable-owner'
 import { attemptStablePaneAttach } from './stable-pane-attach'
 import { PaneOwnerContentionError } from './pane-spawn-operation'
 import { admitPtySpawnOwnership, registerPersistedPtySpawn } from './spawn-registration'
@@ -17,7 +22,9 @@ import {
 import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
 import { admitProviderReattachLaunchIdentity } from './launch-authority'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
-import { provenSpawnResponse } from '../spawn-outcome'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
+import '../spawn-outcome'
+import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
 import { ptySizes } from '../delivery/visibility-state'
 import {
   resolveCommittedPtySize,
@@ -77,6 +84,9 @@ export async function completePaneAdoption(
         )
       : undefined
     ensureWslHookRelayForReattach(result, args.connectionId)
+    if (result.wslDistro && !args.connectionId) {
+      wslBridgePtyPresence.noteLive(result.id, result.wslDistro)
+    }
     runtime?.preparePtyExecutionContext?.(result.id, result.wslDistro ?? null, {
       preserveExisting: result.wslDistro === undefined
     })
@@ -119,6 +129,7 @@ export async function completePaneAdoption(
       runtime,
       args.store,
       claim,
+      { ...result, isReattach: true },
       result.id,
       args.worktreeId,
       args.connectionId ?? null,
@@ -143,7 +154,11 @@ export async function completePaneAdoption(
         }
         return {
           result: response,
-          outcome: { kind: 'registration-exited' as const, result: response },
+          outcome: {
+            kind: 'registration-exited' as const,
+            result: response,
+            terminalStartFailure: readTerminalStartFailure(error)
+          },
           owner,
           materialized: true as const
         }

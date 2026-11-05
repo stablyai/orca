@@ -1,6 +1,8 @@
 ; electron-builder accepts one nsis.include; keep every customInstall/customUnInstall hook here.
 
 !include "${__FILEDIR__}\orca-process-check.nsh"
+!include "${__FILEDIR__}\orca-user-path-cleanup.nsh"
+!include "${__FILEDIR__}\orca-other-install-check.nsh"
 
 ; #10138/#23225: electron-builder’s APP_ASSOCIATE overwrites the extension’s default without backup,
 ; and APP_UNASSOCIATE never restores it. Register only additive ProgID/OpenWithProgids/SupportedTypes
@@ -59,6 +61,67 @@
     Pop $0
     nsExec::Exec 'taskkill /F /IM "orca-terminal-daemon.exe" $2'
     Pop $0
+    ; WSL hosts: the detached wsl.exe holders and each host's server keep their distros running. Orca
+    ; ends only the holders its profile recorded, each checked by pid, start time and command line.
+    ; The last install for this user also stops each recorded host's server in a running distro: the
+    ; HKCU/HKLM twin shares this userData, its host records and those servers, so it keeps them.
+    ; Only a userData with a holder folder or WSL host records launches it: everyone who never ran a
+    ; WSL host sees nothing here. These are the folders Electron's userData (app.getName()) can be, as the
+    ; deleteAppData step lists them; a custom --user-data-dir can't be known here.
+    ; Sync the flags with WSL_HOLDER_UNINSTALL_FLAG and WSL_SERVER_UNINSTALL_FLAG in
+    ; src/main/startup/wsl-holder-uninstall-preflight.ts.
+    ${if} $installMode == "all"
+      SetShellVarContext current
+    ${endIf}
+    StrCpy $1 ""
+    StrCpy $2 ""
+    ${if} ${FileExists} "$APPDATA\${APP_FILENAME}\wsl-distro-holders\*.json"
+      StrCpy $1 "1"
+    ${endIf}
+    ${if} ${FileExists} "$APPDATA\${APP_FILENAME}\orca-wsl-host-deployments.json"
+      StrCpy $2 "1"
+    ${endIf}
+    !ifdef APP_PRODUCT_FILENAME
+      ${if} ${FileExists} "$APPDATA\${APP_PRODUCT_FILENAME}\wsl-distro-holders\*.json"
+        StrCpy $1 "1"
+      ${endIf}
+      ${if} ${FileExists} "$APPDATA\${APP_PRODUCT_FILENAME}\orca-wsl-host-deployments.json"
+        StrCpy $2 "1"
+      ${endIf}
+    !endif
+    !ifdef APP_PACKAGE_NAME
+      ${if} ${FileExists} "$APPDATA\${APP_PACKAGE_NAME}\wsl-distro-holders\*.json"
+        StrCpy $1 "1"
+      ${endIf}
+      ${if} ${FileExists} "$APPDATA\${APP_PACKAGE_NAME}\orca-wsl-host-deployments.json"
+        StrCpy $2 "1"
+      ${endIf}
+    !endif
+    ${if} $installMode == "all"
+      SetShellVarContext all
+    ${endIf}
+    ${if} $2 == "1"
+      !insertmacro ORCA_OTHER_INSTALL_STATE $2
+    ${endIf}
+    ${if} $2 == "none"
+      nsExec::Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --orca-uninstall-release-wsl-holders --orca-uninstall-stop-wsl-servers'
+      Pop $0
+    ${elseIf} $1 == "1"
+      nsExec::Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --orca-uninstall-release-wsl-holders'
+      Pop $0
+    ${endIf}
+    ; Agent hook entries call the ~/.orca\agent-hooks scripts by bare path. Those scripts outlive the
+    ; app, but once that folder is removed every agent fails a hook per event, so the last Orca for
+    ; this user takes the entries out. Another install, or an unreadable registry, keeps them.
+    ; Best effort: the exit code never blocks uninstall.
+    ; Sync the flag with AGENT_HOOKS_UNINSTALL_FLAG in src/main/startup/agent-hooks-uninstall-preflight.ts.
+    !insertmacro ORCA_OTHER_INSTALL_STATE $1
+    ${if} $1 == "none"
+      nsExec::Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --orca-uninstall-remove-agent-hooks'
+      Pop $0
+    ${endIf}
+    ; The `orca` command's PATH entry (Settings → Command line) would otherwise outlive the app.
+    !insertmacro ORCA_REMOVE_USER_PATH_ENTRY "$INSTDIR\resources\bin"
     Pop $2
     Pop $1
     Pop $0

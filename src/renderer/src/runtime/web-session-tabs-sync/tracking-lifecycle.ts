@@ -1,4 +1,8 @@
 import {
+  forgetVisibleTabPicksForEnvironment,
+  forgetVisibleTabPicksForWorktree
+} from '../web-session-visible-tab-pick-report'
+import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
   latestReceivedSessionTabsSnapshotByWorktree,
@@ -153,6 +157,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   clearWebSessionBrowserPlacementsForWorktree(environmentId, worktreeId)
   clearWebSessionTerminalPlacementsForWorktree(environmentId, worktreeId)
   forgetMirroredTerminalHandles(environmentId, worktreeId)
+  forgetVisibleTabPicksForWorktree(environmentId, worktreeId)
 }
 
 export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
@@ -186,6 +191,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   }
   latestReceivedSessionTabsFrameByEnvironment.delete(trimmedEnvironmentId)
   latestReceivedSessionTabsInventoryFrameByEnvironment.delete(trimmedEnvironmentId)
+  forgetVisibleTabPicksForEnvironment(trimmedEnvironmentId)
   for (const key of sessionTabsRemovalWatermarkByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       sessionTabsRemovalWatermarkByWorktree.delete(key)

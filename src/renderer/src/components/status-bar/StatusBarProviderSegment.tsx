@@ -17,10 +17,10 @@ import {
   USAGE_URGENT_PERCENT,
   USAGE_WARNING_PERCENT,
   clampUsedPercent,
-  getProviderDisplayName,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
 } from './tooltip'
+import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
 import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
@@ -263,20 +263,12 @@ export function ProviderSegment({
       : []
   )
 
-  if (!p || p.status === 'idle') {
+  // Why static: unfocused windows never poll, so a pending chip's pulse would redraw the compositor indefinitely.
+  if (!p || p.status === 'idle' || (p.status === 'fetching' && !tightest)) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        <span className="animate-pulse">···</span>
-      </span>
-    )
-  }
-
-  if (p.status === 'fetching' && !tightest) {
-    return (
-      <span className="inline-flex items-center gap-1 text-muted-foreground">
-        <ProviderIcon provider={provider} />
-        <span className="animate-pulse">···</span>
+        <span>···</span>
       </span>
     )
   }

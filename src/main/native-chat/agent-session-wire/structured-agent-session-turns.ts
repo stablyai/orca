@@ -2,19 +2,19 @@
 // Calling the adapter first could lose a turn it accepted.
 
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
   refuse,
-  type AgentSessionRefusalReason,
-  type AgentSessionSendResult,
-  type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+  type AgentSessionWireRefusal,
+  isAgentSessionRefusalError
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
+import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
@@ -25,7 +25,10 @@ import {
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
+import {
+  isAgentSessionAttachmentExpiredError,
+  type AgentSessionAttachmentExpiredError
+} from '../agent-session-attachments/agent-session-attachment-claims'
 import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 export { performPrompt } from './structured-agent-session-turns-prompt'
@@ -70,14 +73,18 @@ function invalid(
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
-export function agentSessionAttachmentExpiredRefusal(): {
+export function agentSessionAttachmentExpiredRefusal(error: AgentSessionAttachmentExpiredError): {
   ok: false
   refusal: AgentSessionWireRefusal
 } {
-  return invalid(
-    'attachmentExpired',
-    'A chat attachment in this message is no longer stored on the host, so it was not sent.'
-  )
+  return {
+    ok: false,
+    refusal: refuse(
+      'agent_session_operation_invalid',
+      { reason: 'attachmentExpired', expiredAttachments: error.expired },
+      'A chat attachment in this message is no longer stored on the host, so it was not sent.'
+    )
+  }
 }
 
 /** Accept once per ID; existing submissions replay without redelivery because unknown cannot prove non-delivery.
@@ -93,11 +100,10 @@ export async function performSend(
     /** Persist only source kind in the submission. */
     source?: AgentSessionMessageSource
     options?: Readonly<Record<string, string>>
+    selection?: Readonly<Record<string, string>>
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
-  const existing = ctx.journal
-    .submissions()
-    .find((entry) => entry.clientMessageId === input.clientMessageId)
+  const existing = ctx.journal.submission(input.clientMessageId)
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
     return invalid(
       'messageIdReused',
@@ -110,7 +116,7 @@ export async function performSend(
       value: { clientMessageId: input.clientMessageId, submission: { ...existing } }
     }
   }
-  const captured = captureStructuredExecutionOptions(ctx, input.options)
+  const captured = captureStructuredExecutionOptions(ctx, input.options, input.selection)
   if ('refusal' in captured) {
     return { ok: false, refusal: captured.refusal }
   }
@@ -130,7 +136,7 @@ export async function performSend(
       error
     })
     if (isAgentSessionAttachmentExpiredError(error)) {
-      return agentSessionAttachmentExpiredRefusal()
+      return agentSessionAttachmentExpiredRefusal(error)
     }
     // Preserve typed refusals, corrupt-database errors and newer-version guards; never retry writes past them.
     if (
@@ -155,12 +161,20 @@ function requireSubmission(
   ctx: AgentSessionTurnContext,
   clientMessageId: string
 ): AgentJournalSubmission {
-  const submission = ctx.journal
-    .submissions()
-    .find((entry) => entry.clientMessageId === clientMessageId)
+  const submission = ctx.journal.submission(clientMessageId)
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }
   // Return this step’s answer; later journal settlement must not mutate it.
   return { ...submission }
+}
+
+export type AgentSessionReplayContext = Pick<
+  AgentSessionTurnContext,
+  'sessionId' | 'fence' | 'currentWork' | 'agent' | 'persistedOptions' | 'now'
+> & {
+  journal: Pick<
+    AgentSessionJournal,
+    'cursor' | 'submission' | 'inputOrder' | 'epoch' | 'threadGoal'
+  > & { queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'> }
 }

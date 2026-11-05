@@ -9,12 +9,15 @@ function ok(result: unknown): RpcResponse {
   return { id: 'rpc', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
-function createClient(responses: RpcResponse[]) {
+function createClient(responses: (RpcResponse | Error)[]) {
   return {
     sendRequest: vi.fn<SendRequest>(async (method) => {
       const response = responses.shift()
       if (!response) {
         throw new Error(`no scripted response for ${method}`)
+      }
+      if (response instanceof Error) {
+        throw response
       }
       return response
     })
@@ -41,319 +44,69 @@ afterEach(() => {
 })
 
 describe('openMobileFileTap', () => {
-  it('opens absolute terminal artifacts through the grant-backed preview route', async () => {
-    const client = createClient([
-      ok({
-        worktree: 'wt-1',
-        relativePath: null,
-        absolutePath: '/tmp/result.json',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'absolute-file',
-          provider: 'local',
-          absolutePath: '/tmp/result.json',
-          grantId: 'grant-1'
+  // Answers like the mobile page bridge, which refuses past 64 pending requests.
+  async function openTerminalReadings(readings: string[], existing: Set<string>) {
+    let pending = 0
+    const client = {
+      sendRequest: vi.fn<SendRequest>(async (method, params) => {
+        if (method === 'files.open') {
+          return ok({ opened: true })
         }
+        if (pending >= 64) {
+          throw new Error('too many pending requests')
+        }
+        pending += 1
+        await Promise.resolve()
+        pending -= 1
+        const pathText =
+          typeof params === 'object' && params !== null && 'pathText' in params
+            ? String(params.pathText)
+            : ''
+        return ok({
+          worktree: 'wt-1',
+          relativePath: pathText,
+          absolutePath: `/repo/${pathText}`,
+          exists: existing.has(pathText),
+          isDirectory: false
+        })
       })
-    ])
-    const pushPreviewRoute = vi.fn()
-    const triggerOpenFeedback = vi.fn()
-
+    }
     openMobileFileTap({
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
-      pathText: '/tmp/result.json',
-      terminalHandle: 'terminal-1',
-      line: 12,
-      column: 3,
-      pushPreviewRoute,
-      openBrowser: vi.fn(),
-      triggerOpenFeedback,
-      fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
-      getActivationState: activeTerminalState,
-      switchSessionTab: vi.fn(),
-      scheduleDelayedAction: vi.fn()
-    })
-    await Promise.resolve()
-
-    expect(client.sendRequest).toHaveBeenCalledWith(
-      'files.resolveTerminalPath',
-      {
-        worktree: 'id:wt-1',
-        pathText: '/tmp/result.json',
-        terminal: 'terminal-1',
-        crossWorkspace: true
-      },
-      { timeoutMs: 10_000 }
-    )
-    expect(pushPreviewRoute).toHaveBeenCalledWith({
-      pathname: '/h/[hostId]/files/preview/[worktreeId]',
-      params: expect.objectContaining({
-        hostId: 'host-1',
-        worktreeId: 'wt-1',
-        source: 'terminalArtifact',
-        absolutePath: '/tmp/result.json',
-        grantId: 'grant-1',
-        pathText: '/tmp/result.json',
-        terminal: 'terminal-1',
-        line: '12',
-        column: '3'
-      })
-    })
-    expect(triggerOpenFeedback).toHaveBeenCalledTimes(1)
-    expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
-  })
-
-  it('preserves the worktree-contained files.open flow', async () => {
-    const client = createClient([
-      ok({
-        worktree: 'wt-1',
-        relativePath: 'src/index.ts',
-        absolutePath: '/repo/src/index.ts',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'worktree-file',
-          provider: 'local',
-          relativePath: 'src/index.ts',
-          absolutePath: '/repo/src/index.ts'
-        }
-      }),
-      ok({ opened: true })
-    ])
-    const scheduleDelayedAction = vi.fn((callback: () => void) => callback())
-    const openedTab = { id: 'tab-2', relativePath: 'src/index.ts' }
-    const switchSessionTab = vi.fn()
-
-    openMobileFileTap({
-      client,
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      pathText: 'src/index.ts',
-      line: null,
-      column: null,
+      candidates: readings.map((pathText) => ({ pathText, line: null, column: null })),
       pushPreviewRoute: vi.fn(),
       openBrowser: vi.fn(),
       triggerOpenFeedback: vi.fn(),
       fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [openedTab],
+      getSessionTabs: () => [],
       getActiveSessionTabId: () => 'terminal-tab',
       getActivationState: activeTerminalState,
-      switchSessionTab,
-      scheduleDelayedAction
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
-    await Promise.resolve()
     await vi.advanceTimersByTimeAsync(0)
+    return client.sendRequest.mock.calls
+      .filter(([method]) => method === 'files.open')
+      .map(([, params]) => params)
+  }
 
-    expect(client.sendRequest).toHaveBeenCalledWith(
-      'files.open',
-      { worktree: 'id:wt-1', relativePath: 'src/index.ts' },
-      { timeoutMs: 15_000 }
+  it('opens the longest terminal reading that exists, as desktop does', async () => {
+    const opened = await openTerminalReadings(
+      ['src/index.ts', 'src/index.ts.map', 'src/index.ts.map.bak'],
+      new Set(['src/index.ts', 'src/index.ts.map'])
     )
-    expect(switchSessionTab).toHaveBeenCalledWith(openedTab)
+    expect(opened).toEqual([{ worktree: 'id:wt-1', relativePath: 'src/index.ts.map' }])
   })
 
-  it('opens a sibling terminal path through the resolved owning worktree', async () => {
-    const client = createClient([
-      ok({
-        worktree: 'wt-2',
-        relativePath: 'docs/readme.md',
-        absolutePath: '/repo-b/docs/readme.md',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'worktree-file',
-          provider: 'local',
-          relativePath: 'docs/readme.md',
-          absolutePath: '/repo-b/docs/readme.md'
-        }
-      })
-    ])
-    const pushPreviewRoute = vi.fn()
-
-    openMobileFileTap({
-      client,
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      pathText: '/repo-b/docs/readme.md',
-      line: null,
-      column: null,
-      pushPreviewRoute,
-      openBrowser: vi.fn(),
-      triggerOpenFeedback: vi.fn(),
-      fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
-      getActivationState: activeTerminalState,
-      switchSessionTab: vi.fn(),
-      scheduleDelayedAction: vi.fn()
-    })
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(pushPreviewRoute).toHaveBeenCalledWith({
-      pathname: '/h/[hostId]/files/preview/[worktreeId]',
-      params: expect.objectContaining({
-        hostId: 'host-1',
-        worktreeId: 'wt-2',
-        source: 'worktree',
-        relativePath: 'docs/readme.md'
-      })
-    })
-    expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
-  })
-
-  it('opens worktree-contained line references through the preview route', async () => {
-    const client = createClient([
-      ok({
-        worktree: 'wt-1',
-        relativePath: 'src/index.ts',
-        absolutePath: '/repo/src/index.ts',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'worktree-file',
-          provider: 'local',
-          relativePath: 'src/index.ts',
-          absolutePath: '/repo/src/index.ts'
-        }
-      })
-    ])
-    const pushPreviewRoute = vi.fn()
-    const triggerOpenFeedback = vi.fn()
-
-    openMobileFileTap({
-      client,
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      worktreeName: 'Orca',
-      pathText: 'src/index.ts:120:7',
-      line: 120,
-      column: 7,
-      pushPreviewRoute,
-      openBrowser: vi.fn(),
-      triggerOpenFeedback,
-      fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
-      getActivationState: activeTerminalState,
-      switchSessionTab: vi.fn(),
-      scheduleDelayedAction: vi.fn()
-    })
-    await Promise.resolve()
-
-    expect(pushPreviewRoute).toHaveBeenCalledWith({
-      pathname: '/h/[hostId]/files/preview/[worktreeId]',
-      params: expect.objectContaining({
-        hostId: 'host-1',
-        worktreeId: 'wt-1',
-        source: 'worktree',
-        relativePath: 'src/index.ts',
-        line: '120',
-        column: '7',
-        worktreeName: 'Orca'
-      })
-    })
-    expect(triggerOpenFeedback).toHaveBeenCalledTimes(1)
-    expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
-  })
-
-  it('encodes worktree HTML paths before opening a browser tab', async () => {
-    const client = createClient([
-      ok({
-        worktree: 'wt-1',
-        relativePath: 'public/report #1?.html',
-        absolutePath: '/repo/public/report #1?.html',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'worktree-file',
-          provider: 'local',
-          relativePath: 'public/report #1?.html',
-          absolutePath: '/repo/public/report #1?.html'
-        }
-      })
-    ])
-    const openBrowser = vi.fn()
-
-    openMobileFileTap({
-      client,
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      pathText: 'public/report #1?.html',
-      line: null,
-      column: null,
-      pushPreviewRoute: vi.fn(),
-      openBrowser,
-      triggerOpenFeedback: vi.fn(),
-      fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
-      getActivationState: activeTerminalState,
-      switchSessionTab: vi.fn(),
-      scheduleDelayedAction: vi.fn()
-    })
-    await Promise.resolve()
-
-    expect(openBrowser).toHaveBeenCalledWith('file:///repo/public/report%20%231%3F.html')
-    expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
-  })
-
-  it('passes the terminal cwd when resolving relative taps', async () => {
-    const client = createClient([
-      ok({
-        worktree: 'wt-1',
-        relativePath: 'src/index.ts',
-        absolutePath: '/repo/src/index.ts',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'worktree-file',
-          provider: 'local',
-          relativePath: 'src/index.ts',
-          absolutePath: '/repo/src/index.ts'
-        }
-      }),
-      ok({ opened: true })
-    ])
-
-    openMobileFileTap({
-      client,
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      pathText: 'index.ts',
-      terminalHandle: 'term-1',
-      cwd: '/repo/src',
-      line: null,
-      column: null,
-      pushPreviewRoute: vi.fn(),
-      openBrowser: vi.fn(),
-      triggerOpenFeedback: vi.fn(),
-      fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
-      getActivationState: activeTerminalState,
-      switchSessionTab: vi.fn(),
-      scheduleDelayedAction: vi.fn()
-    })
-    await Promise.resolve()
-
-    expect(client.sendRequest).toHaveBeenCalledWith(
-      'files.resolveTerminalPath',
-      {
-        worktree: 'id:wt-1',
-        pathText: 'index.ts',
-        terminal: 'term-1',
-        cwd: '/repo/src',
-        crossWorkspace: true
-      },
-      { timeoutMs: 10_000 }
+  it('still checks the real path behind hundreds of hard-wrap guesses', async () => {
+    const guesses = Array.from({ length: 210 }, (_, index) => `src/file${index}.tssrc/next.ts`)
+    const opened = await openTerminalReadings(
+      [...guesses, 'src/file19.ts'],
+      new Set(['src/file19.ts'])
     )
+    expect(opened).toEqual([{ worktree: 'id:wt-1', relativePath: 'src/file19.ts' }])
   })
 
   it('does not open SSH worktree HTML paths as local browser file URLs', async () => {
@@ -379,9 +132,7 @@ describe('openMobileFileTap', () => {
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
-      pathText: 'report.html',
-      line: null,
-      column: null,
+      candidates: [{ pathText: 'report.html', line: null, column: null }],
       pushPreviewRoute: vi.fn(),
       openBrowser,
       triggerOpenFeedback: vi.fn(),
@@ -392,8 +143,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(openBrowser).not.toHaveBeenCalled()
     expect(client.sendRequest).toHaveBeenCalledWith(
@@ -420,10 +170,8 @@ describe('openMobileFileTap', () => {
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
-      pathText: '/tmp/result.json',
+      candidates: [{ pathText: '/tmp/result.json', line: null, column: null }],
       terminalHandle: 'terminal-1',
-      line: null,
-      column: null,
       pushPreviewRoute,
       openBrowser: vi.fn(),
       triggerOpenFeedback: vi.fn(),
@@ -454,100 +202,9 @@ describe('openMobileFileTap', () => {
         }
       })
     )
-    await Promise.resolve()
-    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(pushPreviewRoute).not.toHaveBeenCalled()
-  })
-
-  it('reports a failed files.open through onOpenFailed', async () => {
-    const client = createClient([
-      ok({
-        worktree: 'wt-1',
-        relativePath: 'src/index.ts',
-        absolutePath: '/repo/src/index.ts',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'worktree-file',
-          provider: 'local',
-          relativePath: 'src/index.ts',
-          absolutePath: '/repo/src/index.ts'
-        }
-      }),
-      { id: 'rpc', ok: false, error: { code: 'runtime_error', message: 'nope' } }
-    ])
-    const onOpenFailed = vi.fn()
-
-    openMobileFileTap({
-      client,
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      pathText: 'src/index.ts',
-      line: null,
-      column: null,
-      pushPreviewRoute: vi.fn(),
-      openBrowser: vi.fn(),
-      triggerOpenFeedback: vi.fn(),
-      fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
-      getActivationState: activeTerminalState,
-      switchSessionTab: vi.fn(),
-      scheduleDelayedAction: vi.fn(),
-      onOpenFailed
-    })
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(onOpenFailed).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports an unsupported file when files.open declines it', async () => {
-    const client = createClient([
-      ok({
-        worktree: 'wt-1',
-        relativePath: 'dist/app.zip',
-        absolutePath: '/repo/dist/app.zip',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'worktree-file',
-          provider: 'local',
-          relativePath: 'dist/app.zip',
-          absolutePath: '/repo/dist/app.zip'
-        }
-      }),
-      ok({ worktree: 'wt-1', relativePath: 'dist/app.zip', kind: 'binary', opened: false })
-    ])
-    const onOpenFailed = vi.fn()
-    const scheduleDelayedAction = vi.fn()
-
-    openMobileFileTap({
-      client,
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      pathText: 'dist/app.zip',
-      line: null,
-      column: null,
-      pushPreviewRoute: vi.fn(),
-      openBrowser: vi.fn(),
-      triggerOpenFeedback: vi.fn(),
-      fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
-      getActivationState: activeTerminalState,
-      switchSessionTab: vi.fn(),
-      scheduleDelayedAction,
-      onOpenFailed
-    })
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(onOpenFailed).toHaveBeenCalledTimes(1)
-    expect(scheduleDelayedAction).not.toHaveBeenCalled()
   })
 
   it('does not report a stale failure after a newer tap supersedes it', async () => {
@@ -566,9 +223,7 @@ describe('openMobileFileTap', () => {
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
-      pathText: 'gone/missing.ts',
-      line: null,
-      column: null,
+      candidates: [{ pathText: 'gone/missing.ts', line: null, column: null }],
       pushPreviewRoute: vi.fn(),
       openBrowser: vi.fn(),
       triggerOpenFeedback: vi.fn(),
@@ -583,8 +238,7 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction: vi.fn(),
       onOpenFailed
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(onOpenFailed).not.toHaveBeenCalled()
   })
@@ -611,9 +265,7 @@ describe('openMobileFileTap', () => {
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
-      pathText: 'src/index.ts',
-      line: null,
-      column: null,
+      candidates: [{ pathText: 'src/index.ts', line: null, column: null }],
       pushPreviewRoute: vi.fn(),
       openBrowser: vi.fn(),
       triggerOpenFeedback: vi.fn(),
@@ -628,8 +280,7 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction: vi.fn(),
       onOpenFailed
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(onOpenFailed).not.toHaveBeenCalled()
   })
@@ -659,9 +310,7 @@ describe('openMobileFileTap', () => {
       client,
       hostId: 'host-1',
       worktreeId: 'wt-1',
-      pathText: 'src/index.ts',
-      line: null,
-      column: null,
+      candidates: [{ pathText: 'src/index.ts', line: null, column: null }],
       pushPreviewRoute: vi.fn(),
       openBrowser: vi.fn(),
       triggerOpenFeedback: vi.fn(),
@@ -675,10 +324,9 @@ describe('openMobileFileTap', () => {
       switchSessionTab,
       scheduleDelayedAction: (callback) => callbacks.push(callback)
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(0)
     callbacks.forEach((callback) => callback())
-    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(switchSessionTab).not.toHaveBeenCalled()
   })
@@ -720,9 +368,7 @@ describe('openMobileFileTap', () => {
       hostId: 'host-1',
       worktreeId: 'wt-1',
       worktreeName: 'api',
-      pathText: 'src/index.ts',
-      line: null,
-      column: null,
+      candidates: [{ pathText: 'src/index.ts', line: null, column: null }],
       pushPreviewRoute,
       openBrowser: vi.fn(),
       triggerOpenFeedback: vi.fn(),

@@ -2,11 +2,13 @@ import type { RepoIcon } from './repo-icon'
 import type { GhAccountBinding } from './github/account-binding'
 import type { GitHubRepositoryIdentity } from './github/pull-request-types'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
-import type { ForkSyncMode } from './git-fork-sync'
-import type { GitRemoteIdentity } from './git-remote-identity'
-import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
+import type { ForkSyncMode } from './git/remotes/git-fork-sync'
+import type { GitRemoteIdentity } from './git/remotes/git-remote-identity'
+import type { RepoSourceControlAiOverrides } from './source-control/ai/settings/source-control-ai-settings-types'
 import type { RepoProjectHostSetupMethod } from './project-types'
 import type { JiraProjectReference } from './jira/jira-project-reference'
+import type { OrcadRetainedMarker } from './orcad-retained-marker'
+import type { EditorFormatter } from './editor-formatter'
 
 export type RepoKind = 'git' | 'folder'
 
@@ -53,6 +55,7 @@ export type Repo = {
   /** Optional repo-scoped workspace root override. Relative paths resolve from `path`. */
   worktreeBasePath?: string
   hookSettings?: RepoHookSettings
+  editorFormatter?: EditorFormatter
   /** SSH target ID for remote repos. null/undefined = local. */
   connectionId?: string | null
   /** Runtime-host repos otherwise resemble local repos (connectionId: null); retain their explicit execution owner. */
@@ -95,12 +98,16 @@ export type Repo = {
   sourceControlAi?: RepoSourceControlAiOverrides
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
+  /** Local row a WSL host now owns, kept for a downgrade; set only by the mover's retention pass. */
+  orcadRetained?: OrcadRetainedMarker
 }
 
 /** Shared IPC shape for repos:getBaseRefDefault across main/preload/renderer; remoteCount avoids a second hint lookup. */
 export type BaseRefDefaultResult = {
   defaultBaseRef: string | null
   remoteCount: number
+  /** This stopped (or unverifiable) WSL distro refused the read (E9); re-ask once it runs. */
+  refusedWslDistro?: string
 }
 
 export type BaseRefSearchResult = {

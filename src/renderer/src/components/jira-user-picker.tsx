@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { jiraSearchUsers, type RuntimeJiraSettings } from '@/runtime/runtime-jira-client'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { JiraUser } from '../../../shared/jira/jira-types'
 
 const USER_SEARCH_DEBOUNCE_MS = 250
@@ -67,6 +68,7 @@ export function JiraUserPicker({
   searchUsers?: (query: string) => Promise<JiraUser[]>
   allowKnownUserId?: boolean
 }): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [users, setUsers] = useState<JiraUser[]>([])
@@ -113,7 +115,8 @@ export function JiraUserPicker({
         value0: label
       })
     )
-  }, [label, selectedUser, value])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [label, selectedUser, value, languageRevision])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

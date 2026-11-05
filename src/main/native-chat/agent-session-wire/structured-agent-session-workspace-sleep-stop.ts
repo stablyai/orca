@@ -1,9 +1,9 @@
-import { recordAgentSessionAcquisitionExit } from '../../runtime/agent-session-acquisition-exit-transition'
+import { recordAgentSessionAcquisitionExit } from '../../runtime/agent-session/agent-session-acquisition-exit-transition'
 import {
   agentSessionLeaseIsReleased,
   agentSessionLeaseOwnerVerdict
-} from '../../../shared/agent-session-lease-adjudication'
-import { structuredSessionNeverStarted } from '../../runtime/agent-session-record-founding'
+} from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { structuredSessionNeverStarted } from '../../runtime/agent-session/records/agent-session-record-founding'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-lifetime'
 import type {
@@ -27,12 +27,14 @@ export async function stopWorkspaceSleepChat(input: {
   const { deps, sessions, sessionId, child } = input
   let ownedStopped = false
   try {
+    deps.store.requireWritableRecord(sessionId)
     if (child) {
       await input.stopAgent(sessionId, { cause: 'user-close' })
     } else if (input.owned) {
-      ownedStopped = await stopAgentSessionProviderRoot(
+      const stopped = await stopAgentSessionProviderRoot(
         () => deps.adapter.releaseAcquisition?.({ sessionId }) ?? Promise.resolve(false)
       )
+      ownedStopped = !!stopped
       const receipt = deps.adapter.stoppedAcquisition?.(sessionId)
       if (ownedStopped && receipt) {
         try {
@@ -43,7 +45,13 @@ export async function stopWorkspaceSleepChat(input: {
             ) {
               throw new Error('agent_session_ownership_unknown')
             }
-            return recordAgentSessionAcquisitionExit(record, receipt, input.fence, input.now())
+            return recordAgentSessionAcquisitionExit(
+              record,
+              receipt,
+              input.fence,
+              input.now(),
+              stopped === 'kill-delivered' ? stopped : undefined
+            )
           })
           deps.adapter.acknowledgeSessionRelease?.(sessionId, receipt)
         } catch (error) {

@@ -1,5 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   emitNativeChatMessageSent,
   emitNativeChatPickerItemAccepted,
@@ -10,9 +10,9 @@ import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
-import type { NativeChatPickerItem } from './native-chat-composer-state'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
-import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-pty-session-options'
 import {
   answerNativeChatCommandInComposer,
   type NativeChatLocalCommandAnswer

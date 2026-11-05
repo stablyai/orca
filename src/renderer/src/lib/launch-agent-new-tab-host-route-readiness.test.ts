@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const TAB = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 
@@ -33,8 +33,7 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('@/lib/agent-launch-through-host', () => ({
-  launchAgentThroughHost: testState.launchAgentThroughHost,
-  windowMakesHostLaunchTab: () => true
+  launchAgentThroughHost: testState.launchAgentThroughHost
 }))
 vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: (ptyId: string, watcher: (data: string) => void) => {
@@ -45,7 +44,7 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn(async () => null)
 }))
-vi.mock('../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))

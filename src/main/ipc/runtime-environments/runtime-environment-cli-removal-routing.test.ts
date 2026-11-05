@@ -1,20 +1,20 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import {
   addEnvironmentFromPairingCode,
-  getEnvironmentStorePath,
   removeEnvironment
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getEnvironmentStorePath } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   applyRuntimeEnvironmentCapabilityVerdict,
@@ -33,7 +33,7 @@ const { subscribeMock, supportsMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
-vi.mock('../../../shared/remote-runtime-client', async (importOriginal) => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', async (importOriginal) => ({
   ...(await importOriginal()),
   subscribeRemoteRuntimeRequest: subscribeMock
 }))
@@ -42,7 +42,6 @@ vi.mock('./runtime-environment-shared-control-support', async (importOriginal) =
   supportsSharedControl: supportsMock
 }))
 
-import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
 
 let userDataPath: string
@@ -59,24 +58,6 @@ afterEach(() => {
 })
 
 describe('runtime responses the app can no longer attribute to a saved server', () => {
-  it('keeps verifying status after the store stops resolving the environment', () => {
-    const environment = seedEnvironment()
-    const transport = {
-      isReady: () => false,
-      request: vi.fn(),
-      establish: vi.fn(),
-      pause: vi.fn()
-    }
-    const owner = createRuntimeEnvironmentStatusOwner(userDataPath, environment, transport)
-    removeEnvironment(userDataPath, environment.id)
-
-    // A thrown status callback bypasses settleWaiters and strands refresh callers until timeout.
-    expect(() => owner.acceptVerified(statusResponse())).not.toThrow()
-    // Teardown for a removed environment belongs to the removal watcher, not to a status reader.
-    expect(transport.establish).toHaveBeenCalledOnce()
-    owner.dispose()
-  })
-
   it.each([
     ['direct subscription', 'browser.screencast'],
     ['support-routed subscription on a host without shared control', 'files.watch']
@@ -113,23 +94,6 @@ describe('runtime responses the app can no longer attribute to a saved server', 
     expect(onEvent).toHaveBeenCalledWith({ type: 'response', response })
   })
 })
-
-function statusResponse() {
-  return {
-    id: 'status.get',
-    ok: true as const,
-    result: {
-      runtimeId: 'r',
-      rendererGraphEpoch: 1,
-      graphStatus: 'ready' as const,
-      authoritativeWindowId: 1,
-      liveTabCount: 0,
-      liveLeafCount: 0,
-      capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY]
-    },
-    _meta: { runtimeId: 'r' }
-  }
-}
 
 async function subscribed(method: string) {
   const environment = seedEnvironment()

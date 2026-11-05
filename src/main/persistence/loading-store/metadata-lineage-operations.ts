@@ -1,23 +1,26 @@
-import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
+import type { DiffCommentBaseMutation } from '../../../shared/diff-comment-mutation'
+
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner'
 import {
-  workspaceSessionOwnerPartitionForHost,
-  workspaceSessionPartitionIdsForHost
-} from '../restoring-sessions/session-owner-removal'
+  type WorkspaceKey,
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../shared/workspace-scope'
+import { workspaceSessionPartitionIdsForHost } from '../restoring-sessions/session-owner-removal'
+import { workspaceSessionPartitionHostId as workspaceSessionOwnerPartitionForHost } from '../../../shared/workspace-session/workspace-session-partition-owner'
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import type { SessionHostPartitionOperations } from './session-host-partitions'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
-import { scheduleSave } from './write-scheduling'
+
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import {
+  type SessionHostPartitionOperations,
   hasPersistedWorkspaceSession,
   partitionOwnsWorktreeTabs,
   partitionHasOtherRepoWorktreeTabs,
@@ -97,7 +100,7 @@ export class MetadataLineageOperations {
 
   setWorktreeMeta(
     target: HostWorktreeTarget,
-    meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
+    meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation & DiffCommentBaseMutation
   ): WorktreeMeta {
     return setWorktreeMetaForHostOperation(
       this[metadataLineageOperationsContext].runtime,

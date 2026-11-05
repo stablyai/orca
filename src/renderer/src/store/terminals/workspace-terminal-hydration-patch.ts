@@ -1,6 +1,10 @@
 import type { AppState } from '../types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveAgentPaneAuthorityKey } from '../slices/agent-pane-authority'
 import type { HydrateWorkspaceSessionOptions } from './terminal-contracts'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
@@ -35,7 +39,14 @@ export type WorkspaceHydrationPatch = Pick<
   | 'localOnlyScrollbackByTabId'
 > &
   // Only cold reads carry contested-host shadows; scoped hydration must preserve the store’s copy.
-  Partial<Pick<AppState, 'contestedHostWorkspaceSessions' | 'contestedPrimaryHostBySessionKey'>>
+  Partial<
+    Pick<
+      AppState,
+      | 'contestedHostWorkspaceSessions'
+      | 'contestedPrimaryHostBySessionKey'
+      | 'hydratedRuntimeSessionHostIds'
+    >
+  >
 
 export function replaceHydratedRecordKeys<T>(
   current: Record<string, T>,

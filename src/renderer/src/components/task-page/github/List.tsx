@@ -22,7 +22,7 @@ export function TaskPageGitHubList({
   const {
     selectedRepos,
     githubEmptyState,
-    tasksLoading,
+    githubListPending,
     tasksError,
     failedCount,
     githubUnavailable,
@@ -136,9 +136,15 @@ export function TaskPageGitHubList({
         {!tasksError && !githubUnavailable && failedCount > 0 ? (
           // Why: per-repo partial-failure signal, distinct from a hard IPC reject (tasksError); the two are mutually exclusive.
           <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
-            {failedCount} {translate('auto.components.TaskPage.7762f4b03a', 'of')}{' '}
-            {selectedRepos.length}{' '}
-            {translate('auto.components.TaskPage.d1766fd62d', 'projects failed to load')}
+            {translate(
+              'auto.components.TaskPage.projectsFailedToLoad',
+              '{{failed}} of {{count}} projects failed to load',
+              {
+                failed: failedCount,
+                count: selectedRepos.length,
+                defaultValue_one: '{{failed}} of {{count}} project failed to load'
+              }
+            )}
           </div>
         ) : null}
 
@@ -166,7 +172,7 @@ export function TaskPageGitHubList({
                   variant="outline"
                   size="sm"
                   onClick={() => handleRetryIssuesFetch(s.sourceKey)}
-                  disabled={tasksLoading || retryingSourceKeys.has(s.sourceKey)}
+                  disabled={githubListPending || retryingSourceKeys.has(s.sourceKey)}
                 >
                   {retryingSourceKeys.has(s.sourceKey) ? (
                     <span className="flex items-center gap-1">
@@ -204,7 +210,7 @@ export function TaskPageGitHubList({
               variant="outline"
               size="sm"
               onClick={() => handleRetryIssuesFetch(r.sourceKey)}
-              disabled={tasksLoading || retryingSourceKeys.has(r.sourceKey)}
+              disabled={githubListPending || retryingSourceKeys.has(r.sourceKey)}
             >
               {retryingSourceKeys.has(r.sourceKey) ? (
                 <span className="flex items-center gap-1">

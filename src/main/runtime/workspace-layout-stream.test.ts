@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import {
   localDesktopSession,
   relaySshSession,
@@ -19,8 +19,8 @@ import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
 } from '../../shared/workspace-layout/workspace-layout-published'
-import { WorkspaceLayoutStream } from './workspace-layout-stream'
-import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
+import { WorkspaceLayoutStream } from './terminal/surface/workspace-layout-stream'
+import { collectLayoutEvents } from './orca-runtime-tests/workspace-layout-stream-events.test-fixture'
 
 const SSH_HOST: ExecutionHostId = 'ssh:target-1'
 const SERVER_HOST: ExecutionHostId = 'runtime:env-1'

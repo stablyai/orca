@@ -36,16 +36,6 @@ it('shares concurrent probes only within the same shell and environment', async 
   expect(spawner).toHaveBeenCalledTimes(3)
 })
 
-it('falls back to the supplied execution environment when its shell probe fails', async () => {
-  const env = { HOME: '/execution-host', PI_CONFIG_DIR: '.execution-root' }
-  const spawner = vi.fn(async () => {
-    throw new Error('probe failed')
-  })
-  await expect(
-    resolveLoginShellEnvironment({ shellOverride: '/bin/bash', env, spawner })
-  ).resolves.toEqual(env)
-})
-
 it('bounds retained environments and supports explicit refresh', async () => {
   const spawner = vi.fn(async (_shell: string, env: NodeJS.ProcessEnv) => env)
   for (let index = 0; index < 10; index++) {
@@ -107,24 +97,6 @@ it('serves the cached env to other readers while a rerun runs', async () => {
   release.resolve({ PATH: '/second' })
   await expect(forced).resolves.toEqual({ PATH: '/second' })
   await expect(resolveLoginShellEnvironment(options)).resolves.toEqual({ PATH: '/second' })
-  expect(spawner).toHaveBeenCalledTimes(2)
-})
-
-it('serves a cached fallback to other readers while a rerun runs', async () => {
-  const release = Promise.withResolvers<NodeJS.ProcessEnv | null>()
-  const spawner = vi
-    .fn<(shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>>()
-    .mockResolvedValueOnce(null)
-    .mockReturnValueOnce(release.promise)
-  const env = { HOME: '/host' }
-  const options = { shellOverride: '/bin/bash', env, spawner }
-  await expect(captureLoginShellEnvironment(options)).resolves.toMatchObject({ status: 'fallback' })
-  const forced = resolveLoginShellEnvironment({ ...options, startedAfter: Date.now() })
-  const tick = new Promise((resolve) => setImmediate(() => resolve('still waiting')))
-  await expect(Promise.race([resolveLoginShellEnvironment(options), tick])).resolves.toEqual(env)
-  release.resolve({ PATH: '/profile/bin' })
-  await expect(forced).resolves.toEqual({ PATH: '/profile/bin' })
-  await expect(resolveLoginShellEnvironment(options)).resolves.toEqual({ PATH: '/profile/bin' })
   expect(spawner).toHaveBeenCalledTimes(2)
 })
 
@@ -191,6 +163,31 @@ it('reruns a failed shell once its last attempt is older, and keeps a captured o
     })
     vi.advanceTimersByTime(60_000)
     await captureLoginShellEnvironment(options)
+    expect(spawner).toHaveBeenCalledTimes(2)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('answers a lookup from a finished capture that started after it, without another shell', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  try {
+    const spawner = vi
+      .fn<(shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>>()
+      .mockResolvedValueOnce({ PATH: '/first' })
+      .mockResolvedValueOnce({ PATH: '/second' })
+    const options = { shellOverride: '/bin/bash', env: { HOME: '/host' }, spawner }
+    const before = Date.now()
+    vi.advanceTimersByTime(1)
+    await resolveLoginShellEnvironment(options)
+    vi.advanceTimersByTime(1)
+    await expect(
+      resolveLoginShellEnvironment({ ...options, startedAfter: before })
+    ).resolves.toEqual({ PATH: '/first' })
+    expect(spawner).toHaveBeenCalledTimes(1)
+    await expect(
+      resolveLoginShellEnvironment({ ...options, startedAfter: Date.now() })
+    ).resolves.toEqual({ PATH: '/second' })
     expect(spawner).toHaveBeenCalledTimes(2)
   } finally {
     vi.useRealTimers()

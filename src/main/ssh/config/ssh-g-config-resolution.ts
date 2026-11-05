@@ -4,6 +4,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import { homedir, userInfo } from 'node:os'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { expandIdentityFileTokens } from './ssh-identity-file-tokens'
 
 export type SshResolvedConfig = {
   hostname: string
@@ -186,11 +187,16 @@ async function expandSiteInclude(pattern: string, baseDir: string): Promise<stri
 
 // Delegate Include/Match/wildcard resolution to OpenSSH rather than duplicate its rules.
 export async function resolveWithSshG(host: string): Promise<SshResolvedConfig | null> {
+  return runSshG(sshGArgsForHost(host))
+}
+
+/** `ssh` with `-G` among `args`: prints the resolved config and exits, never connecting. */
+export async function runSshG(args: string[]): Promise<SshResolvedConfig | null> {
   // -- prevents option injection; process-host hides console windows and bounds this probe (#10488).
   try {
     const result = await runProcess({
       program: 'ssh',
-      args: sshGArgsForHost(host),
+      args,
       timeoutMs: SSH_G_TIMEOUT_MS
     })
     if (result.code !== 0 || result.timedOut) {
@@ -204,7 +210,7 @@ export async function resolveWithSshG(host: string): Promise<SshResolvedConfig |
 
 export function parseSshGOutput(stdout: string): SshResolvedConfig {
   const map = new Map<string, string>()
-  const identityFiles: string[] = []
+  const rawIdentityFiles: string[] = []
 
   for (const line of stdout.split('\n')) {
     const spaceIdx = line.indexOf(' ')
@@ -214,12 +220,19 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     const key = line.substring(0, spaceIdx).toLowerCase()
     const value = line.substring(spaceIdx + 1).trim()
     if (key === 'identityfile') {
-      identityFiles.push(resolveSshConfigHomePath(value))
+      // `IdentityFile none` loads no key; it is not a path.
+      if (value.toLowerCase() !== 'none') {
+        rawIdentityFiles.push(value)
+      }
     } else {
       map.set(key, value)
     }
   }
 
+  // Tokens need hostname/user/port, which ssh -G may print after identityfile lines.
+  const identityFiles = rawIdentityFiles.map((value) =>
+    resolveSshConfigHomePath(expandIdentityFileTokens(value, map))
+  )
   return buildSshResolvedConfig(map, identityFiles)
 }
 

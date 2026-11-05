@@ -18,7 +18,8 @@ export function useMobileNativeChatTerminalStream(args: {
   subscribingRef: MutableRefObject<Set<string>>
   leaseOnlyRef: MutableRefObject<Set<string>>
   webReadyRef: MutableRefObject<Set<string>>
-  subscribe: (handle: string) => void
+  // False when a local gate skipped the subscribe.
+  subscribe: (handle: string) => boolean
   unsubscribe: (handle: string) => void
 }): {
   notifyWebReady: (handle: string, wasAlreadyReady: boolean) => void
@@ -26,6 +27,8 @@ export function useMobileNativeChatTerminalStream(args: {
   hasTabsRecoveryNeed: () => boolean
 } {
   const coveredHandleRef = useRef<string | null>(null)
+  // Set by reconcileStream so list callbacks stay stable across tab switches.
+  const reconciledHandleRef = useRef<string | null>(null)
   const rearmAttemptsRef = useRef<Map<string, number>>(new Map())
   // Only actual list absence followed by return grants a fresh rearm budget.
   const absentSinceExhaustionRef = useRef<Set<string>>(new Set())
@@ -60,7 +63,7 @@ export function useMobileNativeChatTerminalStream(args: {
   const notifyListedHandles = useCallback(
     (liveHandles: ReadonlySet<string>) => {
       // Refill exhausted rearms only after list absence and return; still-listed dead PTYs must not renew their own loop.
-      const handle = coveredHandleRef.current
+      const handle = reconciledHandleRef.current
       if (handle == null) {
         return
       }
@@ -83,7 +86,7 @@ export function useMobileNativeChatTerminalStream(args: {
   const hasTabsRecoveryNeed = useCallback((): boolean => {
     // Keep polling until a replacement handle arrives; an equal cached snapshot
     // must not consume recovery and strand the composer on the dead handle.
-    const handle = coveredHandleRef.current
+    const handle = reconciledHandleRef.current
     return (
       handle != null &&
       absentSinceExhaustionRef.current.has(handle) &&
@@ -92,6 +95,7 @@ export function useMobileNativeChatTerminalStream(args: {
   }, [])
   const reconcileStream = useCallback(() => {
     const handle = args.activeHandle
+    reconciledHandleRef.current = handle
     if (coveredHandleRef.current && coveredHandleRef.current !== handle) {
       forgetRearmState(coveredHandleRef.current)
       coveredHandleRef.current = null
@@ -110,8 +114,8 @@ export function useMobileNativeChatTerminalStream(args: {
       streamIsLeaseOnly,
       webViewReady: handle != null && args.webReadyRef.current.has(handle)
     })
-    const streamHolding = action === 'none' && streamActive && coveredHandleRef.current === handle
-    // Invalidate recovery proof whenever its covered stream is no longer the live one.
+    const streamHolding = action === 'none' && streamActive
+    // Invalidate recovery proof whenever its stream is no longer the live one.
     if (!streamHolding || healthyStreamProofRef.current?.handle !== handle) {
       cancelHealthyStreamProof()
     }
@@ -137,9 +141,8 @@ export function useMobileNativeChatTerminalStream(args: {
       if (attempts >= MAX_REARM_ATTEMPTS) {
         return
       }
-      args.subscribe(handle)
-      // A locally gated subscribe never reached the host and spends no attempt.
-      if (args.subscribingRef.current.has(handle) || args.subscriptionsRef.current.has(handle)) {
+      // A subscribe its own gates turned away spends no attempt; one the bridge refused at once does.
+      if (args.subscribe(handle)) {
         rearmAttemptsRef.current.set(handle, attempts + 1)
       }
       return
@@ -154,10 +157,8 @@ export function useMobileNativeChatTerminalStream(args: {
       args.subscribe(handle)
       return
     }
-    if (coveredHandleRef.current === handle || streamIsLeaseOnly) {
-      args.unsubscribe(handle)
-      coveredHandleRef.current = null
-    }
+    args.unsubscribe(handle)
+    coveredHandleRef.current = null
     args.subscribe(handle)
   }, [
     args.activeHandle,

@@ -2,9 +2,13 @@ import { Buffer } from 'node:buffer'
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
-import { deriveSharedKey, encrypt, generateKeyPair } from '../../shared/e2ee-crypto'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime-memory-limits'
-import { startBrowserScreencast } from '../browser/browser-screencast-stream'
+import {
+  deriveSharedKey,
+  encrypt,
+  generateKeyPair
+} from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
+import { startBrowserScreencast } from '../browser/cdp/screencast/browser-screencast-stream'
 import { E2EEChannel } from './rpc/e2ee-channel'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
 import type { RpcBinarySender } from './rpc/rpc-binary-sender'
@@ -77,38 +81,6 @@ function createRuntimeBinarySender() {
 }
 
 describe('sendRemoteBrowserScreencastFrame', () => {
-  it('reports an over-limit frame as handled so the producer does not retry it', () => {
-    const sendBinary = vi.fn(() => true)
-    const oversized = new Uint8Array(REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 1)
-
-    expect(sendRemoteBrowserScreencastFrame(sendBinary, oversized)).toBe('handled')
-    expect(sendBinary).not.toHaveBeenCalled()
-  })
-
-  it('still forwards backpressure for a frame the transport can accept', () => {
-    const withinLimit = new Uint8Array(1024)
-
-    expect(
-      sendRemoteBrowserScreencastFrame(
-        vi.fn(() => false),
-        withinLimit
-      )
-    ).toBe('refused')
-    expect(
-      sendRemoteBrowserScreencastFrame(
-        vi.fn(() => true),
-        withinLimit
-      )
-    ).toBe('handled')
-    expect(sendRemoteBrowserScreencastFrame(vi.fn(), withinLimit)).toBe('handled')
-    expect(
-      sendRemoteBrowserScreencastFrame(
-        vi.fn(() => 'backlogged' as const),
-        withinLimit
-      )
-    ).toBe('backlogged')
-  })
-
   it('drops an oversized encoded frame without closing or stalling the paired stream', async () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()

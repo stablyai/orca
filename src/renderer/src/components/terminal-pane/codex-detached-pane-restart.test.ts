@@ -4,6 +4,7 @@ import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-regis
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { PublishedTab } from '../../../../shared/workspace-layout/workspace-layout-published'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { awaitsCodexRestartAnswer, blocksCodexPaneInput } from '../codex-restart-notice-state'
 import { ptyDataHandlers } from './pty-dispatcher'
 import { deliverPtyExitToHandlers } from './pty-exit-delivery'
@@ -58,7 +59,7 @@ function seedQueuedRestart(
 ): void {
   const leafId = opts.leafId === undefined ? LEAF_ID : opts.leafId
   useAppStore.setState({
-    settings: { activeRuntimeEnvironmentId: null } as never,
+    settings: getDefaultSettings('/home/dev'),
     worktreesByRepo: {
       repo1: [{ id: 'wt1', path: '/Users/dev/code/orca' }]
     } as never,
@@ -145,7 +146,7 @@ describe('codex detached pane restart executor', () => {
         cols: 80,
         rows: 24,
         cwd: '/Users/dev/code/orca',
-        command: 'codex',
+        command: "codex '-c' 'disable_paste_burst=true'",
         startupCommandDelivery: 'shell-ready',
         launchAgent: 'codex',
         worktreeId: 'wt1',
@@ -536,6 +537,10 @@ describe('codex detached pane restart executor', () => {
 
   it('kills now and defers the Codex respawn to mount when the layout leaf is unknown', async () => {
     seedQueuedRestart({ leafId: null })
+    const command = String.raw`& 'C:\Program Files\Codex\codex.exe'`
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/home/dev'), agentCmdOverrides: { codex: command } }
+    })
 
     await sweepUnclaimedCodexPaneRestarts()
 
@@ -545,7 +550,7 @@ describe('codex detached pane restart executor', () => {
     expect(state.ptyIdsByTabId['tab-1']).toEqual([])
     expect(state.pendingStartupByTabId['tab-1']).toEqual(
       expect.objectContaining({
-        command: 'codex',
+        command,
         startupCommandDelivery: 'shell-ready',
         launchAgent: 'codex'
       })
@@ -563,7 +568,7 @@ describe('codex detached pane restart executor', () => {
 
     expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([])
     expect(useAppStore.getState().pendingStartupByTabId['tab-1']).toMatchObject({
-      command: 'codex',
+      command: "codex '-c' 'disable_paste_burst=true'",
       launchAgent: 'codex'
     })
     expect(useAppStore.getState().suppressedPtyExitIds[OLD_PTY]).toBeUndefined()

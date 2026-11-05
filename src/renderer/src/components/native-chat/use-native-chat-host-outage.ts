@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import { runtimeHostContactFromSnapshot } from '../../../../shared/runtime-host-contact'
+import { runtimeHostContactFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
-import {
-  runtimeHostConnectionStateForEntry,
-  type RuntimeHostConnectionState
-} from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import type { RuntimeHostConnectionState } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-export type NativeChatHostOutageKind = 'reconnecting' | 'offline'
+/** `stopped`: a WSL host's distro stopped; only an explicit Start boots it (E9). */
+export type NativeChatHostOutageKind = 'reconnecting' | 'offline' | 'stopped'
 
 export type NativeChatHostOutage = {
   kind: NativeChatHostOutageKind
@@ -57,6 +56,10 @@ export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChat
       ? runtimeHostContactFromSnapshot(entry.snapshot, entry.status).verdict === 'refused'
       : false
   })
+  const stoppedDistro = useAppStore((s) => {
+    const wsl = environmentId === null ? undefined : s.wslHostStatuses[environmentId]
+    return wsl?.state === 'distro-stopped' ? wsl.distro : null
+  })
   const hostLabel = useAppStore((s) =>
     environmentId === null
       ? null
@@ -88,11 +91,16 @@ export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChat
     }
   }, [environmentId, inOutage])
   const shown = kind === 'offline' ? 'offline' : kind === null ? null : earnedHere
-  return useMemo(
-    () =>
-      environmentId === null || shown === null || hostLabel === null
-        ? null
-        : { kind: shown, environmentId, hostLabel, canReconnect: shown === 'offline' && !refused },
-    [environmentId, hostLabel, refused, shown]
-  )
+  return useMemo(() => {
+    if (environmentId === null) {
+      return null
+    }
+    // The host's own verdict outranks a transport guess: a plain reconnect can't boot the distro.
+    if (stoppedDistro !== null) {
+      return { kind: 'stopped', environmentId, hostLabel: stoppedDistro, canReconnect: true }
+    }
+    return shown === null || hostLabel === null
+      ? null
+      : { kind: shown, environmentId, hostLabel, canReconnect: shown === 'offline' && !refused }
+  }, [environmentId, hostLabel, refused, shown, stoppedDistro])
 }

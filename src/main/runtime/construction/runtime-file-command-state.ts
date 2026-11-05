@@ -1,24 +1,22 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
-import type { LocalProjectGhExecOptions } from '../../project-runtime-git-options'
+import type { LocalProjectGhExecOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-terminal-contracts'
 import { OrcaRuntimeWithPreservedBranchCleanup } from './runtime-host-services'
 import { RuntimeFileCommands } from '../orca-runtime-files'
-import { nativeChatTranscriptIncludesPath } from '../../native-chat/native-chat-file-provenance'
 import { createRuntimeFileWatcherRemoval } from '../runtime-file-watcher-removal'
-import { RuntimeGitCommands } from '../orca-runtime-git'
-import { RuntimeHostedReviewCommands } from '../runtime-hosted-review-commands'
-import { RuntimeGitHubRepositoryQueryCommands } from '../runtime-github-repository-query-commands'
-import { RuntimeGitLabQueryCommands } from '../runtime-gitlab-query-commands'
+import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
+import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
+import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
+import { RuntimeGitLabQueryCommands } from '../integrations/gitlab/runtime-gitlab-query-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/gitlab-project-recents'
-import { RuntimeGitLabMutationCommands } from '../runtime-gitlab-mutation-commands'
-import { RuntimeGitHubReviewQueryCommands } from '../runtime-github-review-query-commands'
-import { RuntimeGitHubReviewMutationCommands } from '../runtime-github-review-mutation-commands'
-import { RuntimeGitHubIssueCommentCommands } from '../runtime-github-issue-comment-commands'
-import { RuntimeGitHubProjectCommands } from '../runtime-github-project-commands'
-import { RuntimeRepositoryHooksCommands } from '../runtime-repository-hooks-commands'
-import { RuntimeRepositoryIssueCommand } from '../runtime-repository-issue-command'
+import { RuntimeGitLabMutationCommands } from '../integrations/gitlab/runtime-gitlab-mutation-commands'
+import { RuntimeGitHubReviewQueryCommands } from '../integrations/github/runtime-github-review-query-commands'
+import { RuntimeGitHubReviewMutationCommands } from '../integrations/github/runtime-github-review-mutation-commands'
+import { RuntimeGitHubIssueCommentCommands } from '../integrations/github/runtime-github-issue-comment-commands'
+import { RuntimeGitHubProjectCommands } from '../integrations/github/runtime-github-project-commands'
+import { RuntimeRepositoryHooksCommands } from '../repositories/runtime-repository-hooks-commands'
+import { RuntimeRepositoryIssueCommand } from '../repositories/runtime-repository-issue-command'
 import { ClientHostedBrowserRowPublisher } from '../client-hosted-browser-row-publication'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
@@ -28,14 +26,16 @@ import {
 } from '../files/chat-scratch-file-root'
 
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import type { Repo } from '../../../shared/repo-types'
 import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
-import type { RuntimeRepoSelector } from '../runtime-repo-selector'
+import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import { createRuntimeEditorFileOpener } from '../files/editor-open-through-layout-owner'
+import { resolveNativeChatMediaPath } from '../../native-chat/native-chat-media-path'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -57,20 +57,7 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     relativePath: string
   } | null>
   abstract resolveTerminalCwd(handle: string): Promise<string | null>
-  abstract resolveTerminalContext(handle: string): {
-    worktreeId: string
-    connectionId: string | null
-  } | null
   abstract resolveTerminalFileUriHostname(handle: string): string | null
-  abstract hasRecentTerminalOutputPath(
-    handle: string,
-    pathText: string,
-    absolutePath: string
-  ): boolean
-  protected abstract getMobileSessionTabsForWorktree(
-    worktreeId: string,
-    clientNavigationId?: string
-  ): RuntimeMobileSessionTabsResult
   protected abstract resolveRuntimeGitTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     repo?: Repo
@@ -100,14 +87,11 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   abstract requireStore(): RuntimeStore
 
-  protected abstract resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree>
-
   protected abstract resolveRepoSelector(selector: RuntimeRepoSelector): Promise<Repo>
 
   protected readonly fileCommands = new RuntimeFileCommands({
     getRuntimeId: () => this.runtimeId,
     requireStore: () => this.requireStore(),
-    resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeFileTarget: async (selector) => {
       // Scratch folders are file-only; the general resolver also places chats.
       const scratchFolder = await resolveChatScratchSelectorFolder(selector)
@@ -121,18 +105,16 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     resolveKnownWorkspaceFileTarget: (absolutePath, executionHostId) =>
       this.resolveKnownWorkspaceFileTarget(absolutePath, executionHostId),
     resolveTerminalCwd: (terminalHandle) => this.resolveTerminalCwd(terminalHandle),
-    resolveTerminalContext: (terminalHandle) => this.resolveTerminalContext(terminalHandle),
     resolveTerminalFileUriHostname: (terminalHandle) =>
       this.resolveTerminalFileUriHostname(terminalHandle),
-    hasRecentTerminalOutputPath: (terminalHandle, pathText, absolutePath) =>
-      this.hasRecentTerminalOutputPath(terminalHandle, pathText, absolutePath),
-    hasRecentNativeChatOutputPath: (worktreeId, context, pathText, absolutePath) =>
-      nativeChatTranscriptIncludesPath({
-        tabs: this.getMobileSessionTabsForWorktree(worktreeId).tabs,
-        context,
-        pathText,
-        absolutePath
-      }),
+    resolveNativeChatMediaPath: (request) => {
+      const host = getStructuredAgentSessionHost()
+      return resolveNativeChatMediaPath(request, {
+        getConversation: (id) => host?.deps.store.getConversation(id),
+        getSessionTabId: (id) => host?.getSessionTabId(id),
+        providerRows: (tabId) => this.getAgentProviderSessionRows(tabId)
+      })
+    },
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     openFile: createRuntimeEditorFileOpener({
       getNotifier: () => this.notifier,
@@ -143,7 +125,15 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         this.notifyMobileSessionTabsChanged(id)
       }
     }),
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
+    openDiff: (
+      worktreeId,
+      filePath,
+      relativePath,
+      staged,
+      runtimeEnvironmentId,
+      navigation,
+      oldPath
+    ) => {
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')
       }
@@ -156,7 +146,8 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         relativePath,
         staged,
         runtimeEnvironmentId,
-        navigation
+        navigation,
+        ...(oldPath ? ([oldPath] as const) : [])
       )
     }
   })

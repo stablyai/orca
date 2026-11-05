@@ -34,6 +34,7 @@ import {
   normalizeWorkspaceStatuses,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
 } from '../../../../../shared/workspace-statuses'
+import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -194,6 +195,11 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         .set({ worktreeCardProperties: normalized, _worktreeCardModeDefaulted: false })
         .catch(console.error)
     },
+    showAgentModels: true,
+    setShowAgentModels: (show) => {
+      set({ showAgentModels: show })
+      window.api.ui.set({ showAgentModels: show }).catch(console.error)
+    },
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     setAgentActivityDisplayMode: (mode) => {
       const normalized = normalizeAgentActivityDisplayMode(mode)
@@ -207,6 +213,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       window.api.ui.set({ workspaceStatuses: normalized }).catch(console.error)
       set({ workspaceStatuses: normalized })
     },
+    ...createHostWorkspaceStatusActions(set, get),
 
     workspaceBoardOpacity: 1,
     setWorkspaceBoardOpacity: (opacity) => {

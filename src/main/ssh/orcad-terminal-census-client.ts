@@ -1,18 +1,18 @@
 /** Unknown failures, including older hosts without census support, stay unverifiable and never mean zero live terminals. */
 import { ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   ORCAD_TERMINAL_CENSUS_METHOD,
   OrcadTerminalCensusSchema,
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../shared/orcad-terminal-census'
-import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime/remote-runtime-client'
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import { ensureOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../managed-server/lifecycle/orcad-managed-serving-verify'

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as LocalCommandResolver from './command-path-resolver'
+import type * as LocalCommandResolver from './command-path/command-path-resolver'
+import type * as WslGuestEnvironment from '../wsl/execution/wsl-guest-environment'
 import { resolveProfileLoadingShell } from '../startup/hydrate-shell-path'
 
 const {
@@ -12,6 +13,7 @@ const {
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
+  findCommandsOnLocalPathMock,
   isCommandOnLocalPathMock,
   listLocalCommandPathsMock,
   mergePersistedWindowsPathAsyncMock,
@@ -26,6 +28,7 @@ const {
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
+  findCommandsOnLocalPathMock: vi.fn(),
   isCommandOnLocalPathMock: vi.fn(),
   listLocalCommandPathsMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
@@ -33,8 +36,19 @@ const {
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
+const invalidateGuest = vi.hoisted(() => vi.fn())
+vi.mock('../wsl/execution/wsl-guest-environment', async (original) => ({
+  ...(await original<typeof WslGuestEnvironment>()),
+  invalidateWslGuestEnvironment: invalidateGuest
+}))
+// These cases cover a running distro; the E9 stopped-distro gate has its own suite.
+vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
+  assertWslDistroRunningForExec: async () => {},
+  runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
+}))
+
 // WSL detection uses runWslProcess, so child_process mocks cannot observe it.
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -64,13 +78,15 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
 }))
 
 // Route filesystem PATH resolution through the existing command-lookup mock.
-vi.mock('./command-path-resolver', async (importOriginal) => ({
+vi.mock('./command-path/command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
+  findCommandsOnLocalPath: findCommandsOnLocalPathMock,
   isCommandOnLocalPath: isCommandOnLocalPathMock,
   listLocalCommandPaths: listLocalCommandPathsMock
 }))
 
-vi.mock('../pty/windows-environment-path', () => ({
+vi.mock('../pty/environment/windows-environment-path', () => ({
+  cachedPersistedWindowsPathSegments: () => [],
   readPersistedWindowsPathSegmentsAsync: async () => [],
   mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
@@ -108,6 +124,7 @@ describe('preflight', () => {
         getAzureDevOpsAuthStatusMock,
         getGiteaAuthStatusMock,
         resolveCliCommandsMock,
+        findCommandsOnLocalPathMock,
         isCommandOnLocalPathMock,
         listLocalCommandPathsMock,
         mergePersistedWindowsPathAsyncMock,
@@ -174,6 +191,7 @@ describe('preflight', () => {
     expect(hydrateShellPathMock).not.toHaveBeenCalled()
     expect(mergePathSegmentsMock).not.toHaveBeenCalled()
     expect(resolveProfileLoadingShell).not.toHaveBeenCalled()
+    expect(invalidateGuest).toHaveBeenCalledWith('Ubuntu')
   })
 
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {

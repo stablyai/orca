@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import { buildAgentResumeStartupPlan } from '../../../shared/tui-agent-resume-startup'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { buildAgentResumeStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-resume-startup'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { Store } from '../loading-store/store'
 import {
   emptyTerminalSessionProfile,
@@ -133,26 +133,9 @@ describe('sleep → quit → resume', () => {
       expect(heldForPane(relaunched)).toEqual(expected)
       relaunched.setWorkspaceSession(structuredClone(relaunched.getWorkspaceSession()))
       expect(heldForPane(relaunched)).toEqual(expected)
-      expect(resumeCommand(heldForPane(relaunched).record)).toBe("codex 'resume' 'session-2'")
-    } finally {
-      await relaunched.freezeWritesAsync()
-    }
-  })
-
-  it('keeps a record that only the before-unload stage carried', async () => {
-    const { directory, store, window } = await storeWithAgentPane()
-    window.sleepingAgentSessionsByPaneKey = { [PANE_KEY]: record('quit', 3) }
-    store.stageWorkspaceSessionBeforeUnload(structuredClone(window))
-
-    const relaunched = await reopenTopologyStore(store, directory)
-    try {
-      expect(heldForPane(relaunched)).toEqual({
-        record: record('quit', 3),
-        worktreeRecord: record('quit', 3),
-        tabs: [TAB],
-        binding: PTY
-      })
-      expect(resumeCommand(heldForPane(relaunched).record)).toBe("codex 'resume' 'session-3'")
+      expect(resumeCommand(heldForPane(relaunched).record)).toBe(
+        "codex '-c' 'disable_paste_burst=true' 'resume' 'session-2'"
+      )
     } finally {
       await relaunched.freezeWritesAsync()
     }

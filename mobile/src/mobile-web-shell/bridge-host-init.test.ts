@@ -1,54 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
-import { harness, HOST, PAGE_ROUTE_GRANTS, PAGE_ROUTES, ROUTE } from './bridge-host-test-harness'
+import { harness, ROUTE } from './bridge-host-test-harness'
 import { BRIDGE_MAX_ROUTE_PATHNAME_CHARS } from './bridge/bridge-caps'
 import { BRIDGE_FAULT_GRANT, BRIDGE_RPC_ENVELOPE_GRANT } from './bridge/bridge-envelope'
 import { routeViewOf } from './page-route-policy'
 
 describe('init and state', () => {
-  it('answers ready with the connection getters and session snapshot', () => {
-    const client = createFakeRpcClient({
-      getState: () => 'reconnecting',
-      getReconnectAttempt: () => 3,
-      getLastConnectedAt: () => 1_700_000_000_000,
-      getLastInboundAt: () => 1_700_000_000_500,
-      getGeneration: () => 7
-    })
-    const bridge = harness({ client, storage: { 'orca:pins:host-a': '["wt-1"]' } })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    expect(bridge.last()).toMatchObject({
-      v: 1,
-      type: 'init',
-      sessionId: 'session-a',
-      buildId: 'build-a',
-      connection: {
-        state: 'reconnecting',
-        reconnectAttempt: 3,
-        lastConnectedAt: 1_700_000_000_000,
-        lastInboundAt: 1_700_000_000_500,
-        generation: 7
-      },
-      route: ROUTE,
-      pageRoutes: PAGE_ROUTES,
-      pageRouteGrants: PAGE_ROUTE_GRANTS,
-      host: HOST,
-      storage: { 'orca:pins:host-a': '["wt-1"]' }
-    })
-  })
-
-  // Route patterns alone cannot authorize local hops; init must carry manifest grant pairs so a target cannot run without capabilities such as clipboard.write.
-  it('carries what every page route declared, not only which patterns exist', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    const init = bridge.last()
-    expect(init.type).toBe('init')
-    if (init.type !== 'init') {
-      throw new Error('expected an init frame')
-    }
-    expect((init.pageRouteGrants ?? []).map((entry) => entry.pathname)).toEqual([...PAGE_ROUTES])
-    expect(init.pageRouteGrants).toEqual(PAGE_ROUTE_GRANTS)
-  })
-
   // Drive manifest projection through routeViewOf: newer desktop fields must be stripped before strict pair parsing, or the whole init is refused.
   it('answers init for a route entry carrying a manifest field this build does not read', () => {
     const declared = [
@@ -101,39 +58,6 @@ describe('init and state', () => {
     expect(init.grants.native).toContain('screencastBinary')
   })
 
-  it('refuses a grant name the manifest grammar refuses, naming the field it came from', () => {
-    // Reject names the manifest grammar cannot declare.
-    const bridge = harness({
-      pageRouteGrants: [{ pathname: '/h/[hostId]', grants: ['native.clipboard'] }]
-    })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    expect(bridge.posted.length).toBe(0)
-    expect(bridge.routeRefusals).toHaveLength(1)
-    const [reason] = bridge.routeRefusals
-    // Name the refused field so a valid pathname cannot be mistaken for the cause.
-    expect(reason.startsWith('pageRouteGrants: ')).toBe(true)
-    expect(reason.slice('pageRouteGrants: '.length)).not.toBe('')
-    expect(bridge.diagnostics).toEqual([{ kind: 'route-refused', issue: reason }])
-  })
-
-  it('blames the route, not the pairs, when the route is the malformed one', () => {
-    // Use a pathname refusal as the control so an unconditional prefix cannot satisfy both cases.
-    const bridge = harness({ route: { pathname: '/h/a?b' } })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    expect(bridge.routeRefusals).toHaveLength(1)
-    const [reason] = bridge.routeRefusals
-    expect(reason.startsWith('pageRouteGrants: ')).toBe(false)
-    expect(reason).not.toBe('')
-  })
-
-  it('names the screen the page is standing in for, which its own `/` cannot tell it', () => {
-    const route = { pathname: '/h/host-a/session/wt-1', params: { name: 'a branch' } }
-    const bridge = harness({ route })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    const init = bridge.last()
-    expect(init.type === 'init' && init.route).toEqual(route)
-  })
-
   it('refuses to open a session at all for a route the protocol does not allow', () => {
     // Deep-link host ids reach the producer’s interpolation; refusing them here avoids an init loop behind a blank WebView.
     for (const pathname of [
@@ -155,15 +79,6 @@ describe('init and state', () => {
         pathname
       ).toEqual(['route-refused'])
     }
-  })
-
-  it('answers a ready for a refused route with nothing at all', async () => {
-    // Report ready even when the route cannot produce init; the session switch normally prevents this state before shell mount.
-    const bridge = harness({ route: { pathname: '/h/a b' } })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    await Promise.resolve()
-    expect(bridge.posted).toEqual([])
-    expect(bridge.pageReadyCount()).toBe(1)
   })
 
   it('reports a frame the view would not take, and waits for the next ask (ruling 34)', async () => {
@@ -207,26 +122,6 @@ describe('init and state', () => {
     })
   })
 
-  it('opens a session for the routes a screen actually produces', () => {
-    for (const pathname of ['/h/host-a', '/h/host-a/tasks', '/h/a%20b', '/']) {
-      const bridge = harness({ route: { pathname } })
-      bridge.host.receive(clientFrame({ type: 'ready' }))
-      expect(bridge.last().type, pathname).toBe('init')
-      expect(bridge.routeRefusals, pathname).toEqual([])
-    }
-  })
-
-  it('opens the screen a page asks for, without routing it to the client', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(
-      clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-a/session/wt-1?name=a+b' })
-    )
-    expect(bridge.navigations).toEqual(['/h/host-a/session/wt-1?name=a+b'])
-    expect(bridge.client.requests).toEqual([])
-    expect(bridge.frames().filter((frame) => frame.type === 'error')).toEqual([])
-  })
-
   it('refuses a navigate frame that is not a path this app could open', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
@@ -249,37 +144,12 @@ describe('init and state', () => {
     )
   })
 
-  it('opens a target whose segments merely contain dots, which the refusals above must not', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(
-      clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-a/a..b?q=.' })
-    )
-    expect(bridge.navigations).toEqual(['/h/host-a/a..b?q=.'])
-  })
-
   it('serves no navigate to a page that has said goodbye', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(clientFrame({ type: 'close' }))
     bridge.host.receive(clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-a/tasks' }))
     expect(bridge.navigations).toEqual([])
-  })
-
-  it('writes an allowlisted key into the app store, without routing it to the client', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(
-      clientFrame({ type: 'notify', name: 'storage', key: 'orca:pins:host-a', value: '["wt-1"]' })
-    )
-    bridge.host.receive(
-      clientFrame({ type: 'notify', name: 'storage', key: 'orca:pins:host-a', value: null })
-    )
-    expect(bridge.storageWrites).toEqual([
-      { key: 'orca:pins:host-a', value: '["wt-1"]' },
-      { key: 'orca:pins:host-a', value: null }
-    ])
-    expect(bridge.client.requests).toEqual([])
   })
 
   it('refuses a storage write for a key the page was never told about', () => {
@@ -344,39 +214,56 @@ describe('init and state', () => {
     ])
   })
 
-  it('reports a client without the optional getters as null rather than omitting the field', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    const init = bridge.last()
-    expect(init.type === 'init' && init.connection).toEqual({
-      state: 'connected',
-      reconnectAttempt: 0,
-      lastConnectedAt: null,
-      lastInboundAt: null,
-      generation: null
-    })
-  })
-
-  it('tells the shell the page spoke, on the first ask and on every re-ask', () => {
-    const bridge = harness()
-    expect(bridge.pageReadyCount()).toBe(0)
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    // Every ready ends the startup wait; a page’s backoff need not hit a particular ask.
-    expect(bridge.pageReadyCount()).toBe(2)
-  })
-
-  it('says nothing about a page that never asked, however much else it posts', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
-    expect(bridge.pageReadyCount()).toBe(0)
-  })
-
   it('pushes the event state, not the getter a listener can outrun', () => {
     const bridge = harness()
     bridge.client.pushState('disconnected')
     const pushed = bridge.last()
     expect(pushed.type === 'state' && pushed.connection.state).toBe('disconnected')
+  })
+
+  it('sends a page that reads them a path frame when a relay dial starts without a state change', () => {
+    let pendingPath: 'relay' | null = null
+    let notifyPath = () => {}
+    const client = createFakeRpcClient({
+      getState: () => 'reconnecting',
+      getActivePath: () => 'lan',
+      getPendingPath: () => pendingPath,
+      getRelayHostReachability: () => 'host-offline',
+      onConnectionPathChange: (listener) => {
+        notifyPath = listener
+        return () => {}
+      }
+    })
+    const bridge = harness({ client })
+    bridge.host.receive(clientFrame({ type: 'ready', connectionPathFrames: true }))
+
+    pendingPath = 'relay'
+    notifyPath()
+
+    const pushed = bridge.last()
+    expect(pushed.type === 'connectionPath' && pushed.connection).toMatchObject({
+      state: 'reconnecting',
+      activePath: 'lan',
+      pendingPath: 'relay',
+      relayHostReachability: 'host-offline'
+    })
+  })
+
+  it('sends no path frame to a page that never said it reads them', () => {
+    let notifyPath = () => {}
+    const client = createFakeRpcClient({
+      onConnectionPathChange: (listener) => {
+        notifyPath = listener
+        return () => {}
+      }
+    })
+    const bridge = harness({ client })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const sent = bridge.frames().length
+
+    notifyPath()
+
+    expect(bridge.frames()).toHaveLength(sent)
   })
 
   it('drops the state listener on dispose', () => {

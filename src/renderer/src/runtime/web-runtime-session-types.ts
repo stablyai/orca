@@ -1,14 +1,16 @@
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery
-} from '../../../shared/agent-session-host-authority'
-import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+} from '../../../shared/agent-session/agent-session-host-authority'
+import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 
 export type WebRuntimeTerminalCreateOutcome =
   | { status: 'created' }
@@ -38,6 +40,16 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   /** Explicit CLI override; omission leaves the remote host's defaults authoritative. */
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>>
+  extraAgentArgs?: string
+  agentSessionCreateCapability?: RuntimeCapability
+  /** Foreground fresh launches select their compatibility recipe only after negotiation. */
+  legacyAgentLaunch?: () => Promise<
+    Pick<
+      CreateWebRuntimeSessionTerminalArgs,
+      'command' | 'env' | 'launchConfig' | 'startupCommandDelivery'
+    > & { agentPrompt?: string }
+  >
   providerSession?: AgentProviderSessionMetadata
   viewMode?: 'terminal' | 'chat'
   activate?: boolean

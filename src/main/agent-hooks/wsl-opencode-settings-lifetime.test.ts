@@ -10,11 +10,11 @@ import { createInstallPluginsHandler } from '../../wsl-guest/wsl-install-plugins
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
 import { REINSTALL_MIN_INTERVAL_MS } from './wsl-hook-relay-deps'
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
-} from '../../shared/agent-hook-relay'
+} from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { WSL_HOOK_FS_METHODS } from '../../shared/wsl-hook-relay-contract'
 
 function gate() {
@@ -155,7 +155,10 @@ describe.skipIf(process.platform === 'win32')('WSL public-manager settings lifet
       managedHookSettings: () => settings,
       pluginSources: () => sources,
       warn: vi.fn(),
-      transientRetryDelayMs: 1
+      transientRetryDelayMs: 1,
+      // A bridge terminal stays open, so no relay idles out mid-test.
+      bridgePtyPresence: { count: () => 1, onChange: () => () => {} },
+      daemonBridgeSessions: async () => 'none' as const
     })
   })
   afterEach(() => {

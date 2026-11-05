@@ -13,8 +13,10 @@ export const ConnectorHostDescription = {
   orcaVersion: z.string().min(1)
 }
 
+export const CONNECTOR_SOURCES = ['slack', 'discord', 'linear'] as const
+
 export const ConnectorConversationSchema = z.object({
-  source: z.literal('slack'),
+  source: z.enum(CONNECTOR_SOURCES),
   externalId: OpaqueIdSchema
 })
 export type ConnectorConversation = z.infer<typeof ConnectorConversationSchema>

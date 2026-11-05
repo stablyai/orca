@@ -1,3 +1,7 @@
+import {
+  WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
+  buildPosixClaudeBackgroundJobGuardLines
+} from '../agent-hooks/claude-background-job-guard'
 import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 import { WINDOWS_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import {
@@ -24,8 +28,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     return [
       '@echo off',
       'setlocal',
-      // Daemon workers inherit stale pane keys; exit before reading their potentially abandoned stdin.
-      'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
+      WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
       // Endpoint refresh never sets the pane key, so this guard can precede stdin capture.
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
       // UUID suffixes and sanitized legacy delimiters keep filenames safe.
@@ -91,10 +94,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
-    // Daemon workers inherit stale pane keys; POSIX must capture stdin first to avoid agent EPIPE.
-    'if [ -n "$CLAUDE_JOB_DIR" ]; then',
-    '  exit 0',
-    'fi',
+    ...buildPosixClaudeBackgroundJobGuardLines(),
     // Non-subscriber payloads lack rate_limits; avoid spawning curl for them.
     'case "$payload" in',
     '  *\'"rate_limits"\'*) ;;',

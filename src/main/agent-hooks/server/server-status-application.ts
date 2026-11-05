@@ -5,14 +5,14 @@ import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { track } from '../../telemetry/client'
 import { isCommandCodeNewTurnWhileWorking } from '../../../shared/command-code-turn-boundary'
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
-import { reduceHostTurnEnd } from '../../../shared/agent-hook-turn-end-timing'
+import { reduceHostTurnEnd } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
   AgentStatusObservation,
   AgentStatusObservationOrigin
-} from '../../../shared/agent-status-observation'
-import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
-import type { AgentStatusState, ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/contracts/agent-status-observation'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
+import { mainAgentState } from '../../../shared/agent-status/lifecycle/main-agent-status'
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
@@ -20,10 +20,6 @@ import { AgentHookServerStatusDisposition } from './server-status-disposition'
 
 // Evicting remembered evidence makes later replay fall back to its arrival time.
 const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
-
-function mainAgentState(payload: ParsedAgentStatusPayload): AgentStatusState {
-  return payload.mainAgent?.state ?? payload.state
-}
 
 /** Only live main-agent turn boundaries establish a start; replay and child events preserve it. */
 function resolveTurnStartedAt(

@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from './first-work-structured-session-rename'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
+import '../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 const {
   gitExecFileAsyncMock,
@@ -25,12 +28,19 @@ const {
   getConfiguredBranchPrefixMock: vi.fn((_settings: unknown, username: string | null) => username)
 }))
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 vi.mock('../git/git-username', () => ({ resolveLocalGitUsername: resolveLocalGitUsernameMock }))
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   generateBranchNameFromContext: generateBranchNameMock,
   resolveTextGenerationParams: resolveTextGenerationParamsMock
 }))
+// Loaded at collection so a test that runs the real resolver does not pay for it in its timeout.
+const actualTextGeneration = await vi.importActual<typeof CommitMessageTextGenerationModule>(
+  '../text-generation/commit-message-text-generation'
+)
 vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: prepareLocalEnvMock
 }))
@@ -115,6 +125,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
       const journal = {
         snapshot: () => ({ items, submissions: [] }),
+        statusRead: () => ({ items, submissions: [] }),
+        inputOrder: {
+          inputCount: () => 0,
+          inputOrdinal: () => Infinity,
+          recoverableSubmissions: () => []
+        },
         context: { floor: () => null },
         item: ((itemId) =>
           items.find((item) => item.itemId === itemId) ??
@@ -152,7 +168,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
             }
           ]
         ]),
-        getRecord: () => null,
+        getConversation: () => null,
         now: () => 1,
         onStatusChanged: observe
       })
@@ -236,6 +252,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       stopMarks: { latest: () => null, revision: () => 0 },
       cursor: () => ({ epoch: 1, sequence: 1 }),
       snapshot: () => ({ items, submissions: [] }),
+      statusRead: () => ({ items, submissions: [] }),
+      inputOrder: {
+        inputCount: () => 0,
+        inputOrdinal: () => Infinity,
+        recoverableSubmissions: () => []
+      },
       item: ((itemId) =>
         items.find((item) => item.itemId === itemId) ?? null) satisfies AgentSessionJournal['item'],
       itemFence: () => undefined,
@@ -252,7 +274,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const feed = new StructuredAgentSessionStatusFeed({
       logger: createStructuredAgentSessionLogger(),
       sessions: new Map([['session', { journal, params: { location, provider: 'codex' } }]]),
-      getRecord: () => null,
+      getConversation: () => null,
       now: () => 1,
       onStatusChanged: (summary, options) => {
         expect(summary.workspaceId).toBe(workspaceId)
@@ -287,6 +309,38 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     )
     expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('generates the branch name with the saved Branch name model and effort', async () => {
+    resolveTextGenerationParamsMock.mockImplementation(
+      actualTextGeneration.resolveTextGenerationParams
+    )
+    const settings = getDefaultSettings('/home')
+    settings.autoRenameBranchFromWork = true
+    settings.sourceControlAi = {
+      ...settings.sourceControlAi!,
+      enabled: true,
+      agentId: 'codex',
+      modelOverridesByOperation: { branchName: { selectedModelByAgent: { codex: 'gpt-5.4' } } }
+    }
+    const repo: Repo = {
+      ...REMOTE_REPO_BASE,
+      sourceControlAi: {
+        modelOverridesByOperation: {
+          branchName: {
+            selectedModelByAgent: { codex: 'gpt-5.4-mini' },
+            selectedThinkingByModel: { 'gpt-5.4-mini': 'high' }
+          }
+        }
+      }
+    }
+    const { deps } = makeDeps({ getSettings: () => settings, getRepo: () => repo })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'high' }),
+      expect.anything()
+    )
   })
 
   it('asks to align the on-disk folder with the generated slug after renaming', async () => {
@@ -680,7 +734,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         throw noUpstreamError
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'you/Nautilus\n', stderr: '' }
+        return { stdout: 'refs/heads/you/Nautilus\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/you/Nautilus')) {
         throw new Error('not found')
@@ -705,7 +759,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         return { stdout: 'you/Nautilus\n', stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'you/Nautilus\n', stderr: '' }
+        return { stdout: 'refs/heads/you/Nautilus\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.includes('@{u}'))) {
         upstreamReadCount += 1

@@ -5,15 +5,15 @@ import type {
   AgentType,
   ParsedAgentStatusPayload,
   TurnEndDisposition
-} from '../../../../../shared/agent-status-types'
-import type { AgentStatusObservation } from '../../../../../shared/agent-status-observation'
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusObservation } from '../../../../../shared/agent-status/contracts/agent-status-observation'
 import type { ProgramStatusFacet } from '../../../../../shared/program-status/facet'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
   SleepingAgentLaunchConfig
-} from '../../../../../shared/agent-session-resume'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 export type RetainedAgentEntry = {
   entry: AgentStatusEntry
@@ -160,3 +160,11 @@ export type AgentStatusBatchTransaction = {
   apply: (update: AgentStatusBatchUpdate) => boolean
   afterCommit: (effect: () => void) => void
 }
+
+/** Ephemeral accepted live-row mutations; missing references describe creation/deletion. */
+export type AgentStatusChange = {
+  paneKey: string
+  previous: AgentStatusEntry | undefined
+  current: AgentStatusEntry | undefined
+}
+export type AgentStatusChangeListener = (changes: readonly AgentStatusChange[]) => void

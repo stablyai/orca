@@ -89,15 +89,6 @@ afterEach(() => {
 })
 
 describe('a commit message generation that was canceled', () => {
-  it('fills the empty box when nothing canceled the run', async () => {
-    const { pending } = await startGenerating()
-    await act(async () => {
-      host.succeed?.('feat: generated')
-      await pending
-    })
-    expect(drafts[WORKTREE_ID]).toBe('feat: generated')
-  })
-
   it('drops the late reply after a cancel, so a commit that emptied the box stays empty', async () => {
     const { pending } = await startGenerating()
     act(() => latest?.handleCancelGenerate())

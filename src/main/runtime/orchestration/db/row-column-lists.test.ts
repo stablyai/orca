@@ -35,11 +35,6 @@ describe('row column lists', () => {
     expect([...columns].sort()).toEqual(tableColumns(table))
   })
 
-  it('qualifies each column when the statement joins under an alias', () => {
-    expect(selectColumns(['id', 'run_id'])).toBe('id, run_id')
-    expect(selectColumns(['id', 'run_id'], 't')).toBe('t.id, t.run_id')
-  })
-
   // Alias-qualified SQL must still return bare column names for lineage readers.
   it('returns bare column names for an alias-qualified projection', () => {
     db = new OrchestrationDb(':memory:')

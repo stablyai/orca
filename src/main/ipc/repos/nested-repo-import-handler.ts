@@ -1,7 +1,8 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../../persistence'
+import { realpath } from 'node:fs/promises'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectGroupImportResult } from '../../../shared/project-group-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
@@ -13,10 +14,10 @@ import {
   resolveNestedRepoSelection
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { ProjectGroupImportNestedArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'
@@ -82,6 +83,12 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           }
           const importRepoPath = await importTargetResolver.resolveLocal(repoPath)
           const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
+          // Clone and create save Git's resolved path, so a symlinked import root matches it too.
+          const resolvedImportRepoPath = args.connectionId
+            ? null
+            : await realpath(importRepoPath)
+                .then(normalizeRuntimePathForComparison)
+                .catch(() => null)
           const alreadyImportedProjectId =
             importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
           if (alreadyImportedProjectId) {
@@ -92,13 +99,15 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             })
             continue
           }
-          const existing = store
-            .getRepos()
-            .find(
-              (repo) =>
-                (repo.connectionId ?? null) === (args.connectionId ?? null) &&
-                normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
-            )
+          const existing = store.getRepos().find(
+            (repo) =>
+              (repo.connectionId ?? null) === (args.connectionId ?? null) &&
+              (normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath ||
+                // The resolved spelling names this machine's folder, so only local rows may match it.
+                (resolvedImportRepoPath !== null &&
+                  getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+                  normalizeRuntimePathForComparison(repo.path) === resolvedImportRepoPath))
+          )
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {

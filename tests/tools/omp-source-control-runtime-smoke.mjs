@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { pathToFileURL } from 'node:url'
 import { join, resolve } from 'node:path'
-import { getCommitMessageAgentSpec } from '../../src/shared/commit-message-agent-spec.ts'
+import { getCommitMessageAgentSpec } from '../../src/shared/source-control/ai/generation/commit-message-agent-spec.ts'
 const reference = process.argv[2]
 assert.ok(reference, 'Pass the read-only source checkout path')
 const { parseArgs } = await import(

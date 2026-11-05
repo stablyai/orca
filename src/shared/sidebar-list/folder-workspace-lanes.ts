@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
 import type { WorkspaceStatusDefinition } from '../worktree/types'
 import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../workspace-statuses'
@@ -47,10 +47,15 @@ export function getFolderWorkspaceLaneKey(
   }
 }
 
+type FolderWorkspaceDisplayOrder = Pick<
+  FolderWorkspace,
+  'id' | 'name' | 'sortOrder' | 'manualOrder' | 'executionHostId'
+>
+
 /** Match project-group ordering: user rank, then name. */
 export function compareFolderWorkspacesForDisplay(
-  left: FolderWorkspace,
-  right: FolderWorkspace
+  left: FolderWorkspaceDisplayOrder,
+  right: FolderWorkspaceDisplayOrder
 ): number {
   const leftOrder = left.manualOrder ?? left.sortOrder
   const rightOrder = right.manualOrder ?? right.sortOrder

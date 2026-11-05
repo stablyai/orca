@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   DesktopBrowserBridgeManager,

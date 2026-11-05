@@ -1,17 +1,15 @@
-import { applyAppend, replaceList } from '../../../../src/shared/native-chat-merge'
-import type { NativeChatMerger } from '../../../../src/shared/native-chat-merge'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import { applyAppend, replaceList } from '../../../../src/shared/native-chat/native-chat-merge'
+import { translate } from '../../i18n/mobile-i18n'
+import type { NativeChatMerger } from '../../../../src/shared/native-chat/native-chat-merge'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatTranscriptFrame } from '../../../../src/shared/native-chat/native-chat-transcript-frames'
 
-export type MobileNativeChatStreamFrame = {
-  type?: string
-  messages?: NativeChatMessage[]
-  hasMore?: boolean
-  beforeOffset?: number
-  // No transcript exists yet; render the empty window without treating it as settled history.
-  pending?: boolean
-  error?: string
-  message?: string
-}
+type SnapshotFrame = Extract<NativeChatTranscriptFrame, { type: 'snapshot' }>
+
+// Every field optional: a frame is read before it is checked. `message` is a transport error's text.
+export type MobileNativeChatStreamFrame = { type?: string; message?: string } & Partial<
+  Omit<SnapshotFrame, 'type'>
+>
 
 export type AppliedMobileNativeChatFrame =
   | { kind: 'ignored' }
@@ -65,11 +63,20 @@ export function applyMobileNativeChatStreamFrame(args: {
 }): AppliedMobileNativeChatFrame {
   const { merger, frame, limit, replaceSnapshot } = args
   if (frame.type === 'error') {
-    return { kind: 'error', error: frame.message ?? frame.error ?? 'Transcript stream failed' }
+    return {
+      kind: 'error',
+      error:
+        frame.message ??
+        frame.error ??
+        translate('chat.streamFrame.streamFailed', 'Transcript stream failed')
+    }
   }
   // The subscription owns its token, so an unsolicited end means its feed died.
   if (frame.type === 'end') {
-    return { kind: 'error', error: 'Transcript stream ended' }
+    return {
+      kind: 'error',
+      error: translate('chat.streamFrame.streamEnded', 'Transcript stream ended')
+    }
   }
   if (frame.type !== 'snapshot' && frame.type !== 'replacement' && frame.type !== 'appended') {
     return { kind: 'ignored' }
@@ -82,7 +89,8 @@ export function applyMobileNativeChatStreamFrame(args: {
   }
   const pending = frame.type === 'snapshot' && frame.pending === true
   const replayStartIndex =
-    frame.type === 'snapshot' && !replaceSnapshot && merger.list.length > 0
+    // A resumed page continues the cached list; any other first page is the new base.
+    frame.type === 'snapshot' && (!replaceSnapshot || frame.resumed) && merger.list.length > 0
       ? replayRetainedTailStart(merger, frame.messages, frame.hasMore)
       : null
   if (frame.type === 'replacement' || (frame.type === 'snapshot' && replayStartIndex === null)) {

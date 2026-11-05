@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import { getRuntimeEnvironmentSidecarPath } from '../../../shared/runtime-environment-sidecar'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { getRuntimeEnvironmentSidecarPath } from '../../../shared/remote-runtime/host-store/runtime-environment-sidecar'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
@@ -118,6 +118,8 @@ describe('stopManagedOrcadEnvironment', () => {
       readFileSync(getRuntimeEnvironmentSidecarPath(harness.userDataPath), 'utf8')
     ).not.toContain('orcadDeployment')
     expect(harness.current().orcadFence).toBeUndefined()
+    // Persisted with the release so a reload or relaunch cannot deploy a replacement.
+    expect(harness.current().managedServerRemoved).toBeDefined()
     expect(harness.flushes).toHaveLength(1)
     expect(mocks.retire).toHaveBeenCalledWith('environment-1')
     expect(mocks.closeTunnel).toHaveBeenCalledWith('environment-1')

@@ -1,3 +1,4 @@
+import type * as MobileTerminalOperations from '../../../terminal/mobile-terminal-operations'
 import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -12,7 +13,10 @@ const PTY_MODES: TerminalModes = {
   altScreen: false,
   mouseTrackingMode: 'none',
   sgrMouseMode: false,
-  sgrMousePixelsMode: false
+  sgrMousePixelsMode: false,
+  applicationCursorKeysMode: false,
+  kittyKeyboardFlags: 0,
+  modifyOtherKeys: 0
 }
 
 // Use the real draft store and per-recording pasteboard so refused sends restore recorded input.
@@ -39,11 +43,9 @@ function mountTerminalClipboard(
   const useTerminalPaste = modules.load<
     typeof import('../../../session/use-mobile-terminal-paste')
   >('mobile/src/session/use-mobile-terminal-paste.ts').useMobileTerminalPaste
-  const takeover = modules.load<typeof import('../../../terminal/worker-terminal-takeover-report')>(
-    'mobile/src/terminal/worker-terminal-takeover-report.ts'
+  const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
+    'mobile/src/terminal/mobile-terminal-operations.ts'
   )
-  // The per-client report window is module state; a fresh recording must not inherit one.
-  takeover.resetWorkerTerminalTakeoverReportsForTest()
 
   const ptyModesRef = { current: new Map([[HANDLE, PTY_MODES]]) }
   let selection: ReturnType<typeof useAccessorySelection> | undefined
@@ -70,6 +72,7 @@ function mountTerminalClipboard(
     selection = model
     paste = useTerminalPaste(
       mountFixture<Parameters<typeof useTerminalPaste>[0]>({
+        sendTerminalUserInput: terminalInputSend.request,
         activeHandle: HANDLE,
         activeHandleRef: { current: HANDLE },
         activeSessionTabTypeRef: { current: 'terminal' },
@@ -124,10 +127,7 @@ function mountTerminalClipboard(
       throw new Error(`Unknown terminal clipboard action: ${name}`)
     },
     state: () => ({ connectionId, pasteOutcome, crash: screen.crash() }),
-    dispose: () => {
-      takeover.resetWorkerTerminalTakeoverReportsForTest()
-      screen.unmount()
-    }
+    dispose: () => screen.unmount()
   }
 }
 
@@ -140,17 +140,11 @@ function mountTerminalInputSend(
   >(
     'mobile/src/session/use-mobile-session-terminal-send-actions.ts'
   ).useMobileSessionTerminalSendActions
-  const useDrafts = modules.load<typeof import('../../../terminal/use-buffered-terminal-drafts')>(
-    'mobile/src/terminal/use-buffered-terminal-drafts.ts'
-  ).useBufferedTerminalDrafts
-  const takeover = modules.load<typeof import('../../../terminal/worker-terminal-takeover-report')>(
-    'mobile/src/terminal/worker-terminal-takeover-report.ts'
+  const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
+    'mobile/src/terminal/mobile-terminal-operations.ts'
   )
-  takeover.resetWorkerTerminalTakeoverReportsForTest()
 
   const activeHandleRef = { current: HANDLE }
-  const sendingRef = { current: false }
-  // An agent tab, so an accepted send hands the turn over and the keyboard drop is observable.
   const activeSessionTab = {
     type: 'terminal' as const,
     id: 'tab-1',
@@ -159,15 +153,15 @@ function mountTerminalInputSend(
     launchAgent: 'claude' as const,
     isActive: true
   }
-  let drafts: ReturnType<typeof useDrafts> | undefined
   let actions: ReturnType<typeof useSendActions> | undefined
   let liveAccepted: unknown = 'unsent'
 
   const screen = hookScreenMount(() => {
-    const draftState = useDrafts({ activeHandle: HANDLE, activeHandleRef })
-    drafts = draftState
     actions = useSendActions(
       mountFixture<Parameters<typeof useSendActions>[0]>({
+        sendTerminalUserInput: terminalInputSend.request,
+        sendTerminalOrderedInput: terminalInputSend.request,
+        terminalRefs: { current: new Map() },
         client,
         activeHandle: HANDLE,
         activeSessionTab,
@@ -177,15 +171,13 @@ function mountTerminalInputSend(
         clientRef: { current: client },
         connStateRef: { current: 'connected' },
         liveInputRef: { current: null },
-        commandInputRef: { current: null },
+        ptyModesRef: { current: new Map([[HANDLE, PTY_MODES]]) },
         liveInputFocusTimerRef: { current: null },
         sendLiveTerminalInputRef: { current: null },
         sessionTabActionSheetKeyboardHideSubRef: { current: null },
         sessionTabActionSheetRequestSeqRef: { current: 0 },
         activeHandleRef,
         activeSessionTabTypeRef: { current: 'terminal' },
-        sendingRef,
-        bufferedTerminalDraftState: draftState,
         getSendCompletionGeneration: () => 0,
         showToast: (message: string, durationMs?: number) =>
           effect('toast', { message, durationMs: durationMs ?? null })
@@ -198,13 +190,6 @@ function mountTerminalInputSend(
       if (name === 'mount') {
         return screen.mount()
       }
-      if (name === 'type') {
-        drafts!.setInput(String(args.text ?? 'ls -la'))
-        return screen.update()
-      }
-      if (name === 'send') {
-        return actions!.handleSend()
-      }
       if (name === 'live') {
         return actions!
           .sendLiveTerminalInput(HANDLE, String(args.bytes ?? 'ls'))
@@ -216,14 +201,9 @@ function mountTerminalInputSend(
       throw new Error(`Unknown terminal input send action: ${name}`)
     },
     state: () => ({
-      input: drafts?.input ?? null,
-      sending: sendingRef.current,
       liveAccepted,
       crash: screen.crash()
     }),
-    dispose: () => {
-      takeover.resetWorkerTerminalTakeoverReportsForTest()
-      screen.unmount()
-    }
+    dispose: () => screen.unmount()
   }
 }

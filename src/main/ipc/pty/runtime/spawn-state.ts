@@ -1,37 +1,39 @@
+import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn-outcome'
-import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
+import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
+import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
 import type {
   IPtyProvider,
   PtySpawnOptions,
   PtySpawnResult
 } from '../../../providers/pty-provider-contract'
-import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
+import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { AdoptStablePaneResult } from '../ipc/spawn-types'
-import type { PtyBindingSourceExpectation } from '../../../persistence'
-import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
+import type { PtyBindingSourceExpectation } from '../../../persistence/loading-store/store'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
 import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
-} from '../../../../shared/agent-session-resume'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { TerminalWorkspaceLaunchScope } from '../../../runtime/runtime-legacy-worker-terminal-recovery-types'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -57,6 +59,7 @@ export type RuntimePtySpawnState = {
   effectiveSessionAppId: string | undefined
   ownsNewIncarnation: boolean
   expectedWslDistro: string | null
+  wslHoldReadAnchor: number | undefined
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
@@ -109,6 +112,7 @@ export type RuntimePtySpawnState = {
 }
 
 export type RuntimePtySpawnArgs = {
+  resolvedWorkspace?: TerminalWorkspaceLaunchScope
   cols: number
   rows: number
   cwd?: string
@@ -128,6 +132,8 @@ export type RuntimePtySpawnArgs = {
   resumeProviderSession?: AgentProviderSessionMetadata
   /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
   resumeOrigin?: 'saved'
+  /** The user's own act (a CLI command, a paired client's create, a launch); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
   connectionId?: string | null
   worktreeId?: string
   preAllocatedHandle?: string
@@ -145,6 +151,10 @@ export type RuntimePtySpawnArgs = {
   placement?: TerminalPanePlacement
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: { foreground?: string; background?: string }
+  /** A paired launcher's theme: its PTY answers OSC 10/11 with it over the host-wide theme. */
+  launcherColorQueryReplies?: { foreground?: string; background?: string }
+  /** That launcher's palette and cursor, so its PTY's OSC 4/12 agree with its OSC 10/11. */
+  launcherViewAttributes?: TerminalViewAttributes
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding
@@ -199,6 +209,7 @@ export function createRuntimePtySpawnState(
     effectiveSessionAppId: undefined,
     ownsNewIncarnation: false,
     expectedWslDistro: null,
+    wslHoldReadAnchor: undefined,
     resumeAdmission: null,
     codexSelectionTarget: { runtime: 'host' },
     launchCommand: undefined,
@@ -234,4 +245,9 @@ export function createRuntimePtySpawnState(
     reportPtySpawnCommitted: () => {},
     preSpawnHiddenMarkId: null
   }
+}
+
+/** Default-deny (E9): a main-side start is background unless its caller names the user's act; an adopted pane starts nothing. */
+export function isRuntimeWslBackgroundStart(ctx: RuntimePtySpawnState): boolean {
+  return !ctx.preAdoptedStablePane && ctx.args.wslUserAct !== true
 }

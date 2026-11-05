@@ -7,9 +7,11 @@ const { getWslHomeMock, getWslHomeAsyncMock, parseWslPathMock } = vi.hoisted(() 
   parseWslPathMock: vi.fn()
 }))
 
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getWslHome: getWslHomeMock,
-  getWslHomeAsync: getWslHomeAsyncMock,
+  getWslHomeAsync: getWslHomeAsyncMock
+}))
+vi.mock('../wsl/filesystem/unc-path-access', () => ({
   parseWslPath: parseWslPathMock
 }))
 
@@ -74,6 +76,20 @@ describe('computeWorktreePath WSL layout', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('reads the home through the lookup its main-side caller injects', async () => {
+    parseWslPathMock.mockReturnValue({ distro: 'Ubuntu', linuxPath: '/home/jin/repo' })
+    const readHome = vi.fn(async () => null)
+    const root = await computeWorkspaceRootWithin(
+      String.raw`\\wsl.localhost\Ubuntu\home\jin\repo`,
+      { workspaceDir: 'C:\\workspaces' },
+      5_000,
+      readHome
+    )
+    expect(root).not.toContain('orca')
+    expect(readHome).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+    expect(getWslHomeAsyncMock).not.toHaveBeenCalled()
   })
 
   it('places WSL repo worktrees under the distro home workspace root', () => {

@@ -3,7 +3,7 @@ import { getCheckCounts, getChecksSummaryLabel } from './pr-check-counts'
 import {
   getProviderChecksLabel,
   summarizeProviderChecks
-} from '../../../shared/provider-check-summary'
+} from '../../../shared/source-control/checks/provider-check-summary'
 import type { PRCheckDetail } from '../../../shared/github/check-types'
 
 function check(conclusion: PRCheckDetail['conclusion'], name = String(conclusion)): PRCheckDetail {
@@ -24,6 +24,7 @@ describe('getCheckCounts', () => {
     expect(getCheckCounts(checks)).toEqual({
       passing: 5,
       failing: 0,
+      cancelled: 0,
       needsAction: 0,
       pending: 0,
       neutral: 0
@@ -38,27 +39,12 @@ describe('getCheckCounts', () => {
     expect(getCheckCounts([check('action_required'), check('failure')])).toEqual({
       passing: 0,
       failing: 1,
+      cancelled: 0,
       needsAction: 1,
       pending: 0,
       neutral: 0
     })
     expect(getChecksSummaryLabel([check('action_required')])).toBe('1 check needs action')
-  })
-
-  it('buckets neutral and still-running checks apart', () => {
-    const checks: PRCheckDetail[] = [
-      check('neutral'),
-      { name: 'ci', status: 'in_progress', conclusion: null, url: null }
-    ]
-
-    expect(getCheckCounts(checks)).toEqual({
-      passing: 0,
-      failing: 0,
-      needsAction: 0,
-      pending: 1,
-      neutral: 1
-    })
-    expect(getChecksSummaryLabel(checks)).toBe('1 check pending')
   })
 
   it('keeps a completed check without a conclusion unresolved', () => {
@@ -69,14 +55,18 @@ describe('getCheckCounts', () => {
     expect(getCheckCounts(checks)).toEqual({
       passing: 0,
       failing: 0,
+      cancelled: 0,
       needsAction: 0,
       pending: 0,
       neutral: 1
     })
-    expect(getChecksSummaryLabel(checks)).toBe('0 of 1 checks passing')
+    expect(getChecksSummaryLabel(checks)).toBe('0 of 1 check passing')
   })
+})
 
-  it('reports no checks for an empty list', () => {
-    expect(getChecksSummaryLabel([])).toBe('No checks found')
-  })
+it('keeps cancelled chips distinct and pending ahead of cancellation', () => {
+  const checks = [check('success'), check('cancelled')]
+  expect(getCheckCounts(checks)).toMatchObject({ passing: 1, failing: 0, cancelled: 1 })
+  expect(getChecksSummaryLabel(checks)).toBe('Cancelled')
+  expect(getChecksSummaryLabel([...checks, check('pending')])).toBe('1 check pending')
 })

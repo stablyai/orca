@@ -1,11 +1,11 @@
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { describePairedServerHosts } from '../../../shared/paired-server-hosts'
+import { describePairedServerHosts } from '../../../shared/remote-runtime/host-catalog/paired-server-hosts'
 import type {
   MobileRelayHost,
   MobileRelayHostRelay
-} from '../../../shared/mobile-relay-hosts-contract'
-import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
+import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type {
   MobileDesktopRelayHostListing,
@@ -38,7 +38,9 @@ export function describeRelayHosts(
         identity: { pairingRevision: identity.pairingRevision, runtimeId: identity.runtimeId },
         label: host.label,
         health: host.health,
-        relay: relayVerdict(host.health, answer)
+        relay: relayVerdict(host.health, answer),
+        ...(identity.stoppedOnDesktop ? { stoppedOnDesktop: true as const } : {}),
+        ...(identity.unavailableOnDesktop ? { unavailableOnDesktop: true as const } : {})
       }
     ]
   })

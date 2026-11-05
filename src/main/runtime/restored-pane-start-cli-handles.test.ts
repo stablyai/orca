@@ -5,14 +5,14 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_THIRD_LEAF_ID: THIRD_LEAF_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   deferred
-} = await import('./orca-runtime-test-fixtures.spec')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { SURFACE_PTYS, SURFACE_TAB_ID, surfaceRuntime } =
   await import('./terminal/surface/terminal-surface-replies.test-fixture')
 await import('./rpc/unused-default-rpc-methods.test-fixture')
@@ -85,6 +85,16 @@ const DRIVING = { inputKind: 'driving' } as const
 describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', () => {
   it('a send starts the pane once and delivers to it, and the handle keeps naming it', async () => {
     const { runtime, handle, spawn, started, write } = await restoredPane()
+    const observer = new AbortController()
+    const abandoned = runtime.sendTerminalAgentPrompt(handle, 'abandoned', {
+      ...DRIVING,
+      observationSignal: observer.signal
+    })
+    const refused = expect(abandoned).rejects.toThrow('request_aborted')
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
+    observer.abort()
+    await refused
+    expect(write).not.toHaveBeenCalled()
 
     const send = runtime.sendTerminal(handle, { text: 'echo hi', enter: true }, DRIVING)
     await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
@@ -96,6 +106,7 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
       runtime.sendTerminal(handle, { text: 'echo again', enter: true }, DRIVING)
     ).resolves.toMatchObject({ handle, accepted: true })
     expect(write).toHaveBeenCalledWith('pty-c', 'echo again', 'driving')
+    expect(write).toHaveBeenCalledTimes(4)
     expect(spawn).toHaveBeenCalledOnce()
   })
 

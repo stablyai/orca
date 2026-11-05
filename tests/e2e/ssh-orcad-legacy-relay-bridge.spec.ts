@@ -13,16 +13,16 @@ import {
   mutateStoppedProfileState,
   readPersistedProfileState
 } from './helpers/persisted-profile-state'
-import { workspaceSessionStateSchema } from '../../src/shared/workspace-session-schema'
+import { workspaceSessionStateSchema } from '../../src/shared/workspace-session/workspace-session-schema'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
   getTerminalScrollbackSnapshotPath,
   makeTerminalScrollbackSnapshotRef
-} from '../../src/main/terminal-scrollback-snapshots'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../src/shared/terminal-scrollback-limits'
+} from '../../src/main/pty/scrollback/terminal-scrollback-snapshots'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../src/shared/terminal/replay/terminal-scrollback-limits'
 import { getOrcaProfileDataFile } from '../../src/shared/profile-state-storage-paths'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
-import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
+import { getOrcadSshDeployment } from '../../src/shared/remote-runtime/host-catalog/runtime-environments'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 import { toAppSshPtyId } from '../../src/shared/ssh-pty-id'
 import {
@@ -216,7 +216,10 @@ async function verifyRunningRelayUpgrade(
       await expect
         .poll(() => managedServer(page, targetId), { timeout: 120_000 })
         .toMatchObject({ kind: 'relay', reason: 'refused', canLeaveBehind: true })
-      const move = page.getByRole('button', { name: 'Move anyway…', exact: true })
+      // The refusal toast offers it too; this is the pane's own button.
+      const move = page
+        .getByRole('button', { name: 'Move anyway…', exact: true })
+        .and(page.locator(':not([data-sonner-toast] button)'))
       await expect(move).toBeVisible()
       await page.screenshot({
         path: testInfo.outputPath('unreadable-history-recovery-offered.png')

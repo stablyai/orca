@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { Automation, AutomationRun } from '../automations-types'
 import type { OrcadMigrationManifestVersion } from './orcad-migration-manifest-validation'
 import type { ProjectGroup } from '../project-group-types'
@@ -7,7 +7,7 @@ import type { SparsePreset } from '../worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
 import type { WorktreeMeta } from '../worktree/meta-types'
 import type { RetiredNameRegistry } from '../worktree/retired-name-registry'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import type { OrcadMigrationClientStatePayload } from './orcad-migration-client-state'
 import type {
   OrcadMigrationSnapshotUploadState,
@@ -156,6 +156,8 @@ export type OrcadMigrationCatalogReferenceAbortResult = OrcadMigrationCatalogRef
   state: 'absent' | 'committed'
   aborted: boolean
   durableAbsent?: true
+  /** The receipt was flushed before this answer; older hosts never send it. */
+  durableCommitted?: true
 }
 
 export function orcadMigrationManifestHashInput(

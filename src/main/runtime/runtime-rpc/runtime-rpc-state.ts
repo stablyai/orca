@@ -7,7 +7,7 @@ import type { RpcTransport } from '../rpc/transport'
 import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
-import type { RuntimeHostDescriptor } from '../../../shared/runtime-host-descriptor'
+import type { RuntimeHostDescriptor } from '../../../shared/remote-runtime/host-status/runtime-host-descriptor'
 import type { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-throttle'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import type { MobileDesktopRelay } from '../mobile-desktop-relay/mobile-desktop-relay'
@@ -15,8 +15,11 @@ import type { MobileRelayHostCatalog } from '../mobile-desktop-relay/mobile-rela
 import { RelayRevokeOutbox } from '../mobile-cloud-relay/relay-revoke-outbox'
 import { PushUnregisterOutbox } from '../push/push-unregister-outbox'
 import { RuntimeBinaryMessageRouter } from '../runtime-binary-message-router'
-import type { RuntimeMetadataOwnershipWatch } from '../runtime-metadata-ownership-watch'
-import { RUNTIME_METADATA_OWNERSHIP_POLL_MS } from '../runtime-metadata-ownership-watch'
+
+import {
+  type RuntimeMetadataOwnershipWatch,
+  RUNTIME_METADATA_OWNERSHIP_POLL_MS
+} from '../runtime-metadata-ownership-watch'
 import {
   ASK_LONG_POLL_SHARE,
   BROWSER_HOST_LONG_POLL_SHARE,
@@ -24,13 +27,15 @@ import {
   LONG_POLL_CAP,
   SPECIALIZED_LONG_POLL_SHARE
 } from './runtime-rpc-long-poll'
-import type {
-  MobilePairingOffer,
-  MobileRelayPairingProvider,
-  OrcaRuntimeRpcServerOptions,
-  PairingOfferUnavailable
+
+import {
+  type MobilePairingOffer,
+  type MobileRelayPairingProvider,
+  type OrcaRuntimeRpcServerOptions,
+  type PairingOfferUnavailable,
+  DEFAULT_WS_PORT
 } from './runtime-rpc-pairing-types'
-import { DEFAULT_WS_PORT } from './runtime-rpc-pairing-types'
+import { DeclaredDesktopClients } from '../declared-desktop-clients'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -76,6 +81,7 @@ export class RuntimeRpcState {
   protected mobileDesktopRelay: MobileDesktopRelay | null = null
   protected mobileRelayHostCatalog: MobileRelayHostCatalog | null = null
   protected detachPairedServerRows: (() => void) | null = null
+  protected readonly declaredDesktopClients = new DeclaredDesktopClients()
   // Why: lets an automatic mint install a provider whose launch-time construction failed.
   protected mobileRelayPairingProviderInstaller: (() => Promise<unknown>) | null = null
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()

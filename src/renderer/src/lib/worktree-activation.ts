@@ -1,3 +1,5 @@
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
+import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
@@ -7,7 +9,6 @@ import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-regist
 import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
@@ -20,7 +21,8 @@ import {
   findFolderWorkspaceOwner,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
-import { getFolderWorkspaceHostId } from '../../../shared/folder-workspace-execution-host'
+import '../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../shared/folder-workspaces/folder-workspace-host-id'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import {
   ensureFolderWorkspaceInitialTerminal,
@@ -39,7 +41,11 @@ import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from './pending-worktree-creation'
-import { markVisited, readPreviousActive } from './worktree-activation-visit'
+import {
+  buildActivationStateTransition,
+  markVisited,
+  readPreviousActive
+} from './worktree-activation-visit'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** Share palette/dialog activation; derive repoId and no-op if the selected worktree vanished. */
@@ -49,13 +55,10 @@ export type ActivateAndRevealResult = {
   primaryTabId: string | null
 }
 
-function canInspectAgentActivationInventory(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.api?.runtime?.call === 'function' &&
-    typeof window.api?.pty?.listSessions === 'function'
-  )
-}
+const canInspectAgentActivationInventory = (): boolean =>
+  typeof window !== 'undefined' &&
+  typeof window.api?.runtime?.call === 'function' &&
+  typeof window.api?.pty?.listSessions === 'function'
 
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
@@ -114,7 +117,7 @@ export function activateAndRevealFolderWorkspace(
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   const providesInitialSurface = activationProvidesInitialSurface(opts)
   const seedUserDefaultSurface = activationSeedsUserDefaultSurface(opts)
-  markVisited(state, workspaceKey, previousActive, opts?.executionHostId)
+  markVisited(state, workspaceKey, previousActive, opts?.executionHostId, opts?.navigationIntent)
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
   }
@@ -138,12 +141,9 @@ export function activateAndRevealFolderWorkspace(
   }
   const primaryTabId = shouldGateAgentActivation
     ? null
-    : ensureFolderWorkspaceInitialTerminal(
-        folderWorkspace,
-        opts?.startup,
-        providesInitialSurface,
+    : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface, {
         seedUserDefaultSurface
-      )
+      })
 
   if (opts?.showWorkspaceList) {
     state.setSidebarBody('workspaces')
@@ -202,37 +202,32 @@ export function activateAndRevealWorktree(
     state.activeWorkspaceExecutionHostId === (opts?.executionHostId ?? null) &&
     state.activeView === 'terminal'
 
-  if (wt.repoId !== state.activeRepoId) {
-    state.setActiveRepo(wt.repoId)
-  }
-
   if (state.activeView !== 'terminal') {
     state.setActiveView('terminal')
   }
+  noteUserWorkspaceOpen(worktreeId, opts?.navigationIntent)
 
-  const previousActive = readPreviousActive(state)
-  state.setActiveWorktree(worktreeId, opts?.executionHostId)
-  const postActivationState = useAppStore.getState()
-  const ownerRuntimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
-    postActivationState,
-    wt.id
+  state.setActiveWorktree(
+    worktreeId,
+    opts?.executionHostId,
+    buildActivationStateTransition(state, worktreeId, {
+      repoId: wt.repoId,
+      // Why: Cmd+J focus recency (docs/cmd-j-empty-query-ordering.md); a plain reselect must not restamp it.
+      stampsVisit: !isPlainAlreadyActiveTerminal,
+      nextHostId: opts?.executionHostId ?? null
+    })
   )
+  const postActivationState = useAppStore.getState()
+  const ownerRuntimeEnvironmentId =
+    opts && 'runtimeEnvironmentId' in opts
+      ? (opts.runtimeEnvironmentId ?? null)
+      : runtimeEnvironmentIdOrLocalUnlessTwin(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
     void activateWebRuntimeSessionWorktree({
       worktreeId,
       environmentId: ownerRuntimeEnvironmentId
     })
-  }
-
-  // Why: focus recency for Cmd+J ordering, distinct from recordWorktreeVisit/lastActivityAt; stamp before any later async step could throw. See docs/cmd-j-empty-query-ordering.md.
-  if (!isPlainAlreadyActiveTerminal) {
-    markVisited(state, worktreeId, previousActive, opts?.executionHostId ?? null)
-  }
-
-  // Why: skip re-recording for goBack/goForward history navigation — it moves the index instead of visiting anew (isNavigatingHistory).
-  if (!isPlainAlreadyActiveTerminal && !state.isNavigatingHistory) {
-    state.recordWorktreeVisit(worktreeId)
   }
 
   // Decide gate before resuming: resume consumes sleeping evidence, and late structured inventory can otherwise authorize a shell beside a pending chat (STA-1111).
@@ -251,13 +246,13 @@ export function activateAndRevealWorktree(
     gateAndReseedEmptyWorkspace(worktreeId, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
+      ...(opts?.initialCwd ? { initialCwd: opts.initialCwd } : {}),
       ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
     })
   }
 
-  const primaryTabId = shouldGateAgentActivation
-    ? null
-    : providesInitialSurface && !hasActivationWork
+  const primaryTabId =
+    shouldGateAgentActivation || (providesInitialSurface && !hasActivationWork)
       ? null
       : ensureWorktreeHasInitialTerminal(
           useAppStore.getState(),
@@ -272,6 +267,7 @@ export function activateAndRevealWorktree(
             ...(opts?.createNewTerminalForStartup ? { createNewTerminalForStartup: true } : {}),
             ...(providesInitialSurface ? { callerProvidesSurface: true } : {}),
             ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {}),
+            ...(opts?.initialCwd ? { initialCwd: opts.initialCwd } : {}),
             reseedEmptiedWorkspace: !providesInitialSurface
           }
         )
@@ -303,6 +299,9 @@ export function activateAndRevealWorktree(
     opts?.providesInitialSurface !== true
   ) {
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
+      ...(opts && 'runtimeEnvironmentId' in opts
+        ? { runtimeEnvironmentId: ownerRuntimeEnvironmentId }
+        : {}),
       startup: opts?.startup,
       agent: opts?.agent
     })
@@ -316,6 +315,7 @@ export function activateAndRevealWorkspace(
   workspaceId: string,
   opts?: WorktreeActivationSurfaceSelection & {
     executionHostId?: ExecutionHostId
+    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     revealInSidebar?: boolean
     showWorkspaceList?: boolean
     /** Worktree-only: folder workspaces are never filter-hidden. */

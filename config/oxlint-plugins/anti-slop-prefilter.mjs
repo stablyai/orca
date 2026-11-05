@@ -1,8 +1,8 @@
-// Skips each anti-slop rule on files whose text cannot match it; when every rule skips, oxlint never transfers the AST to JS.
+// Returning false before traversal avoids deserializing the JS AST when all rules skip.
 import antiSlop from '../../.anti-slop-plugin/index.ts'
 
-// Identifiers may be written with \u escapes, which hide them from a plain text search.
-const hasEscape = (text) => text.includes('\\u')
+// Escaped identifiers and computed string keys can hide required text.
+const hasEscape = (text) => text.includes('\\')
 
 const REQUIRED_TEXT = {
   'no-module-mocking': (text) => /mock/i.test(text),
@@ -10,7 +10,6 @@ const REQUIRED_TEXT = {
   'no-reduce-accumulator-copy': (text) => text.includes('reduce'),
   'no-reflect-apply': (text) => text.includes('Reflect'),
   'no-reflect-get': (text) => text.includes('Reflect'),
-  'no-shape-in-symbol-names': (text) => /shape/i.test(text),
   'no-unknown-type-aliases': (text) => text.includes('unknown') && /\btype\b/.test(text),
   'no-widen-then-assert': (text) => /\b(?:unknown|any|object)\b/.test(text) && /\bas\b|</.test(text)
 }

@@ -1,11 +1,11 @@
 import { useCallback } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { getConnectionId } from '@/lib/connection-context'
 import { abortRuntimeGitMerge, abortRuntimeGitRebase } from '@/runtime/runtime-git-sync-client'
-import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
+import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { AbortConflictOperation } from '../listing/operation-target'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
@@ -49,15 +49,30 @@ export function useSourceControlConflictAbort({
       }
 
       const isRebase = requestedOperation === 'rebase'
-      const label = isRebase ? 'rebase' : 'merge'
-      const title = isRebase ? 'Abort rebase?' : 'Abort merge?'
+      const title = isRebase
+        ? translate(
+            'auto.components.right.sidebar.SourceControl.abortRebaseConfirmTitle',
+            'Abort rebase?'
+          )
+        : translate(
+            'auto.components.right.sidebar.SourceControl.abortMergeConfirmTitle',
+            'Abort merge?'
+          )
       const description = isRebase
-        ? 'This cancels the rebase in progress and can discard conflict resolutions made during this rebase.'
-        : 'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
+        ? translate(
+            'auto.components.right.sidebar.SourceControl.abortRebaseConfirmDescription',
+            'This cancels the rebase in progress and can discard conflict resolutions made during this rebase.'
+          )
+        : translate(
+            'auto.components.right.sidebar.SourceControl.abortMergeConfirmDescription',
+            'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
+          )
       const confirmed = await confirmAction({
         title,
         description,
-        confirmLabel: `Abort ${label}`,
+        confirmLabel: isRebase
+          ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
+          : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge'),
         confirmVariant: 'destructive'
       })
       if (!confirmed) {
@@ -78,13 +93,28 @@ export function useSourceControlConflictAbort({
         const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
         await abortGitOperation(context)
       } catch (error) {
-        const message = error instanceof Error ? error.message : `Failed to abort ${label}`
+        const message =
+          error instanceof Error
+            ? error.message
+            : isRebase
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.abortRebaseFailedFallback',
+                  'Failed to abort rebase'
+                )
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.abortMergeFailedFallback',
+                  'Failed to abort merge'
+                )
         toast.error(
-          translate(
-            'auto.components.right.sidebar.SourceControl.f99560ab29',
-            'Abort {{value0}} failed',
-            { value0: label }
-          ),
+          isRebase
+            ? translate(
+                'auto.components.right.sidebar.SourceControl.abortRebaseFailed',
+                'Abort rebase failed'
+              )
+            : translate(
+                'auto.components.right.sidebar.SourceControl.abortMergeFailed',
+                'Abort merge failed'
+              ),
           { description: message }
         )
         setRemoteActionErrors((prev) => ({

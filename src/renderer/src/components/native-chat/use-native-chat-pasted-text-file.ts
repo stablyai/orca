@@ -1,4 +1,6 @@
 import { createUuidV4 } from '../../../../shared/uuid-v4'
+import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { stageNativeChatDraftFile } from './native-chat-draft-attachment-staging'
 import {
   nativeChatPastedTextLabel,
   nativeChatPastedTextOperations,
@@ -10,8 +12,8 @@ import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
-import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import {
   nativeChatAttachFailedNotice,
   nativeChatAttachmentOwnerChangedNotice,
@@ -51,7 +53,6 @@ function nativeChatDraftTooLarge(scopeKey: string, text: string): boolean {
 
 export function useNativeChatPastedTextFile(args: {
   scopeKey: string
-  pastesInline?: () => boolean
   /** Null: not a structured chat. Else the editor while it shows this scope. */
   scopeEditor: (() => NativeChatComposerInput | null) | null
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
@@ -59,11 +60,10 @@ export function useNativeChatPastedTextFile(args: {
   setNotice: (notice: string | null, errorText?: string) => void
 }): (text: string) => boolean {
   const { scopeKey, scopeEditor, resolveAttachmentOwner, insertTypedText, setNotice } = args
-  const { pastesInline } = args
   return useCallback(
     (text: string): boolean => {
       const input = scopeEditor?.()
-      if (pastesInline?.() || !scopeEditor || !input?.stagePastedText || input.disabled) {
+      if (!scopeEditor || !input?.stagePastedText || input.disabled) {
         return insertTypedText(text)
       }
       const { value, selectionStart, selectionEnd } = input
@@ -104,9 +104,18 @@ export function useNativeChatPastedTextFile(args: {
         })
         .then(
           (path) => {
+            const destinationScope = nativeChatPastedTextOperations.get(id)?.scopeKey
             if (nativeChatAttachmentOwnerUnchanged(owner, resolveAttachmentOwner())) {
-              settleNativeChatPastedText(id, path)
+              const retained = settleNativeChatPastedText(id, path)
+              if (owner.kind === 'local' && owner.stagingScope) {
+                if (retained && destinationScope) {
+                  stageNativeChatDraftFile(destinationScope, path)
+                } else {
+                  releaseBrowserAttachmentFiles([path])
+                }
+              }
             } else {
+              releaseBrowserAttachmentFiles([path])
               fail(nativeChatAttachmentOwnerChangedNotice())
             }
           },
@@ -120,6 +129,6 @@ export function useNativeChatPastedTextFile(args: {
         )
       return true
     },
-    [insertTypedText, pastesInline, resolveAttachmentOwner, scopeEditor, scopeKey, setNotice]
+    [insertTypedText, resolveAttachmentOwner, scopeEditor, scopeKey, setNotice]
   )
 }

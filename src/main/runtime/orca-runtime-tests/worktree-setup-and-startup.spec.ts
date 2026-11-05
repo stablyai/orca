@@ -1,23 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import {
-  OrcaRuntimeService,
-  addWorktree,
   computeWorktreePathMock,
-  createSetupRunnerScript,
   ensurePathWithinWorkspaceMock,
-  getEffectiveHooks,
-  listWorktrees,
-  resolveSetupRunnerShell,
-  runHook,
-  setPlatform,
-  shouldRunSetupForCreate
-} from '../orca-runtime-test-mocks.spec'
+  setPlatform
+} from '../orca-runtime-test-mocks/setup.spec'
 import {
-  UUID_RE,
-  expectStablePaneKeyEnv,
-  spawnedPtyEnv,
-  store
-} from '../orca-runtime-test-fixtures.spec'
+  createSetupRunnerScript,
+  resolveSetupRunnerShell
+} from '../../workspace-hooks/worktree-runner-script'
+import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { shouldRunSetupForCreate } from '../../workspace-hooks/effective-hook-config'
+import { UUID_RE, expectStablePaneKeyEnv, store } from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 
 describe('OrcaRuntimeService', () => {
   it('returns a setup launch payload for CLI-created worktrees when hooks are explicitly enabled', async () => {
@@ -44,7 +42,7 @@ describe('OrcaRuntimeService', () => {
         setup: 'pnpm worktree:setup'
       }
     })
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
       envVars: {
         ORCA_ROOT_PATH: '/tmp/repo',
@@ -132,7 +130,7 @@ describe('OrcaRuntimeService', () => {
         setup: 'pnpm worktree:setup'
       }
     })
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
       envVars: {
         ORCA_ROOT_PATH: '/tmp/repo',
@@ -199,7 +197,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(resolveSetupRunnerShell).mockReturnValue({ family: 'posix' })
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
       shell: { family: 'posix' },
       envVars: {
@@ -282,7 +280,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
       envVars: {
         ORCA_ROOT_PATH: '/tmp/repo',
@@ -396,7 +394,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
       shell: { family: 'posix', executable: 'wsl.exe' },
       envVars: {
@@ -474,7 +472,7 @@ describe('OrcaRuntimeService', () => {
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
     vi.mocked(resolveSetupRunnerShell).mockReturnValue({ family: 'posix' })
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
       shell: { family: 'posix' },
       envVars: {

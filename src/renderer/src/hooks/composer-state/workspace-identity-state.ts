@@ -15,15 +15,19 @@ type WorkspaceIdentityStateInput = Pick<
   | 'settings'
 >
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, type SetStateAction } from 'react'
+import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import { getLinkedWorkItemProvider, isGitLabIssueUrl } from '@/lib/new-workspace'
 import {
   type SmartNameMode,
   isBlockingJiraUrlIntent
 } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  filterEnabledTuiAgents,
+  isTuiAgentEnabled
+} from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 
@@ -110,9 +114,14 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     persistDraft ? newWorkspaceDraft?.compareBaseRef : undefined
   )
 
-  const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(
+  const [branchNameOverride, updateBranchNameOverride] = useState<string | undefined>(
     initialLinearBranchName
   )
+  const [branchIntent, setBranchIntent] = useState<CreateWorktreeArgs['branchIntent']>()
+  const setBranchNameOverride = useCallback((value: SetStateAction<string | undefined>) => {
+    setBranchIntent(undefined)
+    updateBranchNameOverride(value)
+  }, [])
 
   const [parentWorktreeId, setParentWorktreeId] = useState<string | null>(null)
 
@@ -213,6 +222,8 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     compareBaseRef,
     setCompareBaseRef,
     branchNameOverride,
+    branchIntent,
+    setBranchIntent,
     setBranchNameOverride,
     parentWorktreeId,
     setParentWorktreeId,

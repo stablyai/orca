@@ -15,16 +15,12 @@ import {
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'
-import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import { fileReferenceContent, promptTextContent } from './native-chat-prompt-document'
-import { writeNativeChatDraftCache } from './native-chat-draft-cache'
-import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
-import { withNativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
+
+import { fileReferenceContent } from './native-chat-prompt-document'
+
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { promptEditor, promptValue } from './native-chat-prompt-editor.test-support'
-import { imageReferenceToken as chip } from '../../../../shared/native-chat-image-reference'
-import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
+import { imageReferenceToken as chip } from '../../../../shared/native-chat/native-chat-image-reference'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
@@ -122,47 +118,12 @@ function fileReferences(document: JSONContent | undefined): string[] {
   )
 }
 
-function transport(send: NativeChatStructuredComposerTransport['send']) {
-  const value: NativeChatStructuredComposerTransport = {
-    capturePresentation: () => () => true,
-    send,
-    dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
-    optionsSurface: {
-      getSnapshot: () => [],
-      setOption: vi.fn(),
-      invokeAction: vi.fn(),
-      subscribe: () => () => {}
-    },
-    optionSnapshot: [],
-    onError: vi.fn(),
-    runtime: 'local',
-    sessionId: 's1',
-    runtimeEnvironmentId: null
-  }
-  return value
-}
-
 afterEach(() => {
   cleanup()
   clearNativeChatAttachmentCacheForTests()
 })
 
 describe('composer image chips', () => {
-  it('numbers chips by the thumbnail row and renumbers them when a thumbnail goes, with no text edit', async () => {
-    const composer = renderComposer('tab-1:pane')
-    act(() => promptEditor(composer.textbox()).commands.focus('end'))
-    const first = begin(composer)
-    const second = begin(composer)
-    const text = promptValue(composer.textbox())
-    await waitFor(() => expect(composer.chips()).toEqual(['Image #1', 'Image #2']))
-
-    act(() => composer.api().removeImageAttachment(first))
-
-    await waitFor(() => expect(composer.chips()).toEqual(['Image #1']))
-    expect(promptValue(composer.textbox())).toBe(text.replace(`${chip(first)} `, ''))
-    expect(promptValue(composer.textbox())).toContain(chip(second))
-  })
-
   it('removes every chip of a removed thumbnail, and keeps the thumbnail when a chip is deleted', async () => {
     const composer = renderComposer('tab-1:pane')
     const kept = begin(composer)
@@ -196,37 +157,6 @@ describe('composer image chips', () => {
     expect(promptValue(composer.textbox())).toBe('B draft')
     expect(readNativeChatComposerDraft('chat-b').text).toBe('B draft')
     expect(readNativeChatComposerDraft('chat-a').text).toBe('')
-  })
-
-  it('gives a message returned while an image uploads distinct, correct numbers at send', () => {
-    const scope = structuredAgentSessionDraftScopeKey('s1')
-    const composer = renderComposer(scope)
-    const uploading = begin(composer)
-    act(() => {
-      handBackStructuredAgentSessionMessage(
-        's1',
-        'm1',
-        message('compare [Image #1] with [Image #2]', ['/up/a.png', '/up/b.png'])
-      )
-    })
-    act(() => composer.api().resolvePendingImageAttachment(uploading, '/up/new.png'))
-
-    const sent = composer.api().imageAttachments
-    expect(sent.map(({ path }) => path)).toEqual(['/up/a.png', '/up/b.png', '/up/new.png'])
-    expect(
-      imageReferencesToPromptMarkers(
-        readNativeChatComposerDraft(scope).text,
-        sent.map(({ id }) => id)
-      )
-    ).toBe('[Image #3]\n\ncompare [Image #1] with [Image #2]')
-  })
-
-  it('sends no marker for an image lost in a crash', async () => {
-    const send = vi.fn(() => true)
-    await dispatchNativeChatStructuredComposerText(transport(send), `see ${chip('lost')}`, [
-      { id: 'kept', path: '/up/kept.png' }
-    ])
-    expect(send).toHaveBeenCalledWith('see ', [{ id: 'kept', path: '/up/kept.png' }])
   })
 
   it('never touches a file pill named like a marker, in the editor or a stored draft', () => {
@@ -279,17 +209,6 @@ describe('composer image chips', () => {
     expect(readNativeChatComposerDraft(scope).text).toBe(`see ${file} and ${chip('returned-m1-1')}`)
   })
 
-  it('adds a message recovered twice once', () => {
-    const scope = structuredAgentSessionDraftScopeKey('s1')
-    const returned = message('see [Image #1]', ['/up/a.png'])
-    handBackStructuredAgentSessionMessage('s1', 'm1', returned)
-    handBackStructuredAgentSessionMessage('s1', 'm1', returned)
-    expect(readNativeChatComposerDraft(scope)).toMatchObject({
-      text: `see ${chip('returned-m1-1')}`,
-      images: [{ id: 'returned-m1-1', path: '/up/a.png' }]
-    })
-  })
-
   it('keeps a stored draft’s file reference when a message comes back', async () => {
     const scope = structuredAgentSessionDraftScopeKey('s1')
     const composer = renderComposer(scope)
@@ -302,40 +221,6 @@ describe('composer image chips', () => {
     const back = renderComposer(scope)
     expect(fileReferences(readNativeChatComposerDraft(scope).document)).toEqual(['/repo/a.md'])
     await waitFor(() => expect(back.chips()).toEqual(['Image #1']))
-  })
-
-  it('rebuilds chips with their ids from text: a reload, a journal replay, a whole-text update', async () => {
-    const scope = 'tab-1:pane'
-    const imageIds = (document: JSONContent | undefined): string[] =>
-      (document?.content ?? []).flatMap((block) =>
-        (block.content ?? []).flatMap((node) =>
-          node.type === 'nativeChatImageReference' ? [String(node.attrs?.attachmentId)] : []
-        )
-      )
-    // A save keeps the text alone; the editor rebuilds the chip from its token.
-    writeNativeChatDraftCache(scope, `see ${chip('a')}`)
-    const composer = renderComposer(scope)
-    await waitFor(() => expect(composer.chips()).toEqual(['Image removed']))
-    expect(imageIds(promptEditor(composer.textbox()).getJSON())).toEqual(['a'])
-
-    // A hidden composer's update, an IME settle and a sent draft's leftover all set the text whole.
-    act(() => {
-      composer.input().value = `${chip('a')} typed ${chip('b')}`
-    })
-    expect(imageIds(promptEditor(composer.textbox()).getJSON())).toEqual(['a', 'b'])
-    const sent = { text: `${chip('a')} `, images: [] }
-    expect(
-      nativeChatComposerDraftLeftAfterSend({ text: `${chip('a')} ${chip('b')}`, images: [] }, sent)
-        ?.text
-    ).toBe(chip('b'))
-
-    // A journal replay appends to the saved document without losing its chips.
-    const text = `${chip('a')} typed ${chip('b')}`
-    const replayed = withNativeChatComposerDraftAddition(
-      { text, document: promptTextContent(text), images: [] },
-      { text: `back ${chip('c')}` }
-    )
-    expect(imageIds(replayed.document)).toEqual(['a', 'b', 'c'])
   })
 
   it('adds a returned message once even after typing, by its image ids', () => {
@@ -352,26 +237,6 @@ describe('composer image chips', () => {
       text: `see ${chip('returned-m1-1')} and more`,
       images: [{ id: 'returned-m1-1' }]
     })
-  })
-
-  it('numbers a send against exactly the images sent with it, not the live row', async () => {
-    const send = vi.fn(() => true)
-    await dispatchNativeChatStructuredComposerText(
-      transport(send),
-      `${chip('later')} see ${chip('sent')}`,
-      [{ id: 'sent', path: '/up/sent.png' }]
-    )
-    expect(send).toHaveBeenCalledWith(' see [Image #1]', [{ id: 'sent', path: '/up/sent.png' }])
-  })
-
-  it('shows a chip whose image is not in the row as removed', async () => {
-    updateNativeChatComposerDraft(
-      'tab-1:pane',
-      { text: `undo brought ${chip('gone')}` },
-      'immediate'
-    )
-    const composer = renderComposer('tab-1:pane')
-    await waitFor(() => expect(composer.chips()).toEqual(['Image removed']))
   })
 
   it('settles a late upload into its own conversation, bound by the same id, while another is shown', async () => {

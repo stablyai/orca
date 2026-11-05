@@ -9,7 +9,7 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../../shared/shell-argument-quoting', () => ({
+vi.mock('../../../shared/shell/launch/shell-argument-quoting', () => ({
   quotePosixShell: (s: string) => `'${s}'`
 }))
 vi.mock('../install/remote-install-lock', async (importOriginal) => ({
@@ -26,7 +26,7 @@ vi.mock('../install/remote-versioned-install', async (importOriginal) => ({
 }))
 vi.mock('../install/orcad-remote-install', () => ({ installOrcadBundle: vi.fn() }))
 vi.mock('../install/orcad-remote-preflight', () => ({
-  preflightInstalledOrcad: vi.fn()
+  preflightInstalledOrcad: vi.fn(async () => ({}))
 }))
 vi.mock('../../ssh/orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'

@@ -1,15 +1,18 @@
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
 import { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from './headless-terminal-tab-close'
-import { recordPtySurface, spawnSurfaceClaimSequence } from '../pty-recorded-surface-topology'
+import {
+  recordPtySurface,
+  spawnSurfaceClaimSequence
+} from '../terminal/surface/pty-recorded-surface-topology'
 import { withSelectedTabs } from '../headless-tab-group-selection'
 import type { RuntimeMobileSessionTabGroup } from '../../../shared/runtime-session-contracts'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { isValidHostTerminalTabId } from '../../../shared/terminal-tab-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { isValidHostTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
 import {
   isTerminalLeafMoveRequest,
   type TerminalLeafMoveRequest,
   type TerminalLeafMoveResult
-} from '../../../shared/terminal-leaf-move'
+} from '../../../shared/workspace-layout/terminal-leaf-move'
 
 /** Where the client dropped the new tab, in the host's group ids. */
 export type MovedPanePlacement = { targetGroupId: string; index?: number }
@@ -29,7 +32,7 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
   ): Promise<TerminalLeafMoveResult> {
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     if (this.getAvailableAuthoritativeWindow()) {
       return { status: 'not_held' }
     }
@@ -56,6 +59,7 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
       const pty = result.ptyId ? this.ptysById.get(result.ptyId) : undefined
       if (pty) {
         recordPtySurface(
+          this.terminalIdentity,
           pty,
           move.targetTabId,
           makePaneKey(move.targetTabId, move.leafId),

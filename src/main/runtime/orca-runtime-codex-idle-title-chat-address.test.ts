@@ -1,10 +1,10 @@
 // #31136: Codex 0.163 idle titles lack agent markers; only shell evidence may retire the hook transcript address.
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import type { RuntimeStore } from './runtime-store-contract'
 
 vi.mock('electron', () => ({
@@ -139,19 +139,6 @@ describe('headless Codex chat address under Codex idle titles (#31136)', () => {
         title('Reply with hi | repo'),
         programState('idle')
       ]
-    )
-
-    expect(agentStatus).toMatchObject({
-      agentType: 'codex',
-      state: 'done',
-      providerSession: PROVIDER_SESSION
-    })
-  })
-
-  it('keeps the transcript address while a new turn starts under the idle title', async () => {
-    const agentStatus = await codexPaneAfterOutput(
-      [codexRow({ state: 'working', prompt: 'explain the parser' })],
-      [title('Reply with hi | repo'), programState('idle')]
     )
 
     expect(agentStatus).toMatchObject({

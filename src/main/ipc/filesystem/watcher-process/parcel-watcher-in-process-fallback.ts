@@ -1,6 +1,9 @@
 import type * as ParcelWatcher from '@parcel/watcher'
 import { loadParcelWatcher } from './parcel-watcher-module-loader'
-import { createWatcherProcessEventDeliveryQueue } from './parcel-watcher-event-delivery'
+import {
+  createWatcherProcessEventDeliveryQueue,
+  isParcelWatcherRescanRequiredError
+} from './parcel-watcher-event-delivery'
 import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type {
   WatcherProcessCallback,
@@ -88,6 +91,10 @@ export async function subscribeWithInProcessWatcher(
         return
       }
       if (err) {
+        if (isParcelWatcherRescanRequiredError(err)) {
+          eventDelivery.overflow()
+          return
+        }
         callback(err, [])
         return
       }

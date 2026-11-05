@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { writeManagedScript } from '../agent-hooks/installer-utils'
 import { getLockedExecutableAsidePath } from '../agent-hooks/locked-executable-rename'
 import {
@@ -17,7 +17,7 @@ import {
   resolveBundledWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME
 } from '../agent-hooks/windows-native-hook-executable'
-import { WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD } from './hook-script'
+import { WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD } from '../agent-hooks/claude-background-job-guard'
 
 const PAYLOAD_FILE_NAME = 'claude-hook-impl.cmd'
 

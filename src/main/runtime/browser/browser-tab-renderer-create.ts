@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
+import type { BrowserTabSplitDirection } from '../../../shared/browser-tab-split-direction'
+import type { BrowserTabCreateRequest } from '../../../shared/browser-tab-create-request'
 
 export async function createBrowserTabInRenderer(
   host: Pick<RuntimeBrowserCommandHost, 'getAuthoritativeWindow'>,
@@ -9,9 +11,12 @@ export async function createBrowserTabInRenderer(
   profileId: string | undefined,
   sessionPartition: string | undefined,
   activate?: boolean,
-  requestedPageId?: string
+  requestedPageId?: string,
+  /** Used only when `worktreeId` is unset and no workspace is active in the renderer. */
+  fallbackWorktreeId?: string,
+  split?: { direction: BrowserTabSplitDirection; fromTabId?: string }
 ): Promise<{ browserPageId: string }> {
-  const win = host.getAuthoritativeWindow()
+  const rendererWebContents = host.getAuthoritativeWindow().webContents
   const requestId = randomUUID()
 
   const browserPageId = await new Promise<string>((resolve, reject) => {
@@ -24,7 +29,7 @@ export async function createBrowserTabInRenderer(
       event: Electron.IpcMainEvent,
       reply: { requestId: string; browserPageId?: string; error?: string }
     ): void => {
-      if (event.sender !== win.webContents || reply.requestId !== requestId) {
+      if (event.sender !== rendererWebContents || reply.requestId !== requestId) {
         return
       }
       clearTimeout(timer)
@@ -36,7 +41,7 @@ export async function createBrowserTabInRenderer(
       }
     }
     ipcMain.on('browser:tabCreateReply', handler)
-    win.webContents.send('browser:requestTabCreate', {
+    const request: BrowserTabCreateRequest = {
       requestId,
       url,
       worktreeId,
@@ -44,8 +49,11 @@ export async function createBrowserTabInRenderer(
       // undefined preserves renderer default-profile inheritance; null would override it.
       sessionProfileId: profileId,
       sessionPartition,
-      activate
-    })
+      activate,
+      ...(fallbackWorktreeId ? { fallbackWorktreeId } : {}),
+      ...(split ? { split: split.direction, splitFromTabId: split.fromTabId } : {})
+    }
+    rendererWebContents.send('browser:requestTabCreate', request)
   })
 
   return { browserPageId }

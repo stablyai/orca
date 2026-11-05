@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type Database from '../sqlite/sync-database'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
@@ -13,7 +13,7 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import type { RuntimeStore } from './runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { bindPaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
+import { bindPaneFirst, registerBoundPty } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
 
 export const TAB_ID = '11111111-1111-4111-8111-111111111111'
@@ -41,12 +41,24 @@ export function sqliteFor(db: OrchestrationDb): Database.Database {
   return (db as unknown as { db: Database.Database }).db
 }
 
-export function createBoundRun(db: OrchestrationDb, objective: string) {
-  return db.createRun({
+/** `rebind` then run-uses it, so the pane keeps only the new Run. */
+export function createBoundRun(
+  db: OrchestrationDb,
+  objective: string,
+  options: { rebind?: boolean } = {}
+) {
+  const run = db.createRun({
     objective,
     coordinatorHandle: TERMINAL_HANDLE,
     coordinatorPaneKey: PANE_KEY
   })
+  return options.rebind
+    ? db.bindRun({
+        runId: run.id,
+        coordinatorHandle: TERMINAL_HANDLE,
+        coordinatorPaneKey: PANE_KEY
+      })!
+    : run
 }
 
 export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subject: string) {
@@ -64,8 +76,14 @@ export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subje
   return db.getMessageById(message.id)!
 }
 
+class MailboxRuntime extends OrcaRuntimeService {
+  get idleEvidenceSource() {
+    return this.tuiIdleEvidenceSource
+  }
+}
+
 export type MailboxNotificationHarness = {
-  runtime: OrcaRuntimeService
+  runtime: MailboxRuntime
   write: ReturnType<typeof vi.fn>
 }
 
@@ -119,10 +137,10 @@ export function createRuntime(
     headless?: boolean
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
-    launchAgent?: TuiAgent
+    launchAgent?: TuiAgent | null
   } = {}
 ): MailboxNotificationHarness {
-  const runtime = new OrcaRuntimeService(
+  const runtime = new MailboxRuntime(
     ORCA_LAYOUT_OWNER_IS_MAIN ? mailboxLayoutStore() : null,
     undefined,
     {
@@ -151,10 +169,14 @@ export function createRuntime(
       tabId: TAB_ID,
       leafId: LEAF_ID,
       incarnationId: 'mailbox-incarnation',
-      agentLaunchAuthority: {
-        launchToken: LAUNCH_TOKEN,
-        launchAgent: options.launchAgent ?? 'codex'
-      }
+      ...(options.launchAgent === null
+        ? {}
+        : {
+            agentLaunchAuthority: {
+              launchToken: LAUNCH_TOKEN,
+              launchAgent: options.launchAgent ?? 'codex'
+            }
+          })
     },
     options.isWsl
   )
@@ -245,9 +267,8 @@ export function registerSecondPane(
 
 export async function driveToLiveIdle(runtime: OrcaRuntimeService): Promise<void> {
   await runtime.listTerminals()
-  runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
-  runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
-  // Await the model's write chain so both chunks are parsed.
+  runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 1)
+  // Await the model's write chain so the chunk is parsed.
   await runtime.serializeMainTerminalBuffer(PTY_ID)
 }
 

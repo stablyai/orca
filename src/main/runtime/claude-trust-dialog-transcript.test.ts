@@ -3,7 +3,10 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 
 function readCapture(name: string): { data: string; size: { cols: number; rows: number } } {
   const base = join(__dirname, '__fixtures__', name)
@@ -124,15 +127,11 @@ describe("Claude's trust dialog under a shell auto-title", () => {
       data: ''
     })
     vi.useFakeTimers()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both resolvers are protected methods on the runtime; the spies only count calls.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver is a protected method on the runtime; the spy only counts calls.
     const internals = pane.runtime as unknown as {
-      resolveTuiIdleWaiters: (...args: unknown[]) => void
       resolvePtyTuiIdleWaiters: (...args: unknown[]) => void
     }
-    const titleResolves = [
-      vi.spyOn(internals, 'resolveTuiIdleWaiters'),
-      vi.spyOn(internals, 'resolvePtyTuiIdleWaiters')
-    ]
+    const titleResolves = [vi.spyOn(internals, 'resolvePtyTuiIdleWaiters')]
     const write = (chunk: string) =>
       pane.runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, chunk, Date.now())
     const paint = (bytes = data) => {

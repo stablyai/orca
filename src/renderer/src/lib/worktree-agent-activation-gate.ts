@@ -1,7 +1,10 @@
 import { useAppStore } from '@/store'
-import type { PtyListedSession } from '../../../shared/pty-listed-session'
-import { parsePtySessionId, PTY_SESSION_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import type { PtyListedSession } from '../../../shared/terminal/pty/lifecycle/pty-listed-session'
+import {
+  parsePtySessionId,
+  PTY_SESSION_ID_SEPARATOR
+} from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { listActivationPtySessions } from './worktree-activation-pty-inventory'
@@ -14,8 +17,11 @@ import {
   adoptLiveWorkspacePtySurfaces,
   type LiveSurfaceAdoptionStore
 } from './worktree-agent-live-surface-adoption'
-import type { LiveTerminalSurfaceOwnerIndex } from './worktree-live-terminal-surface-owners'
-import { readWorktreeLiveTerminalSurfaceOwners } from './worktree-live-terminal-surface-owners'
+
+import {
+  type LiveTerminalSurfaceOwnerIndex,
+  readWorktreeLiveTerminalSurfaceOwners
+} from './worktree-live-terminal-surface-owners'
 import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 import {
   readWorktreeStructuredActivationInventory,
@@ -48,7 +54,7 @@ export type WorktreeAgentActivationOutcome =
 const inFlightByWorktreeId = new Map<string, Promise<WorktreeAgentActivationOutcome>>()
 const WORKSPACE_SESSION_READY_TIMEOUT_MS = 30_000
 
-function waitForWorkspaceSessionReady(): Promise<boolean> {
+export function waitForWorkspaceSessionReady(): Promise<boolean> {
   const isReady = () => {
     const state = useAppStore.getState()
     return state.workspaceSessionReady && state.terminalStartupRestorationReady

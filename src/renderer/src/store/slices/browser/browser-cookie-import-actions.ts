@@ -1,3 +1,4 @@
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
 import type { BrowserCookieImportResult } from '../../../../../shared/browser-workspace-types'
 import type {
@@ -12,6 +13,7 @@ import {
   browserImportStateForHostUpdate,
   retainCookieImportExecutionHost
 } from './browser-host-state'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
 export function createBrowserCookieImportActions(
   set: BrowserSliceSet,
@@ -43,13 +45,14 @@ export function createBrowserCookieImportActions(
             browserProfile
           })
           ranOnClient = clientHostResult != null
-          const result =
+          const pairingRevision = captureRuntimeEnvironmentRequestRevision(runtimeEnvironmentId)
+          const result: BrowserProfileImportFromBrowserResult =
             clientHostResult ??
             (await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
               { kind: 'environment', environmentId: runtimeEnvironmentId },
               'browser.profileImportFromBrowser',
               { profileId, browserFamily, browserProfile, supportsPartitionSkippedCookies: true },
-              { timeoutMs: 30_000 }
+              { timeoutMs: 30_000, expectedEnvironmentPairingRevision: pairingRevision }
             ))
           if (result.ok) {
             set((state) =>
@@ -71,7 +74,7 @@ export function createBrowserCookieImportActions(
                 profileId,
                 status: 'error',
                 summary: null,
-                error: result.reason
+                error: browserCookieImportFailureText(result)
               })
             )
           }
@@ -134,7 +137,7 @@ export function createBrowserCookieImportActions(
               profileId,
               status: 'error',
               summary: null,
-              error: result.reason
+              error: browserCookieImportFailureText(result)
             })
           )
         }

@@ -17,9 +17,11 @@
     "react-doctor/no-adjust-state-on-prop-change": "warn",
     "react-doctor/no-create-store-in-render": "warn",
     "react-doctor/no-derived-state-effect": "warn",
-    "react-doctor/no-initialize-state": "warn",
+    // Derived-state checks already catch mount copies; hydration sentinels are intentional.
+    "react-doctor/no-initialize-state": "off",
+    // The native counterpart runs in the default scan and allows render props.
+    "react-doctor/no-unstable-nested-components": "off",
     "react-doctor/no-side-effect-in-state-updater-function": "warn",
-    "react-doctor/no-unstable-nested-components": "warn",
     "react-doctor/zustand-no-fresh-selector-result": "warn",
     "react-doctor/zustand-no-get-during-initialization": "warn",
     "react-doctor/zustand-no-mutating-state": "warn",
@@ -43,20 +45,11 @@
         "react-doctor/no-adjust-state-on-prop-change": "off",
         "react-doctor/no-create-store-in-render": "off",
         "react-doctor/no-derived-state-effect": "off",
-        "react-doctor/no-initialize-state": "off",
         "react-doctor/no-side-effect-in-state-updater-function": "off",
-        "react-doctor/no-unstable-nested-components": "off",
         "react-doctor/zustand-no-fresh-selector-result": "off",
         "react-doctor/zustand-no-get-during-initialization": "off",
         "react-doctor/zustand-no-mutating-state": "off",
         "react-doctor/zustand-no-whole-store-destructure": "off"
-      }
-    },
-    {
-      // react-doctor tags this rule react-jsx-only; it visits every identifier, so skip files without JSX.
-      "files": ["**/*.{ts,mts,cts,js,mjs,cjs}"],
-      "rules": {
-        "react-doctor/no-unstable-nested-components": "off"
       }
     }
   ],

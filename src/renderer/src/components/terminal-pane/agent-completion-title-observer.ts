@@ -1,4 +1,5 @@
-import { detectAgentStatusFromTitle, type AgentStatus } from '../../../../shared/agent-detection'
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import {
   titleHasExplicitAgentIdentity,
   titleIsInconclusiveNativeDroidTitle

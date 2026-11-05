@@ -1,5 +1,9 @@
-import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
-import type { ContextualTour, ContextualTourId } from '../../../../shared/contextual-tours'
+import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import type {
+  ContextualTour,
+  ContextualTourId,
+  ContextualTourStepAction
+} from '../../../../shared/contextual-tours'
 import type { ContextualTourOutcome } from '../../../../shared/feature-education-telemetry'
 import { useAppStore } from '@/store'
 import {
@@ -11,62 +15,25 @@ import {
   getVisibleContextualTourStepIndexes
 } from './contextual-tour-gate'
 import type { ActiveTourRenderState } from './ContextualTourOverlaySurface'
+import { getLocalizedContextualTourStepCopy } from './contextual-tour-step-copy'
 import { translate } from '@/i18n/i18n'
 
 export type ContextualTourMeasurementAction =
   | { kind: 'wait' }
   | { kind: 'advance' }
+  | { kind: 'regress' }
   | { kind: 'cancel' }
 
 export type ContextualTourOverlayMeasurementResult =
   | { kind: 'wait' }
   | { kind: 'advance' }
+  | { kind: 'regress' }
   | { kind: 'cancel' }
   | {
       kind: 'render'
       renderState: ActiveTourRenderState
       telemetryTotalSteps: number
     }
-
-// Key translated thunks by stable step IDs so insertions cannot shift copy and language resolves at render time.
-const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: () => string }> = {
-  'automations-intro': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title',
-        'What is an automation?'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body',
-        'Automations run agent work on a schedule. Add an automation by clicking this button.'
-      )
-  },
-  'client-hosted-browser-intro': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.title',
-        'This page renders on your desktop'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.body',
-        'Remote browser tabs now render on this device. Network traffic still goes through the remote host.'
-      )
-  },
-  'automations-results': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title',
-        'Find the results'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
-        'Runs show when automations ran, what happened, and where to inspect their output.'
-      )
-  }
-}
 
 export function getContextualTourDisplayProgress(args: {
   tour: ContextualTour
@@ -91,6 +58,25 @@ export function getContextualTourMeasurementAction(args: {
   visibleStepIndexes: readonly number[]
   activeStepIndex: number
 }): ContextualTourMeasurementAction {
+  const activeKind = args.tour.steps[args.activeStepIndex]?.primaryAction?.kind
+  if (
+    args.tour.id === 'workspace-agent-sessions' &&
+    (activeKind === 'split-chat-pane' || activeKind === 'split-terminal-pane')
+  ) {
+    const alternateKind =
+      activeKind === 'split-chat-pane' ? 'split-terminal-pane' : 'split-chat-pane'
+    const alternateIndex = args.visibleStepIndexes.find(
+      (index) => args.tour.steps[index]?.primaryAction?.kind === alternateKind
+    )
+    if (alternateIndex !== undefined) {
+      return { kind: alternateIndex < args.activeStepIndex ? 'regress' : 'advance' }
+    }
+    // A just-opened terminal or chat pane mounts after the tab switch; don't skip its split lesson.
+    const activeTabType = useAppStore.getState().activeTabType
+    if (activeTabType === 'terminal' || activeTabType === 'agent-session') {
+      return { kind: 'wait' }
+    }
+  }
   if (args.visibleStepIndexes.some((index) => index > args.activeStepIndex)) {
     return { kind: 'advance' }
   }
@@ -116,7 +102,7 @@ export function measureContextualTourOverlayRenderState(args: {
   tour: ContextualTour
   activeStepIndex: number
   sidebarOpen: boolean
-  keybindings: Parameters<typeof formatShortcutLabel>[1]
+  keybindings: Parameters<typeof formatOptionalShortcutLabel>[1]
   previousTelemetryTotalSteps: number
 }): ContextualTourOverlayMeasurementResult {
   const targetExists = (selector: string): boolean =>
@@ -128,13 +114,6 @@ export function measureContextualTourOverlayRenderState(args: {
   )
   const activeStep = args.tour.steps[args.activeStepIndex]
   const target = activeStep ? getMeasurableContextualTourTarget(activeStep.targetSelector) : null
-  const localizedCopy = activeStep?.id ? LOCALIZED_STEP_COPY[activeStep.id] : undefined
-  const localizedTitle = localizedCopy ? localizedCopy.title() : activeStep?.title
-  const localizedBody = localizedCopy
-    ? localizedCopy.body()
-    : activeStep
-      ? getContextualTourStepCopy(activeStep)
-      : undefined
   const progress = getContextualTourDisplayProgress({
     tour: args.tour,
     visibleStepIndexes,
@@ -142,25 +121,31 @@ export function measureContextualTourOverlayRenderState(args: {
     activeStep
   })
 
-  if (visibleStepIndexes.length === 0 || !activeStep || !progress) {
+  if (visibleStepIndexes.length === 0 || !activeStep) {
     return { kind: 'cancel' }
   }
 
   if (!target) {
+    const actionKind = activeStep.primaryAction?.kind
+    const canSwitchSplitLesson =
+      args.tour.id === 'workspace-agent-sessions' &&
+      (actionKind === 'split-chat-pane' || actionKind === 'split-terminal-pane')
+    if (!progress && !canSwitchSplitLesson) {
+      return { kind: 'cancel' }
+    }
     const measurementAction = getContextualTourMeasurementAction({
       tour: args.tour,
       visibleStepIndexes,
       activeStepIndex: args.activeStepIndex
     })
-    if (measurementAction.kind === 'advance') {
-      return { kind: 'advance' }
-    }
-    if (measurementAction.kind === 'wait') {
-      return { kind: 'wait' }
-    }
+    return measurementAction
+  }
+
+  if (!progress) {
     return { kind: 'cancel' }
   }
 
+  const localizedCopy = getLocalizedContextualTourStepCopy(activeStep.id)
   const sidebarAlreadyVisible =
     activeStep.primaryAction?.kind === 'show-worktrees' && args.sidebarOpen
   const primaryAction = sidebarAlreadyVisible
@@ -171,8 +156,10 @@ export function measureContextualTourOverlayRenderState(args: {
           'Next'
         )
       } as const)
-    : activeStep.primaryAction
-  const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
+    : withLocalizedLabel(activeStep.primaryAction, localizedCopy?.primaryActionLabel)
+  const secondaryAction = sidebarAlreadyVisible
+    ? undefined
+    : withLocalizedLabel(activeStep.secondaryAction, localizedCopy?.secondaryActionLabel)
 
   return {
     kind: 'render',
@@ -181,10 +168,11 @@ export function measureContextualTourOverlayRenderState(args: {
       rect: target.rect,
       targetElement: target.element,
       progress,
-      title: localizedTitle ?? activeStep.title,
+      title: localizedCopy?.title ?? activeStep.title,
       body: formatContextualTourStepCopy(
-        localizedBody ?? getContextualTourStepCopy(activeStep),
-        args.keybindings
+        localizedCopy?.body ?? getContextualTourStepCopy(activeStep),
+        args.keybindings,
+        localizedCopy?.bodyWithoutShortcut
       ),
       control: activeStep.control,
       primaryAction,
@@ -269,12 +257,25 @@ export function getContextualTourCleanupOutcome(
     : 'cancelled'
 }
 
+function withLocalizedLabel(
+  action: ContextualTourStepAction | undefined,
+  label: string | undefined
+): ContextualTourStepAction | undefined {
+  return action && label ? { ...action, label } : action
+}
+
 function formatContextualTourStepCopy(
   copy: string,
-  keybindings: Parameters<typeof formatShortcutLabel>[1]
+  keybindings: Parameters<typeof formatOptionalShortcutLabel>[1],
+  copyWithoutShortcut?: string
 ): string {
-  return copy.replace(
-    '{terminal.splitRight}',
-    formatShortcutLabel('terminal.splitRight', keybindings)
-  )
+  if (!copy.includes('{terminal.splitRight}')) {
+    return copy
+  }
+  const shortcut = formatOptionalShortcutLabel('terminal.splitRight', keybindings)
+  // An unbound shortcut would leave "Press , or …"; name only the click path instead.
+  if (!shortcut && copyWithoutShortcut) {
+    return copyWithoutShortcut
+  }
+  return copy.replace('{terminal.splitRight}', shortcut ?? '')
 }

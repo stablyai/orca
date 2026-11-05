@@ -1,3 +1,4 @@
+import type { FileOpenFailure } from './terminal-file-open-failure'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { buildHttpLinkActions } from '@/lib/http-link-destinations'
@@ -6,8 +7,7 @@ import {
   mapTerminalFilePath,
   openDetectedFilePath,
   shouldOpenTerminalFileWithSystemDefault,
-  terminalLinkWslDistro,
-  type FileOpenFailure
+  terminalLinkWslDistro
 } from './terminal-file-open-routing'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { isTerminalLinkDirectActivation } from './terminal-link-activation'
@@ -29,6 +29,8 @@ export type TerminalFileLinkActionDeps = {
   wslDistro?: string | null
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
   terminalHandle?: string | null
+  /** Chat files belong to their host even when this computer has the same path. */
+  hostFileOnly?: boolean
   onOpenFailure?: (failure: FileOpenFailure) => void
   /** The tab that owns the link; editor opens place themselves relative to its group. */
   sourceTabId?: string | null
@@ -59,7 +61,8 @@ export function handleTerminalFileLink(
   const actions = buildFileLinkActions(filePath, line, column, deps, actionContext?.sourceOwner)
   return requestTerminalLinkAction(event, actionContext, {
     ...actions,
-    destination: actionDestination ?? actions.destination
+    destination: actionDestination ?? actions.destination,
+    copyValue: actions.destination
   })
 }
 
@@ -156,8 +159,8 @@ export function buildFileLinkActions(
     canOpenLinkInSourceGroup(useAppStore.getState(), deps.worktreeId, deps.sourceTabId)
       ? {
           label: translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.openInThisGroup',
-            'Open in this group'
+            'auto.components.terminal.pane.TerminalLinkActionPopover.openInNewTab',
+            'Open in new tab'
           ),
           run: () =>
             openDetectedFilePath(filePath, line, column, {

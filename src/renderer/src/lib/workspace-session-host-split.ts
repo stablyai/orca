@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -9,7 +9,7 @@ import {
   GLOBAL_WORKSPACE_SESSION_FIELDS,
   hostPartitionSliceTemplate,
   WORKSPACE_SESSION_FIELD_OWNERSHIP
-} from '../../../shared/workspace-session-host-field-ownership'
+} from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 import {
   buildWorktreeIdByFileId,
   buildWorktreeIdByTabId,
@@ -18,7 +18,7 @@ import {
   mergeWorkspaceSessionRecordField,
   worktreeIdForPaneKey,
   type WorkspaceSessionRecord
-} from '../../../shared/workspace-session-host-records'
+} from '../../../shared/workspace-session/workspace-session-host-records'
 
 /** Partition unified renderer sessions by execution host for writes and merge on hydration. FIELD_OWNERSHIP exhaustively classifies fields at compile time, matching workspace-session’s relevant-field gate. */
 
@@ -129,7 +129,12 @@ function assignKeyedByResolvedWorktree(
 export function splitWorkspaceSessionByHost(
   state: WorkspaceSessionState,
   hostIdByWorktreeId: HostIdByWorktreeId,
-  options: { worktreeIdByTabId?: Map<string, string> } = {}
+  options: {
+    worktreeIdByTabId?: Map<string, string>
+    /** Hosts whose rows this write speaks for in full: a field it carries replaces theirs even when
+     *  none of their workspaces has an entry left, or main's fieldwise patch keeps the stale rows (#23914). */
+    emptyContainerHostIds?: readonly ExecutionHostId[]
+  } = {}
 ): HostSessionSlices {
   // Copy only present global own-keys: partial patches must not inject undefined over absent fields; explicit undefined remains intentional.
   const template = {} as WorkspaceSessionState
@@ -167,6 +172,10 @@ export function splitWorkspaceSessionByHost(
     // Seed explicit empty containers locally so merge preserves their presence.
     if (ownership !== 'global' && ownership !== 'hostPrivate') {
       localSlice[field] ??= Array.isArray(value) ? [] : {}
+      for (const hostId of options.emptyContainerHostIds ?? []) {
+        const slice = ensureSlice(slices, hostId, templates)
+        Object.assign(slice, { [field]: slice[field] ?? (Array.isArray(value) ? [] : {}) })
+      }
     }
     switch (ownership) {
       case 'global':

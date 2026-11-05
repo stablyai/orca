@@ -10,9 +10,34 @@ export type Rejection = {
 }
 // Only generated completions may be optional after a divergence; manifest steps remain required.
 // Streaming frames always route to their opening id, assert subscribe params and carry whole host responses.
-export type ScenarioStep =
+export type ExecutionMode = 'native' | 'bridge'
+export type ScenarioLineage = {
+  baseScenario: string
+  mode: ExecutionMode
+  domain: 'paired' | 'bridge-only'
+  site?: string
+  partition?: string
+  schedule?: string
+  role?: 'prelude'
+}
+export type ScenarioStep = ScenarioStepValue & {
+  transport?: ExecutionMode
+  site?: string
+  bridgeSite?: true
+}
+type ScenarioStepValue =
   | { action: string; id: string; args?: Record<string, unknown> }
-  | { complete: string; params: unknown; reply?: unknown; reject?: Rejection; optional?: true }
+  | {
+      complete: string
+      params: unknown
+      reply?: unknown
+      reject?: Rejection
+      optional?: true
+      // Params built from two parallel replies change with whichever reply a matrix diverges.
+      paramsFollowDivergence?: true
+      // A reply that deliberately arrives after its request ended; it must resolve nothing.
+      late?: true
+    }
   | { frame: string; params: unknown; reply: unknown }
   | { bind: string; request: string; params: unknown; optional?: true }
   | { advance: number }
@@ -24,6 +49,14 @@ export type RecordingScenario = DeclaredDeviceState & {
   sites: string[]
   schedules: string[]
   namedDeltas?: string[]
+  replyBranches?: {
+    site: string
+    partitions: readonly string[]
+    request: string
+    params: unknown
+  }[]
+  bridgeOperations?: { request: string; probeSite: string; methods: readonly string[] }[]
+  lineage?: ScenarioLineage
   steps: ScenarioStep[]
 }
 export type MountedOperation = {
@@ -34,6 +67,7 @@ export type MountedOperation = {
 export type MountContext = {
   client: RpcClient
   effect: (name: string, value: unknown) => void
+  captureObservation?: <T>(origin: string, read: () => T) => T
 }
 export type MountAdapter = (context: MountContext) => MountedOperation
 export type RecordingScheduler = {
@@ -44,6 +78,14 @@ export type RecordingScheduler = {
   /** Virtual milliseconds since the pinned recording epoch. */
   elapsed: () => number
   stop: () => void
+  timerEvidence?: () => {
+    baseline: number
+    residual: number
+    stopped: boolean
+    stopAttempted?: boolean
+    clockRestored?: boolean
+    spiesRestored?: boolean
+  }
 }
 export type Observation = {
   sender: RecordedValue

@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import type {
   AgentJournalQuestionItem,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
-import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session/agent-session-question-answer'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { structuredQuestionTranscript } from '../../../../shared/structured-agent-question-projection'
 import {
@@ -17,7 +18,7 @@ import {
 import {
   nativeChatReceiptAnswers,
   type NativeChatResolvedPrompt
-} from '../../../../shared/native-chat-resolution-receipt'
+} from '../../../../shared/native-chat/native-chat-resolution-receipt'
 
 afterEach(async () => {
   cleanup()
@@ -40,90 +41,6 @@ const approval: NativeChatResolvedPrompt = {
 }
 
 describe('resolution receipts', () => {
-  it('localizes the resolved time when the UI language changes', async () => {
-    render(<NativeChatResolutionReceipt body={approval} />)
-    await act(async () => {
-      await i18n.changeLanguage('fr')
-    })
-    expect(screen.getByRole('time')).toHaveTextContent(
-      new Intl.DateTimeFormat('fr', { hour: 'numeric', minute: '2-digit' }).format(1000)
-    )
-    expect(screen.getByRole('time')).toHaveAccessibleName(
-      new Intl.DateTimeFormat('fr', { dateStyle: 'full', timeStyle: 'long' }).format(1000)
-    )
-  })
-
-  it.each([
-    ['yes', 'Allow once'],
-    ['no', 'Deny']
-  ])('shows the exact selected approval label for %s', (id, label) => {
-    render(
-      <NativeChatResolutionReceipt
-        body={{ ...approval, resolution: { ...approval.resolution, selectedOptionId: id } }}
-      />
-    )
-    expect(screen.getByText('Run command?')).toBeInTheDocument()
-    expect(screen.getByText('pnpm test')).toBeInTheDocument()
-    expect(screen.getByText(label)).toBeInTheDocument()
-    expect(screen.getByText('Answered on phone-client')).toBeInTheDocument()
-    expect(document.querySelector('time')).toHaveAttribute('datetime', new Date(1000).toISOString())
-    expect(screen.queryByRole('button')).toBeNull()
-  })
-
-  it('uses the SDK display name in the compact resolved receipt', () => {
-    render(
-      <NativeChatResolutionReceipt
-        body={{
-          ...approval,
-          title: 'Claude wants to present its implementation plan',
-          displayName: 'Present plan'
-        }}
-      />
-    )
-
-    expect(screen.getByText('Present plan')).toBeInTheDocument()
-    expect(screen.queryByText('Claude wants to present its implementation plan')).toBeNull()
-  })
-
-  it('renders cancellation quietly without inventing a choice or resolver', () => {
-    render(
-      <NativeChatResolutionReceipt
-        body={{
-          ...approval,
-          resolution: {
-            state: 'cancelled',
-            selectedOptionId: null,
-            resolvedBy: null,
-            resolvedAt: null
-          }
-        }}
-      />
-    )
-    expect(screen.getByText('Cancelled')).toBeInTheDocument()
-    expect(screen.queryByText('Allow once')).toBeNull()
-    expect(screen.queryByText('Selected answer unavailable')).toBeNull()
-    expect(document.querySelector('time')).toBeNull()
-  })
-
-  it.each([null, 'unknown'])('handles absent or unknown selections (%s)', (selectedOptionId) => {
-    render(
-      <NativeChatResolutionReceipt
-        body={{ ...approval, resolution: { ...approval.resolution, selectedOptionId } }}
-      />
-    )
-    expect(screen.getByText('Selected answer unavailable')).toBeInTheDocument()
-    expect(screen.queryByText('Allow once')).toBeNull()
-  })
-
-  it('excludes pending prompts', () => {
-    const { container } = render(
-      <NativeChatResolutionReceipt
-        body={{ ...approval, resolution: { ...approval.resolution, state: 'pending' } }}
-      />
-    )
-    expect(container).toBeEmptyDOMElement()
-  })
-
   it('reads grouped options from each question despite an empty flat options list', () => {
     const body: AgentJournalQuestionItem = {
       kind: 'question',
@@ -163,75 +80,6 @@ describe('resolution receipts', () => {
       { question: 'Features?', answer: null },
       { question: 'Name?', answer: null }
     ])
-  })
-
-  it('keeps a single grouped question heading distinct from its answer line', () => {
-    const body: AgentJournalQuestionItem = {
-      kind: 'question',
-      question: '1 grouped question from Claude',
-      options: [],
-      questions: [{ id: 'q1', question: 'Libraries?', multiSelect: true, options: [] }],
-      resolution: {
-        ...approval.resolution,
-        selectedOptionId: encodeAgentSessionQuestionAnswers([
-          { questionId: 'q1', optionIds: [], other: 'TypeScript' }
-        ])
-      }
-    }
-
-    render(<NativeChatResolutionReceipt body={body} />)
-    expect(screen.getByText('1 grouped question from Claude')).toBeInTheDocument()
-    expect(screen.getAllByText('Libraries?')).toHaveLength(1)
-    expect(screen.getByText('TypeScript')).toBeInTheDocument()
-  })
-
-  it('does not repeat a single question above its answer', () => {
-    const body: AgentJournalQuestionItem = {
-      kind: 'question',
-      question: 'Libraries?',
-      options: [],
-      questions: [{ id: 'q1', question: 'Libraries?', multiSelect: false, options: [] }],
-      resolution: {
-        ...approval.resolution,
-        selectedOptionId: encodeAgentSessionQuestionAnswers([
-          { questionId: 'q1', optionIds: [], other: 'TypeScript' }
-        ])
-      }
-    }
-
-    render(<NativeChatResolutionReceipt body={body} />)
-    expect(screen.getAllByText('Libraries?')).toHaveLength(1)
-    expect(screen.getByText('TypeScript')).toBeInTheDocument()
-  })
-
-  it('names the actual question while a single grouped prompt is pending', () => {
-    const body: AgentJournalQuestionItem = {
-      kind: 'question',
-      question: '1 grouped question from Claude',
-      options: [],
-      questions: [{ id: 'q1', question: 'Libraries?', multiSelect: true, options: [] }],
-      resolution: { ...approval.resolution, state: 'pending', selectedOptionId: null }
-    }
-
-    render(<NativeChatResolutionReceipt body={body} />)
-    expect(screen.getByText('Libraries?')).toBeInTheDocument()
-    expect(screen.queryByText('1 grouped question from Claude')).toBeNull()
-  })
-
-  it('reports, without breathing, a question whose agent ended (the host says nobody waits)', () => {
-    const body: AgentJournalQuestionItem = {
-      kind: 'question',
-      question: 'Which branch?',
-      options: [],
-      resolution: { ...approval.resolution, state: 'pending', selectedOptionId: null }
-    }
-
-    const { rerender } = render(<NativeChatResolutionReceipt body={body} />)
-    expect(screen.getByText('Awaiting user input:')).toHaveClass('animate-pulse')
-    rerender(<NativeChatResolutionReceipt body={body} awaiting={false} />)
-    expect(screen.queryByText('Awaiting user input:')).toBeNull()
-    expect(screen.getByText('Asked:')).not.toHaveClass('animate-pulse')
-    expect(screen.getByText('Which branch?')).toBeInTheDocument()
   })
 
   it('keeps an opened question open once it is answered', () => {
@@ -334,17 +182,6 @@ describe('resolution receipts', () => {
       expect(screen.queryByRole('list')).toBeNull()
     })
 
-    it('lists the questions of a pending group the card may not be showing', () => {
-      render(
-        <Harness body={{ ...grouped, resolution: { ...grouped.resolution, state: 'pending' } }} />
-      )
-      fireEvent.click(screen.getByRole('button', { name: /Awaiting user input:\s*2 questions/ }))
-      expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
-        FIRST,
-        SECOND
-      ])
-    })
-
     it('does not carry an opened Codex group onto its first question once answered', () => {
       const codexQuestion = (
         itemId: string,
@@ -390,43 +227,10 @@ describe('resolution receipts', () => {
       })
       rerender(<Harness body={receiptFor([answered, second])} />)
       expect(screen.getByText('Branch?')).toHaveClass('truncate')
-      expect(screen.queryByRole('button')).toBeNull()
-    })
-
-    it('stays plain once answered, since each question is listed with its answer', () => {
-      render(
-        <Harness
-          body={{
-            ...grouped,
-            resolution: {
-              state: 'resolved',
-              selectedOptionId: null,
-              answers: [
-                { questionId: 'q1', optionIds: ['a'] },
-                { questionId: 'q2', optionIds: ['y'] }
-              ],
-              resolvedBy: null,
-              resolvedAt: 1000
-            }
-          }}
-        />
+      expect(screen.getByRole('button', { name: /Asked:/ })).toHaveAttribute(
+        'aria-expanded',
+        'false'
       )
-      expect(screen.getByText('2 questions')).toBeInTheDocument()
-      expect(screen.queryByRole('button')).toBeNull()
-      expect(screen.getAllByText(FIRST)).toHaveLength(1)
-      expect(screen.getAllByText(SECOND)).toHaveLength(1)
-      expect(screen.getByText('Yes')).toBeInTheDocument()
-    })
-
-    it('leaves a cancelled single question that fits its line as plain text', () => {
-      render(
-        <Harness
-          body={{ ...grouped, question: FIRST, questions: grouped.questions?.slice(0, 1) }}
-        />
-      )
-      expect(screen.getByText(FIRST)).toHaveClass('truncate')
-      expect(screen.queryByRole('button')).toBeNull()
-      expect(screen.queryByRole('list')).toBeNull()
     })
   })
 

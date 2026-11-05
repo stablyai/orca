@@ -1,11 +1,12 @@
 import { useCallback } from 'react'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import { useAppStore } from '../../store'
 import { findRepoForHost } from '../../store/slices/repo-host-identity'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
+import { translate } from '@/i18n/i18n'
 
 type WorkspaceSpaceManagerBindings = ReturnType<typeof useWorkspaceSpaceManagerBindings>
 
@@ -62,7 +63,14 @@ export function useWorkspaceSpaceGitRefreshAction(bindings: WorkspaceSpaceManage
               },
               { includeLineStats: false, admissionTier: 'background' }
             )
-          : Promise.reject(new Error('Workspace owner is no longer available'))
+          : Promise.reject(
+              new Error(
+                translate(
+                  'auto.components.status.bar.workspaceSpaceGitRefresh.ownerUnavailable',
+                  'Workspace owner is no longer available'
+                )
+              )
+            )
       )
         .then((status) => {
           if (gitStatusScanGenerationRef.current !== scanGeneration) {

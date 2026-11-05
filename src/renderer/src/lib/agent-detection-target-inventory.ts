@@ -1,3 +1,8 @@
+import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
+import { PREFLIGHT_PROJECT_LAUNCH_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import type { ProjectLaunchContext } from '../../../shared/rpc-contract/preflight-params'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { AppState } from '@/store/types'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import {
@@ -7,7 +12,7 @@ import {
 } from '@/hooks/useAgentDetectionTarget'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 type DetectionReadState = Pick<
   AppState,
@@ -134,6 +139,28 @@ export function ensureDetectedAgentsForNewWorktree(
   return host?.kind === 'runtime'
     ? state.ensureRuntimeDetectedAgents(host.environmentId, worktreeId)
     : (ensureDetectedAgentsForRepo(state, repo) ?? Promise.resolve([]))
+}
+
+/** Per-attempt project facts; older hosts retain their existing pre-create validation. */
+export async function loadProjectLaunchContext(
+  target: RuntimeClientTarget,
+  repoId: string
+): Promise<ProjectLaunchContext | undefined> {
+  const capability = PREFLIGHT_PROJECT_LAUNCH_CONTEXT_RUNTIME_CAPABILITY
+  let supported = false
+  try {
+    supported =
+      target.kind === 'local'
+        ? (await ensureLocalRuntimeCapabilities())?.includes(capability) === true
+        : await runtimeEnvironmentSupportsCapability(target.environmentId, capability)
+  } catch {
+    // An unknown capability keeps the existing launch path.
+  }
+  return supported
+    ? callRuntimeRpc<ProjectLaunchContext>(target, 'preflight.detectAgents', {
+        project: { repo: `id:${repoId}` }
+      })
+    : undefined
 }
 
 /** IDs and the latest attempt outcome always describe the same target. */

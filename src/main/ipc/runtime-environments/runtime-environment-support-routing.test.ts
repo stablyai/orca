@@ -1,6 +1,6 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   advanceRuntimeEnvironmentCapabilityIncarnation,
   applyRuntimeEnvironmentCapabilityVerdict,
@@ -27,21 +27,24 @@ vi.mock('./runtime-environment-shared-control-support', () => ({
   supportsSharedControl: supportsMock,
   clearSharedControlSupport: clearSupportMock
 }))
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal()),
-  resolveEnvironment: resolveEnvironmentMock
-}))
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    resolveEnvironment: resolveEnvironmentMock
+  })
+)
 
 vi.mock('./runtime-environment-request-connections', async (importOriginal) => ({
   ...(await importOriginal()),
   subscribeRemoteRuntimeSharedControlRequest: subscribeSharedMock
 }))
-vi.mock('../../../shared/remote-runtime-client', async (importOriginal) => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', async (importOriginal) => ({
   ...(await importOriginal()),
   subscribeRemoteRuntimeRequest: subscribeLegacyMock
 }))
 import type { subscribeRemoteRuntimeSharedControlRequest } from './runtime-environment-request-connections'
-import type { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import type { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 
 import {
   subscribeSupportRoutedRuntimeEnvironment,

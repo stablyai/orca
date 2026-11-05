@@ -108,6 +108,15 @@ export function useSourceControlFileListing({
     worktreeMap
   })
 
+  const visibleBranchRowKeys = useMemo(() => {
+    if (collapsedSections.has('branch')) {
+      return []
+    }
+    return sourceControlViewMode === 'tree'
+      ? visibleBranchTreeRows.filter((node) => node.type === 'file').map((node) => node.key)
+      : filteredBranchEntries.map((entry) => `branch::${entry.path}`)
+  }, [collapsedSections, sourceControlViewMode, visibleBranchTreeRows, filteredBranchEntries])
+
   // Modifier-click opens a right split to preserve the current pane.
   const { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff } =
     useSourceControlRowOpening({
@@ -115,6 +124,7 @@ export function useSourceControlFileListing({
       activeWorktreeId,
       worktreePath,
       visibleSelectionEntries,
+      visibleBranchRowKeys,
       branchSummary
     })
 

@@ -3,7 +3,7 @@ import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey
@@ -187,7 +187,7 @@ export function projectWslMoveState(
     automationRuns: byId(
       state.automationRuns.filter((run) => automationIds.has(run.automationId)).map(withoutSetupId)
     ),
-    session: projectWslMoveSession(input.session, ownerInScope),
+    session: projectWslMoveSession(withoutOwnerFileBindings(input.session, aliases), ownerInScope),
     ui: projectWslMoveUi(
       input.ui ?? {},
       input.session,
@@ -205,6 +205,31 @@ export function projectWslMoveState(
   )
   dropSelfPriorIds(canonical)
   return canonical
+}
+
+/** A file bound to its owning host is that host's file whether or not the binding is written. */
+function withoutOwnerFileBindings<T extends Partial<WorkspaceSessionState>>(
+  session: T,
+  aliases: ReadonlySet<string>
+): T {
+  if (!session.openFilesByWorktree) {
+    return session
+  }
+  return {
+    ...session,
+    openFilesByWorktree: Object.fromEntries(
+      Object.entries(session.openFilesByWorktree).map(([owner, files]) => [
+        owner,
+        files.map(({ runtimeEnvironmentId, ...file }) =>
+          runtimeEnvironmentId === undefined ||
+          runtimeEnvironmentId === null ||
+          aliases.has(runtimeEnvironmentId)
+            ? file
+            : { ...file, runtimeEnvironmentId }
+        )
+      ])
+    )
+  }
 }
 
 /** Catalog order is immaterial and may change on import. */

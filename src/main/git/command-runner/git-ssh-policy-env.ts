@@ -1,18 +1,16 @@
-import { addWslEnvKeys } from '../../wsl-env'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
 import {
   buildGitSshPolicyEnv,
   GIT_SSH_CONFIG_ARGS,
   parseGitSshConfig,
   type GitSshPolicyMode
-} from '../../../shared/git-ssh-policy-env'
-import { findGitSubcommandIndex } from '../../../shared/git-command-classification'
+} from '../../../shared/git/commands/git-ssh-policy-env'
+import { findGitSubcommandIndex } from '../../../shared/git/commands/git-command-classification'
 import { execFileCapture } from './exec-file-capture'
 import { resolveGitCommand } from './git-command-resolution'
 import { DEFAULT_GIT_MAX_BUFFER, type GitExecOptions } from './git-exec-options'
 import { promptGuardGitEnv } from './git-process-env'
 import { acquireGitAdmission } from './git-subprocess-admission'
-
-export type { GitSshPolicyMode } from '../../../shared/git-ssh-policy-env'
 
 const CORE_SSH_COMMAND_PROBE_TIMEOUT_MS = 2500
 // Cold WSL starts and login rc files need the environment probe's startup budget.

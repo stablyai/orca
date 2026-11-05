@@ -5,7 +5,8 @@ import {
   MessageSquarePlus,
   PenTool,
   Share2,
-  SquareCode
+  SquareCode,
+  X
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ import {
   BrowserChromeElementToolButtons,
   type BrowserChromeElementTools
 } from './browser-chrome-element-tool-buttons'
+import { useFloatingSplitBrowserClose } from './use-floating-split-browser-close'
 
 export type { BrowserChromeElementTools } from './browser-chrome-element-tool-buttons'
 
@@ -82,12 +84,15 @@ export function BrowserChromeToolbar({
   reloadControl,
   reloadLabel,
   importControl,
+  extensionActions,
+  passwordControl,
   elementTools,
   markup,
   shareControl,
   viewSource,
   openExternal,
   overflowMenu,
+  closeTabOwner,
   showTourAnchors = false,
   pinnedStage
 }: {
@@ -97,17 +102,30 @@ export function BrowserChromeToolbar({
   reloadLabel?: string
   /** Cookie import — a browsing session concept; null where there is no session to import into. */
   importControl?: ((compact: boolean) => React.ReactNode) | null
+  /**
+   * Extension buttons; null where the page's session runs no extensions (doc preview, route and
+   * SSH pages). `compact` folds the pinned buttons, leaving the extensions menu.
+   */
+  extensionActions?: ((compact: boolean) => React.ReactNode) | null
+  /** Saved-password offer beside the address bar; never folded, it only shows after a login. */
+  passwordControl?: React.ReactNode
   elementTools: BrowserChromeElementTools | null
   markup: BrowserChromeMarkupTool
   shareControl?: (control: BrowserChromeShareControl) => React.ReactNode
   viewSource: BrowserChromeToolAction | null
   openExternal: BrowserChromeToolAction | null
   overflowMenu: (props: BrowserChromeOverflowMenuProps) => React.ReactNode
+  /** The page whose tab the toolbar X closes in a floating split, where the panel's one tab row may be showing another split. */
+  closeTabOwner: { worktreeId: string; browserPageId: string }
   /** Only the browsing pane anchors the contextual tour; a second anchor would steal its steps. */
   showTourAnchors?: boolean
   /** Keeps the active contextual-tour control measurable while the remaining tools still fold. */
   pinnedStage?: BrowserChromeFoldStage
 }): React.JSX.Element {
+  const closeTab = useFloatingSplitBrowserClose(
+    closeTabOwner.worktreeId,
+    closeTabOwner.browserPageId
+  )
   const rowRef = useRef<HTMLDivElement>(null)
   const overflowTriggerRef = useRef<HTMLButtonElement>(null)
   const present: Record<BrowserChromeFoldStage, boolean> = {
@@ -116,6 +134,7 @@ export function BrowserChromeToolbar({
     external: openExternal !== null,
     devtools: viewSource !== null,
     share: shareControl != null,
+    extensions: extensionActions != null,
     draw: true,
     grab: elementTools !== null,
     annotate: elementTools !== null
@@ -207,6 +226,7 @@ export function BrowserChromeToolbar({
       reloadLabel={reloadLabel}
       showTourAnchors={showTourAnchors}
     >
+      {passwordControl}
       {folded.has('import') ? null : importControl?.(folded.has('import-label'))}
 
       {elementTools ? (
@@ -241,6 +261,8 @@ export function BrowserChromeToolbar({
         <BrowserChromeActionButton action={openExternal} icon={ExternalLink} />
       ) : null}
 
+      {extensionActions?.(folded.has('extensions'))}
+
       <span className="relative inline-flex">
         {overflowMenu({
           triggerRef: overflowTriggerRef,
@@ -253,6 +275,8 @@ export function BrowserChromeToolbar({
           <span className="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-background" />
         ) : null}
       </span>
+
+      {closeTab ? <BrowserChromeActionButton action={closeTab} icon={X} /> : null}
     </BrowserNavigationControlRow>
   )
 }

@@ -1,17 +1,16 @@
 import { translate } from '@/i18n/i18n'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
-import type { RuntimeHostBlockedReason } from '../../../../shared/runtime-host-status'
-import type { RuntimePairingRepairRoute } from '../../../../shared/runtime-environments'
-import {
-  describeRuntimeCompatBlock,
-  type RuntimeCompatVerdict
-} from '../../../../shared/protocol-compat'
+import type { RuntimeHostBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimePairingRepairRoute } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import '@/runtime/runtime-host-connection-state'
 import {
   runtimeStatusForOverall,
   type HostStatus,
   type RuntimeHostConnectionState
-} from '@/runtime/runtime-host-connection-state'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 
 /** 'blocked' is a host that refused us (revoked pairing or incompatible versions). */

@@ -1,4 +1,8 @@
-import type { FeatureInteractionId } from './feature-interactions'
+import {
+  hasFeatureInteraction,
+  type FeatureInteractionId,
+  type FeatureInteractionState
+} from './feature-interactions'
 
 export type ContextualTourId =
   | 'workspace-board'
@@ -18,6 +22,7 @@ export type ContextualTourStepActionKind =
   | 'next'
   | 'complete'
   | 'split-terminal-pane'
+  | 'split-chat-pane'
   | 'create-worktree'
   | 'show-worktrees'
   | 'open-tasks'
@@ -33,7 +38,7 @@ export type ContextualTourStepPlacement = 'top' | 'right' | 'bottom' | 'left'
 
 export type ContextualTourStep = {
   // Stable anchor for localized copy — position-keyed translations shift onto the wrong step when one is inserted.
-  id?: string
+  id: string
   title: string
   body: string
   targetSelector: string
@@ -59,6 +64,7 @@ export const CONTEXTUAL_TOURS = [
     id: 'workspace-board',
     steps: [
       {
+        id: 'workspace-board-plan',
         title: 'Plan work on the board',
         body: 'Use the board when you want to see workspaces by status instead of by project.',
         targetSelector: '[data-contextual-tour-target="workspace-board-center"]',
@@ -66,6 +72,7 @@ export const CONTEXTUAL_TOURS = [
         preferredPlacement: 'bottom'
       },
       {
+        id: 'workspace-board-lanes',
         title: 'Move work through lanes',
         body: 'Drag workspaces between lanes as their status changes.',
         targetSelector:
@@ -77,16 +84,39 @@ export const CONTEXTUAL_TOURS = [
     id: 'workspace-agent-sessions',
     steps: [
       {
+        id: 'agent-sessions-new-tab',
+        title: 'New agents start here',
+        body: 'Click + to start an agent, a terminal, or a browser tab.',
+        targetSelector: '[data-contextual-tour-target="tab-create-menu"]',
+        requiredForStart: true,
+        preferredPlacement: 'bottom',
+        targetPulse: true
+      },
+      // Exactly one split step shows: its target exists only for the active tab's kind.
+      {
+        id: 'agent-sessions-split-chat',
+        title: 'Run two chats side by side',
+        body: 'Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.',
+        targetSelector:
+          '[data-contextual-tour-target="chat-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"][data-active-content-type="agent-session"]',
+        requiredForStart: true,
+        preferredPlacement: 'bottom',
+        primaryAction: { kind: 'split-chat-pane', label: 'Split chat' },
+        advanceOnFeatureInteraction: 'tab-splits'
+      },
+      {
+        id: 'agent-sessions-split',
         title: 'Split a terminal pane',
         body: 'Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.',
         targetSelector:
-          '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]',
+          '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"][data-active-content-type="terminal"]',
         requiredForStart: true,
         preferredPlacement: 'bottom',
         primaryAction: { kind: 'split-terminal-pane', label: 'Split terminal' },
         advanceOnFeatureInteraction: 'terminal-pane-split'
       },
       {
+        id: 'agent-sessions-parallel',
         title: 'Start another task in parallel',
         body: 'Each worktree gets its own branch, so parallel work stays separate.',
         targetSelector: '[data-contextual-tour-target="workspace-create-control"]',
@@ -100,6 +130,7 @@ export const CONTEXTUAL_TOURS = [
     id: 'browser',
     steps: [
       {
+        id: 'browser-grab',
         title: 'Grab page context for agents',
         body: "Use the grab tool to copy a page element's context for agents.",
         targetSelector: '[data-contextual-tour-target="browser-grab-control"]',
@@ -107,12 +138,14 @@ export const CONTEXTUAL_TOURS = [
         preferredPlacement: 'bottom'
       },
       {
+        id: 'browser-annotate',
         title: 'Mark design feedback in place',
         body: 'Annotate elements and send those notes to an agent.',
         targetSelector: '[data-contextual-tour-target="browser-annotation-control"]',
         preferredPlacement: 'bottom'
       },
       {
+        id: 'browser-logins',
         title: 'Stay logged in',
         body: 'Bring your existing logins into Orca to stay signed in immediately.',
         // Prefer visible Import; use overflow after the hint is dismissed.
@@ -141,17 +174,20 @@ export const CONTEXTUAL_TOURS = [
     id: 'tasks',
     steps: [
       {
+        id: 'tasks-source',
         title: 'Choose the work source',
         body: 'Switch between connected providers and project filters without changing pages.',
         targetSelector: '[data-contextual-tour-target="tasks-source-filters"]',
         requiredForStart: true
       },
       {
+        id: 'tasks-filter',
         title: 'Filter to the work you need',
         body: 'Use presets and search to narrow issues, reviews, merge requests, or tasks.',
         targetSelector: '[data-contextual-tour-target="tasks-search-presets"]'
       },
       {
+        id: 'tasks-start',
         title: 'Start from work items',
         body: 'Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace.',
         targetSelector:
@@ -181,6 +217,7 @@ export const CONTEXTUAL_TOURS = [
     id: 'floating-workspace',
     steps: [
       {
+        id: 'floating-workspace-repos',
         title: 'Run an agent across every repo',
         body: 'Agents here run in any folder you choose. Point one at the directory above your services to work across all your repos at once.',
         // Action anchors exist only in empty state; use the panel when floating tabs already exist.
@@ -190,6 +227,7 @@ export const CONTEXTUAL_TOURS = [
         preferredPlacement: 'left'
       },
       {
+        id: 'floating-workspace-scratchpad',
         title: 'Or use it as a scratchpad',
         body: 'Open agents, scratch terminals, notes, and browser tabs without cluttering the worktree you’re focused on.',
         targetSelector:
@@ -203,18 +241,21 @@ export const CONTEXTUAL_TOURS = [
     allowedActiveModals: ['new-workspace-composer'],
     steps: [
       {
+        id: 'workspace-creation-project',
         title: 'Pick a project',
         body: 'Orca isolates each task in its own worktree, branched off your base.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-project"]',
         requiredForStart: true
       },
       {
+        id: 'workspace-creation-name',
         title: 'Name it, or start from existing work',
         body: 'Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-name"]',
         control: { kind: 'auto-rename-branch-from-work' }
       },
       {
+        id: 'workspace-creation-agent',
         title: 'Choose what agent starts the work',
         body: 'Pick the agent that should be opened when this worktree is created.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-agent"]'
@@ -222,6 +263,8 @@ export const CONTEXTUAL_TOURS = [
     ]
   }
 ] as const satisfies readonly ContextualTour[]
+
+export type ContextualTourStepId = (typeof CONTEXTUAL_TOURS)[number]['steps'][number]['id']
 
 export const CONTEXTUAL_TOUR_IDS = CONTEXTUAL_TOURS.map((tour) => tour.id)
 
@@ -232,6 +275,38 @@ export function isContextualTourId(value: unknown): value is ContextualTourId {
 export function getContextualTour(id: ContextualTourId): ContextualTour {
   return CONTEXTUAL_TOURS.find((tour) => tour.id === id)!
 }
+
+// A step that waits for a user action is done only once that action succeeded, never when it is shown.
+export function isContextualTourStepDone(
+  step: ContextualTourStep,
+  featureInteractions: FeatureInteractionState
+): boolean {
+  return (
+    step.advanceOnFeatureInteraction !== undefined &&
+    hasFeatureInteraction(featureInteractions, step.advanceOnFeatureInteraction)
+  )
+}
+
+export function hasContextualTourActionStep(tour: ContextualTour): boolean {
+  return tour.steps.some((step) => step.advanceOnFeatureInteraction !== undefined)
+}
+
+export function hasUndoneContextualTourAction(
+  tour: ContextualTour,
+  featureInteractions: FeatureInteractionState,
+  fromStepIndex = 0
+): boolean {
+  return tour.steps
+    .slice(fromStepIndex)
+    .some(
+      (step) =>
+        step.advanceOnFeatureInteraction !== undefined &&
+        !isContextualTourStepDone(step, featureInteractions)
+    )
+}
+
+export const getContextualTourStepIndex = (id: ContextualTourId, stepId: ContextualTourStepId) =>
+  getContextualTour(id).steps.findIndex((step) => step.id === stepId)
 
 export function normalizeContextualTourIds(value: unknown): ContextualTourId[] {
   if (!Array.isArray(value)) {

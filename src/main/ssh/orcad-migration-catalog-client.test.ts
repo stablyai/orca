@@ -2,12 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { computeOrcadMigrationManifestSha256 } from '../orcad/orcad-migration-manifest-digest'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../shared/automation-runtime-capabilities'
+import {
+  DORMANT_AUTOMATION,
+  dormantState
+} from '../persistence/migrating-orcad-catalog/persistence-orcad-migration-catalog-fixture'
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const status = vi.hoisted(() => ({ capabilities: ['orcad.migration-catalog.v1'] }))
 // Run status preflight, then adapt to the existing single-call assertions.
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequestWithStatusPreflight: async (
     pairing: unknown,
     method: string,
@@ -66,6 +72,42 @@ beforeEach(() => {
 })
 
 describe('remote orcad migration catalog client', () => {
+  it.each([stageRemoteOrcadMigrationCatalog, commitRemoteOrcadMigrationCatalog])(
+    'requires complete Automation setup support on stage and commit',
+    async (request) => {
+      const base = manifest()
+      const input = { ...base, payload: { ...base.payload, dormantState: dormantState() } }
+      await expect(request(pairingCode, input)).rejects.toThrow(
+        'keep automation agent launch settings'
+      )
+      expect(sendRequest).not.toHaveBeenCalled()
+      status.capabilities.push(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY)
+      const result = {
+        state: 'staged',
+        migrationId: input.migrationId,
+        manifestSha256: input.manifestSha256,
+        stagedAt: '2026-08-30T12:01:00.000Z'
+      }
+      sendRequest.mockResolvedValue({ ok: true, result })
+      await expect(request(pairingCode, input)).resolves.toEqual(result)
+      expect(sendRequest).toHaveBeenCalledTimes(1)
+      expect(sendRequest.mock.calls[0]?.[2]).toMatchObject({
+        manifest: {
+          payload: {
+            dormantState: {
+              automations: [
+                expect.objectContaining({
+                  agentArgs: DORMANT_AUTOMATION.agentArgs,
+                  launchPreferences: DORMANT_AUTOMATION.launchPreferences
+                })
+              ]
+            }
+          }
+        }
+      })
+    }
+  )
+
   it.each([
     stageRemoteOrcadMigrationCatalog,
     commitRemoteOrcadMigrationCatalog,

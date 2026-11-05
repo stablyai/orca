@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
 import {
   MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
   addGitHubPRReviewCommentMock,
   addGitHubPRReviewCommentReplyMock,
   createHostedReviewMock,
   createStackedHostedReviewMock,
-  getBaseRefDefault,
   getGitHubPRCheckDetailsMock,
   getGitHubPRChecksMock,
   getGitHubPRCommentsMock,
@@ -17,7 +16,6 @@ import {
   getHostedReviewCreationEligibilityMock,
   getHostedReviewForBranchMock,
   getPRForBranchOutcomeMock,
-  listWorktrees,
   mergeGitHubPRMock,
   removeGitHubPRReviewersMock,
   requestGitHubPRReviewersMock,
@@ -29,13 +27,16 @@ import {
   updateGitHubPRDetailsMock,
   updateGitHubPRStateMock,
   updateGitHubPRTitleMock
-} from '../orca-runtime-test-mocks.spec'
+} from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getBaseRefDefault } from '../../git/repo-default-base-ref'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('routes runtime GitHub PR details and actions through the selected WSL project runtime', async () => {
@@ -183,7 +184,8 @@ describe('OrcaRuntimeService', () => {
       42,
       'pr',
       null,
-      localGitOptions
+      localGitOptions,
+      {}
     )
     expect(getGitHubWorkItemDetailsMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -191,7 +193,9 @@ describe('OrcaRuntimeService', () => {
       'pr',
       null,
       localGitOptions,
-      undefined
+      undefined,
+      undefined,
+      false
     )
     expect(getGitHubPRChecksMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,

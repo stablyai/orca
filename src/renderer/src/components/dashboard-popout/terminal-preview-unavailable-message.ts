@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { DashboardCardHostKind } from '../../../../shared/dashboard-snapshot'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 /** Remote snapshot absence cannot prove pane exit because the client does not own the PTY; see docs/reference/ssh-execution-boundary.md. */
 export function terminalPreviewUnavailableMessage(source: {
@@ -19,7 +19,7 @@ export function terminalPreviewUnavailableMessage(source: {
         'No preview for this remote session — open the workspace to view the terminal.'
       )
     : translate(
-        'dashboardPopout.terminal.closed',
-        "No live terminal — this agent's pane has closed."
+        'dashboardPopout.terminal.previewUnavailable',
+        'No preview available — open the workspace to view this agent.'
       )
 }

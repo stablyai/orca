@@ -1,0 +1,164 @@
+import { describe, expect, it } from 'vitest'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
+
+function makeWorktree(id: string, path: string): Worktree {
+  return {
+    id,
+    instanceId: `${id}-instance`,
+    repoId: 'repo-1',
+    path,
+    head: 'abc123',
+    branch: id,
+    isBare: false,
+    isMainWorktree: false,
+    displayName: id,
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 1
+  }
+}
+
+function makeLineage(child: Worktree, parent: Worktree): WorktreeLineage {
+  return {
+    worktreeId: child.id,
+    worktreeInstanceId: child.instanceId ?? '',
+    parentWorktreeId: parent.id,
+    parentWorktreeInstanceId: parent.instanceId ?? '',
+    origin: 'manual',
+    capture: { source: 'manual-action', confidence: 'explicit' },
+    createdAt: 1
+  }
+}
+
+const SSH_HOST: ExecutionHostId = toSshExecutionHostId('build-box')
+
+describe('getWorkspaceDeleteLineage', () => {
+  it('returns valid descendants for parent delete copy and child-first delete-all targets', () => {
+    const parent = makeWorktree('parent', '/workspaces/parent')
+    const child = makeWorktree('child', '/workspaces/parent/child')
+    const grandchild = makeWorktree('grandchild', '/workspaces/parent/child/grandchild')
+
+    const lineage = getWorkspaceDeleteLineage(parent, [parent, child, grandchild], {
+      [child.id]: makeLineage(child, parent),
+      [grandchild.id]: makeLineage(grandchild, child)
+    })
+
+    expect(lineage.descendants.map((worktree) => worktree.id)).toEqual(['child', 'grandchild'])
+    expect(lineage.deleteAllTargets.map((worktree) => worktree.id)).toEqual([
+      'grandchild',
+      'child',
+      'parent'
+    ])
+  })
+
+  it('orders an exact inline-only legacy descendant before its parent', () => {
+    const parent = makeWorktree('parent', '/workspaces/parent')
+    const child = makeWorktree('child', '/workspaces/parent/child')
+    const inlineChild = { ...child, lineage: makeLineage(child, parent) } as Worktree
+
+    const lineage = getWorkspaceDeleteLineage(parent, [parent, inlineChild], {})
+
+    expect(lineage.descendants.map((worktree) => worktree.id)).toEqual([child.id])
+    expect(lineage.deleteAllTargets.map((worktree) => worktree.id)).toEqual([child.id, parent.id])
+  })
+
+  it('keeps a stale side-map child authoritative over valid inline lineage', () => {
+    const parent = makeWorktree('parent', '/workspaces/parent')
+    const child = makeWorktree('child', '/workspaces/parent/child')
+    const inlineChild = { ...child, lineage: makeLineage(child, parent) } as Worktree
+
+    const lineage = getWorkspaceDeleteLineage(parent, [parent, inlineChild], {
+      [child.id]: {
+        ...makeLineage(child, parent),
+        parentWorktreeInstanceId: 'stale-parent-instance'
+      }
+    })
+
+    expect(lineage.descendants).toEqual([])
+    expect(lineage.deleteAllTargets).toEqual([parent])
+  })
+
+  it('resolves a colliding child id to the parent host', () => {
+    const parent: Worktree = { ...makeWorktree('parent', '/workspaces/parent'), hostId: SSH_HOST }
+    const localChild: Worktree = {
+      ...makeWorktree('child', '/workspaces/parent/child'),
+      hostId: LOCAL_EXECUTION_HOST_ID
+    }
+    const sshChild: Worktree = { ...localChild, hostId: SSH_HOST }
+
+    const lineage = getWorkspaceDeleteLineage(parent, [parent, localChild, sshChild], {
+      [localChild.id]: makeLineage(localChild, parent)
+    })
+
+    expect(lineage.deleteAllTargets.map((worktree) => worktree.hostId)).toEqual([
+      SSH_HOST,
+      SSH_HOST
+    ])
+  })
+
+  it('keeps the parent host preference stable regardless of row order', () => {
+    const parent: Worktree = { ...makeWorktree('parent', '/workspaces/parent'), hostId: SSH_HOST }
+    const localChild: Worktree = {
+      ...makeWorktree('child', '/workspaces/parent/child'),
+      hostId: LOCAL_EXECUTION_HOST_ID
+    }
+    const sshChild: Worktree = { ...localChild, hostId: SSH_HOST }
+
+    const lineage = getWorkspaceDeleteLineage(parent, [parent, sshChild, localChild], {
+      [localChild.id]: makeLineage(localChild, parent)
+    })
+
+    expect(lineage.deleteAllTargets.map((worktree) => worktree.hostId)).toEqual([
+      SSH_HOST,
+      SSH_HOST
+    ])
+  })
+
+  it('uses the confirmed host inline lineage when the bare projection belongs to the other host', () => {
+    const localParent: Worktree = {
+      ...makeWorktree('parent', '/workspaces/parent'),
+      instanceId: 'local-parent',
+      hostId: LOCAL_EXECUTION_HOST_ID
+    }
+    const sshParent: Worktree = {
+      ...localParent,
+      instanceId: 'ssh-parent',
+      hostId: SSH_HOST
+    }
+    const localChild: Worktree = {
+      ...makeWorktree('child', '/workspaces/parent/child'),
+      instanceId: 'local-child',
+      hostId: LOCAL_EXECUTION_HOST_ID
+    }
+    const sshChildBase: Worktree = {
+      ...localChild,
+      instanceId: 'ssh-child',
+      hostId: SSH_HOST
+    }
+    const sshChild = {
+      ...sshChildBase,
+      lineage: makeLineage(sshChildBase, sshParent)
+    } as Worktree
+
+    const lineage = getWorkspaceDeleteLineage(
+      sshParent,
+      [localParent, sshParent, localChild, sshChild],
+      { [localChild.id]: makeLineage(localChild, localParent) }
+    )
+
+    expect(lineage.deleteAllTargets).toEqual([sshChild, sshParent])
+  })
+})

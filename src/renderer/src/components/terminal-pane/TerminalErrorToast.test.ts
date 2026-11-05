@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -13,7 +14,23 @@ vi.mock('@/lib/client-environment-info', () => ({
 }))
 
 import { i18n } from '@/i18n/i18n'
-import { appendPaneTerminalError, terminalErrorForPane } from './terminal-error-accumulation'
+import {
+  formatTerminalStartFailure,
+  terminalStartError
+} from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import {
+  appendPaneTerminalError,
+  clearPaneTerminalError,
+  terminalErrorForPane,
+  type TerminalErrorsByPaneId
+} from './terminal-error-accumulation'
+import {
+  LEGACY_PTY_ALLOCATION_HINT,
+  LEGACY_TERMINAL_PROCESS_LIMIT_HINT,
+  PTY_ALLOCATION_HINT,
+  TERMINAL_HOST_CAP_HINT,
+  TERMINAL_PROCESS_LIMIT_HINT
+} from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 
 import {
   TerminalErrorToast,
@@ -89,14 +106,14 @@ describe('humanizeTerminalError', () => {
             rows.slice(midpoint).join('\n')
           )
           const error = terminalErrorForPane(null, errors, 1)
-          expect(error).toBe(rows.join('\n'))
+          expect(error?.error).toBe(rows.join('\n'))
           if (error === null) {
             throw new Error('Accumulated error missing')
           }
           tokenMatches.mockClear()
           translations.mockClear()
           const toast = React.createElement(TerminalErrorToast, {
-            error,
+            ...error,
             agentId: 'codex',
             paneOnClient: false,
             onDismiss: vi.fn()
@@ -123,7 +140,8 @@ describe('humanizeTerminalError', () => {
           if (kind === 'startup') {
             expect(tokenChecks).toBe(2 * rowCount)
           }
-          expect(startupTranslations).toBe(2 * matchingRows)
+          // Upper bound only: option-free translations are cached after their first lookup.
+          expect(startupTranslations).toBeLessThanOrEqual(2 * matchingRows)
           expect(
             view.container.textContent?.match(/Codex exited while starting\./g) ?? []
           ).toHaveLength(matchingRows)
@@ -207,6 +225,26 @@ describe('humanizeTerminalError', () => {
 
   it('leaves other errors untouched', () => {
     expect(humanizeTerminalError('Paste failed.')).toBe('Paste failed.')
+  })
+
+  it("drops Electron's IPC wrapper from a refusal main threw, keeping other lines as they are", () => {
+    const wrapped =
+      "Error invoking remote method 'runtimeEnvironments:call': Error: Ubuntu was stopped. Start it again."
+    expect(humanizeTerminalError(wrapped)).toBe('Ubuntu was stopped. Start it again.')
+    expect(humanizeTerminalError(`Paste failed.\n${wrapped}\n  indented detail`)).toBe(
+      'Paste failed.\nUbuntu was stopped. Start it again.\n  indented detail'
+    )
+  })
+
+  // SSH pin: only the wrapper goes; the SSH host's own words, and other channels' wrappers, stay.
+  it("leaves an SSH host's refusal words and other IPC channels' wrappers as they were", () => {
+    expect(
+      humanizeTerminalError(
+        "Error invoking remote method 'runtimeEnvironments:call': Error: Remote Orca runtime is not connected: ssh desk"
+      )
+    ).toBe('Remote Orca runtime is not connected: ssh desk')
+    const otherChannel = "Error invoking remote method 'ssh:connect': Error: Permission denied"
+    expect(humanizeTerminalError(otherChannel)).toBe(otherChannel)
   })
 
   it('replaces the terminal-host-gone code with copy that explains the loss', () => {
@@ -415,6 +453,43 @@ describe('shouldOfferDaemonRestart', () => {
 })
 
 describe('TerminalErrorToast environment footer', () => {
+  it('renders a formatted capacity failure once with ordinary reporting and dismissal', async () => {
+    const error = formatTerminalStartFailure(
+      terminalStartError(
+        'agent_session_exited_during_start',
+        {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        },
+        'test-incarnation'
+      )
+    )
+    if (error === undefined) {
+      throw new Error('Capacity start failure must have a human explanation')
+    }
+    const onDismiss = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, { error, paneOnClient: true, onDismiss })
+    )
+    const footer = '---\nOrca: 1.4.178-rc.2\nOS: darwin 25.0.0 (arm64)\nShell: /bin/zsh'
+    await waitFor(() => expect(view.container.textContent).toContain(footer))
+
+    const text = view.container.querySelector('span')?.textContent ?? ''
+    expect(text).toBe(`${error}\nIf this persists, please file an issue.\n\n${footer}`)
+    expect(text.match(/128 open terminals on this PC/g)).toHaveLength(1)
+    expect(text.match(/Close some Git Bash terminals and try again\./g)).toHaveLength(1)
+    expect(text).not.toContain('agent_session_exited_during_start')
+    expect(view.getAllByRole('link')).toHaveLength(1)
+    expect(view.getByRole('link', { name: 'file an issue' }).getAttribute('href')).toBe(
+      'https://github.com/stablyai/orca/issues'
+    )
+    expect(environmentMocks.resolveFooter).toHaveBeenCalledOnce()
+    expect(onDismiss).not.toHaveBeenCalled()
+    fireEvent.click(view.getByRole('button', { name: '×' }))
+    expect(onDismiss).toHaveBeenCalledOnce()
+  })
+
   it('appends client environment details to local errors', async () => {
     const view = render(
       React.createElement(TerminalErrorToast, {
@@ -659,4 +734,126 @@ it('uses existing Korean recovery copy and preserves the path', async () => {
   } finally {
     await i18n.changeLanguage('en')
   }
+})
+
+// #21342: dismissing hid the toast but left the dead pane with no way out.
+it('offers Close Pane only for a pane whose remote terminal was closed', () => {
+  const onClosePane = vi.fn()
+  const view = render(
+    React.createElement(TerminalErrorToast, {
+      error: 'Remote terminal was closed.',
+      paneOnClient: false,
+      onDismiss: vi.fn(),
+      onClosePane
+    })
+  )
+  fireEvent.click(view.getByText('Close Pane'))
+  expect(onClosePane).toHaveBeenCalledTimes(1)
+
+  view.rerender(
+    React.createElement(TerminalErrorToast, {
+      error: 'Paste failed.',
+      paneOnClient: false,
+      onDismiss: vi.fn(),
+      onClosePane
+    })
+  )
+  expect(view.queryByText('Close Pane')).toBeNull()
+})
+
+describe('TerminalErrorToast resource-limit styling', () => {
+  const allocationError = `${PTY_ALLOCATION_HINT}\nnode-pty: posix_openpt failed: Device not configured (errno 6)`
+
+  function renderPaneError(
+    errors: TerminalErrorsByPaneId,
+    tabError: string | null = null,
+    paneId = 1
+  ): string {
+    const surface = terminalErrorForPane(tabError, errors, paneId)
+    if (!surface) {
+      throw new Error('Missing pane error surface')
+    }
+    return renderToStaticMarkup(
+      React.createElement(TerminalErrorToast, {
+        ...surface,
+        paneOnClient: false,
+        onDismiss: vi.fn()
+      })
+    )
+  }
+
+  it.each([
+    allocationError,
+    `${LEGACY_PTY_ALLOCATION_HINT}\nnode-pty: open_slave failed: EMFILE (errno 24)`,
+    `${TERMINAL_PROCESS_LIMIT_HINT}\nnode-pty: posix_spawn failed: EAGAIN (errno 35)`,
+    `${LEGACY_TERMINAL_PROCESS_LIMIT_HINT}\nnode-pty: posix_spawn failed: EAGAIN (errno 35)`,
+    TERMINAL_HOST_CAP_HINT
+  ])('renders a resource refusal neutrally: %s', (message) => {
+    const html = renderPaneError(appendPaneTerminalError({}, 1, message))
+    expect(html).not.toContain('linear-gradient')
+    expect(html).toContain('border:1px solid var(--border)')
+  })
+
+  it.each([true, false])('keeps mixed pane errors red, resource first: %s', (resourceFirst) => {
+    let errors = appendPaneTerminalError({}, 1, resourceFirst ? allocationError : 'Paste failed.')
+    errors = appendPaneTerminalError(errors, 1, resourceFirst ? 'Paste failed.' : allocationError)
+
+    const html = renderPaneError(errors)
+    expect(html).toContain('Paste failed.')
+    expect(html).toContain('node-pty: posix_openpt failed')
+    expect(html).toContain('var(--destructive)')
+  })
+
+  it.each([
+    'x'.repeat(4_500),
+    Array.from({ length: 30 }, (_, index) => `diagnostic ${index}`).join('\n')
+  ])('retains resource styling after oversized diagnostics discard the hint', (diagnostics) => {
+    let errors = appendPaneTerminalError({}, 1, `${allocationError}\n${diagnostics}`)
+    expect(terminalErrorForPane(null, errors, 1)?.error).not.toContain(PTY_ALLOCATION_HINT)
+    expect(renderPaneError(errors)).toContain('border:1px solid var(--border)')
+
+    errors = appendPaneTerminalError(errors, 1, 'Paste failed.')
+    expect(renderPaneError(errors)).toContain('var(--destructive)')
+    errors = clearPaneTerminalError(errors, 1, 'Paste failed.')
+    expect(renderPaneError(errors)).toContain('border:1px solid var(--border)')
+  })
+
+  it('keeps a tab-wide error red beside a pane resource refusal', () => {
+    const errors = appendPaneTerminalError({}, 1, allocationError)
+    const html = renderPaneError(errors, 'Paste failed.')
+    expect(html).toContain('Paste failed.')
+    expect(html).toContain('node-pty: posix_openpt failed')
+    expect(html).toContain('var(--destructive)')
+  })
+
+  it.each([true, false])(
+    'keeps legacy combined tab errors red, resource first: %s',
+    (resourceFirst) => {
+      const tabError = resourceFirst
+        ? `${allocationError}\nPaste failed.`
+        : `Paste failed.\n${allocationError}`
+      const html = renderPaneError({}, tabError)
+      expect(html).toContain('Paste failed.')
+      expect(html).toContain('var(--destructive)')
+    }
+  )
+
+  it('restores neutral styling when the unrelated pane error clears', () => {
+    let errors = appendPaneTerminalError({}, 1, allocationError)
+    errors = appendPaneTerminalError(errors, 1, 'Paste failed.')
+    expect(renderPaneError(errors)).toContain('var(--destructive)')
+
+    const cleared = clearPaneTerminalError(errors, 1, 'Paste failed.')
+    const html = renderPaneError(cleared)
+    expect(html).not.toContain('linear-gradient')
+    expect(html).not.toContain('Paste failed.')
+    expect(html).toContain('border:1px solid var(--border)')
+  })
+
+  it('styles each pane from its own errors', () => {
+    let errors = appendPaneTerminalError({}, 1, allocationError)
+    errors = appendPaneTerminalError(errors, 2, 'Paste failed.')
+    expect(renderPaneError(errors, null, 1)).not.toContain('linear-gradient')
+    expect(renderPaneError(errors, null, 2)).toContain('var(--destructive)')
+  })
 })

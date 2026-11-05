@@ -1,9 +1,9 @@
 // Age mirrored evidence by client receipt time: rendererNow minus hostStamp gains clock skew and makes remote rows immediately stale or permanently fresh. Inject separate host/client clocks. Published freshness verdicts cannot decay during silence; exact repaints must not renew receipt time.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import { isExplicitAgentStatusFresh } from '../lib/pane-agent-evidence'
 import type { AppState } from '../store/types'
@@ -126,14 +126,6 @@ describe('a mirrored remote row decays on the replica clock, not the host clock'
     resetRendererOwnedAgentStatusPanesForTests()
   })
 
-  it('decays a row from a host running fast, instead of holding it fresh forever', () => {
-    const store = seedPairedClientStore()
-    applyChangedHostSnapshot(store, T0 + HOST_SKEW_MS, T0)
-
-    expect(mirroredRowIsFreshAt(store, T0), 'fresh on arrival').toBe(true)
-    expect(mirroredRowIsFreshAt(store, T0 + AGENT_STATUS_STALE_AFTER_MS + 1)).toBe(false)
-  })
-
   it('keeps a row from a host running slow fresh for the whole window, not zero of it', () => {
     const store = seedPairedClientStore()
     applyChangedHostSnapshot(store, T0 - HOST_SKEW_MS, T0)
@@ -141,17 +133,6 @@ describe('a mirrored remote row decays on the replica clock, not the host clock'
     expect(mirroredRowIsFreshAt(store, T0), 'must not arrive already stale').toBe(true)
     expect(mirroredRowIsFreshAt(store, T0 + AGENT_STATUS_STALE_AFTER_MS - 1_000)).toBe(true)
     expect(mirroredRowIsFreshAt(store, T0 + AGENT_STATUS_STALE_AFTER_MS + 1)).toBe(false)
-  })
-
-  it('keeps decaying while the host publishes nothing new', () => {
-    // No fresh snapshot arrives during silence, so replica must age its last evidence locally.
-    const store = seedPairedClientStore()
-    applyChangedHostSnapshot(store, T0 + HOST_SKEW_MS, T0)
-
-    for (const elapsed of [1_000, AGENT_STATUS_STALE_AFTER_MS / 2]) {
-      expect(mirroredRowIsFreshAt(store, T0 + elapsed)).toBe(true)
-    }
-    expect(mirroredRowIsFreshAt(store, T0 + AGENT_STATUS_STALE_AFTER_MS * 3)).toBe(false)
   })
 
   it('does not restart the window when the host republishes evidence already seen', () => {

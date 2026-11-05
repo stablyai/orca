@@ -36,7 +36,7 @@ export function TaskPageGitHubIssueDialog({
     setIssueSourcePreference,
     submitShortcutLabel,
     selectedRepos,
-    perRepoSourceState,
+    githubSourceDisplayState,
     newIssueOpen,
     setNewIssueOpen,
     newIssueTitle,
@@ -80,18 +80,24 @@ export function TaskPageGitHubIssueDialog({
           {(() => {
             // Use the resolved slug as the source indicator, falling back to displayName.
             const entry = newIssueTargetRepo
-              ? perRepoSourceState.find((s) =>
+              ? githubSourceDisplayState.find((s) =>
                   repoMatchesHostIdentity(newIssueTargetRepo, s.repoId, s.hostId)
                 )
               : undefined
             const issuesSlug = entry?.sources?.issues
               ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
               : null
-            const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
+            const target = issuesSlug ?? newIssueTargetRepo?.displayName
             return (
               <DialogDescription>
-                {translate('auto.components.TaskPage.9f2b4c03a6', 'Filing in')}
-                {issuesSlug ?? fallback}
+                {target
+                  ? translate('auto.components.TaskPage.filingInTarget', 'Filing in {{target}}', {
+                      target
+                    })
+                  : translate(
+                      'auto.components.TaskPage.filingInThisRepository',
+                      'Filing in this repository'
+                    )}
               </DialogDescription>
             )
           })()}
@@ -100,7 +106,9 @@ export function TaskPageGitHubIssueDialog({
             if (!newIssueTargetRepo) {
               return null
             }
-            const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+            const entry = githubSourceDisplayState.find((s) =>
+              repoMatchesHostIdentity(newIssueTargetRepo, s.repoId, s.hostId)
+            )
             if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.originCandidate) {
               return null
             }
@@ -211,7 +219,9 @@ export function TaskPageGitHubIssueDialog({
             />
           </div>
           <p className="text-[10px] text-muted-foreground">
-            {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            {translate('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+              shortcut: submitShortcutLabel
+            })}
           </p>
         </div>
         <DialogFooter>

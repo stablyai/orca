@@ -56,26 +56,33 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
   // Batch 0 after each hello. Not working never means done: an open turn reads unverifiable.
   z.object({
     kind: z.literal('snapshot'),
+    // Linked conversations active in the last snapshotActiveWindowMs, newest first.
     conversations: z.array(
       z.object({
         ...PaneEvent,
         agent: z.string().min(1),
         working: z.boolean(),
-        prompt: ConnectorPendingPromptSchema.nullable()
+        prompt: ConnectorPendingPromptSchema.nullable(),
+        // The pane's latest turn (its turn-started `at`), working or not; a turn end older than it
+        // changes nothing.
+        turnId: EpochMsSchema.optional()
       })
-    )
+    ).max(CONNECTOR_LIMITS.maxSnapshotConversations)
   })
 ])
 
+const fitsOneEvent = (event: unknown) =>
+  textEncoder.encode(JSON.stringify(event)).byteLength <= CONNECTOR_LIMITS.maxEventBytes
+
 // The machine sends all its event batches through one FIFO queue and starts the next only once the cloud
-// took the head. seq counts batches from 0 after each hello; a retry resends the same body, helloRev and
-// seq. The cloud applies a batch only for the current helloRev and above that hello's high-water mark,
-// so a late original, or one from before a reconnect or restart, never undoes newer state.
+// took the head. It fills each batch by bytes, under maxRequestBytes. seq counts batches from 0 after each hello; a retry resends the same body, helloRev and
+// seq. The cloud applies a batch only for the current helloRev (refusing any other with 409) and above
+// that hello's high-water mark, so a late original never undoes newer state.
 export const ConnectorEventsRequestSchema = z.object({
   v: z.literal(1),
   helloRev: SequenceSchema,
   seq: SequenceSchema,
-  events: z.array(ConnectorEventSchema).min(1)
+  events: z.array(ConnectorEventSchema.refine(fitsOneEvent)).min(1)
 })
 
 // replyId is minted once by the CLI and kept across retries; turnId is the turn-started `at`.
@@ -88,7 +95,7 @@ export const ConnectorReplyRequestSchema = z.object({
 })
 
 export const ConnectorReplyResponseSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('posted'), messageTs: z.string().min(1) }),
+  z.object({ status: z.literal('posted'), messageId: z.string().min(1) }),
   z.object({ status: z.literal('queued') })
 ])
 

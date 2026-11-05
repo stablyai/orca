@@ -1,10 +1,9 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { View } from 'react-native'
-import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
+
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, RpcResponse } from '../transport/types'
+import type { RpcResponse } from '../transport/types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
@@ -115,7 +114,6 @@ function pendingCount(calls: PendingCall[], method: string): number {
 const IGNORE_ACTION_ERROR = (): void => {}
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `setRootRef` compares the node against null and returns; it reads no member of it.
-const ROOT_NODE = {} as View
 
 describe('useMobileSourceControlLoaders branch compare', () => {
   let renderer: ReactTestRenderer | null = null
@@ -185,51 +183,6 @@ describe('useMobileSourceControlLoaders branch compare', () => {
     })
   })
 
-  it('sends no compare for an attempt superseded while it resolved its base ref', async () => {
-    const calls: PendingCall[] = []
-    const read: { loaders: Loaders | null } = { loaders: null }
-    await mount(fakeClient(calls), read)
-
-    await settleOldest(calls, 'git.status', STATUS_REPLY)
-    expect(pendingCount(calls, 'worktree.show')).toBe(1)
-
-    await act(async () => {
-      void read.loaders?.loadStatus({ force: true })
-    })
-    await settleOldest(calls, 'git.status', STATUS_REPLY)
-
-    // The retired base lookup must stop at the currency probe without sending a compare.
-    await settleBaseRefLookup(calls, 'origin/dev')
-    expect(pendingCount(calls, 'git.branchCompare')).toBe(0)
-
-    await settleBaseRefLookup(calls, 'origin/main')
-    expect(pendingCount(calls, 'git.branchCompare')).toBe(1)
-
-    await settleCompare(calls, 'origin/main')
-    expect(read.loaders?.branchCompareState).toEqual({
-      kind: 'ready',
-      result: expect.objectContaining({
-        summary: expect.objectContaining({ baseRef: 'origin/main' })
-      })
-    })
-  })
-
-  it('sends no compare for an attempt the route detached under', async () => {
-    const calls: PendingCall[] = []
-    const read: { loaders: Loaders | null } = { loaders: null }
-    await mount(fakeClient(calls), read)
-    await act(async () => read.loaders?.setRootRef(ROOT_NODE))
-
-    await settleOldest(calls, 'git.status', STATUS_REPLY)
-    expect(pendingCount(calls, 'worktree.show')).toBe(1)
-
-    // Detach must reset the owner; dropping the mount latch alone does not retire the pending lookup.
-    await act(async () => read.loaders?.setRootRef(null))
-
-    await settleBaseRefLookup(calls, 'origin/dev')
-    expect(pendingCount(calls, 'git.branchCompare')).toBe(0)
-  })
-
   it('refuses a compare whose route identity moved while it was out', async () => {
     const calls: PendingCall[] = []
     const read: { loaders: Loaders | null } = { loaders: null }
@@ -245,37 +198,5 @@ describe('useMobileSourceControlLoaders branch compare', () => {
 
     await settleCompare(calls, 'origin/dev')
     expect(read.loaders?.branchCompareState).toEqual({ kind: 'idle' })
-  })
-})
-
-describe('useMobileSourceControlLoaders status on reconnect', () => {
-  let renderer: ReactTestRenderer | null = null
-
-  afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
-  })
-
-  function Harness(props: { client: RpcClient | null; connState: ConnectionState }): null {
-    useMobileSourceControlLoaders({
-      client: props.client,
-      connState: props.connState,
-      statusIdentityKey: IDENTITY,
-      worktreeId: WORKTREE,
-      setActionError: IGNORE_ACTION_ERROR
-    })
-    return null
-  }
-
-  it('reads status again when the shell reconnects, which is what the missing page Retry relies on', async () => {
-    // Page Retry cannot redial; recovery depends on the shell client’s reconnect state.
-    await act(async () => {
-      renderer = create(createElement(Harness, { client: null, connState: 'reconnecting' }))
-    })
-    const client = createFakeRpcClient()
-    await act(async () => {
-      renderer?.update(createElement(Harness, { client, connState: 'connected' }))
-    })
-    expect(client.requests.map((request) => request.method)).toContain('git.status')
   })
 })

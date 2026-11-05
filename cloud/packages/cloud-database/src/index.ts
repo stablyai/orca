@@ -10,3 +10,4 @@ export {
   type CloudNotifications,
   type ListenHandlers
 } from './cloud-notifications.js'
+export { acquireLeadership, type Leadership } from './cloud-leader-lock.js'

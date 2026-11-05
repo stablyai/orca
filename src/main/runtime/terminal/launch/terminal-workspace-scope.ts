@@ -1,45 +1,52 @@
 import { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../../session-graph/session-graph-authority'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceSelector
 } from '../../../../shared/floating-workspace-worktree'
 import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
-import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import {
+  type ExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId,
   getWorktreeExecutionHostId,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
 import { resolveRuntimeBrowserNetworkExecutionHost } from '../../runtime-browser-network-execution-host'
-import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   resolveWorktreeHostRouting,
   resolveWorktreeLaunchHost
-} from '../../worktree-launch-host-repo'
+} from '../../workspaces/catalog/worktree-launch-host-repo'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import { resolveTerminalStartupCwd } from '../../../../shared/terminal-startup-cwd'
-import type { ResolvedTerminalWorkspaceLaunchTarget } from '../../orca-runtime-core'
-import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../orca-runtime-core'
+import { resolveTerminalStartupCwd } from '../../../../shared/shell/launch/terminal-startup-cwd'
+
+import {
+  type ResolvedTerminalWorkspaceLaunchTarget,
+  AGENT_HOOK_RUNTIME_ENV_KEYS
+} from '../../orca-runtime-core'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { homedir } from 'node:os'
-import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
-import {
-  WORKTREE_ID_SEPARATOR,
-  getRepoIdFromWorktreeId,
-  worktreeIdsEqual
-} from '../../../../shared/worktree/id'
-import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
-import { WorktreeIdRequiresFullPathError } from '../../runtime-worktree-lineage-resolution'
-import { triggerTerminalSpawnPushTargetMaterialization } from '../../runtime-terminal-spawn-push-target-materialization'
-import { resolveCreatedWorktreeTerminalTarget } from '../../runtime-created-worktree-terminal-target'
+import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-worktree-selection'
+import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
+import { WorktreeIdRequiresFullPathError } from '../../workspaces/lineage/runtime-worktree-lineage-resolution'
+import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
+import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
+
+export type TerminalWorkspaceCreationEvidence = [
+  createdWorktree?: Worktree,
+  resolvedWorktree?: ResolvedWorktree,
+  resolvedFolder?: FolderWorkspace
+]
 
 // Why: folder and floating workspaces have no worktree row, so no parent, children or lineage.
 function withoutWorktreeLineage(worktree: Worktree): ResolvedWorktree {
@@ -120,14 +127,29 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
 
   async resolveTerminalWorkspaceLaunchScope(
     selector: string,
-    createdWorktree?: Worktree
+    createdWorktree?: Worktree,
+    options: { wslUserAct?: boolean } = {},
+    resolvedWorktree?: ResolvedWorktree,
+    resolvedFolder?: FolderWorkspace
   ): Promise<TerminalWorkspaceLaunchScope> {
-    return (await this.resolveTerminalWorkspaceLaunchTarget(selector, createdWorktree)).scope
+    return (
+      await this.resolveTerminalWorkspaceLaunchTarget(
+        selector,
+        createdWorktree,
+        options,
+        resolvedWorktree,
+        resolvedFolder
+      )
+    ).scope
   }
 
   protected async resolveTerminalWorkspaceLaunchTarget(
     selector: string,
-    createdWorktree?: Worktree
+    createdWorktree?: Worktree,
+    options: { wslUserAct?: boolean } = {},
+    resolvedWorktree?: ResolvedWorktree,
+    resolvedFolder?: FolderWorkspace,
+    checkPath = true
   ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
     if (isFloatingWorkspaceSelector(selector)) {
       // Why no managed worktree: the floating sentinel has no repo or worktree record behind it.
@@ -143,7 +165,12 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       }
     }
 
-    const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
+    const folderScope = await this.resolveFolderWorkspaceLaunchScope(
+      selector,
+      options,
+      resolvedFolder,
+      checkPath
+    )
     if (folderScope) {
       return {
         scope: folderScope,
@@ -155,8 +182,9 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     const parsed = parseWorkspaceKey(workspaceSelector)
     const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
     const worktree =
+      resolvedWorktree ??
       resolveCreatedWorktreeTerminalTarget(this.store, selector, createdWorktree) ??
-      (await this.resolveWorktreeSelector(worktreeSelector))
+      (await this.resolveGitWorktreeSelector(worktreeSelector))
     // Repo ids are host-blind; resolve the worktree owner or refuse as unresolved rather than spawn locally with a remote cwd (#11163).
     const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
     if (resolution.kind === 'ambiguous') {

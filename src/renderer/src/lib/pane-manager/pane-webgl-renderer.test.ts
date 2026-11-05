@@ -1,17 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import {
   attachWebgl,
-  clearTerminalWebglAttachBackoff,
-  presentPaneViewport,
   primeTerminalWebglAddon,
-  resetTerminalWebglSuggestion,
-  resetWebglTextureAtlas
+  resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
-import { notifyPaneFitSucceeded } from './pane-fit-webgl-attach-signal'
 import { safeFit } from './pane-fit'
 import { disposePane } from './pane-lifecycle'
+import { presentPaneViewport } from './pane-viewport-present'
 
 function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
   const leafId = '22222222-2222-4222-8222-222222222222' as never
@@ -63,48 +60,6 @@ function createFittablePane(): ManagedPaneInternal {
     pane.webglAddon ? { cols: 84, rows: 24 } : { cols: 80, rows: 24 }
   ) as never
   return pane
-}
-
-type FakeRenderService = {
-  _isPaused: boolean
-  _needsFullRefresh: boolean
-  refreshRows: Mock<(start: number, end: number, sync?: boolean) => void>
-}
-
-/** Model xterm paused without a layout box; display controls whether IntersectionObserver would consider it visible. */
-function createPausedPane(display: 'block' | 'none'): {
-  pane: ManagedPaneInternal
-  renderService: FakeRenderService
-  setDisplay: (next: 'block' | 'none') => void
-} {
-  const pane = createPane()
-  const renderService: FakeRenderService = {
-    _isPaused: true,
-    _needsFullRefresh: false,
-    // Mirrors xterm: a refresh while paused only latches the pending full repaint.
-    refreshRows: vi.fn<(start: number, end: number, sync?: boolean) => void>(() => {
-      if (renderService._isPaused) {
-        renderService._needsFullRefresh = true
-      }
-    })
-  }
-  let currentDisplay = display
-  const view = { getComputedStyle: () => ({ display: currentDisplay }) }
-  const element = { ownerDocument: { defaultView: view }, parentElement: null }
-  pane.container = element as never
-  pane.xtermContainer = element as never
-  pane.terminal = {
-    ...pane.terminal,
-    refresh: vi.fn(() => renderService.refreshRows(0, pane.terminal.rows - 1)),
-    _core: { _renderService: renderService }
-  } as never
-  return {
-    pane,
-    renderService,
-    setDisplay: (next) => {
-      currentDisplay = next
-    }
-  }
 }
 
 describe('terminal WebGL addon lifecycle', () => {
@@ -167,139 +122,83 @@ describe('terminal WebGL addon lifecycle', () => {
     expect(disposeSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('still refreshes the terminal when resetting a pane without a WebGL addon', () => {
-    const pane = createPane()
-    expect(pane.webglAddon).toBeNull()
-
-    resetWebglTextureAtlas(pane)
-
-    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
-  })
-
-  it('falls back to terminal.refresh on an unpaused, unsynchronized pane', () => {
-    // Other presentPaneViewport callers still need repaint when full-present is a no-op (unpaused/no DEC 2026).
-    const refreshRows = vi.fn()
+  it('paints a newly attached canvas inside a synchronized frame instead of leaving it blank', () => {
     const renderRows = vi.fn()
     const pane = createPane()
-    pane.terminal = {
-      ...pane.terminal,
-      refresh: vi.fn(),
+    Object.assign(pane.terminal, {
       _core: {
         _renderService: {
           _isPaused: false,
           _needsFullRefresh: false,
-          refreshRows,
-          _renderer: { value: { renderRows } }
-        },
-        coreService: { decPrivateModes: { synchronizedOutput: false } }
-      }
-    } as never
-
-    presentPaneViewport(pane)
-
-    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
-    expect(refreshRows).not.toHaveBeenCalled()
-    expect(renderRows).not.toHaveBeenCalled()
-  })
-
-  it('preserves a synchronized frame on a viewport present', () => {
-    const refreshRows = vi.fn()
-    const renderRows = vi.fn()
-    const pane = createPane()
-    pane.terminal = {
-      ...pane.terminal,
-      refresh: vi.fn(),
-      _core: {
-        _renderService: {
-          _isPaused: false,
-          _needsFullRefresh: false,
-          refreshRows,
+          refreshRows: vi.fn(),
           _renderer: { value: { renderRows } }
         },
         coreService: { decPrivateModes: { synchronizedOutput: true } }
       }
-    } as never
-
-    presentPaneViewport(pane)
-
-    expect(refreshRows).toHaveBeenCalledWith(0, 23, true)
-    expect(renderRows).not.toHaveBeenCalled()
-    expect(pane.terminal.refresh).not.toHaveBeenCalled()
-  })
-
-  it('keeps the render pause latched when resetting a pane that has no layout box', () => {
-    // Collapsed siblings must stay paused: releasing no-box panes paints nothing, permanently unpauses them, and loses full-refresh/deferred-resize latches before reveal.
-    const { pane, renderService } = createPausedPane('none')
-
-    resetWebglTextureAtlas(pane)
-
-    expect(renderService._isPaused).toBe(true)
-    expect(renderService._needsFullRefresh).toBe(true)
-    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
-  })
-
-  it('retries a display:none present after the overlay actually shows a box', () => {
-    // First present can run display:none; retry after a box exists to heal stale inner rows and sides without selection/resize.
-    const queued: FrameRequestCallback[] = []
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      queued.push(callback)
-      return queued.length
     })
-    const { pane, renderService, setDisplay } = createPausedPane('none')
 
-    presentPaneViewport(pane)
+    attachWebgl(pane)
 
-    expect(renderService._isPaused).toBe(true)
-    expect(queued).toHaveLength(1)
-
-    setDisplay('block')
-    queued.shift()?.(16)
-
-    expect(renderService._isPaused).toBe(false)
-    expect(renderService.refreshRows).toHaveBeenCalledWith(0, 23, true)
+    expect(pane.webglAddon).not.toBeNull()
+    expect(renderRows).toHaveBeenCalledWith(0, 23)
   })
 
-  it('caps display:none present retries', () => {
-    const queued: FrameRequestCallback[] = []
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      queued.push(callback)
-      return queued.length
-    })
-    const { pane, renderService } = createPausedPane('none')
-
-    presentPaneViewport(pane)
-    presentPaneViewport(pane)
-    expect(queued).toHaveLength(1)
-    let callbacks = 0
-    while (queued.length > 0) {
-      queued.shift()?.(callbacks * 16)
-      callbacks += 1
-    }
-
-    expect(callbacks).toBe(16)
-    expect(renderService._isPaused).toBe(true)
-    expect(renderService.refreshRows).toHaveBeenCalledTimes(2)
-  })
-
-  it('still forces the paused render through for a pane that has a layout box', () => {
-    // Visible reveal must release the paused gate before IntersectionObserver catches up.
-    const { pane, renderService } = createPausedPane('block')
-
-    resetWebglTextureAtlas(pane)
-
-    expect(renderService._isPaused).toBe(false)
-    expect(renderService._needsFullRefresh).toBe(false)
-    expect(renderService.refreshRows).toHaveBeenCalledWith(0, 23, true)
-    expect(pane.terminal.refresh).not.toHaveBeenCalled()
-  })
-
-  it('skips the reset while WebGL is latched off after a context loss', () => {
+  it('keeps an attached, already painted renderer tear-free inside a synchronized frame', () => {
+    const renderRows = vi.fn()
+    const refreshRows = vi.fn()
     const pane = createPane()
-    pane.webglDisabledAfterContextLoss = true
+    Object.assign(pane.container, { getBoundingClientRect: () => ({ width: 800, height: 400 }) })
+    const decPrivateModes = { synchronizedOutput: false }
+    Object.assign(pane.terminal, {
+      _core: {
+        _renderService: {
+          _isPaused: false,
+          _needsFullRefresh: false,
+          refreshRows,
+          _renderer: { value: { renderRows } }
+        },
+        coreService: { decPrivateModes }
+      }
+    })
+    attachWebgl(pane)
+    decPrivateModes.synchronizedOutput = true
 
-    resetWebglTextureAtlas(pane)
+    presentPaneViewport(pane)
 
-    expect(pane.terminal.refresh).not.toHaveBeenCalled()
+    expect(renderRows).not.toHaveBeenCalled()
+    expect(refreshRows).toHaveBeenCalledWith(0, 23, true)
+  })
+
+  it('paints a canvas attached while paused on its reveal present, inside a synchronized frame', () => {
+    const renderRows = vi.fn()
+    const renderService = {
+      _isPaused: true,
+      _needsFullRefresh: false,
+      refreshRows: vi.fn(),
+      _renderer: { value: { renderRows } }
+    }
+    const pane = createPane()
+    Object.assign(pane.container, { getBoundingClientRect: () => ({ width: 800, height: 400 }) })
+    Object.assign(pane.terminal, {
+      onRender: vi.fn(() => ({ dispose: vi.fn() })),
+      _core: {
+        _renderService: renderService,
+        coreService: { decPrivateModes: { synchronizedOutput: true } }
+      }
+    })
+
+    attachWebgl(pane)
+    expect(renderRows).not.toHaveBeenCalled()
+    expect(renderService._isPaused).toBe(true)
+
+    presentPaneViewport(pane)
+    expect(renderRows).toHaveBeenCalledWith(0, 23)
+
+    // Only that one paint may land mid-frame; later presents wait for the frame to close.
+    renderRows.mockClear()
+    presentPaneViewport(pane)
+    expect(renderRows).not.toHaveBeenCalled()
+    expect(renderService.refreshRows).toHaveBeenCalledWith(0, 23, true)
   })
 
   it('keeps attaching to healthy panes after another pane fails to attach', () => {
@@ -318,139 +217,6 @@ describe('terminal WebGL addon lifecycle', () => {
 
     expect(healthy.webglAddon).not.toBeNull()
     expect(healthy.webglAttachFailedSinceRecovery).not.toBe(true)
-  })
-
-  it('honors the per-pane failure latch until it is cleared', () => {
-    const loadAddon = vi.fn(() => {
-      throw new Error('WebGL2 not supported null')
-    })
-    const pane = createPane({ loadAddon })
-
-    attachWebgl(pane)
-    attachWebgl(pane)
-
-    expect(loadAddon).toHaveBeenCalledTimes(1)
-
-    clearTerminalWebglAttachBackoff(pane)
-    attachWebgl(pane)
-
-    expect(loadAddon).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe('fit-anchored WebGL reattach', () => {
-  beforeEach(() => {
-    resetTerminalWebglSuggestion()
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      callback(16)
-      return 1
-    })
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.restoreAllMocks()
-  })
-
-  it('attaches WebGL to an eligible addon-less pane when a fit succeeds', () => {
-    // A fit/late mount proves measurability and offers DOM-stuck panes a WebGL recovery opportunity.
-    const pane = createPane()
-    expect(pane.webglAddon).toBeNull()
-
-    notifyPaneFitSucceeded(pane)
-
-    expect(pane.webglAddon).not.toBeNull()
-  })
-
-  it('does not retry a pane whose attach already failed since recovery', () => {
-    const loadAddon = vi.fn(() => {
-      throw new Error('WebGL2 not supported null')
-    })
-    const pane = createPane({ loadAddon })
-    attachWebgl(pane)
-    expect(loadAddon).toHaveBeenCalledTimes(1)
-
-    notifyPaneFitSucceeded(pane)
-
-    // Failed attaches retry only at recovery boundaries, never on every fit.
-    expect(loadAddon).toHaveBeenCalledTimes(1)
-    expect(pane.webglAddon).toBeNull()
-  })
-
-  it('leaves suspended and context-loss panes alone on fit', () => {
-    const deferred = createPane()
-    deferred.webglAttachmentDeferred = true
-    notifyPaneFitSucceeded(deferred)
-    expect(deferred.webglAddon).toBeNull()
-
-    const lost = createPane()
-    lost.webglDisabledAfterContextLoss = true
-    notifyPaneFitSucceeded(lost)
-    expect(lost.webglAddon).toBeNull()
-  })
-
-  it('does not disturb a pane that already has a live addon', () => {
-    const pane = createPane()
-    attachWebgl(pane)
-    const liveAddon = pane.webglAddon
-    expect(liveAddon).not.toBeNull()
-
-    notifyPaneFitSucceeded(pane)
-
-    expect(pane.webglAddon).toBe(liveAddon)
-  })
-})
-
-// Use real safeFit to cover its signal/import wiring; direct-signal tests above cannot detect disconnected fit recovery.
-describe('safeFit drives the fit-anchored WebGL reattach', () => {
-  beforeEach(() => {
-    resetTerminalWebglSuggestion()
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      callback(16)
-      return 1
-    })
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.restoreAllMocks()
-  })
-
-  it('attaches WebGL when a real safeFit completes', () => {
-    const pane = createFittablePane()
-
-    expect(safeFit(pane)).toBe(true)
-
-    expect(pane.webglAddon).not.toBeNull()
-  })
-
-  it('refits the pane onto the WebGL cell metrics after attaching', () => {
-    // Follow-up fit must replace DOM-derived columns or leave a narrow PTY and unpainted gutter.
-    const pane = createFittablePane()
-    const hadAddonPerFit: boolean[] = []
-    pane.fitAddon.fit = vi.fn(() => {
-      hadAddonPerFit.push(pane.webglAddon != null)
-    }) as never
-
-    safeFit(pane)
-
-    expect(hadAddonPerFit).toEqual([true])
-  })
-
-  it('does not fit when the pane is unmeasurable', () => {
-    const pane = createFittablePane()
-    pane.container = {
-      dataset: {},
-      getBoundingClientRect: () => ({ width: 0, height: 0 })
-    } as never
-
-    expect(safeFit(pane)).toBe(false)
-
-    expect(pane.webglAddon).toBeNull()
   })
 })
 

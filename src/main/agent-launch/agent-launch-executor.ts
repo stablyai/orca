@@ -1,34 +1,37 @@
-/** Ask after workspace creation: the host needs resolved metadata to decide chat support. */
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
+/** Structured launches create the workspace without an agent, then ask its host for chat support.
+ * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
-import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
 import { assertAgentPromptRequestActive } from '../runtime/orca-runtime-core'
-import { parsePaneKey } from '../../shared/stable-pane-id'
-import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
-import { withoutReservedAgentCreateFields } from '../../shared/agent-launch-intent'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import {
+  type AgentLaunchResult,
+  withoutReservedAgentCreateFields,
+  type AgentLaunchModeReceipt
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
 import {
   combineLaunchWarnings,
   ignoredStructuredLaunchInputsWarning
 } from './agent-launch-warnings'
 import {
   argvLaunchPrompt,
+  launchPromptCreateInputs,
   deliverTerminalLaunchPrompt,
   HANDED_TO_TERMINAL,
   promptReceipt,
   settledAtCreation,
   settleLaunchPromptDisposal
 } from './agent-launch-prompt-delivery'
-import { workspaceKindForLaunchTarget } from '../../shared/workspace-launch-kind'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session-definitive-refusal'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session/failures/agent-session-definitive-refusal'
 import {
-  decideAgentLaunchMode,
-  readAgentLaunchModeSettings,
   resolveAgentLaunchModeOnHost,
-  type AgentLaunchModeReceipt,
   type AgentLaunchModeSettlement,
   DEFAULT_LAUNCH_VOCABULARY,
   downgradeAgentLaunchModeForStructuredRefusal,
   warnStructuredLaunchDowngrade
 } from './agent-launch-mode'
+
 import {
   assertLegacyHostTarget,
   createLaunchPromptInputs,
@@ -36,51 +39,27 @@ import {
 } from './agent-launch-legacy-host'
 import {
   AgentLaunchStructuredSessionRefusedError,
+  assertTerminalLaunchAdmissible,
   terminalLaunchInputs,
   type AgentLaunchStructuredSurface,
   type AgentLaunchWorkspaceFactory
 } from './agent-launch-surface-factories'
-import type {
-  AgentLaunchExecution,
-  AgentLaunchPublishedSurface,
-  AgentLaunchSurfaceExecution
-} from './agent-launch-execution'
+import type { AgentLaunchExecution, AgentLaunchSurfaceExecution } from './agent-launch-execution'
 import {
   beginCreatedWorkspaceLaunch,
   recoverCreatedWorkspace
 } from './agent-launch-created-workspace'
 
-export type { AgentLaunchExecution, AgentLaunchPublishedSurface } from './agent-launch-execution'
+export type { AgentLaunchExecution } from './agent-launch-execution'
 
 export async function executeAgentLaunch(
   execution: AgentLaunchExecution
 ): Promise<AgentLaunchResult> {
   const { intent, runtime } = execution
-  if (intent.reuseTerminal || intent.target.kind === 'create-worktree') {
-    assertOpenCodeModelLaunchPreferencesAbsent(intent.agent, intent.sessionOptions)
-  }
   const vocabulary = execution.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  const preflight =
-    execution.decidedMode ??
-    decideAgentLaunchMode({
-      placement: {
-        agent: intent.agent,
-        workspaceKind: workspaceKindForLaunchTarget(intent.target),
-        ...(intent.reuseTerminal ? { terminal: intent.reuseTerminal.handle } : {}),
-        ...(intent.cwd ? { cwd: intent.cwd } : {}),
-        ...(intent.target.kind === 'existing' && intent.target.workspacePath
-          ? { workspacePath: intent.target.workspacePath }
-          : {}),
-        ...(execution.callerRendersStructured === false ? { callerRendersStructured: false } : {})
-      },
-      settings: execution.terminalOnly
-        ? undefined
-        : readAgentLaunchModeSettings(runtime, intent.nativeChatDefault),
-      ...(execution.terminalOnly ? { terminalOnly: true } : {}),
-      ...(intent.surface ? { surface: intent.surface } : {}),
-      vocabulary
-    })
-  // Intent preparation may have outlived the request.
+  const preflight = execution.decidedMode ?? decideAgentLaunchIntentMode(execution)
+  assertTerminalLaunchAdmissible(intent, preflight.mode)
+  // A caller's own preparation (intent resolution) may have outlived its request.
   assertAgentPromptRequestActive(execution.signal)
   if (execution.promptPolicy === 'legacy-host') {
     assertLegacyHostTarget(execution)
@@ -137,7 +116,8 @@ export async function executeAgentLaunch(
           placed.promptRodeLaunchCommand
             ? HANDED_TO_TERMINAL
             : await deliverTerminalLaunchPrompt(execution, placed.startupTerminalHandle, {
-                freshLaunch: true
+                freshLaunch: true,
+                terminalCreation: placed.startupTerminalCreation
               })
         )
       }
@@ -210,10 +190,7 @@ export async function executeAgentLaunch(
   }
 }
 
-function published(
-  execution: AgentLaunchExecution,
-  surface: AgentLaunchPublishedSurface
-): AgentLaunchPublishedSurface {
+function published(execution: AgentLaunchExecution, surface: AgentLaunchResult): AgentLaunchResult {
   warnStructuredLaunchDowngrade(execution.intent.agent, surface.receipt)
   execution.onSurfacePublished?.(surface)
   return surface
@@ -257,10 +234,11 @@ async function resolveWorkspace(
     : rest
 }
 
-/** Keep the structured surface’s creation fence for prompt delivery. */
+/** Keep the structured create receipt for prompt settlement. */
 export type CreatedSurface = {
   outcome: AgentLaunchResult['outcome']
   warning?: string
+  terminalCreation?: RuntimeTerminalCreate
   structured?: AgentLaunchStructuredSurface
   promptRodeLaunchCommand?: boolean
 }
@@ -277,8 +255,10 @@ async function createSurface(
       worktreeId: workspace.worktreeId,
       agent: intent.agent,
       ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
+      ...(intent.chatOptions ? { chatOptions: intent.chatOptions } : {}),
       ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
       ...(reservedTabId ? { tabId: reservedTabId } : {}),
+      ...launchPromptCreateInputs(intent, execution.signal),
       ...(intent.prompt ? {} : { withoutPrompt: true as const })
     })
     return {
@@ -314,6 +294,7 @@ async function createTerminalSurface(
       handle: terminal.handle,
       ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
     },
+    terminalCreation: terminal.terminalCreation,
     ...(terminal.warning ? { warning: terminal.warning } : {}),
     ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRelayApp } from './app.js'
 import type { RelayConfig } from './config.js'
-import type { RelayReadinessDependency } from './relay-readiness.js'
+import type { RelayReadinessDependency } from './process-lifecycle/relay-readiness.js'
 
 function readyApp(input: { ready: boolean; degraded?: RelayReadinessDependency[] }) {
   // SAFETY: /ready reads only ready and readinessDegradation, so the rest of the surface, which

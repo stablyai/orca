@@ -1,24 +1,24 @@
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { TerminalCreateOptions } from '../../runtime/runtime-terminal-contracts'
 import { registerPtyHandlers } from './register-handlers'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { launchWorkspaceId } from '../../../shared/launch-parity-window-request.test-fixture'
 import { POSIX_PATH } from '../../../shared/launch-parity-window-cases.test-fixture'
-import { statSyncMock, forgetRefusedPaneResumeMock } from '../pty-ipc-mock-registry'
+import { statSyncMock, forgetRefusedPaneResumeMock } from './pty-ipc-mock-registry'
 import {
   spawnBoth,
   startParityLanes,
   setMainPlatform,
   restoreMainPlatform
-} from '../pty-launch-parity.test-fixture'
+} from './pty-launch-parity.test-fixture'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type * as JcodeRuntimeDir from '../../../shared/jcode-runtime-dir'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getHiddenRendererPtyIds, isHiddenRendererPty } from './delivery/pty-hidden-delivery-gate'
 import { ptySizes } from './delivery/visibility-state'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import * as paneSpawnReservations from './pane/spawn-reservation'
-import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../runtime/worktree-terminals-sleeping-error'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../shared/workspace-sleep'
 import { RestoredPaneStarter } from '../../runtime/terminal/recovery/restored-pane-start'
 import {
   LAUNCH_RACE_LANES,
@@ -29,59 +29,62 @@ import {
   registerLaunchRaceLanes,
   sleptWorktreeLock,
   type LaunchRaceLane
-} from '../pty-launch-race-test-fixture'
+} from './pty-launch-race-test-fixture'
 
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
 vi.mock('node:fs/promises', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).fsPromisesModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).fsPromisesModuleMock(await importOriginal())
 )
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 // Real mkdir uses thread-pool I/O and could outlast the fixture's fixed macrotask drain under load.
 vi.mock('../../../shared/jcode-runtime-dir', async (importOriginal) => {
@@ -757,7 +760,7 @@ describe('launch race parity, both spawn lanes', () => {
           })
         )
         const records: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
-        records.listRecords = () => [chat]
+        records.listConversations = () => [agentSessionConversationView(chat)]
         records.getVisibleSessionTabIndex = () => ({ present: true, sessionIds: [chat.sessionId] })
         const forget = vi.fn(async () => {})
         const remember = vi.fn()

@@ -30,15 +30,11 @@ function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
     captures.push(text)
   }
   const liveInputRef: RefObject<TextInput | null> = { current: null }
-  const liveInputTerminalHandles = new Set([activeHandle])
-  const liveInputTerminalHandlesRef: RefObject<Set<string>> = {
-    current: new Set([activeHandle])
-  }
   const sent: string[] = []
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
-    current: async (handle, bytes) => {
+    current: async (handle, bytes, origin) => {
       sent.push(bytes)
-      return sender ? sender(handle, bytes) : true
+      return sender ? sender(handle, bytes, origin) : true
     }
   }
   let handlers: Handlers | null = null
@@ -52,8 +48,6 @@ function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
       activeSessionTabTypeRef,
       connected: true,
       liveInputRef,
-      liveInputTerminalHandles,
-      liveInputTerminalHandlesRef,
       sendLiveTerminalInputRef,
       setLiveInputCapture
     })
@@ -78,8 +72,6 @@ function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
     changeHandle: (handle) => {
       activeHandle = handle
       activeHandleRef.current = handle
-      liveInputTerminalHandles.add(handle)
-      liveInputTerminalHandlesRef.current.add(handle)
       act(() => renderer?.update(createElement(Harness)))
     },
     unmount: () => {
@@ -96,22 +88,6 @@ function change(handlers: Handlers, text: string, isComposing = false): void {
 describe('terminal live input around a click', () => {
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('Given typed text When a click arrives Then later typing reaches the new cursor alone', async () => {
-    const { handlers, sent, captures, unmount } = createClickHarness()
-    try {
-      change(handlers, 'hello world')
-      await vi.waitFor(() => expect(sent.join('')).toBe('hello world'))
-
-      await handlers.sendLiveInputClick('terminal-a', CLICK)
-      expect(captures.at(-1)).toBe('')
-
-      change(handlers, 'big ')
-      await vi.waitFor(() => expect(sent.join('')).toBe('hello world' + CLICK + 'big '))
-    } finally {
-      unmount()
-    }
   })
 
   it('Given a composing Hangul syllable When a click arrives Then it lands before the click', async () => {
@@ -150,21 +126,30 @@ describe('terminal live input around a click', () => {
 
       release()
       expect(await clicked).toBe(true)
-      await vi.waitFor(() => expect(sent).toEqual(['abc', CLICK + 'X']))
+      await vi.waitFor(() => expect(sent.join('')).toBe(`abc${CLICK}X`))
     } finally {
       unmount()
     }
   })
 
-  it('Given a cleared field When Backspace is pressed Then one raw erase reaches the new cursor', async () => {
-    const { handlers, sent, unmount } = createClickHarness()
+  it('retires a queued click and later text when their prefix fails', async () => {
+    let fail = (): void => {}
+    const { handlers, sent, unmount } = createClickHarness((_handle, bytes) =>
+      bytes === 'abc'
+        ? new Promise<boolean>((resolve) => {
+            fail = () => resolve(false)
+          })
+        : Promise.resolve(true)
+    )
     try {
-      change(handlers, 'hello')
-      await handlers.sendLiveInputClick('terminal-a', CLICK)
-
-      handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Backspace' } })
-
-      await vi.waitFor(() => expect(sent.join('')).toBe('hello' + CLICK + '\x7f'))
+      change(handlers, 'abc')
+      const clicked = handlers.sendLiveInputClick('terminal-a', CLICK)
+      change(handlers, 'X')
+      fail()
+      expect(await clicked).toBe(false)
+      expect(sent).toEqual(['abc'])
+      change(handlers, 'fresh')
+      await vi.waitFor(() => expect(sent).toEqual(['abc', 'fresh']))
     } finally {
       unmount()
     }
@@ -181,36 +166,6 @@ describe('terminal live input around a click', () => {
 
       await vi.waitFor(() => expect(sent.join('')).toBe('hello' + CLICK + 'X'))
       expect(captures.at(-1)).toBe('X')
-    } finally {
-      unmount()
-    }
-  })
-
-  it('Given the same text typed again later When it is new input Then it is mirrored', async () => {
-    vi.useFakeTimers()
-    const { handlers, sent, unmount } = createClickHarness()
-    try {
-      change(handlers, 'ok')
-      await vi.advanceTimersByTimeAsync(0)
-      await handlers.sendLiveInputClick('terminal-a', CLICK)
-      await vi.advanceTimersByTimeAsync(1000)
-
-      change(handlers, 'ok')
-      await vi.advanceTimersByTimeAsync(0)
-
-      expect(sent.join('')).toBe('ok' + CLICK + 'ok')
-    } finally {
-      unmount()
-    }
-  })
-  it('mirrors the same character typed again immediately after a click', async () => {
-    const { handlers, sent, unmount } = createClickHarness()
-    try {
-      change(handlers, 'x')
-      await handlers.sendLiveInputClick('terminal-a', CLICK)
-      handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'x' } })
-      change(handlers, 'x')
-      await vi.waitFor(() => expect(sent.join('')).toBe('x' + CLICK + 'x'))
     } finally {
       unmount()
     }
@@ -233,17 +188,4 @@ describe('terminal live input around a click', () => {
       }
     }
   )
-
-  it('does not discard matching input after switching to another terminal', async () => {
-    const harness = createClickHarness()
-    try {
-      change(harness.handlers, 'x')
-      await harness.handlers.sendLiveInputClick('terminal-a', CLICK)
-      harness.changeHandle('terminal-b')
-      change(harness.handlers, 'x')
-      await vi.waitFor(() => expect(harness.sent.join('')).toBe('x' + CLICK + 'x'))
-    } finally {
-      harness.unmount()
-    }
-  })
 })

@@ -1,58 +1,61 @@
 import { describe, expect, vi } from 'vitest'
-import { forgetRefusedPaneResumeMock, spawnMock } from './pty-ipc-mock-registry'
-import { posixOnlyIt } from './pty-ipc-test-constants'
-import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
+import { forgetRefusedPaneResumeMock, spawnMock } from './pty/pty-ipc-mock-registry'
+import { posixOnlyIt } from './pty/pty-ipc-test-constants'
+import { setupPtyIpcSuite } from './pty/pty-ipc-test-harness'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/shell-startup/posix-shell-startup-command'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
-vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty/pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty/pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty/pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty/pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../opencode/hook-service', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../mimo/hook-service', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../agent-hooks/server', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../pi/titlebar-extension-service', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../wsl', async (importOriginal) =>
-  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+vi.mock('../pty/shell-startup/pwsh', () =>
+  import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../wsl/filesystem/unc-path-access', async (importOriginal) =>
+  (await import('./pty/pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../telemetry/client', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../telemetry/classify-error', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../codex/codex-pane-account-registry', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+vi.mock('../codex/configuration/homes/codex-pane-account-registry', () =>
+  import('./pty/pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../codex/codex-state-db-backfill-recovery', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () =>
+  import('./pty/pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 // #26417: a pane that saved a chat's conversation must not resume it while the chat is its home.
@@ -63,7 +66,7 @@ describe('a pane restore of a conversation a native chat continues', () => {
       claimStatus: 'released',
       ownerProcess: null,
       reservedSpawnToken: null,
-      deathEvidence: { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
+      deathEvidence: { kind: 'kill-delivered', detail: 'writer terminated', observedAt: 1 }
     })
   )
   const C = 'provider-session-alpha-1'
@@ -76,7 +79,7 @@ describe('a pane restore of a conversation a native chat continues', () => {
         throw new Error('records unavailable')
       }
       const store: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
-      store.listRecords = () => [chat]
+      store.listConversations = () => [agentSessionConversationView(chat)]
       store.getVisibleSessionTabIndex = () => ({ present: true, sessionIds: openTabs })
       return store
     })

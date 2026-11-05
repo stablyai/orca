@@ -1,6 +1,6 @@
 import type { AppState } from '@/store'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget,
@@ -13,8 +13,8 @@ import {
   type LocalWindowsTerminalRuntimeOptions
 } from '../../../shared/local-windows-terminal-runtime'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { resolveTerminalStartupCwd } from '../../../shared/terminal-startup-cwd'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { resolveTerminalStartupCwd } from '../../../shared/shell/launch/terminal-startup-cwd'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'

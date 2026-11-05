@@ -1,23 +1,30 @@
-import { AiVaultChatForkSourceSchema } from '../../../shared/ai-vault-chat-fork-contract'
-import type { AiVaultAgent, AiVaultSession } from '../../../shared/ai-vault-types'
+import { AiVaultChatForkSourceSchema } from '../../../shared/ai-vault/contracts/ai-vault-chat-fork-contract'
 import type {
-  AiVaultPrepareSessionResumeArgs,
-  AiVaultPrepareChatForkArgs,
-  AiVaultPrepareSessionResumeRequest,
-  AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault-resume-preparation'
+  AiVaultAgent,
+  AiVaultSession
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
+
 import {
+  type AiVaultPrepareSessionResumeArgs,
+  type AiVaultPrepareChatForkArgs,
+  type AiVaultPrepareSessionResumeRequest,
+  type AiVaultPrepareSessionResumeResult,
   isLegacySharedCodexHome,
   isPerAccountManagedCodexHome
-} from '../../../shared/ai-vault-resume-preparation'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import {
-  getSshTargetIdForExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
+  parseExecutionHostId,
+  parseRoutableExecutionHostId
 } from '../../../shared/execution-host'
+import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import type { FilesystemPathFlavor } from '../../../shared/filesystem-entry-types'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { readIpcErrorMessage } from './ipc-error'
-import type { AiVaultResumeCommandSession } from './ai-vault-resume-command'
-import { agentForksThroughChat } from '../../../shared/agent-resume-argv'
+import type { AiVaultResumeCommandSession } from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
+import { agentForksThroughChat } from '../../../shared/agent-launch/startup/agent-resume-argv'
 import { translate } from '@/i18n/i18n'
 
 export function prepareAiVaultSessionForResume(session: AiVaultSession): Promise<AiVaultSession> {
@@ -193,22 +200,87 @@ export function aiVaultSessionNeedsResumePreparation(
 // Kimi is folder-keyed: wrong cwd rejects resume or silently opens an empty same-ID session (1.52+).
 const RESUMES_ONLY_IN_RECORDED_CWD: ReadonlySet<AiVaultSession['agent']> = new Set(['kimi', 'muse'])
 
-/** After the SSH host confirms missing cwd, drop it and its prebuilt cd command so resume starts at the workspace root (#17745). */
-export async function dropDeletedSshResumeCwd(
+/** After the session's remote host confirms missing cwd, drop it and its prebuilt cd command so resume starts at the workspace root (#17745, #26509). */
+export async function dropDeletedRemoteResumeCwd(
   session: AiVaultResumeCommandSession
 ): Promise<AiVaultResumeCommandSession> {
-  const connectionId = getSshTargetIdForExecutionHost(session.executionHostId)
-  if (!connectionId || !session.cwd || RESUMES_ONLY_IN_RECORDED_CWD.has(session.agent)) {
+  const host = parseRoutableExecutionHostId(session.executionHostId)
+  const cwd = session.cwd
+  if (
+    (host?.kind !== 'ssh' && host?.kind !== 'runtime') ||
+    !cwd ||
+    RESUMES_ONLY_IN_RECORDED_CWD.has(session.agent)
+  ) {
     return session
   }
+  let hostFlavor: FilesystemPathFlavor | null = null
   try {
-    if (await window.api.fs.pathExists({ filePath: session.cwd, connectionId })) {
-      return session
+    if (host.kind === 'ssh') {
+      if (await window.api.fs.pathExists({ filePath: cwd, connectionId: host.targetId })) {
+        return session
+      }
+    } else {
+      hostFlavor = await runtimeServerFolderMissingFlavor(host.environmentId, cwd)
+      if (!hostFlavor) {
+        return session
+      }
     }
   } catch {
     // Why: only a definite ENOENT proves the folder is gone; losing the host proves nothing.
     return session
   }
   const { resumeCommand: _scannerCommand, ...rest } = session
-  return { ...rest, cwd: null }
+  // The rebuilt command must quote for the host's shell; an unstamped row would otherwise build POSIX.
+  return hostFlavor === 'win32' && !rest.executionHostPlatform
+    ? { ...rest, cwd: null, executionHostPlatform: 'win32' }
+    : { ...rest, cwd: null }
+}
+
+/** The host's path flavor when it proves `cwd` is gone, else null. files.stat needs the deleted workspace, so browse instead. */
+async function runtimeServerFolderMissingFlavor(
+  environmentId: string,
+  cwd: string
+): Promise<FilesystemPathFlavor | null> {
+  // The browser trims, expands `~` and resolves relative paths, so it would probe another folder; keep those.
+  if (cwd.trim() !== cwd || (!cwd.startsWith('/') && !isWindowsAbsolutePathLike(cwd))) {
+    return null
+  }
+  try {
+    await browseRuntimeServerDirectory(environmentId, cwd)
+    return null
+  } catch (error) {
+    if (!isDefiniteMissingPathError(error)) {
+      throw error
+    }
+  }
+  // A WSL session on a Windows host records a Linux cwd the host cannot stat; absence there proves nothing.
+  const flavor = await runtimeServerPathFlavor(environmentId)
+  return flavor === aiVaultCwdPathFlavor(cwd) ? flavor : null
+}
+
+function isDefiniteMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof RuntimeRpcCallError &&
+    error.code === 'runtime_error' &&
+    /^(?:ENOENT|ENOTDIR):/.test(error.message)
+  )
+}
+
+const runtimeServerPathFlavors = new Map<string, Promise<FilesystemPathFlavor>>()
+
+function runtimeServerPathFlavor(environmentId: string): Promise<FilesystemPathFlavor> {
+  // Keyed by pairing: a same-id re-pair may name a machine with another OS.
+  const key = `${environmentId}:${getRuntimeEnvironmentRevision(environmentId) ?? ''}`
+  let flavor = runtimeServerPathFlavors.get(key)
+  if (!flavor) {
+    flavor = browseRuntimeServerDirectory(environmentId, '~').then((listing) => listing.pathFlavor)
+    // A failed probe must not pin its verdict; the next resume asks again.
+    flavor.catch(() => runtimeServerPathFlavors.delete(key))
+    runtimeServerPathFlavors.set(key, flavor)
+  }
+  return flavor
+}
+
+function aiVaultCwdPathFlavor(cwd: string): FilesystemPathFlavor {
+  return isWindowsAbsolutePathLike(cwd) ? 'win32' : 'posix'
 }

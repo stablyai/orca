@@ -5,19 +5,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import { createAgentChildWorkAdmission } from '../../shared/agent-status-child-work-admission'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status-child-work-reconciliation'
-import { createAgentStatusStore } from '../../shared/agent-status-store'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { createAgentChildWorkAdmission } from '../../shared/agent-status/child-work/agent-status-child-work-admission'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-reconciliation'
+import { createAgentStatusStore } from '../../shared/agent-status/store/agent-status-store'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import {
   openClaudeStreamJsonConnection,
   type ClaudeStreamJsonConnection
 } from './claude-stream-json-connection'
-import { stopClaudeBackgroundTasks } from './claude-structured-control-actions'
-import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
-import type { ClaudeSession } from './claude-structured-session-state'
+import { stopClaudeBackgroundTasks } from './structured/claude-structured-control-actions'
+import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './structured/launch/claude-structured-launch-resolution'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'

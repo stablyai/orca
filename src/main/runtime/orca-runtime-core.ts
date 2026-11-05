@@ -1,31 +1,32 @@
-import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import type { RuntimeWorktreeScanResult } from './workspaces/catalog/repo-worktree-resolution-scan'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import type { ResolvedWorktree } from './workspaces/catalog/runtime-worktree-path-identity'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
-import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
+import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/sessions/immediate-kill-reply-budget'
 import type {
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
 import type { RuntimeEdgeCommandSurface } from './runtime-edge-command-controller'
-import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
+import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import type { RuntimeFileCommandSurface } from './runtime-file-command-surface'
-import type { RuntimeGitCommandSurface } from './runtime-git-command-surface'
-import type { RuntimeRepositoryCommandSurface } from './runtime-repository-command-surface'
+import type { RuntimeGitCommandSurface } from './integrations/git/runtime-git-command-surface'
+import type { RuntimeRepositoryCommandSurface } from './repositories/runtime-repository-command-surface'
 import type { RuntimeReviewCommandSurface } from './runtime-review-command-surface'
 import type { RuntimeServiceCommandSurface } from './runtime-service-command-surface'
-import type { RuntimeSkillCommandSurface } from './runtime-skill-command-contract'
+import type { RuntimeSkillCommandSurface } from './integrations/skill/runtime-skill-command-contract'
 
-export type PtyIncarnationHandleRecord = {
+export type PtyIncarnationHandleRecord = Readonly<{
   handle: string
   incarnationId: string | null
   leafKey: string
-}
+}>
 
 export type RuntimeWorktreeScanCache = {
   generation: number
   runtimeKey: string
   result: RuntimeWorktreeScanResult
+  listing?: RuntimeWorktreeScanResult
   expiresAt: number
   adminFingerprint: string | null
   scannedAt: number
@@ -301,3 +302,9 @@ export type RuntimeRendererReloadFence = Readonly<{
   revision: number
   recovery: 'renderer' | 'headless' | 'reloading'
 }>
+
+export type {
+  OrchestrationCompatibilityCallerAuthority,
+  OrchestrationCompatibilityTerminalAuthority,
+  RuntimeTerminalAgentStatusEvent
+} from './runtime-terminal-contracts'

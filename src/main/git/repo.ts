@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
-import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
-import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
+import { parseGitRevListAheadBehindCounts } from '../../shared/git/refs/git-rev-list-output'
+import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './remotes/hosted-remote-url'
+import { getRemoteFileTarget } from './remotes/repo-remote-file-target'
 import {
   DEFAULT_BASE_REF_PROBE_TIMEOUT_MS,
   getDefaultBaseRefAsync,
@@ -19,13 +20,8 @@ export {
   getLinkedWorktreeMainRepoRoot,
   normalizeGitRepoRootForInputPath
 } from './repo-detection'
-export {
-  DEFAULT_BASE_REF_PROBES,
-  getBaseRefDefault,
-  resolveDefaultBaseRefViaExec,
-  resolveDefaultBaseRefWithLocalGit
-} from './repo-default-base-ref'
-export type { GitExec } from './repo-default-base-ref'
+export { getBaseRefDefault, resolveDefaultBaseRefWithLocalGit } from './repo-default-base-ref'
+
 export {
   buildSearchBaseRefsArgv,
   mergeBaseRefSearchResultGroups,
@@ -36,7 +32,6 @@ export {
 } from './repo-base-ref-search'
 export { getBranchConflictKind } from './repo-branch-conflict'
 export type { BranchConflictKind } from './repo-branch-conflict'
-export { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
 
 export function getRepoName(path: string): string {
   const name = basename(path)
@@ -111,9 +106,12 @@ function parseRemoteCount(stdout: string): number {
 }
 
 /** Count configured remotes; zero means either none or unavailable. */
-export async function getRemoteCount(path: string): Promise<number> {
+export async function getRemoteCount(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<number> {
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
     return parseRemoteCount(stdout)
   } catch (err) {
     console.warn('[getRemoteCount] git remote failed', { path, err })
@@ -178,22 +176,14 @@ export async function getDefaultRemote(
 export async function getRemoteFileUrl(
   repoPath: string,
   relativePath: string,
-  line: number
+  line: number,
+  endLine?: number,
+  options: LocalGitExecOptions = {}
 ): Promise<string | null> {
-  const remoteUrl = await getRemoteUrl(repoPath)
-  if (!remoteUrl) {
-    return null
-  }
-  const defaultBaseRef = await getDefaultBaseRefAsync(repoPath)
-  if (!defaultBaseRef) {
-    return null
-  }
-  return buildHostedRemoteFileUrl(
-    remoteUrl,
-    relativePath,
-    defaultBaseRef.replace(/^origin\//, ''),
-    line
-  )
+  const target = await getRemoteFileTarget(repoPath, options)
+  return target
+    ? buildHostedRemoteFileUrl(target.remoteUrl, relativePath, target.ref, line, endLine)
+    : null
 }
 
 export async function getRemoteCommitUrl(repoPath: string, sha: string): Promise<string | null> {

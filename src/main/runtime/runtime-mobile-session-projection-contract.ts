@@ -1,6 +1,8 @@
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   BrowserTabInfo,
+  RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot,
@@ -8,15 +10,23 @@ import type {
   RuntimeSyncedTab
 } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
-import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { TitleDisplayClear } from './runtime-worktree-status-projection'
+import type { RuntimeAgentRowSnapshot } from './workspaces/process-listing/runtime-hook-agent-row-selection'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
+import type { TitleDisplayClear } from './workspaces/process-listing/runtime-worktree-status-projection'
 
 export type RuntimeMobileSessionProjectionHost = {
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   leaves: ReadonlyMap<string, RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
+  getPtyAvailability(ptyId: string): boolean | null
   getLiveBrowserTabs(worktreeId: string): Map<string, BrowserTabInfo>
+  isRendererOwnedMobileBrowserTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionBrowserTab
+  ): boolean
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
   getStatusSnapshot(): AgentStatusIpcPayload[]

@@ -3,8 +3,8 @@ import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
 import type { TaskSourceContext } from '../task-source-context'
-import type { WorkspaceKey } from '../folder-workspace-types'
-import type { TuiAgent } from '../tui-agent'
+import type { WorkspaceKey } from '../workspace-scope'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type {
   AutomationWorkspaceProvenanceRequest,
   GitPushTarget,
@@ -97,6 +97,8 @@ export type CreateWorktreeArgs = {
   compareBaseRef?: string
   /** Existing local branches may contain slashes that the filesystem-safe worktree name cannot. */
   branchNameOverride?: string
+  /** V1 open-existing retains legacy tip/collision policy; V2 pins explicit reuse regardless of remote divergence. */
+  branchIntent?: 'open-existing' | 'open-existing-v2' | 'create-new'
   setupDecision?: SetupDecision
   /** Per-create choice; omitted callers use the execution host's saved default. */
   setupOnly?: boolean

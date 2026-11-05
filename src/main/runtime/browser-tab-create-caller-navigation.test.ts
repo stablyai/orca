@@ -5,7 +5,7 @@ import {
   type RuntimeNavigationTarget
 } from '../../shared/runtime-navigation'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { setRuntimeBrowserCommandsFactory } from './runtime-browser-commands-factory'
 
@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn(), handle: vi.fn(), removeHandler: vi.fn() },
   webContents: { fromId: vi.fn() }
 }))
-vi.mock('../browser/browser-session-registry', () => ({
+vi.mock('../browser/sessions/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
 }))
 
@@ -58,7 +58,7 @@ const storeBase = {
 type RuntimeInternals = {
   offscreenBrowserBackend: unknown
   agentBrowserBridge: unknown
-  resolveWorktreeSelector: (selector: string) => Promise<{ id: string }>
+  resolveGitWorktreeSelector: (selector: string) => Promise<{ id: string }>
 }
 
 function makeSession(): WorkspaceSessionState {
@@ -95,9 +95,10 @@ function createPairedRuntime() {
   })
   const internals = runtime as unknown as RuntimeInternals
   // Stub git selector resolution; this contract needs only the resolved workspace id.
-  internals.resolveWorktreeSelector = async () => ({ id: WT })
+  internals.resolveGitWorktreeSelector = async () => ({ id: WT })
   internals.offscreenBrowserBackend = {
     closeTab: vi.fn(),
+    ownsTab: () => true,
     createTab: vi.fn(async (options: { browserPageId?: string }) => ({
       browserPageId: options.browserPageId ?? 'page-new'
     }))

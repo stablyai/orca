@@ -2,18 +2,11 @@ import React from 'react'
 
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 
 // Use Linear’s brand priority fills instead of generic Orca state colors.
 const LINEAR_PRIORITY_URGENT_FILL = 'lch(66 80 48)'
 const LINEAR_PRIORITY_BAR_FILL = 'lch(39.576 1.25 282)'
-
-const LINEAR_PRIORITY_ICON_LABELS: Record<number, string> = {
-  0: 'No priority',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Medium',
-  4: 'Low'
-}
 
 function getLinearPriorityBarCount(priority: number): number {
   if (priority === 2) {
@@ -29,7 +22,7 @@ function getLinearPriorityBarCount(priority: number): number {
 }
 
 export function getLinearPriorityIconLabel(priority: number): string {
-  return LINEAR_PRIORITY_ICON_LABELS[priority] ?? `P${priority}`
+  return getLinearPriorityLabel(priority)
 }
 
 export function LinearPriorityIcon({
@@ -53,7 +46,9 @@ export function LinearPriorityIcon({
       >
         <span aria-hidden="true">!</span>
         <span className="sr-only">
-          {translate('auto.components.linear.priority.icon.c43d3e065b', 'Priority:')} {label}
+          {translate('auto.components.linear.priority.icon.priorityValue', 'Priority: {{label}}', {
+            label
+          })}
         </span>
       </span>
     )
@@ -70,7 +65,9 @@ export function LinearPriorityIcon({
           className="size-3 rounded-full border border-muted-foreground/55"
         />
         <span className="sr-only">
-          {translate('auto.components.linear.priority.icon.c43d3e065b', 'Priority:')} {label}
+          {translate('auto.components.linear.priority.icon.priorityValue', 'Priority: {{label}}', {
+            label
+          })}
         </span>
       </span>
     )
@@ -107,7 +104,9 @@ export function LinearPriorityIcon({
         })}
       </svg>
       <span className="sr-only">
-        {translate('auto.components.linear.priority.icon.c43d3e065b', 'Priority:')} {label}
+        {translate('auto.components.linear.priority.icon.priorityValue', 'Priority: {{label}}', {
+          label
+        })}
       </span>
     </span>
   )

@@ -1,14 +1,14 @@
 // Track evidence for this provider child; the host owns durable subagent records.
 
 import { createHash } from 'node:crypto'
-import type { AgentChildWorkOutcome } from '../../shared/agent-status-child-work'
+import type { AgentChildWorkOutcome } from '../../shared/agent-status/child-work/agent-status-child-work'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkEvidenceHandle
-} from '../../shared/agent-status-child-work-evidence'
-import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../shared/agent-status-child-work-value-guards'
-import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat-subagent-summary'
-import type { NativeChatSubagentState } from '../../shared/native-chat-types'
+} from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
+import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat/transcript/native-chat-subagent-summary'
+import type { NativeChatSubagentState } from '../../shared/native-chat/native-chat-types'
 import { boundSubagentLabel } from '../native-chat/agent-session-journal/journal-subagent-item'
 import type { ProviderTimelineJoin } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpSubagentUpdate } from './acp-dialects/acp-dialect'

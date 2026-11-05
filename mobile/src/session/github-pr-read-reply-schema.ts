@@ -5,13 +5,14 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../src/shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import {
   CHECK_STATUS,
   MERGEABLE_STATE,
   PR_STATE,
   REVIEW_DECISION,
   prCheckList,
+  prFileSchema,
   prCheckSummary,
   prCommentList,
   prCount,
@@ -57,6 +58,7 @@ export const hostedReviewForBranchSchema = z
     state: salvagedOptional('state', z.enum(HOSTED_REVIEW_STATE)),
     url: prText('url'),
     status: salvagedOptional('status', z.enum(CHECK_STATUS)),
+    checksSummary: prCheckSummary('checksSummary'),
     updatedAt: prText('updatedAt'),
     mergeable: salvagedOptional('mergeable', z.enum(MERGEABLE_STATE)),
     reviewDecision: salvagedOptional('reviewDecision', z.enum(REVIEW_DECISION).nullable()),
@@ -75,6 +77,7 @@ export const hostedReviewForBranchSchema = z
           state: review.state ?? 'open',
           url: review.url ?? '',
           status: review.status ?? 'pending',
+          checksSummary: review.checksSummary,
           updatedAt: review.updatedAt ?? '',
           mergeable: review.mergeable ?? 'UNKNOWN',
           reviewDecision: review.reviewDecision,
@@ -86,6 +89,30 @@ export const hostedReviewForBranchSchema = z
   )
   .nullable()
 
+// Merge gating reads each downstack entry; drop malformed entries rather than the stack.
+const prStackSchema = z.looseObject({
+  number: z.number(),
+  position: z.number(),
+  size: z.number(),
+  baseRefName: z.string(),
+  entries: salvagedOptional(
+    'entries',
+    salvagingArray(
+      z.looseObject({
+        position: z.number(),
+        number: z.number(),
+        title: z.string().catch(''),
+        url: z.string().catch(''),
+        state: z.enum(PR_STATE),
+        checksStatus: z.enum(CHECK_STATUS).catch('pending'),
+        mergeable: z.enum(MERGEABLE_STATE).catch('UNKNOWN'),
+        reviewDecision: salvagedOptional('reviewDecision', z.enum(REVIEW_DECISION).nullable()),
+        mergeStateStatus: prNullableText('mergeStateStatus')
+      })
+    )
+  )
+})
+
 // Preserve prRepo and merge settings because checks and merge choices depend on them.
 const pullRequestSchema = z
   .looseObject({
@@ -94,6 +121,7 @@ const pullRequestSchema = z
     title: prText('title'),
     url: prText('url'),
     checksStatus: salvagedOptional('checksStatus', z.enum(CHECK_STATUS)),
+    checksSummary: prCheckSummary('checksSummary'),
     updatedAt: prText('updatedAt'),
     mergeable: salvagedOptional('mergeable', z.enum(MERGEABLE_STATE)),
     reviewDecision: salvagedOptional('reviewDecision', z.enum(REVIEW_DECISION).nullable()),
@@ -102,8 +130,12 @@ const pullRequestSchema = z
     mergeQueueRequired: prNullableFlag('mergeQueueRequired'),
     mergeStateStatus: prNullableText('mergeStateStatus'),
     headSha: prText('headSha'),
+    headRefName: prText('headRefName'),
+    confirmedContainedHeadOid: prText('confirmedContainedHeadOid'),
+    headDivergedFromMergedPRAtOid: prText('headDivergedFromMergedPRAtOid'),
     prRepo: prRepoIdentity('prRepo'),
-    mergeMethodSettings: prMergeMethodSettings('mergeMethodSettings')
+    mergeMethodSettings: prMergeMethodSettings('mergeMethodSettings'),
+    stack: salvagedOptional('stack', prStackSchema)
   })
   .transform((pr): PRInfo | null =>
     pr.number === undefined || pr.state === undefined
@@ -114,6 +146,7 @@ const pullRequestSchema = z
           state: pr.state,
           url: pr.url ?? '',
           checksStatus: pr.checksStatus ?? 'pending',
+          checksSummary: pr.checksSummary,
           updatedAt: pr.updatedAt ?? '',
           mergeable: pr.mergeable ?? 'UNKNOWN',
           reviewDecision: pr.reviewDecision,
@@ -122,8 +155,12 @@ const pullRequestSchema = z
           mergeQueueRequired: pr.mergeQueueRequired,
           mergeStateStatus: pr.mergeStateStatus,
           headSha: pr.headSha,
+          headRefName: pr.headRefName,
+          confirmedContainedHeadOid: pr.confirmedContainedHeadOid,
+          headDivergedFromMergedPRAtOid: pr.headDivergedFromMergedPRAtOid,
           prRepo: pr.prRepo,
-          mergeMethodSettings: pr.mergeMethodSettings
+          mergeMethodSettings: pr.mergeMethodSettings,
+          stack: pr.stack
         }
   )
 
@@ -168,6 +205,7 @@ const workItemSchema = z
   .looseObject({
     id: prText('id'),
     number: prCount('number'),
+    prRepo: prRepoIdentity('prRepo'),
     type: salvagedOptional('type', z.enum(['issue', 'pr'] as const)),
     state: salvagedOptional('state', z.enum(PR_STATE)),
     title: prText('title'),
@@ -196,6 +234,7 @@ const workItemSchema = z
       : {
           id: item.id,
           type: item.type,
+          prRepo: item.prRepo,
           number: item.number,
           title: item.title ?? '',
           state: item.state,
@@ -228,8 +267,11 @@ export const githubWorkItemDetailsSchema = z
     pullRequestId: prText('pullRequestId'),
     checks: prCheckList('checks'),
     participants: prUserList('participants'),
+    filesUnavailable: prFlag('filesUnavailable'),
     // Absent assignees means unreported, distinct from a confirmed empty list.
-    assignees: salvagedOptional('assignees', salvagingArray(z.string()))
+    assignees: salvagedOptional('assignees', salvagingArray(z.string())),
+    // Older hosts send no files; the diff screen then keeps viewed state on the phone.
+    files: salvagedOptional('files', salvagingArray(prFileSchema))
   })
   .transform((details): GitHubWorkItemDetails | null =>
     details.item === null
@@ -243,7 +285,10 @@ export const githubWorkItemDetailsSchema = z
           pullRequestId: details.pullRequestId,
           checks: details.checks ?? [],
           participants: details.participants ?? [],
-          assignees: details.assignees
+          assignees: details.assignees,
+          ...(details.files ? { files: details.files } : {}),
+          // A host that could not list files says so, so the PR tab hides its changes card rather than showing zero.
+          ...(details.filesUnavailable === true ? { filesUnavailable: true } : {})
         }
   )
   .nullable()

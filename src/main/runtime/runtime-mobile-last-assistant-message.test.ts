@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from './runtime-mobile-agent-status-projection'
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 
 const MESSAGE = '좌→우 가로 파이프라인으로 다시 그렸습니다'
 
@@ -145,6 +145,7 @@ describe('mobile completion status projection', () => {
           ]
         ]),
         ptysById: new Map([[pty.ptyId, pty]]),
+        getPtyAvailability: () => null,
         getLiveBrowserTabs: () => new Map(),
         getProviderSessionRows: () => [],
         getProviderSessionSnapshot: () => [],

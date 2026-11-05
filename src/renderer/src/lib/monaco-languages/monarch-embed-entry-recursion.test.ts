@@ -1,4 +1,3 @@
-import type * as Monaco from 'monaco-editor'
 import { describe, expect, it } from 'vitest'
 import {
   EMBED_ENTRY_REST_OF_LINE_BUDGET,
@@ -11,6 +10,7 @@ import {
   tokenizeLines
 } from './monarch-tokenizer-test-harness'
 import { astroMonarchLanguage } from './register-astro'
+import { glimmerTsMonarchLanguage } from './register-glimmer'
 import { svelteMonarchLanguage } from './register-svelte'
 import { vueMonarchLanguage } from './register-vue'
 
@@ -112,45 +112,6 @@ describe.each([
 
     expect(embeds).toEqual([null, embeddedLanguageId, embeddedLanguageId, null])
   })
-
-  it('keeps tokenizing after an over-budget line and re-embeds on the next one', () => {
-    const overBudget = `<div class="${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}">{value}</div>`
-    const measurement = measureNestedDepth(createMonarchTokenizer(languageId, language), [
-      overBudget,
-      '<p>{value}</p>'
-    ])
-
-    expect(measurement.error).toBeUndefined()
-    expect(measurement.maxNestedDepth).toBeGreaterThan(0)
-  })
-})
-
-describe('unguarded embedded tokenizer', () => {
-  // Control: the same markup/expression shape with no budget on embed entry.
-  // The frame count then tracks the interpolation count one-for-one; ~1700
-  // frames is already a RangeError in this runtime, so the ramp stops short of
-  // the overflow to stay deterministic.
-  const perInterpolationEmbedLanguage: Monaco.languages.IMonarchLanguage = {
-    defaultToken: '',
-    tokenizer: {
-      root: [[/</, { token: '', switchTo: '@markup', nextEmbedded: 'html' }]],
-      markup: [[/\{/, { token: '', switchTo: '@expressionEnter', nextEmbedded: '@pop' }]],
-      expressionEnter: [[/./, { token: '', switchTo: '@expression', nextEmbedded: 'typescript' }]],
-      expression: [[/\}/, { token: '', switchTo: '@markupReenter', nextEmbedded: '@pop' }]],
-      markupReenter: [[/./, { token: '', switchTo: '@markup', nextEmbedded: 'html' }]]
-    }
-  }
-
-  it('recurses once per interpolation', () => {
-    const depths = [50, 200, 500].map(
-      (count) =>
-        measureNestedDepth(createMonarchTokenizer('control', perInterpolationEmbedLanguage), [
-          `${interpolationLine(count)} `
-        ]).maxNestedDepth
-    )
-
-    expect(depths).toEqual([51, 201, 501])
-  })
 })
 
 describe('vue embed-entry recursion', () => {
@@ -200,5 +161,44 @@ describe('vue embed-entry recursion', () => {
 
     expect(measurement.error).toBeUndefined()
     expect(measurement.maxNestedDepth).toBeGreaterThan(0)
+  })
+})
+
+describe('glimmer embed-entry recursion', () => {
+  const islandLine = (count: number): string =>
+    `const a = 1; ${'<template>a</template>'.repeat(count)}`
+
+  it('stays within the embed budget for a line of template islands', () => {
+    const ramp = [50, 200, 500, 900].filter(
+      (count) => islandLine(count).length < MAX_TOKENIZATION_LINE_LENGTH
+    )
+    expect(ramp.length).toBeGreaterThanOrEqual(3)
+
+    const depths = ramp.map((count) =>
+      measureNestedDepth(createMonarchTokenizer('glimmer-ts', glimmerTsMonarchLanguage), [
+        islandLine(count)
+      ])
+    )
+
+    for (const measurement of depths) {
+      expect(measurement.error).toBeUndefined()
+      expect(measurement.maxNestedDepth).toBeLessThanOrEqual(EMBED_ENTRY_REST_OF_LINE_BUDGET)
+    }
+  })
+
+  it('re-embeds script and template after over-budget lines', () => {
+    const long = 'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)
+    const embeds = endEmbeddedLanguages(
+      tokenizeLines(createMonarchTokenizer('glimmer-ts', glimmerTsMonarchLanguage), [
+        `const s = "${long}"`,
+        'const b = 1',
+        `<template>${long}x`,
+        '  {{b}}',
+        '</template>',
+        'const c = 1'
+      ])
+    )
+
+    expect(embeds).toEqual([null, 'typescript', null, 'handlebars', null, 'typescript'])
   })
 })

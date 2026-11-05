@@ -2,14 +2,15 @@ import {
   AGENT_MODEL_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
-  type AgentSubagentSnapshot
-} from './agent-status-types'
-import { normalizeOptionalField } from './agent-status-field-normalization'
+  normalizeOptionalField
+} from './agent-status/contracts/agent-status-field-normalization'
+import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
+
 import { readCodexSubagentIdentity } from './codex-subagent-identity'
 import {
   agentChildWorkLiveness,
   type AgentChildWorkLiveness
-} from './agent-status-child-work-liveness'
+} from './agent-status/child-work/agent-status-child-work-liveness'
 
 const CODEX_SUBAGENT_ID_MAX_LENGTH = 64
 
@@ -22,6 +23,8 @@ type TrackedCodexSubagent = {
   state: 'working' | 'waiting'
   startedAt: number
   identityTranscriptPath?: string
+  /** Relay session whose own roster listed this child; only that session may retire it by omission. */
+  reportedBy?: string
 }
 
 export function upsertCodexSubagent(
@@ -101,7 +104,8 @@ export function setCodexSubagentModel(
 
 export function seedCodexSubagentRoster(
   roster: CodexSubagentRoster,
-  snapshots: readonly AgentSubagentSnapshot[]
+  snapshots: readonly AgentSubagentSnapshot[],
+  reportedBy?: string
 ): void {
   for (const snapshot of snapshots) {
     if (snapshot.state !== 'working' && snapshot.state !== 'waiting') {
@@ -118,6 +122,10 @@ export function seedCodexSubagentRoster(
       },
       snapshot.startedAt
     )
+    const tracked = reportedBy ? roster.get(snapshot.id.trim()) : undefined
+    if (tracked) {
+      tracked.reportedBy = reportedBy
+    }
   }
 }
 
@@ -135,7 +143,7 @@ export function codexRosterToSnapshots(
     state: tracked.state,
     startedAt: tracked.startedAt
   }))
-  snapshots.sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id))
+  snapshots.sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id, 'en'))
   return snapshots
 }
 

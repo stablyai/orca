@@ -7,13 +7,13 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
   TERMINAL_STREAM_CHUNK_BYTES
-} from '../../../shared/terminal-multiplex-flow-control'
+} from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harness'
-import { RuntimeTerminalViewSubscribers } from '../runtime-terminal-view-subscribers'
+import { RuntimeTerminalViewSubscribers } from '../terminal/view/runtime-terminal-view-subscribers'
 
 async function subscribePausable(
   capabilities: Record<string, 1>,
@@ -23,8 +23,7 @@ async function subscribePausable(
   const viewSubscribers = new RuntimeTerminalViewSubscribers({
     notifyPresenceChanged: () => {},
     hasMobileSubscribers: () => false,
-    isUnattachedLocalCandidate: () => false,
-    attachProvider: () => null
+    ensureProviderAttach: () => {}
   })
   const harness = startDesktopMultiplexSubscribe({
     subscribeToTerminalData: vi.fn((_ptyId, listener) => {
@@ -34,7 +33,7 @@ async function subscribePausable(
     registerRemoteTerminalViewSubscriber: (ptyId, isOutputPaused) =>
       viewSubscribers.registerRemote(ptyId, isOutputPaused),
     isSoleRemoteTerminalQueryOwner: (ptyId) =>
-      viewSubscribers.remoteReceivingOutputCount(ptyId) === 1,
+      viewSubscribers.remoteAnsweringQueriesCount(ptyId) === 1,
     answerYieldedTerminalQueries
   })
   await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
@@ -91,7 +90,7 @@ async function subscribePausable(
     harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   }
-  const remoteViewHoldsAuthority = (): boolean => viewSubscribers.hasRemoteReceivingOutput('pty-1')
+  const remoteViewHoldsAuthority = (): boolean => viewSubscribers.hasRemoteAnsweringQueries('pty-1')
   return {
     subscribed: subscribedEvent(),
     setPaused,

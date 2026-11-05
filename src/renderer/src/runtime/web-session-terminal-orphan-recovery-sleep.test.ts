@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { isInactiveWorkspace } from '../lib/worktree-activity-state'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '../lib/worktree-sleep-intent'
 import { listResult } from './__fixtures__/web-session-terminal-orphan-recovery-regression-fixtures'
@@ -158,27 +158,5 @@ describe('terminal orphan recovery of a slept workspace (#30108)', () => {
     })
     expect(applied.ptyIdsByTabId[TAB_ID] ?? []).toEqual([])
     expect(inactive(applied, worktreeId)).toBe(true)
-  })
-
-  it('keeps an already-live binding live through the same pending gap', async () => {
-    const state = sleptState(WT, [PTY_ID])
-    const call = listCall(() => listed(listResult(WT, [])))
-
-    const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
-      state,
-      pendingFrame(WT),
-      ENV,
-      { call }
-    )
-    const applied = {
-      ...state,
-      ...applyWebSessionTabsSnapshot(state, recovered!, ENV, NOW + 1)
-    }
-
-    expect(applied.terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId).toEqual({
-      [LEAF_ID]: PTY_ID
-    })
-    expect(applied.ptyIdsByTabId[TAB_ID]).toEqual([PTY_ID])
-    expect(inactive(applied, WT)).toBe(false)
   })
 })

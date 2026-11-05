@@ -1,11 +1,14 @@
 import { buildHookProcessCapture } from '../agent-hooks/hook-process-capture'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
-import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+import {
+  buildPosixAgentHookPostCommand,
+  buildPosixHookMetadataCacheLines
+} from '../agent-hooks/hook-post-command'
 import {
   buildPosixScrubSafeEnvRestoreLines,
   buildWindowsScrubSafeEnvRestoreLines
-} from '../../shared/agent-hook-scrub-safe-env'
+} from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import {
   buildPosixCursorReplayGuardLines,
   buildWindowsCursorReplayGuardLines
@@ -17,11 +20,18 @@ import {
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines
+  buildWindowsHookEnvironmentGuardLines,
+  POSIX_HOOK_STDIN_EXEC
 } from '../agent-hooks/hook-stdin-contract'
-
-// Daemon workers inherit stale pane keys; exit before draining their potentially abandoned stdin.
-export const WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD = 'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0'
+import {
+  buildPosixClaudeDecisionModeLines,
+  buildPosixClaudeDecisionPreludeLines,
+  wrapPosixClaudeDecisionPost
+} from './claude-hook-decision-script'
+import {
+  WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
+  buildPosixClaudeBackgroundJobGuardLines
+} from '../agent-hooks/claude-background-job-guard'
 
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
@@ -30,6 +40,8 @@ export function getManagedScript(
     skipWhenDevinImportsClaude?: boolean
     skipWhenGrokImportsClaude?: boolean
     skipWhenCursorImportsClaude?: boolean
+    // Only Claude Code itself reads PreToolUse decisions; compatible CLIs keep print-then-post.
+    decidesPreToolUse?: boolean
   } = {}
 ): string {
   const source = options.source ?? 'claude'
@@ -61,13 +73,15 @@ export function getManagedScript(
     ].join('\r\n')
   }
 
+  const decides = options.decidesPreToolUse === true
   return [
     '#!/bin/sh',
     // Permission hooks fail closed on empty stdout, including skip paths.
-    'printf "{}\\n"',
+    ...(decides ? buildPosixClaudeDecisionPreludeLines() : ['printf "{}\\n"']),
     // CLAUDE_CODE_SUBPROCESS_ENV_SCRUB drops ORCA_PANE_KEY; restore it before any guard or spool reads it.
     ...buildPosixScrubSafeEnvRestoreLines(),
-    ...buildPosixHookPayloadCapture(),
+    ...buildPosixHookPayloadCapture('exit', POSIX_HOOK_STDIN_EXEC),
+    ...(decides ? buildPosixClaudeDecisionModeLines() : []),
     ...(options.skipWhenGrokImportsClaude ? buildPosixGrokReplayGuardLines() : []),
     ...(options.skipWhenCursorImportsClaude ? buildPosixCursorReplayGuardLines() : []),
     ...buildPosixHookSpoolLines(source),
@@ -79,10 +93,7 @@ export function getManagedScript(
           'fi'
         ]
       : []),
-    // Daemon workers inherit pane keys that do not identify their own sessions.
-    'if [ -n "$CLAUDE_JOB_DIR" ]; then',
-    '  exit 0',
-    'fi',
+    ...buildPosixClaudeBackgroundJobGuardLines(),
     ...(source === 'claude' ? buildHookProcessCapture() : []),
     // Surviving PTYs need fresh endpoint coordinates; suppress errors and survive outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
@@ -93,10 +104,19 @@ export function getManagedScript(
     '  spool_hook_event',
     '  exit 0',
     'fi',
+    ...buildPosixHookMetadataCacheLines(),
     // Keep hook JSON off argv and avoid URL-encoded paths that trigger IDS rules.
-    ...buildPosixAgentHookPostCommand(source).map((line, index, lines) =>
-      index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
-    ),
+    ...(decides
+      ? wrapPosixClaudeDecisionPost(
+          buildPosixAgentHookPostCommand(source, {
+            decisionHeaderVar: 'orca_hook_decides',
+            cachedMetadata: true
+          })
+        )
+      : buildPosixAgentHookPostCommand(source, { cachedMetadata: true }).map(
+          (line, index, lines) =>
+            index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
+        )),
     'exit 0',
     ''
   ].join('\n')

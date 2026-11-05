@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  basename,
-  join,
-  listWorktrees,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeLineage, WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { basename, join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { tmpdir } from 'node:os'
+import type { WorktreeLineage } from '../../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -16,7 +15,7 @@ import {
   makeWorktreeMeta,
   store,
   withPlatform
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
@@ -160,6 +159,7 @@ describe('OrcaRuntimeService', () => {
           isPinned: false,
           isActive: false,
           status: 'active',
+          sidebarStatus: 'active',
           unread: false,
           liveTerminalCount: 1,
           hasAttachedPty: true,
@@ -400,6 +400,7 @@ describe('OrcaRuntimeService', () => {
         })
       }
       const staleScan = deferred<typeof MOCK_GIT_WORKTREES>()
+      const scansBefore = vi.mocked(listWorktrees).mock.calls.length
       vi.mocked(listWorktrees)
         .mockImplementationOnce(() => staleScan.promise)
         .mockResolvedValueOnce(MOCK_GIT_WORKTREES)
@@ -408,9 +409,11 @@ describe('OrcaRuntimeService', () => {
       const stalePoll = runtime.getWorktreePs()
       runtimePreference = { kind: 'windows-host' }
       runtime.notifyBranchRenamed(TEST_REPO_ID)
-      const freshPoll = await runtime.getWorktreePs()
+      const freshPolling = runtime.getWorktreePs()
       staleScan.resolve(MOCK_GIT_WORKTREES)
-      const staleResult = await stalePoll
+      const [staleResult, freshPoll] = await Promise.all([stalePoll, freshPolling])
+      // Both generations scanned; neither poll fell back to stored rows at the scan timeout.
+      expect(vi.mocked(listWorktrees).mock.calls.length - scansBefore).toBe(2)
 
       // Concurrent scans retain the platform map from their own generation even when they finish out of order.
       expect(staleResult.worktrees[0]).toMatchObject({ terminalPlatform: 'linux' })

@@ -4,15 +4,15 @@ import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
-import { decodePairingOffer } from '../../../src/shared/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime-client'
+import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
+import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead
 } from '../../../src/shared/runtime-terminal-contracts'
-import type { TerminalPaneLayoutNode } from '../../../src/shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../src/shared/workspace-layout/terminal-tab-types'
 import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
 import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
 

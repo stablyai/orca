@@ -1,29 +1,12 @@
-import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
-import { parseWslPath, toWindowsWslPath } from '../../../wsl'
 import { realpath } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import type { RuntimeFileStatLike, TerminalFileGrant } from './file-grants'
+import { isBinaryBuffer } from '../../../../shared/binary-buffer'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES
 } from '../../files/file-preview-budget'
-
-export async function localTerminalArtifactRoots(worktreePath: string): Promise<string[]> {
-  const roots = new Set<string>([tmpdir()])
-  if (process.platform !== 'win32') {
-    roots.add('/tmp')
-    roots.add('/private/tmp')
-  }
-  const wsl = parseWslPath(worktreePath)
-  if (wsl) {
-    roots.add(toWindowsWslPath('/tmp', wsl.distro))
-  }
-  const canonicalRoots = await Promise.all(
-    Array.from(roots).map((root) => canonicalPathForArtifactComparison(root))
-  )
-  return Array.from(new Set([...roots, ...canonicalRoots]))
-}
 
 export async function canonicalPathForArtifactComparison(path: string): Promise<string> {
   try {
@@ -42,16 +25,20 @@ export async function readFileHandleBufferBounded(
   return buffer.subarray(0, bytesRead)
 }
 
-/** Pin all returnable bytes; size-rejected files need no digest. */
+/** Pin all returnable bytes; size-rejected files need no digest. Binary is null where unread. */
 export async function localTerminalArtifactContentDigest(
   handle: FileHandle,
   size: number
-): Promise<string | null> {
+): Promise<{ contentDigest: string | null; binary: boolean | null }> {
   if (size > LOCAL_PREVIEWABLE_BINARY_MAX_BYTES) {
-    return null
+    return { contentDigest: null, binary: null }
   }
-  const buffer = await readFileHandleBufferBounded(handle, LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1)
-  return terminalArtifactContentDigest(buffer)
+  // Why: hover probes mint grants for any path, so read only the file; procfs reports size 0 for real content.
+  const buffer = await readFileHandleBufferBounded(
+    handle,
+    size === 0 ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1 : size + 1
+  )
+  return { contentDigest: terminalArtifactContentDigest(buffer), binary: isBinaryBuffer(buffer) }
 }
 
 export function terminalArtifactContentDigest(buffer: Buffer): string {
@@ -96,21 +83,10 @@ export function assertTerminalFileGrantFresh(
   grant: TerminalFileGrant,
   stats: RuntimeFileStatLike
 ): void {
-  assertTerminalArtifactNotHardLinked(stats)
   const nextIdentity = terminalFileStatIdentity(stats)
   if (grant.statIdentity !== null && nextIdentity !== null && grant.statIdentity !== nextIdentity) {
     throw new Error('terminal_file_grant_stale')
   }
-}
-
-export function assertTerminalArtifactNotHardLinked(stats: RuntimeFileStatLike): void {
-  if (isTerminalArtifactHardLinked(stats)) {
-    throw new Error('terminal_file_grant_stale')
-  }
-}
-
-export function isTerminalArtifactHardLinked(stats: RuntimeFileStatLike): boolean {
-  return typeof stats.nlink === 'number' && stats.nlink > 1
 }
 
 export function truncateMobileFilePreview(content: string): {

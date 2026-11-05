@@ -1,7 +1,7 @@
-import { open, realpath, stat } from 'node:fs/promises'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
-import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 import type { Repo } from '../../shared/repo-types'
 import type {
   DiscoveredSkill,
@@ -19,6 +19,15 @@ import {
   type SkillScanRoot
 } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
+import {
+  isOnStoppedWslDistro,
+  splitStoppedWslDistroRoots,
+  stoppedPluginRoot,
+  stoppedRootReader,
+  unavailableSkillSource,
+  type StoppedWslRootsReadScope
+} from './skill-discovery-stopped-wsl-roots'
+import { wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
@@ -30,10 +39,12 @@ import {
 } from './skill-scan-coalescer'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 import { skillDirectoryMaxDepth } from '../../shared/skill-discovery-depth'
+import { withoutBundledSkillCompatibilityCopies } from './bundled-skill-discovery-name'
+import { readSkillSummary } from './skill-discovery-summary'
+import { bundledSkillNames, requestedBundledSkillName } from '../../shared/bundled-skill-names'
 
 export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
-const MAX_MARKDOWN_BYTES = 256 * 1024
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
 // A scan builds 17 fixed roots + 7/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
@@ -94,31 +105,6 @@ async function pathExists(pathValue: string): Promise<boolean> {
   }
 }
 
-async function readSkillSummary(skillFilePath: string): Promise<{
-  name: string | null
-  description: string | null
-  updatedAt: number | null
-} | null> {
-  try {
-    const fileStat = await stat(skillFilePath)
-    const file = await open(skillFilePath, 'r')
-    let content = ''
-    try {
-      const buffer = Buffer.alloc(Math.min(fileStat.size, MAX_MARKDOWN_BYTES))
-      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
-      content = buffer.toString('utf8', 0, bytesRead)
-    } finally {
-      await file.close()
-    }
-    return {
-      ...summarizeSkillMarkdown(content),
-      updatedAt: fileStat.mtimeMs
-    }
-  } catch {
-    return null
-  }
-}
-
 type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 
 async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
@@ -140,6 +126,7 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
       return {
         id: stablePathId(canonicalSkillFilePath),
         name: summary.name ?? basename(directoryPath),
+        ...(summary.bundledName ? { bundledName: summary.bundledName } : {}),
         description: summary.description,
         // Copy shared root tags before merges so siblings cannot mutate one another.
         providers: [...root.providers],
@@ -206,6 +193,13 @@ function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSki
   if (existing.rootPaths && !existing.rootPaths.includes(skill.rootPath)) {
     existing.rootPaths.push(skill.rootPath)
   }
+  if (
+    basename(skill.directoryPath) === skill.name &&
+    bundledSkillNames(existing.name).slice(1).includes(basename(existing.directoryPath))
+  ) {
+    existing.directoryPath = skill.directoryPath
+    existing.skillFilePath = skill.skillFilePath
+  }
   // Merge all provider tags for visibility, using a fresh array so cached roots and sibling skills stay unchanged.
   const mergedProviders = [...existing.providers]
   for (const provider of skill.providers) {
@@ -217,6 +211,7 @@ function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSki
 }
 
 export async function discoverSkills(args: {
+  signal?: AbortSignal
   repos?: Repo[]
   homeDir?: string
   cwd?: string
@@ -225,20 +220,52 @@ export async function discoverSkills(args: {
   refresh?: boolean
   names?: string[]
   sourceKinds?: SkillSourceKind[]
+  /**
+   * A user act (Share) may read stopped WSL distros' folders: 'all', those on named distros, or only
+   * the roots holding these skill directories. Every other stopped root is reported unavailable, so
+   * its distro stays down.
+   */
+  readStoppedWslRootsFor?: StoppedWslRootsReadScope
 }): Promise<SkillDiscoveryResult> {
+  args.signal?.throwIfAborted()
   const startedAt = Date.now()
   const homeDir = args.homeDir ?? homedir()
   const refresh = args.refresh === true
-  const roots = [
-    ...buildSkillDiscoverySources({ ...args, homeDir }),
-    // Plugin inventory belongs to explicit workspaces; untargeted Settings scans retain their existing scope/cost.
-    ...(args.cwd &&
+  // Plugin inventory belongs to explicit workspaces; untargeted Settings scans retain their existing scope/cost.
+  const pluginCwd =
+    args.cwd &&
     args.includeCwd !== false &&
     (!args.sourceKinds?.length || args.sourceKinds.includes('plugin'))
-      ? await discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd })
+      ? args.cwd
+      : undefined
+  const gateStopped = args.readStoppedWslRootsFor !== 'all'
+  const mayReadStopped = stoppedRootReader(args.readStoppedWslRootsFor)
+  const pluginCwdStopped =
+    gateStopped &&
+    pluginCwd !== undefined &&
+    !mayReadStopped(pluginCwd) &&
+    wslDistroForPath(pluginCwd) !== null &&
+    (await isOnStoppedWslDistro(pluginCwd))
+  const candidateRoots = [
+    ...buildSkillDiscoverySources({ ...args, homeDir }),
+    ...(pluginCwd && !pluginCwdStopped
+      ? await waitForPromiseWithSignal(
+          discoverClaudePluginSkillSources({ homeDir, cwd: pluginCwd, signal: args.signal }),
+          args.signal
+        )
       : [])
-  ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
-  const scans = await Promise.all(roots.map((root) => scanRootShared(root, refresh)))
+  ]
+  // Host-only root sets never await the WSL gate.
+  const { readable, unavailable } =
+    gateStopped && candidateRoots.some((root) => wslDistroForPath(root.path))
+      ? await splitStoppedWslDistroRoots(candidateRoots, mayReadStopped)
+      : { readable: candidateRoots, unavailable: [] }
+  const roots = readable.filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
+  args.signal?.throwIfAborted()
+  const scans = await waitForPromiseWithSignal(
+    Promise.all(roots.map((root) => scanRootShared(root, refresh))),
+    args.signal
+  )
   const sources: SkillDiscoverySource[] = [
     ...roots.map((root, index): SkillDiscoverySource => ({
       ...root,
@@ -252,9 +279,14 @@ export async function discoverSkills(args: {
     })),
     ...(!args.sourceKinds?.length || args.sourceKinds.includes('repo')
       ? buildRemoteRepoSkillSources(args.repos ?? [])
-      : [])
+      : []),
+    ...[...unavailable, ...(pluginCwd && pluginCwdStopped ? [stoppedPluginRoot(pluginCwd)] : [])]
+      .filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
+      .map(unavailableSkillSource)
   ]
-  const normalizedNames = args.names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
+  const normalizedNames = args.names
+    ?.flatMap((name) => bundledSkillNames(name.trim().toLowerCase()))
+    .filter(Boolean)
   const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined
   const seen = new Map<string, DiscoveredSkill>()
   for (const { value } of scans) {
@@ -272,7 +304,12 @@ export async function discoverSkills(args: {
       mergeScannedSkill(seen, skill)
     }
   }
-  const skills = sortDiscoveredSkills(Array.from(seen.values()))
+  const skills = sortDiscoveredSkills(
+    (await withoutBundledSkillCompatibilityCopies(Array.from(seen.values()))).map((skill) => ({
+      ...skill,
+      name: requestedBundledSkillName(skill.name, args.names)
+    }))
+  )
   // Log filesystem work only, using hashed root ids rather than private labels/paths.
   const walked = roots.filter((_, index) => !scans[index].cached).map((root) => root.id)
   if (walked.length > 0) {

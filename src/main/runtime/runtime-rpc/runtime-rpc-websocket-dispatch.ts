@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws'
 import type {
   PairingGetEndpointsParams,
   PairingProvisionRelayParams
-} from '../../../shared/mobile-relay-credential-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { callerScopeOf, devicePrincipalOf } from '../device-principal'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
 import type { AuthenticatedMobileSocket } from '../rpc/mobile-socket-wiring'
@@ -239,6 +239,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         clientKind: device.scope,
         callerScope,
         clientCapabilities: authenticatedSocket?.clientCapabilities,
+        capabilitySource: authenticatedSocket?.capabilitySource,
         updateClientCapabilities:
           authenticatedSocket && device.scope === 'mobile'
             ? (clientCapabilities) => {
@@ -254,6 +255,23 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
               }
             : undefined,
         mobileRelayHosts: this.mobileRelayHostCatalog ?? undefined,
+        // Only an authenticated desktop socket can say which installation it is.
+        peerDesktops:
+          device.scope === 'runtime' && authenticatedSocket
+            ? {
+                list: (clientInstanceId) =>
+                  this.declaredDesktopClients.peers(
+                    { connectionId: authenticatedSocket.connectionId, clientInstanceId },
+                    (deviceId) => this.deviceRegistry?.getDevice(deviceId) ?? null
+                  ),
+                declare: (clientInstanceId) =>
+                  this.declaredDesktopClients.declare(
+                    authenticatedSocket.connectionId,
+                    device.deviceId,
+                    clientInstanceId
+                  )
+              }
+            : undefined,
         delegatedMobileDevices:
           device.scope === 'runtime'
             ? { sync: (phones) => this.syncDelegatedMobileDevices(device.deviceId, phones) }

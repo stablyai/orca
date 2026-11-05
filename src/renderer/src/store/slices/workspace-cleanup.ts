@@ -2,18 +2,17 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
-  applyWorkspaceCleanupPolicy,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupDismissal,
   type WorkspaceCleanupScanArgs,
   type WorkspaceCleanupScanProgress,
   type WorkspaceCleanupScanResult,
   type WorkspaceCleanupUnverifiedRemovalConsent
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupCandidateIdentity
-} from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { hydrateWorkspaceCleanupScanFromCache } from './workspace-cleanup-cache-hydration'
 import {
   applyWorkspaceCleanupDismissal,
@@ -50,6 +49,10 @@ export type WorkspaceCleanupSlice = {
   hydrateWorkspaceCleanupFromCache: () => Promise<boolean>
   markWorkspaceCleanupCandidateViewed: (candidate: WorkspaceCleanupCandidate) => void
   dismissWorkspaceCleanupCandidates: (
+    candidates: readonly WorkspaceCleanupCandidate[]
+  ) => Promise<void>
+  /** Undo "Ignore" for these rows only; other hosts' copies of the same worktree stay ignored. */
+  restoreWorkspaceCleanupCandidates: (
     candidates: readonly WorkspaceCleanupCandidate[]
   ) => Promise<void>
   resetWorkspaceCleanupDismissals: () => Promise<void>
@@ -105,44 +108,46 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       classifierVersion: WORKSPACE_CLEANUP_CLASSIFIER_VERSION
     }))
     set((state) => {
-      const nextDismissals = { ...state.workspaceCleanupDismissals }
+      const next = { ...state.workspaceCleanupDismissals }
       for (const dismissal of dismissals) {
-        nextDismissals[
-          getWorkspaceCleanupCandidateIdentity({
-            worktreeId: dismissal.worktreeId,
-            executionHostId: dismissal.executionHostId
-          })
-        ] = dismissal
+        next[getWorkspaceCleanupCandidateIdentity(dismissal)] = dismissal
       }
-      return {
-        workspaceCleanupDismissals: nextDismissals,
-        workspaceCleanupScan: state.workspaceCleanupScan
-          ? {
-              ...state.workspaceCleanupScan,
-              candidates: state.workspaceCleanupScan.candidates.map((candidate) =>
-                applyWorkspaceCleanupDismissal(candidate, nextDismissals)
-              )
-            }
-          : state.workspaceCleanupScan
-      }
+      return withWorkspaceCleanupDismissals(state, next)
     })
     await window.api.workspaceCleanup.dismiss({ dismissals })
   },
+  restoreWorkspaceCleanupCandidates: async (candidates) => {
+    const { workspaceCleanupDismissals: dismissals, workspaceCleanupScan: scan } = get()
+    const restored = new Set(candidates.map(getWorkspaceCleanupCandidateIdentity))
+    const worktreeIds = new Set(candidates.map((candidate) => candidate.worktreeId))
+    // Legacy dismissals are keyed by bare worktree id and cover every host; drop that key too or the row stays ignored.
+    const restoredDismissalKeys = [...restored, ...worktreeIds]
+    // Re-key a dropped legacy dismissal onto the other hosts it covered so only the restored row un-ignores.
+    const migrated: WorkspaceCleanupDismissal[] = (scan?.candidates ?? []).flatMap((candidate) => {
+      const legacy = dismissals[candidate.worktreeId]
+      const identity = getWorkspaceCleanupCandidateIdentity(candidate)
+      return legacy &&
+        worktreeIds.has(candidate.worktreeId) &&
+        !restored.has(identity) &&
+        !dismissals[identity]
+        ? [{ ...legacy, executionHostId: getWorkspaceCleanupCandidateHostId(candidate) }]
+        : []
+    })
+    // Persist first: a failed restore must not leave the row eligible for bulk delete.
+    await window.api.workspaceCleanup.dismiss({ dismissals: migrated, restoredDismissalKeys })
+    set((state) => {
+      const next = { ...state.workspaceCleanupDismissals }
+      for (const key of restoredDismissalKeys) {
+        delete next[key]
+      }
+      for (const dismissal of migrated) {
+        next[getWorkspaceCleanupCandidateIdentity(dismissal)] = dismissal
+      }
+      return withWorkspaceCleanupDismissals(state, next)
+    })
+  },
   resetWorkspaceCleanupDismissals: async () => {
-    set((state) => ({
-      workspaceCleanupDismissals: {},
-      workspaceCleanupScan: state.workspaceCleanupScan
-        ? {
-            ...state.workspaceCleanupScan,
-            candidates: state.workspaceCleanupScan.candidates.map((candidate) =>
-              applyWorkspaceCleanupPolicy({
-                ...candidate,
-                blockers: candidate.blockers.filter((blocker) => blocker !== 'dismissed')
-              })
-            )
-          }
-        : state.workspaceCleanupScan
-    }))
+    set((state) => withWorkspaceCleanupDismissals(state, {}))
     await window.api.workspaceCleanup.clearDismissals()
   },
   beginUnverifiedRemovalConsent: (identity) => {
@@ -171,3 +176,27 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       }
     })
 })
+
+// Streamed frames merge from the progress copy, so both copies must carry the new dismissal state.
+function withWorkspaceCleanupDismissals(
+  state: AppState,
+  dismissals: Record<string, WorkspaceCleanupDismissal>
+): Pick<
+  AppState,
+  'workspaceCleanupDismissals' | 'workspaceCleanupScan' | 'workspaceCleanupProgress'
+> {
+  const reconcile = <T extends { candidates: WorkspaceCleanupCandidate[] }>(
+    snapshot: T | null
+  ): T | null =>
+    snapshot && {
+      ...snapshot,
+      candidates: snapshot.candidates.map((candidate) =>
+        applyWorkspaceCleanupDismissal(candidate, dismissals)
+      )
+    }
+  return {
+    workspaceCleanupDismissals: dismissals,
+    workspaceCleanupScan: reconcile(state.workspaceCleanupScan),
+    workspaceCleanupProgress: reconcile(state.workspaceCleanupProgress)
+  }
+}

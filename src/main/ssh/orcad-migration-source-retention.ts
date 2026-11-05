@@ -1,8 +1,8 @@
 /** Keep source rows for downgraded clients using their old relays; new clients hide them and serve managed state. Never delete retained rows automatically. */
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { Store } from '../persistence'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import type { Store } from '../persistence/loading-store/store'
 import { withRenamedOrcadMigrationDrafts } from '../persistence/migrating-orcad-catalog/orcad-source-draft-rename'
 import {
   listOrcadMigrationSourceCutovers,
@@ -12,7 +12,9 @@ import {
 type OrcadMigrationDraftRenameStore = Pick<
   Store,
   | 'collectOrcadMigrationSourceDrafts'
+  | 'disableAutomations'
   | 'getWorkspaceSession'
+  | 'listAutomations'
   | 'runDurableMutation'
   | 'setWorkspaceSession'
 >
@@ -48,7 +50,20 @@ async function retainOnce(
   if (cutover.sourceRetainedAt) {
     return cutover
   }
+  const moved = new Set(cutover.manifest.payload.dormantState?.automations?.map(({ id }) => id))
+  // Journal first: once the copies are disabled, nothing else records which ones ran here.
+  const enabled = store
+    .listAutomations()
+    .filter((automation) => automation.enabled && moved.has(automation.id))
+  if (cutover.automationsToEnableOnServer === undefined && enabled.length > 0) {
+    writeOrcadMigrationSourceCutover(userDataPath, {
+      ...cutover,
+      automationsToEnableOnServer: enabled.map(({ id }) => id)
+    })
+  }
   await store.runDurableMutation(() => {
+    // A downgraded desktop would otherwise run the retained copy alongside the server.
+    store.disableAutomations(moved)
     const renamed = renamedDestinationSession(store, cutover)
     if (!renamed) {
       // Startup rename may still be in memory; flush before recording retained completion.

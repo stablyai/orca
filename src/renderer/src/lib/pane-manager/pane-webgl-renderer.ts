@@ -1,6 +1,6 @@
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
+import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { getLivePaneCensus } from './pane-manager-registry'
 import {
   getTerminalWebglAutoDecision,
@@ -8,9 +8,17 @@ import {
 } from './terminal-webgl-auto-policy'
 import { safeFit, safeFitAndThen } from './pane-fit'
 import { setPaneFitWebglAttachHook } from './pane-fit-webgl-attach-signal'
-import { repairPaneWebglCanvasDprMismatch } from './terminal-canvas-dpr-repair'
+import {
+  repairPaneWebglCanvasDprMismatch,
+  restoreReleasedPaneWebglCanvas
+} from './terminal-canvas-dpr-repair'
 import { recordPaneWebglContextLoss } from './pane-webgl-context-loss-policy'
 import { presentPaneViewport } from './pane-viewport-present'
+import { presentEmptiedCanvas } from './terminal-render-pause-release'
+import {
+  releaseWebglCanvasBackingWhileHidden,
+  stopReleasingWebglCanvasBacking
+} from './terminal-webgl-hidden-canvas-release'
 
 export { presentPaneViewport } from './pane-viewport-present'
 import {
@@ -19,6 +27,7 @@ import {
   rearmTerminalWebglAddonLoad,
   setTerminalWebglAddonLoadHandlers
 } from './terminal-webgl-addon-loader'
+import { watchTerminalSymbolsFontLoad } from './terminal-symbols-font'
 
 export { primeTerminalWebglAddon } from './terminal-webgl-addon-loader'
 
@@ -81,7 +90,9 @@ export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
 function refreshTerminalAfterWebglAttach(pane: ManagedPaneInternal): void {
   try {
     // New WebGL canvases are empty; repaint immediately so resume/reparent/settings do not look frozen until output.
-    pane.terminal.refresh(0, pane.terminal.rows - 1)
+    if (!presentEmptiedCanvas(pane.terminal)) {
+      pane.terminal.refresh(0, pane.terminal.rows - 1)
+    }
   } catch {}
 }
 
@@ -132,10 +143,27 @@ export function disposeWebgl(
   }
 }
 
+function getXtermWebglCanvas(webglAddon: WebglAddon): HTMLCanvasElement | undefined {
+  if (!('_renderer' in webglAddon)) {
+    return undefined
+  }
+  const renderer = webglAddon._renderer
+  if (typeof renderer !== 'object' || renderer === null || !('_canvas' in renderer)) {
+    return undefined
+  }
+  const canvas = renderer._canvas
+  return typeof HTMLCanvasElement !== 'undefined' && canvas instanceof HTMLCanvasElement
+    ? canvas
+    : undefined
+}
+
 function releaseXtermWebglContext(webglAddon: ManagedPaneInternal['webglAddon']): void {
   try {
     // Windows/ANGLE may retain driver contexts after canvas removal; explicitly lose them to avoid Chromium’s active-context budget on rapid activation (#6874).
     const renderer = (webglAddon as unknown as XtermWebglAddonInternals | null)?._renderer
+    if (renderer?._canvas) {
+      stopReleasingWebglCanvasBacking(renderer._canvas)
+    }
     renderer?._gl?.getExtension('WEBGL_lose_context')?.loseContext()
     if (renderer?._canvas) {
       renderer._canvas.width = 0
@@ -219,6 +247,8 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     return
   }
   disposeWebgl(pane)
+  // Only WebGL atlases cache glyphs drawn before the face loads; DOM panes repaint on their own.
+  watchTerminalSymbolsFontLoad()
   const WebglAddonConstructor = getTerminalWebglAddonConstructor()
   if (!WebglAddonConstructor) {
     // Opening before lazy resolution parks here; the load continuation attaches, with the fit hook as backstop.
@@ -251,6 +281,15 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     })
     pane.terminal.loadAddon(addon)
     pane.webglAddon = addon
+    const canvas = getXtermWebglCanvas(addon)
+    if (canvas) {
+      // Why: panes of a hidden worktree surface keep their backing so switching worktrees never pays a reallocation.
+      releaseWebglCanvasBackingWhileHidden(
+        canvas,
+        () => pane.container.closest('[data-worktree-surface-hidden]') === null,
+        (devicePixelSize) => restoreReleasedPaneWebglCanvas(pane, devicePixelSize)
+      )
+    }
     refreshTerminalAfterWebglAttach(pane)
   } catch (err) {
     if (pane.terminalGpuAcceleration === 'auto') {

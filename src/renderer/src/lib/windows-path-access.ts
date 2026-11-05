@@ -1,6 +1,6 @@
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { windowsPathAccess, type WindowsPathAccess } from '../../../shared/windows-path-access'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isWebClientLocation } from './web-client-location'
 
 type WslEnvironmentSource = readonly Pick<PublicKnownRuntimeEnvironment, 'id' | 'orcadDeployment'>[]
@@ -18,6 +18,11 @@ function getDesktopPlatform(): NodeJS.Platform | null {
     return null
   }
   return navigator.userAgent.includes('Windows') ? 'win32' : null
+}
+
+/** A Windows desktop can add a Windows drive folder as a project on this computer. */
+export function isWindowsDesktopClient(): boolean {
+  return getDesktopPlatform() === 'win32'
 }
 
 /** {@link windowsPathAccess} for the owner host, from the WSL hosts the renderer knows. */

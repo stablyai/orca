@@ -19,8 +19,8 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { Repo } from '../../shared/repo-types'
 import type { Project } from '../../shared/project-types'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import type { ResolvedWorktree } from './workspaces/catalog/runtime-worktree-path-identity'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 const originalPlatform = process.platform
 
@@ -34,9 +34,7 @@ function makeRuntime(repos: Repo[], projects: Project[] = []) {
     })
   )
   const selector = vi.fn<(selector: string) => Promise<ResolvedWorktree>>()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replaces the protected worktree lookup this method awaits; its signature is restated above.
-  ;(runtime as unknown as { resolveWorktreeSelector: typeof selector }).resolveWorktreeSelector =
-    selector
+  runtime['resolveGitWorktreeSelector'] = selector
   return { runtime, selector }
 }
 

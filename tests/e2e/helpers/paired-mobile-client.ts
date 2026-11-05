@@ -1,12 +1,13 @@
 import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../../../mobile/src/transport/mobile-runtime-client-capabilities'
-import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
-import { decodePairingOffer, type PairingOffer } from '../../../src/shared/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
+import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   sendRemoteRuntimeRequest,
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription,
   type RemoteRuntimeSubscriptionCallbacks
-} from '../../../src/shared/remote-runtime-client'
+} from '../../../src/shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
 import { openRemoteRuntimePassthroughSocket } from '../../../src/shared/remote-runtime/remote-runtime-passthrough-socket'
 import type { RuntimeCapability } from '../../../src/shared/protocol-version'
@@ -18,7 +19,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,
   TerminalStreamOpcode
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 import type { RuntimeDesktopPairingOffer } from './paired-electron-client'
 
 const DEFAULT_TIMEOUT_MS = 15_000
@@ -48,7 +49,12 @@ export type PairedMobileClient = {
 /** Raw frames over one authenticated phone socket, exactly as the app writes them. */
 export type PairedMobileSocket = {
   token: string
-  frames: { id?: string; ok?: boolean; result?: unknown; error?: { code: string } }[]
+  frames: {
+    id?: string
+    ok?: boolean
+    result?: unknown
+    error?: { code: string; message?: string }
+  }[]
   /** Terminal output text per stream id, decoded from binary frames. */
   output: Map<number, string>
   screencastFrames: BrowserScreencastFrame[]

@@ -1,5 +1,5 @@
 import type { RuntimeWorktreePsResult } from '../../../shared/runtime-types'
-import { compareWorktreePs } from '../runtime-worktree-status-projection'
+import { compareWorktreePs } from '../workspaces/process-listing/runtime-worktree-status-projection'
 
 // Why: mobile reads lastOutputAt only to rank rows; a 30 s floor bounds activity-driven resends to one per bucket.
 const COARSE_LAST_OUTPUT_AT_MS = 30_000

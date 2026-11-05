@@ -1,4 +1,4 @@
-import { getRuntimeFileListTarget } from './quick-open-file-list-target'
+import { getRuntimeFileListTarget, useKeyedExcludeRequest } from './quick-open-file-list-target'
 export {
   getRuntimeFileListTarget,
   getNestedWorktreeExcludeRequest
@@ -31,12 +31,12 @@ import {
 } from '@/components/quick-open-capped-local-listing'
 import { useAppStore } from '@/store'
 import { useKnownWorktreeById, useWorktreesForRepo } from '@/store/selectors'
-import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
+import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
 import {
   getFileExplorerOperationOwnerFromState,
   getFileExplorerOwnerUnresolvedMessage,
   getFileExplorerOperationRoute
-} from '@/components/right-sidebar/file-explorer-operation-owner'
+} from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 export type RuntimeFileListState = {
@@ -93,7 +93,7 @@ export function useRuntimeFileListForWorktree({
     () => getRuntimeFileListTarget(worktreeId, worktreePath, repoWorktrees),
     [repoWorktrees, worktreeId, worktreePath]
   )
-  const { excludeRequest } = target
+  const excludeRequest = useKeyedExcludeRequest(target.excludeRequest)
 
   const operationOwnerState = useAppStore(
     useShallow((state) => ({

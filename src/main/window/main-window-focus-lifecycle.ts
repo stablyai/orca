@@ -1,4 +1,4 @@
-import { ipcMain, Menu, type BrowserWindow } from 'electron'
+import { ipcMain, type BrowserWindow } from 'electron'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
   plainTextContextMenuTargetChannel,
@@ -16,12 +16,13 @@ import {
   matchingRichMarkdownContextMenuTableTarget,
   parseRichMarkdownContextMenuTableTarget
 } from './editable-context-menu'
+import { createEditableContextMenuPopup } from './editable-context-menu-popup'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
-import { browserRouteWebContentsRegistry } from '../browser/browser-route-session-runtime'
+import { browserRouteWebContentsRegistry } from '../browser/routing/sessions/browser-route-session-runtime'
 import {
   attachBrowserClientPageRenderer,
   retireBrowserClientPageRenderer
-} from '../browser/browser-client-page-renderer-runtime'
+} from '../browser/client-pages/renderer/browser-client-page-renderer-runtime'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRendererRecoveryReloadWatchdog } from './renderer-recovery-reload-watchdog'
 import { createRendererLaunchFailureBackoff } from './renderer-launch-failure-backoff'
@@ -47,6 +48,8 @@ export function installMainWindowFocusLifecycle(args: {
   rendererWebContentsId: number
 }): MainWindowFocusLifecycle {
   const { isWindowClosing, mainWindow, opts, reloadMainWindow, rendererWebContentsId } = args
+  // Capture once: the BrowserWindow getter throws after close, but late IPC and webContents events can still arrive.
+  const rendererWebContents = mainWindow.webContents
   // Mirror TipTap focus before main shortcut resolution so bare Cmd/Ctrl+B remains bold (docs/markdown-cmd-b-bold-design.md).
   let markdownEditorFocused = false
   let terminalInputFocused = false
@@ -58,7 +61,7 @@ export function installMainWindowFocusLifecycle(args: {
   const markdownFocusChannel = 'ui:setMarkdownEditorFocused'
   // Check sender and strict boolean so guests/malformed payloads cannot disable sidebar shortcuts.
   const onMarkdownEditorFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (event.sender !== rendererWebContents) {
       return
     }
     markdownEditorFocused = focused === true
@@ -67,7 +70,7 @@ export function installMainWindowFocusLifecycle(args: {
   const terminalInputFocusChannel = 'ui:setTerminalInputFocused'
   // Main resolves before renderer keydown; mirror xterm focus so Terminal-first leaves shell chords alone.
   const onTerminalInputFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (event.sender !== rendererWebContents) {
       return
     }
     terminalInputFocused = focused === true
@@ -76,7 +79,7 @@ export function installMainWindowFocusLifecycle(args: {
   const floatingFocusChannel = 'ui:setFloatingFocus'
   // Publish both focus bits atomically; terminal selects keybinding context and implies panel routing ownership.
   const onFloatingFocus = (event: Electron.IpcMainEvent, state: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (event.sender !== rendererWebContents) {
       return
     }
     const payload = (state ?? {}) as { panelFocused?: unknown; terminalFocused?: unknown }
@@ -89,7 +92,7 @@ export function installMainWindowFocusLifecycle(args: {
   const shortcutRecorderFocusChannel = 'ui:setShortcutRecorderFocused'
   // Shortcut recording must receive the keys before main consumes their existing bindings.
   const onShortcutRecorderFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (event.sender !== rendererWebContents) {
       return
     }
     shortcutRecorderFocused = focused === true
@@ -98,7 +101,7 @@ export function installMainWindowFocusLifecycle(args: {
 
   let pendingRichMarkdownContextMenuTableTarget: RichMarkdownContextMenuTableTarget | null = null
   const onRichMarkdownContextMenuTarget = (event: Electron.IpcMainEvent, value: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (event.sender !== rendererWebContents) {
       return
     }
     pendingRichMarkdownContextMenuTableTarget = parseRichMarkdownContextMenuTableTarget(value)
@@ -107,11 +110,12 @@ export function installMainWindowFocusLifecycle(args: {
   // Renderer sends this on the same frame pipe immediately before the next Chromium context menu.
   let pendingPlainTextContextMenuTarget = false
   const onPlainTextContextMenuTarget = (event: Electron.IpcMainEvent): void => {
-    if (event.sender === mainWindow.webContents) {
+    if (event.sender === rendererWebContents) {
       pendingPlainTextContextMenuTarget = true
     }
   }
   ipcMain.on(plainTextContextMenuTargetChannel, onPlainTextContextMenuTarget)
+  const editableContextMenuPopup = createEditableContextMenuPopup(mainWindow, rendererWebContents)
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
     const tableTarget = matchingRichMarkdownContextMenuTableTarget(
       params,
@@ -120,7 +124,7 @@ export function installMainWindowFocusLifecycle(args: {
     const plainText = pendingPlainTextContextMenuTarget
     pendingRichMarkdownContextMenuTableTarget = null
     pendingPlainTextContextMenuTarget = false
-    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
+    const template = buildEditableContextMenuTemplate(params, rendererWebContents, {
       tableTarget,
       plainText
     })
@@ -128,12 +132,13 @@ export function installMainWindowFocusLifecycle(args: {
       return
     }
     // Context menu may precede focus mirroring; trust Electron's editable params.
-    Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
+    editableContextMenuPopup.open(template, params)
   }
-  mainWindow.webContents.on('context-menu', onMainContextMenu)
+  rendererWebContents.on('context-menu', onMainContextMenu)
 
   // Dead renderers cannot clear focus mirrors; reset carve-outs so later lifecycles retain app shortcuts.
   const resetMarkdownEditorFocus = (): void => {
+    editableContextMenuPopup.close()
     markdownEditorFocused = false
     pendingRichMarkdownContextMenuTableTarget = null
     pendingPlainTextContextMenuTarget = false
@@ -149,7 +154,6 @@ export function installMainWindowFocusLifecycle(args: {
     shortcutRecorderFocused = false
   }
   let rendererProcessGone = false
-  const rendererWebContents = mainWindow.webContents
   registerRendererDocumentNavigation(rendererWebContents, () => {
     const frame = rendererWebContents.mainFrame
     retireBrowserClientPageRenderer(rendererWebContents)
@@ -204,8 +208,7 @@ export function installMainWindowFocusLifecycle(args: {
       return
     }
     const launchFailed = details.reason === 'launch-failed'
-    const useLaunchBackoff = launchFailed && process.platform !== 'win32'
-    const launchRetryDelayMs = useLaunchBackoff ? launchFailureBackoff.nextDelayMs() : null
+    const launchRetryDelayMs = launchFailed ? launchFailureBackoff.nextDelayMs() : null
     const goneAt = Date.now()
     // Read commit at death; the next sampler tick would see memory the dead renderer released.
     const lowCommit = lowCommitOomGate.assess(details, goneAt)
@@ -233,7 +236,7 @@ export function installMainWindowFocusLifecycle(args: {
         return
       }
       // Spawn refusal needs its own bounded backoff, independent of crash-loop accounting.
-      if (useLaunchBackoff) {
+      if (launchFailed) {
         const subject = { details, recentRecoveryCount: launchFailureBackoff.attempts() }
         if (launchRetryDelayMs === null) {
           recoveryReloadWatchdog.escalate(subject, 'launch-failed')
@@ -247,7 +250,7 @@ export function installMainWindowFocusLifecycle(args: {
         // Stop repeated crashes through the one-prompt watchdog; it also watches manual retry so another stall cannot strand a blank window.
         recoveryReloadWatchdog.escalate(
           { details, recentRecoveryCount: recovery.recentRecoveryCount },
-          launchFailed ? 'launch-failed' : 'crash-loop'
+          'crash-loop'
         )
         return
       }
@@ -256,7 +259,7 @@ export function installMainWindowFocusLifecycle(args: {
     }, launchRetryDelayMs ?? 250)
   }
   const rendererLiveness = trackRendererLivenessAtDeath(mainWindow)
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+  rendererWebContents.on('render-process-gone', (_event, details) => {
     const liveness = rendererLiveness.takeAtRendererGone()
     rendererProcessGone = true
     retireBrowserClientPageRenderer(rendererWebContents)
@@ -275,14 +278,14 @@ export function installMainWindowFocusLifecycle(args: {
     }
     scheduleRendererRecovery(details)
   })
-  mainWindow.webContents.on('destroyed', () => {
+  rendererWebContents.on('destroyed', () => {
     retireBrowserClientPageRenderer(rendererWebContents)
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
   })
-  mainWindow.webContents.on('did-finish-load', () => {
+  rendererWebContents.on('did-finish-load', () => {
     rendererProcessGone = false
     attachBrowserClientPageRenderer(rendererWebContents)
     clearRendererRecoveryTimer()

@@ -4,15 +4,17 @@ import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoptio
 import {
   getCanonicalUserDataPath,
   migrateMobilePairingDataToCanonicalUserDataPath
-} from '../persistence'
+} from '../persistence/loading-store/user-data-path'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import { WS_BIND_HOST_LOOPBACK } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
+import { isOrcadSidecarLaunch } from '../window/foreground-activation-policy'
 import { registerMobileHandlers } from '../ipc/mobile'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environments/runtime-environment-mobile-relay-hosts'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime'
-import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
 import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
-import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
+import { OffscreenBrowserBackend } from '../browser/backends/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
 import { getDesktopRelayStatus } from './main-process-relay-status'
 import { startDesktopRelayService } from './main-process-relay-startup'
@@ -37,17 +39,21 @@ import {
 } from '../runtime/runtime-rpc-startup-failure'
 import { registerCliForHeadlessServe } from './serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../cli/appimage-copy-pre-extraction'
-import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
+import { scheduleAllPendingHistoryTreeRemovals } from '../pty/history/terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { startDesktopPushService } from './main-process-push-startup'
+import {
+  connectDesktopConnectorCloud,
+  installDesktopConnectorCloud
+} from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../window/main-window-updater'
-import { preserveStateBeforeUpdateRestart } from '../update-restart-preservation'
-import { resolveUpdateInstallMode } from '../updater'
+import { preserveStateBeforeUpdateRestart } from '../updater/update-restart-preservation'
+import { resolveUpdateInstallMode } from '../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
-import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
+import { getBrowserIdentityModeStatus } from '../browser/identity/browser-identity-mode-store'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
@@ -64,6 +70,15 @@ function settleDesktopActivation(): void {
   settleServeDesktopActivation(gate, {
     hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
   })
+}
+
+/** E2E only: a serve host with no browser of its own, as the WSL distro's server is. Never packaged. */
+function e2eHeadlessServeWithoutBrowser(): boolean {
+  return (
+    !app.isPackaged &&
+    process.env.ORCA_E2E_HEADLESS === '1' &&
+    process.env.ORCA_E2E_HEADLESS_SERVE_WITHOUT_BROWSER === '1'
+  )
 }
 
 function installRuntimeRpc(
@@ -88,6 +103,8 @@ function installRuntimeRpc(
     enableWebSocket: true,
     // STA-2370: desktop stays loopback until pairing; serve explicitly opts into remote access and E2E needs harness-wide bind.
     exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
+    // orcad reaches its browser sidecar only over the Unix socket / named pipe; keep its WS off the network (#31895).
+    ...(isOrcadSidecarLaunch() ? { pinnedBindHost: WS_BIND_HOST_LOOPBACK } : {}),
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined
@@ -101,6 +118,7 @@ function installRuntimeRpc(
     webClientRoot: getBundledWebClientRoot()
   })
   state.runtimeRpc = runtimeRpc
+  runtime.setAgentSenderPeerKey(() => runtimeRpc.getE2EEPublicKey())
   runtimeRpc.setMobileDesktopRelayHosts(createRuntimeEnvironmentMobileRelayHosts())
   registerMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,
@@ -160,7 +178,7 @@ async function launchServeMode(
     await placeUnshownLiveTerminalsBestEffort(runtime)
   }
   // Headless hosts need display-backed offscreen WebContents; advertise browser capability only when usable.
-  if (state.headlessBrowserDisplayAvailable) {
+  if (state.headlessBrowserDisplayAvailable && !e2eHeadlessServeWithoutBrowser()) {
     runtime.setOffscreenBrowserBackend(
       new OffscreenBrowserBackend(browserManager, {
         getAgentBrowserBridge: () => state.agentBrowserBridge,
@@ -228,17 +246,21 @@ async function launchDesktopMode(
   }
   // Register before proxy await so concurrent token mints wait rather than fail provider_missing; installer requests are already guarded.
   startDesktopRelayService(runtimeRpc)
+  connectDesktopConnectorCloud()
   // Create the window before awaiting proxy readiness; the request guard already fences fetches.
   await state.initialProxyApplicationReady
   // Apply persisted proxy before the push gateway's first request.
   startDesktopPushService(runtimeRpc)
   // Request macOS notification permission after reveal or the maximized window can hide it.
   win.once('show', () => {
-    // Initialization failure can leave no Store; do not throw inside Electron listeners.
-    const store = state.store
-    if (store && store.getOnboarding().closedAt !== null) {
-      triggerStartupNotificationRegistration(store)
-    }
+    // Await i18n so the one-time prompt is not stuck in the English fallback.
+    void state.mainProcessI18nReady.then(() => {
+      // Initialization failure can leave no Store; do not throw inside Electron listeners.
+      const store = state.store
+      if (store && store.getOnboarding().closedAt !== null) {
+        triggerStartupNotificationRegistration(store)
+      }
+    })
   })
 }
 
@@ -261,6 +283,9 @@ export async function initializeMainProcessRuntimeLaunch(
   state.serveOptions = serveOptions
   installCloudSessionShutdownFlush()
   const runtimeRpc = installRuntimeRpc(runtime, serveOptions)
+  if (!serveOptions) {
+    installDesktopConnectorCloud()
+  }
   const shellPathReady = shellPathHydration.whenReady()
   // Publish the same shell-PATH generation to renderer Git and terminal startup barriers.
   state.shellPathReady = shellPathReady

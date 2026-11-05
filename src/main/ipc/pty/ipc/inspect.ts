@@ -1,7 +1,7 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyIpc } from '../pty-host-bindings'
 import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty-process-inspection'
-import { clientOnlyUnverifiableInspection } from '../../../../shared/terminal-process-inspection'
+import { clientOnlyUnverifiableInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import {
   getProviderForPty,
   hasPtyProviderForInspection,

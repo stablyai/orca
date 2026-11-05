@@ -6,25 +6,27 @@ import type {
   SshTarget
 } from './ssh-types'
 import type { Automation, AutomationRun } from './automations-types'
-import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from './agent-status/contracts/agent-status-ipc-payload'
 import type { FeatureInteractionTelemetryBucketState } from './feature-interactions'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
-import type { NativeChatUpgradeTipAudience } from './native-chat-upgrade-tip-audience'
+import type { ChatUiLaunchTipAudience } from './native-chat/chat-ui-launch-tip-audience'
 import type { DiffComment } from './diff-comment-types'
-import type { FolderWorkspace, WorkspaceKey } from './folder-workspace-types'
+import type { FolderWorkspace } from './folder-workspaces/folder-workspace-types'
+import type { WorkspaceKey } from './workspace-scope'
 import type { GlobalSettings } from './global-settings-types'
 import type { IssueInfo, PRInfo } from './github/pull-request-types'
 import type { OnboardingState } from './onboarding-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from './project-group-types'
 import type { RemoteLayoutSnapshot } from './remote-layout-snapshot'
+import type { HostRepoCatalogSnapshot } from './host-repo-catalog-snapshot'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import type { SparsePreset } from './worktree/create-types'
 import type { RetiredNameRegistry } from './worktree/retired-name-registry'
 import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 import type { WorktreeMeta } from './worktree/meta-types'
-import type { WorkspaceSessionState } from './workspace-session-state-types'
+import type { WorkspaceSessionState } from './workspace-session/workspace-session-state-types'
 import type { OrcadMigrationEvictedReceipt } from './orcad-migration/orcad-migration-evicted-receipts'
 import type {
   OrcadMigrationImportReceipt,
@@ -95,6 +97,8 @@ export type PersistedState = {
   /** Paired server’s last display layout, keyed by environment and written only by the snapshot recorder;
    * separate from runtime:<env> partitions that older builds overwrite. */
   remoteLayoutSnapshots?: Record<string, RemoteLayoutSnapshot>
+  /** WSL host's last project list, keyed by environment; display-only until the host answers again. */
+  hostRepoCatalogSnapshots?: Record<string, HostRepoCatalogSnapshot>
   sshTargets: SshTarget[]
   /** Highest SSH target registration generation issued; prevents identity reuse after rollback. */
   sshTargetGenerationCounter?: number
@@ -121,5 +125,5 @@ export type PersistedState = {
   /** Main-owned reset mutation journal. Never expose this through renderer settings APIs. */
   codexResetCreditAttemptLedger?: CodexResetCreditAttemptLedger
   /** Main-owned, decided once on the first load of the upgrade; never derived from live settings. */
-  nativeChatUpgradeTipAudience?: NativeChatUpgradeTipAudience
+  chatUiLaunchTipAudience?: ChatUiLaunchTipAudience
 }

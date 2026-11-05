@@ -1,7 +1,7 @@
 /** Exhaustive state dispositions for local WSL project moves. Typed stores are compile-checked; tests census localStorage/SQLite. Sibling tables cover UI, storage and out-of-store state.
  * Item numbers refer to docs/design/wsl-via-orcad-lossless-mover.md §2. */
 import type { PersistedState } from '../persisted-state-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 export type WslMoveDisposition =
   /** Carried in the migration manifest; the path stage rewrites UNC to Linux. */
@@ -70,9 +70,18 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   workspaceSessionsByHostId: {
     disposition: 'rewrite-desktop',
     item: 22,
-    note: "The desktop seeds the WSL host's session from the moved 'local' rows (D1b-7c)."
+    note: "The desktop seeds the WSL host's session from the moved 'local' rows."
   },
-  remoteLayoutSnapshots: { disposition: 'rewrite-desktop', item: 47 },
+  remoteLayoutSnapshots: {
+    disposition: 'rederive',
+    item: 47,
+    note: "Rebuilt from the host's first tab stream; the seeded workspaceSessionsByHostId gives first paint."
+  },
+  hostRepoCatalogSnapshots: {
+    disposition: 'rederive',
+    item: 47,
+    note: "Rebuilt from the host's next project list; it caches only that answer."
+  },
   sshTargets: notApplicableDisposition(62),
   sshTargetGenerationCounter: notApplicableDisposition(62),
   deletedSshConfigAliases: notApplicableDisposition(62),
@@ -81,9 +90,11 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   sshPtyConsumerRecoveries: notApplicableDisposition(60),
   migrationUnsupportedPtyEntries: { disposition: 'gate', item: 20 },
   legacyPaneKeyAliasEntries: { disposition: 'gate', item: 20 },
-  automations: moveDisposition(18),
+  automations: moveDisposition(18, {
+    note: "The host runs the moved copy; the desktop's stays unchanged, and its scheduler only advances it."
+  }),
   automationRuns: moveDisposition(19, {
-    note: 'An in-flight run in scope blocks the move.'
+    note: "An in-flight run in scope blocks the move. The desktop's history stays as written, beside its automation."
   }),
   orcadMigrationImportReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationEvictedReceipts: notApplicableDisposition(67, 'Mover-owned.'),
@@ -91,7 +102,7 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   onboarding: notApplicableDisposition(62),
   featureInteractionTelemetryBuckets: notApplicableDisposition(62),
   codexResetCreditAttemptLedger: notApplicableDisposition(62),
-  nativeChatUpgradeTipAudience: notApplicableDisposition(62)
+  chatUiLaunchTipAudience: notApplicableDisposition(62)
 } as const satisfies Record<keyof PersistedState, WslMoveFieldDisposition>
 
 export const WORKSPACE_SESSION_DISPOSITIONS = {
@@ -131,7 +142,10 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   localOnlyScrollbackByTabId: moveDisposition(25, { newManifestSection: true }),
   remoteSessionIdsByTabId: { disposition: 'drop-pty-binding', item: 36 },
   browserPagesByWorkspace: moveDisposition(29),
-  markdownFrontmatterVisible: moveDisposition(28),
+  markdownFrontmatterVisible: moveDisposition(28, {
+    rewriteDesktopCopy: true,
+    note: 'Keyed by a UNC file id; host-session-seed re-keys this desktop copy to the host file.'
+  }),
   sleepingAgentSessionsByPaneKey: moveDisposition(33),
   terminalPtyIncarnationsByPaneKey: {
     disposition: 'drop-pty-binding',
@@ -139,7 +153,10 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   },
   terminalTopologyRevisionByRepoId: { disposition: 'rederive', item: 35 },
   terminalSurfaceTombstonesByPaneKey: moveDisposition(34),
-  closedTerminalTabTombstonesByTabId: moveDisposition(34),
+  closedTerminalTabTombstonesByTabId: moveDisposition(34, {
+    rewriteDesktopCopy: true,
+    note: 'Laid over the host partition by host-session-seed, with the host worktree id.'
+  }),
   // Names terminals of the host the project leaves, as the incarnation map does.
   closedTerminalPanesByPaneKey: { disposition: 'drop-pty-binding', item: 36 }
 } as const satisfies Record<keyof WorkspaceSessionState, WslMoveFieldDisposition>

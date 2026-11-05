@@ -7,9 +7,10 @@ import type {
 export class ClaudeControlRequestError extends Error {
   constructor(
     readonly subtype: string,
-    message: string
+    message: string,
+    options?: ErrorOptions
   ) {
-    super(message)
+    super(message, options)
     this.name = 'ClaudeControlRequestError'
   }
 }
@@ -26,6 +27,10 @@ export class ClaudeControlRequestTimeoutError extends Error {
 
 // Exact SDK error used to distinguish query closure from CLI rejection.
 const QUERY_CLOSED_MESSAGE = 'Query closed before response received'
+
+export function isClaudeQueryClosed(error: unknown): boolean {
+  return error instanceof Error && error.message === QUERY_CLOSED_MESSAGE
+}
 
 // The SDK implements getSettings but omits it from Query's declaration.
 type ClaudeQuerySettingsReader = { getSettings?: () => Promise<unknown> }
@@ -45,6 +50,17 @@ export function claudeQueryAsyncCanceller(
   return typeof cancel === 'function' ? cancel.bind(query) : null
 }
 
+// renameSession sends `rename_session` with source 'host' (the CLI's user rename) but is absent
+// from Query's declaration.
+export function claudeQuerySessionRenamer(
+  query: Query
+): ((title: string, sessionId: string) => unknown) | null {
+  const rename = 'renameSession' in query ? query.renameSession : null
+  return typeof rename === 'function'
+    ? (title, sessionId): unknown => rename.call(query, title, sessionId)
+    : null
+}
+
 export type ClaudeControlOptions = { timeoutMs?: number }
 
 // Orca owns the deadline; null disables it. Query closure remains a transport failure.
@@ -61,7 +77,7 @@ export function runClaudeControl<T>(
       if (error instanceof ClaudeControlRequestError || message === QUERY_CLOSED_MESSAGE) {
         throw error
       }
-      throw new ClaudeControlRequestError(subtype, message)
+      throw new ClaudeControlRequestError(subtype, message, { cause: error })
     })
   if (timeoutMs === null) {
     return request
@@ -96,6 +112,8 @@ export type ClaudeControlSurface = {
   getSettings: (options?: ClaudeControlOptions) => Promise<unknown>
   /** The `/context` breakdown; older CLIs reject the request and the caller shows nothing. */
   getContextUsage: (options?: ClaudeControlOptions) => Promise<unknown>
+  /** Names `sessionId` as the user's rename; refused once the CLI has moved to another session. */
+  renameSession: (title: string, sessionId: string, options?: ClaudeControlOptions) => Promise<void>
 }
 
 type InterruptingQuery = {
@@ -147,6 +165,21 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       runClaudeControl('initialize', () => query.initializationResult(), null),
     getContextUsage: (options) =>
       runClaudeControl('get_context_usage', () => query.getContextUsage(), options?.timeoutMs),
+    renameSession: (title, sessionId, options) => {
+      const rename = claudeQuerySessionRenamer(query)
+      return rename
+        ? runClaudeControl(
+            'rename_session',
+            () => Promise.resolve(rename(title, sessionId)),
+            options?.timeoutMs
+          ).then(() => {})
+        : Promise.reject(
+            new ClaudeControlRequestError(
+              'rename_session',
+              'this SDK exposes no rename_session request'
+            )
+          )
+    },
     getSettings: (options) => {
       const read = claudeQuerySettingsReader(query)
       return read

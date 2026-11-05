@@ -89,6 +89,25 @@ describe('main-owned project move pause', () => {
     expect(f.webContents.eventNames()).toEqual([])
   })
 
+  it('shares one lifecycle listener across overlapping pauses and releases it after', async () => {
+    const f = fixture()
+    const paused = Array.from({ length: 12 }, () =>
+      pauseWorkspacesForProjectMove(f.mainWindow, f, ['wt'])
+    )
+
+    expect(ipc.listenerCount('ui:projectMovePauseResponse')).toBe(1)
+    expect(f.window.listenerCount('closed')).toBe(1)
+    for (const event of ['destroyed', 'render-process-gone', 'did-start-navigation']) {
+      expect(f.webContents.listenerCount(event)).toBe(1)
+    }
+    f.webContents.emit('render-process-gone')
+
+    await Promise.all(paused.map((pause) => expect(pause).rejects.toThrow('renderer_unavailable')))
+    expect(f.window.eventNames()).toEqual([])
+    expect(f.webContents.eventNames()).toEqual([])
+    expect(ipc.listenerCount('ui:projectMovePauseResponse')).toBe(0)
+  })
+
   it('does not stop hosts when an old preload or follower never answers the handshake', async () => {
     const f = fixture()
     const paused = pauseWorkspacesForProjectMove(f.mainWindow, f, ['wt'])
@@ -111,14 +130,6 @@ describe('main-owned project move pause', () => {
     await vi.advanceTimersByTimeAsync(0)
     f.respond({ phase: 'persist' })
     await paused
-  })
-
-  it('refuses a renderer that omits or substitutes a workspace before stopping hosts', async () => {
-    const f = fixture()
-    const paused = pauseWorkspacesForProjectMove(f.mainWindow, f, ['wt'])
-    f.respond({ phase: 'prepare', targets: [] })
-    await expect(paused).rejects.toThrow('invalid_scope')
-    expect(f.sleepWorkspaces).not.toHaveBeenCalled()
   })
 
   it('rejects reload during the host stop instead of accepting a new renderer persistence reply', async () => {

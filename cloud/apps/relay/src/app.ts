@@ -1,22 +1,11 @@
-import {
-  AssignmentRequestSchema,
-  IdleRegionalRehomeRequestSchema,
-  type IdleRegionalRehomeRequest,
-  type IdleRegionalRehomeResult,
-  type RegionCorrectionResponse,
-  isRelayCellConnectionHardCap,
-  RELAY_ADMISSION_BUDGETS,
-  RELAY_DEFAULT_REGION,
-  RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND,
-  RELAY_PROTOCOL_LIMITS,
-  RelayRegionSchema,
-  ResolveRequestSchema,
-  cellPlacementCeiling,
-  relayCellAdmissionBounds,
-  type RelayCellConnectionHardCap,
-  type RelayRegion
-} from '@orca-cloud/relay-contract'
+import { AssignmentRequestSchema, ResolveRequestSchema } from '@orca-cloud/relay-contract/director-messages'
+import { IdleRegionalRehomeRequestSchema, type IdleRegionalRehomeRequest, type IdleRegionalRehomeResult } from '@orca-cloud/relay-contract/idle-regional-rehome'
+import type { RegionCorrectionResponse } from '@orca-cloud/relay-contract/region-correction'
+import { isRelayCellConnectionHardCap, RELAY_ADMISSION_BUDGETS, RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND, cellPlacementCeiling, relayCellAdmissionBounds, type RelayCellConnectionHardCap } from '@orca-cloud/relay-contract/admission-budgets'
+import { RELAY_DEFAULT_REGION, RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
+import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract/protocol-limits'
 import { Hono, type Context } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { SignJWT } from 'jose'
 import { z } from 'zod'
 import {
@@ -26,7 +15,7 @@ import {
   createRegionalRehomeRuntimeTokenVerifier,
   createRegionalRehomeTokenVerifier,
   createRuntimeTokenVerifier
-} from './admin-token-verifier.js'
+} from './authentication/admin-token-verifier.js'
 import {
   RelayAssignmentRowBusyError,
   RelayCellInReserveModeError,
@@ -37,57 +26,57 @@ import {
   type RelayAssignment,
   type RelayAssignmentStore,
   type ResolvedRelayAssignment
-} from './assignment-store.js'
+} from './assignment/assignment-store.js'
 import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment/assignment-lease.js'
 import { AssignmentRejectionLogWindow } from './assignment/assignment-rejection-log-window.js'
-import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
-import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
-import { ReservePaceError, type ReserveAssignment, type ReservePlan } from './reserve-assignment.js'
-import { registerCellReserveRoutes } from './cell-reserve-routes.js'
-import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell-reserve-contract.js'
-import type { CellSeatFeedPage } from './cell-seat-log.js'
-import { type CellFlags, supportedCellFlags } from './cell-flags.js'
-import type { AppliedControlFlags } from './relay-control-flag-channel.js'
+import { CELL_ADMISSION_STATES } from './cell/admission/cell-admission-selector.js'
+import { registerCellSeatFeedRoute } from './cell/seats/cell-seat-feed-route.js'
+import { ReservePaceError, type ReserveAssignment, type ReservePlan } from './assignment/reserve-placement/reserve-assignment.js'
+import { CELL_RESERVE_ROUTE_PATHS, registerCellReserveRoutes } from './cell/reservations/cell-reserve-routes.js'
+import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell/reservations/cell-reserve-contract.js'
+import type { CellSeatFeedPage } from './cell/seats/cell-seat-log.js'
+import { type CellFlags, supportedCellFlags } from './cell/control-flags/cell-flags.js'
+import type { AppliedControlFlags } from './cell/control-flags/relay-control-flag-channel.js'
 import { RELAY_MAX_CELL_CAPACITY_REQUESTS, type RelayConfig } from './config.js'
-import type { RelayCredentialStore } from './credential-store.js'
-import { isRelayDatabaseTransientError } from './database.js'
+import type { RelayCredentialStore } from './credentials/credential-store.js'
+import { isRelayDatabaseTransientError } from './database/database.js'
 import {
   DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS,
   RelayDrainReturnAdmission
-} from './drain-return-admission.js'
-import { googleMetadataIdentityToken } from './google-metadata-identity-token.js'
+} from './assignment/public-admission/drain-return-admission.js'
+import { googleMetadataIdentityToken } from './authentication/google-metadata-identity-token.js'
 import {
   RelayPublicAssignmentAdmission,
   type AssignmentAdmissionRejection
-} from './public-assignment-admission.js'
-import { relayHostLogDigest } from './relay-host-log-digest.js'
-import type { RelayLocalReadinessVerdict } from './relay-local-readiness.js'
+} from './assignment/public-admission/public-assignment-admission.js'
+import { relayHostLogDigest } from './observability/relay-host-log-digest.js'
+import type { RelayLocalReadinessVerdict } from './process-lifecycle/relay-local-readiness.js'
 import {
   classifyShadowSeat,
   type ShadowCompareDatabaseAnswer,
   type ShadowCompareRoute
-} from './shadow-directory-compare.js'
-import type { ShadowSeatDirectory } from './shadow-seat-directory.js'
-import type { RelayReadinessDependency } from './relay-readiness.js'
+} from './cell/seats/shadow-directory-compare.js'
+import type { ShadowSeatDirectory } from './cell/seats/shadow-seat-directory.js'
+import type { RelayReadinessDependency } from './process-lifecycle/relay-readiness.js'
 import type {
   AssignmentAdmissionLane,
   AssignmentAdmissionOutcome,
   AssignmentUnavailableCause,
   RegionalRehomeSafetySnapshot,
   RelayRuntimeCounts
-} from './relay-observability.js'
+} from './observability/relay-observability.js'
 import {
   isRegionalRehomeTrustProbe,
   probeRegionalRehomeTrust
-} from './regional-rehome-trust-probe.js'
-import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
-import type { RelayJWKSet } from './stale-if-error-jwks.js'
-import { stagingAsiaProofMembership } from './staging-asia-proof-admission.js'
+} from './assignment/regional-rehome/regional-rehome-trust-probe.js'
+import { createRelayTokenVerifier, readBearer } from './authentication/relay-token-verifier.js'
+import type { RelayJWKSet } from './authentication/stale-if-error-jwks.js'
+import { stagingAsiaProofMembership } from './cell/admission/staging-asia-proof-admission.js'
 import {
   runInStickySlot,
   StickySlotStatements,
   type StickySlotSample
-} from './sticky-slot-statements.js'
+} from './database/sticky-slot-statements.js'
 
 const RelayCellConnectionHardCapSchema = z.custom<RelayCellConnectionHardCap>(
   isRelayCellConnectionHardCap
@@ -339,6 +328,14 @@ export function createRelayApp(
     if (!rejectionLogWindow.admit(`${entry.route}:${entry.lane}:${entry.reason}`, entry)) return
     logAssignmentRejection(entry)
   }
+  // Content-Length checks alone miss chunked bodies, which req.json would buffer whole.
+  const limitBody = bodyLimit({
+    maxSize: RELAY_PROTOCOL_LIMITS.maxHttpBodyBytes,
+    onError: (context) => context.json({ error: 'request_too_large' }, 413)
+  })
+  app.use('*', (context, next) =>
+    CELL_RESERVE_ROUTE_PATHS.has(context.req.path) ? next() : limitBody(context, next)
+  )
   app.use('/v1/admin/*', async (context, next) => {
     if (
       context.req.path === '/v1/admin/cell-heartbeat' ||

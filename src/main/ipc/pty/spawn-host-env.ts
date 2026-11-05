@@ -1,21 +1,25 @@
-import { getClaudeAgentViewService } from '../../claude/agent-view-service'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { stampRuntimeSourceEnv } from '../../../shared/runtime-source-env'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
-import { isAgentStatusHooksEnabled } from '../../agent-hooks/managed-agent-hook-controls'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
+import { isAgentStatusHooksEnabled } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { awaitExplicitAgentPluginGuestReadiness } from '../../agent-hooks/wsl-agent-plugin-readiness'
-import { ensureCodexStateDbBackfillRecoveryStarted } from '../../codex/codex-state-db-backfill-recovery'
-import type { CodexSessionResumePreparation } from '../../codex/codex-session-resume-home'
+import { ensureCodexStateDbBackfillRecoveryStarted } from '../../codex/history/index/codex-state-db-backfill-recovery'
+import type { CodexSessionResumePreparation } from '../../codex/history/resume/codex-session-resume-home'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
-import { isSafePtySessionId } from '../../daemon/pty-session-id'
+import { isSafePtySessionId } from '../../daemon/sessions/pty-session-id'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
-import { stampWslOrchestrationCompatibilityHost } from '../../pty/wsl-orca-env'
+import { stampWslOrchestrationCompatibilityHost } from '../../pty/shell-startup/wsl-orca-env'
 import { getRuntimeSourceStamp } from '../../runtime/host-descriptor'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { buildPtyHostEnv } from './host-env/assembly'
+import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { runAsWslLaunchUserAct } from '../../wsl/discovery/wsl-background-exec-gate'
 import {
   codexHomePathsEqual,
   getCompatibleSelectedCodexHomePath,
@@ -84,6 +88,8 @@ type PtySpawnHostEnvArgs = {
   resumeOnSelectedAccount: boolean
   /** Host accepts empty IDs without host env; window rejects them. */
   emptySessionIdSkipsHostEnv: boolean
+  /** A restore no user act asked for (#35813): its prep must not start a stopped WSL distro. */
+  wslPassiveRestore?: boolean
   requestedAgentTeamsPath: string | undefined
   provider: IPtyProvider
   deps: PtySpawnCodexResumeDeps & {
@@ -94,7 +100,23 @@ type PtySpawnHostEnvArgs = {
   mark?: (phase: string) => void
 }
 
+/**
+ * Every spawn but a passive restore is a launch someone asked for, so its prep may start the WSL
+ * distro it runs in. A passive restore's prep goes through the E9 gates and skips on a stopped one.
+ */
 export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise<PtySpawnHostEnv> {
+  const target = args.codexSelectionTarget
+  return runAsWslLaunchUserAct(
+    {
+      isWsl: target.runtime === 'wsl',
+      passiveRestore: args.wslPassiveRestore === true,
+      distro: args.expectedWslDistro || target.wslDistro?.trim() || null
+    },
+    () => resolvePtySpawnHostEnvForAct(args)
+  )
+}
+
+async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<PtySpawnHostEnv> {
   const { deps, codexSelectionTarget: target } = args
   const codexResumePreparation = args.preAdopted
     ? null
@@ -149,7 +171,12 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
     })
     selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
   }
-  if (launchesCodex && selectedCodexHomePath) {
+  // Its pending check reads the home's state DB, which starts a stopped distro's UNC home (E9).
+  if (
+    launchesCodex &&
+    selectedCodexHomePath &&
+    !(await blockedWslDistroForPath(selectedCodexHomePath))
+  ) {
     await ensureCodexStateDbBackfillRecoveryStarted(selectedCodexHomePath)
   }
   args.mark?.('codex_home')
@@ -245,6 +272,10 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
       getRuntimeSourceStamp(deps.runtime, getAppEnvironment().getPath('userData'))
     )
     promoteAgentTeamsShimPath(env, args.requestedAgentTeamsPath)
+    if (process.platform === 'win32' && env[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]) {
+      // Why: same-protocol daemons from older builds don't add this WSLENV entry themselves.
+      addWslEnvKeys(env, [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV])
+    }
   } catch (err) {
     // Host prep creates hook/extension state; only this request's minted ID is safe to sweep.
     if (args.mintedSessionId) {

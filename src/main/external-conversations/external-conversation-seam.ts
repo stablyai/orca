@@ -1,7 +1,7 @@
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
-import type { PendingPrompt } from '../../shared/agent-pending-prompt'
-import type { AgentStatusHooksSettings } from '../../shared/agent-status-hooks-setting'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
+import type { AgentStatusHooksSettings } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExternalConversationLink } from '../../shared/external-conversation-link'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { admitConnectorAgent } from './connector-agents'
@@ -77,6 +77,7 @@ type StartInput = Omit<ConversationLaunchInput, 'agent'> & { agent: string }
 /** One enabled period: disabling settles queued work and aborts running work at its next boundary. */
 export class ExternalConversationSeam {
   private readonly abort = new AbortController()
+  readonly signal = this.abort.signal
   private readonly chain = new ConversationChain(this.abort.signal)
   // Only starts from this enabled period can prove their launch outcome.
   private readonly startedHere = new Set<string>()
@@ -110,10 +111,6 @@ export class ExternalConversationSeam {
     this.sessions.restore()
   }
 
-  get signal(): AbortSignal {
-    return this.abort.signal
-  }
-
   dispose(reason: 'connectors_disabled'): void {
     this.releaseRemovals()
     this.releaseSessions()
@@ -143,11 +140,20 @@ export class ExternalConversationSeam {
 
   /** Receipted like a send, so a retried delivery never cancels twice. */
   cancel(host: ExternalConversationHost, key: ConversationKey, id: string): Promise<Delivery> {
-    const { prompts, chain, events } = this
-    const seam = { ...this.deps, prompts, chain, events }
+    const seam = { ...this.deps, prompts: this.prompts, chain: this.chain, events: this.events }
     return this.deps.receipts.run(key, id, 'connector.cancel', [], () =>
       cancelConversation(host.terminal, seam, key, this.abort.signal)
     )
+  }
+
+  /** Null unless a watch runs (replies need the connector) and the pane is linked. */
+  replyTarget(paneKey: string): ReturnType<ConversationEvents['replyTarget']> {
+    return this.events?.replyTarget(paneKey) ?? null
+  }
+
+  /** What an earlier process's received delivery came to, from its receipt; never runs it again. */
+  recorded(key: ConversationKey, deliveryId: string): Promise<Delivery | null> {
+    return this.deps.receipts.recorded(key, deliveryId)
   }
 
   /** A snapshot of every linked conversation first, then its events; returns the release. */

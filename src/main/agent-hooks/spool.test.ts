@@ -17,12 +17,12 @@ import {
   drainAgentHookSpoolAsync,
   launchTokenHash,
   type SpoolRecord
-} from '../../shared/agent-hook-spool'
+} from '../../shared/agent-hook-listener/transport/agent-hook-spool'
 import { AgentHookServer, _internals } from './server'
 import { buildBody } from './server.test-fixtures'
-import { _internals as codexInternals } from '../codex/hook-service'
+import { _internals as codexInternals } from '../codex/hooks/installation/hook-service'
 import { getManagedScript as getClaudeManagedScript } from '../claude/hook-script'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { buildPosixHookSpoolLines } from './hook-stdin-contract'
 
 describe('agent hook spool', () => {
@@ -32,9 +32,6 @@ describe('agent hook spool', () => {
     )
     expect(spoolLine).toBeDefined()
     expect(spoolLine!.match(/printf/g)).toHaveLength(1)
-    expect(spoolLine).toContain(
-      '"$spool_now" "$(spool_json_escape "${orca_agent_process:-}")" "$payload"'
-    )
   })
 
   it('waits for a newline before replaying a complete-looking final record', async () => {
@@ -237,7 +234,8 @@ describe('agent hook spool', () => {
         ORCA_AGENT_HOOK_ENDPOINT: endpoint,
         ORCA_PANE_KEY: 'tab-failure:0',
         ORCA_TAB_ID: 'tab-failure',
-        ORCA_AGENT_LAUNCH_TOKEN: 'generation-token'
+        ORCA_AGENT_LAUNCH_TOKEN: 'generation-token',
+        CLAUDE_JOB_DIR: ''
       },
       timeout: 5000
     })

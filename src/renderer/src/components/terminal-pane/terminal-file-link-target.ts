@@ -3,8 +3,8 @@ import {
   isPathInsideWorktree,
   resolveTerminalFileLink,
   type ParsedTerminalFileLink
-} from '@/lib/terminal-links'
-import { normalizeAbsolutePath } from '@/lib/terminal-path-normalization'
+} from '../../../../shared/terminal/links/terminal-links'
+import { normalizeAbsolutePath } from '../../../../shared/file-links/file-link-path-normalization'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
 import {

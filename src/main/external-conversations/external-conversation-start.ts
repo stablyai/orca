@@ -1,8 +1,11 @@
-import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type {
+  AgentLaunchResult,
+  AgentLaunchResult as AgentLaunchPublishedSurface
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { ConnectorAgent } from '../../shared/external-conversation-link'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
-import type { AgentLaunchPublishedSurface } from '../agent-launch/agent-launch-execution'
+
 import {
   agentPaneWorkspace,
   type AgentPaneWorkspace
@@ -34,15 +37,16 @@ export function runtimeConversationLauncher(runtime: OrcaRuntimeService): Conver
   const context = { runtime }
   return {
     launch: async ({ agent, target, prompt }, onSurfacePublished, signal) => {
-      const intent = await resolveUnlaunchedIntent(
+      const { intent, decidedMode } = await resolveUnlaunchedIntent(
         { agent, target, prompt: { text: prompt, delivery: 'submit' } },
         runtime,
-        null
+        null,
+        { terminalOnly: true }
       )
       return executeAgentLaunch({
         runtime,
         intent,
-        terminalOnly: true,
+        decidedMode,
         surfaces: agentLaunchSurfaceFactory(context, undefined, undefined, false, undefined, {
           early: null,
           presentation: 'background'

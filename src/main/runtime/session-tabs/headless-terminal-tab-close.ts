@@ -10,11 +10,11 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { buildHeadlessMobileSessionTabGroups } from '../mobile-session-layout-projection'
+import { buildHeadlessMobileSessionTabGroups } from '../terminal/surface/mobile-session-layout-projection'
 import { paneTitlesForDesktopWindow } from './desktop-pane-title-forwarding'
-import { appendRetiredTerminalSurfaceProofs } from '../../../shared/terminal-retirement-proof-ledger'
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
+import { appendRetiredTerminalSurfaceProofs } from '../../../shared/workspace-layout/terminal-retirement-proof-ledger'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeTerminalRename } from '../../../shared/runtime-terminal-contracts'
 import type { RuntimeSessionTabCloseReason } from '../../../shared/runtime-session-contracts'
 
@@ -152,7 +152,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
   ): Promise<RuntimeMobileSessionTabMoveResult> {
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
@@ -209,7 +209,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
   ): Promise<{ updated: true }> {
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     // Resolve legacy raw ids to the host tab id, matching tab-prop persistence.
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const hostTabId = snapshot

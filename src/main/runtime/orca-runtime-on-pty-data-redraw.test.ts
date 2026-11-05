@@ -1,7 +1,10 @@
 // #11315: SSH TUI repaints reach Electron main through onPtyData; tail work must stay linear in bytes.
 import { describe, expect, it, vi } from 'vitest'
-import * as ansiNormalization from './terminal-ansi-normalization'
-import { readPtyTail, runtimeWithLeaf } from './orca-runtime-pty-leaf.test-fixture'
+import * as ansiNormalization from './terminal/output/terminal-ansi-normalization'
+import {
+  readPtyTail,
+  runtimeWithLeaf
+} from './orca-runtime-tests/orca-runtime-pty-leaf.test-fixture'
 
 const ESC = '\x1b'
 function panelFrames(width: number, frames: number): string {

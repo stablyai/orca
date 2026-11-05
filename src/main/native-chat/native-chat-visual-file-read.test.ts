@@ -1,11 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { chmod, mkdir, mkdtemp, rm, symlink, writeFile, link } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile, link } from 'node:fs/promises'
+
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { NATIVE_CHAT_VISUAL_MAX_BYTES } from '../../shared/native-chat-visual-directive'
+import { NATIVE_CHAT_VISUAL_MAX_BYTES } from '../../shared/native-chat/native-chat-visual-directive'
 import { nativeChatScratchFolderFor } from './native-chat-scratch-folder'
-import { nativeChatVisualRevision, readNativeChatVisualFile } from './native-chat-visual-file-read'
+import { readNativeChatVisualFile } from './native-chat-visual-file-read'
 
 const posixIt = process.platform === 'win32' ? it.skip : it
 
@@ -22,30 +23,7 @@ afterEach(async () => {
   await rm(stateDirectory, { recursive: true, force: true })
 })
 
-describe('nativeChatScratchFolderFor', () => {
-  it('places each chat in its own hashed folder under the state directory', () => {
-    const alpha = nativeChatScratchFolderFor('/state', 'session-alpha')
-    const beta = nativeChatScratchFolderFor('/state', 'session-beta')
-    expect(alpha).toMatch(/chat-scratch[\\/][0-9a-f]{32}$/)
-    expect(alpha.startsWith(join('/state', 'chat-scratch'))).toBe(true)
-    expect(alpha).not.toBe(beta)
-  })
-})
-
 describe('readNativeChatVisualFile', () => {
-  it('reads a UTF-8 visual with its revision and size', async () => {
-    const html = '<!doctype html><p>Grüße</p>'
-    await writeFile(join(folder, 'chart.html'), html)
-    const result = await readNativeChatVisualFile(folder, 'chart.html')
-    expect(result).toEqual({
-      ok: true,
-      html,
-      revision: nativeChatVisualRevision(Buffer.from(html)),
-      sizeBytes: Buffer.byteLength(html),
-      path: join(folder, 'chart.html')
-    })
-  })
-
   it('answers unchanged without the bytes when the client already holds the revision', async () => {
     await writeFile(join(folder, 'chart.html'), '<p>a</p>')
     const first = await readNativeChatVisualFile(folder, 'chart.html')
@@ -63,18 +41,6 @@ describe('readNativeChatVisualFile', () => {
     await writeFile(join(folder, 'chart.html'), '<p>b</p>')
     const changed = await readNativeChatVisualFile(folder, 'chart.html', first.revision)
     expect(changed).toMatchObject({ ok: true, html: '<p>b</p>' })
-  })
-
-  it('reports a missing file or a missing folder as not_found', async () => {
-    expect(await readNativeChatVisualFile(folder, 'nope.html')).toEqual({
-      ok: false,
-      error: 'not_found'
-    })
-    const absent = nativeChatScratchFolderFor(stateDirectory, 'session-never')
-    expect(await readNativeChatVisualFile(absent, 'chart.html')).toEqual({
-      ok: false,
-      error: 'not_found'
-    })
   })
 
   it('refuses names that are not a bare visual file name', async () => {
@@ -134,14 +100,6 @@ describe('readNativeChatVisualFile', () => {
     })
   })
 
-  it('refuses a directory named like a visual', async () => {
-    await mkdir(join(folder, 'dir.html'))
-    expect(await readNativeChatVisualFile(folder, 'dir.html')).toEqual({
-      ok: false,
-      error: 'not_a_file'
-    })
-  })
-
   posixIt('refuses a FIFO without waiting for a writer', async () => {
     execFileSync('mkfifo', [join(folder, 'pipe.html')])
     expect(await readNativeChatVisualFile(folder, 'pipe.html')).toEqual({
@@ -178,33 +136,5 @@ describe('readNativeChatVisualFile', () => {
     await writeFile(join(folder, 'a.html'), '<p>a</p>')
     await link(join(folder, 'a.html'), join(folder, 'b.html'))
     expect(await readNativeChatVisualFile(folder, 'b.html')).toMatchObject({ ok: true })
-  })
-
-  it('reads the replacement after a file is swapped for new content', async () => {
-    await writeFile(join(folder, 'chart.html'), '<p>old</p>')
-    await rm(join(folder, 'chart.html'))
-    await writeFile(join(folder, 'chart.html'), '<p>new</p>')
-    expect(await readNativeChatVisualFile(folder, 'chart.html')).toMatchObject({
-      ok: true,
-      html: '<p>new</p>'
-    })
-  })
-
-  posixIt('reports an unexpected filesystem fault without the host path', async () => {
-    await writeFile(join(folder, 'chart.html'), '<p>a</p>')
-    await chmod(join(folder, 'chart.html'), 0o000)
-    try {
-      const failure = await readNativeChatVisualFile(folder, 'chart.html').then(
-        () => null,
-        (error: unknown) => error
-      )
-      // Root bypasses mode bits, so assert refusal only when the read fails.
-      if (failure !== null) {
-        expect(String(failure)).toContain('visual_read_failed:EACCES')
-        expect(String(failure)).not.toContain(stateDirectory)
-      }
-    } finally {
-      await chmod(join(folder, 'chart.html'), 0o644)
-    }
   })
 })

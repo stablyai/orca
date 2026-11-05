@@ -11,7 +11,7 @@ import {
   getPRCommentGroupRoot,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from '../../../../../shared/pr-comment-groups'
+} from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { translate } from '@/i18n/i18n'
 import {
   ConversationTabCommentCard,
@@ -64,11 +64,21 @@ export function ConversationTabCommentGroup({
       >
         <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
           <span className="min-w-0 truncate">
-            {translate('auto.components.GitHubItemDialog.228e2f59d3', 'Resolved')}{' '}
             {group.kind === 'thread'
-              ? translate('auto.components.GitHubItemDialog.28d0d3374f', 'thread')
-              : translate('auto.components.GitHubItemDialog.e2bf3e41a9', 'comment')}{' '}
-            {translate('auto.components.GitHubItemDialog.0ae387d8ca', 'by')} {root.author}
+              ? translate(
+                  'auto.components.GitHubItemDialog.resolvedThreadBy',
+                  'Resolved thread by {{author}}',
+                  {
+                    author: root.author
+                  }
+                )
+              : translate(
+                  'auto.components.GitHubItemDialog.resolvedCommentBy',
+                  'Resolved comment by {{author}}',
+                  {
+                    author: root.author
+                  }
+                )}
             {count > 1 ? ` (${count})` : ''}
           </span>
         </AccordionTrigger>

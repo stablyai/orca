@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { createDefaultWorkspaceCleanupBrowseState } from '../../../shared/workspace-cleanup-browse-state'
+import { createDefaultWorkspaceCleanupBrowseState } from '../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   closeTestStores,
   createSqliteTestStore,
@@ -15,7 +15,7 @@ import {
   writeDataFile,
   readDataFile
 } from '../persistence-test-harness'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -237,6 +237,19 @@ describe('Store', () => {
       'repo-1::/repo': false,
       'repo-2::/repo': true
     })
+  })
+
+  it('updateUI survives a throwing UI listener so the shutdown checkpoint is not vetoed', async () => {
+    const store = await createStore()
+    const laterListener = vi.fn()
+    store.onUIChanged(() => {
+      throw new TypeError('Object has been destroyed')
+    })
+    store.onUIChanged(laterListener)
+
+    expect(() => store.updateUI({ sidebarWidth: 321 })).not.toThrow()
+    expect(store.getUI().sidebarWidth).toBe(321)
+    expect(laterListener).toHaveBeenCalledWith(expect.objectContaining({ sidebarWidth: 321 }))
   })
 
   it('updateUI skips save and notification when normalized UI is unchanged', async () => {

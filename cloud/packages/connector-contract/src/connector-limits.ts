@@ -13,5 +13,15 @@ export const CONNECTOR_LIMITS = {
   leasedExpiryGraceMs: 30_000,
   // The machine refuses a delivery with less than this left before its deadline.
   minDeadlineLeftMs: 10_000,
-  maxLastAssistantMessageBytes: 8 * 1024
+  maxLastAssistantMessageBytes: 8 * 1024,
+  // The cloud refuses a larger request body with 413.
+  maxRequestBytes: 256 * 1024,
+  // One event's JSON, so any single event fits in an events request.
+  maxEventBytes: 192 * 1024,
+  // A snapshot lists linked conversations active in the last 7 days, newest first, up to this many.
+  maxSnapshotConversations: 200,
+  snapshotActiveWindowMs: 7 * 24 * 60 * 60 * 1000,
+  // A hello lists the most recently used projects, up to this many, and always fits maxRequestBytes.
+  maxHelloProjects: 500,
+  maxDisplayTextLength: 200
 } as const

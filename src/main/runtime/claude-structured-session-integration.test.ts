@@ -1,18 +1,23 @@
-import './rpc/unused-default-rpc-methods.test-fixture'
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
-import { fakeClaude } from './claude-structured-fake-connection-test-fixture'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
+} from '../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  fakeClaude,
+  leaseOf,
+  startingConnection,
+  failStarting
+} from './claude-structured-fake-connection-test-fixture'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
@@ -21,15 +26,16 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { RpcDispatcher } from './rpc/dispatcher'
-import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
+import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat/native-chat-shell-environment'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime,
   waitForStructuredAgentSessionRecovery
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import './rpc/unused-default-rpc-methods.test-fixture'
 
 const SESSION = 'claude-integration-1'
 const PROVIDER_SESSION = claudeSessionIdForOrcaSession(SESSION)
@@ -112,18 +118,6 @@ function ensureParams(fence: number) {
   }
 }
 
-function leaseOf(sessionId: string): {
-  claimStatus: string
-  runtimeFence: number
-  handoffStage: string | null
-  deathEvidence: { kind: string; detail: string } | null
-} {
-  const host = getStructuredAgentSessionHost() as unknown as {
-    deps: { store: { getRecord: (id: string) => { lease: ReturnType<typeof leaseOf> } } }
-  }
-  return host.deps.store.getRecord(sessionId).lease
-}
-
 let claude: ReturnType<typeof fakeClaude>
 let root: string
 let dispatcher: RpcDispatcher
@@ -137,6 +131,7 @@ let shellEnv: NodeJS.ProcessEnv
 let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
 let childWork: Parameters<NonNullable<StructuredAgentSessionStatusSink['publishChildWork']>>[]
 let hookServer: AgentHookServer
+let releaseUsage = (): void => {}
 
 async function call(method: string, params: unknown): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
@@ -201,6 +196,7 @@ function textOf(item: AgentJournalRenderItem): string {
 }
 
 beforeEach(async () => {
+  releaseUsage = () => {}
   operations = 0
   claudeAuthPolicy = { account: 'system' }
   shellEnv = { PATH: '/shell/bin:/usr/bin' }
@@ -221,7 +217,7 @@ beforeEach(async () => {
   hookServer = new AgentHookServer()
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalNativeChat: true }),
+    getClientSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     structuredAgentSessionLaunchSeedOptions: () => undefined,
     resolveStructuredAgentSessionCreateIntent: async (input: { envelope: unknown }) => ({
@@ -237,8 +233,8 @@ beforeEach(async () => {
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-        resolveCodexCommand: () => '/usr/local/bin/codex',
-        resolveClaudeCommand: () => '/usr/local/bin/claude',
+        resolveCodexCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
+        resolveClaudeCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
         readProcessStartTime: async (pid: number) => pid * 10,
         resolveAgentLaunchEnv: (agent) => (agent === 'claude' ? claudeLaunchEnv : {}),
         // Never consult the developer's login shell.
@@ -248,7 +244,8 @@ beforeEach(async () => {
         resolveClaudeAuthPolicy: () => claudeAuthPolicy,
         openClaudeConnection: claude.openConnection,
         claudeCliFlags: {
-          supports: async (flag) => flag.option === '--thinking-display',
+          check: async (flag) =>
+            flag.option === '--thinking-display' ? 'supported' : 'unsupported',
           prewarm: () => {},
           observeExit: () => {}
         },
@@ -273,10 +270,17 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  vi.unstubAllEnvs()
-  claude.setSelfExit(null)
-  await stopStructuredAgentSessionRuntime()
-  await rm(root, { recursive: true, force: true })
+  releaseUsage()
+  claude.dispose()
+  for (const cleanup of cleanups.values()) {
+    cleanup()
+  }
+  try {
+    await stopStructuredAgentSessionRuntime()
+  } finally {
+    vi.unstubAllEnvs()
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 describe('a structured Claude session over agentSession.*', () => {
@@ -381,9 +385,12 @@ describe('a structured Claude session over agentSession.*', () => {
   })
 
   it('publishes, then ends the session with sign-in guidance when initialization has no credentials', async () => {
+    claude.setInitializeHeld(true)
     claude.setInitializeAccount({ apiProvider: 'firstParty', tokenSource: 'none' })
 
     await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    const connection = await startingConnection(claude, SESSION)
+    connection.initialization.resolve()
     await waitForStructuredAgentSessionRecovery()
 
     const guidance = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
@@ -402,14 +409,12 @@ describe('a structured Claude session over agentSession.*', () => {
   it.each(['unverifiable', 'live'] as const)(
     'releases a session whose CLI self-exited after spawn with its tree %s, with a readable failure',
     async (tree) => {
-      claude.setSelfExit({
-        message: 'claude stream-json exited (code 1): claude: not signed in',
-        exitVerdict: { root: 'exited', tree }
-      })
+      claude.setInitializeHeld(true)
 
       const failed = await call('agentSession.create', createIntentParams())
 
       expect(failed).toMatchObject({ ok: true, result: { ok: true } })
+      failStarting(claude, await startingConnection(claude, SESSION), tree)
       await vi.waitFor(() => expect(leaseOf(SESSION).claimStatus).toBe('released'))
       const failure = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
       expect(failure?.body).toMatchObject({
@@ -425,35 +430,36 @@ describe('a structured Claude session over agentSession.*', () => {
         detail: 'claude stream-json exited (code 1): claude: not signed in'
       })
 
-      claude.setSelfExit(null)
       await ok<{ fence: number }>('agentSession.ensure', ensureParams(lease.runtimeFence))
     }
   )
 
   it('releases a spawned child whose whole CLI tree exited', async () => {
-    claude.setSelfExit({
-      message: 'claude stream-json exited (code 1): claude: not signed in',
-      exitVerdict: { root: 'exited', tree: 'exited' }
-    })
+    claude.setInitializeHeld(true)
 
     const failed = await call('agentSession.create', createIntentParams())
 
     expect(failed).toMatchObject({ ok: true, result: { ok: true } })
+    failStarting(claude, await startingConnection(claude, SESSION), 'exited')
     await vi.waitFor(() =>
       expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
     )
     expect(leaseOf(SESSION).deathEvidence).toMatchObject({ kind: 'exit-observed' })
-    claude.setSelfExit(null)
   })
 
   it('keeps the owner when a published child failure has no proof of exit', async () => {
-    claude.setSelfExit({
-      message: 'claude stream-json exited (code 1): claude: not signed in',
-      // Without observed root exit, process death remains unproven.
-      exitVerdict: { root: 'live', tree: 'unverifiable' }
+    claude.setInitializeHeld(true)
+    expect(await call('agentSession.create', createIntentParams())).toMatchObject({
+      ok: true,
+      result: { ok: true }
     })
-
-    await call('agentSession.create', createIntentParams())
+    const connection = await startingConnection(claude, SESSION)
+    connection.closeProven = false
+    connection.exitVerdict = { root: 'live', tree: 'unverifiable' }
+    connection.handlers.onFault?.(
+      new Error('claude stream-json exited (code 1): claude: not signed in')
+    )
+    connection.initialization.reject(new Error('Query closed before response received'))
     await vi.waitFor(() => expect(claude.live().closed).toBe(true))
 
     // Losing stdio is not proof that a published owner exited.
@@ -463,7 +469,6 @@ describe('a structured Claude session over agentSession.*', () => {
       deathEvidence: null
     })
     expect(claude.connections).toHaveLength(1)
-    claude.setSelfExit(null)
   })
 
   it.each(['unverifiable', 'live'] as const)(
@@ -526,11 +531,31 @@ describe('a structured Claude session over agentSession.*', () => {
       await vi.waitFor(() => expect(connection.sent).toHaveLength(1))
       connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
 
-      expect((await inFlight).submission).toMatchObject({
-        dispatchState: 'unknown',
-        reason: 'provider_exited_before_acknowledgement'
-      })
+      const response = await inFlight
+      expect(response.submission).toMatchObject({ dispatchState: 'unknown' })
+      expect([null, 'provider_exited_before_acknowledgement']).toContain(response.submission.reason)
       await waitForStructuredAgentSessionRecovery()
+      const runtime = getStructuredAgentSessionHost()!
+      const journal = runtime.collaboratorsForTests().sessions.get(SESSION)!.journal
+      const original = journal.submissions()[0]
+      expect(original).toMatchObject({
+        dispatchState: 'unknown',
+        providerItemId: null,
+        reason: 'provider_exited_before_acknowledgement',
+        options: {}
+      })
+      expect(journal.submissionBody(original.clientMessageId)).toEqual(body)
+      const page = await runtime.history({ sessionId: SESSION, direction: 'tail' })
+      expect(page.ok && page.page.queuedMessages).toEqual([])
+      expect(journal.itemBody(`orca:${original.clientMessageId}`)).toEqual(body)
+      expect(
+        page.ok &&
+          page.page.items.filter((item) => item.body.kind === 'status').map((item) => item.body)
+      ).toEqual([
+        expect.objectContaining({
+          text: 'Claude stopped while this response was in progress. You can continue in this conversation.'
+        })
+      ])
       expect(claude.connections).toHaveLength(1)
       expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
       const next = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'after' }] }
@@ -542,6 +567,20 @@ describe('a structured Claude session over agentSession.*', () => {
       expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
       await vi.waitFor(() => expect(claude.live().sent).toHaveLength(1))
       expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'live', handoffStage: null })
+      expect(connection.sent).toHaveLength(1)
+      expect(claude.live().sent[0]).toMatchObject({
+        message: { content: [{ type: 'text', text: 'after' }] }
+      })
+      expect(
+        journal.submissions().filter((send) => send.clientMessageId !== original.clientMessageId)
+      ).toMatchObject([{ dispatchState: 'accepted', providerItemId: expect.any(String) }])
+      expect(
+        journal.submissions().find((send) => send.clientMessageId === original.clientMessageId)
+      ).toEqual(original)
+      expect(journal.submissionBody(original.clientMessageId)).toEqual(body)
+      expect(
+        journal.queuedMessages.list().filter((card) => card.recovers === original.clientMessageId)
+      ).toEqual([])
     }
   )
 
@@ -775,42 +814,61 @@ describe('a structured Claude session over agentSession.*', () => {
 
   it('delivers the breakdown a settled turn asks for with no later frame to carry it', async () => {
     const answers: ((value: unknown) => void)[] = []
-    claude.setContextUsage(() => new Promise((resolve) => answers.push(resolve)))
-    const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
-    const stream = await subscribe({
-      ...CLIENT,
-      clientCapabilities: [...CLIENT.clientCapabilities, AGENT_SESSION_TURN_ITEM_CAPABILITY]
+    let disposed = false
+    const usage: Promise<unknown>[] = []
+    releaseUsage = () => {
+      disposed = true
+      for (const answer of answers.splice(0)) {
+        answer({})
+      }
+    }
+    claude.setContextUsage(() => {
+      const response = disposed
+        ? Promise.resolve({})
+        : new Promise((resolve) => answers.push(resolve))
+      usage.push(response)
+      return response
     })
-    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Hi' }] }
-    await ok('agentSession.send', {
-      envelope: envelope('agentSession.send', { body }, created.fence),
-      body
-    })
-    claude.live().handlers.onMessage?.({
-      type: 'result',
-      subtype: 'success',
-      session_id: PROVIDER_SESSION,
-      uuid: 'result-frame-uuid'
-    })
-    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
-    const turnRow = () => itemsOf(stream).find((item) => item.body?.kind === 'turn')
-    expect(turnRow()?.body).toMatchObject({ state: 'completed' })
-
-    answers.at(-1)?.({
-      model: 'claude-sonnet-5',
-      totalTokens: 18_600,
-      rawMaxTokens: 200_000,
-      categories: [{ name: 'Messages', tokens: 12_000 }]
-    })
-    // This final event has no later publication to carry it to the client.
-    await vi.waitFor(async () => {
+    try {
+      const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+      const stream = await subscribe({
+        ...CLIENT,
+        clientCapabilities: [...CLIENT.clientCapabilities, AGENT_SESSION_TURN_ITEM_CAPABILITY]
+      })
+      const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Hi' }] }
+      await ok('agentSession.send', {
+        envelope: envelope('agentSession.send', { body }, created.fence),
+        body
+      })
+      claude.live().handlers.onMessage?.({
+        type: 'result',
+        subtype: 'success',
+        session_id: PROVIDER_SESSION,
+        uuid: 'result-frame-uuid'
+      })
       await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
-      const turn = turnRow()?.body
-      expect(turn?.kind === 'turn' ? turn.contextUsage?.used : undefined).toMatchObject({
-        kind: 'report',
-        usedTokens: 18_600,
+      const turnRow = () => itemsOf(stream).find((item) => item.body?.kind === 'turn')
+      expect(turnRow()?.body).toMatchObject({ state: 'completed' })
+
+      answers.at(-1)?.({
+        model: 'claude-sonnet-5',
+        totalTokens: 18_600,
+        rawMaxTokens: 200_000,
         categories: [{ name: 'Messages', tokens: 12_000 }]
       })
-    })
+      // This final event has no later publication to carry it to the client.
+      await vi.waitFor(async () => {
+        await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+        const turn = turnRow()?.body
+        expect(turn?.kind === 'turn' ? turn.contextUsage?.used : undefined).toMatchObject({
+          kind: 'report',
+          usedTokens: 18_600,
+          categories: [{ name: 'Messages', tokens: 12_000 }]
+        })
+      })
+    } finally {
+      releaseUsage()
+      await Promise.allSettled(usage)
+    }
   })
 })

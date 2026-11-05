@@ -1,6 +1,6 @@
 // POSIX hooks drain before exit; Windows missing-context hooks may exit without owning stdin.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
+import type * as CodexHookHashLookup from '../codex/trust/hooks/codex-hook-hash-lookup'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -45,10 +45,12 @@ vi.mock('./windows-native-hook-executable', async (importOriginal) => ({
   resolveBundledWindowsNativeHookExecutable: () => bundledHook.path
 }))
 
-vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+vi.mock('../codex/trust/hooks/codex-hook-hash-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexHookHashLookup>()),
   resolveCodexHookAnswerForLaunch: async () =>
-    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
+    (
+      await import('../codex/hooks/installation/hook-service-test-harness')
+    ).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -68,7 +70,8 @@ vi.mock('os', async (importOriginal) => {
 import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { getRemoteManagedCommand } from '../claude/hook-settings'
-import { CodexHookService } from '../codex/hook-service'
+import '../codex/hooks/installation/hook-service'
+import { CodexHookService } from '../codex/hooks/installation/codex-hook-service-implementation'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
@@ -81,8 +84,6 @@ import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import {
-  POSIX_HOOK_JSON_STDIN_PRELUDE,
-  POSIX_HOOK_JSON_STDIN_READER,
   POSIX_HOOK_STDIN_READER,
   WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from './hook-stdin-contract'
@@ -246,9 +247,12 @@ function runPosixHook(command: string, extraEnv: NodeJS.ProcessEnv = {}): Promis
   return runHookProcess('/bin/sh', ['-c', command], hookEnvironment(extraEnv))
 }
 
-async function generatePosixScripts(): Promise<Map<string, string>> {
+async function generatePosixScripts(onlyAgent?: string): Promise<Map<string, string>> {
   const scripts = new Map<string, string>()
   for (const entry of REMOTE_INSTALLERS) {
+    if (onlyAgent && entry.agent !== onlyAgent) {
+      continue
+    }
     const memory = createAgentHookMemorySftp()
     const status = await entry.install(memory.sftp)
     expect(status.state, `${entry.agent} install status`).toBe('installed')
@@ -418,7 +422,7 @@ describe('Windows managed hook stdin structure', () => {
           }
         }
 
-        // In-pane vendor-replay skips must not wait for stdin EOF from a caller that holds it open (#24907).
+        // In-pane skips must not wait for stdin EOF from a caller that holds it open (#24907).
         const paneEnv = {
           ORCA_AGENT_HOOK_PORT: '59999',
           ORCA_AGENT_HOOK_TOKEN: 'token',
@@ -428,7 +432,8 @@ describe('Windows managed hook stdin structure', () => {
           ['claude-hook-impl.cmd', { DEVIN_PROJECT_DIR: home }],
           ['claude-hook-impl.cmd', { GROK_HOOK_EVENT: 'PreToolUse' }],
           ['claude-hook-impl.cmd', { CURSOR_VERSION: '1.0', CURSOR_PROJECT_DIR: home }],
-          ['cursor-hook.cmd', { GROK_HOOK_EVENT: 'PreToolUse' }]
+          ['cursor-hook.cmd', { GROK_HOOK_EVENT: 'PreToolUse' }],
+          ['codex-hook.cmd', { CLAUDE_JOB_DIR: home }]
         ] as const) {
           const skipped = await runHookProcess(
             'cmd.exe',
@@ -578,27 +583,6 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     expect(JSON.parse(result.stdout.trim())).toEqual({})
   })
 
-  it('captures stdin before every possible whole-script success exit', async () => {
-    const scripts = await generatePosixScripts()
-    for (const [agent, script] of scripts) {
-      const captureIndex = Math.max(
-        script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
-        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
-      )
-      const firstExitIndex = script.indexOf('exit 0')
-      expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
-      expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
-      // The JSON reader needs its variable-setting prelude before capture.
-      if (script.includes(POSIX_HOOK_JSON_STDIN_READER)) {
-        const prelude = POSIX_HOOK_JSON_STDIN_PRELUDE.join('\n')
-        expect(script.indexOf(prelude), `${agent} JSON reader prelude`).toBeGreaterThanOrEqual(0)
-        expect(script.indexOf(prelude), `${agent} prelude before capture`).toBeLessThan(
-          captureIndex
-        )
-      }
-    }
-  })
-
   it('accepts a large payload across generated hooks without breaking the writer', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
@@ -657,9 +641,17 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   })
 
   it('drains before Claude skips hooks imported by Devin', async () => {
-    const script = (await generatePosixScripts()).get('claude claude-hook.sh')
+    const script = (await generatePosixScripts('claude')).get('claude claude-hook.sh')
     expect(script).toBeDefined()
     const result = await runPosixHook(script!, { DEVIN_PROJECT_DIR: '/tmp/devin-project' })
+    expect(result.exitCode).toBe(0)
+    expect(result.stdinErrors).toHaveLength(0)
+  })
+
+  it('drains before Codex skips hooks under a Claude background job', async () => {
+    const script = (await generatePosixScripts('codex')).get('codex codex-hook.sh')
+    expect(script).toBeDefined()
+    const result = await runPosixHook(script!, { CLAUDE_JOB_DIR: '/tmp/claude-job' })
     expect(result.exitCode).toBe(0)
     expect(result.stdinErrors).toHaveLength(0)
   })

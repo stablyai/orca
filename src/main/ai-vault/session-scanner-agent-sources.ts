@@ -2,25 +2,24 @@ import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { pathSegments } from './session-file-discovery'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultDeletableAgent } from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { resolveKiroHomeDir } from '../../shared/kiro-home'
-import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import { uniqueCodexSessionsDirs } from './scanners/codex/session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
-  isClineSessionMetadataPath
-} from './session-scanner-cline-parser'
-import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
-import { devinSessionsDbDependencyPath } from './session-scanner-devin-db'
-import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
-import { resolveMuseSessionsDir } from './session-scanner-muse-paths'
-import {
-  isKiroSessionMetadataPath,
   kiroTranscriptPathForMetadata
-} from './session-scanner-kiro-parser'
-import { OPENCLAW_AGENT_SOURCE } from './openclaw-session-layout'
-import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
+} from '../../shared/ai-vault/session-display/ai-vault-session-log-resource'
+import { isClineSessionMetadataPath } from './scanners/cline/session-scanner-cline-parser'
+import { cursorChatMetaPath } from './scanners/cursor/session-scanner-cursor-chat-meta'
+import { devinSessionsDbDependencyPath } from './scanners/devin/session-scanner-devin-db'
+import { resolveKimiSessionsDir } from './scanners/kimi/session-scanner-kimi-paths'
+import { resolveMuseSessionsDir } from '../../shared/muse-session-log'
+import { isKiroSessionMetadataPath } from './scanners/kiro/session-scanner-kiro-parser'
+
+import { OPENCLAW_AGENT_SOURCE } from './scanners/openclaw/openclaw-session-layout'
+import { isOmpConversationDirectory } from './scanners/omp/session-scanner-omp-subagent-transcripts'
 import {
   claudeProjectsRootDirs,
   codexHomeSessionsDir,
@@ -29,7 +28,7 @@ import {
   wslHomeSessionDirs
 } from './session-scanner-roots'
 import { getHermesHome } from '../hermes/hermes-default-home'
-import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
+import { SUBAGENT_DIR_NAME } from './scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
 
@@ -231,14 +230,15 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         'agent',
         'sessions'
       ]),
-    extensions: ['.jsonl']
+    extensions: ['.jsonl'],
+    // OMP inherits PI_CODING_AGENT_DIR, so Pi's folder can hold OMP's task artifacts.
+    directoryPredicate: isOmpConversationDirectory
   },
   omp: {
     rootDirs: (options, wslHomeDirs) =>
       ompSessionsRootDirs({ ompSessionsDir: options.ompSessionsDir, wslHomeDirs }),
     extensions: ['.jsonl'],
-    // Skip worker artifacts below workspace depth; OMP lists only top-level conversations (#9330).
-    directoryPredicate: (name, depth) => depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
+    directoryPredicate: isOmpConversationDirectory
   },
   'prime-agent': {
     rootDirs: (options, wslHomeDirs) =>
@@ -299,6 +299,18 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // Exclude log, SQLite and materialized-projection sidecars.
     filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
   }
+}
+
+// The Pi walk labels the OMP transcripts it reads, so an OMP row can sit under Pi's roots too.
+export function sessionRowRootDirs(
+  agent: AiVaultDeletableAgent,
+  options: AiVaultScanOptions,
+  wslHomeDirs: readonly string[]
+): string[] {
+  const roots = AI_VAULT_AGENT_SOURCES[agent].rootDirs(options, wslHomeDirs)
+  return agent === 'omp'
+    ? [...roots, ...AI_VAULT_AGENT_SOURCES.pi.rootDirs(options, wslHomeDirs)]
+    : roots
 }
 
 export { isDiscoverableSessionFile } from './session-file-discovery'

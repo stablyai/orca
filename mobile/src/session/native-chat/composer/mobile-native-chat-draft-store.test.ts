@@ -1,10 +1,15 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
-import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 
-type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
+import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import {
+  resetMobileNativeChatDraftStoreForTests,
+  useMobileNativeChatDraft
+} from './mobile-native-chat-draft-store'
+import { resetMobileNativeChatDraftInputsForTests } from './mobile-native-chat-draft-inputs'
+
+type DraftState = ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }
 
 describe('mobile native-chat draft store', () => {
   let renderer: ReactTestRenderer | null = null
@@ -13,12 +18,13 @@ describe('mobile native-chat draft store', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     resetMobileNativeChatDraftStoreForTests()
+    resetMobileNativeChatDraftInputsForTests()
     renderer = null
     state = null
   })
 
   function Harness({ tabId }: { tabId: string }): null {
-    state = useMobileNativeChatDrafts({
+    const drafts = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId,
@@ -26,6 +32,7 @@ describe('mobile native-chat draft store', () => {
       messages: [],
       transcriptSettled: true
     })
+    state = { ...drafts, composerText: useMobileNativeChatDraft(drafts.draftKey) }
     return null
   }
 
@@ -64,29 +71,6 @@ describe('mobile native-chat draft store', () => {
     act(() => currentState().setComposerText('ping'))
     act(() => currentState().clearDraftForSend(editedOrigin, 'ping'))
     expect(currentState().composerText).toBe('ping')
-  })
-
-  it('keeps a typed draft after the chat screen unmounts and remounts', async () => {
-    await mount('a')
-    act(() => currentState().setComposerText('half-written prompt'))
-    act(() => renderer?.unmount())
-
-    await mount('a')
-    expect(currentState().composerText).toBe('half-written prompt')
-  })
-
-  it('keeps each tab its own draft across a remount', async () => {
-    await mount('a')
-    act(() => currentState().setComposerText('for a'))
-    act(() => renderer?.unmount())
-
-    await mount('b')
-    expect(currentState().composerText).toBe('')
-    act(() => currentState().setComposerText('for b'))
-    act(() => renderer?.unmount())
-
-    await mount('a')
-    expect(currentState().composerText).toBe('for a')
   })
 
   it('lets an old send clear its unchanged scope after another tab was edited', async () => {

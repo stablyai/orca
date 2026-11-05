@@ -1,7 +1,7 @@
 /** Verify emulator reply parity, per-chunk ownership, replay silence and capture races. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   markHiddenRendererPty,
@@ -15,9 +15,12 @@ import {
 import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
-} from './terminal-view-attribute-store'
-import type { TerminalViewAttributes, TerminalViewRgb } from '../../shared/terminal-view-attributes'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+} from './terminal/view/terminal-view-attribute-store'
+import type {
+  TerminalViewAttributes,
+  TerminalViewRgb
+} from '../../shared/terminal/protocol/queries/terminal-view-attributes'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 
 const QUERY_BATCH = '\x1b[c\x1b]11;?\x07\x1b[?996n'
 
@@ -315,10 +318,22 @@ describe('reply ownership matrix', () => {
     expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(false)
   })
 
-  it('treats mobile subscriber records as remote view subscribers', async () => {
-    const { runtime } = createResponderRuntime()
-    await runtime.handleMobileSubscribe('pty-mob', 'client-1', { cols: 40, rows: 20 })
-    expect(runtime.hasRemoteTerminalViewSubscriber('pty-mob')).toBe(true)
+  it('yields to a phone-fitted mobile view but answers for a passive desktop-size one', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-fit')
+    runtime.registerRemoteTerminalViewSubscriber('pty-fit', () => false, 'client-1')
+    await runtime.handleMobileSubscribe('pty-fit', 'client-1', { cols: 40, rows: 20 })
+    runtime.onPtyData('pty-fit', '\x1b[6n', 1_000)
+    await settle(runtime, 'pty-fit')
+    expect(replies).toEqual([])
+
+    markHiddenRendererPty('pty-passive')
+    runtime.setMobileDisplayMode('pty-passive', 'desktop')
+    runtime.registerRemoteTerminalViewSubscriber('pty-passive', () => false, 'client-1')
+    await runtime.handleMobileSubscribe('pty-passive', 'client-1', { cols: 40, rows: 20 })
+    runtime.onPtyData('pty-passive', '\x1b[6n', 1_000)
+    await settle(runtime, 'pty-passive')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[1;1R'])
   })
 })
 

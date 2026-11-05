@@ -1,3 +1,4 @@
+import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
@@ -8,7 +9,7 @@ import {
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   resolveDashboardCardTerminalInput,
   type DashboardCardTerminalInputState
@@ -16,15 +17,16 @@ import {
 import { readDashboardClientHost } from './dashboard-client-host'
 import { dashboardCardParentPaneKey } from './agent-row-lineage'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
-import { selectTerminalLayoutsForWorktree } from '../sidebar/worktree-agent-row-selectors'
-import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/worktree-agent-orchestration-batch'
+import { selectTerminalLayoutsForWorktree } from '../sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import '../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
+import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 import {
   finishWorktreeAgentRowsCachePass,
   selectWorktreeAgentRowsCached,
   startWorktreeAgentRowsCachePass,
   type WorktreeAgentRowsCache
 } from './worktree-agent-rows-cache'
-import { selectRuntimePaneTitlesForWorktree } from '../sidebar/worktree-card-status-inputs'
+import { selectRuntimePaneTitlesForWorktree } from '../sidebar/workspace-card/activity/worktree-card-status-inputs'
 import {
   resolveDashboardCardContext,
   type DashboardCardContextState
@@ -69,7 +71,14 @@ export type DashboardSnapshotState = Pick<
   Partial<
     DashboardCardTerminalInputState &
       DashboardLaunchDetectionState &
-      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels' | 'unifiedTabsByWorktree'>
+      Pick<
+        AppState,
+        | 'runtimeEnvironments'
+        | 'sshTargetLabels'
+        | 'unifiedTabsByWorktree'
+        | 'activeWorktreeId'
+        | 'activeWorkspaceExecutionHostId'
+      >
   >
 
 export type DashboardSnapshotInput = DashboardSnapshotState & { chatNames: StructuredChatTabNames }
@@ -208,6 +217,7 @@ export function buildDashboardSnapshot(
         agentType: row.agentType,
         bucket,
         dotState,
+        verdict: agentVerdictDisplayMark(row.entry) ?? undefined,
         ...(workingMode ? { workingMode } : {}),
         task: isTitleDerived ? '' : rowTask(row),
         repoId: workspace.projectId,

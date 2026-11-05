@@ -71,6 +71,8 @@ export abstract class RateLimitServiceState {
     zcode: 0
   }
   protected mainWindow: BrowserWindow | null = null
+  /** Paired clients streaming usage (accounts.subscribe); headless hosts have no window to watch. */
+  protected usageViewers = 0
   protected detachWindowListeners: (() => void) | null = null
   protected isFetching = false
   protected fullFetchQueued = false
@@ -88,6 +90,7 @@ export abstract class RateLimitServiceState {
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
   protected zcodeFetchGeneration = 0
+  protected antigravityFetchGeneration = 0
   protected lastOpencodeConfigHash = ''
   protected lastMiniMaxConfigHash = ''
   protected lastZcodeConfigHash = ''

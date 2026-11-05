@@ -1,3 +1,7 @@
+import type { isGeminiTerminalTitle } from '../../../../shared/agent-status/title/agent-title-core'
+import type { isClaudeAgent } from '../../../../shared/agent-status/title/agent-title-identity'
+import type { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
+import type { TerminalLaunchInputAttemptOwner } from './terminal-launch-input-attempt'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
@@ -6,19 +10,19 @@ import type { ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
-import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
+import type { TerminalColorSchemeMode } from '../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
+import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
 import type {
   SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
-import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export type PtyPaneStartup = {
   command: string
@@ -57,11 +61,15 @@ export type PaneProcessExit = {
 }
 
 export type PtyConnectionDeps = {
+  detectAgentStatusFromTitle?: typeof detectAgentStatusFromTitle
+  isClaudeAgent?: typeof isClaudeAgent
+  isGeminiTerminalTitle?: typeof isGeminiTerminalTitle
   tabId: string
   worktreeId: string
   cwd?: string
   /** Delays a fresh split's spawn without delaying its renderer pane. */
   cwdPromise?: Promise<string>
+  launchInputAttempt?: TerminalLaunchInputAttemptOwner
   placement?: TerminalPanePlacement
   /** Input handed off from a predecessor mount of the same deferred split. */
   preconnectInput?: readonly PtyPreconnectInputEntry[]
@@ -127,6 +135,8 @@ export type PtyConnectionDeps = {
   clearExitedPanePtyLayoutBindingForLeaf?: (leafId: string, exitedPtyId: string) => void
   /** Settles the captured one-shot startup only after this pane owns a concrete PTY. */
   onStartupBound?: () => void
+  /** Re-renders mobile lock overlays for fit/driver state that arrived before this pane bound its PTY. */
+  refreshMobileOverlays?: () => void
   deferPtyInput?: (paneId: number, data: string, forward: (data: string) => void) => void
   /** Record main’s 2031 subscription and current theme for later flip pushes; subscription itself is silent (#9993). */
   recordPaneMode2031Subscription?: (paneId: number, subscribedMode: 'dark' | 'light') => void

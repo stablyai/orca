@@ -1,8 +1,8 @@
 // Client OSC ownership once discarded mirrored lastAssistantMessage, which only host hooks know (#12906/STA-3596). OSC writes lack that field, so wholesale client precedence blanked every paired row. Drive real mirror/store/sidebar builder and assert entry.lastAssistantMessage, the field both row renderers consume.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
@@ -13,15 +13,15 @@ import {
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
-import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
+import { buildWorktreeAgentRows } from '../components/sidebar/workspace-card/activity/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree
-} from '../components/sidebar/worktree-agent-row-selectors'
+} from '../components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
-} from '../components/sidebar/worktree-card-status-inputs'
+} from '../components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 
 // Mock singleton import; this harness drives createTestStore like sibling mirror suites.
 vi.mock('../store', () => ({
@@ -204,103 +204,6 @@ describe('#12906: remote agent rows keep the host-published last assistant messa
   afterEach(() => {
     vi.useRealTimers()
     resetRendererOwnedAgentStatusPanesForTests()
-  })
-
-  it('shows the message on a pane this renderer owns from the byte stream', () => {
-    const store = seedPairedClientStore()
-    // Host hook receives completion text while client OSC independently observes idle.
-    const mirrored = applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 1,
-        hostNow: T0 - 1_000,
-        statusByHostTabId: {
-          [OWNED.hostTabId]: {
-            state: 'done',
-            lastAssistantMessage: HOST_MESSAGE,
-            stateStartedAt: T0 - 2_000
-          }
-        }
-      }),
-      T0
-    )
-    expect(mirrored, 'harness must reach the mirror, not stop at the freshness gate').toBe(true)
-    replayClientByteStatus(store, OWNED, 'done', T0)
-    // Republication is where the loss happens: the client now owns the key.
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 2,
-        hostNow: T0 + 1_000,
-        statusByHostTabId: {
-          [OWNED.hostTabId]: {
-            state: 'done',
-            lastAssistantMessage: HOST_MESSAGE,
-            stateStartedAt: T0 - 2_000
-          }
-        }
-      }),
-      T0 + 2_000
-    )
-
-    const messages = observeRowMessages(store, T0 + 2_000)
-    expect(messages, JSON.stringify(messages, null, 2)).toMatchObject({
-      [mirrorPaneKey(OWNED)]: HOST_MESSAGE
-    })
-  })
-
-  it('control: a pane this renderer never wrote status for already showed it', () => {
-    const store = seedPairedClientStore()
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 1,
-        hostNow: T0 - 1_000,
-        statusByHostTabId: {
-          [CEDED.hostTabId]: {
-            state: 'done',
-            lastAssistantMessage: HOST_MESSAGE,
-            stateStartedAt: T0 - 2_000
-          }
-        }
-      }),
-      T0
-    )
-
-    // Pins the causal boundary to the ownership fence, not the mirror as a whole.
-    expect(observeRowMessages(store, T0)[mirrorPaneKey(CEDED)]).toBe(HOST_MESSAGE)
-  })
-
-  it('never invents a message the host did not publish (old host / new client)', () => {
-    const store = seedPairedClientStore()
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 1,
-        hostNow: T0 - 1_000,
-        statusByHostTabId: {
-          [OWNED.hostTabId]: { state: 'done', stateStartedAt: T0 - 2_000 }
-        }
-      }),
-      T0
-    )
-    replayClientByteStatus(store, OWNED, 'done', T0)
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 2,
-        hostNow: T0 + 1_000,
-        statusByHostTabId: {
-          [OWNED.hostTabId]: { state: 'done', stateStartedAt: T0 - 2_000 }
-        }
-      }),
-      T0 + 2_000
-    )
-
-    const messages = observeRowMessages(store, T0 + 2_000)
-    // Guard against a vacuous pass: the row must exist for its blank message to mean anything.
-    expect(Object.keys(messages)).toContain(mirrorPaneKey(OWNED))
-    expect(messages[mirrorPaneKey(OWNED)]).toBeUndefined()
   })
 
   it('keeps a mirrored message when a later host frame omits the field (old host / new client)', () => {

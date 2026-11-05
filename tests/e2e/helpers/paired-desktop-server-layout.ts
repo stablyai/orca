@@ -1,9 +1,9 @@
 // Compare the server’s authoritative workspace layout to the tree its paired desktop actually draws (H5b, H5c).
 import type { Page } from '@stablyai/playwright-test'
-import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
-import { decodePairingOffer } from '../../../src/shared/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime-client'
-import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
+import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
+import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
+import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
+import { toWebTerminalSurfaceTabId } from '../../../src/shared/workspace-layout/terminal-surface-id'
 import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
 import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
 import { expect } from './orca-app'

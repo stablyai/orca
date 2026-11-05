@@ -1,4 +1,4 @@
-import { parseWslPath } from '../wsl'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
 
 export type BundledRipgrepWslRouting = {
   /** Distro the spawn is routed into via wsl.exe; unset runs the host binary. */

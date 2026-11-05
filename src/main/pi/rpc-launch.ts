@@ -1,4 +1,4 @@
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
@@ -6,9 +6,12 @@ import {
 } from '../native-chat/native-chat-visuals-delivery'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import type { PiBackgroundWorkLaunch } from './rpc-background-work-bridge'
+import { PI_BACKGROUND_WORK_DIR_ENV } from './rpc-background-work-bridge-source'
 
 export type PiRpcLaunchOptions = {
   command: string
+  prefixArgs?: readonly string[]
   cwd: string
   fullAccess: boolean
   extraArgs?: readonly string[]
@@ -16,6 +19,8 @@ export type PiRpcLaunchOptions = {
   envToDelete?: readonly string[]
   sessionFile?: string
   forkFile?: string
+  /** Orca's background-work bridge for this launch; absent when it could not be prepared. */
+  backgroundWork?: PiBackgroundWorkLaunch
 }
 
 const CALLER_ENV_TO_DELETE = [
@@ -106,13 +111,20 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
     command: options.command,
     cwd: options.cwd,
     args: [
+      ...(options.prefixArgs ?? []),
       '--mode',
       'rpc',
       ...args,
+      ...(options.backgroundWork ? ['--extension', options.backgroundWork.extension] : []),
       ...(options.sessionFile ? ['--session', options.sessionFile] : []),
       ...(options.forkFile ? ['--fork', options.forkFile] : [])
     ],
-    env: { ...options.env },
+    env: {
+      ...options.env,
+      ...(options.backgroundWork
+        ? { [PI_BACKGROUND_WORK_DIR_ENV]: options.backgroundWork.directory }
+        : {})
+    },
     envToDelete: [...(options.envToDelete ?? [])]
   }
 }

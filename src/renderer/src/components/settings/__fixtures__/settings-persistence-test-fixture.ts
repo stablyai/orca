@@ -1,16 +1,17 @@
+import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useAppStore } from '../../../store'
-import type { SettingsStoreModel } from '../use-settings-store-model'
-import type { SettingsInteractionModel } from '../use-settings-interaction-controller'
-import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control-ai'
+import type { SettingsStoreModel } from '../page/use-settings-store-model'
+import type { SettingsInteractionModel } from '../page/use-settings-interaction-controller'
+import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
   type AgentLaunchSettingsMutation
-} from '../../../../../shared/agent-launch-settings'
+} from '../../../../../shared/agent-launch/choices/agent-launch-settings'
 
 const originalState = useAppStore.getState()
 const originalApi = window.api
@@ -24,7 +25,7 @@ beforeEach(() => {
   useAppStore.setState({
     settings: {
       ...getDefaultSettings('/synthetic'),
-      experimentalNativeChat: true,
+      nativeChatProviders: EVERY_AGENT_CHAT,
       sourceControlAi: normalizeSourceControlAiSettings({
         ...normalizeSourceControlAiSettings(undefined),
         enabled: false,
@@ -58,7 +59,8 @@ beforeEach(() => {
     configurable: true,
     value: {
       settings: { set: persist, get: vi.fn(async () => useAppStore.getState().settings) },
-      runtime: { call: runtimeCall }
+      runtime: { call: runtimeCall },
+      preflight: { detectAgents: async () => [] }
     }
   })
 })
@@ -99,4 +101,25 @@ export function settingsModel(): SettingsPersistenceModel {
     setSourceControlAiPromptDiscardSignal: vi.fn()
   } satisfies SettingsPersistenceModel
   return model
+}
+
+export async function pickerLocaleFixture() {
+  const { i18n } = await import('@/i18n/i18n')
+  const { default: spanish } = await import('@/i18n/locales/es.json')
+  const previous = i18n.hasResourceBundle('es', 'translation')
+    ? structuredClone(i18n.getResourceBundle('es', 'translation'))
+    : undefined
+  const language = i18n.language
+  i18n.addResourceBundle('es', 'translation', spanish, true, true)
+  await i18n.changeLanguage('en')
+  return {
+    i18n,
+    async restore() {
+      i18n.removeResourceBundle('es', 'translation')
+      if (previous) {
+        i18n.addResourceBundle('es', 'translation', previous)
+      }
+      await i18n.changeLanguage(language)
+    }
+  }
 }

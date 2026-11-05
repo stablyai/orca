@@ -30,7 +30,7 @@ jobs:
   # Avoid occupying the limited Mac pool when main has not moved.
   preflight:
     if: github.repository == 'stablyai/orca'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       should_build: ${{ steps.freshness.outputs.should_build }}
@@ -92,7 +92,7 @@ jobs:
     with:
       ref: ${{ needs.preflight.outputs.head_sha }}
       build_template: true
-      fast_runners: true
+      fast_runners: false
 
   build-hourly-mac:
     needs:
@@ -104,6 +104,7 @@ jobs:
       version: ${{ steps.hourly.outputs.version }}
       head_sha: ${{ needs.preflight.outputs.head_sha }}
       published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+    # Hosted macos-15 cannot boot the packaged x64 terminal host that afterPack verifies.
     runs-on: blacksmith-6vcpu-macos-15
     # Allow 150min for install 3×10 + publish 2×45 + ~25 setup/build/verify; outer timeout otherwise interrupts cleanup.
     timeout-minutes: 150
@@ -176,7 +177,7 @@ jobs:
 
       # Require cert before expensive build; signing enables installation over existing Orca.
       - name: Verify macOS signing environment
-        run: node config/scripts/verify-macos-release-env.mjs
+        run: node config/scripts/desktop-distribution/macos/verify-macos-release-env.mjs
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
@@ -208,7 +209,7 @@ jobs:
           published="$main_tags"$'\n'"$channel_tags"
           echo "Published version sources: $(grep -c . <<<"$main_tags" || true) main tags, $(grep -c . <<<"$channel_tags" || true) channel tags"
           ORCA_PUBLISHED_VERSIONS="$published" ORCA_HOURLY_RELEASE_NAMES="$names" \
-            node config/scripts/hourly-build-version.mjs \
+            node "$(if [ -f config/scripts/release/versioning/hourly-build-version.mjs ]; then printf %s config/scripts/release/versioning/hourly-build-version.mjs; else printf %s config/scripts/hourly-build-version.mjs; fi)" \
             >"$RUNNER_TEMP/hourly-identity.txt"
           grep -E '^(version|build_number)=' "$RUNNER_TEMP/hourly-identity.txt"
           # Dispatch YAML can be newer than the pinned source’s version script; reject missing output before publishing an untitled release.
@@ -282,7 +283,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_HOURLY=1 node config/scripts/build-mac-notarization-overlap.mjs --publish always; else ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always; fi
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON "$(if [ -f config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs; else printf %s config/scripts/pinned-node-downloads.mjs; fi)" darwin-arm64 darwin-x64 && node "$(if [ -f config/scripts/native-build/node-addons/ensure-native-runtime.mjs ]; then printf %s config/scripts/native-build/node-addons/ensure-native-runtime.mjs; else printf %s config/scripts/ensure-native-runtime.mjs; fi)" --runtime=electron && if { [ -f config/scripts/desktop-distribution/macos/build-mac-notarization-overlap.mjs ] || [ -f config/scripts/build-mac-notarization-overlap.mjs ]; }; then ORCA_MAC_HOURLY=1 node "$(if [ -f config/scripts/desktop-distribution/macos/build-mac-notarization-overlap.mjs ]; then printf %s config/scripts/desktop-distribution/macos/build-mac-notarization-overlap.mjs; else printf %s config/scripts/build-mac-notarization-overlap.mjs; fi)" --publish always; else ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always; fi
         env:
           # Give publisher token write access to configured orca-hourly repo.
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
@@ -402,4 +403,4 @@ jobs:
       ref: ${{ needs.build-hourly-mac.outputs.head_sha }}
       version: ${{ needs.build-hourly-mac.outputs.version }}
       orcad_template: true
-      fast_release: true
+      fast_release: false

@@ -1,3 +1,5 @@
+import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   RuntimeConstructionBindings,
   RuntimeConstructionDependencies
@@ -5,32 +7,46 @@ import type {
 import type { OrcaRuntimeWithRuntimeId as IdentityState } from './runtime-identity-state'
 import type { OrcaRuntimeWithStopRequestedPtyIds as ServiceState } from './runtime-service-state'
 import type { OrcaRuntimeWithPreservedBranchCleanup as HostServices } from './runtime-host-services'
-import type { RuntimeFileCommandSurface } from '../runtime-file-command-surface'
-import type { RuntimeGitCommandSurface } from '../runtime-git-command-surface'
-import type { RuntimeRepositoryCommandSurface } from '../runtime-repository-command-surface'
-import type { RuntimeReviewCommandSurface } from '../runtime-review-command-surface'
-import type { RuntimeServiceCommandSurface } from '../runtime-service-command-surface'
-import type { RuntimeSkillCommandSurface } from '../runtime-skill-command-contract'
+
 import type { RuntimeEdgeCommandSurface } from '../runtime-edge-command-controller'
 import type { OrcaRuntimeWithListManagedWorktrees as ListManagedWorktrees } from '../workspaces/managed-workspace-operations'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-commands'
 
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
+import { installGitHubProjectAccounts } from '../../github/github-project-account'
+import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
 import type { StatsCollector } from '../../stats/collector'
 
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
 
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
-import { installRuntimeFileCommandSurface } from '../runtime-file-command-surface'
-import { installRuntimeGitCommandSurface } from '../runtime-git-command-surface'
-import { installRuntimeRepositoryCommandSurface } from '../runtime-repository-command-surface'
-import { installRuntimeReviewCommandSurface } from '../runtime-review-command-surface'
-import { installRuntimeServiceCommandSurface } from '../runtime-service-command-surface'
-import { RuntimeSkillCommands } from '../runtime-skill-command-surface'
-import { installRuntimeSkillCommandSurface } from '../runtime-skill-command-contract'
+import {
+  type RuntimeFileCommandSurface,
+  installRuntimeFileCommandSurface
+} from '../runtime-file-command-surface'
+import {
+  type RuntimeGitCommandSurface,
+  installRuntimeGitCommandSurface
+} from '../integrations/git/runtime-git-command-surface'
+import {
+  type RuntimeRepositoryCommandSurface,
+  installRuntimeRepositoryCommandSurface
+} from '../repositories/runtime-repository-command-surface'
+import {
+  type RuntimeReviewCommandSurface,
+  installRuntimeReviewCommandSurface
+} from '../runtime-review-command-surface'
+import {
+  type RuntimeServiceCommandSurface,
+  installRuntimeServiceCommandSurface
+} from '../runtime-service-command-surface'
+import { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
+import {
+  type RuntimeSkillCommandSurface,
+  installRuntimeSkillCommandSurface
+} from '../integrations/skill/runtime-skill-command-contract'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
 import { RuntimeSessionSearchSettingsController } from '../runtime-session-search-settings'
@@ -40,9 +56,10 @@ import { configureAiVaultSessionSources } from '../../ai-vault/cached-session-li
 import { configureHostReadableTranscriptPathSources } from '../../native-chat/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal-model-query-authority'
-import { registerTerminalViewAttributesApplier } from '../terminal-view-attribute-store'
+import { registerTerminalViewAttributesApplier } from '../terminal/view/terminal-view-attribute-store'
 import { RuntimeMachineName } from '../runtime-machine-name'
 import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The constructor installs every checked canonical surface.
 export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
@@ -73,6 +90,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly getPairedDeviceNameFn: HostServices['getPairedDeviceNameFn']
   declare protected readonly buildAgentHookPtyEnv: HostServices['buildAgentHookPtyEnv']
   declare protected readonly getDesktopWindowStatusFn: HostServices['getDesktopWindowStatusFn']
+  protected readonly headlessTerminalScrollbackRows: number
   declare protected readonly prepareAiVaultSessionResumeFn: HostServices['prepareAiVaultSessionResumeFn']
   declare protected readonly prepareCodexStructuredLaunchFn: HostServices['prepareCodexStructuredLaunchFn']
   declare protected readonly resolveCodexStructuredLaunchHomeFn: HostServices['resolveCodexStructuredLaunchHomeFn']
@@ -86,12 +104,14 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly skillCommands: ServiceState['skillCommands']
 
   abstract showManagedWorktree(
-    worktreeSelector: string
+    ...args: Parameters<ListManagedWorktrees['showManagedWorktree']>
   ): ReturnType<ListManagedWorktrees['showManagedWorktree']>
   abstract resolveProjectRuntimeForWorktree(
     worktreeId: string | null | undefined
   ): ProjectExecutionRuntimeResolution | undefined
   protected abstract ensureNativeWindowsConptyDa1Override(ptyId: string): void
+
+  readonly getSetupTerminalTitle: () => string
 
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
 
@@ -112,9 +132,18 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   ) {
     super()
     this.store = store
+    installGitHubProjectAccounts(store, () => this.resolvedWorktrees.peek()?.worktrees ?? [])
+    this.legacyStructuredSessionTabIds = Object.freeze(
+      collectSavedStructuredAgentSessionIds(
+        store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
+      )
+    )
     this.machineName.start()
+    this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
     installRuntimeFileCommandSurface(this, this.fileCommands)
+    // Host start: drop what a crashed run's staged saves left in the staging folder.
+    this.fileCommands.stagedFileSaves.sweepOrphans()
     installRuntimeGitCommandSurface(this, this.gitCommands)
     installRuntimeRepositoryCommandSurface(this, {
       projectHostSetups: this.projectHostSetups,
@@ -191,7 +220,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     )
     this.automation = new RuntimeAutomationController(store, {
       showRepo: (selector) => this.showRepo(selector),
-      showManagedWorktree: (selector) => this.showManagedWorktree(selector)
+      showManagedWorktree: (selector, hostId) => this.showManagedWorktree(selector, hostId)
     })
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
@@ -246,6 +275,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.onClaudeTerminalEvidence = deps?.onClaudeTerminalEvidence ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
+    this.headlessTerminalScrollbackRows =
+      deps?.headlessTerminalScrollbackRows ?? DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null
     this.prepareCodexStructuredLaunchFn = deps?.prepareCodexStructuredLaunch ?? null
     this.resolveCodexStructuredLaunchHomeFn = deps?.resolveCodexStructuredLaunchHome ?? null

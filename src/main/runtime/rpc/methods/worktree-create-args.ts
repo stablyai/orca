@@ -1,8 +1,11 @@
-import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
+import { terminalImageViewerSupported } from '../../terminal/launch/terminal-image-viewer-env'
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { hostQualifiedRepoSelector, type RuntimeRepoSelector } from '../../runtime-repo-selector'
+import {
+  hostQualifiedRepoSelector,
+  type RuntimeRepoSelector
+} from '../../workspaces/catalog/runtime-repo-selector'
 import type { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
@@ -25,6 +28,10 @@ export function buildManagedWorktreeCreateArgs(
   origin?: Parameters<typeof terminalImageViewerSupported>[0]
 ): ManagedWorktreeCreateArgs {
   const viewerSupported = origin && terminalImageViewerSupported(origin)
+  // Why: another owner's provenance is a label only; this host's create policy stays as before.
+  const hostAutomationCreate =
+    provenance.automationProvenance !== undefined &&
+    provenance.automationProvenance.origin !== 'client'
   return {
     repoSelector: worktreeCreateRepoSelector(params),
     // A phone's retry key is the identity of its creation.
@@ -36,6 +43,7 @@ export function buildManagedWorktreeCreateArgs(
     baseBranch: params.baseBranch,
     compareBaseRef: params.compareBaseRef,
     branchNameOverride: params.branchNameOverride,
+    ...(params.branchIntent ? { branchIntent: params.branchIntent } : {}),
     linkedIssue: params.linkedIssue,
     linkedPR: params.linkedPR,
     linkedLinearIssue: params.linkedLinearIssue,
@@ -87,7 +95,9 @@ export function buildManagedWorktreeCreateArgs(
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,
     // Only user-visible creates offer offline fallback; automation retains the network error.
-    ...(provenance.automationProvenance ? {} : { allowLocalBaseFallback: true }),
+    ...(hostAutomationCreate ? {} : { allowLocalBaseFallback: true }),
+    // An automation's create is background work: its terminals never start a stopped WSL distro (E9).
+    ...(hostAutomationCreate ? {} : { wslUserAct: true as const }),
     startup: params.startupCommand
       ? {
           command: params.startupCommand,
@@ -108,6 +118,9 @@ export function buildManagedWorktreeCreateArgs(
       envParentWorkspace: params.envParentWorkspace,
       parentWorktree: params.parentWorktree,
       ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
+      ...(params.cwdParentAmbiguous === true
+        ? { cwdParentAmbiguous: params.cwdParentAmbiguous }
+        : {}),
       noParent: params.noParent === true,
       callerTerminalHandle: params.callerTerminalHandle,
       orchestrationContext: params.orchestrationContext

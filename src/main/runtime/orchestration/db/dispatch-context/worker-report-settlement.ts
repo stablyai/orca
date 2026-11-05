@@ -1,12 +1,13 @@
+import { markUnreadFollowUpMail } from './worker-follow-up-lineage'
 import type { WorkerReportOutcome, WorkerReportSettlement } from '../../types'
 import type { OrchestrationDb } from '../orchestration-db'
-import { AGENT_PROMPT_STALLED_ERROR } from '../../../agent-prompt-submission-verification'
 import { settleActiveDispatchesForTask } from './dispatch-completion'
 import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import {
   isWorkerStateIn,
+  reportCorrectsUnobservedPrompt,
   SETTLEABLE_WORKER_STATES,
   UNPROVEN_WORKER_STATES
 } from '../../worker-report-admission'
@@ -92,11 +93,8 @@ export function settleWorkerReportInTransaction(
 
   const expectedDispatchStatus = params.outcome === 'succeeded' ? 'completed' : 'failed'
   const expectedTaskStatus = params.outcome === 'succeeded' ? 'completed' : 'failed'
-  // A first-hand worker report can correct an unobserved prompt failure, even after circuit break; check before duplicate detection (#16095).
-  const settledByUnobservedPrompt =
-    (dispatch.status === 'failed' || dispatch.status === 'circuit_broken') &&
-    dispatch.last_failure === AGENT_PROMPT_STALLED_ERROR &&
-    task.status === 'failed'
+  // Check before duplicate detection (#16095).
+  const settledByUnobservedPrompt = reportCorrectsUnobservedPrompt(dispatch, task)
   const reportingWorker = this.getWorkerDispatch(params.dispatchId)
   const settledDispatchStatus = dispatch.status === 'circuit_broken' ? 'failed' : dispatch.status
   if (
@@ -279,7 +277,11 @@ export function settleWorkerReportInTransaction(
   if (params.outcome === 'succeeded') {
     this.promoteReadyTasks(params.taskId)
   }
+  if (reportingWorker && this.workerAutoReleaseEnabled?.() !== false) {
+    this.armWorkerTerminalAutoReleaseStatement(params.dispatchId)
+  }
   recordAcceptedReportFact(this, params)
+  markUnreadFollowUpMail(this, params.dispatchId)
   this.db.exec('RELEASE settle_worker_report')
   return { action: 'settled', outcome: params.outcome, duplicate: false }
 }

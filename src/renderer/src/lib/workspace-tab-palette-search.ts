@@ -1,9 +1,12 @@
 import type { OpenFile } from '@/store/slices/editor'
-import type { PaletteDocument } from './palette-match/palette-document'
+import type { PaletteDocument } from '../../../shared/palette-match/palette-document'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AgentMetadata, WorkspaceTabAgentMetadataState } from './workspace-tab-agent-metadata'

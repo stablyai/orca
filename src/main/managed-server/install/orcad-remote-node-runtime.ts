@@ -15,7 +15,7 @@ import {
   orcadNodeRuntimeExecutable
 } from '../../../shared/orcad-artifacts'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination
@@ -226,6 +226,8 @@ export async function ensureRemoteOrcadNodeRuntime(options: {
   archivePath: () => Promise<string>
   /** Name the offline archive location when every download fails. */
   offlineArchivePath?: string
+  /** Per-source connect budget for the host's own download fallback. */
+  hostConnectTimeoutSeconds?: number
   signal?: AbortSignal
   /** Distinguish unconfirmed host round trips from local failures. */
   remoteStep?: RemoteRuntimeStep

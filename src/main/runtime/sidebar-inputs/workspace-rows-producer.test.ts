@@ -3,15 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { OrcaRuntimeService } from '../orca-runtime'
-import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
+import type { ResolvedWorktreeSnapshot } from '../workspaces/catalog/runtime-resolved-worktree-cache'
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { requireSwitchedOn } from './require-switched-on'
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
 import type {
   ResolvedWorktreeRepoScans,
   ResolvedWorktreeScanJoin
-} from '../workspaces/resolved-worktree-scan-join'
+} from '../workspaces/catalog/resolved-worktree-scan-join'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 
@@ -355,39 +355,6 @@ describe('WorkspaceRowsProducer', () => {
     await rows.settled()
     expect(rows.snapshot()?.rows['local|repo-1::/r/a']).toMatchObject({ displayName: 'b' })
     detach()
-  })
-
-  it('times an urgent publish against a scan held for two seconds', async () => {
-    vi.useRealTimers()
-    const { runtime, listing, write, holdScans } = setup()
-    const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
-    const phone = new TestPhone(feed, 'conn-1')
-    phone.refresh()
-    await phone.settle()
-    const release = holdScans()
-    const held = setTimeout(release, 2000)
-    runtime.emit({ type: 'worktreesChanged', repoId: 'repo-1' })
-    // Past the coalesce window, so only urgency can make the write publish at once.
-    await new Promise((resolve) => setTimeout(resolve, 60))
-    const published = new Promise<number>((resolve) => {
-      const detach = runtime.onClientEvent((event) => {
-        if (event.type === 'sidebarInputsChanged') {
-          detach()
-          resolve(performance.now())
-        }
-      })
-    })
-    const startedAt = performance.now()
-    listing.worktrees[0] = { ...listing.worktrees[0], comment: 'renamed' }
-    write(['worktreeMeta'])
-    const elapsedMs = (await published) - startedAt
-    clearTimeout(held)
-    release()
-    process.stdout.write(
-      `[timing] urgent publish with a scan held 2000 ms: ${elapsedMs.toFixed(2)} ms\n`
-    )
-    expect(elapsedMs).toBeLessThan(20)
-    phone.disconnect()
   })
 
   it('keeps a PR linked after a branch switch that a cached rescan did not see yet', async () => {

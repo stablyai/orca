@@ -29,10 +29,12 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     gitHistoryState,
     handleAbortOperationForConflict,
     handleCommitAction,
+    handleCompleteMerge,
     handleContextMenu,
     handleOpenDiff,
     handleResolveConflictsWithAI,
     handleSelect,
+    handleResolveConflict,
     handleStage,
     handleStageAllPaths,
     handleStageSectionPaths,
@@ -40,8 +42,10 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     handleUnstage,
     handleUnstagePaths,
     hasUncommittedEntries,
+    isResolvingConflictsWithAI,
     isAbortingOperation,
     isCheckingRecoveryAdmission,
+    isCommitting,
     isExecutingBulk,
     isGitHistoryVisible,
     loadCommitFiles,
@@ -64,6 +68,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     setBaseRefDialogOpen,
     sourceControlAiActionsVisible,
     sourceControlViewMode,
+    statusReadError,
     toggleSection,
     toggleSubmodule,
     toggleTreeDir,
@@ -78,7 +83,10 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =
-    !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
+    statusReadError === undefined &&
+    !hasUncommittedEntries &&
+    branchSummary?.status === 'ready' &&
+    branchEntries.length === 0
 
   return (
     <>
@@ -86,9 +94,11 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         unresolvedConflictCount={unresolvedConflictReviewEntries.length}
         conflictOperation={conflictOperation}
         sourceControlAiActionsVisible={sourceControlAiActionsVisible}
-        isRecoveryBusy={isCheckingRecoveryAdmission}
+        isRecoveryBusy={isCheckingRecoveryAdmission || isResolvingConflictsWithAI}
         isAbortingOperation={isAbortingOperation}
         onAbortOperation={handleAbortOperationForConflict}
+        isCompletingMerge={isCommitting}
+        onCompleteMerge={() => void handleCompleteMerge()}
         onResolveWithAi={() => void handleResolveConflictsWithAI()}
         onReviewConflicts={() => {
           openConflictReview(
@@ -99,6 +109,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           )
         }}
         repositoryHuge={repositoryHuge}
+        statusReadError={statusReadError}
         worktreeId={currentWorktreeId}
         onRetryStatus={refreshActiveGitStatus}
         onStageAllChanges={handleStageWorktreeChanges}
@@ -168,6 +179,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           activeConnectionId={activeConnectionId}
           handleOpenDiff={handleOpenDiff}
           handleStage={handleStage}
+          handleResolveConflict={handleResolveConflict}
           handleUnstage={handleUnstage}
           requestDiscardEntry={requestDiscardEntry}
           diffCommentCountByPath={diffCommentCountByPath}
@@ -189,6 +201,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
 
       {branchSummary?.status === 'ready' && hasFilteredBranchEntries && (
         <SourceControlBranchSection
+          activeOpenRowKeys={activeOpenRowKeys}
           branchSummary={branchSummary}
           filteredBranchEntries={filteredBranchEntries}
           totalBranchEntryCount={branchEntries.length}
@@ -216,7 +229,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
             state={gitHistoryState}
             collapsed={collapsedSections.has('history')}
             onToggle={() => toggleSection('history')}
-            onRefresh={() => void refreshGitHistory()}
+            onRefresh={() => void refreshGitHistory({ wakeWslDistro: true })}
             onOpenCommit={(item) => void openHistoryCommitDiff(item)}
             onLoadCommitFiles={loadCommitFiles}
             onOpenCommitFile={openCommitFile}

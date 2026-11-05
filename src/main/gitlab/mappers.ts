@@ -1,15 +1,13 @@
-import type { CheckStatus } from '../../shared/github/pull-request-types'
-import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
 import {
   mapGitLabPipelineJobStatusToCheckStatus,
   mapGitLabPipelineJobStatusToConclusion
-} from '../../shared/gitlab-pipeline-checks'
-import { summarizeProviderChecks } from '../../shared/provider-check-summary'
+} from '../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
+import type { CheckStatus } from '../../shared/github/pull-request-types'
+import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
+
+import { summarizeProviderChecks } from '../../shared/source-control/checks/provider-check-summary'
 
 // Split GitLab's combined job lifecycle/outcome into the common check-row shape.
-
-export const mapPipelineJobStatusToCheckStatus = mapGitLabPipelineJobStatusToCheckStatus
-export const mapPipelineJobStatusToConclusion = mapGitLabPipelineJobStatusToConclusion
 
 export function mapMRState(state: string, isDraft?: boolean, title?: string): MRState {
   const s = state?.toLowerCase()
@@ -76,6 +74,8 @@ type GitLabMRRaw = {
   description?: string | null
   target_branch?: string
   author?: { username?: string | null; avatar_url?: string | null } | null
+  head_pipeline?: { status?: string } | null
+  pipeline?: { status?: string } | null
 }
 
 export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInfo {
@@ -86,7 +86,7 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     title: data.title,
     state: mapMRState(data.state, data.draft, data.title),
     url: data.web_url ?? data.url ?? '',
-    pipelineStatus,
+    pipelineStatus: settleManualPipelineStatus(data, pipelineStatus),
     updatedAt: data.updated_at ?? data.updatedAt ?? '',
     mergeable,
     ...(mergeStateStatus ? { mergeStateStatus } : {}),
@@ -97,6 +97,19 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     ...(data.author?.username ? { author: data.author.username } : {}),
     ...(data.author?.avatar_url ? { authorAvatarUrl: data.author.avatar_url } : {})
   }
+}
+
+// A mergeable manual pipeline has no automatic work outstanding, but its manual stage has not passed.
+export function settleManualPipelineStatus(
+  data: GitLabMRRaw,
+  pipelineStatus: CheckStatus
+): CheckStatus {
+  const raw = (data.head_pipeline ?? data.pipeline)?.status?.toLowerCase()
+  return raw === 'manual' &&
+    data.detailed_merge_status === 'mergeable' &&
+    data.has_conflicts !== true
+    ? 'neutral'
+    : pipelineStatus
 }
 
 function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
@@ -151,8 +164,8 @@ export function derivePipelineStatus(
     rollup.map((job) => {
       const s = job.status?.toLowerCase() ?? ''
       return {
-        status: mapPipelineJobStatusToCheckStatus(s),
-        conclusion: mapPipelineJobStatusToConclusion(s)
+        status: mapGitLabPipelineJobStatusToCheckStatus(s),
+        conclusion: mapGitLabPipelineJobStatusToConclusion(s)
       }
     })
   )
@@ -264,6 +277,7 @@ function classifyPipelineString(status: string): CheckStatus {
     s === 'created' ||
     s === 'pending' ||
     s === 'running' ||
+    s === 'waiting_for_callback' ||
     s === 'waiting_for_resource' ||
     s === 'preparing' ||
     s === 'scheduled'

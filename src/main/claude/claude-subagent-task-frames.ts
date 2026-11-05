@@ -5,8 +5,8 @@ import {
   claudeTaskId,
   isBoundedClaudeTaskId
 } from './claude-background-task-tracker'
-import { isAgentChildWorkKind } from '../../shared/agent-status-child-work-liveness'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import { isAgentChildWorkKind } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
+import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 
 const TASK_SUBTYPES: ReadonlySet<string> = new Set([
   'task_started',

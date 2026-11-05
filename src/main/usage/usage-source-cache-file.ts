@@ -5,7 +5,7 @@ import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,
   writeFileDurable
-} from '../durable-file-write'
+} from '../filesystem/durable-file-write'
 
 // Only scans need bulky per-source records; worker-owned sidecars keep them off main.
 
@@ -78,7 +78,8 @@ export async function writeUsageSourceCacheData(
   await writeFileDurable(
     durableWriteTempPath(ref.path, threadId > 0 ? String(threadId) : undefined),
     ref.path,
-    data
+    data,
+    0o600
   )
 }
 

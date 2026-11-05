@@ -1,6 +1,18 @@
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type {
+  AutomationLaunchSetup,
+  AutomationLaunchSetupPatch,
+  AutomationLaunchPreferences
+} from './automation-launch-types'
+export type {
+  AutomationLaunchSetup,
+  AutomationLaunchSetupPatch,
+  AutomationLaunchPreferences,
+  AutomationArgumentEdit,
+  AutomationLaunchSourceEdits
+} from './automation-launch-types'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -96,6 +108,10 @@ export type Automation = {
   prompt: string
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
+  surface?: 'chat' | 'terminal'
+  launchSetup?: AutomationLaunchSetup
+  launchPreferences?: AutomationLaunchPreferences
+  agentArgs?: string | null
   /** Saved text appended to the host's default agent Arguments on each fresh run; absent means none. */
   extraAgentArgs?: string
   /** Why: runContext carries the logical project + host setup identity for
@@ -143,7 +159,7 @@ export type AutomationRun = {
   workspaceId: string | null
   /** Keep run history understandable after workspace deletion removes live metadata. */
   workspaceDisplayName?: string | null
-  sessionKind: 'terminal'
+  sessionKind: 'terminal' | 'chat'
   chatSessionId: string | null
   terminalSessionId: string | null
   /** Retain the executed pane/PTY because terminal tabs may later point elsewhere. */
@@ -153,6 +169,9 @@ export type AutomationRun = {
   precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
   error: string | null
+  /** Localizes `error`; old records omit it and clients show `error` as stored. */
+  errorCode?: string
+  errorParams?: Record<string, string | number>
   startedAt: number | null
   dispatchedAt: number | null
   createdAt: number
@@ -177,6 +196,7 @@ export type AutomationCreateInput = {
   prompt: string
   precheck?: AutomationPrecheck | null
   agentId: TuiAgent
+  launchSetupPatch?: AutomationLaunchSetupPatch
   /** Empty or whitespace means no extras. */
   extraAgentArgs?: string
   runContext?: WorkspaceRunContext | null
@@ -196,7 +216,7 @@ export type AutomationCreateInput = {
   missedRunGraceMinutes?: number
 }
 
-export type AutomationUpdateInput = Partial<
+export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPatch } & Partial<
   Pick<
     Automation,
     | 'name'
@@ -228,6 +248,8 @@ export type AutomationDispatchRequest = {
 
 export type AutomationDispatchResult = {
   runId: string
+  sessionKind?: 'terminal' | 'chat'
+  chatSessionId?: string | null
   status: AutomationRunStatus
   workspaceId?: string | null
   workspaceDisplayName?: string | null
@@ -238,6 +260,8 @@ export type AutomationDispatchResult = {
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null
   error?: string | null
+  errorCode?: string | null
+  errorParams?: Record<string, string | number> | null
   /** With `dispatched`: when the agent was handed the run, if not now. */
   dispatchedAt?: number
 }

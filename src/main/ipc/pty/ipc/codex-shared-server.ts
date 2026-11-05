@@ -1,19 +1,19 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyIpc } from '../pty-host-bindings'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import {
   findPaneCodexOnSharedServer,
   resolveCodexPaneHome
-} from '../../../codex/codex-shared-server-pane'
+} from '../../../codex/configuration/shared-server/codex-shared-server-pane'
 import {
   disableCodexSharedServerAutoStart,
   stopCodexSharedServer
-} from '../../../codex/codex-shared-server-fix'
-import { getLegacyDaemonAdapters } from '../../../daemon/daemon-provider-routing'
+} from '../../../codex/configuration/shared-server/codex-shared-server-fix'
+import { getLegacyDaemonAdapters } from '../../../daemon/providers/lifecycle/daemon-provider-routing'
 import {
   CODEX_FISH_SHELL_FUNCTION_DAEMON_PROTOCOL_VERSION,
   CODEX_NO_DAEMON_SHELL_LAUNCH_DAEMON_PROTOCOL_VERSION
-} from '../../../daemon/daemon-protocol-version'
+} from '../../../daemon/protocol/daemon-protocol-version'
 import type { CodexSharedServerStatus } from '../../../../shared/codex-shared-server-command'
 import { ptyOwnership } from '../provider/ownership-state'
 import { getProviderForPty, hasPtyProviderForInspection } from '../provider/registry'

@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export type RuntimeMobileSessionSyncKey = {
   // Reference changes signal layout/title updates without stringifying thousands of tabs.
@@ -28,7 +28,7 @@ export type RuntimeMobileSessionSyncKey = {
   tabsProjection: string
   openFilesProjection: string
   browserProjection: string
-  editorDraftsProjection: string
+  editorDraftsProjection: ReadonlyMap<string, string>
 }
 
 export type OpenFileByWorktreeAndId = Map<string, Map<string, AppState['openFiles'][number]>>
@@ -79,18 +79,16 @@ export type BrowserPagesProjectionCache = {
   entries: Map<string, BrowserPagesProjectionCacheEntry>
   projection: string
 }
-/** One dirty file's FNV draft stamp plus its pre-serialized projection fragment. */
+/** One dirty file's content and last published draft stamp. */
 export type EditorDraftHashCacheEntry = {
   content: string
   hash: string
-  fileIdJson: string
-  projection: string
 }
 export type EditorDraftHashCache = {
   source: AppState['editorDrafts']
+  openFiles: AppState['openFiles']
   entries: Map<string, EditorDraftHashCacheEntry>
   hashByFileId: Map<string, string>
-  projection: string
 }
 export type MobileSessionAgentStatusByWorktree = ReadonlyMap<
   string,
@@ -117,6 +115,7 @@ export type MountedTerminalSurfaceCapture = {
 }
 /** Complete per-worktree inputs constrain builders at compile time rather than relying on review. */
 export type MobileSessionWorktreeInputs = {
+  hostTabIds: ReadonlyMap<string, string>
   worktreeId: string
   worktreeInstanceId: string | undefined
   terminalTabs: AppState['tabsByWorktree'][string]

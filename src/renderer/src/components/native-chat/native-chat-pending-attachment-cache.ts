@@ -1,12 +1,15 @@
+import {
+  currentDraftScope,
+  captureLaunchDraftDestination,
+  retainLaunchDraftSource
+} from './native-chat-launch-draft-source'
+import { insertNativeChatComposerDraftText } from './native-chat-composer-draft-insertion'
 // Pending chips outlive composers in memory; completed images persist immediately in their draft.
 
 import { useCallback, useSyncExternalStore } from 'react'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatComposerDraftOwner } from './native-chat-composer-draft-storage'
-import {
-  appendNativeChatAttachmentCache,
-  appendNativeChatDraftCache
-} from './native-chat-draft-cache'
+import { appendNativeChatAttachmentCache } from './native-chat-draft-cache'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import {
   appendToNativeChatComposerDraft,
@@ -19,14 +22,23 @@ import {
 const EMPTY: readonly NativeChatComposerImageAttachment[] = Object.freeze([])
 const pendingCache = new Map<string, readonly NativeChatComposerImageAttachment[]>()
 // Capture ownership before tab removal can erase it.
+const chipScopes = new Map<string, string>()
 const pendingOwners = new Map<string, NativeChatComposerDraftOwner>()
 const listeners = new Map<string, Set<() => void>>()
+
+export function nativeChatPendingAttachmentScope(scope: string, id: string): string {
+  return currentDraftScope(chipScopes.get(id) ?? scope)
+}
+
+export function hasNativeChatPendingAttachment(id: string): boolean {
+  return chipScopes.has(id)
+}
 
 /** Keep snapshot identity stable until pending chips change. */
 export function nativeChatPendingAttachmentSnapshot(
   scopeKey: string
 ): readonly NativeChatComposerImageAttachment[] {
-  return pendingCache.get(scopeKey) ?? EMPTY
+  return pendingCache.get(currentDraftScope(scopeKey)) ?? EMPTY
 }
 
 export function nativeChatComposerHasUserContent(scopeKey: string): boolean {
@@ -39,6 +51,14 @@ export function nativeChatComposerHasUserContent(scopeKey: string): boolean {
 }
 
 function writePending(scopeKey: string, next: readonly NativeChatComposerImageAttachment[]): void {
+  for (const chip of pendingCache.get(scopeKey) ?? []) {
+    if (chipScopes.get(chip.id) === scopeKey) {
+      chipScopes.delete(chip.id)
+    }
+  }
+  for (const chip of next) {
+    chipScopes.set(chip.id, scopeKey)
+  }
   if (next.length === 0) {
     pendingCache.delete(scopeKey)
     pendingOwners.delete(scopeKey)
@@ -52,13 +72,17 @@ export function subscribeToNativeChatPendingAttachments(
   scopeKey: string,
   listener: () => void
 ): () => void {
+  const destination = captureLaunchDraftDestination(scopeKey)
+  scopeKey = currentDraftScope(scopeKey)
+  const member = () => listener()
   const scoped = listeners.get(scopeKey) ?? new Set()
   listeners.set(scopeKey, scoped)
-  scoped.add(listener)
+  scoped.add(member)
   return () => {
-    scoped.delete(listener)
-    if (scoped.size === 0 && listeners.get(scopeKey) === scoped) {
-      listeners.delete(scopeKey)
+    const current = listeners.get(destination?.scopeKey ?? scopeKey)
+    current?.delete(member)
+    if (current?.size === 0) {
+      listeners.delete(destination?.scopeKey ?? scopeKey)
     }
   }
 }
@@ -78,6 +102,9 @@ export function addNativeChatPendingAttachment(
   scopeKey: string,
   chip: NativeChatComposerImageAttachment
 ): void {
+  // A pending chip is the setup's first input as much as typed text, so it moves with the setup.
+  retainLaunchDraftSource(scopeKey)
+  scopeKey = currentDraftScope(scopeKey)
   const { previewUrl: _previewUrl, ...pending } = chip
   const owner = resolveNativeChatComposerDraftOwner(scopeKey) ?? pendingOwners.get(scopeKey)
   if (owner) {
@@ -90,6 +117,7 @@ export function takeNativeChatPendingAttachment(
   scopeKey: string,
   id: string
 ): NativeChatComposerImageAttachment | undefined {
+  scopeKey = pendingDestination(scopeKey, id)
   const current = nativeChatPendingAttachmentSnapshot(scopeKey)
   const taken = current.find((attachment) => attachment.id === id && attachment.pending)
   if (taken) {
@@ -134,6 +162,36 @@ export function nativeChatImageRow<T extends { id: string }>(
   return [...images.flatMap((image) => [...(ahead.get(image.id) ?? []), image]), ...waiting]
 }
 
+/** Move outstanding operations with their draft; completion resolves by chip identity after the source closes. */
+export function moveNativeChatPendingAttachments(from: string, to: string): void {
+  const owner =
+    pendingOwners.get(to) ?? resolveNativeChatComposerDraftOwner(to) ?? pendingOwners.get(from)
+  if (owner) {
+    pendingOwners.set(to, owner)
+  }
+  const pending = pendingCache.get(from) ?? EMPTY
+  const held = new Set((pendingCache.get(to) ?? EMPTY).map(({ id }) => id))
+  writePending(to, [
+    ...(pendingCache.get(to) ?? EMPTY),
+    ...pending.filter(({ id }) => !held.has(id))
+  ])
+  writePending(from, [])
+}
+
+/** Only continuing setup views follow association; ordinary closing editors remain keyed. */
+export function moveLaunchPendingAttachmentListeners(from: string, to: string): void {
+  const target = listeners.get(to) ?? new Set<() => void>()
+  for (const listener of listeners.get(from) ?? []) {
+    target.add(listener)
+  }
+  listeners.delete(from)
+  listeners.set(to, target)
+}
+
+function pendingDestination(scope: string, id: string): string {
+  return currentDraftScope(chipScopes.get(id) ?? scope)
+}
+
 /** Persist completed images in attachment order; return false if already removed. */
 export function settleNativeChatPendingAttachment(
   scopeKey: string,
@@ -141,6 +199,7 @@ export function settleNativeChatPendingAttachment(
   path: string,
   connectionId?: string | null
 ): boolean {
+  scopeKey = pendingDestination(scopeKey, id)
   const current = nativeChatPendingAttachmentSnapshot(scopeKey)
   const index = current.findIndex((chip) => chip.id === id && chip.pending)
   if (index === -1) {
@@ -163,6 +222,7 @@ export function appendNativeChatAttachmentsAfterPending(
   images: readonly NativeChatComposerImageAttachment[],
   options?: { fromUser?: boolean }
 ): void {
+  scopeKey = currentDraftScope(scopeKey)
   if (images.length === 0) {
     return
   }
@@ -178,6 +238,8 @@ export function settleNativeChatPendingAttachmentReferences(
   references: { id: string; path: string }[],
   insertAtCaret?: (paths: string[]) => void
 ): boolean {
+  const originalScope = currentDraftScope(scopeKey)
+  scopeKey = references.length ? pendingDestination(scopeKey, references[0].id) : scopeKey
   const owner = pendingOwners.get(scopeKey)
   const paths = references.flatMap(({ id, path }) =>
     takeNativeChatPendingAttachment(scopeKey, id) ? [path] : []
@@ -185,24 +247,29 @@ export function settleNativeChatPendingAttachmentReferences(
   if (paths.length === 0) {
     return false
   }
-  if (insertAtCaret) {
+  if (insertAtCaret && scopeKey === originalScope) {
     insertAtCaret(paths)
   } else {
-    appendNativeChatDraftCache(scopeKey, paths.map(formatNativeChatFileReference).join(' '), owner)
+    insertNativeChatComposerDraftText(
+      scopeKey,
+      paths.map(formatNativeChatFileReference).join(' '),
+      { owner }
+    )
   }
   return true
 }
 
 export function clearNativeChatPendingAttachments(scopeKey: string): void {
+  scopeKey = currentDraftScope(scopeKey)
   if (pendingCache.has(scopeKey)) {
     writePending(scopeKey, [])
   }
 }
 
-function dropPendingWhere(
+export function dropNativeChatPendingAttachmentsWhere(
   matches: (scopeKey: string, owner: NativeChatComposerDraftOwner | undefined) => boolean
 ): void {
-  for (const scopeKey of pendingCache.keys()) {
+  for (const scopeKey of new Set([...pendingCache.keys(), ...listeners.keys()])) {
     if (matches(scopeKey, pendingOwners.get(scopeKey))) {
       writePending(scopeKey, [])
     }
@@ -211,7 +278,7 @@ function dropPendingWhere(
 
 /** Drop only closed-tab pane chips; conversation scopes survive tab closure. */
 export function dropNativeChatPendingAttachmentsForTab(tabId: string): void {
-  dropPendingWhere(
+  dropNativeChatPendingAttachmentsWhere(
     (scopeKey) =>
       structuredAgentSessionIdOfDraftScope(scopeKey) === null &&
       nativeChatDraftScopeTabId(scopeKey) === tabId
@@ -219,7 +286,7 @@ export function dropNativeChatPendingAttachmentsForTab(tabId: string): void {
 }
 
 export function dropNativeChatPendingAttachmentsOwnedBy(owner: NativeChatComposerDraftOwner): void {
-  dropPendingWhere(
+  dropNativeChatPendingAttachmentsWhere(
     (_scopeKey, pendingOwner) =>
       pendingOwner?.workspaceId === owner.workspaceId &&
       pendingOwner.executionHostId === owner.executionHostId
@@ -227,6 +294,7 @@ export function dropNativeChatPendingAttachmentsOwnedBy(owner: NativeChatCompose
 }
 
 export function clearNativeChatPendingAttachmentsForTests(): void {
+  chipScopes.clear()
   pendingCache.clear()
   pendingOwners.clear()
 }

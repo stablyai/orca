@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import {
@@ -53,6 +54,7 @@ export type OwnerUsageRateLimits = {
 
 /** Read provider usage from the focused workspace’s account owner, including that host’s own remote snapshot. */
 export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLimits {
+  const languageRevision = useUiLanguageRevision()
   // Why: route by the focused workspace's owner, never by the Active Server setting.
   const { target } = useActiveAccountOwner(LOCAL_TARGET)
   const ownerId = runtimeTargetEnvironmentId(target)
@@ -105,7 +107,7 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
     }
     let active = true
     const reopen = (): void => setStreamGeneration((value) => value + 1)
-    // Why: orcad does not poll on its own, so a long-lived stream would freeze the meters.
+    // Why: older hosts never poll for a paired stream, so a long-lived one would freeze the meters.
     const staleTimer = setTimeout(reopen, REMOTE_USAGE_STALE_REOPEN_MS)
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined
     const lost = (): void => {
@@ -166,7 +168,8 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
               translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server')
           }
         : null,
-    [ownerId, ownerName]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    [ownerId, ownerName, languageRevision]
   )
 
   const ownerState = useMemo<OwnerUsageState>(() => {

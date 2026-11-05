@@ -1,9 +1,9 @@
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment,
   type RuntimeSshTunnelLink
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { OrcadManagedServing } from './orcad-managed-serving'

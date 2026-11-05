@@ -23,16 +23,32 @@ on:
       - 'src/main/runtime/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
       - 'src/main/runtime/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/records/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-account-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-acquisition-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-conversation-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-death-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-launch-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-operation-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-rewind-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-runtime-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-unsaved-*.ts'
+      # The phone/host contract program's unmocked desktop sources and its declaration owner's inputs.
+      - 'src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts'
+      - 'src/main/github/issue-field-options.ts'
+      - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.node.json'
+      - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
       - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
       # Rerun the only Fastfile-loading checks for release-workflow/Fastfile edits.
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
-      - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs'
       # Mobile typechecks run through the root compiler selection.
-      - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
-      - 'config/scripts/tsrs-typecheck-compiler.mjs'
-      - 'config/scripts/pinned-bun-executable.mjs'
+      - 'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/typecheck/project-execution/tsrs-typecheck-compiler.mjs'
+      - 'config/scripts/tool-invocation/pinned-bun-executable.mjs'
       - 'config/oxlint-code-quality-native-plugins.json'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
@@ -41,9 +57,11 @@ on:
       - '.github/workflows/mobile-ios-release.yml'
       - 'config/scripts/mobile-release-check-scope*'
       - 'config/scripts/mobile-test-change-scope*'
-      - 'config/scripts/pr-code-change-scope.mjs'
-      - 'config/scripts/pr-package-test-paths.mjs'
-      - 'config/scripts/pr-layout-oracle-route.mjs'
+      - 'config/scripts/workflow/source-routing/pr-code-change-scope.mjs'
+      - 'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs'
+      - 'config/scripts/workflow/source-routing/pr-package-test-paths.mjs'
+      - 'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs'
+      - 'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs'
       # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
       - '!src/shared/**/*.test.[jt]s'
       - '!src/shared/**/*.test.[jt]sx'
@@ -70,14 +88,30 @@ on:
       - 'src/main/runtime/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
       - 'src/main/runtime/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/records/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-account-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-acquisition-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-conversation-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-death-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-launch-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-operation-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-rewind-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-runtime-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-unsaved-*.ts'
+      # The phone/host contract program's unmocked desktop sources and its declaration owner's inputs.
+      - 'src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts'
+      - 'src/main/github/issue-field-options.ts'
+      - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.node.json'
+      - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
       - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
-      - 'config/scripts/run-mobile-ci-tests.mjs'
-      - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
-      - 'config/scripts/tsrs-typecheck-compiler.mjs'
-      - 'config/scripts/pinned-bun-executable.mjs'
+      - 'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs'
+      - 'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/typecheck/project-execution/tsrs-typecheck-compiler.mjs'
+      - 'config/scripts/tool-invocation/pinned-bun-executable.mjs'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/setup-pnpm/**'
@@ -105,7 +139,7 @@ jobs:
     name: Mobile verify
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     # Use ARM for pure Vitest; no x86 native toolchain is needed and Gemfile.lock’s ruby platform supports frozen install.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     env:
       # Freeze bundler to reject Gemfile drift before release jobs resolve different fastlane versions.
@@ -137,23 +171,50 @@ jobs:
           # Keep deletions when release files move into an application directory.
           if ! git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/mobile-release-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
-          elif ! node config/scripts/mobile-release-check-scope.mjs "$RUNNER_TEMP/mobile-release-changes"; then
+          elif ! node config/scripts/mobile-web/check-entry/mobile-release-check-scope.mjs "$RUNNER_TEMP/mobile-release-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
-      # Bundler-cache proves the release’s pinned fastlane still resolves before a release needs it.
-      - name: Setup Ruby and fastlane
-        id: ruby-tools
+      - name: Setup Ruby
+        id: ruby-setup
         background: true
         if: steps.ruby-scope.outputs.should_run != 'false'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
-          bundler-cache: true
           working-directory: mobile
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - wait: ruby-setup
+
+      # ruby/setup-ruby's bundler-cache saves on every miss; the platform warmup saves this key on main.
+      - name: Resolve fastlane bundle cache
+        id: ruby-bundle
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        env:
+          GEMFILE_HASH: ${{ hashFiles('mobile/Gemfile', 'mobile/Gemfile.lock') }}
+        run: |
+          . /etc/os-release
+          printf 'key=mobile-bundle-v1-%s-%s-%s-%s\n' "$ID-$VERSION_ID" "$(ruby -e 'print RUBY_PLATFORM')" "$(ruby -e 'print RbConfig::CONFIG["ruby_version"]')" "$GEMFILE_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore fastlane bundle
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        uses: actions/cache/restore@v5
+        with:
+          path: mobile/vendor/bundle
+          key: ${{ steps.ruby-bundle.outputs.key }}
+
+      # Installing proves the release’s pinned fastlane still resolves before a release needs it.
+      - name: Install fastlane
+        id: ruby-tools
+        background: true
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        run: |
+          bundle config set --local path "$PWD/vendor/bundle"
+          bundle config set --local deployment true
+          bundle install --jobs 4
 
       # Check mobile import cycles after Expo deps install; pre-install pr.yml cannot load its tsconfig.
       - name: Lint mobile imports with mobile dependencies installed
@@ -164,12 +225,13 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
+        run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
 
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
       # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
       # drifted. This fails when a test file that checks today stops checking, when a test leaves
-      # the program, and on @ts-nocheck; the baseline may only shrink.
+      # the program, and on @ts-nocheck; the baseline may only shrink. It then emits phone and host
+      # declarations and strictly checks the phone/host contract tests against them.
       - name: Typecheck tests (ratchet)
         id: test-types
         background: true
@@ -183,7 +245,7 @@ jobs:
         run: |
           if ! git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/mobile-test-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
-          elif ! node config/scripts/mobile-test-change-scope.mjs "$RUNNER_TEMP/mobile-test-changes"; then
+          elif ! node config/scripts/mobile-web/check-entry/mobile-test-change-scope.mjs "$RUNNER_TEMP/mobile-test-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
@@ -192,15 +254,19 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
+
+      # Compiler work (including the ratchet's declaration emission) finishes before Vitest workers start.
+      - wait: [production-types, test-types]
 
       - name: Test
         if: steps.test-scope.outputs.should_run != 'false'
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
-        run: node ../config/scripts/run-mobile-ci-tests.mjs
+        run: node ../config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs
 
-      # All checks read the completed install; compilers need not hold up test workers.
-      - wait: [production-types, test-types, ruby-tools]
+      # The Ruby checks below read the completed fastlane install.
+      - wait: ruby-tools
 
       # Decode hash-addressed golden behavior changes for review, including after failed tests; advisory only.
       - name: Summarize RPC recording changes
@@ -240,7 +306,7 @@ jobs:
   native-fingerprint:
     name: Mobile native fingerprint
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     continue-on-error: true
 
@@ -285,7 +351,7 @@ jobs:
       ORCA_MOBILE_TYPECHECK_COMPILER: 'bun'
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     defaults:
       run:
@@ -297,8 +363,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # Restoring the 650 MB store took longer than downloading these packages.
       - uses: ./.github/actions/install-node-dependencies
         with:
+          cache-pnpm-store: 'false'
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
@@ -309,7 +377,7 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
+        run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
 
       - name: Typecheck tests (ratchet)
         id: test-types
@@ -321,10 +389,11 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
+
+      - wait: [production-types, test-types]
 
       - name: Test
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
-        run: node ../config/scripts/run-mobile-ci-tests.mjs
-
-      - wait: [production-types, test-types]
+        run: node ../config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs

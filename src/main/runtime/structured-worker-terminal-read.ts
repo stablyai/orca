@@ -15,7 +15,7 @@ import {
   resolveStructuredWorkerIdentity,
   structuredWorkerTerminalState
 } from './structured-worker-authority'
-import { readTerminalTail } from './terminal-tail-read'
+import { readTerminalTail } from './terminal/output/tail/terminal-tail-read'
 
 /** Return null for unowned handles so PTY routing continues; held workers with unreadable history or unverified successors must refuse rather than report silence. */
 export async function readStructuredWorkerTerminal(args: {

@@ -5,11 +5,11 @@ import type {
   OrcadManagedStopResult
 } from '../../../shared/orcad-managed-runtime'
 import type { OrcadDaemonRetirementVerdict } from '../../../shared/orcad-stop-request'
-import { removeManagedOrcadEnvironment } from '../../../shared/runtime-environment-managed-orcad-store'
+import { removeManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import type {
   KnownRuntimeEnvironment,
   OrcadSshDeploymentLink
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { recoverInterruptedOrcadActivation } from '../activation/orcad-activation-recovery'
 import { withStaleOrcadActivationRecoveryLock } from '../activation/orcad-activation-lock'
 import { readOrcadActivationTransaction } from '../activation/orcad-activation-transaction-store'
@@ -163,7 +163,7 @@ async function unlinkEnvironmentLocally(
   await policy.retireLocalState(environment.id)
   await closeOrcadManagedTunnel(environment.id)
   const { claims } = requireManagedOrcadInfrastructure()
-  claims.release(deployment.sshTargetId, environment.id)
+  claims.releaseForUserRemoval(deployment.sshTargetId, environment.id)
   clearManagedOrcadUpdateDeferral(environment.id)
   await claims.flush()
   // Clear journals after the fence; stale leftovers are recoverable on later conversion.

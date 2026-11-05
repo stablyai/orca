@@ -9,7 +9,7 @@ import {
 
 export type { LoginPreflightOutcome } from './macos-login-session-pty-probe'
 
-const MACOS_LOGIN_PATH = '/usr/bin/login'
+export const MACOS_LOGIN_PATH = '/usr/bin/login'
 const MACOS_BASH_PATH = '/bin/bash'
 const MACOS_PRINTF_PATH = '/usr/bin/printf'
 const LOGIN_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -l -- "$@"'

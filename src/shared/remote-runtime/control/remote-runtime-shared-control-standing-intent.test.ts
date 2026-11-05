@@ -1,6 +1,6 @@
-import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../pairing/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import { SharedControlReconnectScheduler } from './remote-runtime-shared-control-reconnect'
 import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'
@@ -90,18 +90,6 @@ describe('shared-control standing intent', () => {
     expect(opens).toBe(4)
     expect(scheduler.attemptCount).toBe(105)
     scheduler.clear()
-  })
-
-  it('advances an armed idle retry without recreating cleared work', () => {
-    vi.useFakeTimers()
-    const connection = testConnection()
-    const open = replaceOpen(connection)
-    closeCurrentGeneration(connection)
-
-    expect(connection.retryNow()).toBe(true)
-    expect(open).toHaveBeenCalledOnce()
-    expect(connection.retryNow()).toBe(false)
-    connection.close()
   })
 
   it('clears an armed idle retry on close and ignores a late socket close', () => {

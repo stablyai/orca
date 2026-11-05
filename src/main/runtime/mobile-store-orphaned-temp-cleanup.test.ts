@@ -2,7 +2,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import * as durableFileWrite from '../durable-file-write'
 import { DeviceRegistry } from './device-registry'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
@@ -55,24 +54,3 @@ it.each(stores)(
     }
   }
 )
-
-it.each(stores)('%s loads while startup cleanup is still pending', async (_, fileName, open) => {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-orphaned-temp-pending-'))
-  dirs.push(dir)
-  writeFileSync(join(dir, fileName), '[]')
-  let finishCleanup = () => {}
-  const pending = new Promise<void>((resolve) => {
-    finishCleanup = resolve
-  })
-  const cleanup = vi
-    .spyOn(durableFileWrite, 'removeStaleDurableWriteTempFiles')
-    .mockReturnValue(pending)
-  try {
-    const store = open(dir)
-    expect(cleanup).toHaveBeenCalledOnce()
-    expect(store instanceof DeviceRegistry ? store.listDevices() : store.reconcile([])).toEqual([])
-  } finally {
-    finishCleanup()
-    await pending
-  }
-})

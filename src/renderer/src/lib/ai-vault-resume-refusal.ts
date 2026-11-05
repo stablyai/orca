@@ -1,4 +1,7 @@
-import { aiVaultAgentLabel, type AiVaultAgent } from '../../../shared/ai-vault-types'
+import {
+  aiVaultAgentLabel,
+  type AiVaultAgent
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { compactIpcErrorMessage } from './ipc-error'
 
@@ -21,6 +24,13 @@ export function describeAiVaultResumeFailure(error: unknown, agent: AiVaultAgent
     return translate(
       'auto.lib.aiVaultResumeRefusal.ownershipUnknown',
       'Orca could not confirm who owns this {{value0}} conversation. Refresh Session History and try again.',
+      { value0: aiVaultAgentLabel(agent) }
+    )
+  }
+  if (code === 'execution_owner_reconciling') {
+    return translate(
+      'auto.lib.aiVaultResumeRefusal.preparationRefused',
+      'Orca could not prepare this {{value0}} conversation. Start a new chat to continue.',
       { value0: aiVaultAgentLabel(agent) }
     )
   }

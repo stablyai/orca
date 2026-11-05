@@ -1,6 +1,11 @@
+import type {
+  CrewSubscriptionAttemptArgs,
+  CrewSubscriptionAttemptCallbacks,
+  CrewSubscriptionSetupResult
+} from '../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import type { ManagedOrcadPreloadApi } from './managed-orcad-api'
 import type { WslHostsPreloadApi } from './wsl-hosts-api'
-import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../shared/remote-runtime/host-status/runtime-host-status'
 import type {
   RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
@@ -11,12 +16,15 @@ import type {
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
-import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
-import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
+import type {
+  PublicKnownRuntimeEnvironment,
+  RuntimeEnvironmentRemoval
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-runtime/pairing/remote-pairing-verification'
 import type {
   BrowserClientHostPlacementPreparationRequest,
   BrowserPageCreationPlacement
-} from '../../shared/browser-client-host-placement'
+} from '../../shared/browser/client-hosting/browser-client-host-placement'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { WslOrcadAccountNotAppliedEvent } from '../../shared/wsl-orcad-account-notice'
 
@@ -103,7 +111,7 @@ export type RuntimeApi = {
       pairingCode: string
     }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
-    remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
+    remove: (args: { selector: string }) => Promise<RuntimeEnvironmentRemoval>
     disconnect: (args: {
       selector: string
     }) => Promise<{ disconnected: PublicKnownRuntimeEnvironment }>
@@ -140,6 +148,10 @@ export type RuntimeApi = {
       expectedEnvironmentPairingRevision?: number
       expectedEnvironmentRuntimeId?: string
     }) => Promise<RuntimeRpcResponse<unknown>>
+    subscribeCrewAttempt?: (
+      args: CrewSubscriptionAttemptArgs,
+      callbacks: CrewSubscriptionAttemptCallbacks
+    ) => Promise<CrewSubscriptionSetupResult>
     cancelSubscription: (args: { subscriptionId: string }) => Promise<void>
     subscribe: (
       args: {

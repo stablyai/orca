@@ -126,7 +126,7 @@ jobs:
         id: detect
         shell: bash
         run: |
-          if [[ -f config/scripts/packaged-orcad-template.cjs ]]; then
+          if [[ -f config/scripts/orcad-distribution/template/packaged-orcad-template.cjs || -f config/scripts/packaged-orcad-template.cjs ]]; then
             echo "ships=true" >>"$GITHUB_OUTPUT"
           else
             echo "ships=false" >>"$GITHUB_OUTPUT"
@@ -151,7 +151,7 @@ jobs:
           set -euo pipefail
           # Old branch refs may predate adhoc version scripts; report that explicitly.
           for script in adhoc-build-version dev-channel-base-version; do
-            if [[ ! -f "config/scripts/$script.mjs" ]]; then
+            if [[ ! -f "config/scripts/release/versioning/$script.mjs" && ! -f "config/scripts/$script.mjs" ]]; then
               echo "::error::$REF has no config/scripts/$script.mjs; rebase it onto a main that has the adhoc channel."
               exit 1
             fi
@@ -162,7 +162,7 @@ jobs:
             "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
             --jq '.[].ref | sub("^refs/tags/"; "")' || true)"
           ORCA_PUBLISHED_VERSIONS="$published" ORCA_ADHOC_LABEL="${LABEL:-$REF}" \
-            node config/scripts/adhoc-build-version.mjs \
+            node "$(if [ -f config/scripts/release/versioning/adhoc-build-version.mjs ]; then printf %s config/scripts/release/versioning/adhoc-build-version.mjs; else printf %s config/scripts/adhoc-build-version.mjs; fi)" \
             >"$RUNNER_TEMP/adhoc-identity.txt"
           if ! grep -q '^name=' "$RUNNER_TEMP/adhoc-identity.txt"; then
             echo "::error::adhoc-build-version.mjs emitted no release name; $REF's copy of the script is out of sync with this workflow."
@@ -250,11 +250,19 @@ jobs:
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
 
   build-adhoc-mac-arch:
-    needs: [resolve-ref, orcad-template-support, release-javascript, prepare-adhoc-mac-release]
-    # Template qualification gates packaging after desktop preparation.
+    needs:
+      [
+        resolve-ref,
+        orcad-template-support,
+        orcad-template,
+        release-javascript,
+        prepare-adhoc-mac-release
+      ]
+    # Start after template qualification: overlapping ~2.5 min of preparation left both Macs idle ~7 min.
     if: >-
       !cancelled() && github.repository == 'stablyai/orca' &&
       needs.orcad-template-support.result == 'success' &&
+      (needs.orcad-template.result == 'success' || needs.orcad-template-support.outputs.ships != 'true') &&
       needs.release-javascript.result == 'success' &&
       needs.prepare-adhoc-mac-release.result == 'success'
     # Signing environment must restrict deployments to main after MAC_CERTS/password, APPLE_ID/app password/team and hourly App secrets move there; referencing it alone enforces nothing.
@@ -266,7 +274,8 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x64, arm64]
-    runs-on: blacksmith-12vcpu-macos-15
+    # Notary waits dominate; 12 vCPUs packaged no faster than the hourly build’s 6.
+    runs-on: blacksmith-6vcpu-macos-15
     # Allow 150min for install 3×10 + publish 2×45 + ~25 setup/build/verify; outer timeout would prevent cleanup.
     timeout-minutes: 150
     env:
@@ -344,7 +353,7 @@ jobs:
 
       # Require signing cert before expensive build; unsigned macOS cannot update an existing install correctly.
       - name: Verify macOS signing environment
-        run: node config/scripts/verify-macos-release-env.mjs
+        run: node config/scripts/desktop-distribution/macos/verify-macos-release-env.mjs
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
@@ -362,7 +371,11 @@ jobs:
       - name: Build app
         run: |
           if [[ "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" != '' ]]; then
-            node config/scripts/release-javascript-artifact.mjs restore
+            RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs'
+            if [ ! -f "$RELEASE_JAVASCRIPT_ARTIFACT" ]; then
+              RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release-javascript-artifact.mjs'
+            fi
+            node "$RELEASE_JAVASCRIPT_ARTIFACT" restore
             pnpm run build:release:host
           else
             pnpm build:release
@@ -373,30 +386,6 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
           # Leave build identity unset: telemetry accepts only official stable/rc, so branch artifacts stay silent.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
-
-      - name: Wait for the qualified orcad template
-        if: needs.orcad-template-support.outputs.ships == 'true'
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const deadline = Date.now() + 30 * 60_000
-            while (Date.now() < deadline) {
-              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
-                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
-              })
-              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
-              const failed = lanes.find(job => job.status === 'completed' &&
-                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
-              if (failed) throw new Error(`Template qualification failed: ${failed.name}`)
-              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                ...context.repo, run_id: context.runId, per_page: 100
-              })
-              const ready = artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)
-              const completed = lanes.length > 0 && lanes.every(job => job.status === 'completed')
-              if (ready && (process.env.WAIT_FOR_TEMPLATE_COMPLETION !== '1' || completed)) return
-              await new Promise(resolve => setTimeout(resolve, 15_000))
-            }
-            throw new Error('Timed out waiting for the qualified orcad template')
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
@@ -412,7 +401,7 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tools
-          sparse-checkout: config/scripts/adhoc-mac-manifests.mjs
+          sparse-checkout: config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -423,7 +412,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_ADHOC=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac dmg zip --${{ matrix.arch }} --publish never
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON "$(if [ -f config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs; else printf %s config/scripts/pinned-node-downloads.mjs; fi)" darwin-arm64 darwin-x64 && node "$(if [ -f config/scripts/native-build/node-addons/ensure-native-runtime.mjs ]; then printf %s config/scripts/native-build/node-addons/ensure-native-runtime.mjs; else printf %s config/scripts/ensure-native-runtime.mjs; fi)" --runtime=electron && ORCA_MAC_ADHOC=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac dmg zip --${{ matrix.arch }} --publish never
         env:
           ORCA_ADHOC_BUILD_VERSION: ${{ needs.orcad-template-support.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ needs.orcad-template-support.outputs.commit }}
@@ -451,7 +440,7 @@ jobs:
         env:
           MAC_ARCH: ${{ matrix.arch }}
           MAC_VERSION: ${{ needs.orcad-template-support.outputs.version }}
-        run: node .workflow-tools/config/scripts/adhoc-mac-manifests.mjs stage "$MAC_ARCH" "$MAC_VERSION" dist .build/mac-manifests
+        run: node .workflow-tools/config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs stage "$MAC_ARCH" "$MAC_VERSION" dist .build/mac-manifests
 
       - name: Mint adhoc repo token
         id: app_token
@@ -516,7 +505,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ github.workflow_sha }}
-          sparse-checkout: config/scripts/adhoc-mac-manifests.mjs
+          sparse-checkout: config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -535,7 +524,7 @@ jobs:
         run: |
           set -euo pipefail
           gh release view "$TAG" --repo "$ADHOC_REPO" --json assets > .build/mac-manifests/assets.json
-          node config/scripts/adhoc-mac-manifests.mjs merge "$MAC_VERSION" .build/mac-manifests
+          node "$(if [ -f config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs ]; then printf %s config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs; else printf %s config/scripts/adhoc-mac-manifests.mjs; fi)" merge "$MAC_VERSION" .build/mac-manifests
           gh release upload "$TAG" .build/mac-manifests/latest-mac.yml --repo "$ADHOC_REPO" --clobber
 
       - name: Confirm final template qualification before publication

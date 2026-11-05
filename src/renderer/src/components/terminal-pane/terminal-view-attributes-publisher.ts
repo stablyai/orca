@@ -1,13 +1,13 @@
 /** Publish xterm-equivalent theme reply attributes to main’s hidden-PTY responder; module-global dedup avoids repeated sends from per-pane/attribute-neutral appearance updates. */
 import type { ITheme } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
+import type { TerminalColorSchemeMode } from '../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import {
-  terminalViewColorQueryReplyColors,
+  terminalColorSchemeReport,
   type TerminalViewAttributes,
   type TerminalViewRgb
-} from '../../../../shared/terminal-view-attributes'
-import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
+} from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
+import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 
 type ParsedCssColor = {
   rgb: TerminalViewRgb
@@ -158,6 +158,14 @@ function blendOverBackground(background: TerminalViewRgb, color: ParsedCssColor)
   ]
 }
 
+/** The ?996n reply xterm would derive from this theme's luminance. */
+export function terminalThemeColorSchemeReport(theme: ITheme | undefined): string {
+  return terminalColorSchemeReport(
+    parseThemeColor(theme?.foreground, DEFAULT_FOREGROUND).rgb,
+    parseThemeColor(theme?.background, DEFAULT_BACKGROUND).rgb
+  )
+}
+
 export function composeTerminalViewAttributes(
   theme: ITheme | null,
   mode: TerminalColorSchemeMode,
@@ -195,20 +203,35 @@ export function composeTerminalViewAttributes(
 }
 
 let lastPublishedSnapshot: string | null = null
-let lastPublishedColors: TerminalOscColorQueryReplyColors | null = null
-type PublishedColorsListener = (colors: TerminalOscColorQueryReplyColors) => void
-const publishedColorsListeners = new Set<PublishedColorsListener>()
+let lastPublishedAttributes: TerminalViewAttributes | null = null
+type PublishedAttributesListener = (attributes: TerminalViewAttributes) => void
+const publishedAttributesListeners = new Set<PublishedAttributesListener>()
 
-/** Hears the fg/bg of every published change, starting with the current one if any. */
-export function subscribeToPublishedTerminalViewColors(
-  listener: PublishedColorsListener
+/** Hears every published change, starting with the current one if any. */
+export function subscribeToPublishedTerminalViewAttributes(
+  listener: PublishedAttributesListener
 ): () => void {
-  publishedColorsListeners.add(listener)
-  if (lastPublishedColors) {
-    listener(lastPublishedColors)
+  publishedAttributesListeners.add(listener)
+  if (lastPublishedAttributes) {
+    listener(lastPublishedAttributes)
   }
   return () => {
-    publishedColorsListeners.delete(listener)
+    publishedAttributesListeners.delete(listener)
+  }
+}
+
+/** terminal.create's theme params: the pane's colours, plus this window's palette and cursor for a host that pins
+ *  them to the new terminal. Older hosts drop the attributes. */
+export function terminalCreateThemeParams(colors: TerminalOscColorQueryReplyColors | undefined): {
+  terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
+  terminalViewAttributes?: TerminalViewAttributes
+} {
+  if (!colors) {
+    return {}
+  }
+  return {
+    terminalColorQueryReplies: colors,
+    ...(lastPublishedAttributes ? { terminalViewAttributes: lastPublishedAttributes } : {})
   }
 }
 
@@ -238,16 +261,15 @@ export function publishTerminalViewAttributes(
     return false
   }
   lastPublishedSnapshot = serialized
-  const colors = terminalViewColorQueryReplyColors(attributes)
-  lastPublishedColors = colors
-  for (const listener of publishedColorsListeners) {
-    listener(colors)
+  lastPublishedAttributes = attributes
+  for (const listener of publishedAttributesListeners) {
+    listener(attributes)
   }
   return true
 }
 
 export function _resetTerminalViewAttributesPublisherForTest(): void {
   lastPublishedSnapshot = null
-  lastPublishedColors = null
-  publishedColorsListeners.clear()
+  lastPublishedAttributes = null
+  publishedAttributesListeners.clear()
 }

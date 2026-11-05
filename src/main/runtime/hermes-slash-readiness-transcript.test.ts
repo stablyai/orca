@@ -5,7 +5,7 @@ import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID,
   waitForTranscriptIdle
-} from './agent-transcript-pane-test-harness'
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 import metadata from './__fixtures__/hermes-slash-setup.meta.json'
 import metadata022 from './__fixtures__/hermes-0-22-slash-setup.meta.json'
 import profileMetadata from './__fixtures__/hermes-0-22-profile-prompt.meta.json'

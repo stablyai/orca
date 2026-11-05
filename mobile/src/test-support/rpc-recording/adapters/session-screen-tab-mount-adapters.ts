@@ -121,10 +121,7 @@ export function sessionScreenTabMountAdapters(
             setSessionTabs: (update) => {
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
-            reconcileBufferedDraftsRef: { current: () => {} },
             closedTabTombstonesRef: { current: new Map() },
-            clearTerminalLiveInputDefault: (handle: string) =>
-              effect('clear-live-input', { handle }),
             setActiveHandle: (value) => {
               activeHandle = typeof value === 'function' ? value(activeHandle) : value
             },
@@ -143,7 +140,10 @@ export function sessionScreenTabMountAdapters(
               timers.push(setTimeout(callback, delayMs))
             },
             unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
-            subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle }),
+            subscribeToTerminal: (handle: string) => {
+              effect('subscribe-terminal', { handle })
+              return true
+            },
             fetchTerminals: () => {
               effect('fetch-terminals', {})
               return Promise.resolve(true)

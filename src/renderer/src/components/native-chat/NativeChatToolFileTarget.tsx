@@ -1,6 +1,6 @@
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import { createNativeChatFileHref } from '../../../../shared/native-chat-href-routing'
+import { createNativeChatFileHref } from '../../../../shared/native-chat/native-chat-href-routing'
 
 /** Expose the full path accessibly; a link handler opens the file without toggling its row. */
 export function NativeChatToolFileTarget({

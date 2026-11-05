@@ -1,3 +1,4 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 // Mocked desktop removal failures; runtime-failed-local-worktree-removal.test.ts covers real Git and filesystem behavior.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -10,31 +11,90 @@ import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness
 import { makeWorktreeMeta, mockKnownFeatureWorktree } from './worktrees-test-fixtures'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { DetectedWorktree, DetectedWorktreeListResult } from '../../shared/worktree/types'
-import { finishUnregisteredWorktreeRemoval } from '../git/worktree-removal'
-import { worktreeCheckoutExists } from '../worktree-removal-table'
-import type * as WorktreeRemovalModule from '../git/worktree-removal'
-import type * as WorktreeRemovalTable from '../worktree-removal-table'
-import type * as WorktreeRemovalLeftover from '../worktree-removal-leftover'
+import { finishUnregisteredWorktreeRemoval } from '../git/worktrees/removal/worktree-removal'
+import { worktreeCheckoutExists } from '../workspaces/removal/worktree-removal-table'
+import type * as WorktreeRemovalModule from '../git/worktrees/removal/worktree-removal'
+import type * as WorktreeRemovalTable from '../workspaces/removal/worktree-removal-table'
+import type * as WorktreeRemovalLeftover from '../workspaces/removal/worktree-removal-leftover'
+import { removeLocalWorktreePath } from '../workspaces/removal/local-worktree-filesystem'
+import type * as LocalWorktreeFilesystem from '../workspaces/removal/local-worktree-filesystem'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
   retryFailedWorktreeRemoval,
   startBackgroundWorktreeRemoval
-} from '../worktree-background-removal'
+} from '../workspaces/removal/worktree-background-removal'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: (await import('./worktrees-test-module-mocks')).listWorktreesMock,
+    listWorktreesSharedStrictAllowingTrueEmpty: (await import('./worktrees-test-module-mocks'))
+      .listWorktreesMock,
+    listWorktreesSharedStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+  }
+})
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
-vi.mock('../git/worktree', async () =>
-  (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
-)
-vi.mock('../git/runner', async () =>
-  (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
-)
+vi.mock('../../shared/git/worktrees/git-worktree-porcelain-parser', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  parseWorktreeList: (await import('./worktrees-test-module-mocks')).parseWorktreeListMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertWorktreeCleanForRemoval: (await import('./worktrees-test-module-mocks'))
+    .assertWorktreeCleanForRemovalMock
+}))
+
+vi.mock('../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await import('./worktrees-test-module-mocks')).addWorktreeMock
+}))
+
+vi.mock('../git/worktrees/creation/worktree-sparse-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addSparseWorktree: (await import('./worktrees-test-module-mocks')).addSparseWorktreeMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-branch-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  forceDeleteLocalBranch: (await import('./worktrees-test-module-mocks')).forceDeleteLocalBranchMock
+}))
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock,
+  describeCreatedWorktree: (await import('./worktrees-test-module-mocks'))
+    .describeCreatedWorktreeMock
+}))
+const { getWorktreeRunnerMocks } = vi.hoisted(() => {
+  function createWorktreeRunnerMocks() {
+    return (async () => (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock())()
+  }
+  let runner: ReturnType<typeof createWorktreeRunnerMocks> | undefined
+  return { getWorktreeRunnerMocks: () => (runner ??= createWorktreeRunnerMocks()) }
+})
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: (await getWorktreeRunnerMocks()).gitExecFileAsync
+}))
+
+vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileSync: (await getWorktreeRunnerMocks()).gitExecFileSync
+}))
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
+vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock
+}))
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
@@ -43,29 +103,40 @@ vi.mock('../git/git-username', async (importOriginal) => ({
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+vi.mock('../github/client/lookup/get-pr-for-branch', async () =>
+  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
+)
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
-vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
-vi.mock('../setup-runner-script-text', async (importOriginal) =>
+
+vi.mock('../git/worktrees/content-paths/worktree-symlink-detection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  findExistingWorktreeSymlinkPaths: (await import('./worktrees-test-module-mocks'))
+    .findExistingWorktreeSymlinkPathsMock
+}))
+vi.mock('../workspace-hooks/hooks', async () =>
+  (await import('./worktrees-test-module-mocks')).hooksModuleMock()
+)
+vi.mock('../workspace-hooks/setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     await importOriginal<Record<string, unknown>>()
   )
 )
-vi.mock('../worktree-runner-script', async (importOriginal) =>
+vi.mock('../workspace-hooks/worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     await importOriginal<Record<string, unknown>>()
   )
 )
-vi.mock('../effective-hook-config', async (importOriginal) =>
+vi.mock('../workspace-hooks/effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     await importOriginal<Record<string, unknown>>()
   )
 )
-vi.mock('../setup-hook-env-vars', async (importOriginal) =>
+vi.mock('../workspace-hooks/setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     await importOriginal<Record<string, unknown>>()
   )
@@ -75,22 +146,22 @@ vi.mock('./worktree-logic', async (importOriginal) =>
     await importOriginal<Record<string, unknown>>()
   )
 )
-vi.mock('../terminal-history-deletion', async () =>
+vi.mock('../pty/history/terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
-vi.mock('../workspace-cleanup-scan-snapshot', async () =>
+vi.mock('../workspaces/cleanup/workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
-vi.mock('../workspace-space-analysis-snapshot', async () =>
+vi.mock('../workspaces/space-analysis/workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
-vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
+vi.mock('../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
-vi.mock('../runtime/worktree-teardown', async () =>
+vi.mock('../runtime/workspaces/removal/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty/provider/registry', async () =>
@@ -100,21 +171,28 @@ vi.mock('./pty/provider/state-cleanup', async () =>
   (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
 )
 
-vi.mock('../git/worktree-removal', async (importOriginal) => ({
+vi.mock('../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalModule>()),
-  finishUnregisteredWorktreeRemoval: vi.fn(async () => ({}))
+  finishUnregisteredWorktreeRemoval: vi.fn(async () => ({})),
+  removeWorktree: (await import('./worktrees-test-module-mocks')).removeWorktreeMock
 }))
-vi.mock('../worktree-removal-table', async (importOriginal) => ({
+vi.mock('../workspaces/removal/worktree-removal-table', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalTable>()),
   worktreeCheckoutExists: vi.fn(async () => true)
 }))
-vi.mock('../worktree-removal-leftover', async (importOriginal) => ({
+vi.mock('../workspaces/removal/local-worktree-filesystem', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalWorktreeFilesystem>()
+  return { ...actual, removeLocalWorktreePath: vi.fn(actual.removeLocalWorktreePath) }
+})
+vi.mock('../workspaces/removal/worktree-removal-leftover', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalLeftover>()),
   isUnregisteredRemovalLeftover: vi.fn(async () => true)
 }))
 
 const featureId = 'repo-1::/workspace/feature-wt'
 const GIT_ERROR = "error: failed to delete '/workspace/feature-wt': Operation not permitted"
+const FOLLOW_UP_DELETE_ERROR =
+  "EPERM: operation not permitted, unlink '/workspace/feature-wt/locked'"
 
 function remove(args: Record<string, unknown>): Promise<RemoveWorktreeResult> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktrees:remove resolves a RemoveWorktreeResult.
@@ -182,15 +260,17 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
       listWorktreesMock.mockResolvedValue([main])
       throw new Error(GIT_ERROR)
     })
+    // Orca's follow-up delete of the folder Git left also fails, so the row stays listed.
+    vi.mocked(removeLocalWorktreePath).mockRejectedValueOnce(new Error(FOLLOW_UP_DELETE_ERROR))
 
-    await expect(remove({ worktreeId: featureId })).rejects.toThrow(/Operation not permitted/)
+    await expect(remove({ worktreeId: featureId })).rejects.toThrow(FOLLOW_UP_DELETE_ERROR)
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'remove', pushTarget.remoteName], {
       cwd: '/workspace/repo'
     })
     expect(await listFeature()).toMatchObject({
-      removalError: expect.stringMatching(/Operation not permitted/)
+      removalError: expect.stringContaining(FOLLOW_UP_DELETE_ERROR)
     })
   })
 

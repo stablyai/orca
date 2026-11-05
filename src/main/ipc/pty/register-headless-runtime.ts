@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type {
   CodexHomePtySpawnedLifecycleArgs,

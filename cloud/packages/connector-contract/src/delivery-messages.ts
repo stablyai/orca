@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { CONNECTOR_LIMITS } from './connector-limits.js'
 import { ConnectorConversationSchema, PlaceIdSchema } from './connector-wire-scalars.js'
 
-// Polls, acks and events name the hello they belong to; the cloud ignores acks and events from an older
-// one, and the first poll after a hello lists what is still unsettled instead.
+// Polls, acks and events name the hello they belong to. Under any other than the current one the cloud
+// answers 409 hello_required and applies nothing; the first poll after a hello lists what is unsettled.
 export const ConnectorPollRequestSchema = z.object({ v: z.literal(1), helloRev: SequenceSchema })
 
 const DeliveryBase = {

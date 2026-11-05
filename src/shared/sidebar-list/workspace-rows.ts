@@ -5,11 +5,11 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import type { FolderWorkspace } from '../folder-workspace-types'
-import { folderWorkspaceToWorktree } from '../folder-workspace-worktree'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
+import { folderWorkspaceToWorktree } from '../folder-workspaces/folder-workspace-worktree'
 import type { Repo } from '../repo-types'
-import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
-import { getWorkspaceAttachments } from '../workspace-attachments'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
+import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
 import {
   composeWorktreeHostIdentity,
@@ -148,7 +148,7 @@ function listedRow(worktree: ListedWorktree, repo: ListedRepo | undefined): List
 }
 
 /** Resolve each row’s own repo; repo IDs can collide across hosts. */
-function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
+export function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
   worktrees: readonly W[],
   repos: readonly R[]
 ): { worktree: W; repo: R | undefined }[] {

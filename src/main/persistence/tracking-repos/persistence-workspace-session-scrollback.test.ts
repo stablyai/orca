@@ -3,9 +3,9 @@ import { writeFileSync, rmSync, mkdtempSync, mkdirSync, existsSync } from 'node:
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
-import { MAX_BROWSER_HISTORY_ENTRIES } from '../../../shared/workspace-session-browser-history'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
+import { MAX_BROWSER_HISTORY_ENTRIES } from '../../../shared/workspace-session/workspace-session-browser-history'
 import {
   closeTestStores,
   createSqliteTestStore,
@@ -26,7 +26,7 @@ import {
   makeSessionWithBrowserHistory
 } from '../persistence-session-fixtures'
 
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { Store } from '../loading-store/store'
 import { initDataPath } from '../loading-store/user-data-path'
 
@@ -403,6 +403,12 @@ describe('Store', () => {
     expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)
     expect(buffer?.startsWith('stale-prefix')).toBe(false)
     expect(buffer?.endsWith('tail')).toBe(true)
+    expect(store.hasTerminalScrollbackSnapshot(ref)).toBe(true)
+    expect(store.hasTerminalScrollbackSnapshot('v1-11111111111111111111111111111111')).toBe(false)
+    await expect(store.readTerminalScrollbackSnapshotAsync(ref)).resolves.toBe(buffer)
+    await expect(store.statTerminalScrollbackSnapshotSize(ref)).resolves.toBe(
+      TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT + 'stale-prefix-tail'.length
+    )
   })
 
   it('strips legacy local terminal scrollback buffers when loading workspace session', async () => {

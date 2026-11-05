@@ -30,9 +30,13 @@ on:
         description: JSON array of shard assignments, produced by unit-plan.yml.
         required: true
         type: string
+      download_selection_plan:
+        description: Download an applied selection plan; full runs discover and shard the entire inventory.
+        default: true
+        type: boolean
 
       module_cache:
-        description: Transform cache policy (off, cold producer, or warm exact restore).
+        description: Transform cache policy (off, cold producer, or warm restore).
         default: 'off'
         type: string
 
@@ -89,7 +93,7 @@ jobs:
           cache-electron-package: 'true'
 
       - name: Install Electron package binary for tests
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
 
       - name: Verify Blacksmith unit runner environment
         if: runner.os == 'Linux' && startsWith(inputs.runner, 'blacksmith-')
@@ -99,6 +103,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       - name: Resolve unit module cache
         id: module-cache
@@ -107,24 +112,29 @@ jobs:
           ORCA_UNIT_SHARD_INDEX: ${{ matrix.shard.index }}
           ORCA_UNIT_SHARD_COUNT: ${{ matrix.shard.count }}
           ORCA_UNIT_CACHE_NAMESPACE: ${{ inputs.module_cache_namespace }}
-        run: node config/scripts/ci-unit-module-cache.mjs identity
+        run: node config/scripts/ci/unit-cache/ci-unit-module-cache.mjs identity
 
-      - name: Restore exact unit module cache
+      # The key pins config, plugins, lockfile and runtimes; the newest producer for it wins.
+      # Source edits are keyed per module by Vitest plus vitest-module-cache-resolution-key.ts.
+      - name: Restore unit module cache
         id: module-cache-restore
         if: inputs.module_cache == 'warm' && steps.module-cache.outputs.key != ''
         continue-on-error: true
         uses: actions/cache/restore@v5
         with:
           path: ${{ steps.module-cache.outputs.path }}
-          key: ${{ steps.module-cache.outputs.key }}
+          key: ${{ steps.module-cache.outputs.key }}-${{ github.sha }}
+          restore-keys: ${{ steps.module-cache.outputs.key }}-
 
       - name: Validate restored unit module cache or use cold transforms
         if: steps.module-cache.outputs.key != ''
         env:
-          ORCA_UNIT_CACHE_RESTORE_HIT: ${{ steps.module-cache-restore.outputs.cache-hit }}
-        run: node config/scripts/ci-unit-module-cache.mjs prepare
+          ORCA_UNIT_CACHE_RESTORE_HIT: ${{ steps.module-cache-restore.outputs.cache-matched-key != '' }}
+          ORCA_UNIT_CACHE_MODE: ${{ inputs.module_cache }}
+        run: node config/scripts/ci/unit-cache/ci-unit-module-cache.mjs prepare
 
       - uses: actions/download-artifact@v8
+        if: inputs.download_selection_plan
         continue-on-error: true
         with:
           name: unit-selection-attempt-${{ github.run_attempt }}
@@ -135,8 +145,8 @@ jobs:
         continue-on-error: true
         run: >-
           node --input-type=module -e '
-          import { discoverUnitFiles } from "./config/scripts/ci-unit-files.mjs";
-          import { writeAssignment } from "./config/scripts/ci-shard-assignment.mjs";
+          import { discoverUnitFiles } from "./config/scripts/ci/unit-selection/dependency-graph/ci-unit-files.mjs";
+          import { writeAssignment } from "./config/scripts/ci/sharding/ci-shard-assignment.mjs";
           writeAssignment("ci-shards/unit-discovery.json", { files: discoverUnitFiles() });'
 
       - name: Test shard
@@ -148,19 +158,19 @@ jobs:
         run: |
           ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
           export ORCA_SHARD_SOURCE_SHA
-          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
+          node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
-            ${{ inputs.runner == 'blacksmith-8vcpu-ubuntu-2404' && '--maxWorkers=8' || (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404') && '--maxWorkers=4' || '' }}
+            ${{ inputs.runner == 'blacksmith-8vcpu-ubuntu-2404' && '--maxWorkers=8' || (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404' || inputs.runner == 'ubuntu-24.04') && '--maxWorkers=4' || '' }}
 
       - name: Seal unit module cache
         id: module-cache-seal
+        # Only cold main/seeded producers publish; PRs consume and never seed each other.
         if: >-
           success() && steps.module-cache.outputs.key != '' &&
-          steps.module-cache-restore.outputs.cache-hit != 'true' &&
-          (github.event_name == 'pull_request' ||
-          github.ref == 'refs/heads/main' && github.event_name != 'pull_request' ||
+          inputs.module_cache == 'cold' &&
+          (github.ref == 'refs/heads/main' && github.event_name != 'pull_request' ||
           inputs.module_cache_seed && github.event_name == 'workflow_dispatch')
-        run: node config/scripts/ci-unit-module-cache.mjs seal
+        run: node config/scripts/ci/unit-cache/ci-unit-module-cache.mjs seal
 
       - name: Save unit module cache
         if: steps.module-cache-seal.outputs.ready == 'true'
@@ -168,7 +178,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{ steps.module-cache.outputs.path }}
-          key: ${{ steps.module-cache.outputs.key }}
+          key: ${{ steps.module-cache.outputs.key }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Upload unit shard assignment
         if: always()
@@ -188,7 +198,8 @@ jobs:
       fail-fast: false
       matrix:
         node: ${{ fromJSON(inputs.node_versions) }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Free hosted runner: ~1.2 min of work finishes well inside the ~7 min unit shards it runs beside.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
 
     steps:

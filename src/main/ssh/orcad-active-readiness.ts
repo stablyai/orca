@@ -19,6 +19,7 @@ import {
 } from '../managed-server/install/orcad-remote-readiness-wait'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { withOrcadLogTail } from '../managed-server/install/orcad-remote-log-tail'
+import type { RemoteHostPlatform } from './ssh-remote-platform'
 
 type OrcadReadinessFailureVerdict = 'exited' | 'unverifiable' | 'rejected'
 
@@ -29,6 +30,14 @@ export class OrcadActiveReadinessError extends Error {
   ) {
     super(message)
     this.name = 'OrcadActiveReadinessError'
+  }
+}
+
+/** A launched orcad that did not publish acceptable readiness; inspection failures stay the base error. */
+export class OrcadLaunchReadinessError extends OrcadActiveReadinessError {
+  constructor(verdict: OrcadReadinessFailureVerdict, message: string) {
+    super(verdict, message)
+    this.name = 'OrcadLaunchReadinessError'
   }
 }
 
@@ -78,9 +87,26 @@ export async function probeActiveOrcadReadiness(
   target: OrcadRemoteExecTarget & { remoteInstallDir: string },
   expectation: OrcadActivationExpectation
 ): Promise<ServeReadiness> {
-  const liveness = parseOrcadLiveness(
-    await execOrcadRemote(target, orcadLivenessProbeCommand(target.host, target.remoteInstallDir))
+  assertActiveOrcadLive(
+    await execOrcadRemote(target, orcadLivenessProbeCommand(target.host, target.remoteInstallDir)),
+    expectation
   )
+  return activeOrcadReadinessFromOutput(
+    target.host,
+    await execOrcadRemote(
+      target,
+      readOrcadReadinessNowCommand(target.host, target.remoteInstallDir)
+    ),
+    expectation
+  )
+}
+
+/** Throws unless the liveness probe's answer proves the active slot's process is running. */
+export function assertActiveOrcadLive(
+  livenessOutput: string,
+  expectation: OrcadActivationExpectation
+): void {
+  const liveness = parseOrcadLiveness(livenessOutput)
   if (liveness === 'DEAD') {
     throw new OrcadActiveReadinessError(
       'exited',
@@ -99,14 +125,18 @@ export async function probeActiveOrcadReadiness(
       `orcad ${expectation.fullVersion} process state is unverifiable.`
     )
   }
-  const parsed = parseOrcadReadinessWaitOutput(
-    target.host,
-    await execOrcadRemote(
-      target,
-      readOrcadReadinessNowCommand(target.host, target.remoteInstallDir)
-    )
+}
+
+export function activeOrcadReadinessFromOutput(
+  host: RemoteHostPlatform,
+  readinessOutput: string,
+  expectation: OrcadActivationExpectation
+): ServeReadiness {
+  return gatedReadiness(
+    parseOrcadReadinessWaitOutput(host, readinessOutput),
+    expectation,
+    'The active orcad'
   )
-  return gatedReadiness(parsed, expectation, 'The active orcad')
 }
 
 /** Accept recovery/rollback launches only when they prove the expected build. */
@@ -126,6 +156,6 @@ export async function launchOrcadSlotAndAwaitReadiness(
       throw error
     }
     const message = await withOrcadLogTail(target, spec.remoteInstallDir, error.message)
-    throw new OrcadActiveReadinessError(error.verdict, message)
+    throw new OrcadLaunchReadinessError(error.verdict, message)
   }
 }

@@ -275,9 +275,13 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
         deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
         return
       }
+      // The held copy already sends a chord the IME replays on commit, even while xterm is still finalizing (#17616).
+      if (deferredChordSender.absorbReplay(e)) {
+        return
+      }
       // Defer cursor chords until composed text commits or they overtake it (#12871); unlike Enter, timeout must drop rather than fire mid-preedit. Sender owns cancellation on blur/teardown.
       if (e.isComposing || hasPendingImeComposition) {
-        deferredChordSender.defer(pane.terminal.element, sendResolvedInput)
+        deferredChordSender.defer(e, pane.terminal.element, sendResolvedInput)
         return
       }
       sendResolvedInput()
