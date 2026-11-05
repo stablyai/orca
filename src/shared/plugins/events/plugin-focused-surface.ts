@@ -91,7 +91,9 @@ function sanitizeTitle(value: string): string | null {
 function urlTitle(value: string): string | null {
   try {
     const url = new URL(value)
-    return url.hostname || url.pathname.split('/').findLast(Boolean) || null
+    const basename = url.pathname.split('/').findLast(Boolean) ?? null
+    // Why: a file URL's host is a file server, which the basename-only rule for files keeps private.
+    return url.protocol === 'file:' ? basename : url.hostname || basename
   } catch {
     return null
   }

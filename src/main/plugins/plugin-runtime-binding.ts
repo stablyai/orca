@@ -166,17 +166,17 @@ export function watchPluginUiFocus(input: {
   delayMs?: number
 }): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
-  let last: string | null = null
+  // Why track while nobody listens: a new subscriber reads `ui.readFocus` first, so only later changes are news.
+  let last = JSON.stringify(input.readFocusedSurface())
   const check = (): void => {
     timer = null
-    if (!input.events.wantsEvent('ui.focus.changed')) {
-      last = null
-      return
-    }
     const focusedSurface = input.readFocusedSurface()
     const signature = JSON.stringify(focusedSurface)
-    if (signature !== last) {
-      last = signature
+    if (signature === last) {
+      return
+    }
+    last = signature
+    if (input.events.wantsEvent('ui.focus.changed')) {
       input.events.emitEvent('ui.focus.changed', { focusedSurface, receivedAt: Date.now() })
     }
   }

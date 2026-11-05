@@ -127,10 +127,11 @@ describe('workspace.changed', () => {
 })
 
 describe('ui.focus.changed', () => {
-  it('re-reads focus after its inputs settle and emits only real changes', async () => {
+  it('emits only changes after the value a subscriber can already read, coalescing bursts', async () => {
     vi.useFakeTimers()
     try {
-      const events = { wantsEvent: vi.fn(() => true), emitEvent: vi.fn() }
+      let listening = false
+      const events = { wantsEvent: vi.fn(() => listening), emitEvent: vi.fn() }
       let surface: { kind: 'terminal'; title: string } | null = { kind: 'terminal', title: 'zsh' }
       let changed: () => void = () => undefined
       const stop = watchPluginUiFocus({
@@ -142,20 +143,19 @@ describe('ui.focus.changed', () => {
         },
         delayMs: 10
       })
-      changed()
+      surface = { kind: 'terminal', title: 'vim' }
       changed()
       await vi.advanceTimersByTimeAsync(20)
-      expect(events.emitEvent).toHaveBeenCalledWith('ui.focus.changed', {
-        focusedSurface: { kind: 'terminal', title: 'zsh' },
-        receivedAt: expect.any(Number)
-      })
+      listening = true
+      changed()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).not.toHaveBeenCalled()
+      surface = null
+      changed()
       changed()
       await vi.advanceTimersByTimeAsync(20)
       expect(events.emitEvent).toHaveBeenCalledOnce()
-      surface = null
-      changed()
-      await vi.advanceTimersByTimeAsync(20)
-      expect(events.emitEvent).toHaveBeenLastCalledWith('ui.focus.changed', {
+      expect(events.emitEvent).toHaveBeenCalledWith('ui.focus.changed', {
         focusedSurface: null,
         receivedAt: expect.any(Number)
       })
