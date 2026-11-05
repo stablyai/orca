@@ -47,3 +47,20 @@ export function homeWorktreeForAgentPane<T extends AgentPaneOwner>(
     fallback
   )
 }
+
+/** False when the pane is stamped with a home workspace that is not loaded yet, so only a mirrored copy is visible. */
+export function agentPaneHomeLoaded(
+  worktrees: readonly AgentPaneOwner[],
+  paneKey: string,
+  home: AgentPaneOwner
+): boolean {
+  const row = worktrees
+    .flatMap((worktree) => worktree.agents ?? [])
+    .find((agent) => agent.paneKey === paneKey)
+  if (!row?.homeWorktreeId) {
+    return true
+  }
+  return (
+    home.worktreeId === row.homeWorktreeId && (!row.homeHostId || home.hostId === row.homeHostId)
+  )
+}
