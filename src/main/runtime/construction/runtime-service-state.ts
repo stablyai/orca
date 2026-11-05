@@ -8,7 +8,7 @@ import { RuntimeOrchestrationSenderNames } from '../runtime-orchestration-sender
 import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
 import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
-import { OrcaRuntimeWithRuntimeId } from './runtime-identity-state'
+import { OrcaRuntimeWithTerminalMailboxSubscriptions } from './runtime-terminal-mailbox-subscriptions'
 import { RuntimeTerminalAgentPresence } from '../runtime-terminal-agent-presence'
 import type { RuntimeNotifier } from '../runtime-notifier-contract'
 import { RuntimeClientEventBus } from '../runtime-client-event-bus'
@@ -49,7 +49,7 @@ import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../orca-runtime-postlude'
 import { readScreenClearingBlockedTail } from '../blocked-tail-screen-clear'
 
-export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
+export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithTerminalMailboxSubscriptions {
   protected readonly stopRequestedPtyIds = new Set<string>()
 
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
@@ -265,6 +265,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   })
 
   protected readonly orchestrationMailboxPointerDelivery = new OrchestrationMailboxPointerDelivery({
+    ...this.terminalMailboxPointerSubscriptionDependencies,
     mailboxOwner: this.orchestrationMailboxOwner,
     deliveryTarget: this.orchestrationMailboxDeliveryTarget,
     getDb: () => this._orchestrationDb,
@@ -273,7 +274,6 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
-    resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
       this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),

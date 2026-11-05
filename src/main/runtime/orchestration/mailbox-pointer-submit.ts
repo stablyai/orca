@@ -1,3 +1,12 @@
+import {
+  shouldReleaseOrchestrationPointer,
+  type OrchestrationMessageWaiter
+} from './mailbox-pointer-eligibility'
+import {
+  isTerminalMailbox,
+  type TerminalMailboxSubscriptions
+} from './terminal-mailbox-subscriptions'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { OrchestrationDb } from './db'
 import {
   MAILBOX_POINTER_ENTER_ATTEMPTED,
@@ -15,10 +24,16 @@ import type {
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 type PointerSubmitDependencies = {
-  mailboxOwner: OrchestrationMailboxOwner
+  terminalSubscriptions?: TerminalMailboxSubscriptions
+  isAgentSettledForDelivery?: (ptyId: string) => boolean
+  getMessageWaiters?: (mailboxHandle: string) => ReadonlySet<OrchestrationMessageWaiter> | undefined
+  mailboxOwner: Pick<OrchestrationMailboxOwner, 'resolve'>
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
-  resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
+  resolveSubmitTarget: (
+    ptyId: string,
+    mailboxHandle?: string
+  ) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
@@ -29,6 +44,7 @@ type PointerSubmitDependencies = {
 export type OrchestrationMailboxPointerSubmitTarget = {
   terminal: OrchestrationMailboxTerminal
   processIncarnation: string
+  agentIdentity?: TuiAgent
 }
 
 export function submitOrchestrationMailboxPointer(
@@ -40,6 +56,7 @@ export function submitOrchestrationMailboxPointer(
     ptyId: string
     flight: OrchestrationMailboxDeliveryFlight
     expectedTarget: OrchestrationMailboxPointerSubmitTarget
+    subscriptionGeneration?: number
   }
 ): void {
   let clearAndRedrive = false
@@ -66,16 +83,76 @@ export function submitOrchestrationMailboxPointer(
         finalizeReservation = false
         return
       }
-      const target = deps.resolveSubmitTarget(input.ptyId)
+      const target = deps.resolveSubmitTarget(input.ptyId, input.mailboxHandle)
       const terminal =
         target?.terminal.handle === input.expectedTarget.terminal.handle &&
         target.processIncarnation === input.expectedTarget.processIncarnation
           ? target.terminal
           : null
       const sameMailbox =
-        terminal && deps.mailboxOwner.resolve(terminal, input.mailboxHandle) === input.mailboxHandle
+        terminal &&
+        deps.mailboxOwner.resolve(terminal, input.mailboxHandle, { routeDirectMail: false }) ===
+          input.mailboxHandle
       const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
-      if (!terminal || !sameMailbox) {
+      const bare = isTerminalMailbox(input.mailboxHandle)
+      const subscriptionMatches =
+        deps.terminalSubscriptions?.generation(input.mailboxHandle) ===
+          input.subscriptionGeneration &&
+        target &&
+        deps.terminalSubscriptions?.matches(input.mailboxHandle, target)
+      if (bare && (!terminal || !subscriptionMatches)) {
+        const replacementProven =
+          target &&
+          (target.terminal.handle !== input.expectedTarget.terminal.handle ||
+            target.terminal.ptyId !== input.expectedTarget.terminal.ptyId ||
+            target.processIncarnation !== input.expectedTarget.processIncarnation ||
+            target.terminal.paneKeys.length !== input.expectedTarget.terminal.paneKeys.length ||
+            target.terminal.paneKeys.some(
+              (key, i) => key !== input.expectedTarget.terminal.paneKeys[i]
+            ))
+        if (
+          replacementProven ||
+          deps.terminalSubscriptions?.status(input.mailboxHandle).state === 'stale_replaced'
+        ) {
+          clearAndRedrive = true
+        } else {
+          preserveAmbiguousDelivery = true
+        }
+      } else if (
+        bare &&
+        terminal &&
+        (!sameMailbox ||
+          terminal.lastAgentStatus !== 'idle' ||
+          !terminal.lastAgentStatusObservedLive ||
+          !deps.isAgentSettledForDelivery?.(input.ptyId) ||
+          deps.isPtyAwaitingUserInput(input.ptyId))
+      ) {
+        deps.terminalSubscriptions?.record(
+          input.mailboxHandle,
+          terminal.lastAgentStatus === 'working' ? 'blocked_working' : 'blocked_permission',
+          'deferred',
+          !sameMailbox ? 'mailbox_ownership_changed' : 'permission_or_prompt_changed',
+          messageIds,
+          input.subscriptionGeneration
+        )
+        releaseWithoutRedrive = true
+      } else if (
+        bare &&
+        target &&
+        (target.agentIdentity === undefined ||
+          target.agentIdentity === 'cursor' ||
+          target.agentIdentity !== input.expectedTarget.agentIdentity)
+      ) {
+        deps.terminalSubscriptions?.record(
+          input.mailboxHandle,
+          'active',
+          'deferred',
+          'manual_submit_required',
+          messageIds,
+          input.subscriptionGeneration
+        )
+        releaseWithoutRedrive = true
+      } else if (!terminal || !sameMailbox) {
         clearAndRedrive = true
       } else if (
         (terminal.lastAgentStatusObservedLive && terminal.lastAgentStatus === null) ||
@@ -86,6 +163,16 @@ export function submitOrchestrationMailboxPointer(
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deferredUntilIdle = true
+      } else if (
+        bare &&
+        shouldReleaseOrchestrationPointer(
+          deps.getDb(),
+          input.mailboxHandle,
+          input.messages,
+          deps.getMessageWaiters?.(input.mailboxHandle)
+        )
+      ) {
+        releaseWithoutRedrive = true
       } else if (!queueSafe) {
         releaseWithoutRedrive = true
       } else {
@@ -99,6 +186,18 @@ export function submitOrchestrationMailboxPointer(
         }
         const enterSettlement = await deps.writePty(input.ptyId, '\r')
         submitted = enterSettlement.outcome === 'accepted'
+        deps.terminalSubscriptions?.record(
+          input.mailboxHandle,
+          enterSettlement.outcome === 'unverifiable' ? 'ambiguous_write' : 'active',
+          submitted
+            ? 'submitted'
+            : enterSettlement.outcome === 'refused'
+              ? 'deferred'
+              : 'unverifiable',
+          `enter_${enterSettlement.outcome}`,
+          messageIds,
+          input.subscriptionGeneration
+        )
         if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
           finalizeReservation = false
           return
@@ -110,6 +209,14 @@ export function submitOrchestrationMailboxPointer(
       }
     })
     .catch(() => {
+      deps.terminalSubscriptions?.record(
+        input.mailboxHandle,
+        'ambiguous_write',
+        'unverifiable',
+        'submit_unverifiable',
+        messageIds,
+        input.subscriptionGeneration
+      )
       if (!preserveAmbiguousDelivery) {
         clearAndRedrive = true
         redriveClearedPointer = false

@@ -13,6 +13,7 @@ import {
   MAILBOX_POINTER_RESERVED,
   MAILBOX_POINTER_WRITE_ATTEMPTED
 } from './db/messages/mailbox-pointer-enter-state'
+import { isTerminalMailbox } from './terminal-mailbox-subscriptions'
 import { resumePendingOrchestrationMailboxPointer } from './mailbox-pointer-resume'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 
@@ -34,7 +35,10 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
 
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     try {
-      const terminal = this.deps.deliveryTarget.resolveTerminal(handle)
+      const terminal =
+        (isTerminalMailbox(handle)
+          ? this.deps.resolveSubscriptionTarget?.(handle)?.terminal
+          : null) ?? this.deps.deliveryTarget.resolveTerminal(handle)
       // Skip ownership resolution, and the reconciliation it schedules, for a terminal deliver() would refuse.
       if (!terminal || !isMailboxTerminalTakingInput(terminal)) {
         return
@@ -58,12 +62,38 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   ): void {
     const db = this.deps.getDb()
     const mailboxHandle = options.mailboxHandle
-    if (!db || (!mailboxHandle.startsWith('run:') && !mailboxHandle.startsWith('dispatch:'))) {
+    const bare = isTerminalMailbox(mailboxHandle)
+    if (
+      !db ||
+      (!bare && !mailboxHandle.startsWith('run:') && !mailboxHandle.startsWith('dispatch:'))
+    ) {
       return
     }
     const { ptyId } = terminal
+    if (bare) {
+      const target = this.deps.resolveSubmitTarget(ptyId, mailboxHandle)
+      if (!target || !this.deps.terminalSubscriptions?.matches(mailboxHandle, target)) {
+        return
+      }
+      if (terminal.lastAgentStatus !== 'idle' || !terminal.lastAgentStatusObservedLive) {
+        this.deps.terminalSubscriptions.record(
+          mailboxHandle,
+          terminal.lastAgentStatus === 'working' ? 'blocked_working' : 'host_unverifiable',
+          'deferred',
+          'live_idle_not_observed',
+          [],
+          this.deps.terminalSubscriptions.generation(mailboxHandle)
+        )
+        this.parkRedelivery(mailboxHandle, options.reservedTypes)
+        return
+      }
+    }
     // Gate live, settled input at this shared commit point; refusal parks for recheck instead of dropping mail.
-    if (!isMailboxTerminalTakingInput(terminal) || !this.deps.isAgentSettledForDelivery(ptyId)) {
+    if (
+      !isMailboxTerminalTakingInput(terminal) ||
+      !this.deps.isAgentSettledForDelivery(ptyId) ||
+      (bare && this.deps.isPtyAwaitingUserInput(ptyId))
+    ) {
       this.parkRedelivery(mailboxHandle, options.reservedTypes)
       return
     }
@@ -93,7 +123,12 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     const pending = db.getPendingMailboxPointerMessages(mailboxHandle)
     if (
       pending.length > 0 &&
-      resumePendingOrchestrationMailboxPointer({ deps: this.deps, terminal, messages: pending })
+      resumePendingOrchestrationMailboxPointer({
+        deps: this.deps,
+        terminal,
+        mailboxHandle,
+        messages: pending
+      })
     ) {
       return
     }
@@ -151,6 +186,11 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   }
 
   retirePty(ptyId: string): void {
+    this.deps.terminalSubscriptions?.retirePty(ptyId)
+    this.retireDeliveryState(ptyId)
+  }
+
+  private retireDeliveryState(ptyId: string): void {
     this.coldParkedPtys.delete(ptyId)
     const { flight, releasedMailboxes } = this.state.retirePty(ptyId)
     if (flight?.enterTimer != null) {
@@ -183,8 +223,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         }
         return
       }
-      this.retirePty(ptyId)
-      this.deps.getDb()?.releasePendingMailboxPointerForPty(ptyId)
+      this.retireDeliveryState(ptyId)
+      const db = this.deps.getDb()
+      db?.releasePendingMailboxPointerForPty(ptyId, { preserveBareTerminalAttempts: true })
     } catch {
       // Runtime teardown can close the DB before the final PTY frame is drained.
     }

@@ -1,3 +1,4 @@
+import type { TerminalMailboxSubscriptions } from './terminal-mailbox-subscriptions'
 import type { OrchestrationDb } from './db'
 import type { OrchestrationMailboxDeliveryTarget } from './mailbox-delivery-target'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
@@ -16,8 +17,13 @@ export type OrchestrationMailboxPointerMessage = {
 }
 
 export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
-  mailboxOwner: OrchestrationMailboxOwner
-  deliveryTarget: OrchestrationMailboxDeliveryTarget
+  terminalSubscriptions?: TerminalMailboxSubscriptions
+  resolveSubscriptionTarget?: (handle: string) => OrchestrationMailboxPointerSubmitTarget | null
+  mailboxOwner: Pick<OrchestrationMailboxOwner, 'resolve'>
+  deliveryTarget: Pick<
+    OrchestrationMailboxDeliveryTarget,
+    'resolveTerminal' | 'deferForAbsenceProbe'
+  >
   getDb: () => OrchestrationDb | null
   getTerminal: (ptyId: string) => OrchestrationMailboxTerminal | null
   /** Whether the terminal may take the pointer plus Enter now: at rest, or mid-turn (input queues). */
@@ -25,7 +31,10 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
-  resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
+  resolveSubmitTarget: (
+    ptyId: string,
+    mailboxHandle?: string
+  ) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>

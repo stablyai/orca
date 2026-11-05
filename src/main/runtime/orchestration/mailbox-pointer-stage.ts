@@ -1,3 +1,4 @@
+import { isTerminalMailbox } from './terminal-mailbox-subscriptions'
 import { formatMessagePointer } from './formatter'
 import type {
   OrchestrationMailboxPointerMessage,
@@ -39,8 +40,50 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   args: StagePointerArgs<TWaiter>
 ): void {
   const { ptyId } = args.terminal
-  const expectedTarget = args.deps.resolveSubmitTarget(ptyId)
+  const expectedTarget = args.deps.resolveSubmitTarget(ptyId, args.mailboxHandle)
   if (!expectedTarget) {
+    return
+  }
+  const bare = isTerminalMailbox(args.mailboxHandle)
+  if (
+    bare &&
+    (!args.deps.terminalSubscriptions?.matches(args.mailboxHandle, expectedTarget) ||
+      args.deps.mailboxOwner.resolve(expectedTarget.terminal, undefined, {
+        routeDirectMail: false
+      }) !== args.mailboxHandle)
+  ) {
+    return
+  }
+  const subscriptionGeneration = args.deps.terminalSubscriptions?.generation(args.mailboxHandle)
+  if (
+    bare &&
+    (!args.deps.isAgentSettledForDelivery(ptyId) || args.deps.isPtyAwaitingUserInput(ptyId))
+  ) {
+    args.deps.terminalSubscriptions?.record(
+      args.mailboxHandle,
+      'blocked_permission',
+      'deferred',
+      'permission_or_prompt_unsettled',
+      args.messages.map((message) => message.id),
+      subscriptionGeneration
+    )
+    return
+  }
+  if (
+    bare &&
+    (expectedTarget.terminal.lastAgentStatus !== 'idle' ||
+      !expectedTarget.terminal.lastAgentStatusObservedLive)
+  ) {
+    args.deps.terminalSubscriptions?.record(
+      args.mailboxHandle,
+      expectedTarget.terminal.lastAgentStatus === 'working'
+        ? 'blocked_working'
+        : 'host_unverifiable',
+      'deferred',
+      'live_idle_not_observed',
+      args.messages.map((message) => message.id),
+      subscriptionGeneration
+    )
     return
   }
   const db = args.deps.getDb()
@@ -85,9 +128,25 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
       preserveAmbiguousWrite()
       return
     }
-    finishPointerWriteAndStageEnter(args, ptyId, flight, expectedTarget, settlement)
+    finishPointerWriteAndStageEnter(
+      args,
+      ptyId,
+      flight,
+      expectedTarget,
+      settlement,
+      subscriptionGeneration
+    )
   }
   const preserveAmbiguousWrite = (): void => {
+    args.deps.terminalSubscriptions?.record(
+      args.mailboxHandle,
+      'ambiguous_write',
+      'unverifiable',
+      'pointer_write_unverifiable',
+      flight.stagedMessageIds,
+      subscriptionGeneration
+    )
+
     if (!args.state.isCurrentFlight(ptyId, flight)) {
       return
     }
@@ -119,7 +178,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
   ptyId: string,
   flight: OrchestrationMailboxDeliveryFlight,
   expectedTarget: OrchestrationMailboxPointerSubmitTarget,
-  settlement: Extract<WriteSettlement, { outcome: 'accepted' | 'refused' }>
+  settlement: Extract<WriteSettlement, { outcome: 'accepted' | 'refused' }>,
+  subscriptionGeneration?: number
 ): void {
   let delayedSettle = false
   try {
@@ -135,12 +195,32 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
       }
       return
     }
+    if (
+      isTerminalMailbox(args.mailboxHandle) &&
+      (expectedTarget.agentIdentity === undefined || expectedTarget.agentIdentity === 'cursor')
+    ) {
+      args.deps.terminalSubscriptions?.record(
+        args.mailboxHandle,
+        'active',
+        'deferred',
+        'manual_submit_required',
+        flight.stagedMessageIds,
+        subscriptionGeneration
+      )
+      db?.markAsDelivered(flight.stagedMessageIds, args.mailboxHandle)
+      args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)
+      args.redrive(args.mailboxHandle)
+      return
+    }
     const submitEnter = (): void =>
       submitOrchestrationMailboxPointer(
         {
+          terminalSubscriptions: args.deps.terminalSubscriptions,
+          isAgentSettledForDelivery: args.deps.isAgentSettledForDelivery,
           mailboxOwner: args.deps.mailboxOwner,
           state: args.state,
           getDb: args.deps.getDb,
+          getMessageWaiters: args.deps.getMessageWaiters,
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
@@ -154,7 +234,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           newestSequence: args.newestSequence,
           ptyId,
           flight,
-          expectedTarget
+          expectedTarget,
+          subscriptionGeneration
         }
       )
     flight.submitEnter = submitEnter
