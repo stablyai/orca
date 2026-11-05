@@ -10123,7 +10123,7 @@
             },
             "matchTerminal": "match terminal",
             "singlePaneWidth": "Single Pane Width",
-            "singlePaneWidthSummary": "Maximum width for a tab with no splits — terminal, browser, editor or preview — centered in the window.",
+            "singlePaneWidthSummary": "Maximum width for a tab with no splits — terminal, editor or preview — centered in the window.",
             "kwWidth": "width",
             "kwMaxWidth": "max width",
             "kwCentered": "centered",
