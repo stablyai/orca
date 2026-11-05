@@ -78,7 +78,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       ? this.resolvePtyTabCloseSurfaceAuthority(options.expectedPtyCloseAuthority)
       : null
     const tab = options.expectedPtyCloseAuthority
-      ? ptyCloseAuthority?.surface.tab
+      ? ptyCloseAuthority?.surface?.tab
       : (snapshot?.tabs.find((candidate) => candidate.id === tabId) ??
         snapshot?.tabs.find(
           (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tabId
@@ -91,7 +91,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       worktreeId,
       tabId,
       tab,
-      authorityTab: ptyCloseAuthority?.surface.tab,
+      authorityTab: ptyCloseAuthority?.surface?.tab,
       snapshot,
       observedPtyIds
     })
@@ -169,7 +169,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       }
       // Headless parents need local kill/de-persist or relay acknowledgments resurrect them; renderer-owned parents retain its pin guard/durable close.
       if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
-        await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
+        await this.closeHeadlessMobileTerminalTab(worktreeId, tab.parentTabId, {
           allowMissingPersistedTab: Boolean(ptyCloseAuthority),
           force: options.force,
           reason: options.reason,
@@ -224,7 +224,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             ? this.resolvePtyTabCloseSurfaceAuthority(options.expectedPtyCloseAuthority)
             : null
           // Relay recovery may acknowledge an absent renderer tab; HUB still retires its SSH surface.
-          await this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
+          await this.closeHeadlessMobileTerminalTab(worktreeId, remainingTab.parentTabId, {
             // The renderer may already have durably removed it.
             allowMissingPersistedTab: true,
             force: options.force,
@@ -252,7 +252,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
           !this.notifier?.closeTerminal ||
           this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)
         ) {
-          await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
+          await this.closeHeadlessMobileTerminalTab(worktreeId, tab.parentTabId, {
             force: options.force,
             ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
           })

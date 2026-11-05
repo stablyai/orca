@@ -35,7 +35,7 @@ class RetirementRuntime extends OrcaRuntimeService {
     if (!snapshot || tab?.type !== 'terminal') {
       throw new Error('missing test tab')
     }
-    await this.closeHeadlessMobileTerminalTab(binding.worktreeId, snapshot, tab)
+    await this.closeHeadlessMobileTerminalTab(binding.worktreeId, tab.parentTabId)
   }
   publish(layoutOnly = false): void {
     this.storeMobileSessionSnapshot(binding.worktreeId, {

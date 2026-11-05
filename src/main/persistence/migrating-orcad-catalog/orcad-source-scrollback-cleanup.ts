@@ -10,12 +10,16 @@ import { sessionPartitions } from './orcad-source-workspace-session-fragments'
 export function deleteUnreferencedOrcadMigrationScrollback(
   runtime: Pick<
     StoreRuntimeState,
-    'state' | 'terminalScrollbackSnapshotStorage' | 'retainedScrollbackRefsByMigrationId'
+    | 'state'
+    | 'terminalScrollbackSnapshotStorage'
+    | 'retainedScrollbackRefsByMigrationId'
+    | 'deferredMutationScrollbackDeletions'
   >,
   refs: Iterable<string>
 ): void {
   // Host-run panes whose local copy this deletes repaint from the host (session.readTerminalScrollback).
   const live = new Set([
+    ...(runtime.deferredMutationScrollbackDeletions ?? []),
     ...sessionPartitions(runtime.state, LOCAL_EXECUTION_HOST_ID).flatMap(([, session]) => [
       ...collectTerminalScrollbackSnapshotRefs(session)
     ]),

@@ -12,7 +12,10 @@ import {
 
 type RetentionRuntime = Pick<
   StoreRuntimeState,
-  'state' | 'terminalScrollbackSnapshotStorage' | 'retainedScrollbackRefsByMigrationId'
+  | 'state'
+  | 'terminalScrollbackSnapshotStorage'
+  | 'retainedScrollbackRefsByMigrationId'
+  | 'deferredMutationScrollbackDeletions'
 >
 
 /** Persist signed snapshots until commit/abandonment so tab closes cannot break transfer retries. */

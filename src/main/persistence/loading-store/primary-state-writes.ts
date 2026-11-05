@@ -15,6 +15,7 @@ import type { DurableProfileStateMutation } from './store-runtime-state'
 import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
 import { notifyWorkspaceSessionOperationEnded } from './workspace-session-write-listeners'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import { finishMutationScrollbackDeletions } from './terminal-session-cleanup'
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
 export class PrimaryStateWriteOperations {
@@ -59,53 +60,90 @@ export class PrimaryStateWriteOperations {
       return Promise.reject(new Error('Cannot mutate finalized profile persistence'))
     }
     return enqueuePrimaryStateOperation(this, async () => {
-      if (runtime.profileStateAuthority?.asynchronous) {
-        runtime.profileStateAuthority.assertWritable()
-      }
-      let mutation: DurableProfileStateMutation<T>
+      runtime.deferredMutationScrollbackDeletions = new Set()
       try {
-        mutation = this.runAdmittedMutationCallback(
-          'mutate',
-          mutate,
-          (result) => result.writtenHostIds
-        )
-      } catch (error) {
-        await stopAfterFailedPrimaryStateMutation(runtime, error)
-        throw error
+        return await this.commitDurableMutation(mutate)
+      } finally {
+        finishMutationScrollbackDeletions(runtime)
       }
-      if (
-        mutation.persist === false ||
-        (mutation.persist === 'if-dirty' &&
-          runtime.lastDurableWriteGeneration >= runtime.writeGeneration)
-      ) {
-        return mutation.value
-      }
-      runtime.writeGeneration++
-      const requiredGeneration = runtime.writeGeneration
-      try {
-        const captured = runtime.profileStateAuthority?.asynchronous
-          ? await writeToDiskAsync(this)
-          : writeToDiskSync(this[primaryStateWriteOperationsContext], {
-              expectedGeneration: requiredGeneration
-            })
-        if (!captured || runtime.lastDurableWriteGeneration < requiredGeneration) {
-          throw new Error('Profile mutation changed while preparing its durable snapshot')
-        }
-      } catch (error) {
-        if (profileStateWriterFailureOutcome(error) !== 'indeterminate') {
-          if (mutation.rollback) {
-            try {
-              this.runAdmittedMutationCallback('rollback', mutation.rollback)
-            } catch (rollbackError) {
-              await stopAfterFailedPrimaryStateMutation(runtime, rollbackError)
-              throw rollbackError
-            }
-          }
-        }
-        throw error
-      }
-      return mutation.value
     })
+  }
+
+  private async commitDurableMutation<T>(mutate: () => DurableProfileStateMutation<T>): Promise<T> {
+    const { runtime } = this[primaryStateWriteOperationsContext]
+    if (runtime.profileStateAuthority?.asynchronous) {
+      runtime.profileStateAuthority.assertWritable()
+    }
+    let mutation: DurableProfileStateMutation<T>
+    try {
+      mutation = this.runAdmittedMutationCallback(
+        'mutate',
+        mutate,
+        (result) => result.writtenHostIds
+      )
+    } catch (error) {
+      await stopAfterFailedPrimaryStateMutation(runtime, error)
+      throw error
+    }
+    if (
+      mutation.persist === false ||
+      (mutation.persist === 'if-dirty' &&
+        runtime.lastDurableWriteGeneration >= runtime.writeGeneration)
+    ) {
+      return mutation.value
+    }
+    try {
+      await this.persistMutation()
+    } catch (error) {
+      if (profileStateWriterFailureOutcome(error) !== 'indeterminate') {
+        await this.rollbackMutation(mutation)
+      }
+      throw error
+    }
+    const refusal = mutation.validate?.()
+    if (refusal) {
+      await this.rollbackMutation(mutation)
+      return refusal.value
+    }
+    return mutation.value
+  }
+
+  private async rollbackMutation<T>(mutation: DurableProfileStateMutation<T>): Promise<void> {
+    if (!mutation.rollback) {
+      return
+    }
+    let compensation: { persist: true } | void
+    try {
+      compensation = this.runAdmittedMutationCallback<{ persist: true } | void>(
+        'rollback',
+        mutation.rollback
+      )
+    } catch (error) {
+      await stopAfterFailedPrimaryStateMutation(
+        this[primaryStateWriteOperationsContext].runtime,
+        error
+      )
+      throw error
+    }
+    if (compensation?.persist) {
+      try {
+        await this.persistMutation()
+      } catch (error) {
+        console.error('[persistence] Failed to persist mutation compensation:', error)
+      }
+    }
+  }
+
+  private async persistMutation(): Promise<void> {
+    const context = this[primaryStateWriteOperationsContext]
+    const { runtime } = context
+    const requiredGeneration = ++runtime.writeGeneration
+    const captured = runtime.profileStateAuthority?.asynchronous
+      ? await writeToDiskAsync(this)
+      : writeToDiskSync(context, { expectedGeneration: requiredGeneration })
+    if (!captured || runtime.lastDurableWriteGeneration < requiredGeneration) {
+      throw new Error('Profile mutation changed while preparing its durable snapshot')
+    }
   }
 
   private runAdmittedMutationCallback<T>(

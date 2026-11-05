@@ -72,14 +72,13 @@ export function registerHeadlessCloseKeepsPublicationEpochTests(): void {
     const internals = runtime as unknown as {
       closeHeadlessMobileTerminalTab: (
         worktreeId: string,
-        snapshot: RuntimeMobileSessionTabsSnapshot,
-        tab: RuntimeMobileSessionTerminalTab,
+        tabId: string,
         options?: Record<string, unknown>
       ) => Promise<void>
       mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
     }
     internals.mobileSessionTabsByWorktree.set(WORKTREE_ID, snapshot)
-    await internals.closeHeadlessMobileTerminalTab(WORKTREE_ID, snapshot, closedTab, {
+    await internals.closeHeadlessMobileTerminalTab(WORKTREE_ID, closedTab.parentTabId, {
       allowMissingPersistedTab: true,
       killPtys: false
     })

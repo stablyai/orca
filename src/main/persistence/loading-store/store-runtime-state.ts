@@ -36,7 +36,10 @@ export type DurableProfileStateMutation<T> = {
   value: T
   /** if-dirty fences prior changes without rewriting a durable generation. */
   persist?: boolean | 'if-dirty'
-  rollback?: () => void
+  /** Recheck external ownership after the write, before acknowledging the mutation. */
+  validate?: () => { value: T } | undefined
+  /** A rejected commit can require a durable, fieldwise compensation. */
+  rollback?: (() => void) | (() => { persist: true })
   /** Absent means any host may have changed; otherwise notify only listed partitions. */
   writtenHostIds?: readonly ExecutionHostId[]
 }
@@ -62,6 +65,7 @@ export class StoreRuntimeState {
   readonly orcadTerminalRestoreHints: OrcadTerminalRestoreHintStore
   /** Retain exported scrollback blobs until their in-flight migrations finish reading. */
   readonly retainedScrollbackRefsByMigrationId = new Map<string, ReadonlySet<string>>()
+  deferredMutationScrollbackDeletions: Set<string> | null = null
   writeTimer: ReturnType<typeof setTimeout> | null = null
   pendingWrite: Promise<void> | null = null
   pendingSnapshotFileWork: Promise<void> | null = null

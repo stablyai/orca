@@ -195,8 +195,9 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
           row.type === 'terminal' && row.parentTabId === target.tabId
       ),
       graphLeafIds,
-      sessionLayout:
-        this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[target.tabId]
+      sessionLayout: this.store?.getWorkspaceSession?.(
+        this.getWorkspaceSessionHostIdForTab(worktreeId, target.tabId)
+      )?.terminalLayoutsByTabId?.[target.tabId]
     })
   }
 

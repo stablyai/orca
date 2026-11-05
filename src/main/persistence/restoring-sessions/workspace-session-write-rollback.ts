@@ -93,19 +93,22 @@ function rollbackValue(
   if (rows) {
     return rows
   }
-  if (!isRecord(original) || !isRecord(staged) || !isRecord(current)) {
+  // Optional maps may first appear or disappear in this mutation; other writers can add keys.
+  const before = original === MISSING || original === undefined ? {} : original
+  const written = staged === MISSING || staged === undefined ? {} : staged
+  if (!isRecord(before) || !isRecord(written) || !isRecord(current)) {
     return current
   }
   let changed = false
   const next: Record<string, RollbackSlot> = { ...current }
   for (const key of new Set([
-    ...Object.keys(original),
-    ...Object.keys(staged),
+    ...Object.keys(before),
+    ...Object.keys(written),
     ...Object.keys(current)
   ])) {
     const value = rollbackValue(
-      Object.hasOwn(original, key) ? original[key] : MISSING,
-      Object.hasOwn(staged, key) ? staged[key] : MISSING,
+      Object.hasOwn(before, key) ? before[key] : MISSING,
+      Object.hasOwn(written, key) ? written[key] : MISSING,
       Object.hasOwn(current, key) ? current[key] : MISSING
     )
     if (value === MISSING) {

@@ -121,9 +121,12 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
     }
   }
 
-  protected resolvePtyTabCloseSurfaceAuthority(
-    authority: RuntimePtyTabCloseAuthority
-  ): { pty: RuntimePtyWorktreeRecord; surface: RuntimeMobileSessionCreateTerminalResult } | null {
+  protected resolvePtyTabCloseSurfaceAuthority(authority: RuntimePtyTabCloseAuthority): {
+    pty: RuntimePtyWorktreeRecord
+    tabId: string
+    leafId: string
+    surface: RuntimeMobileSessionCreateTerminalResult | null
+  } | null {
     const live = this.getLivePtyForHandle(authority.handle)
     if (
       !live ||
@@ -135,30 +138,46 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
       return null
     }
     const surface = this.findMobileTerminalSurfaceForPty(authority.worktreeId, authority.ptyId)
-    if (!surface) {
+    const recorded = this.paneOfPty(live.pty)
+    const tabId = surface?.tab.parentTabId ?? recorded.tabId
+    const leafId = surface?.tab.leafId ?? parsePaneKey(recorded.paneKey ?? '')?.leafId
+    if (!tabId || !leafId) {
       return null
     }
-    const [hostId] = this.getWorkspaceSessionHostIdsForTab(
-      authority.worktreeId,
-      surface.tab.parentTabId
-    )
+    const [hostId] = this.getWorkspaceSessionHostIdsForTab(authority.worktreeId, tabId)
     const session = hostId ? (this.store?.getWorkspaceSession?.(hostId) ?? null) : null
+    if (!surface) {
+      // An ambiguous or conflicting publication must not fall back to a saved owner.
+      const snapshot = this.mobileSessionTabsByWorktree.get(authority.worktreeId)
+      const { incarnationId } = authority
+      if (
+        !incarnationId ||
+        snapshot?.tabs.some(
+          (tab) =>
+            tab.type === 'terminal' &&
+            (tab.parentTabId === tabId ||
+              this.getMobileTerminalLeafPtyIds(tab).includes(authority.ptyId))
+        ) ||
+        !this.hasExactPersistedTerminalSurfaceIdentity(
+          { ...authority, incarnationId, tabId, leafId },
+          session
+        )
+      ) {
+        return null
+      }
+    }
     const sessionWorktreeId = session
       ? resolveTerminalSessionWorktreeId(session, authority.worktreeId)
       : null
     const persistedTab = sessionWorktreeId
-      ? session?.tabsByWorktree[sessionWorktreeId]?.find(
-          (tab) => tab.id === surface.tab.parentTabId
-        )
+      ? session?.tabsByWorktree[sessionWorktreeId]?.find((tab) => tab.id === tabId)
       : undefined
     if (persistedTab && !worktreeIdsEqual(persistedTab.worktreeId, authority.worktreeId)) {
       return null
     }
-    const paneKey = makePaneKey(surface.tab.parentTabId, surface.tab.leafId)
+    const paneKey = makePaneKey(tabId, leafId)
     const persistedPtyId =
-      session?.terminalLayoutsByTabId?.[surface.tab.parentTabId]?.ptyIdsByLeafId?.[
-        surface.tab.leafId
-      ] ?? null
+      session?.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId] ?? null
     const persistedIncarnationId = session?.terminalPtyIncarnationsByPaneKey?.[paneKey] ?? null
     if (
       (persistedPtyId && persistedPtyId !== authority.ptyId) ||
@@ -169,14 +188,15 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
     if (
       !this.resolveTerminalSplitSourceAuthority(
         authority.worktreeId,
-        surface.tab.parentTabId,
-        surface.tab.leafId,
-        authority.ptyId
+        tabId,
+        leafId,
+        authority.ptyId,
+        session
       )
     ) {
       return null
     }
-    return { pty: live.pty, surface }
+    return { pty: live.pty, tabId, leafId, surface }
   }
 
   // Publish live-backed pending creates in main so graph-sync stalls cannot destroy sessions (#7587).

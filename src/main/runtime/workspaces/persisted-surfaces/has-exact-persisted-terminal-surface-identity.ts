@@ -79,14 +79,21 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     return Boolean(layout && layoutContainsLeafId(layout.root, leafId))
   }
 
-  protected hasExactPersistedTerminalSurfaceIdentity(expected: {
-    worktreeId: string
-    tabId: string
-    leafId: string
-    ptyId: string
-    incarnationId: string
-  }): boolean {
-    const session = this.getPersistedSessionListingTerminalTab(expected.worktreeId, expected.tabId)
+  protected hasExactPersistedTerminalSurfaceIdentity(
+    expected: {
+      worktreeId: string
+      tabId: string
+      leafId: string
+      ptyId: string
+      incarnationId: string
+    },
+    savedSession = this.getWorkspaceSessionForWorktree(expected.worktreeId)
+  ): boolean {
+    const session = this.getPersistedSessionListingTerminalTab(
+      expected.worktreeId,
+      expected.tabId,
+      savedSession
+    )
     const paneKey = makePaneKey(expected.tabId, expected.leafId)
     return Boolean(
       session &&

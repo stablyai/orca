@@ -33,7 +33,10 @@ import {
 
 type OrcadSourceExportRuntime = Pick<
   StoreRuntimeState,
-  'state' | 'terminalScrollbackSnapshotStorage' | 'retainedScrollbackRefsByMigrationId'
+  | 'state'
+  | 'terminalScrollbackSnapshotStorage'
+  | 'retainedScrollbackRefsByMigrationId'
+  | 'deferredMutationScrollbackDeletions'
 >
 
 const orcadSourceExportContext = Symbol('OrcadSourceExportPersistence')

@@ -27,6 +27,7 @@ import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/t
 type SessionSnapshotOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'durableMutationPhase'
+  | 'deferredMutationScrollbackDeletions'
   | 'pendingSnapshotFileWork'
   | 'profileMaintenancePending'
   | 'quitFlushStarted'

@@ -35,6 +35,79 @@ export function registerProfileStateWorkerCoordinationTests(): void {
       }
     )
 
+    it('returns the original refusal when its compensation write fails', async () => {
+      const { store, authority, readState } = await fixture()
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const refusal = new Error('terminal_pane_owner_changed')
+      const operation = store.runDurableMutation<Error | undefined>(() => {
+        store.updateSettings({ theme: 'dark' })
+        return {
+          value: undefined,
+          validate: () => ({ value: refusal }),
+          rollback: () => {
+            store.updateSettings({ theme: 'light' })
+            authority.failNextWrite()
+            return { persist: true }
+          }
+        }
+      })
+      await expect(operation).resolves.toBe(refusal)
+      expect(log).toHaveBeenCalledWith(
+        '[persistence] Failed to persist mutation compensation:',
+        expect.objectContaining({ message: 'profile_state_write_failed' })
+      )
+      expect(store.getSettings().theme).toBe('light')
+      expect(readState().settings.theme).toBe('dark')
+      await store.flushPendingOrThrowAsync()
+      expect(readState().settings.theme).toBe('light')
+    })
+
+    it('preserves the initial write error when its compensation also fails', async () => {
+      const { store, authority, readState } = await fixture()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const original = new Error('original write refused')
+      const gate = authority.pause()
+      const operation = store.runDurableMutation(() => {
+        store.updateSettings({ theme: 'dark' })
+        return {
+          value: undefined,
+          rollback: () => {
+            store.updateSettings({ theme: 'light' })
+            authority.failNextWrite()
+            return { persist: true }
+          }
+        }
+      })
+      const rejected = expect(operation).rejects.toBe(original)
+      await gate.started.promise
+      gate.finish.reject(original)
+      await rejected
+      await store.flushPendingOrThrowAsync()
+      expect(readState().settings.theme).toBe('light')
+    })
+
+    it('still stops persistence when the rollback callback itself fails', async () => {
+      const { store, authority } = await fixture()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const fatal = new Error('rollback callback failed')
+      authority.failNextWrite()
+      await expect(
+        store.runDurableMutation(() => {
+          store.updateSettings({ theme: 'dark' })
+          return {
+            value: undefined,
+            rollback: () => {
+              throw fatal
+            }
+          }
+        })
+      ).rejects.toBe(fatal)
+      expect(authority.close).toHaveBeenCalled()
+      await expect(store.runDurableMutation(() => ({ value: undefined }))).rejects.toThrow(
+        'Cannot mutate finalized profile persistence'
+      )
+    })
+
     it('consumes the debounce timer and avoids full checkpoints after a selective durable write', async () => {
       const { store, authority, readState } = await fixture()
       const full = vi.spyOn(authority, 'writeCompleteSerializedDomains')
