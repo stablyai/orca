@@ -55,6 +55,7 @@ import {
 import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatScrollRootsBoundary } from '../MobileNativeChatScrollRootsBoundary'
 import { MobileNativeChatRowList } from './transcript/MobileNativeChatRowList'
+import { MobileNativeChatQuoteWhileComposerShown } from './transcript/MobileNativeChatQuoteWhileComposerShown'
 import { useMobileNativeChatRowRenderer } from './transcript/use-mobile-native-chat-row-renderer'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { OlderPagePhase } from '../use-mobile-older-page-loader'
@@ -323,24 +324,26 @@ export function MobileNativeChatView({
         />
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
-          <MobileNativeChatDisclosureContext.Provider value={disclosures}>
-            <MobileNativeChatScrollRootsBoundary
-              {...{ rowKeys, layoutKey }}
-              roots={disclosures.roots}
-              runPlacements={rowKeys.runPlacements}
-            >
-              <GestureDetector gesture={pinchGesture}>
-                <MobileNativeChatRowList
-                  {...{ tail, rowKeys, renderItem, footer, emptyStateView, onScroll, layoutKey }}
-                  {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
-                  rows={turns.listMessages}
-                  runs={turns.presentation.workRuns.heads}
-                  roots={disclosures.roots}
-                  contentContainerStyle={styles.listContent}
-                />
-              </GestureDetector>
-            </MobileNativeChatScrollRootsBoundary>
-          </MobileNativeChatDisclosureContext.Provider>
+          <MobileNativeChatQuoteWhileComposerShown composerShown={!promptOwnsInput}>
+            <MobileNativeChatDisclosureContext.Provider value={disclosures}>
+              <MobileNativeChatScrollRootsBoundary
+                {...{ rowKeys, layoutKey }}
+                roots={disclosures.roots}
+                runPlacements={rowKeys.runPlacements}
+              >
+                <GestureDetector gesture={pinchGesture}>
+                  <MobileNativeChatRowList
+                    {...{ tail, rowKeys, renderItem, footer, emptyStateView, onScroll, layoutKey }}
+                    {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
+                    rows={turns.listMessages}
+                    runs={turns.presentation.workRuns.heads}
+                    roots={disclosures.roots}
+                    contentContainerStyle={styles.listContent}
+                  />
+                </GestureDetector>
+              </MobileNativeChatScrollRootsBoundary>
+            </MobileNativeChatDisclosureContext.Provider>
+          </MobileNativeChatQuoteWhileComposerShown>
           <MobileNativeChatFloatingControls
             showJumpToTail={tail.showJumpToTail}
             onJumpToTail={jumpToTail}
