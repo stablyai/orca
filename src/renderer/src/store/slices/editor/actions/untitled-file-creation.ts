@@ -1,3 +1,4 @@
+import { findGroupAndWorktree } from '../../tab-group-state'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
@@ -36,7 +37,9 @@ export async function createUntitledFileInActiveWorkspace(
   failureMessage: string
 ): Promise<boolean> {
   const state = get()
-  const worktreeId = state.activeWorktreeId
+  const worktreeId =
+    (groupId ? findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId : undefined) ??
+    state.activeWorktreeId
   const worktree = worktreeId ? state.getKnownWorktreeById(worktreeId) : undefined
   if (!worktreeId || !worktree) {
     return false

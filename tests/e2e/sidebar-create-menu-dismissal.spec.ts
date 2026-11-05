@@ -1,3 +1,4 @@
+import { worktreeRow } from './worktree-row-locators'
 import { test, expect } from './helpers/orca-app'
 
 test('dismissing the sidebar create menu restores an empty workspace', async ({ orcaPage }) => {
@@ -15,9 +16,8 @@ test('dismissing the sidebar create menu restores an empty workspace', async ({ 
       worktreeId
     )
   await expect.poll(count).toBe(0)
-  await orcaPage
+  await worktreeRow(orcaPage, worktreeId)
     .getByRole('button', { name: 'New tab', exact: true })
-    .first()
     .click({ force: true })
   await expect(orcaPage.getByRole('menu')).toBeVisible()
   await expect.poll(count).toBe(0)
@@ -44,9 +44,8 @@ test('the sidebar terminal entry keeps its workspace when activation changes', a
       before: state.tabsByWorktree[worktreeId]?.map((tab) => tab.id) ?? []
     }
   })
-  await orcaPage
+  await worktreeRow(orcaPage, setup.worktreeId)
     .getByRole('button', { name: 'New tab', exact: true })
-    .first()
     .click({ force: true })
   await expect(orcaPage.getByRole('menu')).toBeVisible()
   const otherCount = await orcaPage.evaluate((other) => {
@@ -103,9 +102,8 @@ test('an async Markdown selection does not also seed a terminal', async ({ orcaP
     })
     return id
   })
-  await orcaPage
+  await worktreeRow(orcaPage, worktreeId)
     .getByRole('button', { name: 'New tab', exact: true })
-    .first()
     .click({ force: true })
   await expect(orcaPage.getByRole('menu')).toBeVisible()
   await orcaPage
@@ -126,6 +124,55 @@ test('an async Markdown selection does not also seed a terminal', async ({ orcaP
   expect(
     await orcaPage.evaluate((id) => window.__store!.getState().tabsByWorktree[id] ?? [], worktreeId)
   ).toEqual([])
-  await expect(orcaPage.getByRole('button', { name: /^untitled\.md .*Close tab$/ })).toBeVisible()
+  await expect(
+    orcaPage.getByRole('button', { name: /^untitled(?:-\d+)?\.md .*Close tab$/ })
+  ).toBeVisible()
   await expect(orcaPage.locator('[data-testid="sortable-tab"]')).toHaveCount(0)
+})
+
+test('Markdown creation uses the menu group after another workspace becomes active', async ({
+  orcaPage
+}) => {
+  const setup = await orcaPage.evaluate(() => {
+    const state = window.__store!.getState()
+    const worktreeId = state.activeWorktreeId!
+    const other = Object.values(state.worktreesByRepo)
+      .flat()
+      .find((row) => row.id !== worktreeId)!
+    if (!state.tabsByWorktree[other.id]?.length) {
+      state.createTab(other.id)
+    }
+    return { worktreeId, other: other.id }
+  })
+  await worktreeRow(orcaPage, setup.worktreeId)
+    .getByRole('button', { name: 'New tab', exact: true })
+    .click({ force: true })
+  await expect(orcaPage.getByRole('menu')).toBeVisible()
+  await orcaPage.evaluate((id) => window.__store!.getState().setActiveWorktree(id), setup.other)
+  await orcaPage
+    .getByRole('menuitem', { name: /New Markdown/i })
+    .first()
+    .click({ force: true })
+  await expect
+    .poll(() =>
+      orcaPage.evaluate(
+        (id) =>
+          window.__store!.getState().openFiles.filter((file) => file.worktreeId === id).length,
+        setup.worktreeId
+      )
+    )
+    .toBe(1)
+  expect(
+    await orcaPage.evaluate(
+      (id) => window.__store!.getState().openFiles.filter((file) => file.worktreeId === id),
+      setup.other
+    )
+  ).toEqual([])
+  await orcaPage.evaluate(
+    (id) => window.__store!.getState().setActiveWorktree(id),
+    setup.worktreeId
+  )
+  await expect(
+    orcaPage.getByRole('button', { name: /^untitled(?:-\d+)?\.md .*Close tab$/ })
+  ).toBeVisible()
 })
