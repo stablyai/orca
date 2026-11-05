@@ -109,10 +109,12 @@ export function isCompleteAgentPromptDraft(
   draft: string | null | undefined,
   prompt: string
 ): boolean {
+  const expected = sanitizeAgentPromptText(prompt)
+  // Why: trailing whitespace may not render, so a composer missing it looks complete.
   return (
     !!draft &&
-    collapseComposerWhitespace(draft) ===
-      collapseComposerWhitespace(sanitizeAgentPromptText(prompt))
+    expected.trimEnd() === expected &&
+    collapseComposerWhitespace(draft) === collapseComposerWhitespace(expected)
   )
 }
 
