@@ -36,7 +36,7 @@ type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
   'agentDefaultEnv' | 'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
 > &
-  Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> &
+  Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'antigravityChatAuth'>> &
   AgentLaunchProfileSettings
 
 /** What the check reads from the runtime asking it. */

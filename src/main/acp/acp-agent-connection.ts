@@ -72,6 +72,12 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     // Invalid limits must fail before spawning an unowned child.
     const peer = resolveAcpPeerOptions({ ...options.peer, closeOnInputEnd: false })
     const { signIn } = options
+    const lifecycle: AcpConnectionLifecycle = { closing: false }
+    const answerAuth = (signedIn: boolean): void => {
+      if (!lifecycle.closing && managed.rootVerdict !== 'exited') {
+        signIn?.answered?.(signedIn)
+      }
+    }
     let signedOut = (): void => {}
     let unreadable = (): void => {}
     // Never retain sign-in links in diagnostics.
@@ -102,7 +108,6 @@ export class AcpAgentConnection extends AcpSessionRuntime {
           }
         : {})
     })
-    const lifecycle: AcpConnectionLifecycle = { closing: false }
     const diagnose = (message: string): void => {
       try {
         options.onDiagnostic?.(message)
@@ -114,7 +119,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       ...options,
       peer,
       onOtherLine: (line, cut) => signInLine(line, 'stdout', cut),
-      onAuthAnswered: (signedIn) => signIn?.answered?.(signedIn),
+      onAuthAnswered: answerAuth,
       // A closed stdin usually means the agent is exiting; its exit settles calls once its output
       // drained, so the bound only covers an agent that stopped reading without exiting.
       onOutputEnd: (_error, finish) => {
@@ -167,7 +172,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       super.close(error)
     })
     signedOut = () => {
-      signIn?.answered?.(false)
+      answerAuth(false)
       super.close(new AcpSignInPromptError('The agent asked to sign in in a browser'))
     }
     // A malformed protocol-stream link closes the connection without reporting signed-out status.

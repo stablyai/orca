@@ -1,3 +1,5 @@
+import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
+import { readAcpFixture } from './acp-timeline-fixture.test-support'
 import { mkdtemp, readFile, writeFile, mkdir, rm, access } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -48,6 +50,7 @@ afterEach(async () => {
 async function stagedRig(
   options: {
     antigravity?: boolean
+    authConfig?: AntigravityChatAuthConfig
     proveExit?: boolean
     deletion?: 'unsupported' | 'stalled'
     prepare?: () => Promise<Record<string, string>>
@@ -59,6 +62,9 @@ async function stagedRig(
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-naming-task-test-'))
   folders.push(root)
+  const initialized = options.authConfig
+    ? (await readAcpFixture('antigravity-v1-question'))[0]?.message.result
+    : { protocolVersion: 1, agentCapabilities: {} }
   const base = acpLaunchSpecFor(options.antigravity ? 'antigravity' : 'grok')
   if (!base) {
     throw new Error('ACP spec is missing')
@@ -84,7 +90,8 @@ async function stagedRig(
     textTaskLaunch: {
       dataDirectory: root,
       resolveEnvironment: options.prepare ?? (async () => ({ PATH: '/usr/bin' })),
-      resolveCommand: () => '/fixture/agent'
+      resolveCommand: () => '/fixture/agent',
+      resolveCommandSettings: () => ({ antigravityChatAuth: options.authConfig })
     },
     connect: (launch, connectionOptions) => {
       options.onConnect?.()
@@ -98,11 +105,12 @@ async function stagedRig(
         child.proveClose = () => close(connected)
       }
       const agent = child.agent
-      agent.on('initialize', (frame) =>
-        agent.reply(frame, { protocolVersion: 1, agentCapabilities: {} })
-      )
+      agent.on('initialize', (frame) => agent.reply(frame, initialized))
+      agent.on('authenticate', (frame) => agent.reply(frame, {}))
       agent.on('session/new', (frame) =>
-        agent.reply(frame, { sessionId: '11111111-1111-4111-8111-111111111111' })
+        options.authConfig && !agent.frames.some((entry) => entry.method === 'authenticate')
+          ? agent.fail(frame, -32000, 'Authentication required')
+          : agent.reply(frame, { sessionId: '11111111-1111-4111-8111-111111111111' })
       )
       agent.on('_x.ai/session/delete', (frame) => {
         if (options.deletion === 'unsupported') {
@@ -427,4 +435,28 @@ it('runs healthy own-agent naming through the runtime, registered router and ACP
   expect(await r.result).toEqual({ name: 'Repair login' })
   expect(r.logger.warn).not.toHaveBeenCalled()
   expect(r.server.exited).toBe(true)
+})
+
+it('naming uses the same configured Enterprise method as Chat with recorded auth advertisement', async () => {
+  const r = await rig({
+    antigravity: true,
+    authConfig: {
+      method: 'oauth-business',
+      gcpProject: 'enterprise-project',
+      gcpLocation: 'us-central1'
+    }
+  })
+  expect(r.agent.frames.find((frame) => frame.method === 'authenticate')?.params).toEqual({
+    methodId: 'oauth-business'
+  })
+  r.text('Enterprise reply')
+  r.agent.reply(r.frame, { stopReason: 'end_turn' })
+  expect(await r.result).toBe('Enterprise reply')
+  const config = JSON.parse(
+    await readFile(join(r.root, 'antigravity-acp', 'settings.json'), 'utf8')
+  )
+  expect(config).toEqual({
+    auth: { type: 'oauth-business' },
+    gcp: { project: 'enterprise-project', location: 'us-central1' }
+  })
 })

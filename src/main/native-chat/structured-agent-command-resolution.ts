@@ -36,7 +36,7 @@ export function assertStructuredAgentResolutionCurrent(
 }
 
 export type StructuredAgentCommandSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv' | 'antigravityChatAuth'>
 >
 type CommandSettings = StructuredAgentCommandSettings
 type CommandOptions = NonNullable<Parameters<typeof resolveExecutableCommand>[1]>

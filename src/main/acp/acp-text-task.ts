@@ -216,12 +216,18 @@ export class AcpTextTasks {
       const initialized = await waitForPromiseWithSignal(server.initialize(), taskSignal)
       const authMethodId = spec.authMethod?.({
         advertised: initialized.authMethods?.map((method) => method.id) ?? [],
-        env: launch.env
+        env: launch.env,
+        antigravityChatAuth: launch.antigravityChatAuth
       })
       starting = true
       await waitForPromiseWithSignal(
         server
-          .start({ cwd, mcpServers: [], authMethodId })
+          .start({
+            cwd,
+            mcpServers: [],
+            authMethodId,
+            authMethodUnavailableMessage: spec.authMethodUnavailableMessage
+          })
           .then((started) => {
             sessionId = started.sessionId
           })

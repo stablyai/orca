@@ -1,3 +1,4 @@
+import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
 import { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -326,6 +327,7 @@ export function AntigravityChatSignInRow(props: {
           </Button>
         )}
       </div>
+      <AntigravityChatAuthForm owner={props.owner} disabled={props.disabled || signIn.ownFlow} />
       {url && <PastedAddressForm pending={signIn.pending} send={signIn.send} />}
     </div>
   )

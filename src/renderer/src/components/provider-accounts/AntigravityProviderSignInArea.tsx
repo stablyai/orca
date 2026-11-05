@@ -1,3 +1,4 @@
+import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
 import { Check, Copy } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
@@ -93,6 +94,10 @@ export function AntigravityProviderSignInArea(props: {
           </Button>
         )}
       </div>
+      <AntigravityChatAuthForm
+        owner={props.owner}
+        disabled={antigravityChatSignInBlocked(props.install) || signIn.ownFlow}
+      />
       {url && <PastedAddressForm pending={signIn.pending} send={signIn.send} />}
     </div>
   )

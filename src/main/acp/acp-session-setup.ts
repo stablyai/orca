@@ -1,3 +1,7 @@
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 import type { z } from 'zod'
 import { AcpAuthRequiredError, AcpRpcError, acpAuthRequiredError } from './acp-errors'
 import {
@@ -28,6 +32,7 @@ export type AcpSessionStartOptions = NewSessionRequest & {
   sessionId?: string
   resumePreference?: 'load' | 'resume'
   authMethodId?: string
+  authMethodUnavailableMessage?: string
 }
 type Request = <T>(method: string, params: unknown, schema: z.ZodType<T>) => Promise<T>
 
@@ -37,7 +42,13 @@ export async function setupAcpSession(
   request: Request
 ): Promise<AcpSessionStarted> {
   const setup = async (): Promise<AcpSessionStarted> => {
-    const { sessionId, resumePreference, authMethodId: _auth, ...params } = options
+    const {
+      sessionId,
+      resumePreference,
+      authMethodId: _auth,
+      authMethodUnavailableMessage: _unavailable,
+      ...params
+    } = options
     if (sessionId === undefined) {
       const response = await request('session/new', params, newSessionSchema)
       return { kind: 'new', sessionId: response.sessionId, response }
@@ -70,6 +81,12 @@ export async function setupAcpSession(
     const required = acpAuthRequiredError(error, initialized.authMethods)
     const method = initialized.authMethods?.find((method) => method.id === options.authMethodId)
     if (!method) {
+      if (options.authMethodId && options.authMethodUnavailableMessage) {
+        throw withProviderDiagnostic(
+          new AcpRpcError(-32602, options.authMethodUnavailableMessage),
+          providerDiagnostic(options.authMethodUnavailableMessage, 'person')
+        )
+      }
       throw required
     }
     try {

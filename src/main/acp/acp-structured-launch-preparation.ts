@@ -5,6 +5,7 @@ import {
   launchPreparationFailure,
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 
@@ -23,7 +24,11 @@ export function prepareAcpStructuredLaunch(
 }
 
 export async function prepareAcpLaunch<
-  Launch extends { command: string; env: Record<string, string> }
+  Launch extends {
+    command: string
+    env: Record<string, string>
+    antigravityChatAuth?: AntigravityChatAuthConfig
+  }
 >(
   deps: Pick<AcpStructuredSessionAdapterDeps, 'spec'>,
   resolve: () => Promise<Launch>,
@@ -41,7 +46,9 @@ export async function prepareAcpLaunch<
   }
   const { prepare } = spec.account
   if (prepare) {
-    await prepare(launch.env).catch(preparationFailure)
+    await prepare(launch.env, launch.antigravityChatAuth, closedBeforeSpawn).catch(
+      preparationFailure
+    )
     closedBeforeSpawn()
   }
   return launch

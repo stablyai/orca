@@ -521,3 +521,33 @@ it.each([true, false])(
     })
   }
 )
+
+it('ignores late sign-in output from a credential writer stopped before applying new account settings', async () => {
+  const answered = vi.fn()
+  const { connection, child } = fixture({
+    signIn: { read: (line) => (line === 'SIGN IN' ? 'link' : undefined), answered }
+  })
+  await connection.start(start)
+  expect(answered).toHaveBeenCalledWith(true)
+  await connection.close()
+  answered.mockClear()
+  child.stderr.write('SIGN IN\n')
+  await tick()
+  expect(answered).not.toHaveBeenCalled()
+})
+
+it('keeps cached startup usable without advertising the configured method, but refuses unsupported required authentication', async () => {
+  const { connection, agent } = fixture()
+  const configured = {
+    ...start,
+    authMethodId: 'oauth-business',
+    authMethodUnavailableMessage:
+      'Antigravity account type is unavailable. Update Antigravity or change account settings.'
+  }
+  await expect(connection.start(configured)).resolves.toMatchObject({ sessionId: 'session-1' })
+  agent.on('session/new', (frame) => agent.fail(frame, -32000, 'Authentication required'))
+  await expect(connection.start(configured)).rejects.toThrow(
+    'Antigravity account type is unavailable'
+  )
+  expect(agent.frames.filter((frame) => frame.method === 'authenticate')).toEqual([])
+})

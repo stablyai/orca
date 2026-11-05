@@ -1,5 +1,6 @@
 // One sign-in flow per host; only its initiating client receives the link or controls it.
 
+import { resolveAntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -203,7 +204,16 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     const stop = (): void => void server.close().catch(() => false)
     signal.addEventListener('abort', stop, { once: true })
     try {
-      await connection.authenticate('oauth-personal')
+      const method = resolveAntigravityChatAuthConfig(launch.antigravityChatAuth).method
+      const initialized = await connection.initialize()
+      closed()
+      if (
+        initialized.authMethods &&
+        !initialized.authMethods.some((entry) => entry.id === method)
+      ) {
+        throw new AntigravitySignInSentence(spec.authMethodUnavailableMessage)
+      }
+      await connection.authenticate(method)
       publish(current, { phase: 'verifying' })
       // Authentication alone does not prove a chat can start.
       const started = await connection.start({ cwd, mcpServers: [] }).catch((error: unknown) => {

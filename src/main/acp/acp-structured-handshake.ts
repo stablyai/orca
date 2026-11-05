@@ -65,9 +65,14 @@ export async function initializeAcpStructuredSession(
   // Choose authentication using the execution host's launch environment.
   const authMethodId = spec.authMethod?.({
     advertised: (initialized.authMethods ?? []).map((method) => method.id),
-    env: launch.env
+    env: launch.env,
+    antigravityChatAuth: launch.antigravityChatAuth
   })
-  const setup = { authMethodId, resumePreference: spec.resumePreference }
+  const setup = {
+    authMethodId,
+    authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
+    resumePreference: spec.resumePreference
+  }
   const resume = launch.resume
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
   let liveLane: AcpStructuredLane | null = null
