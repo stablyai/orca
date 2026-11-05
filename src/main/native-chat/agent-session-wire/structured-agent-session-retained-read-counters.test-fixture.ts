@@ -109,18 +109,11 @@ export function createRetainedReadCounters() {
       index['all'] = root
     }
   }
-  const maximumAfter = JournalInputPlaceIndex.prototype.maximumAfter
   const firstPosition = JournalInputPlaceIndex.prototype.firstPosition
   const lastId = JournalInputPlaceIndex.prototype.lastId
   const successorId = JournalInputPlaceIndex.prototype.successorId
   const idsAfter = JournalInputPlaceIndex.prototype.idsAfter
   const pathSpies = [
-    vi.spyOn(JournalInputPlaceIndex.prototype, 'maximumAfter').mockImplementation(function (
-      this: JournalInputPlaceIndex,
-      sequence
-    ) {
-      return atPath(this, () => maximumAfter.call(this, sequence))
-    }),
     vi.spyOn(JournalInputPlaceIndex.prototype, 'idsAfter').mockImplementation(function (
       this: JournalInputPlaceIndex,
       sequence

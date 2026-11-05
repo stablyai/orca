@@ -1,3 +1,4 @@
+import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
 import { z } from 'zod'
 import { AgentJournalTurnScopeSchema } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { AgentSessionExecutionOptionsSchema } from '../../../shared/agent-session/options/agent-session-execution-options'
@@ -140,7 +141,12 @@ function checked<T>(schema: z.ZodType): z.ZodType<T> {
 }
 
 type State = JournalReducerState
-type Stored<F> = F extends Map<infer K, infer V> ? [K, V] : F extends Set<infer T> ? [T, T] : never
+type Stored<F> =
+  F extends JournalKeyedMap<infer K, infer V>
+    ? [K, V]
+    : F extends JournalKeyedSet<infer T>
+      ? [T, T]
+      : never
 type Cards = State['queue']['cards']
 const s = outcomeFormat1Stored
 const scalar = outcomeFormat1StoredScalars.shape

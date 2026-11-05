@@ -1,3 +1,12 @@
+import type { JournalKeyedMap } from './journal-keyed-storage'
+import { journalInputCardPauseInputs, journalInputCardPauses } from './journal-input-card-pauses'
+import type {
+  JournalInputPlaceStorage,
+  JournalInputDomainStorage,
+  JournalInputReleasedStorage,
+  JournalInputCandidateStorage,
+  JournalIndexStorageFactory
+} from './journal-index-storage'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalSubmissionRow } from './journal-row-schema'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -6,20 +15,14 @@ import { journalInputOrder } from './journal-input-order'
 import type { QueuedMessageRow } from './queued-message-table'
 import {
   queuePauseHolding,
-  journalQueueStopHolds,
   failedQueueTurnSequence,
   type DerivedQueuePause
 } from './queued-message-pause'
-import {
-  JournalInputPlaceIndex,
-  mergeInputPlaces,
-  type InputPlaceQuery
-} from './journal-input-place-index'
+import { mergeInputPlaces, type InputPlaceQuery } from './journal-input-place-index'
 import type { JournalInputLineageOwner } from './journal-input-lineage'
 import { isLiveJournalQueueCard } from './journal-queue-retention'
-import { JournalInputDomainIndex, type JournalIndexedInputCard } from './journal-input-domain-index'
-import { JournalInputCandidates } from './journal-input-candidates'
-import { JournalInputReleasedPositions } from './journal-input-released-positions'
+import type { JournalIndexedInputCard } from './journal-input-domain-index'
+import { memoryJournalIndexStorage } from './journal-memory-index-storage'
 import {
   readJournalInputAdmission as readAdmission,
   queryJournalInputCurrent as queryCurrentPlace,
@@ -30,16 +33,16 @@ import {
 } from './journal-input-order-state'
 
 export class JournalInputCardIndex {
-  private index: JournalInputPlaceIndex | undefined
-  private currentCoordinates: JournalInputPlaceIndex | undefined
-  private domains = new JournalInputDomainIndex()
-  private readonly released = new JournalInputReleasedPositions()
+  private index: JournalInputPlaceStorage | undefined
+  private currentCoordinates: JournalInputPlaceStorage | undefined
+  private readonly domains: JournalInputDomainStorage
+  private readonly released: JournalInputReleasedStorage
   private history = true
   private readonly current = new Map<string, QueuedMessageRow>()
-  private readonly positions = new JournalInputPlaceIndex('')
+  private readonly positions: JournalInputPlaceStorage
   private currentRevision = 0
-  private readonly indexed = new Map<string, JournalIndexedInputCard>()
-  readonly candidates = new JournalInputCandidates()
+  private readonly indexed: JournalKeyedMap<string, JournalIndexedInputCard> = new Map()
+  readonly candidates: JournalInputCandidateStorage
   // Derived current membership only; the prepared transition owns introduction values.
   private readonly unintroduced = new Set<string>()
   private overlayRows: readonly QueuedMessageRow[] = []
@@ -80,7 +83,15 @@ export class JournalInputCardIndex {
   private cleared = new Set<string>()
   // A failure holds every waiting card alike, so it gates reads instead of the cached flags.
   private failed = false
-  constructor(private readonly lineage: JournalInputLineageOwner) {}
+  constructor(
+    private readonly lineage: JournalInputLineageOwner,
+    private readonly indexes: JournalIndexStorageFactory = memoryJournalIndexStorage
+  ) {
+    this.domains = indexes.domain('cards')
+    this.released = indexes.released('cards')
+    this.positions = indexes.place('card-positions')
+    this.candidates = indexes.candidates('cards')
+  }
   hasOverlay(id: string): boolean {
     return this.overlays.has(id)
   }
@@ -93,7 +104,7 @@ export class JournalInputCardIndex {
   }
   releaseHistory(): void {
     this.history = false
-    this.domains = new JournalInputDomainIndex()
+    this.domains.clear()
     for (const card of this.current.values()) {
       const prior = this.indexed.get(card.messageId)
       if (!this.lineage.cards.has(card.messageId) && prior?.source.baseline) {
@@ -144,38 +155,20 @@ export class JournalInputCardIndex {
         journalInputOrder(state).newestTurn.failure(),
         marks.resumedSequence
       ) > 0
-    const lifted = Math.max(state.latestAcceptedTurnSequence, marks.resumedSequence)
-    const reopened = Math.max(
-      marks.reopenedSequence,
-      this.floor?.epoch === state.epoch ? this.floor.sequence : 0
+    const pauseInputs = journalInputCardPauseInputs(
+      state.epoch,
+      marks,
+      state.latestAcceptedTurnSequence,
+      this.floor
     )
-    const pauseInputs = [
-      journalQueueStopHolds(marks, state.latestAcceptedTurnSequence) ? marks.latestStop : null,
-      reopened > lifted ? reopened : 0,
-      marks.cleared && !marks.cleared.lifted && marks.cleared.sequence > lifted
-        ? marks.cleared
-        : null
-    ]
     const first = !this.index
     if (first || pauseInputs.some((value, i) => value !== this.pauseKey[i])) {
       this.pauseKey = pauseInputs
       this.cleared = new Set(pauseInputs[2] ? marks.cleared?.messageIds : [])
-      this.pauses = [
-        ...(pauseInputs[0] && marks.latestStop
-          ? [
-              {
-                reason: 'stopped' as const,
-                since: { epoch: state.epoch, sequence: marks.latestStop.sequence }
-              }
-            ]
-          : []),
-        ...(pauseInputs[1]
-          ? [{ reason: 'restarted' as const, since: { epoch: state.epoch, sequence: reopened } }]
-          : [])
-      ]
+      this.pauses = journalInputCardPauses(state.epoch, pauseInputs)
       if (first) {
-        this.index = new JournalInputPlaceIndex('introduction')
-        this.currentCoordinates = new JournalInputPlaceIndex(state.epoch)
+        this.index = this.indexes.place('card-introductions')
+        this.currentCoordinates = this.indexes.place('card-coordinates')
         for (const card of this.overlays.values()) {
           if (!state.queue.cards.has(card.messageId)) {
             this.indexCard(state, card)

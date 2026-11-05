@@ -1,3 +1,5 @@
+import type { JournalKeyedMap } from './journal-keyed-storage'
+import type { JournalSubmissionStorage, JournalIndexStorageFactory } from './journal-index-storage'
 import {
   readJournalInputPlace,
   restoreJournalInputPlaces,
@@ -11,7 +13,7 @@ export type { JournalInputPlace } from './journal-input-order-state'
 
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { JournalSubmissionIndex } from './journal-submission-index'
+import { memoryJournalIndexStorage } from './journal-memory-index-storage'
 import { JournalNewestTurn } from './journal-newest-turn'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
@@ -22,33 +24,25 @@ import { JournalInputEvidence } from './journal-input-evidence'
 import { JournalInputLineageOwner } from './journal-input-lineage'
 import { JournalInputCardIndex } from './journal-input-card-index'
 
-import { getJournalInputOrder, setJournalInputOrder } from './journal-input-order-registry'
-export { setJournalInputOrder } from './journal-input-order-registry'
-
-export function initializeJournalInputOrder(
-  state: JournalReducerState,
-  originalAcceptance?: (id: string) => AgentJournalCursor | undefined
-): JournalInputOrder {
-  const owner = new JournalInputOrder(state, originalAcceptance)
-  setJournalInputOrder(state, owner)
-  return owner
-}
-export function journalInputOrder(state: JournalReducerState): JournalInputOrder {
-  return getJournalInputOrder(state) ?? initializeJournalInputOrder(state)
-}
+export {
+  initializeJournalInputOrder,
+  journalInputOrder,
+  setJournalInputOrder
+} from './journal-input-order-registry'
 
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
 export class JournalInputOrder extends JournalInputEvidence {
   private reconstructing = false
   private legacyPlaces = 0
   private readonly recoveryOwed = new Set<string>()
-  private readonly originals = new Map<string, AgentJournalCursor | undefined>()
-  private readonly unsettled = new JournalSubmissionIndex()
+  private readonly originals: JournalKeyedMap<string, AgentJournalCursor | undefined> = new Map()
+  private readonly unsettled: JournalSubmissionStorage
   // Recovered unknown sends stay unsettled forever; only pending ones can still be accepted.
-  private readonly sending = new JournalSubmissionIndex()
+  private readonly sending: JournalSubmissionStorage
   private readonly queued = new Map<string, AgentJournalSubmission>()
   private readonly entered = new Map<string, AgentJournalSubmission>()
   private readonly overrides = new Map<string, AgentJournalSubmission>()
+  readonly newestTurn: JournalNewestTurn
   readonly lineage: JournalInputLineageOwner
   readonly cards: JournalInputCardIndex
   private receiptCount = 0
@@ -58,11 +52,15 @@ export class JournalInputOrder extends JournalInputEvidence {
   constructor(
     state: JournalReducerState,
     private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined,
-    readonly newestTurn = new JournalNewestTurn(state)
+    newestTurn: JournalNewestTurn | undefined = undefined,
+    indexes: JournalIndexStorageFactory = memoryJournalIndexStorage
   ) {
-    super(state)
+    super(state, indexes)
+    this.newestTurn = newestTurn ?? new JournalNewestTurn(state, indexes.newestTurn())
+    this.unsettled = indexes.submissions('unsettled')
+    this.sending = indexes.submissions('sending')
     this.lineage = new JournalInputLineageOwner(state.inputCards)
-    this.cards = new JournalInputCardIndex(this.lineage)
+    this.cards = new JournalInputCardIndex(this.lineage, indexes)
   }
 
   beforeRow(state: JournalReducerState, row: JournalRow): void {
@@ -124,7 +122,7 @@ export class JournalInputOrder extends JournalInputEvidence {
   }
 
   markOpeningRecovery(): void {
-    for (const entry of this.unsettled.values()) {
+    for (const entry of this.unsettled.list()) {
       if (isQueuedAgentJournalSubmission(entry)) {
         this.markRecoveryPending(entry.clientMessageId)
       }

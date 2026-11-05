@@ -1,8 +1,10 @@
+import type { JournalKeyedMap } from './journal-keyed-storage'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { JournalReducerState } from './journal-reducer'
-import { JournalInputPlaceIndex } from './journal-input-place-index'
+import { memoryJournalIndexStorage } from './journal-memory-index-storage'
+import type { JournalInputPlaceStorage, JournalIndexStorageFactory } from './journal-index-storage'
 
 export type JournalInputKeys = {
   has: (key: string) => boolean
@@ -14,19 +16,23 @@ export type JournalInputKeys = {
 /** Derived named lifecycle queries on the input owner, refreshed in its isolated draft. */
 export abstract class JournalInputObservations {
   private readonly keyReads = new Map<symbol, Map<string, boolean>>()
-  private readonly submittedByFence = new JournalInputPlaceIndex('')
-  private readonly acceptedByFence = new JournalInputPlaceIndex('')
-  private readonly providerInputs = new Map<string, JournalInputPlaceIndex>()
-  private readonly providerByInput = new Map<string, string>()
-  private readonly receiptSequences = new JournalInputPlaceIndex('')
-  protected readonly inputIds = new Map<string, string>()
-  private readonly dispatchByFence = new Map<number, JournalInputPlaceIndex>()
-  private readonly signedOutByFence = new Map<number, Set<string>>()
-  private readonly fences = new Map<string, number>()
+  private readonly providerInputs = new Map<string, JournalInputPlaceStorage>()
+  private readonly providerByInput: JournalKeyedMap<string, string> = new Map()
+  private readonly receiptSequences: JournalInputPlaceStorage
+  protected readonly inputIds: JournalKeyedMap<string, string> = new Map()
+  private readonly dispatchByFence = new Map<number, JournalInputPlaceStorage>()
+  private readonly signedOutByFence: JournalKeyedMap<number, Set<string>> = new Map()
+  private readonly fences: JournalKeyedMap<string, number> = new Map()
   private readonly recoveredUnknown = new Set<string>()
-  private readonly accepted = new JournalInputPlaceIndex('')
+  private readonly accepted: JournalInputPlaceStorage
 
-  constructor(protected readonly state: JournalReducerState) {}
+  constructor(
+    protected readonly state: JournalReducerState,
+    protected readonly indexes: JournalIndexStorageFactory = memoryJournalIndexStorage
+  ) {
+    this.receiptSequences = indexes.place('receipt-sequences')
+    this.accepted = indexes.place('accepted-inputs')
+  }
 
   hasInputs(): boolean {
     return this.state.submissions.size !== 0
@@ -56,18 +62,6 @@ export abstract class JournalInputObservations {
         return [...keys].every((key) => has(key) === other.has(key))
       }
     }
-  }
-
-  submissionExtremaAfterFence(afterFence: number): AgentJournalSubmission[] {
-    return [
-      ...new Set([
-        this.submittedByFence.maximumAfter(afterFence),
-        this.acceptedByFence.maximumAfter(afterFence)
-      ])
-    ].flatMap((id) => {
-      const input = id === undefined ? undefined : this.state.submissions.get(id)
-      return input ? [input] : []
-    })
   }
 
   firstInputForProviderItem(key: string): AgentJournalSubmission | undefined {
@@ -111,16 +105,6 @@ export abstract class JournalInputObservations {
     } else {
       this.receiptSequences.delete(id)
     }
-    if (entry) {
-      this.submittedByFence.setSummary(id, entry.fence, entry.submittedAt, ordinal)
-    } else {
-      this.submittedByFence.delete(id)
-    }
-    if (entry?.dispatchState === 'accepted') {
-      this.acceptedByFence.setSummary(id, entry.fence, entry.submittedAt, ordinal)
-    } else {
-      this.acceptedByFence.delete(id)
-    }
     const oldProvider = this.providerByInput.get(id)
     if (oldProvider && oldProvider !== entry?.providerItemId) {
       const index = this.providerInputs.get(oldProvider)!
@@ -131,7 +115,9 @@ export abstract class JournalInputObservations {
       this.providerByInput.delete(id)
     }
     if (entry?.providerItemId) {
-      const index = this.providerInputs.get(entry.providerItemId) ?? new JournalInputPlaceIndex('')
+      const index =
+        this.providerInputs.get(entry.providerItemId) ??
+        this.indexes.place('provider-inputs', entry.providerItemId)
       index.setPosition(id, ordinal)
       this.providerInputs.set(entry.providerItemId, index)
       this.providerByInput.set(id, entry.providerItemId)
@@ -160,7 +146,9 @@ export abstract class JournalInputObservations {
       this.fences.delete(id)
     }
     if (entry) {
-      const index = this.dispatchByFence.get(entry.fence) ?? new JournalInputPlaceIndex('')
+      const index =
+        this.dispatchByFence.get(entry.fence) ??
+        this.indexes.place('dispatch-by-fence', entry.fence)
       index.setPosition(id, entry.submittedAt, ordinal)
       this.dispatchByFence.set(entry.fence, index)
       this.fences.set(id, entry.fence)

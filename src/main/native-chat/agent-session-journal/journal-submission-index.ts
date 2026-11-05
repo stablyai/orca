@@ -18,9 +18,6 @@ export class JournalSubmissionIndex {
     this.listed = undefined
     return true
   }
-  values(): Iterable<AgentJournalSubmission> {
-    return this.entries.values()
-  }
   list(): readonly AgentJournalSubmission[] {
     return (this.listed ??= [...this.entries.values()])
   }

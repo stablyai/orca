@@ -1,3 +1,4 @@
+import type { JournalKeyedMap } from './journal-keyed-storage'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalInputSourceFamily, journalInputSourceSequence } from './journal-input-source'
 import type { JournalReducerState } from './journal-reducer'
@@ -6,8 +7,8 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session/journ
 /** Reverse links derive from submission rows and share the reducer lifetime. */
 export class JournalSubmissionLinks {
   private readonly linked = new Map<string, Map<string, AgentJournalSubmission>>()
-  private readonly ids = new Map<string, { family: string; sequence: number }>()
-  private readonly latest = new Map<string, string>()
+  private readonly ids: JournalKeyedMap<string, { family: string; sequence: number }> = new Map()
+  private readonly latest: JournalKeyedMap<string, string> = new Map()
   private revision = 0
   /** Where the latest provider-accepted input was actually handed over; the admission cursor the queue
    *  pauses by can predate it. Derived with the links, so a restore rebuilds it. */

@@ -9,6 +9,7 @@ import {
   type InputPlaceQuery
 } from './journal-input-place-index'
 import type { QueuedMessageRow } from './queued-message-table'
+import type { JournalInputPlaceStorage } from './journal-index-storage'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 
 export type JournalIndexedInputCard = {
@@ -20,12 +21,16 @@ export type JournalIndexedInputCard = {
   releasedAt?: number
 }
 
-type Node = { index: JournalInputPlaceIndex; left?: Node; right?: Node }
+type Node = { index: JournalInputPlaceStorage; left?: Node; right?: Node }
 const LIMIT = Number.MAX_SAFE_INTEGER
 
 /** A fixed-width introduction prefix, with coordinate summaries on each of its 53 levels. */
 export class JournalInputDomainIndex {
-  private readonly root: Node = { index: new JournalInputPlaceIndex('') }
+  private root: Node = { index: new JournalInputPlaceIndex('') }
+
+  clear(): void {
+    this.root = { index: new JournalInputPlaceIndex('') }
+  }
 
   set(
     card: QueuedMessageRow,
@@ -105,7 +110,7 @@ export class JournalInputDomainIndex {
 
   private before(
     cut: number,
-    query: (index: JournalInputPlaceIndex) => InputPlaceQuery
+    query: (index: JournalInputPlaceStorage) => InputPlaceQuery
   ): InputPlaceQuery {
     let result: InputPlaceQuery = { position: -Infinity }
     const append = (node: Node) => {

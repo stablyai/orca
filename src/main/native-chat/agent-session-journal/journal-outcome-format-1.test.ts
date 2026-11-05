@@ -1,3 +1,4 @@
+import { journalStateCollections } from './journal-state-layout'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -151,7 +152,9 @@ it('reads the checked-in format-1 outcomes into the same chat, every field and s
   expect([...state.inputs.sources.keys()]).toEqual(['send-1', 'send-3', 'send-2'])
   expect(plain(state)).toEqual(fixture.expected)
   // An echo declared undefined stays present without a value.
-  const echoes = [...state.itemEchoes]
+  const echoes = [
+    ...journalStateCollections(state).find(({ path }) => path === 'itemEchoes')!.entries
+  ]
   expect(echoes).toHaveLength(1)
   expect(echoes[0]?.[1]).toBeUndefined()
 })

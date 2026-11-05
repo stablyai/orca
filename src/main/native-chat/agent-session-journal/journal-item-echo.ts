@@ -1,3 +1,4 @@
+import type { JournalKeyedRead } from './journal-keyed-storage'
 import { getJournalInputOrder } from './journal-input-order-registry'
 import type { JournalReducerState } from './journal-reducer'
 import {
@@ -16,7 +17,7 @@ export function journalItemEchoFields(item: JournalItemEcho): JournalItemEcho {
 }
 
 export function journalItemDeclaresEcho(
-  declarations: ReadonlyMap<string, unknown>,
+  declarations: JournalKeyedRead<string, unknown>,
   itemId: string,
   incoming: JournalItemEcho = {}
 ): boolean {
@@ -24,7 +25,7 @@ export function journalItemDeclaresEcho(
 }
 
 export function journalItemEchoRestatement(
-  declarations: ReadonlyMap<string, unknown>,
+  declarations: JournalKeyedRead<string, unknown>,
   itemId: string
 ): JournalItemEcho {
   return declarations.has(itemId) ? { echoOf: declarations.get(itemId) } : {}

@@ -1,3 +1,4 @@
+import { journalStateCollections } from './journal-state-layout'
 import type { JournalReducerState } from './journal-reducer'
 import { durableQueuePauseMarks } from './journal-outcome-format-1-decode'
 
@@ -6,6 +7,16 @@ export function encodeJournalState(state: JournalReducerState): {
   stateJson: string
   items: { itemId: string; itemJson: string; ordinal: number }[]
 } {
+  const collections = new Map(
+    journalStateCollections(state).map(({ path, entries }) => [path, entries])
+  )
+  const entries = (path: string): [unknown, unknown][] => {
+    const source = collections.get(path)
+    if (!source) {
+      throw new Error(`journal state snapshot requires collection ${path}`)
+    }
+    return [...source]
+  }
   const stored = {
     sessionId: state.sessionId,
     epoch: state.epoch,
@@ -14,17 +25,17 @@ export function encodeJournalState(state: JournalReducerState): {
     oldestSequence: state.oldestSequence,
     ...(state.contextBoundary > 1 ? { contextBoundary: state.contextBoundary } : {}),
     highestFence: state.highestFence,
-    itemFences: [...state.itemFences],
-    itemExecutionOwners: [...state.itemExecutionOwners],
-    providerActivityAt: [...state.providerActivityAt],
-    tombstones: [...state.tombstones],
-    removedTurnIds: [...state.removedTurnIds],
+    itemFences: entries('itemFences'),
+    itemExecutionOwners: entries('itemExecutionOwners'),
+    providerActivityAt: entries('providerActivityAt'),
+    tombstones: entries('tombstones'),
+    removedTurnIds: entries('removedTurnIds').map(([id]) => id),
     submissions: [...state.submissions],
     inputEntries: [...state.inputEntries],
     inputCards: [...state.inputCards],
-    receipts: [...state.receipts],
+    receipts: entries('receipts'),
     aliases: [...state.aliases],
-    itemEchoes: [...state.itemEchoes].map(([key, value]) =>
+    itemEchoes: entries('itemEchoes').map(([key, value]) =>
       value === undefined ? [key] : [key, value]
     ),
     appliedSettlementIds: [...state.appliedSettlementIds],
@@ -32,7 +43,7 @@ export function encodeJournalState(state: JournalReducerState): {
     latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
     queuePauseMarks: durableQueuePauseMarks(state.queuePauseMarks),
     stoppedHistoryCarried: [...state.stoppedHistoryCarried],
-    queuedHandOffPlaces: [...state.queuedHandOffPlaces],
+    queuedHandOffPlaces: entries('queuedHandOffPlaces'),
     normalizedHandOffs: [...state.normalizedHandOffs],
     queue: { revision: state.queue.revision, cards: [...state.queue.cards] },
     historyOrigin: state.historyOrigin

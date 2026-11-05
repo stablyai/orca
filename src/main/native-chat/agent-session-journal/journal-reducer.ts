@@ -1,3 +1,4 @@
+import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
 import { journalContextCursor } from './journal-context-cursor'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import {
@@ -66,28 +67,28 @@ export type JournalReducerState = {
   highestFence: number
   items: Map<string, AgentJournalRenderItem>
   /** Creation provenance determines whether an item belongs to current execution. */
-  itemFences: Map<string, number>
+  itemFences: JournalKeyedMap<string, number>
   /** Later runs may explicitly assume execution of reusable child items. */
-  itemExecutionOwners: Map<string, number>
-  providerActivityAt: Map<number, number>
+  itemExecutionOwners: JournalKeyedMap<string, number>
+  providerActivityAt: JournalKeyedMap<number, number>
   /** Retain removed revisions to prevent stale resurrection. */
-  tombstones: Map<string, number>
+  tombstones: JournalKeyedMap<string, number>
   /** Rewound turns remain ended even after their visible records disappear. */
-  removedTurnIds: Set<string>
+  removedTurnIds: JournalKeyedSet<string>
   inputs: ReturnType<typeof createJournalInputObligations>
   submissions: Map<string, AgentJournalSubmission>
-  receipts: Map<string, AgentJournalAcceptanceReceipt>
+  receipts: JournalKeyedMap<string, AgentJournalAcceptanceReceipt>
   /** Alias provider echoes to existing optimistic submissions to prevent duplicate bubbles. */
   aliases: Map<string, string>
   /** Preserve the first declared echo contract through tombstones. */
-  itemEchoes: Map<string, unknown>
+  itemEchoes: JournalKeyedMap<string, unknown>
   appliedSettlementIds: Set<string>
   derivedTurnScope: JournalDerivedTurnScope
   /** Acceptance survives visible-message rewind; zero means none in this epoch. */
   latestAcceptedTurnSequence: number
   queuePauseMarks: JournalQueuePauseMarks
   stoppedHistoryCarried: Map<string, readonly string[]>
-  queuedHandOffPlaces: Map<
+  queuedHandOffPlaces: JournalKeyedMap<
     string,
     Pick<AgentJournalRenderItem, 'sequence' | 'observedAt' | 'turnScope'>
   >

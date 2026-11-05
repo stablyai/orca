@@ -1,3 +1,5 @@
+import type { JournalKeyedMap } from './journal-keyed-storage'
+import type { JournalInputPlaceStorage } from './journal-index-storage'
 import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageRow } from './queued-message-table'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -12,11 +14,7 @@ import {
   type JournalInputCard,
   type JournalInputLineageOwner
 } from './journal-input-lineage'
-import {
-  mergeInputPlaces,
-  type InputPlaceQuery,
-  type JournalInputPlaceIndex
-} from './journal-input-place-index'
+import { mergeInputPlaces, type InputPlaceQuery } from './journal-input-place-index'
 
 export type JournalInputPlace = JournalInputEntry & {
   coordinate: AgentJournalCursor
@@ -26,7 +24,7 @@ export type JournalInputPlace = JournalInputEntry & {
 export function readJournalInputPlace(
   state: JournalReducerState,
   id: string,
-  originals: Map<string, AgentJournalCursor | undefined>,
+  originals: JournalKeyedMap<string, AgentJournalCursor | undefined>,
   originalAcceptance?: (id: string) => AgentJournalCursor | undefined
 ): JournalInputPlace | undefined {
   const own = state.inputEntries.get(id)
@@ -167,7 +165,7 @@ export function releaseJournalInputHistory(
 
 export function queryJournalInputCurrent(
   place: JournalInputPlace,
-  coordinates: JournalInputPlaceIndex
+  coordinates: JournalInputPlaceStorage
 ): InputPlaceQuery {
   return queryInputContext(
     place.context,

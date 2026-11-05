@@ -1,3 +1,4 @@
+import type { JournalKeyedMap } from './journal-keyed-storage'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   refusedBeforeWrite,
@@ -9,30 +10,42 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from './journal-reducer'
-import { JournalInputPlaceIndex } from './journal-input-place-index'
+import type { JournalInputPlaceStorage, JournalIndexStorageFactory } from './journal-index-storage'
 import { JournalInputObservations } from './journal-input-observations'
 import { JournalSubmissionLinks } from './journal-submission-links'
+import { memoryJournalIndexStorage } from './journal-memory-index-storage'
 
 /** Reconstructible query evidence on the input owner; canonical records remain authoritative. */
 export class JournalInputEvidence extends JournalInputObservations {
   readonly links = new JournalSubmissionLinks()
   private readonly recoverable = new Map<string, AgentJournalSubmission>()
-  private readonly nonRefused = new JournalInputPlaceIndex('')
-  private readonly submissionRows = new Map<number, string>()
-  private readonly rowsBySubmission = new Map<string, number>()
-  private readonly keptCards = new Map<string, Set<string>>()
-  private readonly keptBySubmission = new Map<string, string>()
-  private readonly ordinals = new Map<string, number>()
+  private readonly nonRefused: JournalInputPlaceStorage
+  private readonly submissionRows: JournalKeyedMap<number, string> = new Map()
+  private readonly rowsBySubmission: JournalKeyedMap<string, number> = new Map()
+  private readonly keptCards: JournalKeyedMap<string, Set<string>> = new Map()
+  private readonly keptBySubmission: JournalKeyedMap<string, string> = new Map()
+  private readonly ordinals: JournalKeyedMap<string, number> = new Map()
   private nextOrdinal = 0
-  private readonly acceptedByTime = new JournalInputPlaceIndex('')
-  private readonly failedRequests = new JournalInputPlaceIndex('')
+  private readonly acceptedByTime: JournalInputPlaceStorage
+  private readonly failedRequests: JournalInputPlaceStorage
   private readonly statusPending = new Map<string, AgentJournalSubmission>()
-  private readonly steers = new Map<string, JournalInputPlaceIndex>()
-  private readonly steerTurns = new Map<string, string>()
+  private readonly steers = new Map<string, JournalInputPlaceStorage>()
+  private readonly steerTurns: JournalKeyedMap<string, string> = new Map()
   private readonly stoppedCandidates = new Set<string>()
-  private readonly stoppedOwed = new JournalInputPlaceIndex('')
-  private readonly carrierCoverage = new Map<string, readonly string[]>()
-  private readonly coveredBy = new Map<string, Set<string>>()
+  private readonly stoppedOwed: JournalInputPlaceStorage
+  private readonly carrierCoverage: JournalKeyedMap<string, readonly string[]> = new Map()
+  private readonly coveredBy: JournalKeyedMap<string, Set<string>> = new Map()
+
+  constructor(
+    state: JournalReducerState,
+    indexes: JournalIndexStorageFactory = memoryJournalIndexStorage
+  ) {
+    super(state, indexes)
+    this.nonRefused = indexes.place('non-refused-inputs')
+    this.acceptedByTime = indexes.place('accepted-by-time')
+    this.failedRequests = indexes.place('failed-requests')
+    this.stoppedOwed = indexes.place('stopped-owed')
+  }
 
   refreshLink(id: string): void {
     this.links.refreshInput(this.state, id)
@@ -193,7 +206,7 @@ export class JournalInputEvidence extends JournalInputObservations {
       this.steerTurns.delete(id)
     }
     if (turn && entry) {
-      const index = this.steers.get(turn) ?? new JournalInputPlaceIndex('')
+      const index = this.steers.get(turn) ?? this.indexes.place('steers', turn)
       index.setPosition(id, entry.acceptedSequence ?? 0, ordinal)
       this.steers.set(turn, index)
       this.steerTurns.set(id, turn)

@@ -1,3 +1,4 @@
+import type { JournalInputDomainStorage, JournalInputPlaceStorage } from './journal-index-storage'
 import type { JournalInputCard } from './journal-input-lineage'
 import type { JournalInputPlace } from './journal-input-order-state'
 import type { QueuedMessageRow } from './queued-message-table'
@@ -10,16 +11,16 @@ import {
 
 /** Nonselectable native positions outlive the corresponding live card membership. */
 export class JournalInputReleasedPositions {
-  private readonly domains = new JournalInputDomainIndex()
-  private readonly fallbackDomains = new JournalInputDomainIndex()
-  private readonly releases = new JournalInputPlaceIndex('introduction')
-  private sincePause = new JournalInputPlaceIndex('introduction')
+  private readonly domains: JournalInputDomainStorage = new JournalInputDomainIndex()
+  private readonly fallbackDomains: JournalInputDomainStorage = new JournalInputDomainIndex()
+  private readonly releases: JournalInputPlaceStorage = new JournalInputPlaceIndex('introduction')
+  private readonly sincePause: JournalInputPlaceStorage = new JournalInputPlaceIndex('introduction')
   private count = 0
   private floor = -Infinity
 
   pause(cut: number): void {
     this.floor = cut
-    this.sincePause = new JournalInputPlaceIndex('introduction')
+    this.sincePause.clear()
   }
 
   delete(prior: JournalIndexedInputCard): void {
