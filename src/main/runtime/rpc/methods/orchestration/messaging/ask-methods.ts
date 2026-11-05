@@ -155,7 +155,8 @@ export const ORCHESTRATION_ASK_METHODS = [
       }
 
       const questionId = question.message_id
-      if (!params.resume && params.wait === false) {
+      // A finished worker has no turn for an answer to wake, so it waits for it here.
+      if (!params.resume && params.wait === false && workingDispatch) {
         return askedQuestionReceipt(questionId, recordMutationReceipt)
       }
       return waitForQuestionAnswer({

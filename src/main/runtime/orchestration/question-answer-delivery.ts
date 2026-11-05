@@ -22,11 +22,10 @@ function questionAnswerWaitHandle(question: { dispatch_id: string; message_id: s
 /** A waiting ask takes its own answer; otherwise the answer is Dispatch mail that wakes the worker. */
 export function deliverQuestionAnswer(
   runtime: Pick<OrcaRuntimeService, 'notifyMessageWaiters' | 'notifyMessageArrived'>,
-  question: { message_id: string; dispatch_id: string },
-  deliverAsMail = () => runtime.notifyMessageArrived(`dispatch:${question.dispatch_id}`, 'status')
+  question: { message_id: string; dispatch_id: string }
 ): void {
   if (!runtime.notifyMessageWaiters(questionAnswerWaitHandle(question))) {
-    deliverAsMail()
+    runtime.notifyMessageArrived(`dispatch:${question.dispatch_id}`, 'status')
   }
 }
 

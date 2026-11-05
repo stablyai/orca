@@ -1,8 +1,4 @@
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { deliverQuestionAnswer } from '../../../../orchestration/question-answer-delivery'
-import { continueUnreadWorkerMail } from './settled-worker-follow-through'
-import type { FollowUpContext } from './worker-follow-up'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
 import type { DispatchContextRow } from '../../../../orchestration/types'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
@@ -100,28 +96,4 @@ export function refuseFinishedRemoteWorker(db: OrchestrationDb, paneKey: string 
       `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that a finished worker cannot reach yet. Nothing was sent; give the message to the user instead.`
     )
   }
-}
-
-/** A worker that asked after it finished has no turn to wake; the answer continues it as the replier's send would. */
-export function deliverAnswer(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  question: { message_id: string; dispatch_id: string },
-  {
-    from,
-    ...replier
-  }: Omit<FollowUpContext, 'runtime' | 'orchestrationMutation'> & { from?: string }
-): void {
-  const status = db.getDispatchContextById(question.dispatch_id)?.status
-  deliverQuestionAnswer(
-    runtime,
-    question,
-    status === 'pending' || status === 'dispatched'
-      ? undefined
-      : () =>
-          continueUnreadWorkerMail(runtime, db, question.dispatch_id, {
-            from: from ?? 'unknown',
-            ctx: replier
-          })
-  )
 }

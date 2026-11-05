@@ -19,7 +19,6 @@ import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report
 import {
   planWorkerFollowUp,
   startWorkerFollowUp,
-  type FollowUpContext,
   type WorkerFollowUpOutcome
 } from './worker-follow-up'
 import { captureReportedWorkerResumeSession } from '../worker/worker-resume-session-capture'
@@ -43,11 +42,9 @@ export function followThroughWorkerReport(
 export function continueUnreadWorkerMail(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
-  dispatchId: string,
-  /** Who starts the follow-up when its mail's sender cannot, such as a Run answering a question. */
-  starter?: FollowUpStarter
+  dispatchId: string
 ): void {
-  void continueUnreadMail(runtime, db, dispatchId, starter).catch((error: unknown) => {
+  void continueUnreadMail(runtime, db, dispatchId).catch((error: unknown) => {
     console.warn('[orchestration] unread worker mail was not continued', dispatchId, error)
   })
 }
@@ -64,16 +61,10 @@ const CHAT_FOLLOW_UP_TASK = {
   body: 'You have new orchestration messages. They arrive next, one at a time; act on each.'
 }
 
-type FollowUpStarter = {
-  from: string
-  ctx: Omit<FollowUpContext, 'runtime' | 'orchestrationMutation'>
-}
-
 async function continueUnreadMail(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
-  dispatchId: string,
-  starter: FollowUpStarter | undefined
+  dispatchId: string
 ): Promise<void> {
   const first = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
   if (!first) {
@@ -120,13 +111,10 @@ async function continueUnreadMail(
     outcome =
       plan?.kind === 'start'
         ? await startWorkerFollowUp({
-            ctx: {
-              runtime,
-              ...(starter?.ctx ?? { orchestrationCaller: senderSession(db, first.from_handle) })
-            },
+            ctx: { runtime, orchestrationCaller: senderSession(db, first.from_handle) },
             db,
             plan,
-            from: starter?.from ?? first.from_handle,
+            from: first.from_handle,
             message: receivesMailWhole(plan.latest.assignee_handle)
               ? CHAT_FOLLOW_UP_TASK
               : FOLLOW_UP_TASK,

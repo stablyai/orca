@@ -18,7 +18,11 @@ describe('a worker after its worker_done', () => {
       'runtime_test:term_worker:1'
     )
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
-      handle === 'term_worker' ? 'tab_worker:leaf_worker' : null
+      handle === 'term_worker'
+        ? 'tab_worker:leaf_worker'
+        : handle === 'term_coord'
+          ? harness.coordinatorPaneKey
+          : null
     )
     const send = (params: Record<string, unknown>) =>
       harness.call('orchestration.send', { from: 'term_worker', ...params }, ctx)
@@ -35,14 +39,16 @@ describe('a worker after its worker_done', () => {
       subject: 'Second report',
       payload: report('failed')
     })
-    const asked = await harness.call(
+    // It has no turn for a later answer to wake, so even a returning ask waits for the answer.
+    const asking = harness.call(
       'orchestration.ask',
-      { from: 'term_worker', question: 'Anything else?', wait: false },
+      { from: 'term_worker', question: 'Anything else?', wait: false, timeoutMs: 5_000 },
       ctx
     )
+    await vi.waitFor(() => expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(5))
+    const question = db.getUnreadMessages(`run:${activeRunId}`)[4]
 
     expect(again).toMatchObject({ lifecycle: { action: 'settled', outcome: 'succeeded' } })
-    expect(asked).toMatchObject({ pending: true })
     expect(db.getTask(task.id)).toEqual(settled)
     expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
     expect(
@@ -54,6 +60,12 @@ describe('a worker after its worker_done', () => {
       ['status', 'Second report'],
       ['question', 'Question']
     ])
+    await harness.call(
+      'orchestration.reply',
+      { from: 'term_coord', id: question.id, body: 'Nothing else.' },
+      ctx
+    )
+    expect(await asking).toMatchObject({ answer: 'Nothing else.', timedOut: false })
   })
 
   it('tells a finished worker on a paired host that its coordinator is out of reach', async () => {
