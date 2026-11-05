@@ -10,7 +10,10 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import { runWorktreeDelete } from './delete-worktree-flow'
 import { deleteFolderWorkspaceUnlessUnsaved } from './folder-workspace-delete'
 import {
@@ -90,7 +93,11 @@ export function resolveActiveWorkspaceDeleteTarget(
   return worktree &&
     !worktree.isMainWorktree &&
     !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting
-    ? { kind: 'worktree', worktree, identity: getWorktreeHostIdentity(worktree) }
+    ? {
+        kind: 'worktree',
+        worktree,
+        identity: getWorktreeHostIdentity(worktree)
+      }
     : null
 }
 
@@ -103,7 +110,10 @@ export function requestActiveWorkspaceDelete(
   if (!target) {
     return false
   }
-  if (isDeleteConfirmationOnScreen() && confirmWorkspaceDeleteConfirmation(target.identity)) {
+  if (
+    isDeleteConfirmationOnScreen(target.identity) &&
+    confirmWorkspaceDeleteConfirmation(target.identity)
+  ) {
     return deleteWorkspaceTarget(target, dependencies)
   }
   armWorkspaceDeleteConfirmation(target.identity, dependencies.confirmationDependencies)
@@ -114,9 +124,11 @@ export function requestActiveWorkspaceDelete(
 }
 
 // Why: a filtered-out row never draws the prompt, and a modal hides it; never delete unseen.
-function isDeleteConfirmationOnScreen(): boolean {
-  const notice = document.querySelector('[data-workspace-delete-confirm]')
-  return notice !== null && !notice.closest('[aria-hidden="true"]')
+function isDeleteConfirmationOnScreen(identity: string): boolean {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-workspace-delete-confirm]')).some(
+    (notice) =>
+      notice.dataset.workspaceDeleteConfirm === identity && !notice.closest('[aria-hidden="true"]')
+  )
 }
 
 export function deleteWorkspaceTarget(

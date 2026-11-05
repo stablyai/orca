@@ -65,10 +65,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   const { cardStyle } = geometryFor(frame.statusLane)
   const titleOnlyCard = frame.singleLine
   // Why: only the active row arms; isActive is host-exact, unlike the inherited isActiveSurface.
+  const worktreeIdentity = getWorktreeHostIdentity(worktree)
   const deleteArmed =
-    useWorkspaceDeleteConfirmationArmed(getWorktreeHostIdentity(worktree)) &&
-    isActive &&
-    !affiliateListMode
+    useWorkspaceDeleteConfirmationArmed(worktreeIdentity) && isActive && !affiliateListMode
 
   const cardBody = (
     <div
@@ -130,6 +129,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       )}
       {deleteArmed && !isDeleting ? (
         <WorkspaceDeleteConfirmNotice
+          identity={worktreeIdentity}
           isFolder={parseWorkspaceKey(worktree.id)?.type === 'folder'}
         />
       ) : null}

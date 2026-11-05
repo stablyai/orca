@@ -4,8 +4,10 @@ import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 
 export function WorkspaceDeleteConfirmNotice({
+  identity,
   isFolder
 }: {
+  identity: string
   isFolder: boolean
 }): React.JSX.Element {
   const shortcut = useShortcutKeyDetails('workspace.delete')
@@ -13,7 +15,7 @@ export function WorkspaceDeleteConfirmNotice({
     <div
       role="status"
       aria-live="polite"
-      data-workspace-delete-confirm=""
+      data-workspace-delete-confirm={identity}
       className="mt-1 flex flex-wrap items-center gap-1 pl-2 text-[11px] font-medium text-destructive"
     >
       {translate('auto.components.sidebar.WorkspaceDeleteConfirmNotice.press', 'Press')}

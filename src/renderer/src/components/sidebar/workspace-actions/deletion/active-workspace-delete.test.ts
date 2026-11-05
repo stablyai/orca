@@ -50,16 +50,19 @@ function state(worktrees: Worktree[] = [], overrides: Partial<TestState> = {}): 
 }
 
 const noFocus = { activeElement: null }
-const confirmationDependencies = { timeoutMs: 4000, watchActiveWorkspace: () => () => {} }
+const confirmationDependencies = {
+  timeoutMs: 4000,
+  watchActiveWorkspace: () => () => {}
+}
 
 afterEach(() => {
   cancelWorkspaceDeleteConfirmation()
   document.body.innerHTML = ''
 })
 
-function showConfirmNotice(): HTMLElement {
+function showConfirmNotice(identity: string): HTMLElement {
   const notice = document.createElement('div')
-  notice.setAttribute('data-workspace-delete-confirm', '')
+  notice.setAttribute('data-workspace-delete-confirm', identity)
   document.body.append(notice)
   return notice
 }
@@ -68,7 +71,9 @@ describe('resolveActiveWorkspaceDeleteTarget', () => {
   it('targets the active worktree on its exact host, not another at the same path', () => {
     const local = worktree({ hostId: 'local', instanceId: 'i-1' })
     const remote = worktree({ hostId: 'ssh:build', instanceId: 'i-2' })
-    const current = state([local, remote], { activeWorkspaceExecutionHostId: 'ssh:build' })
+    const current = state([local, remote], {
+      activeWorkspaceExecutionHostId: 'ssh:build'
+    })
     expect(resolveActiveWorkspaceDeleteTarget(current, noFocus)).toEqual({
       kind: 'worktree',
       worktree: remote,
@@ -173,7 +178,7 @@ describe('requestActiveWorkspaceDelete', () => {
     expect(current.setSidebarOpen).toHaveBeenCalledWith(true)
     expect(getArmedWorkspaceDeleteIdentity()).toBe('ssh:build|repo::/feature')
 
-    showConfirmNotice()
+    showConfirmNotice('ssh:build|repo::/feature')
     expect(requestActiveWorkspaceDelete(current, undefined, dependencies)).toBe(true)
     expect(getArmedWorkspaceDeleteIdentity()).toBeNull()
     expect(deleteWorktree).toHaveBeenCalledWith(target.id, {
@@ -196,8 +201,11 @@ describe('requestActiveWorkspaceDelete', () => {
     requestActiveWorkspaceDelete(current, undefined, dependencies)
     const hidden = document.createElement('div')
     hidden.setAttribute('aria-hidden', 'true')
-    hidden.append(showConfirmNotice())
+    hidden.append(showConfirmNotice('local|repo::/feature'))
     document.body.append(hidden)
+    requestActiveWorkspaceDelete(current, undefined, dependencies)
+    // Another workspace's notice is not this workspace's prompt.
+    showConfirmNotice('local|repo::/other')
     requestActiveWorkspaceDelete(current, undefined, dependencies)
     expect(deleteWorktree).not.toHaveBeenCalled()
     expect(getArmedWorkspaceDeleteIdentity()).toBe('local|repo::/feature')
@@ -259,7 +267,10 @@ describe('deleteWorkspaceTarget', () => {
         () => new Promise<boolean>((resolve) => (finishDelete = resolve))
       )
     })
-    const dependencies = { deleteWorktree: vi.fn(), getCurrentState: () => current }
+    const dependencies = {
+      deleteWorktree: vi.fn(),
+      getCurrentState: () => current
+    }
     expect(deleteWorkspaceTarget(folder, dependencies)).toBe(true)
     expect(deleteWorkspaceTarget(folder, dependencies)).toBe(false)
     finishDelete(false)
