@@ -18950,8 +18950,6 @@
       },
       "turnDiff": {
         "partial": "부분적인 차이점",
-        "showDiff": "차이 보기",
-        "hideDiff": "차이 숨기기",
         "changedFiles_other": "변경된 파일 {{count}}개"
       },
       "receipt": {

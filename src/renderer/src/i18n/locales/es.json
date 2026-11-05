@@ -19584,8 +19584,6 @@
       },
       "turnDiff": {
         "partial": "Diff parcial",
-        "showDiff": "Mostrar diferencias",
-        "hideDiff": "Ocultar diferencias",
         "changedFiles_one": "{{count}} archivo modificado",
         "changedFiles_other": "{{count}} archivos modificados",
         "changedFiles_many": "{{count}} archivos modificados"
