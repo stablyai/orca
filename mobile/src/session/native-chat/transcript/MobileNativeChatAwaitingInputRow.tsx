@@ -66,7 +66,7 @@ export function MobileNativeChatAwaitingInputRow({
         <View style={indent}>
           {/* Numbers stay outside the agent's text so its own markdown cannot restyle them. */}
           {questions.map((entry, index) => (
-            <View key={index} style={styles.entry}>
+            <View key={entry} style={styles.entry}>
               <Text style={[styles.question, type]}>{`${index + 1}.`}</Text>
               <MobileNativeChatQuestionText
                 content={entry}
