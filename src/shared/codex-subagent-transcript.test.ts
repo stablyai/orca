@@ -16,14 +16,14 @@ function jsonl(records: unknown[]): string {
   return `${records.map((record) => JSON.stringify(record)).join('\n')}\n`
 }
 
-function activity(kind: string, occurredAtMs = 1234): unknown {
+function activity(kind: string, occurredAtMs = 1234, agentPath = '/root/sidebar_repro'): unknown {
   return {
     type: 'event_msg',
     payload: {
       type: 'sub_agent_activity',
       occurred_at_ms: occurredAtMs,
       agent_thread_id: CHILD_ID,
-      agent_path: '/root/sidebar_repro',
+      agent_path: agentPath,
       kind
     }
   }
@@ -111,6 +111,31 @@ describe('Codex subagent transcript reconciliation', () => {
     // Why: only a cross-day lookup can observe the completion; the parent-directory scan never finds this file.
     expect(roster.size).toBe(0)
     expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)
+  })
+
+  it('keeps the current parent activity name when older spawn metadata arrives late', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-late-identity-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
+    const started = activity('started', 1234, '')
+    writeFileSync(parentPath, jsonl([started]))
+    writeFileSync(childPath, jsonl([{ type: 'session_meta', payload: { id: CHILD_ID } }]))
+    const state = createCodexSubagentTranscriptState()
+    const roster: CodexSubagentRoster = new Map()
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+    expect(codexRosterToSnapshots(roster)?.[0]?.description).toBeUndefined()
+
+    writeFileSync(parentPath, jsonl([started, activity('interacted', 1235, '/root/mobile')]))
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+    expect(codexRosterToSnapshots(roster)?.[0]?.description).toBe('mobile')
+
+    writeFileSync(
+      childPath,
+      jsonl([{ type: 'session_meta', payload: { id: CHILD_ID, agent_path: '/root/task_a' } }])
+    )
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+    expect(codexRosterToSnapshots(roster)?.[0]?.description).toBe('mobile')
   })
 
   it('retires a child whose rollout never becomes readable', () => {

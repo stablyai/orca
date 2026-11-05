@@ -84,9 +84,11 @@ export function enrichCodexSubagentIdentity(
     return false
   }
   child.identityTranscriptPath = transcriptPath
-  const changed = description !== child.description
+  if (child.description) {
+    return false
+  }
   child.description = description
-  return changed
+  return true
 }
 
 /** Update only an existing child’s model, preserving lifecycle so late discovery cannot resurrect finished children. */
