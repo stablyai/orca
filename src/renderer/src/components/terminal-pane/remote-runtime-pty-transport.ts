@@ -1209,7 +1209,7 @@ export function createRemoteRuntimePtyTransport(
   }
 
   async function attachHostSessionMirror(
-    options: { cols?: number; rows?: number },
+    options: { cols?: number; rows?: number; sessionId?: string },
     notifySpawn = true,
     expectedAttachGeneration?: number,
     expectedLifecycleEpoch?: number
@@ -1222,7 +1222,9 @@ export function createRemoteRuntimePtyTransport(
       (expectedAttachGeneration === undefined || expectedAttachGeneration === attachGeneration) &&
       (expectedLifecycleEpoch === undefined || expectedLifecycleEpoch === lifecycleEpoch)
     const hostTabId = toHostSessionTabId(tabId)
-    const paneHandle = handle
+    const paneHandle = options.sessionId
+      ? getRemoteRuntimeTerminalHandle(options.sessionId)
+      : handle
     const waitOutcome = { boundedWaitEnded: false }
     // Why overlap: resolvePane is a read keyed only by the pane, so it need not wait an activation round trip.
     const earlyPaneResolution = resolveHostSessionPane(hostTabId)
@@ -2750,9 +2752,15 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       if (nextHandle && typeof nextHandle !== 'string') {
+        const probeLifecycle = lifecycleEpoch
         await endRetiredHostSurface(
           nextHandle.retiredHandle,
-          () => !destroyed && connected && handle === previousHandle
+          () =>
+            !destroyed &&
+            connected &&
+            handle === previousHandle &&
+            probeLifecycle === lifecycleEpoch &&
+            recovery.isCurrent(recoveryEpoch)
         )
         return
       }

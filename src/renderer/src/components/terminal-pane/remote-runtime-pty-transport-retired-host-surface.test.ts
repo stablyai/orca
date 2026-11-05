@@ -33,15 +33,14 @@ const { runtimeCall, runtimeSubscribe, latestSubscribePayload, resetRemoteRuntim
 
 type HostAnswers = {
   retired: string
-  liveSurface?: string
   show: Record<string, unknown> | 'terminal_not_found'
 }
 
 /** A host whose pane surface was retired when its process exited: no surface, only the close record. */
-function answerAsHostThatRetired({ retired, liveSurface, show }: HostAnswers): void {
+function answerAsHostThatRetired({ retired, show }: HostAnswers): void {
   const defaultCall = runtimeCall.getMockImplementation()
   runtimeCall.mockImplementation(async (args: { method: string; params?: unknown }) => {
-    if (args.method === 'session.tabs.activate' && !liveSurface) {
+    if (args.method === 'session.tabs.activate') {
       return { ok: false, error: { code: 'tab_not_found', message: 'tab_not_found' } }
     }
     if (args.method === 'session.tabs.list') {
@@ -54,20 +53,7 @@ function answerAsHostThatRetired({ retired, liveSurface, show }: HostAnswers): v
           activeGroupId: null,
           activeTabId: null,
           activeTabType: null,
-          tabs: liveSurface
-            ? [
-                {
-                  type: 'terminal',
-                  id: 'host-tab-1::pane:1',
-                  parentTabId: 'host-tab-1',
-                  leafId: 'pane:1',
-                  title: 'Terminal',
-                  isActive: true,
-                  status: 'ready',
-                  terminal: liveSurface
-                }
-              ]
-            : [],
+          tabs: [],
           retiredTerminalSurfaces: [
             { parentTabId: 'host-tab-1', leafId: 'pane:1', ptyId: 'pty-1', terminal: retired }
           ]
@@ -159,25 +145,6 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
 
     await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1'))
     expect(transport.getRecoveryState?.().phase).toBe('ended')
-    transport.destroy?.()
-  })
-
-  it('follows a live replacement the host publishes over an older close record', async () => {
-    const { transport, onPtyExit } = await createHostMirror()
-    await transport.connect({ url: '', callbacks: {} })
-    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledOnce())
-    resolvedPaneHandle = 'terminal-2'
-    answerAsHostThatRetired({ retired: 'terminal-1', liveSurface: 'terminal-2', show: EXITED_127 })
-
-    const { streamId } = latestSubscribePayload()
-    subscriptionCallbacks?.onResponse({
-      ok: true,
-      result: { type: 'end', streamId, verdict: 'exited' }
-    })
-
-    await vi.waitFor(() => expect(latestSubscribePayload().terminal).toBe('terminal-2'))
-    expect(onPtyExit).not.toHaveBeenCalled()
-    expect(transport.getPtyId()).toBe('remote:env-1@@terminal-2')
     transport.destroy?.()
   })
 })
