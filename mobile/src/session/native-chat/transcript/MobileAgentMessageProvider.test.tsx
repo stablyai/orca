@@ -1,112 +1,86 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
 import './mobile-agent-message-renderer.test-fixture'
-import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { MobileAgentMessageProvider } from './MobileAgentMessageProvider'
-import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { findAllByHostType } from '../../../test-support/react-test-renderer-host-nodes'
-const userMessage = (blocks: NativeChatMessage['blocks']): NativeChatMessage => ({
-  id: 'u1',
-  role: 'user',
-  blocks,
-  timestamp: null,
-  source: 'transcript'
-})
-describe('phone sender provider', () => {
-  let renderer: ReactTestRenderer | null = null
-  it.each([false, true])(
-    'keeps saved external reports in the background surface without agent status or navigation (provider %s)',
-    async (provider) => {
-      await activateMobileUiLocale(provider ? 'fr' : 'en')
-      const from: AgentMessageSource = {
-        kind: 'agent',
-        orchestration: {
-          message: 'mail-notice',
-          mailbox: 'run:r',
-          dispatchId: null,
-          messages: [{ messageId: 'mail', runId: 'r', from: 'ci-notifier' }]
-        },
-        senders: [
-          {
-            name: null,
-            party: { address: 'ci-notifier', terminalHandle: 'ci-notifier', orcaSessionId: null }
-          }
-        ]
-      }
-      const open = vi.fn()
-      const card = (source = from) =>
-        createElement(MobileNativeChatMessage, {
-          message: { ...userMessage([{ type: 'text', text: 'CI completed.' }]), from: source }
-        })
-      const wrap = (child: ReturnType<typeof card>) =>
-        provider ? (
-          <MobileAgentMessageProvider
-            tabs={[]}
-            terminals={[]}
-            scopeKey="host/workspace"
-            open={open}
-          >
-            {child}
-          </MobileAgentMessageProvider>
-        ) : (
-          child
-        )
-      try {
-        act(() => {
-          renderer = create(wrap(card()))
-        })
-        const name = findAllByHostType(renderer!.root, 'Pressable').find((node) =>
-          findAllByHostType(node, 'Text').some((text) => text.children.includes('ci-notifier'))
-        )
-        expect(name?.props.disabled).toBe(true)
-        expect(name?.props.accessibilityRole).toBeUndefined()
-        expect(findAllByHostType(renderer!.root, 'Terminal')).toHaveLength(0)
-        expect(findAllByHostType(renderer!.root, 'Bot')).toHaveLength(0)
-        expect(findAllByHostType(renderer!.root, 'AgentStateDot')).toHaveLength(0)
-        expect(findAllByHostType(renderer!.root, 'ArrowUpRight')).toHaveLength(0)
-        expect(
-          findAllByHostType(renderer!.root, 'Text').some((node) =>
-            node.children.includes('un agent')
-          )
-        ).toBe(false)
-        expect(open).not.toHaveBeenCalled()
-        for (const savedName of [null, 'Setup']) {
-          const endpoint: AgentMessageSource = {
-            ...from,
-            orchestration: {
-              message: 'mail-notice',
-              mailbox: 'run:r',
-              dispatchId: null,
-              messages: [{ messageId: 'mail', runId: 'r', from: 'term_plain' }]
-            },
-            senders: [
-              {
-                name: savedName,
-                party: { address: 'term_plain', terminalHandle: 'term_plain', orcaSessionId: null }
-              }
-            ]
-          }
-          act(() => renderer!.update(wrap(card(endpoint))))
-          const label = savedName ?? 'Terminal'
-          const action = findAllByHostType(renderer!.root, 'Pressable').find((node) =>
-            findAllByHostType(node, 'Text').some((text) => text.children.includes(label))
-          )
-          expect(action?.props.disabled).toBe(!provider)
-          expect(action?.props.accessibilityRole).toBe(provider ? 'button' : undefined)
-          if (provider) {
-            act(() => action!.props.onPress())
-            expect(open).toHaveBeenLastCalledWith(endpoint, endpoint.senders[0])
-          }
-          expect(findAllByHostType(renderer!.root, 'AgentStateDot')).toHaveLength(0)
-        }
-      } finally {
-        act(() => renderer?.unmount())
-        renderer = null
-        await activateMobileUiLocale('en')
+import { describe, expect, it } from 'vitest'
+import { parseOrcaSessionAddress } from '../../../../../src/shared/orca-session-address'
+import {
+  createMobileAgentMessageSource,
+  useMobileAgentMessageView
+} from './mobile-agent-message-context'
+import type { MobileSessionTab } from '../../mobile-session-route-types'
+
+describe('saved sender activity', () => {
+  it('keeps the saved kind without a provider and after its tab closes', async () => {
+    const session = parseOrcaSessionAddress('orca_session_id:codex_original_sender')
+    if (!session) {
+      throw new Error('invalid fixture session')
+    }
+    const sender = {
+      name: 'Original sender',
+      agent: 'codex',
+      party: { address: 'term_old', terminalHandle: 'term_old', orcaSessionId: session }
+    }
+    let value: ReturnType<typeof useMobileAgentMessageView> | undefined
+    function Probe() {
+      value = useMobileAgentMessageView(sender)
+      return null
+    }
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = create(createElement(Probe))
+    })
+    expect(value).toEqual({ agentType: 'codex' })
+    await act(async () => renderer?.unmount())
+    const source = createMobileAgentMessageSource()
+    const tab: MobileSessionTab = {
+      type: 'agent-session',
+      id: 'chat',
+      sessionId: session,
+      agent: 'codex',
+      title: 'Original sender',
+      isActive: true,
+      chatStatus: { state: 'working', updatedAt: 1000 }
+    }
+    source.update([tab], [], 1000)
+    expect(source.view(sender)).toMatchObject({ agentType: 'codex', dot: 'working' })
+    act(() => source.update([], [], 1000))
+    expect(source.view(sender)).toEqual({ agentType: 'codex' })
+  })
+
+  it('never takes terminal activity for ordinary mail, a Dispatch or a missing saved session', () => {
+    const source = createMobileAgentMessageSource()
+    const tab: MobileSessionTab = {
+      type: 'terminal',
+      id: 'terminal',
+      terminal: 'term_old',
+      launchAgent: 'codex',
+      title: 'Later sender',
+      isActive: true,
+      agentStatus: {
+        paneKey: 'tab:leaf',
+        worktreeId: 'workspace',
+        terminalHandle: 'term_old',
+        agentType: 'codex',
+        state: 'working',
+        updatedAt: 1000,
+        prompt: 'work',
+        stateStartedAt: 1000,
+        stateHistory: []
       }
     }
-  )
+    source.update([tab], [{ handle: 'term_old', agentIdentity: 'codex' }], 1000)
+    const session = parseOrcaSessionAddress('orca_session_id:codex_original_sender')
+    if (!session) {
+      throw new Error('invalid fixture session')
+    }
+    for (const party of [
+      { address: 'term_old', terminalHandle: 'term_old', orcaSessionId: null },
+      { address: 'dispatch:past', terminalHandle: 'term_old', orcaSessionId: null },
+      { address: 'term_old', terminalHandle: 'term_old', orcaSessionId: session }
+    ]) {
+      const sender = { name: 'Original sender', agent: 'codex', party }
+      expect(source.view(sender)).toEqual({ agentType: 'codex' })
+      expect(source.view(sender)).toBe(source.view(sender))
+    }
+  })
 })

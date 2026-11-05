@@ -18,12 +18,8 @@ export type OrcaSessionAddress = string & { readonly [orcaSessionAddressBrand]: 
 // Terminal handles (term_/structworker_) share the charset but are never durable session ids.
 const TERMINAL_HANDLE_PREFIXES = ['term_', STRUCTURED_WORKER_HANDLE_PREFIX] as const
 
-export function isOrcaTerminalHandle(handle: string | null | undefined): boolean {
-  return Boolean(handle && TERMINAL_HANDLE_PREFIXES.some((prefix) => handle.startsWith(prefix)))
-}
-
 export function isOrcaSessionId(id: string): id is OrcaSessionId {
-  return isAgentSessionId(id) && !isOrcaTerminalHandle(id)
+  return isAgentSessionId(id) && !TERMINAL_HANDLE_PREFIXES.some((prefix) => id.startsWith(prefix))
 }
 
 export function formatOrcaSessionAddress(orcaSessionId: OrcaSessionId): OrcaSessionAddress {

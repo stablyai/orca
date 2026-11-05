@@ -1,4 +1,3 @@
-import { mailDisplayReportsForItem } from '../mail-display-report'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,
@@ -191,9 +190,7 @@ export function projectStructuredItemToNativeChat(
         ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {}),
         ...lifecycle,
         ...(command ? { command } : {}),
-        ...(from && projected.role === 'user'
-          ? { from, mailDisplayReports: mailDisplayReportsForItem(item) }
-          : {}),
+        ...(from && projected.role === 'user' ? { from } : {}),
         ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {})
       }
     : null

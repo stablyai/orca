@@ -98,8 +98,8 @@ function source(terminal = false): AgentMessageSource {
     senders: [
       {
         party: {
-          address: terminal ? 'term_a' : `orca_session_id:${ROOT}`,
-          terminalHandle: terminal ? 'term_a' : null,
+          address: terminal ? 'term-a' : `orca_session_id:${ROOT}`,
+          terminalHandle: terminal ? 'term-a' : null,
           orcaSessionId: terminal ? null : ROOT
         },
         name: 'Original sender'
@@ -128,7 +128,7 @@ function publish(
 function row(provider = providerA, agentType = 'claude'): AgentStatusEntry {
   return {
     paneKey: PANE,
-    terminalHandle: 'term_a',
+    terminalHandle: 'term-a',
     worktreeId: SENDER,
     state: 'working',
     prompt: '',

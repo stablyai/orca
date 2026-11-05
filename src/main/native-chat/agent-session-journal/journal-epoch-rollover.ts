@@ -1,6 +1,5 @@
 // Delete and replace epochs atomically; retaining superseded rows would grow history without bound.
 
-import { JournalMailDisplayReports } from './journal-mail-display-reports'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -68,10 +67,6 @@ export function publishNewEpoch(input: {
       if (retired !== null) {
         deleteJournalEpochRows(db, sessionId, retired)
       }
-      const display = new JournalMailDisplayReports(sessionId)
-      display.load(db)
-      display.rebuildOwners(state)
-      display.retire(db)()
       input.queue.receipt.write(db)
       publishJournalSessionEpoch(db, input.identity, input.epoch)
       return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)

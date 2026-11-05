@@ -142,7 +142,6 @@ async function syncFederatedDispatchPages(
         to: `run:${dispatch.run_id}`,
         subject: message.subject,
         body: message.body,
-        displayReport: item.displayReport,
         type: message.type,
         priority: message.priority,
         threadId: message.threadId ?? undefined,

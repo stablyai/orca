@@ -67,7 +67,6 @@ export function sendFederatedControlMail(args: {
   const relay = db.enqueueFederationRelay({
     dispatchId,
     direction: 'to_worker',
-    displayReport: params.displayReport,
     kind: 'control_message',
     payload: encodeFederatedControlMessage({
       from,

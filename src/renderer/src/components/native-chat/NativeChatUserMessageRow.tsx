@@ -1,6 +1,3 @@
-import { mailReportPresentation } from '../../../../shared/agent-session/mail-report-presentation'
-import { NativeChatBackgroundTaskRun } from './NativeChatBackgroundTaskRun'
-import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -93,7 +90,6 @@ export function NativeChatUserMessageRow({
   // Agent-authored input belongs to the turn but uses a left-aligned sender row instead of the person’s bubble.
   const from = message.from
   const sending = deliveryNotice?.sending === true
-  const report = mailReportPresentation(message)
   return (
     <div
       ref={rowRef}
@@ -102,49 +98,7 @@ export function NativeChatUserMessageRow({
       data-native-chat-rewind-item={rewind && !sending ? message.id : undefined}
       className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
     >
-      {report ? (
-        <NativeChatBackgroundTaskRun
-          report={report}
-          attribution={
-            from ? (
-              <NativeChatAgentMessageSenders
-                from={from}
-                chatWorktreeId={runtimeContext?.worktreeId ?? null}
-                target={runtimeContext?.target}
-                compact
-              />
-            ) : undefined
-          }
-        >
-          <NativeChatImageAttachments
-            blocks={prose}
-            runtimeContext={runtimeContext}
-            enablePreview={runtimeContext !== undefined}
-          />
-          <NativeChatUserMessageFold
-            messageId={message.id}
-            markdown={report.text}
-            onRefolded={onRefolded}
-          >
-            <NativeChatTextAttachments
-              content={report.text}
-              structured={structuredAttachments}
-              runtimeContext={runtimeContext}
-              renderText={(text) => (
-                <NativeChatMarkdown
-                  rowKey={message.id}
-                  content={text}
-                  variant="document"
-                  className="text-sm"
-                  renderCodeBlock={NativeChatCodeBlock}
-                  onLinkClick={onLinkClick}
-                  allowFileUriLinks={allowFileUriLinks}
-                />
-              )}
-            />
-          </NativeChatUserMessageFold>
-        </NativeChatBackgroundTaskRun>
-      ) : from ? (
+      {from ? (
         <NativeChatAgentMessageCard
           message={message}
           from={from}

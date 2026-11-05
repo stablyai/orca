@@ -45,8 +45,8 @@ class OrchestrationDbCore {
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
     for (const [table, columns] of [
-      ['messages', ['display_report', 'answer_sender_snapshot']],
-      ['federation_relay_items', ['display_report', 'answer_sender_report']]
+      ['messages', ['answer_sender_snapshot']],
+      ['federation_relay_items', ['answer_sender_report']]
     ] as const) {
       const existing = new Set(
         this.db

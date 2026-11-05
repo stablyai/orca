@@ -158,7 +158,6 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             : structuredSessionPointerCallerKey(input.sessionId),
           turn: {
             body: input.body,
-            displayAttachments: input.displayAttachments,
             // A person's message: queued behind running work or a question, one handed over per turn.
             delivery: 'queue',
             operationId: input.operationId,

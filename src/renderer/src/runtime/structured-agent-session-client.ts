@@ -1,5 +1,5 @@
-export { readStructuredAgentSessionItem } from './structured-agent-session-item-read'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
@@ -8,7 +8,13 @@ import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-sess
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
 import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/agent-session/agent-session-conversation-command'
 import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-attention-capabilities'
-import * as caps from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,
@@ -31,7 +37,9 @@ import {
   readLocalRuntimeCapabilitiesOrUnknown
 } from './local-runtime-capabilities'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
-/** Probe through the status cache; failed/unknown hosts keep the legacy path. */
+/** Read a capability through the runtime's existing status cache. A failed/unknown
+ *  probe is treated as legacy so a newer call is never made before the host has
+ *  proved it understands it. */
 export async function structuredAgentSessionHostSupports(
   target: RuntimeClientTarget,
   capability: RuntimeCapability
@@ -67,7 +75,7 @@ export function supportsStructuredAgentSessionContinuationContext(
 ): Promise<boolean> {
   return structuredAgentSessionHostSupports(
     target,
-    caps.AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY
+    AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY
   )
 }
 
@@ -113,7 +121,7 @@ export function supportsStructuredAgentSessionQuestionAnswers(
 ): Promise<boolean> {
   return structuredAgentSessionHostSupports(
     target,
-    caps.AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY
+    AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY
   )
 }
 
@@ -126,7 +134,7 @@ export async function readStructuredAgentSessionConversationOutline(
   if (
     !(await structuredAgentSessionHostSupports(
       target,
-      caps.AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY
+      AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY
     ))
   ) {
     return null
@@ -141,10 +149,22 @@ export async function readStructuredAgentSessionConversationOutline(
 export function supportsStructuredAgentSessionItemDetail(
   target: RuntimeClientTarget
 ): Promise<boolean> {
-  return structuredAgentSessionHostSupports(
+  return structuredAgentSessionHostSupports(target, AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)
+}
+
+/** One item whole, as the host keeps it; null when the host no longer has it. Call only after
+ *  `supportsStructuredAgentSessionItemDetail`; a failed read rejects. */
+export async function readStructuredAgentSessionItem(
+  target: RuntimeClientTarget,
+  sessionId: string,
+  itemId: string
+): Promise<AgentJournalRenderItem | null> {
+  const result = await callRuntimeRpc<{ item: AgentJournalRenderItem | null }>(
     target,
-    caps.AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY
+    'agentSession.item',
+    { sessionId, itemId }
   )
+  return result?.item ?? null
 }
 
 const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
@@ -174,7 +194,7 @@ export async function callStructuredAgentSession<TResult>(
     target.kind === 'environment' &&
     !(await runtimeEnvironmentSupportsCapability(
       target.environmentId,
-      caps.AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+      AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
     ))
   ) {
     throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')

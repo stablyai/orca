@@ -1,6 +1,5 @@
 // Negotiate item-detail.v1 for full journal items beyond preview heads; fit replies to transport limits and mark remaining truncation.
 
-import type { MailDisplayProjection } from '../../../../shared/agent-session/mail-display-report'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { ItemParams } from '../../../../shared/rpc-contract/structured-agent-session-params'
 import { shortenedAgentJournalItem } from '../../../native-chat/agent-session-wire/agent-session-item-wire-form'
@@ -17,28 +16,18 @@ export const STRUCTURED_AGENT_SESSION_ITEM_METHODS = [
     name: 'agentSession.item',
     permission: 'workspace',
     params: ItemParams,
-    handler: async (
-      params,
-      ctx
-    ): Promise<{
-      item: AgentJournalRenderItem | null
-      mailDisplayReports?: MailDisplayProjection
-    }> => {
-      const host = await requireInstalledStructuredHost(ctx, params.sessionId)
-      const snapshot = await host.journalSnapshot(params.sessionId)
+    handler: async (params, ctx): Promise<{ item: AgentJournalRenderItem | null }> => {
+      const snapshot = await (
+        await requireInstalledStructuredHost(ctx, params.sessionId)
+      ).journalSnapshot(params.sessionId)
       const item = snapshot.items.find((each) => each.itemId === params.itemId)
       if (!item) {
         return { item: null }
       }
       // Null only for an item whose identifiers alone exceed a reply; the client keeps its head.
-      const mailDisplayReports = await host.journalMailDisplayReports(params.sessionId, [item])
-      const response = {
+      return {
         item: shortenedAgentJournalItem(projectReceiptDeviceItem(item, ctx), ITEM_REPLY_MAX_BYTES)
       }
-      const projected = { ...response, ...(mailDisplayReports ? { mailDisplayReports } : {}) }
-      return Buffer.byteLength(JSON.stringify(projected)) <= ITEM_REPLY_MAX_BYTES
-        ? projected
-        : response
     }
   })
 ]

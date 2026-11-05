@@ -76,7 +76,7 @@ afterEach(() => {
   useAppStore.setState(initialStore, true)
   vi.useRealTimers()
 })
-it('finds title/process-only terminal rows and uses their sidebar dot before a hook arrives', () => {
+it('keeps title/process-only terminal identity without claiming its sender activity', () => {
   useAppStore.setState({
     agentStatusByPaneKey: {},
     ptyIdsByTabId: { 'tab-0': ['pty'] },
@@ -87,7 +87,7 @@ it('finds title/process-only terminal rows and uses their sidebar dot before a h
   })
   useAppStore.getState().setAgentSenderPublication('local', publication([association(0)]))
   const hook = renderHook(() => useAgentMessageSenderView(proved, 'workspace', { kind: 'local' }))
-  expect(hook.result.current).toMatchObject({ agentType: 'claude', dot: 'idle' })
+  expect(hook.result.current).toEqual({ agentType: 'claude' })
 })
 
 it.each([100, 1000])(
@@ -165,7 +165,7 @@ it('resolves Started-worker dispatches after restart; old-host absence and autho
   )
   expect(legacy.result.current.dot).toBeUndefined()
   act(() => useAppStore.getState().setAgentSenderPublication('local', undefined))
-  expect(legacy.result.current.dot).toBe('working')
+  expect(legacy.result.current.dot).toBeUndefined()
 })
 it('qualifies federation by both execution peer and the attachment home principal', () => {
   const home = {
@@ -352,17 +352,27 @@ it.each([100, 1000])(
         )
       }
     })
-    const whole = publication(Array.from({ length: n }, (_, i) => association(i)))
+    const whole = publication(
+      Array.from({ length: n }, (_, i) => ({
+        ...association(i),
+        identity: `dispatch:source-${i}`,
+        dispatchActor: true as const
+      }))
+    )
     useAppStore.getState().setAgentSenderPublication('local', whole)
     const before = agentSenderIndexWorkForTest()
     let renders = 0
     const hook = renderHook(() => {
       renders++
-      return useAgentMessageSenderView(proved, 'workspace', { kind: 'local' })
+      return useAgentMessageSenderView(proved, 'workspace', { kind: 'local' }, 'source-0')
     })
     for (let i = 0; i < n; i++) {
       expect(
-        selectAgentSenderAssociation(useAppStore.getState(), 'local', sender(`term_${i}`))?.paneKey
+        selectAgentSenderAssociation(
+          useAppStore.getState(),
+          'local',
+          sender(`dispatch:source-${i}`)
+        )?.paneKey
       ).toBe(status(i).paneKey)
     }
     expect(agentSenderIndexWorkForTest()).toEqual({
@@ -609,6 +619,6 @@ it.each([100, 1000])(
         })
       )
     ).toBe(1)
-    expect(cards[0].result.current).toEqual({ opens: true, dot: 'working' })
+    expect(cards[0].result.current).toEqual({ opens: true, dot: undefined })
   }
 )

@@ -1,4 +1,3 @@
-import type { JournalMailDisplayReports } from './journal-mail-display-reports'
 import { isDeepStrictEqual } from 'node:util'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
@@ -24,7 +23,6 @@ export class JournalWriteProjection {
   constructor(
     private readonly deps: {
       database: JournalHostDatabase
-      mailDisplayReports?: JournalMailDisplayReports
       state: () => JournalReducerState
       adopt: (state: JournalReducerState) => void
       withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
@@ -43,9 +41,7 @@ export class JournalWriteProjection {
     const cut = this.deps.withdrawStoppedCut && journalStoppedUsageLimitCut(transition.state, rows)
     const withdrawal = cut ? this.deps.withdrawStoppedCut?.(cut) : undefined
     withdrawal?.write(db)
-    const retired = this.deps.mailDisplayReports?.transition(db, transition.state)
     return () => {
-      retired?.()
       withdrawal?.committed()
       this.deps.adopt(transition.adopt())
     }

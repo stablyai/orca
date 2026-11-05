@@ -3,7 +3,6 @@ import type { OrchestrationCliCommand } from './cli-command'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import type { SenderSnapshotResolver } from './agent-message-sender'
-import type { MailDisplayAttachment } from '../../../shared/agent-session/mail-display-report'
 /** What the structured mailbox lane needs from a chat host: ordinary sends, and reads of what became of them. */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -30,7 +29,6 @@ export type StructuredMailboxPointerHost = {
     operationId: string
     expectedRuntimeFence: number
     /** Names its senders as `from`. */
-    displayAttachments?: readonly MailDisplayAttachment[]
     body: AgentJournalMessageItem
     /** Rechecked at admission: the mail may have been taken, or its owner changed, while the send waited. */
     stillOwed: () => boolean

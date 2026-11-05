@@ -59,7 +59,7 @@ const party: AgentMessageSender['party'] = {
 function source(p = party): AgentMessageSource {
   return {
     kind: 'agent',
-    senders: [{ party: p, name: 'Worker with spaces', agent: 'codex' }],
+    senders: [{ party: p, name: 'Worker with spaces' }],
     orchestration: {
       message: 'mail-notice',
       mailbox: 'run:r',
@@ -80,20 +80,6 @@ beforeEach(() => {
   mocks.state.unifiedTabsByWorktree = {}
   mocks.focus.mockReturnValue(true)
   mocks.rpc.mockResolvedValue({ ok: true })
-})
-it('does not look up or show agent feedback for a named source, including an old-host target', async () => {
-  const saved = source({
-    address: 'ci-notifier',
-    terminalHandle: 'ci-notifier',
-    orcaSessionId: null
-  })
-  const sender = { party: saved.senders[0]!.party, name: null }
-  await openAgentMessageSender({ ...saved, senders: [sender] }, sender, 'wt-chat', host)
-  expect(mocks.rpc).not.toHaveBeenCalled()
-  expect(mocks.focus).not.toHaveBeenCalled()
-  expect(mocks.remoteFocus).not.toHaveBeenCalled()
-  expect(mocks.info).not.toHaveBeenCalled()
-  expect(mocks.toast).not.toHaveBeenCalled()
 })
 it.each([
   ['success', null],
@@ -179,24 +165,4 @@ it('coalesces one sender but keeps selected hosts independent', async () => {
   wait.resolve({ location: null })
   await Promise.all([a, b, c])
   expect(mocks.toast).toHaveBeenCalledTimes(2)
-})
-
-it('keeps Setup endpoint navigation but uses neutral feedback when its terminal is gone', async () => {
-  const saved = source()
-  const sender = { party, name: 'Setup' }
-  mocks.rpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'current' } })
-  mocks.focus.mockReturnValue(false)
-  mocks.remoteFocus.mockRejectedValue(
-    new RuntimeRpcCallError({
-      id: 'focus',
-      ok: false,
-      error: { code: 'terminal_gone', message: 'gone' }
-    })
-  )
-  await openAgentMessageSender({ ...saved, senders: [sender] }, sender, 'wt-chat', host)
-  expect(mocks.rpc).toHaveBeenCalled()
-  expect(mocks.info).toHaveBeenCalledWith(
-    'Setup is no longer available. Open its terminal from the sidebar.'
-  )
-  expect(mocks.toast).not.toHaveBeenCalled()
 })

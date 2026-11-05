@@ -237,7 +237,6 @@ export type FederationRelayItemRow = {
   kind: string
   payload: string
   byte_count: number
-  display_report?: string | null
   answer_sender_report?: string | null
   acked_at: string | null
   created_at: string
@@ -260,7 +259,6 @@ export type MessageRow = {
   created_at: string
   delivered_at: string | null
   sender_pane_key: string | null
-  display_report?: string | null
   answer_sender_snapshot?: string | null
   pointer_enter_pending?: number
   pointer_pty_id?: string | null

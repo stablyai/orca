@@ -6,27 +6,8 @@ export function mobileStructuredSessionOpenMessage(
   reason: StructuredSessionOpenFailure['reason'],
   displayLabel?: string,
   surface?: StructuredSessionOpenFailure['surface'],
-  workspaceKind?: StructuredSessionOpenFailure['workspaceKind'],
-  externalSource = false
+  workspaceKind?: StructuredSessionOpenFailure['workspaceKind']
 ): string {
-  if (externalSource && reason !== 'workspace-missing') {
-    return reason === 'gone'
-      ? translate(
-          'session.structuredOpen.sourceUnavailable',
-          '{{name}} is no longer available. Open its terminal from the sidebar.',
-          { name: displayLabel ?? '' }
-        )
-      : reason === 'unsupported'
-        ? translate(
-            'session.structuredOpen.sourceUpdateRequired',
-            'Update Orca to open this source.'
-          )
-        : translate(
-            'session.structuredOpen.sourceOpenFailed',
-            "Couldn't open {{name}}. Try again.",
-            { name: displayLabel ?? '' }
-          )
-  }
   if (reason === 'gone' && surface === 'terminal') {
     return translate(
       'session.structuredOpen.paneUnavailable',

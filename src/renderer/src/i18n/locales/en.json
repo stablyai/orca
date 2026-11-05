@@ -20004,8 +20004,6 @@
         "agent": "Background agent",
         "workflow": "Background workflow",
         "command": "Background command",
-        "commandExit": "Exit {{code}}",
-        "commandSignal": "Signal {{signal}}",
         "monitor": "Background monitor",
         "task": "Background task",
         "outputFile": "Output: {{value0}}",
@@ -20205,9 +20203,6 @@
         "unreported": "Context usage is not available for this session."
       },
       "agentMessage": {
-        "sourceUpdateRequired": "Update Orca to open this source.",
-        "sourceUnavailable": "{{name}} is no longer available. Open its terminal from the sidebar.",
-        "sourceOpenFailed": "Couldn't open {{name}}. Try again.",
         "messageFrom": "Message from",
         "unnamedSender": "an agent",
         "goToAgent": "Go to agent",

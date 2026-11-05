@@ -91,7 +91,7 @@ function tab(id: string, sessionId: string, name: string, host: 'local' | 'runti
   }
 }
 function source(terminal = false): AgentMessageSource {
-  const address = terminal ? 'term_sender' : `orca_session_id:${ROOT}`
+  const address = terminal ? 'term-sender' : `orca_session_id:${ROOT}`
   return {
     kind: 'agent',
     senders: [
@@ -223,7 +223,7 @@ beforeEach(() => {
           : method === 'orchestration.partyOpen'
             ? {
                 location:
-                  params?.address === 'term_sender'
+                  params?.address === 'term-sender'
                     ? { kind: 'terminal', handle: 'term-current' }
                     : { kind: 'chat', sessionId: ROOT, worktreeId: WORKSPACE }
               }

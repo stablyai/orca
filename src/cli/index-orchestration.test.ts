@@ -65,58 +65,6 @@ describe('orca cli worktree awareness', () => {
   })
 
   it.each([
-    ['valid', '{"version":1,"kind":"command","result":{"type":"exit","code":7}}'],
-    ['invalid', '{not json'],
-    ['future', '{"version":2,"kind":"command"}']
-  ])(
-    'sends %s optional command display facts through the real CLI without changing canonical mail or retry identity',
-    async (_case, declaration) => {
-      vi.spyOn(console, 'log').mockImplementation(() => {})
-      callMock.mockResolvedValue({
-        id: 'req_send',
-        ok: true,
-        result: { message: { id: 'msg_once' } }
-      })
-      const canonical = [
-        'orchestration',
-        'send',
-        '--from',
-        'orca-bg-wake',
-        '--to',
-        'term_owner',
-        '--subject',
-        'Review complete',
-        '--body',
-        'Line one\nLine two "quoted"',
-        '--payload',
-        '{"result":"kept"}',
-        '--retry-request',
-        '11111111-2222-4333-8444-555555555555',
-        '--json'
-      ]
-      await main(canonical, '/tmp/repo')
-      const original = callMock.mock.calls.find(([method]) => method === 'orchestration.send')
-      expect(original).toBeDefined()
-      callMock.mockClear()
-      await main([...canonical, '--display-report', declaration], '/tmp/repo')
-      expect(process.exitCode).toBeUndefined()
-      expect(callMock).toHaveBeenCalledOnce()
-      const [method, params, options] = callMock.mock.calls[0]!
-      expect(method).toBe('orchestration.send')
-      expect(params).toEqual({
-        ...original![1],
-        displayReport: _case === 'valid' ? JSON.parse(declaration) : undefined
-      })
-      expect(options).toEqual(original![2])
-      expect(options).toMatchObject({
-        orchestrationRequestId: '11111111-2222-4333-8444-555555555555'
-      })
-      expect(params.body).toBe('Line one\nLine two "quoted"')
-      expect(params.payload).toBe('{"result":"kept"}')
-    }
-  )
-
-  it.each([
     { questionFlag: '--question', questionValue: 'Proceed?', json: true },
     { questionFlag: '--resume', questionValue: 'msg_pending', json: false }
   ])('reports oversized ask waits before any request: %o', async (testCase) => {

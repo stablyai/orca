@@ -169,8 +169,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
             const controlMessage = importFederatedControlMessage(db, {
               dispatchId: params.dispatchId,
               messageId: item.message_id,
-              payload: item.payload,
-              displayReport: item.displayReport
+              payload: item.payload
             })
             imported += controlMessage.imported ? 1 : 0
             if (controlMessage.imported) {

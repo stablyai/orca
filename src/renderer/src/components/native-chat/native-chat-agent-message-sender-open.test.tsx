@@ -193,25 +193,6 @@ it('asks the host, with no dot, for a terminal sender whose terminal exited or w
   )
 })
 
-it('uses neutral Terminal feedback for an unnamed report endpoint opened directly', async () => {
-  const sender = {
-    party: { address: 'term_missing', terminalHandle: 'term_missing', orcaSessionId: null },
-    name: null
-  }
-  mocks.callRuntimeRpc.mockResolvedValue({ location: null, lost: 'terminal' })
-  await openAgentMessageSender(sourceOf(sender), sender, 'workspace', LOCAL)
-  expect(mocks.toastInfo).toHaveBeenCalledExactlyOnceWith(
-    'Terminal is no longer available. Open its terminal from the sidebar.'
-  )
-  expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-    LOCAL,
-    'orchestration.partyOpen',
-    { address: 'term_missing' },
-    { timeoutMs: 5000 }
-  )
-  expect(mocks.activatePane).not.toHaveBeenCalled()
-})
-
 it('reopens a closed chat sender through the host lineage lookup', async () => {
   useAppStore.getState().setAgentSenderPublication('local', publication())
   const session = testOrcaSessionId('55555555-5555-4555-8555-555555555555')
@@ -296,18 +277,20 @@ describe('an older paired host, which publishes no sender locations', () => {
     ['omp', 'pi'],
     ['claude-agent-teams', 'claude'],
     [undefined, 'codex']
-  ] as const)('keeps a %s card over a %s terminal live and opening', async (saved, running) => {
-    live(running)
-    const { agent: _claude, ...unsaved } = terminal()
-    const sender = saved ? terminal('term_0', saved) : unsaved
-    expect(oldCard(sender)).toEqual({
-      avatar: expect.objectContaining({ dot: 'working' }),
-      link: true
-    })
-    mocks.callRuntimeRpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_0' } })
-    await openOld(sender)
-    expect(mocks.focusRenderer).toHaveBeenCalledWith('term_0', 'old-host')
-  })
+  ] as const)(
+    'keeps a %s card over a %s terminal opening without activity',
+    async (saved, running) => {
+      live(running)
+      const { agent: _claude, ...unsaved } = terminal()
+      const sender = saved ? terminal('term_0', saved) : unsaved
+      const card = oldCard(sender)
+      expect(card).toEqual({ avatar: { agentType: saved ?? running }, link: true })
+      expect(card.avatar.dot).toBeUndefined()
+      mocks.callRuntimeRpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_0' } })
+      await openOld(sender)
+      expect(mocks.focusRenderer).toHaveBeenCalledWith('term_0', 'old-host')
+    }
+  )
 
   it('still asks the host when no row names the terminal, and judges what it returns by the same rule', async () => {
     useAppStore.setState({ agentStatusByPaneKey: {} })
@@ -366,16 +349,18 @@ it.each([
 it('reads a saved "unknown" kind as no kind: the live row draws, and nothing vetoes it', async () => {
   const sender = terminal('term_0', 'unknown')
   // Older host: no publication, so the window's own lookup places the terminal.
+  expect(card(sender).avatar.dot).toBeUndefined()
   expect(card(sender)).toEqual({
-    avatar: expect.objectContaining({ agentType: 'claude', dot: 'working' }),
+    avatar: expect.objectContaining({ agentType: 'claude' }),
     link: true
   })
   expect(
     agentMessageSenderReplacedOnHandle(useAppStore.getState(), sender, 'local', 'term_0')
   ).toBe(false)
   useAppStore.getState().setAgentSenderPublication('local', publication([row('term_0', 0)]))
+  expect(card(sender).avatar.dot).toBeUndefined()
   expect(card(sender)).toEqual({
-    avatar: expect.objectContaining({ agentType: 'claude', dot: 'working' }),
+    avatar: expect.objectContaining({ agentType: 'claude' }),
     link: true
   })
   await open(sender)
@@ -389,7 +374,7 @@ it('keeps a published OMP card over its Pi-launched terminal live and opening', 
   })
   useAppStore.getState().setAgentSenderPublication('local', publication([row('term_0', 0)]))
   expect(card(terminal('term_0', 'omp'))).toEqual({
-    avatar: expect.objectContaining({ agentType: 'omp', dot: 'working' }),
+    avatar: expect.objectContaining({ agentType: 'omp' }),
     link: true
   })
   await open(terminal('term_0', 'omp'))

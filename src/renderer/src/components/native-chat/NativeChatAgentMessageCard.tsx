@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
-import { ChevronDown, Terminal } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,6 @@ import {
   agentMessageHeading,
   agentMessageIsCompact,
   agentMessagePrimarySender,
-  agentMessageSenderIsNamedSource,
   agentMessageOverflows,
   agentMessageFoldLabel,
   agentMessageCanCopy,
@@ -334,7 +333,6 @@ function AgentMessageAvatar({
   target?: RuntimeClientTarget
 }): React.JSX.Element {
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
-  const namedSource = agentMessageSenderIsNamedSource(sender)
   return (
     <div
       className={cn(
@@ -342,12 +340,8 @@ function AgentMessageAvatar({
         compact ? 'size-6' : 'mt-0.5 size-8'
       )}
     >
-      {namedSource ? (
-        <Terminal className="size-4" aria-hidden />
-      ) : (
-        <AgentTypeIcon agentType={view.agentType} size={16} />
-      )}
-      {!namedSource && view.dot ? (
+      <AgentTypeIcon agentType={view.agentType} size={16} />
+      {view.dot ? (
         // Flex square: the chat line box would stretch a shrink-wrapped badge into a pill.
         <span className="absolute -right-0.5 -bottom-0.5 flex size-3.5 items-center justify-center rounded-full border border-border bg-card">
           <AgentStateDot state={view.dot} size="md" progress={view.progress} />

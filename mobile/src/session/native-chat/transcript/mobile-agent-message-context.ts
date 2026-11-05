@@ -1,12 +1,10 @@
-import { translate } from '../../../i18n/mobile-i18n'
-import { sameAgentIdentity } from '../../../../../src/shared/agent-status/title/agent-title-owner'
+import { parseOrcaSessionAddress } from '../../../../../src/shared/orca-session-address'
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
 import type { MobileSessionTab } from '../../mobile-session-route-types'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 import {
   agentMessageSavedKind,
   agentMessageSenderLabel,
-  agentMessageSenderIsNamedSource,
   agentMessageSenderView,
   type AgentMessageSenderView
 } from '../../../../../src/shared/agent-session/agent-message-presentation'
@@ -16,9 +14,11 @@ import { agentDotState } from '../../../worktree/agent-row-display'
 type Sender = AgentMessageSource['senders'][number]
 type TerminalIdentity = { handle: string; agentIdentity?: string }
 const EMPTY_VIEW: AgentMessageSenderView = Object.freeze({})
+const senderSession = (sender: Sender | undefined) =>
+  sender?.party.orcaSessionId ?? parseOrcaSessionAddress(sender?.party.address)
 const senderKey = (sender: Sender | undefined) =>
-  sender?.party.orcaSessionId
-    ? `chat:${sender.party.orcaSessionId}`
+  senderSession(sender)
+    ? `chat:${senderSession(sender)}`
     : `terminal:${sender?.party.terminalHandle ?? ''}`
 
 export function createMobileAgentMessageSource() {
@@ -74,22 +74,20 @@ export function createMobileAgentMessageSource() {
     name(sender: Sender, fallback: string): string {
       const tab = indexed.get(senderKey(sender))?.tab
       return agentMessageSenderLabel({
-        sender,
         localChat: tab?.type === 'agent-session',
         customLabel: tab?.title,
         snapshotName: sender.name,
         tabLabel: tab?.title,
-        fallback,
-        terminalFallback: translate('session.terminalRecords.defaultTitle', 'Terminal')
+        fallback
       })
     },
     view(sender: Sender | undefined): AgentMessageSenderView {
-      if (!sender || agentMessageSenderIsNamedSource(sender)) {
+      if (!sender) {
         return EMPTY_VIEW
       }
-      const identityKey = senderKey(sender)
+      const key = senderKey(sender)
       const saved = agentMessageSavedKind(sender)
-      const facts = indexed.get(identityKey)
+      const facts = indexed.get(key)
       const tab = facts?.tab
       const status =
         tab?.type === 'terminal'
@@ -97,24 +95,18 @@ export function createMobileAgentMessageSource() {
           : tab?.type === 'agent-session'
             ? tab.chatStatus
             : undefined
-      const replaced = Boolean(
-        saved &&
-        facts?.agentType &&
-        facts.agentType !== 'unknown' &&
-        !sender?.party.orcaSessionId &&
-        !sameAgentIdentity(saved, facts.agentType)
-      )
-      const next =
-        facts && !replaced
-          ? agentMessageSenderView(
-              status && !(tab?.type === 'terminal' && tab.agentStatus?.restoredUnconfirmed)
-                ? { agentType: facts.agentType, dot: agentDotState(status, now) }
-                : undefined,
-              saved ?? facts.agentType
-            )
-          : saved
-            ? { agentType: saved }
-            : EMPTY_VIEW
+      const next = facts
+        ? agentMessageSenderView(
+            senderSession(sender) &&
+              status &&
+              !(tab?.type === 'terminal' && tab.agentStatus?.restoredUnconfirmed)
+              ? { agentType: facts.agentType, dot: agentDotState(status, now) }
+              : undefined,
+            saved ?? facts.agentType
+          )
+        : saved
+          ? { agentType: saved }
+          : EMPTY_VIEW
       const previous = views.get(sender)
       if (
         previous &&
@@ -141,13 +133,7 @@ export function useMobileAgentMessageName(sender: Sender, fallback: string): str
   const read = useCallback(
     () =>
       source?.name(sender, fallback) ??
-      agentMessageSenderLabel({
-        sender,
-        localChat: false,
-        snapshotName: sender.name,
-        fallback,
-        terminalFallback: translate('session.terminalRecords.defaultTitle', 'Terminal')
-      }),
+      agentMessageSenderLabel({ localChat: false, snapshotName: sender.name, fallback }),
     [source, sender, fallback]
   )
   return useSyncExternalStore(source?.subscribe ?? noopSubscribe, read, read)
@@ -155,9 +141,8 @@ export function useMobileAgentMessageName(sender: Sender, fallback: string): str
 export function useMobileAgentMessageView(sender: Sender | undefined): AgentMessageSenderView {
   const source = useContext(MobileAgentMessageContext)
   const read = useMemo(() => {
-    const fallback = agentMessageSavedKind(sender)
-      ? { agentType: agentMessageSavedKind(sender) }
-      : EMPTY_VIEW
+    const saved = agentMessageSavedKind(sender)
+    const fallback = saved ? { agentType: saved } : EMPTY_VIEW
     return () => source?.view(sender) ?? fallback
   }, [source, sender])
   return useSyncExternalStore(source?.subscribe ?? noopSubscribe, read, read)

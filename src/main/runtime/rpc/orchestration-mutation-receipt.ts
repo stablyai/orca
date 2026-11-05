@@ -30,12 +30,9 @@ export function replayStableCallerParams(
   const result: Record<string, unknown> = callerOrcaSessionId
     ? { ...source, [CALLER_ORCA_SESSION_ID_KEY]: callerOrcaSessionId }
     : { ...source }
-  if (method === 'orchestration.send') {
-    delete result.displayReport
-  }
   if (method === 'orchestration.federationImport' && Array.isArray(result.items)) {
     result.items = result.items.map((item: Record<string, unknown>) => {
-      const { answerSenderReport: _answer, displayReport: _display, ...canonical } = item
+      const { answerSenderReport: _answer, ...canonical } = item
       return canonical
     })
   }

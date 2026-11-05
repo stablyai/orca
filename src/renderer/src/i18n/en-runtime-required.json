@@ -1460,8 +1460,6 @@
       "backgroundTasks": {
         "agent": "Background agent",
         "command": "Background command",
-        "commandExit": "Exit {{code}}",
-        "commandSignal": "Signal {{signal}}",
         "countAgents_one": "{{count}} agent",
         "countAgents_other": "{{count}} agents",
         "countMonitors_one": "{{count}} monitor",

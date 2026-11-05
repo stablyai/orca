@@ -276,7 +276,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (fence === null) {
       return 'park'
     }
-    const { body, whole, displayAttachments } = structuredMailMessage({
+    const { body, whole } = structuredMailMessage({
       db,
       mailboxHandle,
       dispatchId: target.dispatchId,
@@ -300,7 +300,6 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     // The host's last answer, set inside its own check: a holder, so the read after the send sees it.
     const last: { owed: QueuedMessageOwed } = { owed: 'owed' }
     const outcome = await this.deps.host.send({
-      displayAttachments,
       sessionId,
       dispatchId: target.dispatchId,
       operationId: attempt.operation_id,

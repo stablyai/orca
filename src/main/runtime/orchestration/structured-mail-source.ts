@@ -1,9 +1,5 @@
 import { runCoordinatorKey } from './orchestration-caller-identity'
-import {
-  readAnswerSenderSnapshot,
-  readMailDisplayReport,
-  type MailDisplayAttachment
-} from '../../../shared/agent-session/mail-display-report'
+import { readAnswerSenderSnapshot } from '../../../shared/agent-session/answer-sender-snapshot'
 /** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
 
 import type {
@@ -118,28 +114,8 @@ export function structuredMailMessage(input: {
   message: MessageRow
   cliCommand: OrchestrationCliCommand
   senderSnapshot: SenderSnapshotResolver
-}): {
-  body: AgentJournalMessageItem
-  whole: boolean
-  displayAttachments?: readonly MailDisplayAttachment[]
-} {
+}): { body: AgentJournalMessageItem; whole: boolean } {
   const from = structuredMailSource({ ...input, batch: [input.message] })
-  const report = ['worker_done', 'heartbeat', 'escalation', 'decision_gate'].includes(
-    input.message.type
-  )
-    ? undefined
-    : readMailDisplayReport(input.message.display_report)
-  const displayAttachments = report
-    ? [
-        {
-          mailbox: input.mailboxHandle,
-          messageId: input.message.id,
-          runId: input.message.run_id,
-          from: input.message.from_handle,
-          report
-        }
-      ]
-    : undefined
   const formatted = formatMessageBannerWithContent(input.message, { cliCommand: input.cliCommand })
   const whole = [{ type: 'text' as const, text: formatted.text }]
   if (!structuredAgentSessionBlocksTooLarge(whole)) {
@@ -159,14 +135,12 @@ export function structuredMailMessage(input: {
           }
         }
       },
-      displayAttachments,
       whole: true
     }
   }
   const pointer = formatMessagePointer(1, input.mailboxHandle, input.cliCommand).trim()
   return {
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: pointer }], from },
-    displayAttachments,
     whole: false
   }
 }

@@ -52,7 +52,6 @@ const from: AgentMessageSource = {
   senders: [
     {
       name: 'Worker',
-      agent: 'codex',
       party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null }
     }
   ]
@@ -166,24 +165,6 @@ function mount(
     unmount: () => act(() => tree!.unmount())
   }
 }
-
-it('does not change selection or contact the host for a named command source', () => {
-  const send = vi.fn<Parameters<typeof mount>[0]>(async () => reply({}))
-  const run = mount(send)
-  run.open({
-    ...from,
-    senders: [
-      {
-        name: null,
-        party: { address: 'ci-notifier', terminalHandle: 'ci-notifier', orcaSessionId: null }
-      }
-    ]
-  })
-  expect(send).not.toHaveBeenCalled()
-  expect(run.sourceSelection.selectedSessionTabIdRef.current).toBeNull()
-  expect(run.navigate).not.toHaveBeenCalled()
-  expect(run.toast).not.toHaveBeenCalled()
-})
 
 it.each(['claude', 'codex'] as const)(
   'opens a closed %s sender through the shared opener and real phone receiver',
@@ -327,30 +308,3 @@ it('retains the displayed source, respects pending selection, and fences stale s
   expect(h.toast).not.toHaveBeenCalled()
   expect(h.sourceSelection.selectedSessionTabIdRef.current).toBe('newer')
 })
-
-it.each(['Setup', null])(
-  'keeps a %s endpoint failure neutral without presenting it as an agent',
-  async (name) => {
-    const send = vi.fn<Parameters<typeof mount>[0]>(async (method) =>
-      method === 'orchestration.partyOpen'
-        ? reply({ location: { kind: 'terminal', handle: 'term_worker' } })
-        : refused('terminal_gone')
-    )
-    const h = mount(send)
-    await act(async () =>
-      h.open({
-        ...from,
-        senders: [{ name, party: from.senders[0]!.party }]
-      })
-    )
-    expect(send.mock.calls.map(([method]) => method)).toEqual([
-      'orchestration.partyOpen',
-      'terminal.focus'
-    ])
-    expect(h.toast).toHaveBeenCalledExactlyOnceWith(
-      `${name ?? 'Terminal'} is no longer available. Open its terminal from the sidebar.`,
-      3000
-    )
-    expect(h.navigate).not.toHaveBeenCalled()
-  }
-)

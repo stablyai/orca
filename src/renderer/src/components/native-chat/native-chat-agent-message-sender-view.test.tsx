@@ -12,6 +12,7 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
 import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import * as presentation from '@/lib/program-status/agent-row-presentation'
 import * as cache from '@/components/dashboard/worktree-agent-rows-cache'
 import '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
@@ -50,11 +51,26 @@ function Probe({
       name: 'Sender'
     },
     workspace,
-    remote ? { kind: 'environment', environmentId: 'remote' } : { kind: 'local' }
+    remote ? { kind: 'environment', environmentId: 'remote' } : { kind: 'local' },
+    `source-${id}`
   )
   views.set(id, value)
   renders.set(id, (renders.get(id) ?? 0) + 1)
   return null
+}
+let publicationRevision = 0
+function publishSources(n: number, host = 'local', worktreeId = 'workspace') {
+  useAppStore.getState().setAgentSenderPublication(host, {
+    associations: Array.from({ length: n }, (_, i) => ({
+      identity: `dispatch:source-${i}`,
+      paneKey: status(i).paneKey,
+      worktreeId,
+      dispatchActor: true as const
+    })),
+    principals: [],
+    attachments: [],
+    revision: { epoch: 'activity', revision: ++publicationRevision }
+  })
 }
 function write(i: number, update: Partial<AgentStatusEntry>) {
   const state = useAppStore.getState()
@@ -76,6 +92,8 @@ beforeEach(() => {
   renders.clear()
   views.clear()
   resetSenderStore()
+  publishSources(1)
+  publishSources(10, 'runtime:remote', 'remote')
 })
 afterEach(() => {
   cleanup()
@@ -117,6 +135,7 @@ it.each([100, 1000])(
         ])
       )
     })
+    publishSources(n)
     const normalize = vi.spyOn(presentation, 'resolveRowProgramStatus')
     const mounted = render(
       <>
@@ -125,8 +144,8 @@ it.each([100, 1000])(
         ))}
       </>
     )
-    // Handle lookup, visible-authority acquisition and sidebar indexing each enumerate the N live entries.
-    expect(visits).toBe(n * 3)
+    // Exact Dispatch lookup reuses the index; visible authority and sidebar indexing visit the live entries.
+    expect(visits).toBe(n * 2)
     expect(normalize).toHaveBeenCalledTimes(n)
     for (let i = 0; i < n; i++) {
       expect(views.get(i)?.dot).toBe('working')
@@ -238,7 +257,7 @@ it('keeps other hosts isolated, retains completed senders, and releases disconne
   )
   expect(views.get(0)?.dot).toBe('done')
   act(() => useAppStore.setState({ activeWorkspaceExecutionHostId: 'runtime:remote' }))
-  expect(views.get(0)).toEqual({})
+  expect(views.get(0)?.dot).toBe('done')
   act(() => useAppStore.setState({ activeWorkspaceExecutionHostId: 'local' }))
   expect(views.get(0)?.dot).toBe('done')
   const disconnected = new Map(renders)
@@ -305,11 +324,14 @@ it('refuses a target-less ambiguous workspace twin while an explicit local targe
   const state = useAppStore.getState()
   expect(getKnownExecutionHostIdForWorktree(state, workspace)).toBe('local')
   expect(resolveStructuredAgentSessionOwner(state, workspace)).toBeNull()
-  const view = renderHook(() => useAgentMessageSenderView(from.senders[0], workspace))
+  publishSources(1, 'local', workspace)
+  const view = renderHook(() =>
+    useAgentMessageSenderView(from.senders[0], workspace, undefined, 'source-0')
+  )
   expect(view.result.current).toEqual({})
   view.unmount()
   const explicit = renderHook(() =>
-    useAgentMessageSenderView(from.senders[0], workspace, { kind: 'local' })
+    useAgentMessageSenderView(from.senders[0], workspace, { kind: 'local' }, 'source-0')
   )
   expect(explicit.result.current.dot).toBe('working')
 })
@@ -337,19 +359,36 @@ it('resolves batched senders through published identity and leases replaced rows
   })
   useAppStore.getState().setAgentSenderPublication('local', {
     associations: [
-      { identity: 'term_0', paneKey: status(0).paneKey, worktreeId: 'workspace' },
-      { identity: 'term_old', paneKey: status(1).paneKey, worktreeId: 'workspace' }
+      {
+        identity: 'dispatch:batch-0',
+        paneKey: status(0).paneKey,
+        worktreeId: 'workspace',
+        dispatchActor: true
+      },
+      {
+        identity: 'dispatch:batch-1',
+        paneKey: status(1).paneKey,
+        worktreeId: 'workspace',
+        dispatchActor: true
+      }
     ],
     principals: [],
     attachments: [],
     revision: { epoch: 'batch', revision: 1 }
   })
   const inputs = [
-    { sender: { ...from.senders[0], agent: 'codex' as const }, worktreeId: 'workspace' },
+    {
+      sender: {
+        ...from.senders[0],
+        party: { address: 'dispatch:batch-0', terminalHandle: null, orcaSessionId: null },
+        agent: 'codex' as const
+      },
+      worktreeId: 'workspace'
+    },
     {
       sender: {
         name: 'Moved worker',
-        party: { address: 'term_old', terminalHandle: 'term_old', orcaSessionId: null }
+        party: { address: 'dispatch:batch-1', terminalHandle: null, orcaSessionId: null }
       },
       worktreeId: 'workspace'
     }
@@ -404,7 +443,7 @@ it.each(['run:coordinator', 'dispatch:past'])(
       )
     )
     expect(past.result.current).toEqual({ agentType: 'codex', dot: undefined, progress: undefined })
-    expect(current.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
+    expect(current.result.current).toEqual({ agentType: 'codex' })
     write(0, { state: 'waiting' })
     expect(past.result.current).toEqual({ agentType: 'codex', dot: undefined, progress: undefined })
   }
@@ -468,7 +507,7 @@ it('shows only a proved Dispatch invocation and withdraws proof without changing
   const list = renderHook(() => useAgentMessageSenderViews(inputs, { kind: 'local' }))
   expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
   expect(list.result.current[0]).toMatchObject({ agentType: 'codex', dot: 'working' })
-  expect(alias.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
+  expect(alias.result.current).toEqual({ agentType: 'codex' })
   const before = new Map(renders)
   act(() => publish(false, 2))
   expect(renders).toEqual(before)
@@ -487,4 +526,52 @@ it('shows only a proved Dispatch invocation and withdraws proof without changing
   expect(single.result.current.dot).toBeUndefined()
   act(() => publish(true, 4))
   expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'waiting' })
+})
+
+it('never falls from a missing saved session to the later occupant of its handle, while keeping navigation', () => {
+  write(0, { agentType: 'codex' })
+  const session = parseOrcaSessionAddress('orca_session_id:codex_original_sender')
+  if (!session) {
+    throw new Error('invalid fixture session')
+  }
+  const saved = {
+    name: 'Original sender',
+    agent: 'codex',
+    party: { address: 'term_0', terminalHandle: 'term_0', orcaSessionId: session }
+  }
+  useAppStore.getState().setAgentSenderPublication('local', {
+    associations: [
+      {
+        identity: 'term_0',
+        paneKey: status(0).paneKey,
+        worktreeId: 'workspace',
+        dispatchActor: true
+      }
+    ],
+    principals: [],
+    attachments: [],
+    revision: { epoch: 'saved-session', revision: 1 }
+  })
+  const single = renderHook(() => useAgentMessageSenderView(saved, 'workspace', { kind: 'local' }))
+  const inputs = [{ sender: saved, worktreeId: 'workspace' }]
+  const list = renderHook(() => useAgentMessageSenderViews(inputs, { kind: 'local' }))
+  expect(single.result.current).toEqual({ agentType: 'codex' })
+  expect(list.result.current).toEqual([{ agentType: 'codex' }])
+  act(() =>
+    useAppStore.getState().setAgentSenderPublication('local', {
+      associations: [
+        {
+          identity: `orca_session_id:${session}`,
+          sessionId: session,
+          paneKey: status(0).paneKey,
+          worktreeId: 'workspace'
+        }
+      ],
+      principals: [],
+      attachments: [],
+      revision: { epoch: 'saved-session', revision: 2 }
+    })
+  )
+  expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
+  expect(list.result.current[0]).toMatchObject({ agentType: 'codex', dot: 'working' })
 })

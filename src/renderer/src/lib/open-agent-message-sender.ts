@@ -1,4 +1,3 @@
-import { senderHasOrchestrationProvenance } from '../../../shared/agent-session/mail-report-presentation'
 // Open the sender through chat or terminal-handle routes; choose feedback from the answering host’s evidence, never the sender’s address shape.
 
 import { toast } from 'sonner'
@@ -7,12 +6,7 @@ import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
-  agentMessageSenderIsNamedSource,
-  agentMessageSenderLabel
-} from '../../../shared/agent-session/agent-message-presentation'
-import {
   openDesktopStructuredSession,
-  structuredSessionOpenFeedback,
   structuredSessionOpenFeedbackText,
   type StructuredSessionOpenFeedback
 } from './activate-ai-vault-structured-session'
@@ -24,10 +18,7 @@ import {
   showLookupFailure,
   type LookupFailure
 } from './open-located-agent-message-sender'
-import {
-  unnamedSenderLabel,
-  unnamedTerminalSenderLabel
-} from '@/components/native-chat/native-chat-agent-message-sender-label'
+import { unnamedSenderLabel } from '@/components/native-chat/native-chat-agent-message-sender-label'
 import {
   agentMessageSenderOpens,
   agentMessageSenderReplacedOnHandle,
@@ -54,9 +45,6 @@ export function openAgentMessageSender(
   dispatchId?: string,
   name?: string
 ): Promise<void> {
-  if (agentMessageSenderIsNamedSource(sender)) {
-    return Promise.resolve()
-  }
   const state = useAppStore.getState()
   // Read at click time, so a stale render cannot open what the host has since rejected.
   const resolved = resolveAgentMessageSenderTarget(
@@ -66,19 +54,9 @@ export function openAgentMessageSender(
     target,
     dispatchId
   )
-  const label =
-    name ??
-    agentMessageSenderLabel({
-      sender,
-      localChat: false,
-      snapshotName: sender.name,
-      fallback: unnamedSenderLabel(),
-      terminalFallback: unnamedTerminalSenderLabel()
-    })
-  const feedback = externalSenderFeedback(sender, label)
+  const label = name ?? sender.name ?? unnamedSenderLabel()
   if (resolved.kind === 'located') {
     return openLocatedAgentMessageSender(resolved.location, label, {
-      feedback,
       current: () =>
         resolveAgentMessageSenderTarget(
           useAppStore.getState(),
@@ -96,7 +74,7 @@ export function openAgentMessageSender(
     resolved.kind !== 'legacy' &&
     !agentMessageSenderOpens(resolved, sender)
   ) {
-    toast.info(agentMessageSenderUnavailableText(resolved, label, sender))
+    toast.info(agentMessageSenderUnavailableText(resolved, label))
     return Promise.resolve()
   }
   const host =
@@ -107,7 +85,7 @@ export function openAgentMessageSender(
         )
       : null)
   if (!host) {
-    showLookupFailure('unreachable', label, feedback)
+    showLookupFailure('unreachable', label)
     return Promise.resolve()
   }
   const key = `${executionHostIdForStructuredTarget(host)}\0${chatWorktreeId}\0${sender.party.address}\0${dispatchId ?? ''}`
@@ -119,7 +97,7 @@ export function openAgentMessageSender(
     .catch((error: unknown) => {
       // Every answer above shows its own words; one that threw showed none.
       console.warn('[agent-message-sender] opening the sender failed', error)
-      showLookupFailure('unreachable', label, feedback)
+      showLookupFailure('unreachable', label)
     })
     .finally(() => opensInFlight.delete(key))
   opensInFlight.set(key, opening)
@@ -152,7 +130,6 @@ async function openSender(
         )
       )[0]
     : undefined
-  const feedback = externalSenderFeedback(sender, name)
   const result = await openDesktopStructuredSession(
     {
       kind: 'sender',
@@ -161,10 +138,7 @@ async function openSender(
       displayName: name ?? undefined,
       ...(known ? { fallback: known } : {})
     },
-    host,
-    undefined,
-    undefined,
-    feedback
+    host
   )
   if (result.kind === 'terminal') {
     if (
@@ -175,49 +149,12 @@ async function openSender(
         result.handle
       )
     ) {
-      toast.info(agentMessageSenderUnavailableText({ kind: 'replaced' }, name, sender))
+      toast.info(agentMessageSenderUnavailableText({ kind: 'replaced' }, name))
       return
     }
     await focusTerminal(result.handle, environmentId, {
-      gone: feedback?.terminalGone,
-      lookupFailure: (failure) => showLookupFailure(failure, name, feedback)
+      lookupFailure: (failure) => showLookupFailure(failure, name)
     })
-  }
-}
-
-function externalSenderFeedback(
-  sender: Sender,
-  name: string
-): StructuredSessionOpenFeedback | undefined {
-  if (senderHasOrchestrationProvenance(sender)) {
-    return
-  }
-  const unavailable = () =>
-    toast.info(
-      translate(
-        'components.native-chat.agentMessage.sourceOpenFailed',
-        "Couldn't open {{name}}. Try again.",
-        { name }
-      )
-    )
-  return {
-    ...structuredSessionOpenFeedback,
-    unavailable,
-    gone: () =>
-      toast.info(
-        agentMessageSenderUnavailableText({ kind: 'gone', sender: 'terminal' }, name, sender)
-      ),
-    hostCannotOpen: () =>
-      toast.info(
-        translate(
-          'components.native-chat.agentMessage.sourceUpdateRequired',
-          'Update Orca to open this source.'
-        )
-      ),
-    terminalGone: () =>
-      toast.info(
-        agentMessageSenderUnavailableText({ kind: 'gone', sender: 'terminal' }, name, sender)
-      )
   }
 }
 

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { readAnswerSenderSnapshot } from '../../../shared/agent-session/mail-display-report'
+import { readAnswerSenderSnapshot } from '../../../shared/agent-session/answer-sender-snapshot'
 import { agentMessageSenderName } from '../../../shared/agent-session/agent-session-message-source'
 
 const reportSchema = z.object({

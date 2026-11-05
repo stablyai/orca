@@ -30,11 +30,7 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-
 /** older-host identifies the chat host; update may mean either side, and unreachable proves nothing. */
 export type LookupFailure = 'older-host' | 'update' | 'unreachable'
 /** The click's own resolution, read again after an asynchronous step, and a fresh click. */
-type Click = {
-  current: () => AgentMessageSenderTarget
-  reopen: () => Promise<void>
-  feedback?: StructuredSessionOpenFeedback
-}
+type Click = { current: () => AgentMessageSenderTarget; reopen: () => Promise<void> }
 
 /** The answers that prove the terminal is gone; anything else proves nothing about it. */
 const TERMINAL_GONE_CODES = new Set([
@@ -107,14 +103,12 @@ async function openUnheldTerminal(
 ): Promise<void> {
   const host = structuredAgentSessionTargetForHost(location.host)
   if (!host) {
-    showLookupFailure('unreachable', name, click.feedback)
+    showLookupFailure('unreachable', name)
     return
   }
   const environmentId = host.kind === 'environment' ? host.environmentId : null
   const gone = () =>
-    click.feedback?.terminalGone
-      ? click.feedback.terminalGone()
-      : toast.info(agentMessageSenderUnavailableText({ kind: 'gone', sender: 'terminal' }, name))
+    toast.info(agentMessageSenderUnavailableText({ kind: 'gone', sender: 'terminal' }, name))
   const row = useAppStore.getState().agentStatusByPaneKey[location.paneKey]
   let handle =
     row?.worktreeId === location.worktreeId && (row.connectionId ?? null) === environmentId
@@ -132,11 +126,7 @@ async function openUnheldTerminal(
       if (provesTerminalGone(error)) {
         gone()
       } else {
-        showLookupFailure(
-          isRuntimeCompatBlockError(error) ? 'update' : 'unreachable',
-          name,
-          click.feedback
-        )
+        showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable', name)
       }
       return
     }
@@ -152,7 +142,7 @@ async function openUnheldTerminal(
   }
   await focusTerminal(handle, environmentId, {
     gone,
-    lookupFailure: (failure) => showLookupFailure(failure, name, click.feedback)
+    lookupFailure: (failure) => showLookupFailure(failure, name)
   })
 }
 

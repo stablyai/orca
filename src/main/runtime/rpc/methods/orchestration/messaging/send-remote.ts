@@ -72,7 +72,6 @@ export async function sendRemoteMessage(args: {
   const relay = db.enqueueFederationRelay({
     dispatchId: remoteAttachment.dispatch_id,
     direction: 'to_home',
-    displayReport: params.displayReport,
     kind: type,
     payload: JSON.stringify({
       from,

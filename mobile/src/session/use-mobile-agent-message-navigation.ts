@@ -1,12 +1,6 @@
-import { translate } from '../i18n/mobile-i18n'
-import { senderHasOrchestrationProvenance } from '../../../src/shared/agent-session/mail-report-presentation'
 import { useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
-import {
-  agentMessageSenderIsNamedSource,
-  agentMessageSenderLabel
-} from '../../../src/shared/agent-session/agent-message-presentation'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   structuredSessionOpenFailure,
@@ -51,7 +45,7 @@ export function useMobileAgentMessageNavigation(
   return useCallback(
     (from: AgentMessageSource, sender: AgentMessageSource['senders'][number]) => {
       const visit = scope.current
-      if (!visit.active || agentMessageSenderIsNamedSource(sender)) {
+      if (!visit.active) {
         return
       }
       const generation = client?.getGeneration?.()
@@ -84,22 +78,14 @@ export function useMobileAgentMessageNavigation(
         client?.getGeneration?.() === generation &&
         selectedSessionTabIdRef.current === selected &&
         pendingSelectionRef.current === pending
-      const label = agentMessageSenderLabel({
-        sender,
-        localChat: false,
-        snapshotName: sender.name,
-        fallback: '',
-        terminalFallback: translate('session.terminalRecords.defaultTitle', 'Terminal')
-      })
       const failure = (outcome: StructuredSessionOpenFailure) => {
         if (current()) {
           showToast(
             mobileStructuredSessionOpenMessage(
               outcome.reason,
-              label,
+              sender.name ?? '',
               outcome.surface,
-              outcome.workspaceKind,
-              !senderHasOrchestrationProvenance(sender)
+              outcome.workspaceKind
             ),
             3000
           )
@@ -120,7 +106,7 @@ export function useMobileAgentMessageNavigation(
           source: {
             kind: 'sender',
             party: sender.party,
-            displayName: label || undefined,
+            displayName: sender.name ?? undefined,
             messageIds,
             ...(known?.type === 'agent-session'
               ? {

@@ -4,7 +4,6 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { render } from './native-chat-tooltip-test-harness'
 import { useAppStore } from '@/store'
-import { i18n } from '@/i18n/i18n'
 import {
   initialStore,
   from,
@@ -335,10 +334,8 @@ beforeEach(() => {
     }
   )
 })
-afterEach(async () => {
+afterEach(() => {
   cleanup()
-  await i18n.changeLanguage('en')
-  i18n.removeResourceBundle('fr', 'translation')
   useAppStore.setState(initialStore, true)
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -437,10 +434,6 @@ it.each(['task', 'mail'] as const)(
       timestamp: 1,
       from: {
         ...from,
-        senders: from.senders.map((sender) => ({
-          ...sender,
-          ...(kind === 'task' ? { relation: 'coordinator' as const } : { agent: 'claude' })
-        })),
         orchestration:
           kind === 'task'
             ? { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }

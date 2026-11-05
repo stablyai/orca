@@ -1,4 +1,3 @@
-import type { JournalMailDisplayReports } from '../agent-session-journal/journal-mail-display-reports'
 import {
   createStructuredAgentSessionCatalogReads,
   structuredAgentSessionCatalogScopeOwned
@@ -56,10 +55,6 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
   }))
   const journalOf = async (id: string) => (await context().conversation(id)).journal
   return {
-    journalMailDisplayReports: async (
-      sessionId: string,
-      items: Parameters<JournalMailDisplayReports['project']>[0]
-    ) => (await context().conversation(sessionId)).journal.mailDisplayReports.project(items),
     journalCurrentRead: async (sessionId: string, inputIds?: readonly string[]) =>
       (await context().conversation(sessionId)).journal.currentRead(inputIds),
 

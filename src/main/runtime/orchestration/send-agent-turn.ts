@@ -1,4 +1,3 @@
-import type { MailDisplayAttachment } from '../../../shared/agent-session/mail-display-report'
 /** Use the composer's structured send/envelope/waiter or the terminal prompt writer; callers interpret the shared outcome. */
 
 import type {
@@ -27,7 +26,6 @@ export type StructuredAgentTurnHost = Pick<
 
 export type StructuredSessionTurn = {
   /** Carries its sender as `from`, which the chat shows and no fingerprint covers. */
-  displayAttachments?: readonly MailDisplayAttachment[]
   body: AgentJournalMessageItem
   /** Reused on a retry, so the host replays its recorded answer instead of sending twice. */
   operationId: string
@@ -140,7 +138,7 @@ async function sendStructuredSessionTurn(
   })
   const result = await send.host.send(
     { callerKey: send.callerKey },
-    { ...message, beforeRun: turn.beforeRun, displayAttachments: turn.displayAttachments }
+    turn.beforeRun ? { ...message, beforeRun: turn.beforeRun } : message
   )
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }

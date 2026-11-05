@@ -702,7 +702,7 @@ describe('federation relay acknowledgments', () => {
   })
 })
 
-describe('bounded outgoing report relay', () => {
+describe('bounded outgoing answer relay', () => {
   it.each(['drain', 'ahead', 'no-progress', 'superseded'] as const)(
     'keeps canonical bytes and obeys durable ACK on %s',
     async (mode) => {
@@ -719,12 +719,7 @@ describe('bounded outgoing report relay', () => {
         byte_count: Buffer.byteLength(payload),
         created_at: '',
         acked_at: null,
-        display_report: JSON.stringify({
-          version: 1,
-          kind: 'command',
-          result: { type: 'exit', code: 0 }
-        }),
-        answer_sender_report: null
+        answer_sender_report: JSON.stringify({ version: 1, name: 'Known A', agent: 'codex' })
       }))
       let pending = items
       db.listPendingFederationRelay = () => pending

@@ -4,7 +4,6 @@ import { formatMessageBanner } from '../../../../orchestration/formatter'
 
 // Hide read/sequence, pointer_* and sender_pane_key: they are runtime delivery plumbing, not caller mailbox truth.
 const INTERNAL_MESSAGE_COLUMNS = [
-  'display_report',
   'answer_sender_snapshot',
   'read',
   'sequence',

@@ -1,6 +1,6 @@
 import { memo, useContext, useState, useRef, useLayoutEffect } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ArrowUpRight, Bot, ChevronDown, ChevronUp, Terminal } from 'lucide-react-native'
+import { ArrowUpRight, Bot, ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 import { agentMessageSendersShown } from '../../../../../src/shared/agent-session/agent-session-message-source'
@@ -10,7 +10,6 @@ import {
   agentMessageIsCompact,
   agentMessagePrimarySender,
   agentMessageSenderCanOpen,
-  agentMessageSenderIsNamedSource,
   agentMessageOverflows,
   agentMessageFoldLabel,
   agentMessageCanCopy,
@@ -99,7 +98,7 @@ function CompactAgentMessageCard({
         >
           {heading}
         </Text>
-        <MobileNativeChatAgentMessageSenders compact from={from} />
+        <Senders compact from={from} />
         {agentMessageCanCopy(text) ? (
           <MobileSourceCopyButton
             text={text}
@@ -191,7 +190,7 @@ const PreviewAgentMessageCard = memo(function PreviewAgentMessageCard({
             <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
           </View>
         </View>
-        <MobileNativeChatAgentMessageSenders from={from} />
+        <Senders from={from} />
         {attachments}
         <View
           testID="agent-message-viewport"
@@ -262,18 +261,15 @@ function SenderAvatar({
   sender: AgentMessageSource['senders'][number] | undefined
   compact?: boolean
 }) {
-  const namedSource = agentMessageSenderIsNamedSource(sender)
-  const view = useMobileAgentMessageView(namedSource ? undefined : sender)
+  const view = useMobileAgentMessageView(sender)
   return (
     <View style={[styles.avatar, compact && styles.compactAvatar]}>
-      {namedSource ? (
-        <Terminal size={16} color={colors.textMuted} />
-      ) : view.agentType ? (
+      {view.agentType ? (
         <MobileAgentIcon agentId={view.agentType} size={16} />
       ) : (
         <Bot size={16} color={colors.textMuted} />
       )}
-      {!namedSource && view.dot && view.dot !== 'permission' ? (
+      {view.dot && view.dot !== 'permission' ? (
         <View style={styles.glyph}>
           <AgentStateDot state={view.dot} />
         </View>
@@ -282,13 +278,7 @@ function SenderAvatar({
   )
 }
 
-export function MobileNativeChatAgentMessageSenders({
-  from,
-  compact = false
-}: {
-  from: AgentMessageSource
-  compact?: boolean
-}) {
+function Senders({ from, compact = false }: { from: AgentMessageSource; compact?: boolean }) {
   const open = useContext(MobileAgentMessageOpenContext)
   const t = useMobileTranslation()
   const { shown, more } = agentMessageSendersShown(from)

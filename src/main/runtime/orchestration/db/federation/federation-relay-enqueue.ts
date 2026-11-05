@@ -1,4 +1,3 @@
-import { readMailDisplayReport } from '../../../../../shared/agent-session/mail-display-report'
 import { readAnswerSenderRelayReport } from '../../answer-sender-relay-report'
 import type {
   WorkerReportOutcome,
@@ -19,12 +18,10 @@ export function enqueueFederationRelay(
     payload: string
     messageId?: string
     settleRemoteOutcome?: WorkerReportOutcome
-    displayReport?: unknown
     answerSenderReport?: unknown
     remoteQuestion?: true
   }
 ): FederationRelayItemRow {
-  const report = readMailDisplayReport(params.displayReport)
   const answer = readAnswerSenderRelayReport(params.answerSenderReport)
   const byteCount = Buffer.byteLength(params.payload, 'utf8')
   const messageId = params.messageId ?? generateId('relay')
@@ -148,8 +145,8 @@ export function enqueueFederationRelay(
     this.db
       .prepare(
         `INSERT INTO federation_relay_items (
-           dispatch_id, direction, sequence, message_id, kind, payload, byte_count, display_report, answer_sender_report
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           dispatch_id, direction, sequence, message_id, kind, payload, byte_count, answer_sender_report
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         params.dispatchId,
@@ -159,7 +156,6 @@ export function enqueueFederationRelay(
         params.kind,
         params.payload,
         byteCount,
-        report ? JSON.stringify(report) : null,
         answer ? JSON.stringify(answer) : null
       )
     if (params.remoteQuestion) {

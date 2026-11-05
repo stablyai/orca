@@ -62,6 +62,30 @@ describe('orchestration RPC methods', () => {
       expect(resolveProcessIncarnation).not.toHaveBeenCalled()
     })
 
+    it('keeps accepted sender snapshots internal while retaining inbox read and sequence', async () => {
+      setup()
+      const saved = db.insertMessage({
+        from: 'term_worker',
+        to: `run:${activeRunId}`,
+        runId: activeRunId,
+        subject: 'question',
+        answerSenderSnapshot: '{"version":1,"sender":{}}'
+      })
+      const receipt = (await call('orchestration.reply', {
+        id: saved.id,
+        from: 'term_coord',
+        body: 'answer'
+      })) as { message: Record<string, unknown> }
+      expect(receipt.message).not.toHaveProperty('answer_sender_snapshot')
+      const inbox = (await call('orchestration.inbox', { terminal: `run:${activeRunId}` })) as {
+        messages: Record<string, unknown>[]
+      }
+      const message = inbox.messages.find((item) => item.id === saved.id)!
+      expect(message).not.toHaveProperty('answer_sender_snapshot')
+      expect(message).toHaveProperty('read', 1)
+      expect(message).toHaveProperty('sequence')
+    })
+
     it('sends a message', async () => {
       setup()
       // Notify idle recipients on send so delivery does not wait for a status transition (#12536).
@@ -586,23 +610,20 @@ describe('orchestration RPC methods', () => {
       const task = db.createTask({ spec: 'work' })
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
 
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real send handler returns the asserted public message receipt.
       const result = (await call('orchestration.send', {
         from: 'term_worker',
         to: 'term_coord',
         subject: 'done',
         type: 'worker_done',
-        displayReport: { version: 1, kind: 'command' },
         payload: JSON.stringify({
           taskId: task.id,
           dispatchId: dispatch.id,
           outcome: 'succeeded'
         })
-      })) as { message: { id: string; to_handle: string; type: string; payload: string | null } }
+      })) as { message: { to_handle: string; type: string; payload: string | null } }
 
       expect(result.message.to_handle).toBe(`run:${activeRunId}`)
       expect(result.message.type).toBe('worker_done')
-      expect(db.getMessageById(result.message.id)?.display_report).toBeNull()
       expect(result.message.payload).toBe(
         JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
       )

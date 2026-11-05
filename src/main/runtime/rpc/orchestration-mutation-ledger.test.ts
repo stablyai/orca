@@ -79,7 +79,6 @@ describe('durable orchestration mutation ledger', () => {
               items: z.array(
                 newReader
                   ? item.extend({
-                      displayReport: z.unknown().optional(),
                       answerSenderReport: z.unknown().optional()
                     })
                   : item
@@ -99,7 +98,6 @@ describe('durable orchestration mutation ledger', () => {
           dispatch_id: 'dispatch-one',
           sequence: 1,
           payload: 'canonical',
-          displayReport: { version: 1, kind: 'command' },
           answerSenderReport: { version: 1, name: 'Known A', agent: 'codex' }
         }
       ]
