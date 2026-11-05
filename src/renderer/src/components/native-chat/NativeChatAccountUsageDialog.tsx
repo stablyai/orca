@@ -37,7 +37,7 @@ function UsageDialog({
         showCloseButton={false}
         aria-describedby={undefined}
         surface="panel"
-        className="flex max-h-[min(640px,calc(100vh-4rem))] flex-col overflow-hidden sm:max-w-[560px]"
+        className="flex h-[min(640px,calc(100vh-4rem))] flex-col overflow-hidden sm:max-w-[560px]"
         onCloseAutoFocus={(event) => {
           event.preventDefault()
           if (returnFocusTo?.isConnected) {

@@ -50,10 +50,21 @@ export function useNativeChatAccountUsage(sessionId: string, target: RuntimeClie
     },
     [load]
   )
-  // The modal opens loading; its first read settles into that state.
+  // The modal opens loading; its first read settles into that state unless a later read took
+  // over. A replayed mount (dev StrictMode) drops the read its cleanup retired.
   useEffect(() => {
-    void load(nextRequest.current)
-  }, [load])
+    let live = true
+    void read()
+      .catch(() => ({ status: 'failed' as const }))
+      .then((result) => {
+        if (live) {
+          setShown((current) => (current.request === 0 ? { ...current, result } : current))
+        }
+      })
+    return () => {
+      live = false
+    }
+  }, [read])
   // The host builds the reset offer from its own Codex state, which can land after the modal
   // opened (its first read after launch, an account switch); re-read when it changes.
   // Watched from the opening, so a change during the first read is not mistaken for its baseline.

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
 import NativeChatAccountUsageDialog from './NativeChatAccountUsageDialog'
@@ -101,6 +102,26 @@ describe('/usage modal', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(mocks.closeModal).toHaveBeenCalled()
+  })
+
+  it('keeps the newer first read when a replayed mount’s older read fails late', async () => {
+    let failFirst!: (error: Error) => void
+    mocks.read
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            failFirst = reject
+          })
+      )
+      .mockResolvedValueOnce(result)
+    render(
+      <StrictMode>
+        <NativeChatAccountUsageDialog />
+      </StrictMode>
+    )
+    await screen.findByText('chat@example.com')
+    await act(async () => failFirst(new Error('connection lost')))
+    expect(screen.getByText('chat@example.com')).toBeTruthy()
   })
 
   it('renders the chat account’s provider usage, retries the same confirmed reset on its host and reports its outcome', async () => {
