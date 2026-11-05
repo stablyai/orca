@@ -102,7 +102,7 @@ it.each([false, undefined])(
     mocks.coherentCatalog = true
     mocks.sendSelection = true
     const pending = Promise.withResolvers<AgentSessionOptionsResult>()
-    const catalog = Promise.withResolvers<typeof HOST_CATALOG>()
+    const catalog = Promise.withResolvers<AgentSessionModelCatalogResult>()
     let reads = 0
     const current: AgentSessionOptionsResult = {
       models: [],
