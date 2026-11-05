@@ -10,9 +10,9 @@ import {
   worktreeWorkspaceKey
 } from '../../../../../../shared/workspace-scope'
 import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
-import { repoMatchesHostIdentity } from '../../repo-host-identity'
+import { resolveReviewRepository } from '@/lib/review-owner'
 import {
-  getWorktreeExecutionHostId,
+  getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
@@ -37,10 +37,13 @@ export function resolveWorktreeCreateParent(
   const picked = requestedParentWorktreeId
     ? getIndexedWorktreesById(selectWorktreesByRepo(state), requestedParentWorktreeId).find(
         (candidate) => {
-          const repo = state.repos.find((owner) =>
-            repoMatchesHostIdentity(owner, candidate.repoId, candidate.hostId ?? executionHostId)
-          )
-          return Boolean(repo && getWorktreeExecutionHostId(candidate, repo) === executionHostId)
+          const repo = resolveReviewRepository(state.repos, {
+            ...candidate,
+            hostId:
+              candidate.hostId ??
+              (candidate.runtimeOwnerEnvironmentId?.trim() ? undefined : executionHostId)
+          })
+          return Boolean(repo && getRepoExecutionHostId(repo) === executionHostId)
         }
       )
     : undefined

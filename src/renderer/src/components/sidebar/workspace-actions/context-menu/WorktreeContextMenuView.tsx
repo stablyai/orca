@@ -24,7 +24,8 @@ import {
   Workflow,
   FolderInput,
   FolderPlus,
-  FolderTree
+  FolderTree,
+  GitBranchPlus
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WorktreeRowOpenInSubMenu } from '../open/WorktreeRowOpenInSubMenu'
@@ -70,6 +71,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleCreateGroupFromRepo,
     handleDelete,
     handleMoveProjectToGroup,
+    handleNewChildWorktree,
     handleOpenParent,
     handleOpenParentPicker,
     handleRemoveParentLink,
@@ -255,6 +257,15 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 </>
               ) : null}
               <DropdownMenuSeparator />
+              {model.canCreateChildWorktree ? (
+                <DropdownMenuItem onSelect={handleNewChildWorktree} disabled={isDeleting}>
+                  <GitBranchPlus className="size-3.5" />
+                  {translate(
+                    'auto.components.sidebar.WorktreeContextMenu.newChildWorktree',
+                    'New Child Worktree...'
+                  )}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem
                 onSelect={handleOpenParentPicker}
                 disabled={isWorktreeParentPickerDisabled({ isDeleting, eligibleParentCount })}

@@ -1,5 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
@@ -112,6 +114,20 @@ export function isWorktreeParentPickerDisabled(args: {
   eligibleParentCount: number
 }): boolean {
   return args.isDeleting || args.eligibleParentCount === 0
+}
+
+export function canCreateChildWorktree(args: {
+  repo: Repo | null | undefined
+  folderWorkspaceId: string | null
+  worktree: Pick<Worktree, 'isArchived'>
+}): boolean {
+  return (
+    args.repo != null &&
+    isGitRepoKind(args.repo) &&
+    getComposerEligibleRepos([args.repo]).length > 0 &&
+    !args.folderWorkspaceId &&
+    !args.worktree.isArchived
+  )
 }
 
 export function getWorktreeParentPickerAnchor(
