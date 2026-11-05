@@ -18,9 +18,9 @@ import {
   resetWslMoveFenceForTests
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { OrcaRuntimeService } from './orca-runtime'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
-import { runtimeHiddenRepos } from './runtime-visible-catalog'
+import type { ResolvedWorktree } from './workspaces/catalog/runtime-worktree-path-identity'
+import type { ResolvedWorktreeSnapshot } from './workspaces/catalog/runtime-resolved-worktree-cache'
+import { runtimeHiddenRepos } from './workspaces/catalog/runtime-visible-catalog'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

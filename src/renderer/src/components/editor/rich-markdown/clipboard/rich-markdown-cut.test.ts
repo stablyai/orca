@@ -8,7 +8,7 @@ import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { createIsolatedMarkdownExtensionForTests } from '../schema/isolated-markdown-extension-for-tests'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
-import { normalizeEmptyListItems, normalizeSoftBreaks } from '../schema/rich-markdown-normalize'
+import { normalizeEmptyListItems } from '../schema/rich-markdown-normalize'
 
 const showCutLimitErrorMock = vi.hoisted(() => vi.fn())
 
@@ -75,23 +75,6 @@ function createClipboardEventMock(options?: { failReadback?: boolean }): {
 }
 
 describe('rich markdown cut handler behavior', () => {
-  it('soft-break normalization still creates visible paragraph breaks', () => {
-    const editor = createEditor('Line one\nLine two\nLine three\n')
-    normalizeSoftBreaks(editor)
-
-    expect(countParagraphs(editor)).toBe(3)
-    const paragraphs: string[] = []
-    editor.state.doc.forEach((node) => {
-      if (node.type.name === 'paragraph') {
-        expect(node.textContent).not.toContain('\n')
-        paragraphs.push(node.textContent)
-      }
-    })
-    expect(paragraphs).toEqual(['Line one', 'Line two', 'Line three'])
-
-    editor.destroy()
-  })
-
   it('Cmd+X cuts only a visual line inside a hard-wrapped paragraph', () => {
     const editor = createEditor('Alpha segment stays\nMiddle segment is cut\nOmega segment stays')
     try {

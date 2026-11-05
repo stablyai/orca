@@ -1,14 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from '../bind-first-pane.test-fixture'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import './runtime-test-module-registration.spec'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
-  CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
-  OrcaRuntimeService,
-  acknowledgeAgentPromptSubmit,
   buildAgentPromptPasteBytes
-} from '../orca-runtime-test-mocks.spec'
+} from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { acknowledgeAgentPromptSubmit } from '../orca-runtime-test-mocks/setup.spec'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES,
@@ -21,7 +22,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   renderGateCapMs,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('settles a foreground Codex prompt when launch metadata has not arrived', async () => {

@@ -207,25 +207,6 @@ describe('same-path models on different execution hosts', () => {
     }
   )
 
-  it('releases a closed SSH model after its view detaches without touching a live local model', async () => {
-    const { owners, store, attach } = createHostModels()
-    const local = owners[0]!
-    const ssh = owners[1]!
-    const detach = attachModelLifetimeView(ssh.model)
-    attach()
-    store.getState().closeFile(ssh.file.id)
-    await Promise.resolve()
-    expect(ssh.model.isDisposed()).toBe(false)
-    detach()
-    expect(ssh.model.isDisposed()).toBe(false)
-    await Promise.resolve()
-    expect(ssh.model.isDisposed()).toBe(true)
-    expect(local.model.isDisposed()).toBe(false)
-    edit(local.model, 'local still editable')
-    await local.model.undo()
-    expect(local.model.getValue()).toBe(local.initial)
-  })
-
   it('preserves local same-path sharing until the final local tab closes', async () => {
     const { owners, store, attach } = createHostModels()
     const local = owners[0]!

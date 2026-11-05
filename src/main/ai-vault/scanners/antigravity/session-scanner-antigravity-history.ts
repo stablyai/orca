@@ -15,6 +15,8 @@ import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
 import { parseJsonObject, timestampMs } from '../../session-scanner-values'
 import { antigravityHistoryPromptHash } from './antigravity-history-prompt'
+import { antigravitySessionOrigin } from '../../../../shared/antigravity-session-origin'
+import { antigravityAcpSessionMetadataPath } from './session-scanner-antigravity-paths'
 
 const HISTORY_MATCH_WINDOW_MS = 2_000
 
@@ -82,6 +84,15 @@ export function createAntigravityWorkspaceResolver(
     async enrich(session, historyPath) {
       if (session.agent !== 'antigravity' || session.cwd) {
         return session
+      }
+      if (antigravitySessionOrigin(session.filePath) === 'antigravity-acp') {
+        // The ACP server records each session's cwd beside it and keeps no history.jsonl.
+        const metadata = parseJsonObject(
+          (await readHistory(antigravityAcpSessionMetadataPath(historyPath, session.sessionId))) ??
+            ''
+        )
+        const cwd = typeof metadata?.cwd === 'string' ? metadata.cwd.trim() : ''
+        return cwd && cwd.length <= 4096 ? { ...session, cwd } : session
       }
       let index = indexes.get(historyPath)
       if (!index) {

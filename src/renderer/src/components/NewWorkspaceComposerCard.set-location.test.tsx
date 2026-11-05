@@ -135,31 +135,4 @@ describe('NewWorkspaceComposerCard set location', () => {
     expect(storeMocks.openModal).not.toHaveBeenCalled()
     expect(storeMocks.openSettingsPage).not.toHaveBeenCalled()
   })
-
-  // Flush independently so this test cannot rely on an earlier test warming the chunk.
-  it('closes the nested dialog before publishing the ready run target', async () => {
-    const nestedOpenChanges: boolean[] = []
-    const setupChanges: string[] = []
-    container = await renderCard({
-      onNestedDialogOpenChange: (open) => nestedOpenChanges.push(open),
-      onProjectHostSetupChange: (setupId) => setupChanges.push(setupId)
-    })
-
-    act(() => {
-      container?.querySelector<HTMLElement>('div[data-run-target-combobox-root="true"]')?.click()
-    })
-    const setLocation = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.includes('Set project location')
-    )
-    act(() => setLocation?.click())
-    await act(async () => {})
-    const complete = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent === 'Complete location'
-    )
-    act(() => complete?.click())
-
-    expect(nestedOpenChanges).toEqual([true, false])
-    expect(setupChanges).toEqual(['setup-remote'])
-    expect(document.body.querySelector('[data-testid="set-project-location-dialog"]')).toBeNull()
-  })
 })

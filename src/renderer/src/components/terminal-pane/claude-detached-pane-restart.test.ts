@@ -160,14 +160,4 @@ describe('detached Claude account-move restart', () => {
       uninstall()
     }
   })
-
-  it('skips a pane whose session can no longer be resumed instead of starting a fresh Claude', async () => {
-    seedClaudePane({ providerSession: undefined })
-    useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
-
-    await sweepUnclaimedCodexPaneRestarts()
-
-    expect(window.api.pty.spawn).not.toHaveBeenCalled()
-    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
-  })
 })

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
-import { makeTuiIdlePty } from './tui-idle-wait-test-harness'
+import { makeTuiIdlePty } from './terminal/wait/tui-idle-wait-test-harness'
 
 const PTY_ID = 'pty-local-1'
 const WORKTREE_ID = 'repo::/worktree'

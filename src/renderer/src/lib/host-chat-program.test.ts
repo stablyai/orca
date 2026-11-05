@@ -4,6 +4,9 @@ import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fix
 import { getDefaultSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
+import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { pr } from '@/hooks/composer-state/composer-review-base-test-fixture'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY as INSTALL } from '../../../shared/managed-runtime-install'
@@ -15,8 +18,16 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as MODE
 } from '../../../shared/agent-session/agent-session-runtime-capabilities'
-const rpc = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn(), direct: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: rpc.call }))
+const rpc = vi.hoisted(() => ({
+  call: vi.fn(),
+  subscribe: vi.fn(),
+  direct: vi.fn(),
+  supports: vi.fn()
+}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: rpc.call,
+  runtimeEnvironmentSupportsCapability: rpc.supports
+}))
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: rpc.subscribe }))
 import { useAppStore } from '@/store'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
@@ -47,6 +58,7 @@ const flush = () =>
   Array.from({ length: 12 }).reduce<Promise<void>>((tick) => tick.then(), Promise.resolve())
 beforeEach(() => {
   rpc.call.mockReset().mockResolvedValue(catalog)
+  rpc.supports.mockReset().mockResolvedValue(true)
   rpc.subscribe.mockReset().mockResolvedValue({ unsubscribe: vi.fn() })
   setLocalRuntimeCapabilitiesForTests(CAPS)
   useAppStore.setState({
@@ -57,6 +69,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   resetHostStructuredAgentsForTests()
+  clearHostAgentMenuSettingsForTests()
   setLocalRuntimeCapabilitiesForTests(null)
   useAppStore.setState(initial, true)
 })
@@ -85,8 +98,19 @@ it('acquires inactive B independently of detection, preserves unknown truth and 
       ]
     },
     runtimeDetectedAgentIds: {},
-    settings: { ...current.settings!, defaultTuiAgent: 'grok', nativeChatProviders: { grok: true } }
+    settings: {
+      ...current.settings!,
+      defaultTuiAgent: 'claude',
+      nativeChatProviders: { grok: true }
+    }
   }))
+  rpc.call.mockResolvedValue({
+    settings: projectAgentLaunchSettings({ defaultTuiAgent: 'grok' })
+  })
+  await ensureAgentLaunchPreferences(useAppStore.getState(), {
+    kind: 'git-worktree',
+    worktreeId: 'known-chat'
+  })
   expect(agentMenuShortcutLabels('known-chat', {}, 'darwin').get('grok')).toBe('⌘⌥T')
   const state = useAppStore.getState()
   const lease = holdChatProgramFacts(chat.resolveChatProgramContext(state, workspace))

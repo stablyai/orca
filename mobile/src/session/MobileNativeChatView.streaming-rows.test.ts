@@ -246,6 +246,8 @@ function Harness({
   } as unknown as MobileNativeChatController
   return createElement(MobileNativeChatOverlay, {
     controller,
+    worktreePath: null,
+    connState: 'connected',
     onOpenFile: stable.onComposerTextChange,
     images: {
       attachments: [],
@@ -268,7 +270,8 @@ function Harness({
     sessionId: source?.sessionId ?? 'session',
     getSendCompletionGeneration: stable.getSendCompletionGeneration,
     keyboardInset: 0,
-    hostName: null
+    hostName: null,
+    onRunInTerminal: vi.fn()
   })
 }
 

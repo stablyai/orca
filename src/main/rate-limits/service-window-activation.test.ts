@@ -129,6 +129,32 @@ describe('RateLimitService', () => {
     service.stop()
   })
 
+  // #37256: a headless host has no window, so its only watchers are remote account streams.
+  it('polls without a window only while a remote reader watches', async () => {
+    vi.useFakeTimers()
+    try {
+      mockFreshBackgroundProviderFetches()
+      vi.mocked(fetchClaudeRateLimits).mockImplementation(async () => okProvider('claude', 12))
+      const service = new RateLimitService()
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+
+      const release = service.addUsageViewer()
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      release()
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('performs a one-shot active-window fetch when startup focus was missed', async () => {
     vi.useFakeTimers()
     try {

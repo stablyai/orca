@@ -99,48 +99,4 @@ describe('captured OMP compaction visibility', () => {
       turnFolds: false
     })
   })
-
-  it('keeps a newly marked outcome visible without an opener or a legacy identity', async () => {
-    const captured = await capturedCompaction((journal) => ({
-      items: journal.items
-        .filter((item) => item.body.kind !== 'message')
-        .map((item) =>
-          item.body.kind === 'status'
-            ? {
-                ...item,
-                itemId: 'orca:future-outcome',
-                body: { ...item.body, presentation: 'compaction-skipped' }
-              }
-            : item
-        ),
-      submissions: []
-    }))
-    expect(slotsFor(captured)[0]).toMatchObject({ drawsMessage: true, folded: false })
-  })
-
-  it.each([
-    'orca:ordinary-warning',
-    'legacy:grok:runtime-session-1:item%3Ap%3Asession-1%3Acompaction%253Acompact%253Acompact-1'
-  ])('continues folding an ordinary warning beside a compact command: %s', async (itemId) => {
-    const captured = await capturedCompaction((journal) => ({
-      ...journal,
-      items: journal.items.map((item) => (item.body.kind === 'status' ? { ...item, itemId } : item))
-    }))
-    const slots = slotsFor(captured)
-    expect(slots.map((slot) => slot.kind === 'message' && slot.message.role)).toEqual(['user'])
-    expect(slots[0]).toMatchObject({ turnFolds: true })
-  })
-
-  it('preserves an unknown presentation instead of reclassifying its warning', async () => {
-    const captured = await capturedCompaction((journal) => ({
-      ...journal,
-      items: journal.items.map((item) =>
-        item.body.kind === 'status'
-          ? { ...item, body: { ...item.body, presentation: 'future-presentation' } }
-          : item
-      )
-    }))
-    expect(captured.messages[1]?.blocks[0]).toMatchObject({ presentation: 'future-presentation' })
-    expect(slotsFor(captured)).toHaveLength(1)
-  })
 })

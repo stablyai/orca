@@ -26,7 +26,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 
 const CALLER = { callerKey: 'codex-held-sends-test' }
 

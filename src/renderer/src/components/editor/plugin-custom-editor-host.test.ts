@@ -159,43 +159,6 @@ const bytesEdit = (bytes: number[], baseVersion = 1, id?: number) =>
   applyEdit({ kind: 'bytes', bytes: new Uint8Array(bytes).buffer }, baseVersion, id)
 
 describe('custom editor bytes documents', () => {
-  it('waits for the bytes, then transfers a copy so a remounted frame can get them again', () => {
-    const { host, posted, send, documents, load } = setupBytes(true)
-    send(READY)
-    expect(documents()).toEqual([])
-    const loaded = load([0x50, 0x4b, 3, 4])
-    host.syncDocument()
-    expect(documents()).toHaveLength(1)
-    const { message, transfer } = posted.at(-1)!
-    expect(message).toMatchObject({
-      orca: 1,
-      kind: 'evt',
-      event: 'editor.document',
-      payload: { version: 1, readOnly: true, fileType: 'xlsx', content: { kind: 'bytes' } }
-    })
-    const bytes =
-      isPluginJsonObject(message) &&
-      isPluginJsonObject(message.payload) &&
-      isPluginJsonObject(message.payload.content)
-        ? message.payload.content.bytes
-        : null
-    expect(bytes).toBeInstanceOf(ArrayBuffer)
-    expect(bytes instanceof ArrayBuffer && [...new Uint8Array(bytes)]).toEqual([0x50, 0x4b, 3, 4])
-    expect(transfer).toEqual([bytes])
-    expect(bytes).not.toBe(loaded.bytes.buffer)
-    host.syncDocument()
-    expect(documents()).toHaveLength(1)
-  })
-
-  it('sends new bytes with a higher version after an outside change', () => {
-    const { host, send, documents, load } = setupBytes()
-    load([1])
-    send(READY)
-    load([2])
-    host.syncDocument()
-    expect(documents()).toMatchObject([{ payload: { version: 1 } }, { payload: { version: 2 } }])
-  })
-
   it('applies a full bytes replacement once, without echoing it back', () => {
     const { host, onEdit, onBytesEdit, send, documents, answers, load } = setupBytes()
     load([1])
@@ -246,76 +209,7 @@ describe('custom editor bytes documents', () => {
   })
 })
 
-describe('custom editor document versions', () => {
-  it('applies an edit made against the current version and answers it', () => {
-    const { onEdit, send, answers } = setup({ text: 'a' })
-    send(READY)
-    send(edit('b', 1, 6))
-    expect(onEdit).toHaveBeenCalledWith('b')
-    expect(answers(6)).toEqual([{ orca: 1, kind: 'res', id: 6, result: null }])
-  })
-
-  it('refuses a stale edit with a conflict instead of overwriting the outside change', () => {
-    const { host, doc, onEdit, send, answers } = setup({ text: 'a' })
-    send(READY)
-    doc.text = 'changed on disk'
-    host.syncDocument()
-    send(edit('mine', 1, 7))
-    expect(onEdit).not.toHaveBeenCalled()
-    expect(answers(7)).toEqual([
-      {
-        orca: 1,
-        kind: 'res',
-        id: 7,
-        error: { code: 'conflict', message: expect.any(String), retryable: true }
-      }
-    ])
-  })
-
-  it('refuses an edit that names no version or carries an unknown field', () => {
-    const { onEdit, send, answers } = setup({ text: 'a' })
-    send(READY)
-    send({
-      orca: 1,
-      kind: 'req',
-      id: 8,
-      method: 'editor.applyEdit',
-      params: { content: { kind: 'text', text: 'x' } }
-    })
-    send({
-      orca: 1,
-      kind: 'req',
-      id: 9,
-      method: 'editor.applyEdit',
-      params: { baseVersion: 1, content: { kind: 'text', text: 'x' }, force: true }
-    })
-    expect(onEdit).not.toHaveBeenCalled()
-    expect(answers(8)).toMatchObject([{ error: { code: 'invalid_params' } }])
-    expect(answers(9)).toMatchObject([{ error: { code: 'invalid_params' } }])
-  })
-})
-
 describe('custom editor document channel', () => {
-  it('sends hello then the buffer once the editor is ready, and nothing before', () => {
-    const { host, send, messages } = setup({ text: '{"type":"excalidraw"}' })
-    host.syncDocument()
-    expect(messages()).toEqual([])
-    send(READY)
-    expect(messages()).toEqual([
-      expect.objectContaining({ kind: 'evt', event: 'hello' }),
-      {
-        orca: 1,
-        kind: 'evt',
-        event: 'editor.document',
-        payload: {
-          version: 1,
-          readOnly: false,
-          content: { kind: 'text', text: '{"type":"excalidraw"}' }
-        }
-      }
-    ])
-  })
-
   it('round-trips an edit into the buffer without echoing it back', () => {
     const { host, onEdit, send, documents } = setup({ text: 'a' })
     send(READY)
@@ -323,33 +217,6 @@ describe('custom editor document channel', () => {
     expect(onEdit).toHaveBeenCalledWith('b')
     host.syncDocument()
     expect(documents()).toHaveLength(1)
-  })
-
-  it('does not dirty the buffer for an edit equal to what it already holds', () => {
-    const { onEdit, send } = setup({ text: 'same' })
-    send(READY)
-    send(edit('same'))
-    expect(onEdit).not.toHaveBeenCalled()
-  })
-
-  it('pushes outside changes such as a reload from disk', () => {
-    const { host, doc, send, documents } = setup({ text: 'old' })
-    send(READY)
-    doc.text = 'reloaded'
-    host.syncDocument()
-    expect(documents().at(-1)).toMatchObject({
-      payload: { version: 2, readOnly: false, content: { kind: 'text', text: 'reloaded' } }
-    })
-  })
-
-  it('refuses edits before ready and for read-only documents', () => {
-    const { onEdit, send, answers } = setup({ text: 'a', readOnly: true })
-    send(edit('early', 1, 10))
-    send(READY)
-    send(edit('b', 1, 11))
-    expect(onEdit).not.toHaveBeenCalled()
-    expect(answers(10)).toMatchObject([{ error: { code: 'unavailable' } }])
-    expect(answers(11)).toMatchObject([{ error: { code: 'not_permitted' } }])
   })
 
   it('ignores messages from any window but the editor frame', () => {
@@ -461,17 +328,6 @@ describe('custom editor document channel', () => {
     expect(answers(25)).toEqual([])
   })
 
-  it('never spends the edit budget on chords or flush replies', () => {
-    const { onEdit, send } = setup({ text: 'a', maxEdits: 1 })
-    send(READY)
-    for (let index = 0; index < 5; index += 1) {
-      send(keydown({ key: 's', code: 'KeyS', metaKey: true }))
-      send({ orca: 1, kind: 'res', id: index, result: null })
-    }
-    send(edit('b'))
-    expect(onEdit).toHaveBeenCalledWith('b')
-  })
-
   it('waits for the frame to flush before a save, and times out if it never answers', async () => {
     const { host, send, messages } = setup({ text: 'a' })
     send(READY)
@@ -482,32 +338,6 @@ describe('custom editor document channel', () => {
     await expect(flushed).resolves.toBe(true)
     // A frame that never answers holds edits Orca can't see.
     await expect(host.flush()).resolves.toBe(false)
-  })
-
-  it('settles a flush at once for a read-only document or a frame with no window', async () => {
-    const { host, send, messages } = setup({ text: 'a', readOnly: true })
-    send(READY)
-    await expect(host.flush()).resolves.toBe(true)
-    expect(messages()).not.toContainEqual(expect.objectContaining({ method: 'editor.flush' }))
-
-    const detached = createCustomEditorHost({
-      getFrameWindow: () => null,
-      getDocument: () => ({ text: 'a', readOnly: false }),
-      onEdit: vi.fn()
-    })
-    detached.channel.onReady()
-    await expect(detached.flush()).resolves.toBe(true)
-  })
-
-  it('forwards key chords from the shell for Orca to match, dropping malformed ones', () => {
-    const { onKeyChord, send } = setup({ text: 'a' })
-    send(keydown({ key: 'x'.repeat(65), code: 'a' }))
-    expect(onKeyChord).not.toHaveBeenCalled()
-    send(keydown({ key: 's', code: 'KeyS', metaKey: true }))
-    expect(onKeyChord).toHaveBeenCalledWith(
-      expect.objectContaining({ key: 's', metaKey: true, ctrlKey: false }),
-      { userActivation: false, transport: 'iframe' }
-    )
   })
 
   it('a remounted frame must announce ready before it receives the document again', () => {

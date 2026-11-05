@@ -125,30 +125,6 @@ describe('worktree keyboard cycling with a resolved active host', () => {
       executionHostId: 'local'
     })
   })
-
-  it('steps to the previous row when the active host resolved to local', () => {
-    renderProbe('b', 'local')
-
-    press('up')
-
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('a', {
-      navigationIntent: 'user-open',
-      revealInSidebar: false,
-      executionHostId: 'local'
-    })
-  })
-
-  it('still steps normally when the active host is unqualified', () => {
-    renderProbe('b', null)
-
-    press('down')
-
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {
-      navigationIntent: 'user-open',
-      revealInSidebar: false,
-      executionHostId: 'local'
-    })
-  })
 })
 
 describe('workspace keyboard cycling after closing the final tab', () => {

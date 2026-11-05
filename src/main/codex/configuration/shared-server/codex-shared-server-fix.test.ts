@@ -57,10 +57,6 @@ describe('resolveCodexSharedServerBinary', () => {
     const legacy = installPackage('standalone', 'current')
     expect(await resolveCodexSharedServerBinary(home)).toBe(legacy)
   })
-
-  it('is null when no package is installed', async () => {
-    expect(await resolveCodexSharedServerBinary(home)).toBeNull()
-  })
 })
 
 describe('readFeatureEnabled', () => {

@@ -5,7 +5,7 @@ import { registerPtyHandlers } from './register-handlers'
 import { getPtyRendererDeliveryDebugSnapshot } from './delivery/debug'
 import { _resetColorQueryReplyColorsForTest } from './provider/registry'
 import { _resetPtyOwnerHostColorsForTest } from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
-import { _resetTerminalViewAttributesForTest } from '../../runtime/terminal-view-attribute-store'
+import { _resetTerminalViewAttributesForTest } from '../../runtime/terminal/view/terminal-view-attribute-store'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
