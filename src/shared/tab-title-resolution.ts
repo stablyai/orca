@@ -18,11 +18,13 @@ export function resolveTabNameSource(
   sources: TabNameSources,
   generatedTitlesEnabled: boolean
 ): string {
+  // Why: a quick-command label only names the tab until the session has a name of its own; renaming the
+  // session renames the tab, like any other tab, while a name typed on the tab still wins.
   return (
     sources.customTitle?.trim() ||
-    sources.quickCommandLabel?.trim() ||
     (isMeaningfulOpenCodeTerminalTitle(sources.liveTitle) ? sources.liveTitle : '') ||
     sources.sessionTitle?.trim() ||
+    sources.quickCommandLabel?.trim() ||
     (generatedTitlesEnabled ? sources.generatedTitle?.trim() : '') ||
     ''
   )

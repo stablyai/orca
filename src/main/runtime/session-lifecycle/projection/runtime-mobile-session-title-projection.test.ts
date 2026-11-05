@@ -20,8 +20,14 @@ describe('paired desktop tab names', () => {
     const projected = projectRuntimeMobileSessionTitle({ worktree: 'wt-1' }, tab, {
       isSessionTitlePublisher: () => true
     })
-    expect(
-      resolveTerminalTabTitle({ title: tab.title, customTitle: null, ...projected }, true)
-    ).toBe('Codex 公司 High')
+    const resolve = (overrides: Partial<Parameters<typeof resolveTerminalTabTitle>[0]>) =>
+      resolveTerminalTabTitle(
+        { title: tab.title, customTitle: null, ...projected, ...overrides },
+        true
+      )
+    // The session's own name replaces the quick-command name; a name typed on the tab beats both.
+    expect(resolve({})).toBe('Login cleanup')
+    expect(resolve({ aiVaultTitle: undefined })).toBe('Codex 公司 High')
+    expect(resolve({ customTitle: 'My tab' })).toBe('My tab')
   })
 })
