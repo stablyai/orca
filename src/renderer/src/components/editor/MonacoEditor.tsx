@@ -4,32 +4,34 @@ import type { editor, IRange } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
-import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import { monacoTypographyOptions } from '@/lib/editor-typography'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
 import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-embed-entry-budget'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
-import { toEditorModelUri } from './editor-model-uri'
-import { getEditorModelOwnerKey } from './editor-model-owner'
+import { toEditorModelUri } from './model-lifetime/identity/editor-model-uri'
+import { getEditorModelOwnerKey } from './model-lifetime/identity/editor-model-owner'
+import { NO_RESOURCE_EVIDENCE, type WorkspaceResource } from '@/lib/workspace-copy-owner'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
 import { useMonacoRevealScheduler } from './use-monaco-reveal-scheduler'
 import type { MonacoContentSyncMode } from './monaco-content-sync'
 import { useMonacoContentSyncBridge } from './use-monaco-content-sync-bridge'
-import { useMonacoMarkdownAnnotations } from './use-monaco-markdown-annotations'
+import { useMonacoMarkdownAnnotations } from './markdown-source-tools/monaco/use-monaco-markdown-annotations'
 import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
-import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { MonacoMarkdownAnnotationOverlay } from './markdown-source-tools/monaco/MonacoMarkdownAnnotationOverlay'
 import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
-import { useEditorModelRekeyCarry } from './editor-model-rekey-carry'
+import { useEditorModelRekeyCarry } from './model-lifetime/identity/editor-model-rekey-carry'
 
 type MonacoEditorProps = {
   fileId: string
@@ -47,6 +49,8 @@ type MonacoEditorProps = {
   revealMatchLength?: number
   markdownDocuments?: MarkdownDocument[]
   worktreeId?: string
+  /** The open file's tab; its review notes belong to the copy it names. */
+  noteSource?: WorkspaceResource
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
@@ -71,6 +75,7 @@ export default function MonacoEditor({
   revealMatchLength,
   markdownDocuments,
   worktreeId,
+  noteSource = NO_RESOURCE_EVIDENCE,
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
@@ -102,14 +107,12 @@ export default function MonacoEditor({
   contentSyncModeRef.current = readOnly && liveTail ? 'read-only-live-tail' : 'undoable'
 
   const settings = useAppStore((s) => s.settings)
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const setEditorCursorLine = useAppStore((s) => s.setEditorCursorLine)
-  const editorFontSize = computeEditorFontSize(
-    settings?.terminalFontSize ?? 13,
-    editorFontZoomLevel
-  )
-  const editorFontFamily = resolveEditorFontFamily(settings)
+  const typography = useEditorTypography()
+  const typographyOptions = useMemo(() => monacoTypographyOptions(typography), [typography])
+  // Mirrors Monaco's automatic spacing closely enough to size before mount.
+  const autoHeightLineHeight = typography.lineHeight || Math.ceil(typography.fontSize * 1.45)
   const editorWordWrap = settings?.editorWordWrap
   const modelOwnerKey = useAppStore((state) => {
     const file = state.openFiles?.find((entry) => entry.id === fileId)
@@ -126,12 +129,11 @@ export default function MonacoEditor({
     if (!autoHeight) {
       return null
     }
-    return getMonacoAutoHeightForContent(content, Math.ceil(editorFontSize * 1.45))
-  }, [autoHeight, content, editorFontSize])
+    return getMonacoAutoHeightForContent(content, autoHeightLineHeight)
+  }, [autoHeight, content, autoHeightLineHeight])
   const renderedEditorHeight = autoHeight
     ? (autoHeightContentHeight ?? estimatedAutoHeight ?? 80)
     : null
-  const autoHeightLineHeight = Math.ceil(editorFontSize * 1.45)
   const autoHeightUsesInternalScroll =
     autoHeight && isMonacoAutoHeightCapped(renderedEditorHeight, autoHeightLineHeight)
   // The React wrapper skips first post-remount value sync; reconcile retained models from live contentRef, never the possibly stale lastSyncedContentRef.
@@ -162,6 +164,7 @@ export default function MonacoEditor({
     content,
     language,
     worktreeId,
+    noteSource,
     markdownAnnotationsEnabled
   })
 
@@ -186,12 +189,11 @@ export default function MonacoEditor({
       return
     }
     editorRef.current.updateOptions({
-      fontSize: editorFontSize,
-      fontFamily: editorFontFamily,
+      ...typographyOptions,
       ...buildFileEditorWordWrapOptions(editorWordWrap),
       readOnly
     })
-  }, [editorFontFamily, editorFontSize, editorWordWrap, readOnly])
+  }, [typographyOptions, editorWordWrap, readOnly])
 
   const decorations = useMonacoEditorDecorations({
     editorRef,
@@ -301,8 +303,7 @@ export default function MonacoEditor({
           scrollBeyondLastLine: false,
           ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
           ...buildFileEditorWordWrapOptions(editorWordWrap),
-          fontSize: editorFontSize,
-          fontFamily: editorFontFamily,
+          ...typographyOptions,
           lineNumbers: 'on',
           renderLineHighlight: 'line',
           automaticLayout: true,

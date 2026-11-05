@@ -27,9 +27,9 @@ afterEach(() => {
 })
 import type * as NativeChatWorkRunModule from '../../../../shared/native-chat/native-chat-work-run'
 import type * as NativeChatProseModule from '../../../../shared/native-chat/transcript/native-chat-prose'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type * as UnifiedPatchModule from '../../../../shared/native-chat/tools/native-chat-unified-patch'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
@@ -211,14 +211,11 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
       )
     }
     expect(patchCalls).toEqual({ summary: 1, detailed: 0 })
-    fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
-    expect(patchCalls.detailed).toBe(0)
-    expect(screen.queryByText('Totals from recorded edits in this turn.')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Show diff' }))
+    fireEvent.click(screen.getByRole('button', { name: /^src\/a.ts/ }))
     expect(patchCalls).toEqual({ summary: 1, detailed: 1 })
     expect(screen.getByText('new')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Hide diff' }))
-    fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^src\/a.ts/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^src\/a.ts/ }))
     expect(patchCalls).toEqual({ summary: 1, detailed: 1 })
     expect(screen.getByText('new')).toBeInTheDocument()
   })

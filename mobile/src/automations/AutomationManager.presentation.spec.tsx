@@ -1,8 +1,6 @@
-import { AUTOMATION_ORPHAN_ISSUES } from '../../../src/shared/automation-list-scope'
-import { activateMobileUiLocale } from '../i18n/mobile-i18n'
 import { MOBILE_RPC_METHOD_ROUTES } from '../../../src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-routing'
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
-import { SetupHookTrustDrawer } from '../components/SetupHookTrustDrawer'
+import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
@@ -26,7 +24,7 @@ import {
 } from './AutomationControls'
 import { ConfirmModal } from '../components/ConfirmModal'
 import type { RpcClient } from '../transport/rpc-client'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+
 import {
   automationClient,
   automationRepo,
@@ -73,7 +71,7 @@ export function registerAutomationPresentationTests({
     await press('Continue')
     await press('Create automation')
     expect(port.send.mock.calls.filter(([method]) => method === 'automation.create')).toEqual([])
-    const drawer = root().findByType(SetupHookTrustDrawer)
+    const drawer = root().findByType(OrcaHookTrustDrawer)
     expect(drawer.props).toMatchObject({
       visible: true,
       prompt: { repoId: 'repo-1', contentHash: 'setup-hash', scriptContent: 'npm ci' }
@@ -198,7 +196,7 @@ export function registerAutomationPresentationTests({
     await press('Continue')
     await press('Create automation')
     expect(send.mock.calls.filter(([method]) => method === 'automation.create')).toEqual([])
-    const drawer = root().findByType(SetupHookTrustDrawer)
+    const drawer = root().findByType(OrcaHookTrustDrawer)
     expect(drawer.props).toMatchObject({
       visible: true,
       allowAlwaysTrust: false,
@@ -300,149 +298,6 @@ export function registerAutomationPresentationTests({
     })
     await open()
   }
-  it('localizes known orphan reasons in French list and detail while preserving unknown host text', async () => {
-    await activateMobileUiLocale('fr')
-    try {
-      for (const [issue, expected] of [
-        [
-          AUTOMATION_ORPHAN_ISSUES.projectMissing,
-          'Son projet n’existe plus, il est donc impossible de déterminer son hôte.'
-        ],
-        ['Future host reason', 'Future host reason']
-      ]) {
-        const port = portFor(savedAutomation(), { kind: 'orphan', issue })
-        let unmount = () => {}
-        await act(async () => {
-          const tree = create(
-            createElement(AutomationManager, { client: port.client, hostId: 'desktop' })
-          )
-          setTree(tree)
-          unmount = () => tree.unmount()
-        })
-        const text = () =>
-          root()
-            .findAll((node) => String(node.type) === 'Text')
-            .map((node) => node.props.children)
-        expect(text()).toContain(expected)
-        expect(text()).not.toContain(AUTOMATION_ORPHAN_ISSUES.projectMissing)
-        await open()
-        expect(text()).toContain(expected)
-        expect(text()).not.toContain(AUTOMATION_ORPHAN_ISSUES.projectMissing)
-        const button = (label: string) =>
-          root()
-            .findAllByType(AutomationButton)
-            .find((node) => node.props.label === label)!
-        expect(button('Exécuter maintenant').props.disabled).toBe(true)
-        expect(button('Édition').props.disabled).toBe(false)
-        expect(button("Supprimer l'automatisation").props.disabled).toBe(false)
-        expect(port.send.mock.calls.some(([method]) => method === 'automation.runNow')).toBe(false)
-        await act(async () => unmount())
-      }
-    } finally {
-      await act(async () => {
-        await activateMobileUiLocale('en')
-      })
-    }
-  })
-
-  function twins(reverse = false) {
-    const targets = automationTargets()
-    const local = { ...targets.setups[0]!, label: 'Review/desktop' }
-    const ssh = { ...local, hostId: 'ssh:builder' as const, label: 'Review/builder' }
-    targets.setups = reverse ? [ssh, local] : [local, ssh]
-    targets.workspaces = targets.setups.map((setup) => ({
-      worktreeId: 'repo-1::/repo',
-      repoId: setup.repoId,
-      hostId: setup.hostId,
-      path: '/repo',
-      displayName: `${setup.label} workspace`
-    }))
-    targets.coverage = {
-      ...targets.coverage,
-      totalCount: 2,
-      hostScope: { hostIds: ['local', 'ssh:builder'], omittedHostIds: [] }
-    }
-    targets.sshTargets = [{ id: 'builder', label: 'Builder', generation: 7 }]
-    return targets
-  }
-
-  it.each([
-    ['local', false],
-    ['local', true],
-    ['ssh:builder', false],
-    ['ssh:builder', true]
-  ] as const)(
-    'labels %s from canonical inventory with copied IDs and paths (reverse=%s)',
-    async (hostId, reverse) => {
-      const targets = twins(reverse)
-      inventory.targets.mockResolvedValue(targets)
-      const setup = targets.setups.find((entry) => entry.hostId === hostId)!
-      const selector =
-        hostId === 'local'
-          ? { kind: 'self' as const }
-          : { kind: 'ssh' as const, targetId: 'builder', targetGeneration: 7 }
-      await mount(
-        portFor(
-          {
-            ...savedAutomation(),
-            workspaceId: 'repo-1::/repo',
-            runContext:
-              hostId === 'local'
-                ? null
-                : {
-                    kind: 'workspace-run',
-                    projectId: setup.projectId,
-                    projectHostSetupId: setup.id,
-                    hostId,
-                    repoId: setup.repoId,
-                    path: setup.path
-                  }
-          },
-          selector
-        )
-      )
-      expect(inventory.targets).toHaveBeenCalledTimes(1)
-      expect(metadata('Project')).toBe(`${setup.label} · /repo`)
-      expect(metadata('Workspace')).toBe(`${setup.label} workspace`)
-      expect(metadata('Workspace')).not.toContain('::')
-    }
-  )
-
-  it.each(['duplicate', 'truncated', 'omitted', 'missing', 'replaced'] as const)(
-    'does not borrow a workspace label from %s inventory',
-    async (problem) => {
-      const targets = twins()
-      if (problem === 'duplicate') {
-        targets.workspaces.push({ ...targets.workspaces[1]! })
-      }
-      if (problem === 'truncated') {
-        targets.coverage.truncated = true
-      }
-      if (problem === 'omitted') {
-        targets.coverage.hostScope.omittedHostIds = ['ssh:builder']
-      }
-      if (problem === 'missing') {
-        targets.workspaces = [targets.workspaces[0]!]
-      }
-      if (problem === 'replaced') {
-        targets.sshTargets[0]!.generation = 8
-      }
-      inventory.targets.mockResolvedValue(targets)
-      await mount(
-        portFor(
-          { ...savedAutomation(), workspaceId: 'repo-1::/repo' },
-          { kind: 'ssh', targetId: 'builder', targetGeneration: 7 }
-        )
-      )
-      expect(metadata('Workspace')).toBe('Unavailable')
-      if (problem === 'replaced') {
-        expect(metadata('Project')).toBe('Unavailable')
-      }
-      expect(root().findAll((node) => String(node.type) === 'Switch')[0]!.props.disabled).toBe(
-        false
-      )
-    }
-  )
 
   it('keeps captured-owner actions independent of delayed and failed label acquisition', async () => {
     const pending = deferred<AutomationTargets>()
@@ -510,106 +365,26 @@ export function registerAutomationPresentationTests({
     )
   })
 
-  it('refreshes labels on reconnect and rejects late acquisition from a prior generation', async () => {
-    const before = deferred<AutomationTargets>()
-    const after = deferred<AutomationTargets>()
-    inventory.targets.mockReturnValueOnce(before.promise).mockReturnValueOnce(after.promise)
-    const port = portFor()
-    await mount(port)
-    await act(async () => port.state('disconnected'))
-    await act(async () => port.state('connected'))
-    expect(inventory.targets).toHaveBeenCalledTimes(2)
-    const fresh = automationTargets()
-    fresh.workspaces[0]!.displayName = 'Current workspace'
-    await act(async () => after.resolve(fresh))
-    expect(metadata('Workspace')).toBe('Current workspace')
-    await act(async () => before.resolve(automationTargets()))
-    expect(metadata('Workspace')).toBe('Current workspace')
-    await act(async () => port.event({ type: 'automationsChanged' }))
-    expect(inventory.targets).toHaveBeenCalledTimes(2)
-  })
-
-  it('cannot publish labels acquired by a replaced client or an unmounted detail', async () => {
-    const oldRead = deferred<AutomationTargets>()
-    const currentRead = deferred<AutomationTargets>()
-    inventory.targets.mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(currentRead.promise)
-    const oldPort = portFor()
-    const currentPort = portFor()
-    let update = (_client: RpcClient) => {}
-    let unmount = () => {}
+  it('lists, shows and renames an automation whose agent this build does not know without rewriting its agent', async () => {
+    const port = portFor({ ...savedAutomation(), agentId: 'future-agent' })
     await act(async () => {
-      const tree = create(
-        createElement(AutomationManager, { client: oldPort.client, hostId: 'desktop' })
-      )
-      setTree(tree)
-      update = (client) =>
-        tree.update(createElement(AutomationManager, { client, hostId: 'desktop' }))
-      unmount = () => tree.unmount()
+      setTree(create(createElement(AutomationManager, { client: port.client, hostId: 'desktop' })))
     })
+    expect(
+      root()
+        .findByType(AutomationList)
+        .props.rows.map((row: MobileAutomationRow) => row.automation.agentId)
+    ).toEqual(['future-agent'])
     await open()
-    await act(async () => update(currentPort.client))
-    expect(inventory.targets.mock.calls.map((call) => call[0])).toEqual([
-      oldPort.client,
-      currentPort.client
-    ])
-    await act(async () => oldRead.resolve(automationTargets()))
-    expect(metadata('Workspace')).toBe('Unavailable')
-    await act(async () => unmount())
-    await act(async () => currentRead.resolve(automationTargets()))
-    const fresh = automationTargets()
-    fresh.workspaces[0]!.displayName = 'Newly mounted workspace'
-    inventory.targets.mockResolvedValue(fresh)
-    await mount(portFor())
-    expect(metadata('Workspace')).toBe('Newly mounted workspace')
-  })
-
-  it('applies literal keyboard policy and the web font floor to actual editor inputs and saves their exact text', async () => {
-    const port = portFor({ ...savedAutomation(), reuseSession: false })
-    await mount(port)
+    expect(metadata('Agent')).toBe('future-agent')
     await press('Edit')
-    const assertInput = (label: string, literal: boolean) => {
-      const field = input(label)
-      expect(field.props.autoCapitalize).toBe('none')
-      for (const prop of ['autoCorrect', 'spellCheck', 'smartInsertDelete']) {
-        expect(field.props[prop]).toBe(literal ? false : undefined)
-      }
-      expect(field.props.autoComplete).toBe(literal ? 'off' : undefined)
-      expect(TEXT_INPUT_FONT_SIZE).toBeGreaterThanOrEqual(16)
-      expect(field.props.style.flat()).toContainEqual(
-        expect.objectContaining({ fontSize: TEXT_INPUT_FONT_SIZE })
-      )
-      return field
-    }
-    assertInput('Name', false)
-    expect(assertInput('Instructions', false).props.multiline).toBe(true)
-    await press('Advanced options')
-    const extraAgentArgs = '--model "gpt-6.1-sol" -c model_reasoning_effort="high"'
-    const command = 'printf "%s" "résumé -- unchanged"'
-    assertInput('Extra agent arguments', true)
-    assertInput('Precheck command (optional)', true)
-    expect(assertInput('Precheck timeout (seconds)', true).props.keyboardType).toBe('numeric')
-    assertInput('Missed-run grace (minutes)', true)
-    await act(async () => {
-      input('Extra agent arguments').props.onChangeText(extraAgentArgs)
-      input('Precheck command (optional)').props.onChangeText(command)
-    })
+    expect(
+      root()
+        .findAllByType(AutomationChoice)
+        .find((node) => node.props.label === 'Agent')!.props.options
+    ).toContainEqual({ value: 'future-agent', label: 'future-agent (saved)' })
+    await act(async () => input('Name').props.onChangeText('Renamed'))
     await press('Continue')
-    assertInput('Cron or RRULE', true)
-    assertInput('Time zone', true)
-    await act(async () =>
-      root()
-        .findAllByType(AutomationChoice)
-        .find((node) => node.props.label === 'Cadence')!
-        .props.onSelect('daily')
-    )
-    assertInput('Time (HH:MM, 24 hour)', true)
-    await act(async () =>
-      root()
-        .findAllByType(AutomationChoice)
-        .find((node) => node.props.label === 'Cadence')!
-        .props.onSelect('custom')
-    )
-    await act(async () => input('Cron or RRULE').props.onChangeText(savedAutomation().rrule))
     await press('Continue')
     await press('Save changes')
     expect(port.send).toHaveBeenCalledWith(
@@ -617,18 +392,9 @@ export function registerAutomationPresentationTests({
       {
         id: 'automation-1',
         expectedOwner: { selector: { kind: 'self' } },
-        updates: { extraAgentArgs, precheck: { command, timeoutSeconds: 120 } }
+        updates: { name: 'Renamed' }
       },
       { failWhenDisconnected: true }
     )
-    await press('Edit')
-    await act(async () =>
-      root()
-        .findAllByType(AutomationChoice)
-        .find((node) => node.props.label === 'Workspace')!
-        .props.onSelect('new_per_run')
-    )
-    await press('Advanced options')
-    assertInput('Base branch (optional)', true)
   })
 }

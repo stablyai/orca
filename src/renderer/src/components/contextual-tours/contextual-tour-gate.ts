@@ -72,15 +72,32 @@ export function hasContextualTourTarget(selector: string, root?: ParentNode): bo
 
 export function getContextualTourStartStepIndex(
   tour: ContextualTour,
-  targetExists: (selector: string) => boolean
+  targetExists: (selector: string) => boolean,
+  isStepDone: (step: ContextualTourStep) => boolean = () => false
 ): number | null {
-  const requiredStepIndex = tour.steps.findIndex((step) => step.requiredForStart === true)
-  const startIndex = Math.max(requiredStepIndex, 0)
-  const step = tour.steps[startIndex]
-  if (!step || !targetExists(step.targetSelector)) {
-    return null
+  const requiredStepIndexes = tour.steps.flatMap((step, index) =>
+    step.requiredForStart === true ? [index] : []
+  )
+  const candidates = requiredStepIndexes.length > 0 ? requiredStepIndexes : [0]
+  for (const candidate of candidates) {
+    let startIndex = candidate
+    while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
+      const nextIndex = getNextVisibleContextualTourStepIndex({
+        tour,
+        currentStepIndex: startIndex,
+        targetExists
+      })
+      if (nextIndex === null) {
+        return null
+      }
+      startIndex = nextIndex
+    }
+    const step = tour.steps[startIndex]
+    if (step && targetExists(step.targetSelector)) {
+      return startIndex
+    }
   }
-  return startIndex
+  return null
 }
 
 export function getVisibleContextualTourStepIndexes(
@@ -135,6 +152,7 @@ export function getContextualTourRequestDecision(args: {
   activeModal: string
   blockingSurfaceVisible: boolean
   targetExists: (selector: string) => boolean
+  isStepDone?: (step: ContextualTourStep) => boolean
 }): ContextualTourRequestDecision {
   if (!args.persistedUIReady) {
     return { kind: 'blocked', reason: 'persisted-ui-not-ready' }
@@ -161,7 +179,7 @@ export function getContextualTourRequestDecision(args: {
     return { kind: 'blocked', reason: 'blocking-surface' }
   }
 
-  const stepIndex = getContextualTourStartStepIndex(args.tour, args.targetExists)
+  const stepIndex = getContextualTourStartStepIndex(args.tour, args.targetExists, args.isStepDone)
   if (stepIndex === null) {
     return { kind: 'blocked', reason: 'missing-start-target' }
   }

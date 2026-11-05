@@ -6,13 +6,13 @@ on:
     paths:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
-      - 'config/scripts/build-computer-macos.mjs'
-      - 'config/scripts/build-native-for-platform.mjs'
-      - 'config/scripts/build-native-for-platform.test.mjs'
-      - 'config/scripts/pnpm-cli-invocation.mjs'
-      - 'config/scripts/build-windows-cli-launcher.mjs'
-      - 'config/scripts/windows-rust-executable-build.mjs'
-      - 'config/scripts/build-windows-cli-launcher.test.mjs'
+      - 'config/scripts/native-build/macos/build-computer-macos.mjs'
+      - 'config/scripts/native-build/composition/build-native-for-platform.mjs'
+      - 'config/scripts/native-build/composition/build-native-for-platform.test.mjs'
+      - 'config/scripts/tool-invocation/pnpm-cli-invocation.mjs'
+      - 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs'
+      - 'config/scripts/native-build/windows/windows-rust-executable-build.mjs'
+      - 'config/scripts/native-build/windows/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-metrics.mjs'
@@ -38,14 +38,14 @@ on:
       - '!src/main/daemon/mock-descendant-sweep.ts'
       - '!src/main/daemon/daemon-host-relocation.test-fixture.ts'
       - '!src/main/daemon/daemon-endpoint-reachability-test-harness.ts'
-      - 'src/main/providers/local-pty-provider.ts'
+      - 'src/main/providers/local-pty/local-pty-provider.ts'
       - 'src/main/providers/windows-shell-args.ts'
       - 'src/main/providers/windows-shell-preflight-runtime.windows.test.ts'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
       - 'native/computer-use-windows/**'
       - 'native/windows-cli-launcher/**'
-      - 'skills/computer-use/SKILL.md'
+      - 'skills/orca-computer-use/SKILL.md'
       - 'src/cli/**'
       - 'src/main/computer/**'
       - 'src/main/runtime/rpc/dispatcher.ts'
@@ -100,8 +100,6 @@ jobs:
           src/main/computer/macos-computer-use-permissions.test.ts
           src/main/computer/macos-computer-use-permission-status.test.ts
           src/main/providers/windows-shell-preflight-runtime.windows.test.ts
-          src/main/computer/desktop-script-provider-client.test.ts
-          src/main/computer/desktop-script-provider-cache.test.ts
           src/main/computer/desktop-script-provider-actions.test.ts
           src/main/computer/desktop-script-provider-cache-lifecycle.test.ts
           src/main/computer/desktop-script-provider-errors.test.ts
@@ -110,7 +108,6 @@ jobs:
           src/shared/computer-use-key-spec.test.ts
           src/cli/format.test.ts
           src/cli/handlers/computer.test.ts
-          src/cli/handlers/computer-action-routing.test.ts
           src/cli/handlers/computer-action-validation.test.ts
           src/cli/handlers/computer-state-formatting.test.ts
           src/cli/index.test.ts

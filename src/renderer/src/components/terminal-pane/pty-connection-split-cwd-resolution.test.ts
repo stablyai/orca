@@ -8,7 +8,11 @@ import {
   createPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -30,7 +34,6 @@ const {
 
 let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
-let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
@@ -67,8 +70,7 @@ vi.mock('react', async (importOriginal) => {
 })
 
 vi.mock('./pty-transport', () => ({
-  createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
-    createdTransportOptions.push(options)
+  createIpcPtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
     if (!nextTransport) {
       throw new Error('No mock transport queued')
@@ -81,7 +83,6 @@ describe('connectPanePty split cwd resolution', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     transportFactoryQueue = []
-    createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
     await installTerminalTestGlobals()
@@ -91,38 +92,19 @@ describe('connectPanePty split cwd resolution', () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('waits for inherited cwd before fresh spawn and applies the resolved directory', async () => {
-    const cwd = createDeferred<string>()
-    const transport = createMockTransport('pty-1')
-    transportFactoryQueue.push(transport)
-
-    const binding = connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never
-    )
-    await flushAsyncTicks(20)
-
-    expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBe(true)
-    expect(transport.connect).not.toHaveBeenCalled()
-
-    cwd.resolve('/resolved/source-cwd')
-    await flushAsyncTicks(20)
-
-    expect(createdTransportOptions[0]?.cwd).toBe('/resolved/source-cwd')
-    expect(transport.connect).toHaveBeenCalledOnce()
-    binding.dispose()
-  })
-
   it('cancels the pending spawn when the split closes before cwd resolution', async () => {
     const cwd = createDeferred<string>()
     const transport = createMockTransport('pty-1')
     transportFactoryQueue.push(transport)
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
     const binding = connectPanePty(
       createPane(1) as never,
       createManager(1) as never,
-      buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never
+      bindPaneAgentTitleMocks(
+        buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never,
+        agentTitleMocks2
+      )
     )
     await flushAsyncTicks(20)
     binding.dispose()

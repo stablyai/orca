@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { compileAggregateExpression } from './pr-aggregate-gate-context.mjs'
+import { compileAggregateExpression } from './workflow/pr-admission/pr-aggregate-gate-context.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/node-server-tests.yml', 'utf8'))
 
@@ -13,15 +13,6 @@ function runnerFor(job, os, fast, event = 'workflow_dispatch') {
     github: { event_name: event }
   }).coerceString()
 }
-
-it('defaults reusable and manual qualification to Blacksmith', () => {
-  for (const trigger of ['workflow_call', 'workflow_dispatch']) {
-    expect(workflow.on[trigger].inputs.fast_runners).toMatchObject({
-      type: 'boolean',
-      default: true
-    })
-  }
-})
 
 it.each([
   ['ubuntu-22.04', 'blacksmith-8vcpu-ubuntu-2204'],

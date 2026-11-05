@@ -4,7 +4,12 @@ import { ChevronLeft } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { BottomDrawer } from '../components/BottomDrawer'
+import {
+  BottomDrawer,
+  OptionPager,
+  useOptionPager,
+  type OptionPagerControls
+} from '../components/bottom-drawer/BottomDrawer'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import {
@@ -24,8 +29,8 @@ import { resolveWorktreeHostId } from '../worktree/worktree-host-context-labels'
 import { withServerHosts } from '../worktree/server-workspaces'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
-import { DrillRow, OptionRowList } from './workspace-option-rows'
-import { OptionPager, useOptionPager, type OptionPagerControls } from './workspace-options-pager'
+import { ListGroup, SectionHeader } from '../components/list/ListGroup'
+import { DrillRow } from './workspace-option-rows'
 import {
   WORKSPACE_OPTION_CONTROLS,
   type WorkspaceOptionHost,
@@ -237,7 +242,7 @@ function WorkspaceOptionsContent({
       />
       <WorkspaceOptionsPending settings={settings} />
 
-      {sections.map(({ section, options }) => {
+      {sections.map(({ section, options }, index) => {
         const sectionLabel = sectionLabels[section]
         const bareRows: ReactNode[] = []
         const framedRows: ReactNode[] = []
@@ -261,15 +266,13 @@ function WorkspaceOptionsContent({
         return (
           <View key={section} testID={`workspace-option-section-${section}`}>
             {sectionLabel ? (
-              <Text style={styles.filterSectionLabel}>{sectionLabel}</Text>
+              <SectionHeader title={sectionLabel} first={index === 0} />
             ) : (
               <View style={styles.optionSectionGap} />
             )}
             {bareRows}
             {framedRows.length > 0 && (
-              <View style={styles.filterGroup}>
-                <OptionRowList>{framedRows}</OptionRowList>
-              </View>
+              <ListGroup style={styles.optionGroup}>{framedRows}</ListGroup>
             )}
           </View>
         )

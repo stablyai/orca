@@ -22,14 +22,22 @@ import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../src/shared/node-run
 import {
   buildWindowsSecurityAddon,
   probeWindowsSecurityAddon
-} from './build-windows-security-addon.mjs'
-import { assertNoHeaderDownloads, treeDigest } from './benchmark-windows-native-preparation.mjs'
-import { ensurePinnedNodeExecutable, preparePinnedNodeDir } from './pinned-node-downloads.mjs'
-import { sha256Of } from './orcad-prebuild-slot-contents.mjs'
-import { hash } from './windows-native-benchmark-observer.mjs'
+} from './native-build/windows/build-windows-security-addon.mjs'
+import {
+  assertNoHeaderDownloads,
+  treeDigest
+} from './native-build/windows/benchmark-windows-native-preparation.mjs'
+import {
+  ensurePinnedNodeExecutable,
+  preparePinnedNodeDir
+} from './orcad-distribution/prebuilds/pinned-node-downloads.mjs'
+import { sha256Of } from './orcad-distribution/prebuilds/orcad-prebuild-slot-contents.mjs'
+import { hash } from './native-build/windows/windows-native-benchmark-observer.mjs'
 
 const ROOT = resolve(import.meta.dirname, '../..')
-const { PE_MACHINE, readPeMachine } = createRequire(import.meta.url)('./windows-pe-machine.cjs')
+const { PE_MACHINE, readPeMachine } = createRequire(import.meta.url)(
+  './native-build/windows/windows-pe-machine.cjs'
+)
 const invalidCandidate = Buffer.from('orca-windows-security-qualification-invalid')
 const preparedPath = (root) =>
   join(root, 'native/windows-security/build/Release/orca_windows_security.node')
@@ -292,8 +300,8 @@ export async function benchmarkWindowsSecurityReuse(
       'package.json',
       '.github/actions/prepare-native-runtime/action.yml',
       'src/shared/node-runtime-pin.ts',
-      'config/scripts/build-windows-security-addon.mjs',
-      'config/scripts/ensure-native-runtime.mjs',
+      'config/scripts/native-build/windows/build-windows-security-addon.mjs',
+      'config/scripts/native-build/node-addons/ensure-native-runtime.mjs',
       'config/scripts/benchmark-windows-security-reuse.mjs'
     ]
     report.sourceHashes = Object.fromEntries(
@@ -322,10 +330,10 @@ export async function benchmarkWindowsSecurityReuse(
     }
     report.headers = treeDigest(nodeDir)
     await command('prepare-node-artifacts', process.execPath, [
-      join(root, 'config/scripts/initialize-windows-native-toolchain.mjs')
+      join(root, 'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs')
     ])
     await command('verify-prepared-node', process.execPath, [
-      join(root, 'config/scripts/ensure-native-runtime.mjs'),
+      join(root, 'config/scripts/native-build/node-addons/ensure-native-runtime.mjs'),
       '--check-only'
     ])
     report.stage = 'verify-prepared-candidate-ownership'
@@ -370,7 +378,7 @@ export async function benchmarkWindowsSecurityReuse(
     }
     // Warm compiler discovery and local build inputs before measuring the pair.
     await command('warm-compiler-before-measurement', process.execPath, [
-      join(root, 'config/scripts/build-windows-security-addon.mjs'),
+      join(root, 'config/scripts/native-build/windows/build-windows-security-addon.mjs'),
       `--arch=${arch}`
     ])
     await sample('control')

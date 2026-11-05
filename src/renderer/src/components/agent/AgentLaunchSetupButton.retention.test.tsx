@@ -1,0 +1,195 @@
+// @vitest-environment happy-dom
+import { act } from 'react'
+import { fireEvent, getByRole } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { retireAgentPickerDrafts } from './agent-launch-picker-drafts'
+import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
+import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
+import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-support'
+import {
+  clearNativeChatComposerDraftsForTests,
+  readNativeChatComposerDraft,
+  writeLaunchSetupOptions
+} from '../native-chat/native-chat-composer-draft-store'
+import * as sources from '../native-chat/native-chat-launch-draft-source'
+import { transitionLaunchDrafts } from '../native-chat/native-chat-launch-draft-transition'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+
+vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
+
+const AGENTS = ['claude', 'codex'] as const
+const HOSTS: ExecutionHostId[] = ['local', 'ssh:h1', 'runtime:r1']
+function row(workspace: number, agent: (typeof AGENTS)[number]): AgentPickerEntry {
+  return {
+    agent,
+    label: agent,
+    rows: [{ agent, kind: 'terminal', executionHostId: HOSTS[workspace % HOSTS.length] }],
+    surfaces: ['chat', 'terminal'],
+    defaultSurface: 'terminal',
+    terminal: {},
+    structured: {},
+    catalog: { origin: 'unknown' },
+    ownerKey: `owner-${workspace}`,
+    worktreeId: `folder:f${workspace}`
+  }
+}
+const sourceCount = () => [...sources.launchDraftSources()].length
+let root: Root
+let host: HTMLDivElement
+beforeEach(() => {
+  clearNativeChatComposerDraftsForTests()
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+})
+afterEach(() => {
+  act(() => root.unmount())
+  host.remove()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  Reflect.deleteProperty(window, 'api')
+  clearNativeChatComposerDraftsForTests()
+})
+
+describe('setup records exist only for authored setups', () => {
+  it('keeps typed prompt and options through close, reopen and a rename', () => {
+    const entry = {
+      ...row(0, 'codex'),
+      worktreeId: 'repo::/old',
+      arguments: '--add-dir docs'
+    }
+    const show = (value: AgentPickerEntry) =>
+      act(() =>
+        root.render(
+          <TooltipProvider>
+            <AgentLaunchSetupButton entry={value} onUse={vi.fn()} />
+          </TooltipProvider>
+        )
+      )
+    const configure = () =>
+      document.querySelector<HTMLButtonElement>('button[aria-label="Configure codex"]')!
+    const prompt = () =>
+      document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
+    const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+    show(entry)
+    fireEvent.click(configure())
+    close()
+    expect(sourceCount()).toBe(0)
+
+    // The open panel's first write is an option change; it shows at once and retains the setup.
+    fireEvent.click(configure())
+    fireEvent.change(document.querySelector('textarea')!, { target: { value: '--add-dir src' } })
+    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    expect(sourceCount()).toBe(1)
+    changePrompt(prompt(), 'fix the flaky test')
+    close()
+    expect(document.querySelector('textarea')).toBeNull()
+    fireEvent.click(configure())
+    expect(prompt().textContent).toBe('fix the flaky test')
+    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    close()
+
+    act(() =>
+      transitionLaunchDrafts((source) =>
+        source.workspaceId === 'repo::/old'
+          ? { workspaceId: 'repo::/new', executionHostId: source.executionHostId }
+          : undefined
+      )
+    )
+    show({ ...entry, worktreeId: 'repo::/new' })
+    fireEvent.click(configure())
+    expect(prompt().textContent).toBe('fix the flaky test')
+    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+  })
+
+  it('keeps a search preset in its own options slot, saving only real changes, with one shared prompt', async () => {
+    const entry: AgentPickerEntry = {
+      ...row(0, 'claude'),
+      worktreeId: 'repo::/w',
+      arguments: '--add-dir docs',
+      catalog: {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: ['opus', 'sonnet'].map((id) => ({
+          id,
+          label: id,
+          isDefault: false,
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'high', label: 'High' }
+          ]
+        }))
+      }
+    }
+    const preset = {
+      agent: 'claude' as const,
+      surface: 'terminal' as const,
+      choices: { model: 'opus', options: { effort: 'high' } }
+    }
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <AgentLaunchSetupButton entry={entry} onUse={vi.fn()} />
+          <AgentLaunchSetupButton entry={entry} initial={preset} onUse={vi.fn()} />
+        </TooltipProvider>
+      )
+    )
+    const user = userEvent.setup()
+    const [plain, searched] = document.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label="Configure claude"]'
+    )
+    const prompt = () =>
+      document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
+    const effort = (label: string) =>
+      getByRole(document.body, 'radio', { name: label }).getAttribute('data-state')
+    const model = () => document.querySelector('[cmdk-item][data-current="true"]')?.textContent
+    const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+
+    // Opening a preset saves nothing, and the plain row still shows defaults.
+    fireEvent.click(searched)
+    expect(model()).toBe('opus')
+    expect(effort('High')).toBe('on')
+    close()
+    expect(sourceCount()).toBe(0)
+    fireEvent.click(plain)
+    // Defaults: nothing chosen, so the agent keeps its own model.
+    expect(model()).toBeUndefined()
+    close()
+    expect(sourceCount()).toBe(0)
+
+    // A real change saves into that preset's slot only and survives close and reopen.
+    fireEvent.click(searched)
+    await user.click(getByRole(document.body, 'radio', { name: 'Low' }))
+    expect(effort('Low')).toBe('on')
+    expect(sourceCount()).toBe(1)
+    changePrompt(prompt(), 'review the diff')
+    close()
+    fireEvent.click(searched)
+    expect(model()).toBe('opus')
+    expect(effort('Low')).toBe('on')
+    close()
+
+    // The plain row keeps its own options but shares the workspace's typed prompt.
+    fireEvent.click(plain)
+    expect(model()).toBeUndefined()
+    expect(prompt().textContent).toBe('review the diff')
+    close()
+    expect(sourceCount()).toBe(1)
+    const scope = agentLaunchPromptScopeKey(entry)
+    writeLaunchSetupOptions(scope, {
+      agent: 'claude',
+      surface: 'terminal',
+      choices: {},
+      pendingArguments: '--ordinary'
+    })
+    retireAgentPickerDrafts([{ ...entry, catalog: { origin: 'probe', fetchedAt: 2, models: [] } }])
+    expect(sources.readLaunchSetupOptions(scope, JSON.stringify(preset.choices))).toBeUndefined()
+    expect(sources.readLaunchSetupOptions(scope)?.pendingArguments).toBe('--ordinary')
+    expect(readNativeChatComposerDraft(scope).text).toBe('review the diff')
+  })
+})

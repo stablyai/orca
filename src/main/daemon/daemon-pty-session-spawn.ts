@@ -10,17 +10,21 @@ import type { DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import type { ColdRestoreInfo } from './history-reader'
 import { mintPtySessionId } from './pty-session-id'
 import { shellPathSupportsPtyStartupBarrier, resolvePtyShellPath } from './shell-ready'
-import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
+import { shellReadyMarkerComesFromLineEditor } from '../../shared/terminal/output/shell-ready-marker-timing'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult } from './types'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { probeRecoveredStartupCwdDirectory } from '../ipc/pty/host-env/startup-cwd-directory-exists'
-import { resolveUnixShellPath } from '../providers/local-pty-utils'
+import { resolveUnixShellPath } from '../providers/local-pty/local-pty-executable-spawn'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
-import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
-import { addWslEnvKeys } from '../wsl-env'
+import {
+  injectHistoryEnv,
+  injectWslFishHistoryEnv,
+  logHistoryInjection
+} from '../pty/history/terminal-history'
+import { addWslEnvKeys } from '../../shared/wsl-env'
 import { holdPassiveRestoreOfStoppedWslDistro } from './daemon-wsl-passive-restore-hold'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {

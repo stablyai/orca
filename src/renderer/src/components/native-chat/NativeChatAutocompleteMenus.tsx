@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom'
+import { autoUpdate, computePosition, offset, size } from '@floating-ui/dom'
 import { memo, useEffect, useRef, useLayoutEffect, useState } from 'react'
 import { Package, RotateCcw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -7,10 +8,8 @@ import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
 import { FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import type {
-  ComposerAutocomplete,
-  NativeChatPickerItem
-} from '../../../../shared/native-chat-composer-autocomplete'
+import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { localizeSlashCommandDescription } from './native-chat-slash-command-descriptions'
@@ -237,54 +236,54 @@ function PickerListbox({
   children: React.ReactNode
 }): React.JSX.Element {
   const marker = useRef<HTMLSpanElement>(null)
-  const [bounds, setBounds] = useState<DOMRect | null>(null)
+  const listbox = useRef<HTMLDivElement>(null)
+  const [container, setContainer] = useState<HTMLElement | null>(null)
+  useLayoutEffect(() => {
+    setContainer(marker.current?.closest<HTMLElement>('.native-chat-appearance') ?? document.body)
+  }, [])
   useLayoutEffect(() => {
     const anchor = marker.current?.parentElement
-    if (!anchor) {
+    const floating = listbox.current
+    if (!anchor || !floating) {
       return
     }
-    const measure = (): void => {
-      const next = anchor.getBoundingClientRect()
-      setBounds((current) =>
-        current?.left === next.left && current.width === next.width && current.top === next.top
-          ? current
-          : next
-      )
-    }
-    const ancestors: HTMLElement[] = []
-    for (let parent: HTMLElement | null = anchor; parent; parent = parent.parentElement) {
-      ancestors.push(parent)
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(anchor)
-    ancestors.forEach((parent) => parent.addEventListener('scroll', measure))
-    window.addEventListener('resize', measure)
-    return () => {
-      observer.disconnect()
-      ancestors.forEach((parent) => parent.removeEventListener('scroll', measure))
-      window.removeEventListener('resize', measure)
-    }
-  }, [])
+    // autoUpdate also follows moves with no resize or scroll, like dragging the floating panel.
+    return autoUpdate(anchor, floating, () => {
+      void computePosition(anchor, floating, {
+        strategy: 'fixed',
+        placement: 'top-start',
+        middleware: [
+          offset(4),
+          size({
+            padding: 8,
+            apply: ({ rects, availableHeight }) => {
+              floating.style.width = `${rects.reference.width}px`
+              floating.style.maxHeight = `min(calc(var(--spacing) * 72), ${Math.max(0, availableHeight)}px)`
+            }
+          })
+        ]
+      }).then(({ x, y }) => {
+        floating.style.left = `${x}px`
+        floating.style.top = `${y}px`
+      })
+    })
+  }, [container])
   return (
     <>
       <span ref={marker} />
-      {bounds &&
+      {container &&
         createPortal(
           <div
+            ref={listbox}
             id={id}
             role="listbox"
-            style={{
-              position: 'fixed',
-              left: bounds.left,
-              width: bounds.width,
-              bottom: window.innerHeight - bounds.top + 4
-            }}
-            className="scrollbar-sleek z-50 max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating"
+            data-focus-behavior="composer-suggestions"
+            // Inside the launch setup (a popover or the new-tab menu's submenu), take the menu layer those overlays use.
+            className={`scrollbar-sleek fixed left-0 top-0 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating ${marker.current?.closest('[data-slot="popover-content"], [data-slot="dropdown-menu-sub-content"]') ? 'z-[70]' : 'z-50'}`}
           >
             {children}
           </div>,
-          marker.current?.closest('.native-chat-appearance') ?? document.body
+          container
         )}
     </>
   )
@@ -372,15 +371,14 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 }): React.JSX.Element {
   useUiLanguageRevision()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
-  const { files } = mention
-  const selectedIndex = Math.min(activeIndex, files.length - 1)
+  const selectedIndex = Math.min(activeIndex, mention.files.length - 1)
 
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [selectedIndex, files])
+  }, [selectedIndex, mention.files])
 
   const statusText =
-    files.length > 0
+    mention.files.length > 0
       ? null
       : mention.loading
         ? translate('components.native-chat.composer.loadingFiles', 'Loading files...')
@@ -390,7 +388,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 
   return (
     <PickerListbox id={listboxId}>
-      {files.map((path, index) => (
+      {mention.files.map((path, index) => (
         <PickerOptionButton
           key={path}
           id={`${listboxId}-option-${index}`}

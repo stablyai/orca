@@ -23,6 +23,10 @@ import {
 } from './check-job-log-performance-cases.mjs'
 
 const shared = Object.keys(BASELINE_SOURCE_HASHES)
+const currentSourcePaths = {
+  'check-job-log-tail-slice.ts': 'source-control/checks/logs/check-job-log-tail-slice.ts',
+  'check-job-log-excerpt.ts': 'source-control/checks/logs/check-job-log-excerpt.ts'
+}
 export const hash = (value) => createHash('sha256').update(value).digest('hex')
 export const nodeExecutable = () => {
   const executable = process.versions.bun
@@ -56,7 +60,7 @@ export async function prepareBenchmark(
     const baseline = new Map()
     const current = new Map()
     for (const name of [...shared, 'check-job-log-excerpt.ts']) {
-      const filename = path.join(root, 'src', 'shared', name)
+      const filename = path.join(root, 'src', 'shared', currentSourcePaths[name] ?? name)
       current.set(name, await readFile(filename, 'utf8'))
       if (!compareBaseline || !shared.includes(name)) {
         continue
@@ -125,6 +129,16 @@ export async function prepareBenchmark(
             {
               name: 'source-pinned-log-text',
               setup(builder) {
+                builder.onResolve({ filter: /^\./ }, ({ path: request }) => {
+                  const basename = path.basename(request)
+                  const name = basename.endsWith('.ts') ? basename : `${basename}.ts`
+                  return sources.has(name)
+                    ? {
+                        path: path.join(root, 'src', 'shared', name),
+                        namespace: 'source-pinned-log-text'
+                      }
+                    : undefined
+                })
                 builder.onResolve({ filter: /^check-log-observations$/ }, () => ({
                   path: 'check-log-observations',
                   namespace: 'observations'
@@ -136,7 +150,8 @@ export async function prepareBenchmark(
                 builder.onLoad(
                   {
                     filter:
-                      /[\\/](?:ansi-escape-sequences|check-job-log-tail-slice|check-job-log-excerpt|utf8-byte-limits|own-retained-string|owned-utf16-suffix)\.ts$/
+                      /[\\/](?:ansi-escape-sequences|check-job-log-tail-slice|check-job-log-excerpt|utf8-byte-limits|own-retained-string|owned-utf16-suffix)\.ts$/,
+                    namespace: 'source-pinned-log-text'
                   },
                   ({ path: filename }) => {
                     const name = path.basename(filename)

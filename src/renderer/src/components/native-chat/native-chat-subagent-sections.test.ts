@@ -2,17 +2,17 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   NativeChatMessage,
   NativeChatSubagentState
-} from '../../../../shared/native-chat-types'
-import { projectNativeChatTranscript } from '../../../../shared/native-chat-transcript-projection'
+} from '../../../../shared/native-chat/native-chat-types'
+import { projectNativeChatTranscript } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal
-} from '../../../../shared/native-chat-turn-membership'
+} from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { compareMessages } from './native-chat-session-assembler'
 import {
   nativeChatRowsInTranscriptOrder,
@@ -25,7 +25,7 @@ import {
   type NativeChatMessageSlot,
   type NativeChatTranscriptSlot
 } from './native-chat-transcript-slots'
-import { nativeChatTurnDiffs } from './native-chat-turn-diffs'
+import { nativeChatTurnDiffs } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
 let sequence = 0
 

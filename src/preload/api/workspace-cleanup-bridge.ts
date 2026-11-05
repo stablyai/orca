@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { WorkspaceCleanupScanProgress } from '../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanProgress } from '../../shared/workspace-cleanup/workspace-cleanup'
 import type { PreloadApi } from '../api-types'
 
 export const workspaceCleanupApi = {

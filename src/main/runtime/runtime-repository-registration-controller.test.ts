@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type { Repo } from '../../shared/repo-types'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
-import type { RuntimeStore } from './runtime-store-contract'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
-vi.mock('../repo-icon-autodetect', () => ({
+vi.mock('../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
 }))
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
 }))
 
@@ -22,7 +22,7 @@ function createController(): {
   repos: Repo[]
 } {
   const repos: Repo[] = []
-  const store = {
+  const store = partialRuntimeStore({
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     addRepo: (repo: Repo) => {
@@ -30,10 +30,9 @@ function createController(): {
       return repo
     },
     updateRepo: () => null
-  }
+  })
   const controller = new RuntimeRepositoryRegistrationController({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: add() only uses getRepos/getRepo/addRepo/updateRepo.
-    getStore: () => store as unknown as RuntimeStore,
+    getStore: () => store,
     invalidateResolvedWorktrees: () => {},
     invalidateWorktreeScan: () => {},
     notifyReposChanged: () => {}

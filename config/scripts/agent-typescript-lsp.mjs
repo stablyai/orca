@@ -1,8 +1,11 @@
 // Adapt TypeScript 7 pull diagnostics for agent clients that only accept publishDiagnostics.
 import { spawnProcess } from '@orca/process-host'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { resolveProjectCompilerInfo } from './run-typecheck-projects-in-parallel.mjs'
-import { resolveTsrsLauncher, supportsTsrs } from './tsrs-typecheck-compiler.mjs'
+import { resolveProjectCompilerInfo } from './typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
+import {
+  resolveTsrsLauncher,
+  supportsTsrs
+} from './typecheck/project-execution/tsrs-typecheck-compiler.mjs'
 
 const PULL_DEBOUNCE_MS = 100
 const BRIDGE_ID_PREFIX = 'orca-diagnostics-'

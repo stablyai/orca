@@ -1,12 +1,18 @@
 import { MAX_EDIT_LINES } from '../../../../shared/native-chat/tools/native-chat-edit-model'
 import { describe, expect, it } from 'vitest'
-import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatMessage
+} from '../../../../shared/native-chat/native-chat-types'
 import { foldToolMessages } from '../../../../shared/native-chat/tools/native-chat-tool-fold'
 import {
-  buildDiffSummaries,
+  buildEditSummaries,
   buildEditCards
 } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
-import { nativeChatTurnDiffEditFile, nativeChatTurnDiffs } from './native-chat-turn-diffs'
+import {
+  nativeChatTurnDiffEditFile,
+  nativeChatTurnDiffs
+} from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
 function diff(id: string, path: string, patch = '@@ -1 +1 @@\n-old\n+new'): NativeChatMessage {
   return {
@@ -169,18 +175,10 @@ describe('turn diff rollups', () => {
     ).toBe(0)
   })
 
-  it('leaves non-journal Diff envelopes to the deferred tool card', () => {
-    for (const input of [{ path: 'x', patch: '@@\n+override' }, { file_path: 'x' }, null]) {
-      const message = diff('generic', 'x')
-      message.blocks[0] = { type: 'tool-call', name: 'Diff', input }
-      expect(buildDiffSummaries(message.blocks).size).toBe(0)
-    }
-  })
-
   it('caches counts and deferred card models separately and refreshes new results', () => {
     const message = diff('a', 'a.ts')
-    const summary = [...buildDiffSummaries(message.blocks).values()][0]!.files
-    expect([...buildDiffSummaries([...message.blocks]).values()][0]!.files).toBe(summary)
+    const summary = [...buildEditSummaries(message.blocks).values()][0]!.files
+    expect([...buildEditSummaries([...message.blocks]).values()][0]!.files).toBe(summary)
     expect(summary[0]).not.toHaveProperty('lines')
     const first = [...buildEditCards(message.blocks).editCards.values()][0]!.files
     expect([...buildEditCards([...message.blocks]).editCards.values()][0]!.files).toBe(first)
@@ -191,7 +189,7 @@ describe('turn diff rollups', () => {
     const updated = [...buildEditCards(message.blocks).editCards.values()][0]!.files
     expect(updated).not.toBe(first)
     expect(updated[0]?.added).toBe(2)
-    const updatedSummary = [...buildDiffSummaries(message.blocks).values()][0]!.files
+    const updatedSummary = [...buildEditSummaries(message.blocks).values()][0]!.files
     expect(updatedSummary).not.toBe(summary)
     expect(updatedSummary[0]?.added).toBe(2)
   })
@@ -206,10 +204,41 @@ describe('turn diff rollups', () => {
     '@@ -1 +1 @@\n-old\n+new\n… (9999 bytes)'
   ])('keeps lightweight counts identical to the expanded card (case %#)', (patch) => {
     const message = diff('parity', 'a.ts', patch)
-    const summary = [...buildDiffSummaries(message.blocks).values()][0]!.files
+    const summary = [...buildEditSummaries(message.blocks).values()][0]!.files
     const detailed = [...buildEditCards(message.blocks).editCards.values()][0]!.files
     expect(summary).toEqual(
       detailed.map(({ lines: _lines, lineNumbersKnown: _known, ...file }) => file)
     )
   })
+})
+
+it('summarizes landed Claude and Codex edits, including a completed call without a result', () => {
+  const message: NativeChatMessage = {
+    id: 'tools',
+    role: 'assistant',
+    timestamp: 1,
+    source: 'transcript',
+    blocks: [
+      {
+        type: 'tool-call',
+        name: 'Edit',
+        state: 'completed',
+        input: { file_path: '/repo/a.ts', old_string: 'before', new_string: 'after' }
+      },
+      { type: 'tool-result', output: 'The file /repo/a.ts has been updated successfully.' },
+      {
+        type: 'tool-call',
+        name: 'apply_patch',
+        state: 'completed',
+        input: { patch: '*** Begin Patch\n*** Add File: b.ts\n+added\n*** End Patch' }
+      }
+    ]
+  }
+  const turn = nativeChatTurnDiffs([message], ['u']).get('u')!
+  expect(turn.files.map((file) => [file.path, file.added, file.removed])).toEqual([
+    ['/repo/a.ts', 1, 1],
+    ['b.ts', 1, 0]
+  ])
+  expect(turn.files[1]!.edits.map(nativeChatTurnDiffEditFile)[0]?.lines[0]?.text).toBe('added')
+  expect(nativeChatTurnDiffs([message], ['u'], undefined, 'u').get('u')?.truncated).toBe(true)
 })

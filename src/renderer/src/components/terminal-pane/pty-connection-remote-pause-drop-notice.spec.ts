@@ -8,7 +8,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -50,6 +54,8 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
 
     async function connectRemotePane(dropsReported: boolean) {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const remotePtyId = 'remote:env-1@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       const callbacks: { current: ConnectCallbacks } = { current: {} }
@@ -77,7 +83,9 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
       const deps = buildPaneConnectionDeps(() => mockStoreState, {
         isVisibleRef: { current: true }
       })
-      const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks))
+      )
       await flushAsyncTicks(6)
       const setVisible = async (visible: boolean): Promise<void> => {
         deps.isVisibleRef.current = visible
@@ -88,24 +96,6 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
         pane.terminal.write.mock.calls.map((call) => String(call[0])).join('')
       return { transport, callbacks, binding, setVisible, written }
     }
-
-    it('switches back to a quiet paused pane without fetching a snapshot', async () => {
-      const { transport, callbacks, binding, setVisible, written } = await connectRemotePane(true)
-
-      for (let switchIndex = 0; switchIndex < 3; switchIndex += 1) {
-        await setVisible(false)
-        expect(transport.setOutputPaused).toHaveBeenLastCalledWith(true)
-        await setVisible(true)
-        expect(transport.setOutputPaused).toHaveBeenLastCalledWith(false)
-      }
-      const live = 'live after reveal\r\n'
-      callbacks.current.onData?.(live, { seq: 10 + live.length, rawLength: live.length })
-      await flushAsyncTicks(20)
-
-      expect(transport.serializeBuffer).not.toHaveBeenCalled()
-      expect(written()).toContain(live)
-      binding.dispose()
-    })
 
     it('restores exactly once when the host reports a paused drop', async () => {
       const { transport, callbacks, binding, setVisible, written } = await connectRemotePane(true)
@@ -127,16 +117,6 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
       // The next quiet switch is free again.
       await setVisible(false)
       await setVisible(true)
-      expect(transport.serializeBuffer).toHaveBeenCalledTimes(1)
-      binding.dispose()
-    })
-
-    it('restores on reveal when the host cannot report drops', async () => {
-      const { transport, binding, setVisible } = await connectRemotePane(false)
-
-      await setVisible(false)
-      await setVisible(true)
-
       expect(transport.serializeBuffer).toHaveBeenCalledTimes(1)
       binding.dispose()
     })

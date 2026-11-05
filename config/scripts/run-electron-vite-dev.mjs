@@ -23,25 +23,25 @@ import {
   getDevBundleProcessTable,
   isDevBundleInUse,
   selectStaleDevBundleDirs
-} from './dev-electron-bundle-cache.mjs'
-import { startDevStorageReclaim } from './dev-storage-reclaim.mjs'
+} from './development/electron-bundle-cache/dev-electron-bundle-cache.mjs'
+import { startDevStorageReclaim } from './worktree-storage/dev-storage-reclaim.mjs'
 import {
   announceDevInstance,
   dropInheritedDevInstanceEnv,
   resolveDevInstancePorts,
   resolveDevProfile,
   writeWorktreeProfileMarker
-} from './dev-instance-isolation.mjs'
+} from './development/instance-isolation/dev-instance-isolation.mjs'
 import { getDefaultSeedSource, profileHasState, seedDevProfile } from './dev-profile-seed.mjs'
 import {
   captureDevWebClientInputs,
   isDevWebClientFresh,
   recordDevWebClientInputs
 } from './dev-web-client-freshness.mjs'
-import { withRolldownThreadLimit } from './rolldown-thread-limit.mjs'
+import { withRolldownThreadLimit } from './tool-invocation/rolldown-thread-limit.mjs'
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
-import { copyPrivateTree } from './space-sharing-copy.mjs'
-import { buildDevSwiftCliHelpers } from './swift-cli-helper-macos.mjs'
+import { copyPrivateTree } from './artifact-storage/reflink-copy/space-sharing-copy.mjs'
+import { buildDevSwiftCliHelpers } from './native-build/macos/swift-cli-helper-macos.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -328,7 +328,14 @@ function prepareMacDevElectronApp() {
     execFileSync(
       process.execPath,
       [
-        path.join(repoRoot, 'config', 'scripts', 'build-notification-status-macos.mjs'),
+        path.join(
+          repoRoot,
+          'config',
+          'scripts',
+          'native-build',
+          'macos',
+          'build-notification-status-macos.mjs'
+        ),
         '--bundle-id',
         bundleId,
         '--single-arch',

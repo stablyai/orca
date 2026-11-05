@@ -9,10 +9,17 @@ const darkColors = {
   bgRaised: '#262626',
   borderSubtle: 'rgba(255, 255, 255, 0.07)',
   editorSurface: '#1e1e1e',
+  // Sheets sit a step above the screen, their groups a step above the sheet (the desktop's sidebar and secondary).
+  sheetSurface: '#171717',
+  sheetGroup: '#262626',
+  // A translucent grey that reads on any surface: off switches, and chips or picked segments on a sheet group.
+  translucentFill: 'rgba(120, 120, 128, 0.36)',
   // --chat-composer-surface painted over --chat-canvas, and --chat-composer-border.
   composerSurface: '#1f1f1f',
   composerBorder: 'rgba(250, 250, 250, 0.09)',
   composerControl: '#262626',
+  // A text field's edge, 3:1 on the screen, a sheet and a sheet group (WCAG 1.4.11): desktop's dark --ring.
+  inputBorder: '#737373',
   skillToken: '#8ab4f8',
   skillTokenSurface: 'rgba(59, 130, 246, 0.2)',
   // Your own message: --chat-user-surface and --chat-user-border over --chat-canvas, text in --chat-foreground-strong.
@@ -22,13 +29,13 @@ const darkColors = {
 
   // --foreground, --muted-foreground, --chat-foreground-faint
   textPrimary: '#fafafa',
-  textSecondary: '#a1a1a1',
+  textSecondary: '#acacac',
   textMuted: '#898989',
 
   // --primary: the filled primary-action surface.
   surfaceBright: '#e5e5e5',
 
-  accentBlue: '#3b82f6',
+  accentBlue: '#3276f2',
   // White text preserves contrast on saturated accent fills.
   onAccent: '#ffffff',
 
@@ -36,6 +43,8 @@ const darkColors = {
   statusGreen: '#86efac',
   statusAmber: '#eab308',
   statusRed: '#ff6568',
+  // Desktop's --destructive-foreground: dark ink on the light-red dark fill.
+  onStatusRed: '#450a0a',
   // Match desktop’s merge CTA fill and text.
   mergeGreen: '#16a34a',
   onMergeGreen: '#ffffff',
@@ -74,9 +83,15 @@ const lightColors: MobilePalette = {
   bgRaised: '#f5f5f5',
   borderSubtle: '#e5e5e5',
   editorSurface: '#ffffff',
+  // Light inverts it: a grey sheet under white groups, as iOS does.
+  sheetSurface: '#f5f5f5',
+  sheetGroup: '#ffffff',
+  translucentFill: 'rgba(120, 120, 128, 0.16)',
   composerSurface: '#ffffff',
   composerBorder: 'rgba(10, 10, 10, 0.11)',
   composerControl: '#f5f5f5',
+  // Desktop's light --ring (#a1a1a1) is under 3:1 on white, so both schemes share the dark one.
+  inputBorder: '#737373',
   skillToken: '#1d4ed8',
   skillTokenSurface: 'rgba(59, 130, 246, 0.12)',
   chatUserSurface: '#f5f5f5',
@@ -84,17 +99,18 @@ const lightColors: MobilePalette = {
   chatForegroundStrong: '#1e1e1e',
 
   textPrimary: '#0a0a0a',
-  textSecondary: '#737373',
-  textMuted: '#737373',
+  textSecondary: '#696969',
+  textMuted: '#696969',
 
   surfaceBright: '#171717',
 
-  accentBlue: '#2563eb',
+  accentBlue: '#225be3',
   onAccent: '#ffffff',
 
-  statusGreen: '#15803d',
+  statusGreen: '#147638',
   statusAmber: '#ca8a04',
   statusRed: '#e40014',
+  onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',
   onMergeGreen: '#ffffff',
   statusPurple: '#9333ea',
@@ -189,3 +205,12 @@ export const typography = {
   metaSize: 12,
   monoFamily: 'monospace' as const
 } as const
+
+// One press and one disabled look for every control; fills on press use colors.translucentFill.
+export const feedback = {
+  pressedOpacity: 0.7,
+  disabledOpacity: 0.4
+} as const
+
+/** The pressed look for a button: `style={({ pressed }) => [styles.button, pressed && pressedStyle]}`. */
+export const pressedStyle = { opacity: feedback.pressedOpacity } as const

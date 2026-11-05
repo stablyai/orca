@@ -2,7 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
+import {
+  readTrackedSources,
+  runEntryRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Bare-ID writes can edit the wrong local/SSH twin; require RepoHostTarget/HostWorktreeTarget and allow counts only to decrease.
 // Match parameter names regardless of types; known limit: IDs inside object parameters are not detected.
@@ -21,6 +24,7 @@ const MEMBER =
 /** `Class.param` first parameters whose id has no host twin, with the reason. */
 export const NOT_HOST_TWINNED_PARAMS = new Map([
   ['AutomationPersistence.automationId', 'automation ids are minted UUIDs'],
+  ['HostRepoCatalogSnapshotPersistence.environmentId', 'the id names the host itself'],
   ['OrcadSourceExportPersistence.targetId', 'the id names the host itself'],
   ['RemoteLayoutSnapshotPersistence.environmentId', 'the id names the host itself'],
   ['SessionHostPartitionOperations.hostId', 'the id names the host itself'],

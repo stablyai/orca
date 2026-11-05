@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { join } from 'node:path'
-import { getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { getCodexConfigSyncStatus } from '../codex/config-sync-stall'
+import { getSystemCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
+import { getCodexConfigSyncStatus } from '../codex/configuration/settings/config-sync-stall'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { CodexMirroredHomeStatus } from '../codex-accounts/runtime-home-service'
 

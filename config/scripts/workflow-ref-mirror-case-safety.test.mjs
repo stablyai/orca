@@ -81,7 +81,7 @@ describe('ref-mirroring vet steps', () => {
       const script = `
         const result = [];
         for (const [channel, exported] of [['daily', 'Daily'], ['hourly', 'Hourly'], ['adhoc', 'Adhoc']]) {
-          const module = await import(${JSON.stringify(pathToFileURL(join(projectDir, 'config/scripts/')).href)} + channel + '-build-version.mjs');
+          const module = await import(${JSON.stringify(pathToFileURL(join(projectDir, 'config/scripts/release/versioning/')).href)} + channel + '-build-version.mjs');
           const date = new Date('2026-09-12T00:00:00Z');
           result.push(channel === 'adhoc'
             ? module.getAdhocBuildIdentity(date, 'branch', ['v1.4.167'])

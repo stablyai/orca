@@ -6,16 +6,16 @@ import {
   wslHomeSessionDirs,
   type SessionHomeAgent
 } from '../ai-vault/session-scanner-roots'
-import { resolveWslGuestRealDirAsync } from '../wsl'
+import { resolveWslGuestRealDirAsync } from '../wsl/filesystem/unc-path-access'
 import {
   listRunningWslHomeDirsUnlessStopped,
   wslHomeUnlessStopped
-} from '../wsl/wsl-home-unless-stopped'
+} from '../wsl/discovery/wsl-home-unless-stopped'
 import { admitWslTranscriptPath } from './wsl-transcript-running-admission'
 import {
   filterPathsToRunningWslDistrosAsync,
   filterPathsToWslDistros
-} from '../wsl-running-path-filter'
+} from '../wsl/filesystem/wsl-running-path-filter'
 import { wslGatedAccess } from './wsl-transcript-fs-access'
 import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
@@ -233,15 +233,15 @@ export async function toHostReadableTranscriptPath(
   }
   // Classify before probing: Win32 resolves /home on the current drive and may find a local look-alike.
   if (!needsWslHostTranslation(path, platform)) {
-    if (
-      platform === 'win32' &&
-      isWslUncPath(path) &&
-      (deps.wslSnapshot
-        ? filterPathsToWslDistros([path], deps.wslSnapshot.runningDistros)
-        : await filterPathsToRunningWslDistrosAsync([path])
-      ).length === 0
-    ) {
-      return null
+    if (platform === 'win32' && isWslUncPath(path)) {
+      if (deps.wslSnapshot) {
+        if (filterPathsToWslDistros([path], deps.wslSnapshot.runningDistros).length === 0) {
+          return null
+        }
+      } else {
+        // A stopped or unverifiable distro is a refusal the pane can show, never a missing file.
+        await admitWslTranscriptPath(path)
+      }
     }
     return (await pathExists(path)) ? path : null
   }

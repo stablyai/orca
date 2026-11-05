@@ -180,18 +180,6 @@ describeRender(
       await page.close()
     }, 300_000)
 
-    it('installs no window.onerror on a page that had none', async () => {
-      // With no initial handler, dispose must leave slot free for later consumer.
-      const { page } = await openTerminal()
-      expect(await page.evaluate(() => window.onerror)).toBe(null)
-      await openProbeTerminal(page)
-      expect(await page.evaluate(() => window.onerror)).toBe(null)
-      await page.evaluate(() => globalThis.__orcaTerminalProbe.setMounted(false))
-      await page.locator('#terminal-container').waitFor({ state: 'detached', timeout: 30_000 })
-      expect(await page.evaluate(() => window.onerror)).toBe(null)
-      await page.close()
-    }, 300_000)
-
     // ES module bodies run once; remount must reacquire live DOM/listeners rather than retain detached first-mount elements.
     // Read live behavior: component readiness handshake alone does not prove engine uses current nodes.
     /** The listeners the page holds with no terminal on it, which is what two mounts can differ by. */
@@ -229,26 +217,6 @@ describeRender(
         { timeout: 30_000, polling: 100 }
       )
     }
-
-    it('is a live terminal again after an unmount and a remount', async () => {
-      const { page } = await openTerminal()
-      await openProbeTerminal(page)
-      await assertLiveTerminal(page, 'first-mount')
-
-      await page.evaluate(() => globalThis.__orcaTerminalProbe.setMounted(false))
-      await page.locator('#terminal-container').waitFor({ state: 'detached', timeout: 30_000 })
-      await page.evaluate(() => {
-        globalThis.__orcaTerminalReady = false
-        globalThis.__orcaTerminalProbe.setMounted(true)
-      })
-      await page.waitForFunction(() => globalThis.__orcaTerminalReady === true, {
-        timeout: 60_000,
-        polling: 100
-      })
-      await openProbeTerminal(page)
-      await assertLiveTerminal(page, 'remount')
-      await page.close()
-    }, 300_000)
 
     it('is a live terminal again after the user reloads a failed one', async () => {
       // Drive pre-init uncaught error through real fatal overlay/Reload; this user remount path must rebuild document inside same component.

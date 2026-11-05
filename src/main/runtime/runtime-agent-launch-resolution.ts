@@ -1,21 +1,21 @@
 import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import { createHash } from 'node:crypto'
 import type { Repo } from '../../shared/repo-types'
-import type { TuiAgent } from '../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ClaudeAgentTeamsMode } from '../../shared/claude-agent-teams-tmux-compat'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
   executionRuntimePlatform,
   remoteExecutionPlatform
-} from '../../shared/agent-launch-runtime'
+} from '../../shared/agent-launch/startup/agent-launch-runtime'
 import {
   getTuiAgentLaunchCommand,
   isTuiAgent,
   TUI_AGENT_CONFIG
-} from '../../shared/tui-agent-config'
-import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { recognizeAgentLaunchCommand } from '../../shared/agent-command-line-intent'
+} from '../../shared/agent-launch/catalog/tui-agent-config'
+import { isTuiAgentEnabled } from '../../shared/agent-launch/catalog/tui-agent-selection'
+import { recognizeAgentLaunchCommand } from '../../shared/agent-launch/startup/agent-command-line-intent'
 
 export function mergeTerminalEnvDeletionKeys(
   first: readonly string[] | undefined,

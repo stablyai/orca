@@ -16,7 +16,7 @@ import {
   resolveCommitMessageGenerationSuccess,
   type CommitMessageGenerationRecord
 } from '@/store/slices/commit-message-generation'
-import { isCustomAgentId } from '../../../../../../shared/commit-message-agent-spec'
+import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { hasConfiguredCommitMessageGenerationDefaults } from '../ai/text-generation-defaults'
 import type { SourceControlAi } from '../ai/use-ai'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'

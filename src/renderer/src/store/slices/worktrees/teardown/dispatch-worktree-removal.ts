@@ -1,4 +1,4 @@
-import { showNestedWorktreePreservedBranchesToast } from '@/components/sidebar/nested-worktree-preserved-branches-toast'
+import { showNestedWorktreePreservedBranchesToast } from '@/components/sidebar/workspace-actions/deletion/nested-worktree-preserved-branches-toast'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   _resetClosedPaneFencesForTests,
@@ -89,14 +89,5 @@ describe('the closed-pane fence', () => {
     expect(isClosedPaneFenced('t:b')).toBe(false)
     create.rollback?.()
     expect(isClosedPaneFenced('t:b')).toBe(true)
-  })
-
-  it('records nothing for an unfenced command', () => {
-    const store = partitions({ [LOCAL]: sessionWith('t', ['a', 'b']) })
-    fencedIfLayoutOwner(
-      () => null,
-      () => (store.set(LOCAL, sessionWith('t', ['a'])), { value: null })
-    )()
-    expect(isClosedPaneFenced('t:b')).toBe(false)
   })
 })

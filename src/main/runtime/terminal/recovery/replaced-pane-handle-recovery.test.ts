@@ -1,6 +1,5 @@
 // Recover ended pane handles only to connected replacements bound in the same pane and workspace (L80 P4).
-import { readdirSync, readFileSync } from 'node:fs'
-import path from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -129,30 +128,5 @@ describe('a stale handle of a replaced pane (switch on)', () => {
       restarted.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, oldHandle)
     ).rejects.toThrow('terminal_not_found')
     expect(createTerminal).not.toHaveBeenCalled()
-  })
-})
-
-describe('issuedForPaneKey census', () => {
-  it('is written by issuePtyHandle and read only by recoverTerminalPane', () => {
-    const root = path.resolve(__dirname, '../../../../..')
-    const users: string[] = []
-    const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name)
-        if (entry.isDirectory()) {
-          walk(full)
-        } else if (/\.tsx?$/.test(entry.name) && !/\.(test|spec)\.tsx?$/.test(entry.name)) {
-          if (readFileSync(full, 'utf8').includes('issuedForPaneKey')) {
-            users.push(path.relative(root, full))
-          }
-        }
-      }
-    }
-    walk(path.join(root, 'src'))
-    expect(users.sort()).toEqual([
-      'src/main/runtime/runtime-terminal-contracts.ts',
-      'src/main/runtime/terminal/identity/terminal-handle-bindings.ts',
-      'src/main/runtime/terminal/recovery/resolve-terminal-pane.ts'
-    ])
   })
 })

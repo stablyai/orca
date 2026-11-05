@@ -1,4 +1,5 @@
-import { parseGitRepositoryIdentity } from './plugin-marketplace'
+import { parseGitRepositoryIdentity, splitQualifiedPluginKey } from './plugin-marketplace'
+import { gitUrlPluginPublisher } from '../installation/plugin-publisher-derivation'
 
 const LINKABLE_GIT_HOSTS = new Set(['github.com', 'gitlab.com'])
 const PATH_SEGMENT_RE = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/
@@ -37,4 +38,24 @@ export function pluginReadmePageUrl(source: {
   }
   const tree = repository.startsWith('https://gitlab.com/') ? '-/tree' : 'tree'
   return `${[repository, tree, source.commit, ...pathSegments].join('/')}#readme`
+}
+
+/** The repository a listing's links open: the release's recorded author repository when it
+ *  belongs to the listed publisher, else the install source (such as Stably's mirror, which a
+ *  catalog marks `sourceUnavailable` once the author's repository is gone). */
+export function pluginListingRepositoryUrl(listing: {
+  pluginKey: string
+  source: { url: string }
+  release?: { repository?: string; sourceUnavailable?: true }
+}): string {
+  const authored = listing.release?.repository
+  if (
+    authored &&
+    !listing.release?.sourceUnavailable &&
+    pluginRepositoryPageUrl(authored) &&
+    gitUrlPluginPublisher(authored) === splitQualifiedPluginKey(listing.pluginKey)?.publisher
+  ) {
+    return authored
+  }
+  return listing.source.url
 }

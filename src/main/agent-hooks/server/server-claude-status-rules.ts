@@ -1,9 +1,9 @@
-import { mainAgentStatusEqual } from '../../../shared/main-agent-status'
+import { mainAgentStatusEqual } from '../../../shared/agent-status/lifecycle/main-agent-status'
 import {
   claudeTeammateIdMatchesName,
   isClaudeChildTurnEndEvent
 } from '../../../shared/claude-subagent-roster'
-import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
+import { isAskUserQuestionTool } from '../../../shared/agent-status/lifecycle/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { isClaudePermissionSettledByReplay } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'

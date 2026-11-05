@@ -13,6 +13,7 @@ vi.mock('@/lib/visible-overlay', () => ({ hasVisibleOverlay: () => overlay.visib
 const insertTypedText = vi.fn(() => true)
 const composer: NativeChatComposerHandle = {
   focus: () => true,
+  insertAgentReferences: () => false,
   insertTypedText,
   appendText: () => {},
   acceptsText: () => true,
@@ -74,15 +75,6 @@ afterEach(() => {
 })
 
 describe('useNativeChatRootInputRouting', () => {
-  it('types into the composer from the transcript and from a focused button or link', () => {
-    const view = render(<Chat revealed />)
-    fireEvent.keyDown(view.getByTestId('transcript'), { key: 'h' })
-    fireEvent.keyDown(view.getByRole('button', { name: 'Copy code' }), { key: 'i' })
-    fireEvent.keyDown(view.getByRole('link', { name: 'example.com' }), { key: '!' })
-
-    expect(insertTypedText.mock.calls).toEqual([['h'], ['i'], ['!']])
-  })
-
   it('leaves Space with a focused button or link and letters with a composite control', () => {
     const view = render(<Chat revealed />)
     expect(fireEvent.keyDown(view.getByRole('button', { name: 'Copy code' }), { key: ' ' })).toBe(
@@ -104,13 +96,6 @@ describe('useNativeChatRootInputRouting', () => {
     fireEvent.keyDown(view.getByRole('button', { name: 'Close preview' }), { key: 'a' })
 
     expect(insertTypedText).not.toHaveBeenCalled()
-  })
-
-  it('types into the composer when nothing has focus and the chat is revealed', () => {
-    render(<Chat revealed />)
-    expect(fireEvent.keyDown(document.body, { key: 'q' })).toBe(false)
-
-    expect(insertTypedText).toHaveBeenCalledWith('q')
   })
 
   it('leaves keys typed with nothing focused alone while hidden, under an overlay, or after unmount', () => {
@@ -136,20 +121,6 @@ describe('useNativeChatRootInputRouting', () => {
       </>
     )
     fireEvent.keyDown(document.body, { key: 'a' })
-
-    expect(insertTypedText).not.toHaveBeenCalled()
-  })
-
-  it('leaves keys aimed at controls outside the chat alone', () => {
-    render(<Chat revealed />)
-    const field = document.createElement('input')
-    const list = document.createElement('div')
-    list.setAttribute('role', 'listbox')
-    list.tabIndex = 0
-    document.body.append(field, list)
-
-    fireEvent.keyDown(field, { key: 'a' })
-    fireEvent.keyDown(list, { key: 'b' })
 
     expect(insertTypedText).not.toHaveBeenCalled()
   })

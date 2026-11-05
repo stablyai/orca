@@ -23,15 +23,15 @@ import { createProjectGroup } from '../../../../../../shared/project-groups'
 import type * as FolderStatus from '@/store/folder-workspaces/folder-path-status'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import { useSidebarHostVisibleScope } from './use-host-visible-scope'
-import { makeFolderWorkspace } from '../../../worktree-jump-palette-test-fixtures'
+import { makeFolderWorkspace } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type * as SshGate from '@/lib/repo-ssh-connection'
 import type * as DeviceVisibility from '../../../../../../shared/workspace-creator-visibility'
 import type * as Registry from '../../../../../../shared/execution-host-registry'
 import type * as RowPlan from '../../../../../../shared/sidebar-list/sidebar-row-plan'
-import type * as Visibility from '../../visible-worktrees'
+import type * as Visibility from './compute-visible-worktrees'
 import type * as HeaderContext from '../rows/project-header-host-context'
-import { collapsedSameNameProjectHeaders } from '../../worktree-list-groups-test-fixtures'
+import { collapsedSameNameProjectHeaders } from '../grouping/worktree-list-groups-test-fixtures'
 
 const runtimeRpc = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
@@ -138,7 +138,7 @@ vi.mock('../../../../../../shared/sidebar-list/sidebar-row-plan', async (origina
     }
   }
 })
-vi.mock('../../visible-worktrees', async (original) => {
+vi.mock('./compute-visible-worktrees', async (original) => {
   const actual = await original<typeof Visibility>()
   return {
     ...actual,

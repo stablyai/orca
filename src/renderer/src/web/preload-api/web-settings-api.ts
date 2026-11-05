@@ -1,9 +1,10 @@
 import type { PreloadApi } from '../../../../preload/api-types'
+import { legacyMatchTerminalSidebarWrite } from '../../../../shared/plugin-theme-settings'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../../../shared/computer-awake-mode'
-import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
+import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { mergeSettings, stripRetiredWebChatSettings } from './web-preference-normalization'
 import {
   getRuntimeBackedStoredSettings,
@@ -11,9 +12,10 @@ import {
   settingsForActiveVisibilityOwner,
   syncRuntimeBackedSettings,
   updateRuntimePRBotAuthorOverride,
-  writeStoredSettings
+  writeStoredSettings,
+  type WebSettingsApi
 } from './web-preferences-store'
-import type { WebSettingsApi } from './web-preferences-store'
+
 import {
   requireActiveEnvironmentOrNull,
   resolveEnvironment,
@@ -76,11 +78,14 @@ export function createWebSettingsApi(): Pick<Partial<PreloadApi>, 'agentAwake'> 
             )
           )
         }
+        const stored = getStoredSettings()
+        Object.assign(sanitizedUpdates, legacyMatchTerminalSidebarWrite(stored, sanitizedUpdates))
         const localUpdates = { ...sanitizedUpdates }
+        delete localUpdates.nativeChatAutoContinueAfterUsageLimit
         if (runtimeEnvironment) {
           delete localUpdates.worktreeVisibilityDefaults
         }
-        const next = mergeSettings(getStoredSettings(), localUpdates, {
+        const next = mergeSettings(stored, localUpdates, {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
         writeStoredSettings(next)

@@ -1,11 +1,14 @@
+import { crewWorkspaceNames } from '../../orchestration/crew/crew-workspace-names'
+import { isDeepStrictEqual } from 'node:util'
 import { OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity } from '../persisted-surfaces/has-exact-persisted-terminal-surface-identity'
 import type {
   OrchestrationEnvironmentCallOptions,
   OrchestrationWorkerServer
 } from '../../orchestration/environment-transport'
 import type { RuntimeOrchestrationEnvelope } from '../../../../shared/runtime-rpc-envelope'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+
 import {
+  type ExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -14,7 +17,7 @@ import {
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity {
   getRuntimeId(): string {
@@ -196,7 +199,11 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExac
   }
 
   setWorkspaceSessionForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
+    const before = crewWorkspaceNames(this.workspaceSessions.get(worktreeId))
     this.workspaceSessions.setForWorktree(worktreeId, session)
+    if (!isDeepStrictEqual(before, crewWorkspaceNames(this.workspaceSessions.get(worktreeId)))) {
+      this.crewChanges.notify(new Set(['names']))
+    }
   }
 
   protected getKnownWorkspaceSessionWorktreeIds(): Set<string> {

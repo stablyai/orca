@@ -8,13 +8,13 @@ import {
   WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY,
   scanWorkspacePortsForTarget,
   workspacePortScanKeyForTarget
-} from '@/lib/workspace-port-actions'
+} from '@/lib/workspace-ports/workspace-port-actions'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import {
   reconcileTransientPortScanFailures,
   type PortScanDebounceState
-} from '@/lib/workspace-port-scan-debounce'
+} from '@/lib/workspace-ports/workspace-port-scan-debounce'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
 

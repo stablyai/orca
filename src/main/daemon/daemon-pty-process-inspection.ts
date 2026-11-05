@@ -1,17 +1,19 @@
-import { isShellProcess } from '../../shared/agent-detection'
+import { PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION } from './daemon-protocol-version'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
 import { DaemonPtyBufferSnapshots } from './daemon-pty-buffer-snapshots'
-import { parsePtySessionId } from '../../shared/pty-session-id-format'
+import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   type ListSessionsResult,
   type SessionInfo
 } from './types'
-import type {
-  PtyProcessInspection,
-  PtyProcessInspectionOptions
-} from '../providers/pty-process-inspection'
-import { clientOnlyUnverifiableInspection } from '../../shared/terminal-process-inspection'
+import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
+
+import {
+  type TerminalProcessInspection as PtyProcessInspection,
+  clientOnlyUnverifiableInspection
+} from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
@@ -25,6 +27,10 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       return true
     }
     return this.hasChildProcessesFromForeground(await this.getForegroundProcess(id))
+  }
+
+  supportsForegroundObservation(_id: string): boolean {
+    return this.protocolVersion >= PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION
   }
 
   async inspectProcess(
@@ -49,6 +55,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       ...(options?.expectedIncarnationId
         ? { expectedIncarnationId: options.expectedIncarnationId }
         : {}),
+      ...(options?.foregroundOnly === true ? { foregroundOnly: true } : {}),
       // Additive: an older daemon ignores it and pays for the full capture.
       ...(options?.steadyState === true ? { steadyState: true } : {}),
       ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})

@@ -1,7 +1,11 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { parse } from 'jsonc-parser'
-import { listTrackedFiles, readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
+import {
+  listTrackedFiles,
+  readTrackedSources,
+  runEntryRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet stale src/... references in CI/workflows/e2e downward before folder moves can orphan routes, gate manifests or workflow paths.
 

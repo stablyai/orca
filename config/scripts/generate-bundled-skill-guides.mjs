@@ -3,6 +3,7 @@ import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { parse } from 'yaml'
+import skillRenames from '../../src/shared/bundled-skill-renames.json' with { type: 'json' }
 import {
   SHARED_STUB_SOURCE,
   parseSharedStubBlocks,
@@ -13,7 +14,7 @@ const SCRIPT_DIR = import.meta.dirname
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..')
 
 const CANONICAL_GUIDE_NAMES = [
-  'computer-use',
+  'orca-computer-use',
   'jira-tickets',
   'linear-tickets',
   'orca-cli',
@@ -22,12 +23,13 @@ const CANONICAL_GUIDE_NAMES = [
   'orca-jira',
   'orca-linear',
   'orca-per-workspace-env',
+  'orca-plugin-authoring',
   'orchestration'
 ]
 
 // Aliases preserve renamed discovery stubs; append ledger entries, never remove them.
 const GUIDE_ALIASES = {
-  'computer-use': [],
+  'orca-computer-use': skillRenames['orca-computer-use'],
   'jira-tickets': [],
   'linear-tickets': [],
   'orca-cli': [],
@@ -36,13 +38,14 @@ const GUIDE_ALIASES = {
   'orca-jira': [],
   'orca-linear': [],
   'orca-per-workspace-env': [],
+  'orca-plugin-authoring': [],
   orchestration: []
 }
 
 // Stubbed topics install thin projections but skills get serves full version-matched guides.
 // Migration is one-way: old fat installs need new stubs to converge, so only add STUB_TOPICS; bodies live in skill-stubs/<topic>.md.
 const STUB_TOPICS = [
-  'computer-use',
+  'orca-computer-use',
   'jira-tickets',
   'linear-tickets',
   'orca-cli',
@@ -51,6 +54,7 @@ const STUB_TOPICS = [
   'orca-jira',
   'orca-linear',
   'orca-per-workspace-env',
+  'orca-plugin-authoring',
   'orchestration'
 ]
 

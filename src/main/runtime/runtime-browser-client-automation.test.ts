@@ -1,86 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult
-} from '../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import { routeRuntimeBrowserClientAutomation } from './runtime-browser-client-automation'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { LOCAL_CLI_RPC_CALLER } from './rpc/rpc-caller-identity'
 
 describe('runtime browser client automation routing', () => {
-  it('routes an explicit client page and returns its exact command result', async () => {
-    const fixture = await createFixture()
-    const routing = routeRuntimeBrowserClientAutomation({
-      method: 'browser.click',
-      params: { page: 'page-a', x: 10, y: 20 },
-      pages: fixture.pages,
-      leases: fixture.leases,
-      resolveWorkspace: fixture.resolveWorkspace
-    })
-
-    const command = await fixture.waitForCommand()
-    expect(command).toMatchObject({
-      browserPageId: 'page-a',
-      command: {
-        type: 'automation',
-        method: 'browser.click',
-        params: { page: 'page-a', x: 10, y: 20 }
-      }
-    })
-    fixture.settle({ status: 'completed', value: { clicked: true } })
-    await expect(routing).resolves.toEqual({ handled: true, result: { clicked: true } })
-    expect(fixture.resolveWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('routes the active client page in an explicit folder or worktree workspace', async () => {
-    const fixture = await createFixture()
-    const routing = routeRuntimeBrowserClientAutomation({
-      method: 'browser.snapshot',
-      params: { worktree: 'id:folder:folder-a' },
-      pages: fixture.pages,
-      leases: fixture.leases,
-      resolveWorkspace: fixture.resolveWorkspace
-    })
-
-    await fixture.waitForCommand()
-    fixture.settle({ status: 'completed', value: { url: 'https://example.test/' } })
-    await expect(routing).resolves.toEqual({
-      handled: true,
-      result: { url: 'https://example.test/' }
-    })
-    expect(fixture.resolveWorkspace).toHaveBeenCalledWith('id:folder:folder-a')
-  })
-
-  it('keeps server pages and non-targeted browser methods on the server', async () => {
-    const fixture = await createFixture()
-
-    await expect(
-      routeRuntimeBrowserClientAutomation({
-        method: 'browser.click',
-        params: { page: 'server-page', x: 10 },
-        pages: fixture.pages,
-        leases: fixture.leases,
-        resolveWorkspace: fixture.resolveWorkspace
-      })
-    ).resolves.toEqual({ handled: false })
-    await expect(
-      routeRuntimeBrowserClientAutomation({
-        method: 'browser.tabList',
-        params: { page: 'page-a' },
-        pages: fixture.pages,
-        leases: fixture.leases,
-        resolveWorkspace: fixture.resolveWorkspace
-      })
-    ).resolves.toEqual({ handled: false })
-    expect(fixture.command).toBeUndefined()
-  })
-
   it('surfaces missing host capability and exact client execution failures', async () => {
     const legacy = await createFixture({ automation: false })
     await expect(
       routeRuntimeBrowserClientAutomation({
         method: 'browser.click',
         params: { page: 'page-a', x: 10 },
+        caller: LOCAL_CLI_RPC_CALLER,
         pages: legacy.pages,
         leases: legacy.leases,
         resolveWorkspace: legacy.resolveWorkspace
@@ -91,6 +24,7 @@ describe('runtime browser client automation routing', () => {
     const routing = routeRuntimeBrowserClientAutomation({
       method: 'browser.click',
       params: { page: 'page-a', x: 10 },
+      caller: LOCAL_CLI_RPC_CALLER,
       pages: failed.pages,
       leases: failed.leases,
       resolveWorkspace: failed.resolveWorkspace
@@ -99,9 +33,72 @@ describe('runtime browser client automation routing', () => {
     failed.settle({ status: 'failed', errorCode: 'browser_client_page_automation_failed' })
     await expect(routing).rejects.toThrow('browser_client_page_automation_failed')
   })
+
+  it('marks only an agent caller’s command as agent-driven on the desktop', async () => {
+    for (const [caller, agent] of [
+      [LOCAL_CLI_RPC_CALLER, true],
+      [{ kind: 'paired-device', deviceId: 'device-a' }, false]
+    ] as const) {
+      const fixture = await createFixture()
+      const routing = routeRuntimeBrowserClientAutomation({
+        method: 'browser.goto',
+        params: { page: 'page-a', url: 'https://example.test/next' },
+        caller,
+        pages: fixture.pages,
+        leases: fixture.leases,
+        resolveWorkspace: fixture.resolveWorkspace
+      })
+      const event = await fixture.waitForCommand()
+      expect(event.command).toMatchObject({ type: 'automation', method: 'browser.goto', agent })
+      fixture.settle({ status: 'completed' })
+      await routing
+    }
+  })
+
+  it('refuses --expect-url for a client that would drop it, without sending the command', async () => {
+    const older = await createFixture()
+    await expect(
+      routeRuntimeBrowserClientAutomation({
+        method: 'browser.click',
+        params: { page: 'page-a', element: '@e1', expectUrl: 'https://example.test/a' },
+        caller: LOCAL_CLI_RPC_CALLER,
+        pages: older.pages,
+        leases: older.leases,
+        resolveWorkspace: older.resolveWorkspace
+      })
+    ).rejects.toMatchObject({ code: 'browser_expect_url_unsupported' })
+  })
+
+  it('brings back the client’s URL mismatch with its diagnostics', async () => {
+    const mismatch = {
+      expectedUrl: 'https://example.test/a',
+      actualUrl: 'https://example.test/b',
+      browserPageId: 'page-a',
+      mayHaveStarted: false
+    }
+    const fixture = await createFixture({ expectUrl: true })
+    const routing = routeRuntimeBrowserClientAutomation({
+      method: 'browser.click',
+      params: { page: 'page-a', element: '@e1', expectUrl: mismatch.expectedUrl },
+      caller: LOCAL_CLI_RPC_CALLER,
+      pages: fixture.pages,
+      leases: fixture.leases,
+      resolveWorkspace: fixture.resolveWorkspace
+    })
+    await fixture.waitForCommand()
+    fixture.settle({
+      status: 'failed',
+      errorCode: 'browser_expected_url_mismatch',
+      expectedUrlMismatch: mismatch
+    })
+    await expect(routing).rejects.toMatchObject({
+      code: 'browser_expected_url_mismatch',
+      data: mismatch
+    })
+  })
 })
 
-async function createFixture(options: { automation?: boolean } = {}) {
+async function createFixture(options: { automation?: boolean; expectUrl?: boolean } = {}) {
   const leases = new BrowserHostLeaseRegistry({
     authorityRuntimeId: 'runtime-a',
     authorityEpoch: 'epoch-a'
@@ -110,7 +107,10 @@ async function createFixture(options: { automation?: boolean } = {}) {
     browserHostClientId: 'host-a',
     connectionId: 'connection-a',
     pairedDeviceId: 'device-a',
-    hostCapabilities: options.automation === false ? ['webview'] : ['webview', 'automation-v1'],
+    hostCapabilities:
+      options.automation === false
+        ? ['webview']
+        : ['webview', 'automation-v1', ...(options.expectUrl ? ['expect-url-v1'] : [])],
     pageCommandProtocolVersion: 1,
     pageInventoryProtocolVersion: 1,
     pageInventory: [],

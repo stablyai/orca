@@ -1,7 +1,10 @@
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
-import { entryStaticClosure, mobileWebAppBuildOptions } from '../build-mobile-web-app-bundle.mjs'
+import {
+  entryStaticClosure,
+  mobileWebAppBuildOptions
+} from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { collectMobileWebAppRoutes } from './mobile-web-app-route-manifest.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../../mobile', import.meta.url))

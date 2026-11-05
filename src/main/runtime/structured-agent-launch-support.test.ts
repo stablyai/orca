@@ -3,7 +3,7 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import {
   resolveHostStructuredAgentCreateSupport,
@@ -13,7 +13,7 @@ import {
 } from './structured-agent-launch-support'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type * as LoginShellModule from '../startup/login-shell-environment'
-import type * as VersionProbeModule from '../agent-cli-version-probe'
+import type * as VersionProbeModule from '../agent-launch/preflight/agent-cli-version-probe'
 import {
   resetLoginShellEnvironmentCacheForTests,
   type ResolveLoginShellEnvironmentOptions as LoginShellOptions
@@ -30,7 +30,7 @@ const { readVersion, loginShell } = vi.hoisted(() => {
   }
   return { readVersion: vi.fn<VersionProbeModule.AgentCliVersionReader>(), loginShell }
 })
-vi.mock('../agent-cli-version-probe', async (importOriginal) => {
+vi.mock('../agent-launch/preflight/agent-cli-version-probe', async (importOriginal) => {
   const real = await importOriginal<typeof VersionProbeModule>()
   return {
     ...real,

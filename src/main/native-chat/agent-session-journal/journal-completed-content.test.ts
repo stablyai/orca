@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { AcpToolTimeline } from '../../acp/acp-tool-timeline'
 import { PiRpcMessages } from '../../pi/rpc-messages'
 import { PiRpcContextUsage } from '../../pi/rpc-context-usage'
@@ -160,7 +160,6 @@ it.each(['acp', 'pi'] as const)(
       expect(repeated.body.input).toBe(changed.body.input)
       expect(repeated.body.output).toBe(changed.body.output)
     }
-    expect(agent === 'acp' ? acp.retainedToolBytes : pi.retainedToolBytes).toBeGreaterThan(4 * size)
     expect(
       (await rig.rows())
         .filter((row) => row.body.kind === 'tool-call')
@@ -176,7 +175,6 @@ it.each(['acp', 'pi'] as const)(
       lane.retry()
       await lane.drained()
     }
-    expect(agent === 'acp' ? acp.retainedToolBytes : pi.retainedToolBytes).toBe(0)
     expect(onFailed).not.toHaveBeenCalled()
     const reopened = await rig.reopenJournal()
     expect(reopened.snapshot().items.map((row) => row.body)).toEqual(

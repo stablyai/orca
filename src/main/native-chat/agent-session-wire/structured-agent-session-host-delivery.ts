@@ -1,6 +1,7 @@
+import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { holdClosedStructuredAgentSessionSends } from './structured-agent-session-host-lifetime'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -26,7 +27,7 @@ import type {
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
-import { recoverStructuredRewind } from './structured-rewind-recovery'
+import { settleInterruptedStructuredAgentSessionCommands } from './structured-rewind-recovery'
 import {
   retireOutgrownStructuredAgentSessionChild,
   structuredAgentSessionChildOwesWork
@@ -71,8 +72,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
   ) => StructuredAgentSessionStartReadiness | null
-  /** Next start must reflect changed login/permission mode. */
+  /** Stops a child the chat outgrew, so the start after it reads a new login, account or permission
+   *  mode. */
   stopOutgrownAgent: (sessionId: string) => Promise<void>
+  stopPermissionTransitionChild: (sessionId: string) => Promise<void>
   clientDelivery: Pick<
     StructuredAgentSessionClientDelivery,
     | 'publishRestored'
@@ -80,6 +83,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     | 'childWorkOpen'
     | 'readStopping'
     | 'publishStatus'
+    | 'publishStatusAndSettlement'
     | 'publishGenerationEnded'
   >
 }): StructuredAgentSessionConversationDelivery {
@@ -104,6 +108,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     serialize: input.serialize,
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
+    stopPermissionTransitionChild: input.stopPermissionTransitionChild,
     retireOutgrownChild: async (sessionId, continuingId, next) => {
       // Defer retirement while personal Stop holds handover; its next step decides.
       const session = input.clientDelivery.readStopping(sessionId)
@@ -127,13 +132,17 @@ export function createStructuredAgentSessionConversationDelivery(input: {
           )
         },
         permissionRequiresAcquisition: (mode) =>
-          continuingId
+          structuredAgentSessionInputCompilerPermission(session?.journal, continuingId)
             ? true
             : (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, mode) ??
               mode !== session?.child?.permissionMode),
         stopAgent: (sessionId) => {
           deps.store.requireWritableRecord(sessionId)
           return input.stopOutgrownAgent(sessionId)
+        },
+        launchAccountHome: async () => {
+          const record = deps.store.getRecord(sessionId)
+          return record ? ((await deps.launchAccountHome?.(record, 'identity')) ?? null) : null
         },
         logger: deps.logger
       })
@@ -218,26 +227,25 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   })
   const adoptOpened = async (
     sessionId: string,
-    opened: OpenedStructuredAgentSessionConversation
+    { session }: OpenedStructuredAgentSessionConversation
   ): Promise<void> => {
-    const { session } = opened
     sessions.set(sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
-    await settleInterruptedCommands(deps, sessionId, session)
+    await settleInterruptedStructuredAgentSessionCommands(deps, sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
-    if (session.journal.submissions().some(isQueuedAgentJournalSubmission)) {
+    if (session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission)) {
       loop.wake(sessionId)
     }
   }
   const wakesQueued = new Set<string>()
   const afterCommit = (sessionId: string, journal: AgentSessionJournal): void => {
-    input.deliveryOrder.reconcile(sessionId, journal.submissions())
+    input.deliveryOrder.reconcile(sessionId, journal)
     const work = hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId)
     if (
       wakesQueued.has(sessionId) ||
       !work ||
       structuredAgentSessionCommandRunning(work) ||
-      !journal.submissions().some(isQueuedAgentJournalSubmission)
+      !selectableStructuredSubmission(journal, work)
     ) {
       return
     }
@@ -280,7 +288,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     loop,
     afterCommit,
     afterSettleEdge: (sessionId, journal) => {
-      input.clientDelivery.publishStatus(sessionId)
+      input.clientDelivery.publishStatusAndSettlement(sessionId)
       afterCommit(sessionId, journal)
     },
     adoptOpened,
@@ -290,23 +298,5 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     },
     open: (sessionId, options) =>
       openStructuredAgentSessionConversation({ deps, sessions, adoptOpened }, sessionId, options)
-  }
-}
-
-/** Settle prepared rewinds orphaned across processes; provider-only proof waits for the next proven start. */
-async function settleInterruptedCommands(
-  deps: StructuredAgentSessionHostDeps,
-  sessionId: string,
-  session: StructuredAgentSessionHostSession
-): Promise<void> {
-  const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
-  try {
-    await recoverStructuredRewind(deps, sessionId, session.journal, fence)
-  } catch (error) {
-    deps.logger.warn('settling an interrupted rewind on open failed', {
-      scope: 'rewind-recovery',
-      sessionId,
-      error
-    })
   }
 }

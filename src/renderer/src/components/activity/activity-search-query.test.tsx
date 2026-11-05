@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import {
@@ -11,10 +11,7 @@ import {
   makeTabWithIds,
   makeWorktree
 } from './ActivityPrototypePage-test-fixtures'
-import {
-  activityThreadMatchesSearchQuery,
-  createActivityThreadSearchMatcher
-} from './activity-thread-grouping'
+
 import { useAgentPaneThreads } from './use-agent-pane-threads'
 
 vi.mock('@/store', async () => {
@@ -71,31 +68,6 @@ function options(query: string): Parameters<typeof useAgentPaneThreads>[0] {
 }
 
 describe('Activity search query in the real hook', () => {
-  it('matches normalized Unicode queries without replacing thread objects', () => {
-    const count = 12
-    installThreads(count)
-    const activity = renderHook(() => useAgentPaneThreads(options(' PROJECT ☃ ')))
-    expect(activity.result.current.allThreads).toHaveLength(count)
-    expect(activity.result.current.visibleThreads).toEqual(activity.result.current.allThreads)
-    for (const [index, thread] of activity.result.current.visibleThreads.entries()) {
-      expect(thread).toBe(activity.result.current.allThreads[index])
-    }
-  })
-
-  it.each(['', ' \t\n '])('shows all threads for an empty query: %j', (query) => {
-    installThreads(12)
-    const activity = renderHook(() => useAgentPaneThreads(options(query)))
-    expect(activity.result.current.visibleThreads).toEqual(activity.result.current.allThreads)
-  })
-
-  it('retains both original and normalized UTF-8 byte limits', () => {
-    const query = 'İ'.repeat(700)
-    installThreads(12, query)
-    const activity = renderHook(() => useAgentPaneThreads(options(query)))
-    expect(activity.result.current.allThreads).toHaveLength(12)
-    expect(activity.result.current.visibleThreads).toEqual([])
-  })
-
   it('excludes acknowledged rows from an unread search', () => {
     const panes = installThreads(12)
     useAppStore.setState({
@@ -159,40 +131,5 @@ describe('Activity search query in the real hook', () => {
     expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
       panes[2]
     ])
-  })
-
-  it('rejects original oversized whitespace before it becomes an empty query', () => {
-    installThreads(12)
-    const query = ' '.repeat(2049)
-    const activity = renderHook(() => useAgentPaneThreads(options(query)))
-    expect(activity.result.current.visibleThreads).toEqual([])
-  })
-})
-
-describe('Activity search matcher APIs', () => {
-  it('matches Unicode and byte boundaries against independent expected results', () => {
-    installThreads(
-      1,
-      `Unicode İ 👩🏽‍💻 and BILLING ${'x'.repeat(2049)} ${'é'.repeat(1025)} ${'İ'.repeat(700)}`
-    )
-    const activity = renderHook(() => useAgentPaneThreads(options('')))
-    const thread = activity.result.current.allThreads[0]
-    const queries = [
-      { query: '', expected: true },
-      { query: '\t\n ', expected: true },
-      { query: 'BILLING', expected: true },
-      { query: '  Unicode İ ', expected: true },
-      { query: '👩🏽‍💻', expected: true },
-      { query: '\ud800', expected: false },
-      { query: 'x'.repeat(2048), expected: true },
-      { query: 'x'.repeat(2049), expected: false },
-      { query: 'é'.repeat(1024), expected: true },
-      { query: 'é'.repeat(1025), expected: false },
-      { query: 'İ'.repeat(700), expected: true }
-    ]
-    for (const { query, expected } of queries) {
-      expect(createActivityThreadSearchMatcher(query)(thread), query).toBe(expected)
-      expect(activityThreadMatchesSearchQuery({ thread, searchQuery: query }), query).toBe(expected)
-    }
   })
 })

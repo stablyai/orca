@@ -1,5 +1,5 @@
 import { unlinkSync } from 'node:fs'
-import { writeEncryptedCredential } from '../integration-credential-file'
+import { writeEncryptedCredential } from '../credentials/integration-credential-file'
 import {
   LEGACY_WORKSPACE_ID,
   ensureOrcaDir,
@@ -23,7 +23,7 @@ import {
   workspaceTokenFileCache
 } from './linear-workspace-registry'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
-import { readCredentialFileProtection } from '../credential-file-protection'
+import { readCredentialFileProtection } from '../credentials/credential-file-protection'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
 export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {

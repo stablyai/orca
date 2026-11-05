@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { WORKTREE_ROW_LAYOUT } from '../components/worktree-list-row-layout'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
@@ -10,12 +11,19 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   list: {
     paddingBottom: spacing.lg
   },
+  // The chevron sits in the rows' status-dot column, so the icon and title start at the row text.
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
+    paddingLeft: WORKTREE_ROW_LAYOUT.indicatorInset,
+    paddingRight: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: 6
+  },
+  sectionChevron: {
+    width: WORKTREE_ROW_LAYOUT.indicatorWidth,
+    alignItems: 'center',
+    marginRight: spacing.sm
   },
   sectionIcon: {
     marginRight: spacing.xs
@@ -24,25 +32,23 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     marginRight: spacing.xs
   },
   sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    flexShrink: 1
   },
   sectionCount: {
-    fontSize: 11,
+    fontSize: 13,
     color: colors.textMuted,
-    marginLeft: spacing.xs
+    marginLeft: 6
   },
   sectionPendingSpinner: {
     marginLeft: spacing.sm
   },
   separator: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginLeft: spacing.lg + 24,
-    marginRight: spacing.lg
+    marginLeft: WORKTREE_ROW_LAYOUT.textInset
   },
   filterModalSubtitle: {
     fontSize: typography.metaSize,
@@ -55,68 +61,16 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     gap: spacing.xs,
     marginBottom: spacing.sm
   },
-  // Settings-style group caption: sentence case, over the group's leading edge.
-  filterSectionLabel: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.lg
-  },
   optionSectionGap: {
     height: spacing.xs
   },
-  filterGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.surface,
-    overflow: 'hidden',
+  optionGroup: {
     marginBottom: spacing.md
   },
-  filterRow: {
-    minHeight: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm
-  },
-  filterRowText: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.textPrimary
-  },
-  // Inset from the leading edge, like a settings list.
-  filterSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginLeft: spacing.lg
-  },
-  optionRowLabel: {
-    flex: 1
-  },
-  optionRowDetail: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  optionRowIndented: {
-    paddingLeft: spacing.lg * 2
-  },
-  optionRowDisabled: {
-    opacity: 0.5
-  },
   optionSearch: {
-    padding: spacing.sm
+    marginBottom: spacing.sm
   },
-  optionRowValue: {
-    flexShrink: 1,
-    maxWidth: '45%',
-    fontSize: 15,
-    color: colors.textSecondary
-  },
-  // On the drawer's base color, so the track takes the panel color the option cards use.
   optionSegmented: {
-    backgroundColor: colors.bgPanel,
     marginBottom: spacing.md
   },
   // Over the sheet header's empty leading side, centred in its 52pt row.
@@ -155,7 +109,7 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     alignItems: 'center'
   },
   confirmBtnCancel: {
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.sheetGroup
   },
   confirmBtnDestructive: {
     backgroundColor: colors.statusRed

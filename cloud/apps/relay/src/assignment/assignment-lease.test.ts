@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract'
+import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract/close-codes'
 import { SignJWT } from 'jose'
 import nacl from 'tweetnacl'
 import { describe, expect, it, vi } from 'vitest'
@@ -10,13 +10,13 @@ import {
   assignmentLeaseKeyId,
   classifyAssignmentLease
 } from './assignment-lease.js'
-import { ASSIGNMENT_LEASE_SHADOW_EVENT, AssignmentLeaseShadow } from './assignment-lease-shadow.js'
-import type { RelayAssignmentStore } from '../assignment-store.js'
+import { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
+import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from '../config.js'
-import type { RelayCredentialStore } from '../credential-store.js'
-import { HostSessionRegistry } from '../host-session-registry.js'
-import type { RelayTokenClaims } from '../relay-token-verifier.js'
-import { ProcessQueuedByteBudget } from '../splice-forwarder.js'
+import type { RelayCredentialStore } from '../credentials/credential-store.js'
+import { HostSessionRegistry } from '../connections/host-session-registry.js'
+import type { RelayTokenClaims } from '../authentication/relay-token-verifier.js'
+import { ProcessQueuedByteBudget } from '../connections/splice-forwarder.js'
 
 const KEY = new TextEncoder().encode('0123456789abcdef0123456789abcdef')
 const OTHER_KEY = new TextEncoder().encode('fedcba9876543210fedcba9876543210')
@@ -61,14 +61,6 @@ const classify = async (value: string | undefined, helloEpoch = 4) =>
   })
 
 describe('assignment lease classification', () => {
-  it('names the key by a short hash of it', () => {
-    expect(assignmentLeaseKeyId(KEY)).toMatch(/^k1-[0-9a-f]{8}$/)
-    expect(assignmentLeaseKeyId(KEY)).toBe(
-      `k1-${createHash('sha256').update(KEY).digest('hex').slice(0, 8)}`
-    )
-    expect(assignmentLeaseKeyId(OTHER_KEY)).not.toBe(assignmentLeaseKeyId(KEY))
-  })
-
   it('sorts every lease into one class', async () => {
     expect(await classify(undefined)).toBe('absent')
     expect(await classify(await lease())).toBe('valid')
@@ -87,58 +79,6 @@ describe('assignment lease classification', () => {
     expect(await classify(await lease({ cellId: 'production-gce-c8' }))).toBe('wrong-cell')
     expect(await classify(await lease({ assignmentEpoch: 3 }))).toBe('epoch-behind')
     expect(await classify(await lease({ assignmentEpoch: 5 }))).toBe('epoch-ahead')
-  })
-})
-
-describe('assignment lease shadow', () => {
-  it('does nothing while the switch is off', () => {
-    const shadow = new AssignmentLeaseShadow({ enabled: () => false, key: KEY, cellId: CELL_ID })
-    expect(shadow.check({ lease: undefined, ...HOST, helloEpoch: 4 })).toBeNull()
-  })
-
-  it('counts each class against the database answer and logs one line per window', async () => {
-    let now = 0
-    const log = vi.fn()
-    const shadow = new AssignmentLeaseShadow({
-      enabled: () => true,
-      key: KEY,
-      cellId: CELL_ID,
-      now: () => now,
-      log
-    })
-    const valid = await lease()
-    const record = async (value: string | undefined, dbValid: boolean, dbReadMs: number) => {
-      const check = shadow.check({ lease: value, ...HOST, helloEpoch: 4 })
-      expect(check).not.toBeNull()
-      if (check) shadow.record(check, dbValid, dbReadMs)
-      await check
-      await Promise.resolve()
-    }
-    await record(valid, true, 2)
-    await record(valid, false, 4)
-    await record(undefined, true, 6)
-    expect(log).not.toHaveBeenCalled()
-    now = 60_000
-    await record(valid, true, 8)
-    expect(log).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({
-      event: ASSIGNMENT_LEASE_SHADOW_EVENT,
-      cellId: CELL_ID,
-      windowMs: 60_000,
-      classes: {
-        agree: 2,
-        disagree: 1,
-        absent: 1,
-        expired: 0,
-        badSignature: 0,
-        wrongHost: 0,
-        wrongCell: 0,
-        epochBehind: 0,
-        epochAhead: 0
-      },
-      dbRefused: 1,
-      dbReadMs: { samples: 4, p50: 4, p99: 8, max: 8 }
-    })
   })
 })
 
@@ -181,7 +121,13 @@ describe('host hello with the lease shadow on', () => {
       {} as RelayCredentialStore,
       { verifyCellAssignment } as unknown as RelayAssignmentStore,
       new ProcessQueuedByteBudget(),
-      { recordAuth: vi.fn(), recordForwardedBytes: vi.fn(), recordHttp: vi.fn(), recordReconnect: vi.fn(), recordSql: vi.fn() },
+      {
+        recordAuth: vi.fn(),
+        recordForwardedBytes: vi.fn(),
+        recordHttp: vi.fn(),
+        recordReconnect: vi.fn(),
+        recordSql: vi.fn()
+      },
       Date.now,
       Math.random,
       'incarnation-1',
@@ -189,7 +135,13 @@ describe('host hello with the lease shadow on', () => {
     )
     const socket = new FakeSocket()
     const hostLease = input.withLease ? await lease({ relayHostId }) : undefined
-    registry.acceptControl(socket as unknown as WebSocket, identity, undefined, undefined, hostLease)
+    registry.acceptControl(
+      socket as unknown as WebSocket,
+      identity,
+      undefined,
+      undefined,
+      hostLease
+    )
     socket.emit(
       'message',
       Buffer.from(

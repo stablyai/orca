@@ -15,10 +15,11 @@ export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   stage?: string
   turnStart?: string
   next?: string
+  keptOpen?: true
 }
 
 // A hook-capable agent that has not shown its turn yet is usually slow, not dead; a resend duplicates the task.
-function isUnobservedTurnStart(value: WorkerStartAgentReceipt): boolean {
+export function isUnobservedTurnStart(value: WorkerStartAgentReceipt): boolean {
   return (
     value.state === 'outcome_unknown' &&
     (value.turnStart === 'unobserved' || value.stage === 'turn_start_unobserved')
@@ -43,6 +44,7 @@ type WorkerStartFields = {
   warning?: string
   residualResources?: string[]
   nextCommands?: string[]
+  keptOpen?: true
   next?: string
 }
 
@@ -76,6 +78,7 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         residualResources:
           value.state !== 'ready' && !unobserved && residual.length ? residual : undefined,
         nextCommands: value.state === 'ready' || unobserved ? undefined : value.nextCommands,
+        keptOpen: value.keptOpen,
         next: unobserved
           ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
           : value.recovery
@@ -99,6 +102,39 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
               message: `${value.failedStage ?? 'start'}: ${value.lastError ?? value.state}`
             }
   }
+
+/** A send a finished worker took as its next Task: worker-start's receipt plus where it went. */
+export type WorkerFollowUpReceipt = WorkerStartAgentReceipt & {
+  delivery: 'follow_up' | 'reopened' | 'started_fresh'
+  followUpOf: string
+}
+
+type WorkerFollowUpFields = Omit<WorkerStartFields, 'mode' | 'modeDetail'> & {
+  delivery: WorkerFollowUpReceipt['delivery']
+  followUpOf: string
+  /** Behind the worker's own finishing turn: it runs when that turn ends. */
+  queued?: true
+  mode?: string
+  modeDetail?: string
+}
+
+export const WORKER_FOLLOW_UP_VIEW: OrchestrationAgentView<
+  WorkerFollowUpReceipt,
+  WorkerFollowUpFields
+> = {
+  fields: (value) => {
+    const { mode, modeDetail, ...start } = WORKER_START_VIEW.fields(value)
+    return {
+      delivery: value.delivery,
+      followUpOf: value.followUpOf,
+      ...start,
+      queued: value.turnStart === 'queued' ? true : undefined,
+      // The launch mode describes a new worker; only a fresh start is one.
+      ...(value.delivery === 'started_fresh' ? { mode, modeDetail } : {})
+    }
+  },
+  failure: WORKER_START_VIEW.failure
+}
 
 function findEffectId(
   effects: unknown[] | undefined,

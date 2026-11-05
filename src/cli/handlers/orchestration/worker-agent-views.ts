@@ -1,5 +1,6 @@
 import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
 import type { WorkerListRunScope } from './worker-list-run-scope'
+import { isActionableOrchestrationFleetAttention } from '../../../shared/orchestration-fleet-attention'
 
 type WorkerProjection = {
   runId?: string
@@ -21,6 +22,7 @@ export type WorkerShowResult = {
     taskId: string
     runId?: string
     status: string
+    followUpOf?: string | null
   } | null
   worker: {
     dispatchId?: string
@@ -43,6 +45,7 @@ type WorkerShowFields = {
   dispatchId: string
   taskId?: string
   runId?: string
+  followUpOf?: string
   state: string
   stage: string
   liveness?: string
@@ -63,6 +66,7 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
       dispatchId: value.dispatch?.id ?? value.worker.dispatchId ?? 'unknown',
       taskId: value.dispatch?.taskId,
       runId: value.dispatch?.runId ?? value.projection?.runId,
+      followUpOf: value.dispatch?.followUpOf ?? undefined,
       state: value.worker.state,
       stage: value.worker.stage,
       liveness: value.projection?.liveness.verdict,
@@ -74,7 +78,7 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
         value.terminalResource?.releaseState ??
         undefined,
       workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
-      attention: nonEmpty(value.projection?.attention?.categories),
+      attention: actionableAttention(value.projection),
       // Silence means checked and clear; an older host or unreadable pane never evaluated it.
       waitingOnHuman:
         value.observation === undefined || !('agentWait' in value.observation)
@@ -158,9 +162,11 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         // Older runtimes send no projection; the terminal resource row still names both.
         workspace: projection?.workspace?.id ?? worker.resource?.worktreeId ?? undefined,
         host: projection?.host.id,
-        attention: nonEmpty(projection?.attention?.categories),
+        attention: actionableAttention(projection),
         autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
-        next: projection ? renderOrchestrationArgv(projection.nextAction.argv) : undefined
+        next: projection
+          ? renderOrchestrationArgv(projection.nextAction.argv)
+          : olderHostReleaseNext(worker)
       }
     }),
     scope: value.scope,
@@ -179,6 +185,13 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
   }
 }
 
+// Older runtimes send no projection and cannot close finished workers on their own.
+function olderHostReleaseNext(worker: WorkerListResult['workers'][number]): string | undefined {
+  return worker.terminalState === 'reclaimable' && !worker.resource?.autoReleaseAt
+    ? renderOrchestrationArgv(['orchestration', 'worker-release', '--dispatch', worker.dispatchId])
+    : undefined
+}
+
 function workerListWarnings(value: WorkerListResult): string[] {
   return [
     ...(value.warnings ?? []),
@@ -187,6 +200,13 @@ function workerListWarnings(value: WorkerListResult): string[] {
         `worker observations from ${error.name} (${error.environmentId}) are incomplete: ${error.code}; dispatches=${error.dispatchIds.join(',') || 'none'}`
     )
   ]
+}
+
+// Descriptive categories like root_completion or stale owe the coordinator nothing; --full keeps them.
+function actionableAttention(
+  projection: WorkerProjection | null | undefined
+): string[] | undefined {
+  return nonEmpty(projection?.attention?.categories.filter(isActionableOrchestrationFleetAttention))
 }
 
 function nonEmpty<T>(values: T[] | undefined): T[] | undefined {

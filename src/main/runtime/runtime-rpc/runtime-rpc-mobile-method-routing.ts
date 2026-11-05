@@ -87,6 +87,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.pull',
   'git.push',
   'git.rebaseFromBase',
+  'git.remoteCommitUrl',
   'git.resolveConflict',
   'git.stage',
   'git.status',
@@ -101,6 +102,7 @@ export const EXECUTION_HOST_METHODS = [
   'github.listAssignableUsers',
   'github.listLabels',
   'github.listWorkItems',
+  'github.markPRDraft',
   'github.markPRReadyForReview',
   'github.mergePR',
   'github.prCheckDetails',
@@ -155,6 +157,9 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
+  // Sender cards resolve on the host that owns the orchestration records.
+  'orchestration.partyLocation',
+  'orchestration.partyOpen',
   // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
   'orchestration.workerChatTouch',
@@ -208,6 +213,7 @@ export const EXECUTION_HOST_METHODS = [
   'terminal.isRunningAgent',
   'terminal.list',
   'terminal.multiplex',
+  'terminal.openInputSession',
   'terminal.read',
   'terminal.rename',
   'terminal.send',

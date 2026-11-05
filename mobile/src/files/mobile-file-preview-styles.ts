@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, concentricRadius, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const filePreviewStyles = themedStyleSheet(() => ({
@@ -29,10 +29,10 @@ export const filePreviewStyles = themedStyleSheet(() => ({
   },
   scroll: {
     flex: 1,
-    backgroundColor: colors.editorSurface
+    backgroundColor: colors.bgBase
   },
   textContent: {
-    padding: spacing.md,
+    padding: spacing.lg,
     paddingBottom: spacing.xl
   },
   textPreview: {
@@ -42,36 +42,19 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     lineHeight: 19
   },
   markdownContent: {
-    padding: spacing.md,
+    padding: spacing.lg,
     paddingBottom: spacing.xl
   },
-  modeContainer: {
-    flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  modeToolbar: {
+  modeBar: {
     flexDirection: 'row',
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
-    padding: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgPanel
-  },
-  modeToggle: {
-    width: 34,
-    height: 28,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: concentricRadius(radii.control, 2),
-    backgroundColor: 'transparent',
-    opacity: 0.72
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs
   },
-  modeToggleActive: {
-    backgroundColor: colors.bgRaised,
-    opacity: 1
+  modeSwitch: {
+    backgroundColor: colors.bgPanel
   },
   truncatedNote: {
     marginBottom: spacing.md,
@@ -80,24 +63,21 @@ export const filePreviewStyles = themedStyleSheet(() => ({
   },
   imageContainer: {
     flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  imageScrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md
-  },
-  image: {
-    backgroundColor: colors.editorSurface
+    backgroundColor: colors.bgBase
   },
   editContainer: {
     flex: 1,
-    backgroundColor: colors.editorSurface,
-    padding: spacing.md
+    backgroundColor: colors.bgBase,
+    padding: spacing.lg
   },
   saveErrorText: {
     marginBottom: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  previewSaveErrorText: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     color: colors.statusRed,
     fontSize: typography.metaSize
   },
@@ -105,8 +85,58 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     flex: 1,
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
-    fontSize: 13,
-    lineHeight: 19,
+    // iOS zooms the page when a field under 16px takes focus; a literal, not the seam, avoids an extra shared chunk.
+    fontSize: 16,
+    lineHeight: 22,
     padding: 0
+  }
+}))
+
+export const chatAttachmentPreviewStyles = themedStyleSheet(() => ({
+  ...filePreviewStyles,
+  header: {
+    backgroundColor: colors.bgPanel,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
+  },
+  topBar: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    borderCurve: 'circular'
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  title: {
+    color: colors.textPrimary,
+    fontSize: typography.titleSize,
+    fontWeight: '600'
+  },
+  meta: {
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  saveButtonDisabled: {
+    opacity: 0.42
+  },
+  scroll: {
+    flex: 1,
+    backgroundColor: colors.editorSurface
+  },
+  textContent: {
+    padding: spacing.md,
+    paddingBottom: spacing.xl
   }
 }))

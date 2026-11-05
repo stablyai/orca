@@ -121,10 +121,7 @@ export function sessionScreenTabMountAdapters(
             setSessionTabs: (update) => {
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
-            reconcileBufferedDraftsRef: { current: () => {} },
             closedTabTombstonesRef: { current: new Map() },
-            clearTerminalLiveInputDefault: (handle: string) =>
-              effect('clear-live-input', { handle }),
             setActiveHandle: (value) => {
               activeHandle = typeof value === 'function' ? value(activeHandle) : value
             },

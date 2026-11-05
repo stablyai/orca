@@ -159,7 +159,7 @@ async function runCapture(options, command) {
   const pty = await import('node-pty').catch((error) => {
     console.error(
       `node-pty failed to load. Build it for plain node first:
-  node config/scripts/ensure-native-runtime.mjs --runtime=node
+  node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node
 ${String(error)}`
     )
     return null

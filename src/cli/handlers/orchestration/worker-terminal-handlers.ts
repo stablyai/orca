@@ -22,6 +22,23 @@ const WORKER_TERMINAL_LIST_STATES = [
   'released'
 ] as const
 
+const keepWorkerOpen: CommandHandler = async ({ flags, client, json }) => {
+  const result = await callOrchestrationMutation<WorkerReleaseReceipt>(
+    client,
+    flags,
+    'orchestration.workerRetain',
+    { dispatch: getRequiredStringFlag(flags, 'dispatch') }
+  )
+  if (!flags.has('full')) {
+    printOrchestrationResult(result, json, WORKER_RELEASE_VIEW)
+    return
+  }
+  if (result.result.state === 'release_unknown') {
+    process.exitCode = 1
+  }
+  printResult(result, json, formatWorkerRelease)
+}
+
 export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-stop': async ({ flags, client, json }) => {
     const result = await callOrchestrationMutation<{
@@ -88,22 +105,8 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     printResult(result, json, formatWorkerRelease)
   },
 
-  'orchestration worker-retain': async ({ flags, client, json }) => {
-    const result = await callOrchestrationMutation<WorkerReleaseReceipt>(
-      client,
-      flags,
-      'orchestration.workerRetain',
-      { dispatch: getRequiredStringFlag(flags, 'dispatch') }
-    )
-    if (!flags.has('full')) {
-      printOrchestrationResult(result, json, WORKER_RELEASE_VIEW)
-      return
-    }
-    if (result.result.state === 'release_unknown') {
-      process.exitCode = 1
-    }
-    printResult(result, json, formatWorkerRelease)
-  },
+  'orchestration worker-keep-open': keepWorkerOpen,
+  'orchestration worker-retain': keepWorkerOpen,
 
   'orchestration worker-list': async ({ flags, client, cwd, json }) => {
     const terminalState = getOptionalStringFlag(flags, 'terminal-state')

@@ -6,7 +6,9 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
 const DETECTOR_SOURCE = readFileSync(
-  fileURLToPath(new URL('../../src/shared/terminal-github-pr-link-detector.ts', import.meta.url)),
+  fileURLToPath(
+    new URL('../../src/shared/terminal/links/terminal-github-pr-link-detector.ts', import.meta.url)
+  ),
   'utf8'
 )
 
@@ -76,7 +78,7 @@ function carryBefore(value) {
   return endsWithHttpSchemePrefixFragment(value)
 }
 
-// Post-fix implementation, mirroring src/shared/terminal-github-pr-link-detector.ts.
+// Post-fix implementation, mirroring src/shared/terminal/links/terminal-github-pr-link-detector.ts.
 function lastIndexOfHttpScheme(value, fromIndex) {
   let lastIndex = -1
   for (const prefix of HTTP_SCHEME_PREFIXES) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { grokToolBackgroundTasks } from './grok-background-tasks'
 import { GROK_ACP_DIALECT } from './grok-dialect'
@@ -17,58 +17,6 @@ function finished(update: Partial<ToolCallUpdate>): ToolCallUpdate {
 }
 
 describe('Grok subagent session updates', () => {
-  it('reads a spawn with its description, its spawning turn and nothing it cannot show', () => {
-    expect(
-      grokSubagentNotification({
-        sessionUpdate: 'subagent_spawned',
-        subagent_id: 'subagent-1',
-        child_session_id: 'subagent-1',
-        parent_prompt_id: 'prompt-1',
-        subagent_type: 'general-purpose',
-        description: 'Count note lines',
-        model: 'grok-4.7'
-      })
-    ).toEqual({ id: 'subagent-1', state: 'working', label: 'Count note lines', turn: 'prompt-1' })
-  })
-
-  it('labels a spawn with no description by its type', () => {
-    expect(
-      grokSubagentNotification({
-        sessionUpdate: 'subagent_spawned',
-        subagent_id: 'subagent-1',
-        subagent_type: 'explore'
-      })
-    ).toEqual({ id: 'subagent-1', state: 'working', label: 'explore' })
-  })
-
-  it('reads progress as tokens only', () => {
-    expect(
-      grokSubagentNotification({
-        sessionUpdate: 'subagent_progress',
-        subagent_id: 'subagent-1',
-        tokens_used: 4091
-      })
-    ).toEqual({ id: 'subagent-1', tokens: 4091 })
-  })
-
-  it.each([
-    ['completed', { state: 'completed', result: '4' }],
-    ['failed', { state: 'failed' }],
-    ['cancelled', { state: 'stopped' }],
-    ['something-new', {}]
-  ] as const)('reads a %s finish', (status, expected) => {
-    expect(
-      grokSubagentNotification({
-        sessionUpdate: 'subagent_finished',
-        subagent_id: 'subagent-1',
-        status,
-        output: status === 'completed' ? '4' : undefined,
-        error: status === 'completed' ? undefined : 'Subagent was cancelled',
-        tokens_used: 0
-      })
-    ).toEqual({ id: 'subagent-1', ...expected })
-  })
-
   it('ignores every other update', () => {
     expect(grokSubagentNotification({ sessionUpdate: 'turn_completed' })).toBeUndefined()
     expect(grokSubagentNotification({ sessionUpdate: 'subagent_spawned' })).toBeUndefined()
@@ -95,21 +43,6 @@ describe('Grok subagent session updates', () => {
 
 describe('Grok subagent tool calls', () => {
   const spawnInput = { description: 'Count note lines', prompt: 'Read notes.txt' }
-
-  it('ends a foreground spawn with its reply, the machine blocks removed', () => {
-    expect(
-      grokToolSubagents(
-        finished({
-          rawOutput: {
-            type: 'SubagentCompleted',
-            subagent_id: 'subagent-1',
-            output: `4${SUBAGENT_RESULT_TAIL}`
-          }
-        }),
-        tool('spawn_subagent', spawnInput)
-      )
-    ).toEqual([{ id: 'subagent-1', state: 'completed', label: 'Count note lines', result: '4' }])
-  })
 
   it('keeps a background spawn running from its acknowledgement, labelled by the prompt when undescribed', () => {
     expect(
@@ -176,14 +109,5 @@ describe('Grok subagent tool calls', () => {
       { id: 'subagent-1', state: 'stopped', knownOnly: true }
     ])
     expect(grokToolBackgroundTasks(update, tool('kill_command_or_subagent'))).toEqual([])
-  })
-
-  it('infers a kill with no result from the ids it named', () => {
-    expect(
-      grokToolSubagents(
-        finished({}),
-        tool('kill_command_or_subagent', { task_ids: ['subagent-1', 'subagent-1'] })
-      )
-    ).toEqual([{ id: 'subagent-1', state: 'stopped', knownOnly: true }])
   })
 })

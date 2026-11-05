@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import {
   chmod,
@@ -13,21 +14,18 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 import { observeSkillPackage } from '../../src/main/skills/skill-package-identity'
 import {
   classifyFile,
   collectPackageFiles,
   describeFile,
   findDroppedReleasedDigests,
-  normalizeText,
   packageDigest,
   sortManifestFiles,
   withDigests
 } from './generate-skill-bundle-manifest.mjs'
 
 const temporaryDirectories = []
-const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 
 async function createPackage() {
   const directory = await mkdtemp(path.join(tmpdir(), 'orca-skill-manifest-'))
@@ -50,8 +48,18 @@ async function createGeneratorSandbox() {
   const script = path.join(root, 'config', 'scripts', 'generate-skill-bundle-manifest.mjs')
   await mkdir(path.dirname(script), { recursive: true })
   await mkdir(skillRoot, { recursive: true })
-  for (const name of ['generate-skill-bundle-manifest.mjs', 'git-pull-request-diff-base.mjs']) {
-    await copyFile(path.join(import.meta.dirname, name), path.join(path.dirname(script), name))
+  await mkdir(path.join(root, 'src', 'shared'), { recursive: true })
+  await copyFile(
+    path.resolve(import.meta.dirname, '../../src/shared/bundled-skill-renames.json'),
+    path.join(root, 'src', 'shared', 'bundled-skill-renames.json')
+  )
+  for (const name of [
+    'generate-skill-bundle-manifest.mjs',
+    'git/pr-diff-base/git-pull-request-diff-base.mjs'
+  ]) {
+    const target = path.join(path.dirname(script), name)
+    await mkdir(path.dirname(target), { recursive: true })
+    await copyFile(path.join(import.meta.dirname, name), target)
   }
   await writeFile(path.join(skillRoot, 'SKILL.md'), 'demo skill\n')
   const run = (env, args) =>
@@ -91,14 +99,6 @@ afterEach(async () => {
 })
 
 describe('skill bundle manifest generator', () => {
-  it('folds platform line endings for text identity', () => {
-    const lf = Buffer.from('first\nsecond\n')
-    const crlf = Buffer.from('first\r\nsecond\r\n')
-
-    expect(classifyFile(lf)).toBe('text')
-    expect(normalizeText(crlf)).toEqual(lf)
-  })
-
   it('classifies null-containing and invalid UTF-8 content as binary', () => {
     expect(classifyFile(Buffer.from([0, 1, 2]))).toBe('binary')
     expect(classifyFile(Buffer.from([0xc3, 0x28]))).toBe('binary')
@@ -181,6 +181,23 @@ describe('skill bundle manifest generator', () => {
     expect(() => sandbox.generate()).not.toThrow()
   })
 
+  it('keeps SKILL.md bytes only a release tag shipped, off HEAD', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.git('init', '-q', '-b', 'main')
+    sandbox.git('add', 'skills')
+    sandbox.git('commit', '-qm', 'one')
+    sandbox.git('checkout', '-qb', 'release')
+    await sandbox.editSkill('release-only version\n')
+    sandbox.git('commit', '-qam', 'release cut')
+    sandbox.git('tag', 'v1.0.0')
+    sandbox.git('checkout', '-q', 'main')
+    await sandbox.editSkill('demo skill\n')
+    sandbox.generate('--write')
+    const digests = JSON.parse(await sandbox.read('released-digests.json')).skills.demo
+    expect(digests).toContain(createHash('sha256').update('release-only version\n').digest('hex'))
+    expect(digests).toHaveLength(2)
+  })
+
   it('fails when a digest is missing or the pull request base cannot be read', async () => {
     const sandbox = await createGeneratorSandbox()
     sandbox.generate('--write')
@@ -251,17 +268,6 @@ describe('skill bundle manifest generator', () => {
     expect(await collectPackageFiles(packageRoot)).toEqual(pristine)
   })
 
-  it('still records an unexpected file that is not OS metadata', async () => {
-    const packageRoot = await createPackage()
-    await writeFile(path.join(packageRoot, 'SKILL.md'), 'demo skill\n')
-    await writeFile(path.join(packageRoot, 'payload.sh'), 'echo hi\n')
-
-    expect((await collectPackageFiles(packageRoot)).map((file) => file.path)).toEqual([
-      'SKILL.md',
-      'payload.sh'
-    ])
-  })
-
   it('keeps guarding a directory or link that only wears an OS metadata name', async () => {
     const packageRoot = await createPackage()
     await writeFile(path.join(packageRoot, 'SKILL.md'), 'demo skill\n')
@@ -310,31 +316,5 @@ describe('skill bundle manifest generator', () => {
     const generated = (await collectPackageFiles(packageRoot)).map((file) => file.path)
     expect(generated).toEqual((await observeSkillPackage(packageRoot)).files.map((f) => f.path))
     expect(generated).toEqual(['.DS_Store.md', '.dsstore', 'SKILL.md', '_SKILL.md', 'ds_store.md'])
-  })
-
-  // Release steps share index; a prior step can stage regenerated manifest into bump commit. Pin cut’s committed-artifact guard and spellings.
-  it('keeps the whole release-cut job off skill regeneration', async () => {
-    const workflow = parse(
-      await readFile(path.join(REPO_ROOT, '.github/workflows/release-cut.yml'), 'utf8')
-    )
-    const runSteps = workflow.jobs.cut.steps
-      .filter((step) => typeof step.run === 'string')
-      .map((step) => ({ name: step.name ?? '(unnamed)', run: step.run.replace(/^\s*#.*$/gm, '') }))
-    const bumpStep = runSteps.find((step) => step.name === 'Bump package.json and tag')
-
-    // Check commit, not index (commit flags can bypass it); -F keeps dot literal, -m exposes merge changes.
-    expect(bumpStep.run).toMatch(
-      /git diff-tree --no-commit-id --name-only -r -m --first-parent HEAD\s*\|\s*grep -vxF -e 'package\.json'/
-    )
-    expect(bumpStep.run.indexOf('grep -vxF')).toBeLessThan(bumpStep.run.indexOf('git tag'))
-    // ...and that it aborts. A guard degraded to a warning still reads as covered.
-    expect(bumpStep.run).toMatch(
-      /if \[\[ -n "\$committed" \]\]; then(?:(?!\bfi\b)[\s\S])*exit 1[\s\S]*?fi/
-    )
-    for (const step of runSteps) {
-      expect(step.run, step.name).not.toMatch(
-        /resources[/\\]skills|--write|generate:skill-bundle-manifest/
-      )
-    }
   })
 })

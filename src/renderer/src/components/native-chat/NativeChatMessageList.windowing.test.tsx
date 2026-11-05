@@ -28,8 +28,8 @@ afterEach(() => {
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from './native-chat-autoscroll'
 import { NATIVE_CHAT_ROW_GAP_PX } from './native-chat-row-height-estimate'
@@ -221,7 +221,7 @@ describe('revealing a diff from a turn rollup', () => {
     )
   ]
 
-  it('mounts the row a reveal names even when the window has left it behind', () => {
+  it('opens an old edit inline at the visible turn outcome without mounting its source row', () => {
     const scrollTo = vi.fn()
     vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
     const { container } = render(
@@ -237,14 +237,13 @@ describe('revealing a diff from a turn rollup', () => {
     expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
     const mountedBefore = windowState(container).indexes.length
 
-    fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     scrollTo.mockClear()
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
 
     expect(screen.getByText('Edited')).toBeInTheDocument()
     expect(screen.getByText('after')).toBeInTheDocument()
-    expect(scrollTo).toHaveBeenCalled()
-    // Pinned, not paged to: the window is still a window.
+    expect(scrollTo).not.toHaveBeenCalled()
+    // The outcome reuses the bounded transcript window.
     expect(windowState(container).indexes.length).toBeLessThanOrEqual(mountedBefore + 2)
   })
 })

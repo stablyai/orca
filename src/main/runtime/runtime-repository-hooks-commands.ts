@@ -1,16 +1,23 @@
 import { getRepoDialableSshTargetId } from '../../shared/execution-host'
 import { createHash } from 'node:crypto'
-import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
+import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
-import { getEffectiveHooks, hasHooksFile, hasUnrecognizedOrcaYamlKeys, loadHooks } from '../hooks'
-import { getEffectiveSetupRunPolicy } from '../effective-hook-config'
+import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
+import {
+  getEffectiveHooks,
+  hasHooksFile,
+  hasUnrecognizedOrcaYamlKeys,
+  loadHooks
+} from '../workspace-hooks/hooks'
+import { getEffectiveSetupRunPolicy } from '../workspace-hooks/effective-hook-config'
+import { resolveHookCommandSourcePolicy } from '../../shared/hook-command-source-policy'
 import { getSetupConfig, getSetupTrustContent } from '../../shared/orca-hook-setup-config'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
+import { inspectSetupScriptImportCandidates } from '../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
-import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 type RuntimeRepositoryHooksCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
@@ -45,8 +52,10 @@ export class RuntimeRepositoryHooksCommands {
       // Local-only setup runs the user's own script, which needs no orca.yaml trust.
       setupTrust:
         setupConfig && setupConfig.source !== 'local'
-          ? setupTrust(getSetupTrustContent(sharedHooks))
-          : undefined
+          ? hookTrust(getSetupTrustContent(sharedHooks))
+          : undefined,
+      // As desktop's archive prompt: only a shared orca.yaml script needs trust. null tells clients none is needed; older hosts omit it.
+      archiveTrust: archiveTrust(repo, sharedHooks)
     }
   }
 
@@ -106,6 +115,22 @@ export class RuntimeRepositoryHooksCommands {
   }
 }
 
-function setupTrust(scriptContent: string): { contentHash: string; scriptContent: string } {
+function hookTrust(scriptContent: string): { contentHash: string; scriptContent: string } {
   return { contentHash: createHash('sha256').update(scriptContent).digest('hex'), scriptContent }
+}
+
+function archiveTrust(
+  repo: Repo,
+  sharedHooks: OrcaHooks | null
+): { contentHash: string; scriptContent: string } | null {
+  // Folder removal never runs hooks.
+  if (isFolderRepo(repo)) {
+    return null
+  }
+  const localArchive = repo.hookSettings?.scripts.archive?.trim()
+  const policy = resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
+    hasLocalScript: Boolean(localArchive)
+  })
+  const sharedArchive = sharedHooks?.scripts.archive?.trim()
+  return policy === 'local-only' || !sharedArchive ? null : hookTrust(sharedArchive)
 }

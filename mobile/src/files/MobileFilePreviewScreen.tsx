@@ -1,13 +1,14 @@
+import { saveErrorMessageFromPreviewResult } from './mobile-file-preview-response'
+import { MobileChatAttachmentPreview } from './MobileChatAttachmentPreview'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View } from 'react-native'
-import { SafeAreaView, useSafeAreaFrame } from 'react-native-safe-area-context'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, Save } from 'lucide-react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { getWorktreeLabel } from '../session/worktree-label'
-import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
@@ -16,13 +17,16 @@ import {
   loadMobileFilePreview,
   previewError,
   saveMobileTerminalArtifactPreview,
-  type MobileFilePreviewSource,
   type MobileFilePreviewResult
 } from './mobile-file-preview-request'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileFilePreviewBody } from './MobileFilePreviewBody'
+import {
+  MobileMarkdownPreviewModeBar,
+  useMarkdownPreviewMode
+} from './MobileMarkdownPreviewModeBar'
 import {
   displayNameFromPreviewPath,
   type MobileFilePreviewRouteState
@@ -42,7 +46,14 @@ type Props = {
   route: MobileFilePreviewRouteState
 }
 
-export function MobileFilePreviewScreen({ route }: Props) {
+export const MobileFilePreviewScreen = ({ route }: Props) =>
+  route.ok && route.params.source === 'chatAttachment' ? (
+    <MobileChatAttachmentPreview key={JSON.stringify(route.params)} params={route.params} />
+  ) : (
+    <WorkspaceFilePreviewScreen route={route} />
+  )
+
+function WorkspaceFilePreviewScreen({ route }: Props) {
   const executionHost = useWorkspaceExecutionHost()
   const documentKey = route.ok
     ? [
@@ -82,14 +93,11 @@ function MobileFilePreviewDocument({ route }: Props) {
   const draftContentRef = useRef(draftContent)
   const savedContentRef = useRef(savedContent)
   const draftSourceKeyRef = useRef<string | null>(null)
-  const { width, height } = useSafeAreaFrame()
   const routePreviewSource = useMemo(
     () => (previewParams ? previewSourceFromRoute(previewParams) : null),
     [previewParams]
   )
-  const [previewSource, setPreviewSource] = useState<MobileFilePreviewSource | null>(
-    routePreviewSource
-  )
+  const [previewSource, setPreviewSource] = useState(routePreviewSource)
   const previewSourceKey = useMemo(() => sourceKeyForPreview(previewSource), [previewSource])
   const routePreviewSourceKey = useMemo(
     () => sourceKeyForPreview(routePreviewSource),
@@ -238,9 +246,7 @@ function MobileFilePreviewDocument({ route }: Props) {
     previewParams?.worktreeName,
     previewParams?.worktreeId ?? ''
   )
-  const meta = previewParams
-    ? `${worktreeLabel} - ${displayPath}`
-    : t('files.filePreviewScreen.title', 'Preview')
+  const [markdownMode, setMarkdownMode] = useMarkdownPreviewMode(displayPath, lineColumn?.line)
   const isEditableTerminalArtifact =
     previewSource?.source === 'terminalArtifact' &&
     isEditableMobileTerminalArtifactPreview(preview, previewSource.readOnly === true)
@@ -324,7 +330,7 @@ function MobileFilePreviewDocument({ route }: Props) {
             />
           }
           title={title || t('files.filePreviewScreen.title', 'Preview')}
-          subtitle={meta}
+          subtitle={previewParams ? worktreeLabel : undefined}
           trailing={
             isEditableTerminalArtifact ? (
               <NavBarButton
@@ -338,6 +344,19 @@ function MobileFilePreviewDocument({ route }: Props) {
               />
             ) : null
           }
+          accessory={
+            preview.status === 'ready' &&
+            preview.kind === 'markdown' &&
+            !isEditableTerminalArtifact ? (
+              <MobileMarkdownPreviewModeBar
+                mode={markdownMode}
+                onModeChange={setMarkdownMode}
+                relativePath={displayPath}
+                content={preview.content}
+                truncated={preview.truncated}
+              />
+            ) : null
+          }
         />
       </SafeAreaView>
       <MobileFilePreviewBody
@@ -347,11 +366,10 @@ function MobileFilePreviewDocument({ route }: Props) {
         relativePath={displayPath}
         title={title || t('files.filePreviewScreen.fileTitle', 'File')}
         editable={isEditableTerminalArtifact}
+        markdownMode={markdownMode}
         draftContent={draftContent}
         saveError={saveError}
         lineColumn={lineColumn}
-        imageWidth={Math.max(1, width - spacing.md * 2)}
-        imageHeight={Math.max(240, height - 160)}
         onDraftChange={setDraftContent}
         onImageError={() =>
           setPreview({
@@ -395,10 +413,4 @@ function MobileFilePreviewDocument({ route }: Props) {
       />
     </View>
   )
-}
-
-function saveErrorMessageFromPreviewResult(result: MobileFilePreviewResult): string {
-  return result.status === 'error' || result.status === 'waiting'
-    ? result.message
-    : translate('files.filePreviewScreen.saveFailed', 'Unable to save file')
 }

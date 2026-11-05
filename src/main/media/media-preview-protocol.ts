@@ -1,5 +1,5 @@
 import { protocol } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
 import {
   filePreviewForPath,
@@ -19,7 +19,7 @@ import {
 } from './preview-document-signature'
 import { openLocalPreviewGrantFile } from './local-preview-grant-file'
 import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
-import { resolveLocalFileRequestPath } from '../ipc/local-file-access-resolution'
+import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
 import { openLocalRegularFile } from '../ipc/filesystem/local-regular-file-read'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { createMediaRangeResponse } from './media-range-response'

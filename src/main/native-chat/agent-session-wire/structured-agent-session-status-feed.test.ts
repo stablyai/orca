@@ -1,18 +1,18 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
-import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
+import { publishCodexTurnLifecycle } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import {
@@ -26,7 +26,8 @@ import {
 } from './structured-agent-session-status-feed'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { releasedStructuredStatusSummary } from './structured-agent-session-status-summary'
 
 const SESSION = 'status-session'
 const TURN_IDENTITY = {
@@ -107,6 +108,24 @@ function feedFor(
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
+  it("retains the saved model but drops the released child's reported model", () => {
+    const released = releasedStructuredStatusSummary({
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      agent: 'claude',
+      status: 'idle',
+      latestPrompt: 'hello',
+      model: 'claude-opus-5-5',
+      reportedModel: 'claude-opus-4-8',
+      hostExecutionOwned: true,
+      hostExecutionPhase: 'ready',
+      updatedAt: 1_000
+    })
+
+    expect(released.model).toBe('claude-opus-5-5')
+    expect(released).not.toHaveProperty('reportedModel')
+  })
+
   it('publishes provider ownership transitions without changing journal time', async () => {
     const journal = await openJournal()
     const sessions = new Map<string, Indexed>([
@@ -640,7 +659,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    const snapshot = vi.spyOn(journal, 'snapshot')
+    const snapshot = vi.spyOn(journal, 'statusRead')
     let taskState: 'working' | 'waiting' = 'working'
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => [
       statusFeedChildView({ state: taskState })

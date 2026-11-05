@@ -1,8 +1,8 @@
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
+} from '../../agent-status/contracts/agent-status-types'
 import { createMuseSessionLogState, readMusePendingUserInput } from '../../muse-session-log'
 import type { HookListenerState, MusePaneState } from '../listener-state'
 import {
