@@ -11,7 +11,7 @@ import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type {
   RuntimePtyTabCloseAuthority,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal {
   protected abstract resolveTerminalSplitSourceAuthority(

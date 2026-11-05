@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SessionInfo } from '../../daemon/types'
+import type { SessionInfo } from '../../daemon/protocol/daemon-session-info'
 import { proveWslMoveTerminalsExited } from './wsl-move-exit-proof'
 
 type CensusSession = Pick<SessionInfo, 'sessionId' | 'isAlive'> &

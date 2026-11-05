@@ -5,7 +5,7 @@ import type {
 } from '../../shared/runtime-terminal-contracts'
 import { RuntimeMachineName } from './runtime-machine-name'
 import { OrcaRuntimeService } from './orca-runtime'
-import { makeTuiIdlePty } from './tui-idle-wait-test-harness'
+import { makeTuiIdlePty } from './terminal/wait/tui-idle-wait-test-harness'
 import { readFileSync } from 'node:fs'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { join } from 'node:path'

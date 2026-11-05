@@ -17,7 +17,7 @@ import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
-import { forgetPtySurface } from '../pty-recorded-surface-topology'
+import { forgetPtySurface } from '../terminal/surface/pty-recorded-surface-topology'
 
 export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeWithPersistHeadlessTerminalTitle {
   protected abstract deliverPendingMessagesForPty(ptyId: string): void

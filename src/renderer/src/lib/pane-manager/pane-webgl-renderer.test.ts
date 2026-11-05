@@ -8,6 +8,7 @@ import {
 } from './pane-webgl-renderer'
 import { safeFit } from './pane-fit'
 import { disposePane } from './pane-lifecycle'
+import { presentPaneViewport } from './pane-viewport-present'
 
 function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
   const leafId = '22222222-2222-4222-8222-222222222222' as never
@@ -119,6 +120,85 @@ describe('terminal WebGL addon lifecycle', () => {
 
     expect(pane.webglAddon).toBeNull()
     expect(disposeSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('paints a newly attached canvas inside a synchronized frame instead of leaving it blank', () => {
+    const renderRows = vi.fn()
+    const pane = createPane()
+    Object.assign(pane.terminal, {
+      _core: {
+        _renderService: {
+          _isPaused: false,
+          _needsFullRefresh: false,
+          refreshRows: vi.fn(),
+          _renderer: { value: { renderRows } }
+        },
+        coreService: { decPrivateModes: { synchronizedOutput: true } }
+      }
+    })
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).not.toBeNull()
+    expect(renderRows).toHaveBeenCalledWith(0, 23)
+  })
+
+  it('keeps an attached, already painted renderer tear-free inside a synchronized frame', () => {
+    const renderRows = vi.fn()
+    const refreshRows = vi.fn()
+    const pane = createPane()
+    Object.assign(pane.container, { getBoundingClientRect: () => ({ width: 800, height: 400 }) })
+    const decPrivateModes = { synchronizedOutput: false }
+    Object.assign(pane.terminal, {
+      _core: {
+        _renderService: {
+          _isPaused: false,
+          _needsFullRefresh: false,
+          refreshRows,
+          _renderer: { value: { renderRows } }
+        },
+        coreService: { decPrivateModes }
+      }
+    })
+    attachWebgl(pane)
+    decPrivateModes.synchronizedOutput = true
+
+    presentPaneViewport(pane)
+
+    expect(renderRows).not.toHaveBeenCalled()
+    expect(refreshRows).toHaveBeenCalledWith(0, 23, true)
+  })
+
+  it('paints a canvas attached while paused on its reveal present, inside a synchronized frame', () => {
+    const renderRows = vi.fn()
+    const renderService = {
+      _isPaused: true,
+      _needsFullRefresh: false,
+      refreshRows: vi.fn(),
+      _renderer: { value: { renderRows } }
+    }
+    const pane = createPane()
+    Object.assign(pane.container, { getBoundingClientRect: () => ({ width: 800, height: 400 }) })
+    Object.assign(pane.terminal, {
+      onRender: vi.fn(() => ({ dispose: vi.fn() })),
+      _core: {
+        _renderService: renderService,
+        coreService: { decPrivateModes: { synchronizedOutput: true } }
+      }
+    })
+
+    attachWebgl(pane)
+    expect(renderRows).not.toHaveBeenCalled()
+    expect(renderService._isPaused).toBe(true)
+
+    presentPaneViewport(pane)
+    expect(renderRows).toHaveBeenCalledWith(0, 23)
+
+    // Only that one paint may land mid-frame; later presents wait for the frame to close.
+    renderRows.mockClear()
+    presentPaneViewport(pane)
+    expect(renderRows).not.toHaveBeenCalled()
+    expect(renderService.refreshRows).toHaveBeenCalledWith(0, 23, true)
   })
 
   it('keeps attaching to healthy panes after another pane fails to attach', () => {

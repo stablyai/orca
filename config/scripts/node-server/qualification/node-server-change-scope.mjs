@@ -17,7 +17,7 @@ const BUILD_SCRIPTS = [
   'config/scripts/native-build/windows/build-windows-process-tree-addon.mjs',
   'config/scripts/native-build/windows/build-windows-cli-launcher.mjs',
   'config/scripts/native-build/windows/build-windows-security-addon.mjs',
-  'config/scripts/run-node-server-tests.mjs',
+  'config/scripts/ci/unit-selection/run-node-server-tests.mjs',
   'config/vitest.config.ts',
   'config/scripts/test-runtime/dom/vitest-dom-setup.ts',
   'config/scripts/test-runtime/dom/happy-dom-offscreen-canvas.ts',
@@ -42,7 +42,7 @@ const ALWAYS_FILES = new Set([
   ...NODE_SERVER_POLICY_TESTS,
   'config/scripts/workspace/source-exports/workspace-source-exports.mjs',
   'config/scripts/workspace/source-exports/workspace-source-exports.test.mjs',
-  'config/scripts/headless-detector-compiler-cache.mjs',
+  'config/scripts/runtime-verification/headless-detector/headless-detector-compiler-cache.mjs',
   'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs',
   'config/scripts/native-build/windows/capture-windows-native-environment.cmd',
   'config/scripts/node-server/qualification/node-server-qualification.mjs',
@@ -63,7 +63,21 @@ const ALWAYS_PREFIXES = [
   'src/main/orcad/',
   'src/main/runtime/',
   'src/main/claude/',
-  'src/main/daemon/pty-subprocess/',
+  'src/main/daemon/pty-subprocess/conpty-startup-input-reader.ts',
+  'src/main/daemon/pty-subprocess/daemon-pty-physical-owner.ts',
+  'src/main/daemon/pty-subprocess/foreground-fallback-process.ts',
+  'src/main/daemon/pty-subprocess/foreground-process-tracker.ts',
+  'src/main/daemon/pty-subprocess/native-pty-spawn-windows.test.ts',
+  'src/main/daemon/pty-subprocess/native-pty-spawn.ts',
+  'src/main/daemon/pty-subprocess/pre-listener-events.ts',
+  'src/main/daemon/pty-subprocess/pty-shell-foreground-confirmation.ts',
+  'src/main/daemon/pty-subprocess/shell-launch-plan.ts',
+  'src/main/daemon/pty-subprocess/spawn-environment.ts',
+  'src/main/daemon/pty-subprocess/spawn-file-child-processes.ts',
+  'src/main/daemon/pty-subprocess/spawn-file-foreground-process.ts',
+  'src/main/daemon/pty-subprocess/spawn-file-foreground-rejected-agents.test.ts',
+  'src/main/daemon/pty-subprocess/spawn-preflight.ts',
+  'src/main/daemon/pty-subprocess/subprocess-handle.ts',
   'src/main/providers/',
   'config/patches/',
   'config/tsconfig',
@@ -181,7 +195,7 @@ export async function classifyNodeServerChanges(
     (file) =>
       (ALWAYS_FILES.has(file) && !(modifiedOnly && NODE_SERVER_POLICY_TESTS.has(file))) ||
       (ALWAYS_PREFIXES.some((prefix) => file.startsWith(prefix)) && !isSourceUnitTest(file)) ||
-      /^config\/scripts\/(?:orcad-distribution\/prebuilds\/|orcad-distribution\/template\/|orcad-distribution\/server-bundle\/|orcad-distribution\/qualification\/)?(?:test-runtime\/environment\/)?[^/]*orcad[^/]*$/.test(
+      /^config\/scripts\/(?:release\/workflow-contracts\/|orcad-distribution\/qualification\/)?(?:orcad-distribution\/prebuilds\/|orcad-distribution\/template\/|orcad-distribution\/server-bundle\/|orcad-distribution\/qualification\/)?(?:test-runtime\/environment\/)?[^/]*orcad[^/]*$/.test(
         file
       ) ||
       selectors.some((selector) => file.includes(selector))

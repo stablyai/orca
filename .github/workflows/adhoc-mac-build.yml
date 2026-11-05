@@ -353,7 +353,7 @@ jobs:
 
       # Require signing cert before expensive build; unsigned macOS cannot update an existing install correctly.
       - name: Verify macOS signing environment
-        run: node config/scripts/verify-macos-release-env.mjs
+        run: node config/scripts/desktop-distribution/macos/verify-macos-release-env.mjs
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}

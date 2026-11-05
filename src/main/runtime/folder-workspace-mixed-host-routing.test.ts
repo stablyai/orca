@@ -17,7 +17,7 @@ import {
   GIT_KEY
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
-import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import { WorkspaceLayoutStream } from './terminal/surface/workspace-layout-stream'
 import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
 import { partialRuntimeStore, storeRepo } from './runtime-store-partial-fixture'
 

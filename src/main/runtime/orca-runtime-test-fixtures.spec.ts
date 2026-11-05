@@ -4,7 +4,7 @@ import { forgetInstalledPaneSession } from './bind-first-pane.test-fixture'
 import { announceSessionWrites } from './profile-session-store.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { createHash } from 'node:crypto'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   buildAgentPromptPasteBytes,

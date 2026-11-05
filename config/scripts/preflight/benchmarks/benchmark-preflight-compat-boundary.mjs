@@ -10,7 +10,8 @@ const root = fileURLToPath(new URL('../../../..', import.meta.url))
 const output = path.join(root, '.build/preflight-benchmark')
 mkdirSync(output, { recursive: true })
 const bun = process.env.ORCA_BENCHMARK_BUN ?? 'bun'
-const sourcePath = 'config/scripts/check-compat-boundary-imports.mjs'
+const sourcePath =
+  'config/scripts/static-analysis/process-boundaries/check-compat-boundary-imports.mjs'
 const baselineRef = process.env.ORCA_COMPAT_BASELINE_REF ?? 'HEAD^'
 const baselinePath = path.join(output, 'compat-baseline.mjs')
 const report = {

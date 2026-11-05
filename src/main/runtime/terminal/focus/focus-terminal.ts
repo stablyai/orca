@@ -6,7 +6,7 @@ import type {
 } from '../../../../shared/workspace-layout/terminal-pane-reveal'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
-import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
+import { copySleepingAgentLaunchConfig } from '../launch/runtime-agent-launch-resolution'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 
 export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyId {

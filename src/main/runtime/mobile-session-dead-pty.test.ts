@@ -1,14 +1,14 @@
 import { expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
-import { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
+import { DaemonPtyAdapter } from '../daemon/providers/adapter/daemon-pty-adapter'
+import { DaemonPtyRouter } from '../daemon/providers/routing/daemon-pty-router'
+import { DegradedDaemonPtyProvider } from '../daemon/providers/routing/degraded-daemon-pty-provider'
 import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,
   waitFor
-} from '../daemon/daemon-pty-adapter-test-harness'
+} from '../daemon/providers/adapter/testing/daemon-pty-adapter-test-harness'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 

@@ -13,7 +13,7 @@ import {
   agentPaneWorkspace,
   type AgentPaneWorkspace
 } from '../agent-hooks/agent-transition-detector'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace

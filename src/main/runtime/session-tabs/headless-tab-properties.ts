@@ -8,7 +8,7 @@ import type {
   TerminalPaneLayoutNode
 } from '../../../shared/workspace-layout/terminal-tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { cloneTerminalLayoutSnapshot } from '../mobile-session-layout-projection'
+import { cloneTerminalLayoutSnapshot } from '../terminal/surface/mobile-session-layout-projection'
 import {
   sameStringRecord,
   terminalLayoutNodeEqual

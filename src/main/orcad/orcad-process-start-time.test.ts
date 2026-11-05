@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as DaemonProcessStartTime from '../daemon/daemon-process-start-time'
+import type * as DaemonProcessStartTime from '../daemon/endpoint/identity/daemon-process-start-time'
 
 const { readWindowsProcessCreationTime, getProcessStartedAtMs } = vi.hoisted(() => ({
   readWindowsProcessCreationTime: vi.fn<(pid: number) => number | null>(),
@@ -12,7 +12,7 @@ const { readWindowsProcessCreationTime, getProcessStartedAtMs } = vi.hoisted(() 
 vi.mock('../windows/windows-process-table', () => ({
   readWindowsProcessCreationTime
 }))
-vi.mock('../daemon/daemon-process-start-time', async (importOriginal) => ({
+vi.mock('../daemon/endpoint/identity/daemon-process-start-time', async (importOriginal) => ({
   ...(await importOriginal<typeof DaemonProcessStartTime>()),
   getProcessStartedAtMs
 }))

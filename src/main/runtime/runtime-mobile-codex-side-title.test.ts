@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from './runtime-mobile-agent-status-projection'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import { makeTuiIdlePty } from './tui-idle-wait-test-harness'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
+import { makeTuiIdlePty } from './terminal/wait/tui-idle-wait-test-harness'
 
 // Codex 0.164: idle /side output after a long main-turn PreToolUse hook incorrectly cleared the paired-host spinner.
 function runningExec(hookAt: number, agentType: string): AgentStatusEntry {

@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDaemonFileLog } from '../daemon/daemon-file-log'
+import { createDaemonFileLog } from '../daemon/observability/daemon-file-log'
 import { createLocalFileSink, DROPPED_RECORD_TYPE } from './local-file-sink'
 
 // `holdAsync` parks async appends (at open) until released; `blockSync` makes sync writes hold the thread.
