@@ -6,7 +6,8 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
-  RuntimeMobileSessionTabsSnapshot
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeSessionTabCloseReason
 } from '../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
@@ -16,7 +17,6 @@ import { appendRetiredTerminalSurfaceProofs } from '../../../shared/workspace-la
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeTerminalRename } from '../../../shared/runtime-terminal-contracts'
-import type { RuntimeSessionTabCloseReason } from '../../../shared/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithMainLayoutTabMoves {
   protected abstract applyHeadlessTerminalPaneLayoutToSnapshot(
