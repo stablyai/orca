@@ -8,16 +8,12 @@ import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
 } from '@/runtime/runtime-terminal-inspection'
-<<<<<<< HEAD
-import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
-=======
 import {
   primeReattachedPtyKittyKeyboardModeTracker,
   registerPtyKittyKeyboardModeTracker,
   unregisterPtyKittyKeyboardModeTracker
 } from '../terminal-pty-kitty-keyboard-flags'
-import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
->>>>>>> 34c2b1e95e (fix: make Codex paste submit configurable)
+import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { isCtrlCKeyEvent, isPlainEscapeKeyEvent } from '../agent-interrupt-inference'
 import { createAgentCompletionCoordinator } from '../agent-completion-coordinator'
 import { dispatchAgentHookTerminalLifecycle } from '../agent-hook-terminal-lifecycle'

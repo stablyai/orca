@@ -1,4 +1,4 @@
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 
 type RegisteredPtyKittyKeyboardModeTracker = {
   tracker: TerminalKittyKeyboardModeTracker

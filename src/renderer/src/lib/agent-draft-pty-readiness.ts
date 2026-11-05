@@ -1,4 +1,4 @@
-import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+import { isExpectedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'

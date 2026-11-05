@@ -3,6 +3,8 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
+import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scanner'
 import {
   resolveTerminalCtrlEnterInput,
   TERMINAL_ENTER_INPUT
@@ -18,7 +20,10 @@ import { waitForAgentReady } from './agent-ready-wait'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
-import { isExpectedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
+import {
+  waitForAgentDraftInputReadyOnTab,
+  waitForExpectedAgentOnPty
+} from './agent-draft-pty-readiness'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,

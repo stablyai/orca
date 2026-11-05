@@ -64,6 +64,7 @@ vi.mock('@/components/terminal-pane/terminal-pty-kitty-keyboard-flags', () => ({
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
+const RENDER_QUIET_MS = 1500
 
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
 const PASTED_ISSUE_URL = `\x1b[200~${ISSUE_URL}\x1b[201~`
