@@ -71,15 +71,15 @@ export function useNativeChatComposerEditSession({
 
   useLayoutEffect(() => {
     const element = root.current
-    const destination = captureNativeChatEditDraftDestination(draftScopeKey)
-    if (!element || !destination) {
+    if (!element) {
       return
     }
+    const destination = captureNativeChatEditDraftDestination(draftScopeKey)
     return registerDictationComposerTarget(element, (text) => {
-      if (!destination.active) {
+      if (destination && !destination.active) {
         return
       }
-      insertNativeChatComposerDraftText(destination.scopeKey, text)
+      insertNativeChatComposerDraftText(destination?.scopeKey ?? draftScopeKey, text)
     })
   }, [draftScopeKey, root, handle])
 
