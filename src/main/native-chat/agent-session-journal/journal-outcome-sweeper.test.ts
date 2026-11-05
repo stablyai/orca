@@ -13,6 +13,13 @@ import { restoreJournal } from './journal-open'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { JournalOutcomeSweeper, sweepJournalOutcomePage } from './journal-outcome-cleanup'
 import { observeNativeJournalSql } from './journal-native-test-instrumentation'
+import type { JournalMaintenanceUnit } from './journal-maintenance-unit'
+import {
+  projectionBase,
+  projectionEpochRow,
+  projectionSessionId,
+  seedOutcomeRows
+} from './journal-projection-test-support'
 
 // The production sweeper over a real database, on its own timers.
 const epoch = 'epoch-1'
@@ -205,4 +212,115 @@ it('bounds retired discovery, indexed outcome pages and writer identity rechecks
       stop()
     }
   }
+})
+
+it('runs a scheduled pass with bounded discovery, admissions and native calls at N and 10N, letting foreground writes through between units', async () => {
+  const measure = async (size: number) => {
+    database = await openTestJournalHostDatabase(join(root, `pass-${size}`))
+    database.fixtureTransaction((db) => {
+      publishTestJournalEpoch(db, 'live', epoch)
+      publishJournalOutcomeEpoch(db, 'live', epoch, [epochRow, item])
+    })
+    retire(size)
+    // A second chat whose one item was revised `size` times: compaction keeps first and latest.
+    const revisions: JournalRow[] = [projectionEpochRow]
+    for (let revision = 1; revision <= size; revision++) {
+      revisions.push({
+        ...projectionBase(revision + 1),
+        kind: 'item',
+        itemId: 'answer',
+        revision,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'x'.repeat(100) }]
+        }
+      })
+    }
+    seedOutcomeRows(database, revisions)
+    const compactable = Number(
+      database.db
+        .prepare(`SELECT COUNT(*) AS n FROM journal_outcomes WHERE generation =
+          (SELECT generation FROM journal_outcome_epochs WHERE session_id = ?)`)
+        .get(projectionSessionId)?.n
+    )
+    expect(compactable).toBeGreaterThan(size)
+    let freeAtVacuum: number | undefined
+    const scans = vi.spyOn(database, 'scan')
+    const units: JournalMaintenanceUnit['kind'][] = []
+    const requests: string[] = []
+    const owner = database['owner']
+    const request = owner.request.bind(owner)
+    vi.spyOn(owner, 'request').mockImplementation((command) => {
+      requests.push(command.type)
+      return request(command)
+    })
+    const foreground: Promise<void>[] = []
+    const maintenance = database.maintenance.bind(database)
+    vi.spyOn(database, 'maintenance').mockImplementation((unit) => {
+      units.push(unit.kind)
+      if (unit.kind === 'vacuum') {
+        freeAtVacuum ??= Number(database.db.prepare('PRAGMA freelist_count').get()?.freelist_count)
+      }
+      const admitted = maintenance(unit)
+      // A send arriving while this unit is admitted reaches the writer before the next unit.
+      foreground.push(
+        database.transaction((plan) => {
+          plan.add({
+            kind: 'sweep',
+            operation: { kind: 'mark', uploadId: `fg-${units.length}`, now: 1 }
+          })
+        })
+      )
+      return admitted
+    })
+    let calls = 0
+    let largest = 0
+    const stop = observeNativeJournalSql(database, (entry) => {
+      if (entry.method !== 'prepare') {
+        calls++
+        largest = Math.max(largest, entry.rows, entry.changes)
+      }
+    })
+    try {
+      const { pass } = started()
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(pass).toHaveBeenCalledTimes(1)
+      await pass.mock.results[0].value
+      await Promise.all(foreground)
+    } finally {
+      stop()
+      sweepers.splice(0).forEach((sweeper) => sweeper.stop())
+    }
+    // Cleanup happened: the retired generation is gone and the revised item keeps two records.
+    expect(retiredRecords()).toBe(0)
+    expect(
+      database.db.prepare("SELECT COUNT(*) AS n FROM journal_outcomes WHERE field = 'items'").get()
+        ?.n
+    ).toBe(3)
+    const pages = (records: number) => Math.ceil(records / 32)
+    const count = (kind: JournalMaintenanceUnit['kind']) => units.filter((k) => k === kind).length
+    // One atomic unit per page of at most 32 records, plus each source's boundary.
+    expect(count('retired')).toBeLessThanOrEqual(pages(size) + 1)
+    expect(count('compact')).toBeLessThanOrEqual(pages(compactable) + 2)
+    expect(count('vacuum')).toBeLessThanOrEqual(freeAtVacuum ?? 0)
+    // Each deleting unit follows its own released discovery scan; registry steps add a constant.
+    expect(scans.mock.calls.length).toBeGreaterThanOrEqual(count('retired') + count('compact'))
+    expect(scans.mock.calls.length).toBeLessThanOrEqual(count('retired') + count('compact') + 8)
+    // No native call returns or changes more than a page, whatever the history size.
+    expect(largest).toBeLessThanOrEqual(32)
+    // Each admitted unit's foreground write committed before the writer took the next unit.
+    const maintained = requests.flatMap((type, index) => (type === 'maintenance' ? [index] : []))
+    expect(maintained).toHaveLength(units.length)
+    for (let index = 0; index + 1 < maintained.length; index++) {
+      expect(requests.slice(maintained[index], maintained[index + 1])).toContain('unit')
+    }
+    expect(restoreJournal(database.db, 'live')?.state.items.has('kept')).toBe(true)
+    return { units: units.length, calls }
+  }
+  const small = await measure(100)
+  const large = await measure(1_000)
+  // Work grows with pages, never with a per-call scan of the whole history.
+  expect(large.units).toBeLessThanOrEqual(12 * small.units)
+  expect(large.calls).toBeLessThanOrEqual(12 * small.calls)
 })

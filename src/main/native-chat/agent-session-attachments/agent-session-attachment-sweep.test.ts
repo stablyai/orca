@@ -60,6 +60,7 @@ vi.mock('node:fs', async (original) => {
 })
 import type Database from '../../sqlite/sync-database'
 import { sweepAttachmentClaims } from './agent-session-attachment-claim-sweep'
+import { observeNativeJournalSql } from '../agent-session-journal/journal-native-test-instrumentation'
 import type { TestJournalHostDatabase as JournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -192,9 +193,11 @@ describe('sweepAgentSessionAttachments', () => {
         }
       })
       let scans = 0
+      let discoveries = 0
       const scan = journal.scan.bind(journal)
       const observedScan: typeof journal.scan = async (run) => {
         scans++
+        discoveries++
         try {
           return await scan(run)
         } finally {
@@ -248,6 +251,17 @@ describe('sweepAgentSessionAttachments', () => {
       const errored = new Promise<void>((resolve) => {
         observedError = resolve
       })
+      let largest = 0
+      const pageSql = new Set<string>()
+      const stopNative = observeNativeJournalSql(journal, (entry) => {
+        if (entry.method === 'prepare') {
+          if (entry.sql.includes('LIMIT 32')) {
+            pageSql.add(entry.sql)
+          }
+        } else {
+          largest = Math.max(largest, entry.rows, entry.changes)
+        }
+      })
       const sweeper = startAgentSessionAttachmentSweeps(store, sweepFacts, {
         initialDelayMs: 1,
         intervalMs: 100_000,
@@ -281,10 +295,24 @@ describe('sweepAgentSessionAttachments', () => {
         await foreground
         await finished
         await new Promise<void>((resolve) => setImmediate(resolve))
+        stopNative()
         expect(errors).toEqual([])
         expect(successes).toBe(1)
         expect(counts.reduce((a, b) => a + b, 0)).toBe(size)
         expect(Math.max(...counts)).toBeLessThanOrEqual(32)
+        // One released upper-bound read, then at most ceil(N/32)+1 released 32-claim pages; each
+        // page's transaction is its only write admission, and no native call grows with N.
+        expect(discoveries).toBeLessThanOrEqual(Math.ceil(size / 32) + 2)
+        expect(counts).toHaveLength(Math.ceil(size / 32))
+        expect(largest).toBeLessThanOrEqual(32)
+        expect(pageSql.size).toBe(1)
+        const plan = db
+          .prepare(`EXPLAIN QUERY PLAN ${[...pageSql][0]}`)
+          .all('0', '9223372036854775807')
+          .map((row) => row.detail)
+          .join(' ')
+        expect(plan).toContain('SEARCH')
+        expect(plan).not.toContain('TEMP B-TREE')
         expect(claimedSessions()).toHaveLength(size + 2)
         expect(
           db.prepare('SELECT COUNT(*) AS n FROM agent_session_attachment_sweeps').get()?.n
@@ -349,6 +377,7 @@ describe('sweepAgentSessionAttachments', () => {
         expect(claimedSessions()).toHaveLength(size - 1)
         expect(await readFile(join(store.rootDir, SENT, 'shot.png'), 'utf8')).toBe('bytes')
       } finally {
+        stopNative()
         release()
         sweeper.stop()
       }

@@ -126,14 +126,17 @@ async function carryOn(
         expect.objectContaining({ clientMessageId: 'after-upgrade', dispatchState: 'accepted' })
       )
       const beforeRewind = journal.cursor()
-      const database = openTestJournalHostDatabase(stateDirectory)
+      const database = await openTestJournalHostDatabase(stateDirectory)
       const physicalEpoch = readJournalSessionEpoch(database.db, options.identity.sessionId)
       expect(physicalEpoch).not.toBeNull()
       await rewindReleasedChat(journal, new Set(opened.snapshot.items.map((item) => item.itemId)))
       expect(journal.epoch).toMatch(/^context-v1:/)
       expect(journal.epoch).not.toBe(beforeRewind.epoch)
       expect(readJournalSessionEpoch(database.db, options.identity.sessionId)).toBe(physicalEpoch)
-      expect(journal.readSince(beforeRewind)).toEqual({ ok: false, reset: 'epoch_changed' })
+      await expect(journal.readSince(beforeRewind)).resolves.toEqual({
+        ok: false,
+        reset: 'epoch_changed'
+      })
       const seen = view(journal)
       // The rewind keeps every message the release wrote and every card not taken back, the edit
       // included.
