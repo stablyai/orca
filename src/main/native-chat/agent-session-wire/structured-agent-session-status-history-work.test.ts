@@ -83,9 +83,9 @@ function openJournal(sessionId: string) {
   })
 }
 
-/** One streamed write on a chat with `turns` finished turns behind a running one. */
-async function measure(turns: number, withCommand: boolean) {
-  const journal = await openJournal(`session-${turns}-${withCommand}`)
+/** One write on a chat with `turns` finished turns behind a streaming turn, or one Orca just stopped. */
+async function measure(turns: number, withCommand: boolean, stopped = false) {
+  const journal = await openJournal(`session-${turns}-${withCommand}-${stopped}`)
   if (withCommand) {
     await turn(
       journal,
@@ -97,13 +97,21 @@ async function measure(turns: number, withCommand: boolean) {
   for (let index = 0; index < turns; index++) {
     await turn(journal, `old-${index}`, prompt(`Old ${index}`), 'completed')
   }
-  await turn(journal, 'live', prompt('Live'), 'running')
+  await append(journal, 'user-live', prompt('Live'))
+  await append(journal, 'turn-live', {
+    kind: 'turn',
+    turnId: 'live',
+    state: stopped ? 'interrupted' : 'running',
+    userItemId: 'orca:user-live'
+  })
   const projections = new StructuredAgentSessionJournalProjections()
   projections.read(journal, null)
   await append(
     journal,
     'streamed',
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Streaming' }] },
+    stopped
+      ? { kind: 'status', text: 'Stopped for an update', orcaStop: { cause: 'update' } }
+      : { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Streaming' }] },
     'turn-live'
   )
 
@@ -141,18 +149,23 @@ async function measure(turns: number, withCommand: boolean) {
   }
 }
 
-it.each([false, true])(
-  'keeps command-turn discovery off history on each streamed write (old /compact: %s)',
-  async (withCommand) => {
-    const small = await measure(20, withCommand)
-    const large = await measure(200, withCommand)
+it.each([
+  [false, false],
+  [true, false],
+  [true, true]
+])(
+  'keeps command-turn discovery off history on each write (old /compact: %s, stopped: %s)',
+  async (withCommand, stopped) => {
+    const small = await measure(20, withCommand, stopped)
+    const large = await measure(200, withCommand, stopped)
     for (const run of [small, large]) {
       // Same status as a scan of the rows, from the few rows the indexed read reaches.
       expect(run.state).toEqual(run.scanned)
-      expect(run.state.summary).toMatchObject({
-        status: 'working',
-        lastAssistantMessage: 'Streaming'
-      })
+      expect(run.state.summary).toMatchObject(
+        stopped
+          ? { status: 'idle', turnOutcome: 'cancellation' }
+          : { status: 'working', lastAssistantMessage: 'Streaming' }
+      )
     }
     // Command turns are found through the indexed read, the same few rows at any history length.
     expect(small.indexedReads).toBeGreaterThan(0)
