@@ -32,7 +32,7 @@ import {
   readIssueCommandUnlessWslStopped,
   writeIssueCommandUnlessWslStopped
 } from './issue-command-file'
-import { RuntimeRepositoryIssueCommand } from '../runtime/runtime-repository-issue-command'
+import { RuntimeRepositoryIssueCommand } from '../runtime/repositories/runtime-repository-issue-command'
 
 const WSL_REPO = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 const HOST_REPO = 'C:\\src\\repo'

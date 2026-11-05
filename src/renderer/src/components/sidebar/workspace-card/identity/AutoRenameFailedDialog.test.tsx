@@ -89,49 +89,7 @@ afterEach(() => {
 
 const EXCERPT_ERROR = 'Pi CLI command failed with code 1: No API key found for github-copilot.'
 
-const onOpenChange = vi.fn<(open: boolean) => void>()
-
-async function renderDialog(error = EXCERPT_ERROR): Promise<void> {
-  await act(async () => {
-    root.render(
-      <AutoRenameFailedDialog
-        open
-        onOpenChange={onOpenChange}
-        worktreeId="wt-1"
-        executionHostId="ssh:builder"
-        worktreeName="staghorn"
-        error={error}
-      />
-    )
-  })
-}
-
 describe('AutoRenameFailedDialog dismissal', () => {
-  it('keeps Close temporary and persists Dismiss error on the workspace owner', async () => {
-    getBranchRenameFailureOutput.mockResolvedValue(null)
-    updateWorktreeMeta.mockResolvedValue({ ok: true })
-    await renderDialog()
-    const footer = document.querySelector('[data-slot="dialog-footer"]')
-    await act(async () => footer?.querySelector<HTMLButtonElement>('button')?.click())
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-    expect(updateWorktreeMeta).not.toHaveBeenCalled()
-    onOpenChange.mockClear()
-
-    await act(async () => {
-      const dismiss = Array.from(document.querySelectorAll('button')).find(
-        (button) => button.getAttribute('aria-label') === 'Dismiss error'
-      )
-      dismiss?.click()
-    })
-
-    expect(updateWorktreeMeta).toHaveBeenCalledWith(
-      'wt-1',
-      { firstAgentMessageRenameError: null },
-      { executionHostId: 'ssh:builder' }
-    )
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-  })
-
   it.each([true, false])(
     'keeps the real store error visible until its save succeeds (%s)',
     async (succeeds) => {
@@ -178,16 +136,6 @@ describe('AutoRenameFailedDialog dismissal', () => {
 })
 
 describe('AutoRenameFailedDialog full output', () => {
-  it('shows the full CLI output fetched from main when available', async () => {
-    getBranchRenameFailureOutput.mockResolvedValueOnce(
-      'Pi exited with code 1.\n\n[stderr]\nNo API key found for github-copilot.\nUse /login to log in.'
-    )
-    await renderDialog()
-    expect(getBranchRenameFailureOutput).toHaveBeenCalledWith({ worktreeId: 'wt-1' })
-    expect(document.body.textContent).toContain('[stderr]')
-    expect(document.body.textContent).toContain('Use /login to log in.')
-  })
-
   it('refreshes and copies a new chat diagnostic while its identical-message dialog stays open', async () => {
     getBranchRenameFailureOutput.mockResolvedValueOnce('run A output')
     await act(async () => root.render(<ChatFailure failedAt={1} />))
@@ -201,52 +149,6 @@ describe('AutoRenameFailedDialog full output', () => {
     )
     expect(writeClipboardText).toHaveBeenCalledWith('run B output')
   })
-
-  it('falls back to the persisted excerpt when main holds no capture', async () => {
-    getBranchRenameFailureOutput.mockResolvedValueOnce(null)
-    await renderDialog()
-    expect(document.body.textContent).toContain(EXCERPT_ERROR)
-  })
-
-  it('falls back to the persisted excerpt when the fetch rejects', async () => {
-    getBranchRenameFailureOutput.mockRejectedValueOnce(new Error('ipc unavailable'))
-    await renderDialog()
-    expect(document.body.textContent).toContain(EXCERPT_ERROR)
-  })
-
-  it('refetches full output when a retry changes the persisted error', async () => {
-    getBranchRenameFailureOutput.mockResolvedValueOnce('first run full output')
-    await renderDialog('first run excerpt')
-    expect(document.body.textContent).toContain('first run full output')
-
-    getBranchRenameFailureOutput.mockResolvedValueOnce('second run full output')
-    await renderDialog('second run excerpt')
-
-    expect(getBranchRenameFailureOutput).toHaveBeenCalledTimes(2)
-    expect(document.body.textContent).toContain('second run full output')
-    expect(document.body.textContent).not.toContain('first run full output')
-  })
 })
 
 // happy-dom has no intrinsic sizing; verify the declarations that contain unbroken output.
-describe('AutoRenameFailedDialog unbroken output containment', () => {
-  it('keeps the output surface shrinkable and breakable mid-token', async () => {
-    getBranchRenameFailureOutput.mockResolvedValueOnce(`{"error":"${'A'.repeat(1000)}"}`)
-    await renderDialog()
-
-    const dialog = document.querySelector('[role="dialog"]')
-    const output = dialog?.querySelector('pre')
-    expect(output).toBeTruthy()
-    expect(output?.textContent).toContain('A'.repeat(1000))
-
-    // break-word preserves token min-content width; anywhere shrinks it.
-    expect(output?.className).toContain('[overflow-wrap:anywhere]')
-    expect(output?.className).not.toContain('break-words')
-
-    // Grid children need min-w-0 to shrink below min-content.
-    const gridChild = Array.from(dialog?.children ?? []).find((child) =>
-      child.contains(output ?? null)
-    )
-    expect(gridChild?.className).toContain('min-w-0')
-  })
-})

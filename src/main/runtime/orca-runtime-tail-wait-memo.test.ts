@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeTerminalTailWaitState } from './terminal-wait-tail-state'
+import { computeTerminalTailWaitState } from './terminal/wait/terminal-wait-tail-state'
 
 describe('terminal tail wait state', () => {
   it('computeTerminalTailWaitState reports fromTail and blocked signals', () => {

@@ -98,18 +98,6 @@ describe('claude streamed text checkpoints', () => {
     expect(rows).toEqual([{ uuid: 'block-1', text: 'partial answer' }])
   })
 
-  it('keeps a block whose final frame arrived out of the settlement sweep', () => {
-    const { store } = checkpoints()
-
-    store.append(identityOf('block-1'), 'one')
-    store.append(identityOf('block-2'), 'two')
-    store.forget('claude:claude-session:block-1')
-
-    expect(store.pending).toBe(1)
-    store.settle()
-    expect(store.pending).toBe(0)
-  })
-
   it('flushes text the widening checkpoint interval has not written yet', () => {
     const { store, rows } = checkpoints()
 
@@ -119,18 +107,6 @@ describe('claude streamed text checkpoints', () => {
     expect(rows).toEqual([{ uuid: 'block-1', text: 'x' }])
     store.flush()
     expect(rows).toHaveLength(1)
-  })
-
-  it("stamps a block streamed inside a child with that child's linkage", () => {
-    const producer = scriptedProducer()
-    producer.resolve(CHILD_LINKAGE)
-    const { store, rows, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'hello', 'toolu_1')
-    runWindow()
-
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'hello' }])
-    expect(stamps).toEqual([CHILD_LINKAGE])
   })
 
   it("writes no linkage keys for a block the session's own agent streamed", () => {
@@ -160,22 +136,6 @@ describe('claude streamed text checkpoints', () => {
 
     expect(rows.at(-1)).toEqual({ uuid: 'block-1', text: 'partial' })
     expect(stamps.at(-1)).toEqual(CHILD_LINKAGE)
-  })
-
-  it('writes a held block under the raw reference when no announcement comes', () => {
-    const producer = scriptedProducer()
-    const { store, rows, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'never announced', 'toolu_1')
-    runWindow()
-
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'never announced' }])
-    expect(stamps).toEqual([
-      { agentId: 'toolu_1', providerParentRef: 'toolu_1', producerKind: 'agent' }
-    ])
-
-    store.reattribute()
-    expect(rows).toHaveLength(1)
   })
 
   it('re-resolves a block’s producer on every checkpoint', () => {

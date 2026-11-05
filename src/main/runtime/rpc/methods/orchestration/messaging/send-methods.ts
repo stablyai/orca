@@ -35,6 +35,7 @@ import { assertWorkflowSendPermitted } from '../../../../orchestration/workflow-
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
+import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import {
   followThroughWorkerReport,
   passHeldWorkerMail,
@@ -104,6 +105,10 @@ export const ORCHESTRATION_SEND_METHODS = [
           evidence: orchestrationCompatibilityEvidence
         })
       }
+      const processIncarnation = () =>
+        attestedCaller?.processIncarnation ??
+        runtime.getTerminalProcessIncarnation(from) ??
+        undefined
       const remoteAttachment = senderPaneKey
         ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
         : undefined
@@ -115,24 +120,26 @@ export const ORCHESTRATION_SEND_METHODS = [
           from,
           senderPaneKey,
           remoteAttachment,
-          processIncarnation:
-            attestedCaller?.processIncarnation ??
-            runtime.getTerminalProcessIncarnation(from) ??
-            undefined,
+          processIncarnation: processIncarnation(),
           signal
         })
       }
 
+      refuseFinishedRemoteWorker(db, senderPaneKey, params.to)
       const runGroup =
         params.to && isGroupAddress(params.to) && !params.to.toLowerCase().startsWith('@worktree:')
       // Run groups validate their own audience; message scope cannot select a parent Dispatch.
-      const routing = resolveMessageRun(runtime, {
+      let routing = resolveMessageRun(runtime, {
         sender,
         to: params.to,
         runId: runGroup ? undefined : params.run,
         payload: runGroup ? undefined : params.payload,
         type: params.type
       })
+      const finished = runGroup
+        ? undefined
+        : finishedWorkerSend(db, { ...sender, processIncarnation }, routing, params)
+      ;({ params, routing } = finished ?? { params, routing })
       if (
         params.type === 'worker_done' &&
         !isWorkerReportOutcome(parseRemoteWorkerPayload(params.payload).outcome)
@@ -273,14 +280,12 @@ export const ORCHESTRATION_SEND_METHODS = [
           messageRunId,
           senderPaneKey,
           legacyCoordinatorRunId,
-          resolveProcessIncarnation: () =>
-            attestedCaller?.processIncarnation ??
-            runtime.getTerminalProcessIncarnation(from) ??
-            undefined,
+          resolveProcessIncarnation: processIncarnation,
           revalidateLegacyCoordinator,
           recordMutationReceipt,
           markWorkerDoneMutationEffectFree,
-          withSendWarnings
+          withSendWarnings: (sent) =>
+            finished?.receipt(withSendWarnings(sent)) ?? withSendWarnings(sent)
         })
         followThroughWorkerReport(
           runtime,

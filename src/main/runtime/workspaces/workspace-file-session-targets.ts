@@ -10,7 +10,7 @@ import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../shared/runtime-types'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
 import type { Repo } from '../../../shared/repo-types'
 import {
   getConnectionExecutionHostId,
@@ -18,7 +18,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
-import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
+import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import {
   readMarkdownTabFromDisk,

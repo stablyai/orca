@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../runtime/agent-transcript-pane-test-harness'
+} from '../runtime/orca-runtime-tests/agent-transcript-pane-test-harness'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
 
 describe('createRuntimeAutomationRunTerminalObserver', () => {

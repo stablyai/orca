@@ -29,7 +29,7 @@ import {
   killProfileDaemons,
   removeTestRoot
 } from './orcad-daemon-teardown-fixture'
-import { PROTOCOL_VERSION } from '../daemon/types'
+import { PROTOCOL_VERSION } from '../daemon/protocol/daemon-protocol-version'
 import type { ServeReadiness } from '../server/serve-readiness'
 import {
   getOrcaProfileIndexPath,
@@ -306,39 +306,7 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
     )
     await build({
       stdin: {
-        contents: `
-        import { DaemonPtyAdapter } from './src/main/daemon/daemon-pty-adapter'
-        import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './src/main/daemon/daemon-spawner'
-        import { setAppEnvironment } from './src/shared/app-environment'
-        const [op, runtimeDir, sessionId, marker, cwd] = process.argv.slice(2)
-        setAppEnvironment({
-          getPath: () => cwd, getAppPath: () => cwd, getVersion: () => 'test', isPackaged: () => true,
-          onWillQuit() {}, exit: code => process.exit(code), getAppMetrics: () => []
-        })
-        const adapter = new DaemonPtyAdapter({
-          socketPath: getDaemonSocketPath(runtimeDir), tokenPath: getDaemonTokenPath(runtimeDir),
-          pidPath: getDaemonPidPath(runtimeDir), profileScope: runtimeDir, runtimeDir
-        })
-        let output = ''
-        adapter.onData(event => { if (event.id === sessionId) output += event.data })
-        const deadline = setTimeout(() => { console.error('timed out; output: ' + output); process.exit(98) }, 20_000)
-        ;(async () => {
-          const spawned = await adapter.spawn(op === 'create'
-            ? { sessionId, cols: 80, rows: 24, cwd, shellOverride: '/bin/sh' }
-            : { sessionId, cols: 80, rows: 24 })
-          if (op === 'kill') {
-            await adapter.shutdown(spawned.id, { immediate: true })
-          } else {
-            // The echoed command line holds the format, never the expanded marker.
-            adapter.write(spawned.id, "printf 'ORCA_XRT_%s\\\\n' " + marker + "\\r")
-            while (!output.includes('ORCA_XRT_' + marker)) await new Promise(r => setTimeout(r, 50))
-          }
-          clearTimeout(deadline)
-          await adapter.disconnectOnly()
-          console.log(JSON.stringify({ pid: spawned.pid, isReattach: spawned.isReattach === true, output: output.includes('ORCA_XRT_' + marker) }))
-          process.exit(0)
-        })().catch(error => { console.error(error); process.exit(1) })
-      `,
+        contents: `\n        import { DaemonPtyAdapter } from './src/main/daemon/providers/adapter/daemon-pty-adapter'\n        import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './src/main/daemon/launch/daemon-spawner'\n        import { setAppEnvironment } from './src/shared/app-environment'\n        const [op, runtimeDir, sessionId, marker, cwd] = process.argv.slice(2)\n        setAppEnvironment({\n          getPath: () => cwd, getAppPath: () => cwd, getVersion: () => 'test', isPackaged: () => true,\n          onWillQuit() {}, exit: code => process.exit(code), getAppMetrics: () => []\n        })\n        const adapter = new DaemonPtyAdapter({\n          socketPath: getDaemonSocketPath(runtimeDir), tokenPath: getDaemonTokenPath(runtimeDir),\n          pidPath: getDaemonPidPath(runtimeDir), profileScope: runtimeDir, runtimeDir\n        })\n        let output = ''\n        adapter.onData(event => { if (event.id === sessionId) output += event.data })\n        const deadline = setTimeout(() => { console.error('timed out; output: ' + output); process.exit(98) }, 20_000)\n        ;(async () => {\n          const spawned = await adapter.spawn(op === 'create'\n            ? { sessionId, cols: 80, rows: 24, cwd, shellOverride: '/bin/sh' }\n            : { sessionId, cols: 80, rows: 24 })\n          if (op === 'kill') {\n            await adapter.shutdown(spawned.id, { immediate: true })\n          } else {\n            // The echoed command line holds the format, never the expanded marker.\n            adapter.write(spawned.id, "printf 'ORCA_XRT_%s\\\\n' " + marker + "\\r")\n            while (!output.includes('ORCA_XRT_' + marker)) await new Promise(r => setTimeout(r, 50))\n          }\n          clearTimeout(deadline)\n          await adapter.disconnectOnly()\n          console.log(JSON.stringify({ pid: spawned.pid, isReattach: spawned.isReattach === true, output: output.includes('ORCA_XRT_' + marker) }))\n          process.exit(0)\n        })().catch(error => { console.error(error); process.exit(1) })\n      `,
         resolveDir: process.cwd(),
         loader: 'ts'
       },

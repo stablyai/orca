@@ -3,8 +3,8 @@ import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-bu
 import type { GitDiffResult } from '../../shared/git/diff/git-diff-compare-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
-import { RuntimeGitCommands } from './orca-runtime-git'
-import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
+import { RuntimeGitCommands } from './integrations/git/orca-runtime-git'
+import type { ResolvedRuntimeGitWorktree } from './integrations/git/runtime-git-command-target'
 
 const mocks = vi.hoisted(() => ({
   getDiff: vi.fn(),

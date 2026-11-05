@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
   ChevronLeft,
@@ -117,6 +117,8 @@ export function MobileNativeChatSessionOptionPickers({
   const t = useMobileTranslation()
   const open = presentation?.page != null
   const wasOpen = useRef(false)
+  // Aliases of listed models wait behind a toggle, as compact pickers do without search.
+  const [moreModelsShown, setMoreModelsShown] = useState(false)
   useEffect(() => {
     if (open && !wasOpen.current) {
       controller.optionSurface?.demandModelCatalog?.()
@@ -247,7 +249,10 @@ export function MobileNativeChatSessionOptionPickers({
       <BottomDrawer
         visible={activeDescriptor !== undefined}
         onClose={closePicker}
-        onAfterClose={onDrawerAfterClose}
+        onAfterClose={() => {
+          setMoreModelsShown(false)
+          onDrawerAfterClose?.()
+        }}
       >
         {activeDescriptor ? (
           <View style={styles.sheet}>
@@ -302,6 +307,10 @@ export function MobileNativeChatSessionOptionPickers({
                   disabled: locked(activeDescriptor),
                   onSetOption: (value) => applyOption(activeDescriptor, value),
                   onInvokeAction: () => invokeAction(activeDescriptor),
+                  moreChoices: {
+                    shown: moreModelsShown,
+                    onToggle: () => setMoreModelsShown((shown) => !shown)
+                  },
                   ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
                 },
                 t

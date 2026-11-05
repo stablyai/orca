@@ -5,7 +5,7 @@ import { applyPtyBinding } from '../../persistence/loading-store/pty-binding-ses
 import {
   withRuntimePaneAdmission,
   withDurableRuntimeStore
-} from '../../runtime/runtime-durable-store-fixture'
+} from '../../runtime/orca-runtime-tests/runtime-durable-store-fixture'
 import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../shared/workspace-sleep'

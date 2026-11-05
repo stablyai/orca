@@ -7,6 +7,7 @@ import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import BrowserAddressBar from './BrowserAddressBar'
 import { BrowserChromeToolbar } from './browser-chrome-toolbar'
 import { BrowserImportHintButton } from './BrowserImportHintButton'
+import { BrowserPasswordSaveButton } from '../passwords/BrowserPasswordSaveButton'
 import { BrowserReloadControl } from './browser-reload-control'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import { BrowserExtensionToolbar } from './browser-extension-toolbar'
@@ -142,6 +143,7 @@ export function BrowserPageToolbar({
 
   return (
     <BrowserChromeToolbar
+      closeTabOwner={{ worktreeId, browserPageId }}
       showTourAnchors
       pinnedStage={pinnedStage}
       controls={{
@@ -199,6 +201,9 @@ export function BrowserPageToolbar({
           onReload={() => runReloadTrigger('reload')}
           onHardReload={() => runReloadTrigger('hard-reload')}
         />
+      }
+      passwordControl={
+        <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
       }
       importControl={(compact) => (
         <BrowserImportHintButton profileId={sessionProfileId} compact={compact} />

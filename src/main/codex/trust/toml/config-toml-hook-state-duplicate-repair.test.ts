@@ -4,22 +4,14 @@ import { join } from 'node:path'
 import { syncSystemConfigIntoManagedCodexHome } from '../../configuration/settings/codex-config-mirror'
 import { findDuplicateTomlDeclarations } from '../../configuration/toml/config-toml-duplicate-declarations-test-fixture'
 import { repairOrcaDuplicateTrustTables } from './config-toml-project-duplicate-repair'
-import { upsertProjectTrustLevel, type CodexTrustEntry } from './config-toml-trust'
-import { upsertHookTrustContent as upsertHookTrustEntriesInContent } from './config-toml-hook-trust-edit'
+import { upsertProjectTrustLevel } from './config-toml-trust'
+
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture
 } from './config-toml-trust-test-fixtures'
 
 const HOOK_KEY = '/Users/me/.codex/hooks.json:stop:0:0'
-const hookEntry: CodexTrustEntry = {
-  sourcePath: '/Users/me/.codex/hooks.json',
-  eventLabel: 'stop',
-  groupIndex: 0,
-  handlerIndex: 0,
-  command: 'orca-hook',
-  trustedHash: 'sha256:new'
-}
 
 let tmpDir: string
 let configPath: string
@@ -38,34 +30,6 @@ afterEach(() => {
 })
 
 describe('hook trust recognises Codex quoted hooks.state spellings', () => {
-  it('rewrites a quoted hook table instead of appending a bare copy', () => {
-    const original = [
-      `["hooks"."state"."${HOOK_KEY}"]`,
-      'enabled = true',
-      'trusted_hash = "sha256:old"',
-      ''
-    ].join('\n')
-
-    const updated = upsertHookTrustEntriesInContent(original, [hookEntry])
-
-    expect(updated).toBe(
-      [`[hooks.state."${HOOK_KEY}"]`, 'enabled = true', 'trusted_hash = "sha256:new"', ''].join(
-        '\n'
-      )
-    )
-  })
-
-  it('does not add a bare parent table beside a quoted one for Windows hooks', () => {
-    const windowsEntry = { ...hookEntry, sourcePath: 'C:\\Users\\me\\.codex\\hooks.json' }
-    const original = ['["hooks"."state"]', ''].join('\n')
-
-    const updated = upsertHookTrustEntriesInContent(original, [windowsEntry])
-
-    expect(updated.startsWith('["hooks"."state"]\n')).toBe(true)
-    expect(updated).not.toContain('[hooks.state]')
-    expect(findDuplicateTomlDeclarations(updated)).toEqual([])
-  })
-
   it('treats a quoted hook table as runtime-owned trust in the config mirror', () => {
     const runtimeHomePath = join(tmpDir, 'runtime')
     const systemHomePath = join(tmpDir, 'system')

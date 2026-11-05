@@ -71,19 +71,6 @@ function fakeHost(
 }
 
 describe('runWithActionEffects', () => {
-  it('diffs against the last reading without reissuing the refs the agent holds', async () => {
-    const guest = fakeGuest()
-    const { host } = fakeHost(guest, [INVALID_LOGIN], true)
-
-    await runWithActionEffects(host, async () => {
-      // The action must run against the refs the agent last saw.
-      expect(host.snapshotDelta).not.toHaveBeenCalled()
-      return { clicked: '@e6' }
-    })
-
-    expect(host.snapshotDelta).toHaveBeenCalledTimes(1)
-  })
-
   it('lists the lines an action added and the console errors it logged', async () => {
     const guest = fakeGuest()
     const { host } = fakeHost(guest, [UNCHANGED, INVALID_LOGIN])

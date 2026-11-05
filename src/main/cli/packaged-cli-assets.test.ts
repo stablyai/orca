@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 import { createPackageWithOptions, statFile } from '@electron/asar'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { stagePackagedProcessHost } from '../../../config/scripts/packaged-process-host-fixture.mjs'
+import { stagePackagedProcessHost } from '../../../config/scripts/desktop-distribution/runtime-verification/packaged-process-host-fixture.mjs'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
