@@ -89,13 +89,17 @@ describe('a turn’s subagents drawn as one row', () => {
     const rows = foldSubagentItems([
       item(1, subagent('a', { label: 'Audit' })),
       item(2, subagent('b', { label: 'Audit' })),
-      item(3, subagent('c', { label: 'Audit 2' }))
+      item(3, subagent('c', { label: 'Audit 2' })),
+      item(4, subagent('d', { label: 'Audit' })),
+      item(5, subagent('e', { label: 'Audit 4' }))
     ])
 
     expect(groupOf(rows[0]).agents.map((agent) => agent.label)).toEqual([
       'Audit',
       'Audit 3',
-      'Audit 2'
+      'Audit 2',
+      'Audit 5',
+      'Audit 4'
     ])
   })
 
