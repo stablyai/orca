@@ -4,7 +4,7 @@ import type { TerminalCursorContext } from './terminal-composer-draft'
 // opaque themes) laid out as a padding row, the textarea, a spacer row and a metadata row (agent,
 // model or `Shell`). Its placeholder is undimmed, so only its stock wording marks it.
 const OPENCODE_BOX_GUTTER = '┃'
-const OPENCODE_PLACEHOLDERS = ['Ask anything', 'Run a command']
+const OPENCODE_PLACEHOLDERS = ['Ask anything…', 'Run a command…']
 const ELLIPSIS = '…'
 
 function isOpenCodePlaceholder(line: string): boolean {
