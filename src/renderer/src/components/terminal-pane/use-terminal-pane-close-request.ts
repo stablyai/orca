@@ -13,9 +13,11 @@ export function useTerminalPaneCloseRequest(
         const pane = leafId
           ? manager?.getPanes().find((candidate) => manager.getLeafId(candidate.id) === leafId)
           : (manager?.getActivePane() ?? manager?.getPanes()[0])
-        if (pane) {
-          requestClose(pane.id)
+        if (!pane) {
+          return false
         }
+        requestClose(pane.id)
+        return true
       }),
     [tabId, managerRef, requestClose]
   )

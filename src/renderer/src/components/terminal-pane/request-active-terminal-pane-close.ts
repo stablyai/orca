@@ -16,12 +16,13 @@ export function requestActiveTerminalPaneClose(tabId: string, leafId?: string): 
 /** The mounted pane's side of `requestActiveTerminalPaneClose`. Returns the unsubscribe. */
 export function onActiveTerminalPaneCloseRequest(
   tabId: string,
-  closeActivePane: (leafId?: string) => void
+  closeActivePane: (leafId?: string) => boolean
 ): () => void {
   const onRequest = (event: Event): void => {
     if (event instanceof CustomEvent && isCloseRequestFor(event.detail, tabId)) {
-      event.preventDefault()
-      closeActivePane(event.detail.leafId)
+      if (closeActivePane(event.detail.leafId)) {
+        event.preventDefault()
+      }
     }
   }
   window.addEventListener(REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT, onRequest)

@@ -20,7 +20,14 @@ export function closeSidebarAgent(agent: DashboardAgentRow): void {
   const layout = state.terminalLayoutsByTabId[terminalId]
   if (layout?.root?.type === 'split') {
     const pane = parsePaneKey(agent.paneKey)
-    if (pane) {
+    if (!pane || pane.tabId !== terminalId) {
+      toast.error(
+        translate(
+          'sidebar.agentActions.paneUnavailable',
+          'This agent could not be closed. Try again.'
+        )
+      )
+    } else {
       void closeSidebarAgentPane(worktreeId, terminalId, pane.leafId).then((handled) => {
         if (!handled) {
           toast.error(

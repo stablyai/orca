@@ -18,9 +18,11 @@ const mocks = vi.hoisted(() => {
     renamePane: vi.fn(),
     closeTab: vi.fn(),
     closeLegacyTab: vi.fn(),
-    closePane: vi.fn(async () => true)
+    closePane: vi.fn(async () => true),
+    closeError: vi.fn()
   }
 })
+vi.mock('sonner', () => ({ toast: { error: mocks.closeError } }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('@/lib/workspace-tab-commands', () => ({ dispatchWorkspaceTabCommand: mocks.closeTab }))
 vi.mock('@/components/terminal/terminal-tab-actions', () => ({
@@ -145,4 +147,12 @@ it('does not rename a vanished agent or a synthetic child', () => {
   expect(renameSidebarAgent({ ...row, rowSource: 'subagent' }, 'Wrong target')).toBe(false)
   expect(mocks.state.setTabCustomTitle).not.toHaveBeenCalled()
   expect(mocks.renamePane).not.toHaveBeenCalled()
+})
+
+it('reports a legacy split pane key without closing a sibling or the tab', () => {
+  mocks.state.terminalLayoutsByTabId = { 'agent-b': { root: { type: 'split' } } }
+  closeSidebarAgent({ ...row, paneKey: 'agent-b:1' })
+  expect(mocks.closeError).toHaveBeenCalled()
+  expect(mocks.closePane).not.toHaveBeenCalled()
+  expect(mocks.closeTab).not.toHaveBeenCalled()
 })
