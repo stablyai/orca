@@ -45,9 +45,41 @@ let cached: {
   parents: SidebarLineageParentIdentities
 } | null = null
 
+const INPUT_KEYS = [
+  'worktreesByRepo',
+  'worktreeLineageById',
+  'crossStoreLineageByStoreKey',
+  'ownLineageInstallationId',
+  'runtimeStatusByEnvironmentId',
+  'removedRuntimeEnvironmentIds'
+] as const satisfies readonly (keyof CrossStoreLineageInputs)[]
+
+let lastCall: {
+  inputs: CrossStoreLineageInputs
+  result: SidebarLineageParentIdentities | undefined
+} | null = null
+
 /** Sidebar parents over every visible store, or undefined while no store holds a cross-store record
  * (the sidebar then resolves same-store parents exactly as before). */
 export function selectSidebarLineageParentIdentities(
+  state: CrossStoreLineageInputs
+): SidebarLineageParentIdentities | undefined {
+  // Every subscriber runs this on unrelated writes; unchanged inputs skip the record scans.
+  const previous = lastCall
+  if (previous && INPUT_KEYS.every((key) => previous.inputs[key] === state[key])) {
+    return previous.result
+  }
+  const result = resolveSidebarParents(state)
+  lastCall = {
+    inputs: Object.fromEntries(
+      INPUT_KEYS.map((key) => [key, state[key]])
+    ) as CrossStoreLineageInputs,
+    result
+  }
+  return result
+}
+
+function resolveSidebarParents(
   state: CrossStoreLineageInputs
 ): SidebarLineageParentIdentities | undefined {
   // Partial store snapshots (tests, early boot) may lack the slice.
