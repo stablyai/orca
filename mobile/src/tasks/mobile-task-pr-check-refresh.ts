@@ -1,4 +1,5 @@
 import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import { matchesGitHubWorkItemTarget } from '../../../src/shared/github/work-item-target'
 import { acceptPRCheckObservation } from '../../../src/shared/github/complete-pr-check-owner'
 import { captureMobilePRCheckContract } from '../transport/pr-check-observation-contract'
@@ -124,29 +125,47 @@ export async function refreshMobileTaskPRChecks(
       }
       publish(owner)
     }
-    const reply = await githubPullRequestChecksRead.request(
-      contract.client ?? client,
-      {
-        repo: `id:${item.source.repoId}`,
-        prNumber: item.source.number,
-        prRepo: repository,
-        headSha: owner?.headSha ?? requestedHead,
-        noCache: true
-      },
-      { timeoutMs: 30_000, ...contract.options }
-    )
-    const checks = githubPullRequestChecksRead.interpret(reply)
+    let checks: PRCheckDetail[] | undefined
+    try {
+      const reply = await githubPullRequestChecksRead.request(
+        contract.client ?? client,
+        {
+          repo: `id:${item.source.repoId}`,
+          prNumber: item.source.number,
+          prRepo: repository,
+          headSha: owner?.headSha ?? requestedHead,
+          noCache: true
+        },
+        { timeoutMs: 30_000, ...contract.options }
+      )
+      checks = githubPullRequestChecksRead.interpret(reply)
+    } catch (error) {
+      if (selected() && contract.routeCurrent()) {
+        setError(error instanceof Error ? error.message : 'Failed to refresh checks')
+      }
+    }
     if (!selected() || !contract.routeCurrent()) {
       return
     }
-    setDetailPayload((prior) =>
-      prior?.provider === 'github' && prior.targetKey === githubTaskKey(item.source)
-        ? { ...prior, checks }
-        : prior
-    )
+    if (checks) {
+      const returnedChecks = checks
+      setDetailPayload((prior) =>
+        prior?.provider === 'github' && prior.targetKey === githubTaskKey(item.source)
+          ? { ...prior, checks: returnedChecks }
+          : prior
+      )
+    }
     if (!contract.complete && !current() && selected() && contract.routeCurrent()) {
-      contract.retire()
-      contract = await captureMobilePRCheckContract(client, { repo: `id:${item.source.repoId}` })
+      const previous = contract
+      const replacement = await captureMobilePRCheckContract(client, {
+        repo: `id:${item.source.repoId}`
+      })
+      if (!selected() || !previous.routeCurrent() || !replacement.current()) {
+        replacement.retire()
+        return
+      }
+      contract = replacement
+      previous.retire()
       if (contract.complete) {
         owner = await readOwner()
         if (current()) {
@@ -154,7 +173,7 @@ export async function refreshMobileTaskPRChecks(
         }
       }
     }
-    if (!contract.complete && current()) {
+    if (checks && !contract.complete && current()) {
       const summary = buildGitHubCheckSummary(checks)
       const update = (source: typeof item.source) => ({
         ...source,
