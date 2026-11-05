@@ -87,8 +87,13 @@ export async function changeCodexThreadGoal(
   } catch (error) {
     if (isCodexAppServerRequestError(error)) {
       // Codex words a missing goal with internal ids; say it in the user's terms instead.
-      if (change.kind === 'status' && (await codexThreadGoalMissing(session, timeoutMs))) {
-        return { ok: false, rejected: AGENT_SESSION_GOAL_CONTROL_COPY.noGoal }
+      if (change.kind === 'status') {
+        throwIfSignalAborted(signal)
+        const missing = await codexThreadGoalMissing(session, timeoutMs)
+        throwIfSignalAborted(signal)
+        if (missing) {
+          return { ok: false, rejected: AGENT_SESSION_GOAL_CONTROL_COPY.noGoal }
+        }
       }
       return {
         ok: false,

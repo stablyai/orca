@@ -19,13 +19,22 @@ export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
 const NATIVE_CHAT_USAGE_COMMAND = 'usage'
 const CODEX_ACCOUNTS_SECTION_ID = getUsageProviderAccountsSectionId('codex') ?? undefined
 
+/** Put an Orca row where the agent's namesake sits, which it then hides, or last. */
+function withOrcaRow(
+  commands: readonly SlashCommandSuggestion[],
+  row: SlashCommandSuggestion
+): SlashCommandSuggestion[] {
+  const at = commands.findIndex(({ name }) => name === row.name)
+  return at === -1 ? [...commands, row] : [...commands.slice(0, at), row, ...commands.slice(at)]
+}
+
 /** Replace the agent’s /resume catalog entry with Orca’s Session History command, and give
  *  Codex /usage, which its app-server cannot run from message text. */
 export function withNativeChatOrcaCommands(
   commands: readonly SlashCommandSuggestion[],
   agent: AgentType
 ): SlashCommandSuggestion[] {
-  const resume: SlashCommandSuggestion = {
+  const withResume = withOrcaRow(commands, {
     name: NATIVE_CHAT_RESUME_COMMAND,
     description: translate(
       'components.native-chat.resumeCommand.description',
@@ -33,24 +42,17 @@ export function withNativeChatOrcaCommands(
     ),
     argumentHint: translate('components.native-chat.resumeCommand.argumentHint', '[search]'),
     orcaOwned: true
-  }
-  const at = commands.findIndex(({ name }) => name === NATIVE_CHAT_RESUME_COMMAND)
-  const withResume =
-    at === -1 ? [...commands, resume] : [...commands.slice(0, at), resume, ...commands.slice(at)]
-  if (agent !== 'codex' || commands.some(({ name }) => name === NATIVE_CHAT_USAGE_COMMAND)) {
-    return withResume
-  }
-  return [
-    ...withResume,
-    {
-      name: NATIVE_CHAT_USAGE_COMMAND,
-      description: translate(
-        'components.native-chat.usageCommand.description',
-        'View account usage'
-      ),
-      orcaOwned: true
-    }
-  ]
+  })
+  return agent === 'codex'
+    ? withOrcaRow(withResume, {
+        name: NATIVE_CHAT_USAGE_COMMAND,
+        description: translate(
+          'components.native-chat.usageCommand.description',
+          'View account usage'
+        ),
+        orcaOwned: true
+      })
+    : withResume
 }
 
 /** Parse optional /resume search text using host command syntax; null for other drafts. */
