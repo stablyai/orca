@@ -176,11 +176,16 @@ it('awaits native founding, append, reconstruction and replacement through the p
     expect(saved?.state.items.size).toBe(1)
     const since = await journal.readSince({ epoch: journal.epoch, sequence: 1 })
     expect(since).toMatchObject({ ok: true, through: 2, cursor: journal.cursor() })
-    await journal.replaceEpochItems('handle_forked', 0, [])
+    const cursor = await journal.replaceEpochItems('handle_forked', 0, [])
     expect(journal.snapshot().items).toHaveLength(0)
-    const replaced = await host.read((read) => restoreJournalAsync(read, identity.sessionId))
-    expect(replaced?.state.epoch).toBe(journal.epoch)
-    expect(replaced?.state.items.size).toBe(0)
+    await journal.close()
+    const reopened = await openAgentSessionJournal({ database: host, identity })
+    try {
+      expect(reopened.cursor()).toEqual(cursor)
+      expect(reopened.snapshot().items).toEqual([])
+    } finally {
+      await reopened.close()
+    }
   } finally {
     await journal.close()
     await host.close()

@@ -1,4 +1,4 @@
-import { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
@@ -24,7 +24,7 @@ export class SurfaceExecutorReader {
     )
   ) {
     this.queue = new WorkerThreadRequestQueue({
-      factory: () => new Worker(workerPath, { execArgv: [] }),
+      factory: () => spawnWorkerThread(workerPath, { execArgv: [] }),
       idleTeardownMs: 30_000,
       maxConsecutiveDeaths: 2,
       awaitRetirement: true,
