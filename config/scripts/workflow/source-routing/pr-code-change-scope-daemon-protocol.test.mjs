@@ -13,8 +13,8 @@ describe('daemon protocol crossing gate routing', () => {
 
   it.each([
     'config/scripts/daemon-protocol/schema-facts/daemon-protocol-facts.mjs',
-    'config/scripts/check-daemon-protocol-crossing.mjs',
-    'config/scripts/stable-release-tags.mjs'
+    'config/scripts/daemon-protocol/admission/check-daemon-protocol-crossing.mjs',
+    'config/scripts/release/versioning/stable-release-tags.mjs'
   ])('runs the gate when its checker %s changes', (file) => {
     expect(classifyPrJobs([file])).toMatchObject({ should_run: true, 'cross-version-wire': true })
   })

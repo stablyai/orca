@@ -20,10 +20,10 @@ const ENTRY_POINTS = [
   'config/scripts/orcad-distribution/server-bundle/build-orcad.mjs',
   'config/scripts/native-build/node-addons/ensure-native-runtime.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps.mjs',
-  'config/scripts/verify-cli-bin.mjs',
-  'config/scripts/install-dev-cli.mjs',
-  'config/scripts/orca-dev.mjs',
-  'config/scripts/runtime-serve-terminal-smoke.mjs',
+  'config/scripts/cli-build/verify-cli-bin.mjs',
+  'config/scripts/development/setup/install-dev-cli.mjs',
+  'config/scripts/development/launch/orca-dev.mjs',
+  'config/scripts/runtime-verification/daemon-lifecycle/runtime-serve-terminal-smoke.mjs',
   'config/scripts/orcad-distribution/qualification/orcad-terminal-smoke-change-scope.mjs'
 ]
 
@@ -42,6 +42,9 @@ export async function classifyOrcadTerminalSmokeChanges(
       file.startsWith('config/scripts/orcad-terminal-smoke-') ||
       file.startsWith('config/scripts/orcad-distribution/qualification/orcad-terminal-smoke-') ||
       file.startsWith('config/scripts/runtime-serve-terminal-smoke') ||
+      file.startsWith(
+        'config/scripts/runtime-verification/daemon-lifecycle/runtime-serve-terminal-smoke'
+      ) ||
       // createRequire-loaded native probes are invisible to esbuild's import graph.
       (file.startsWith('config/scripts/') && file.endsWith('.cjs')) ||
       // CLI emit and runtime resources include files opened by path, outside the import graph.

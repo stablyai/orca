@@ -17,9 +17,15 @@ const RUN_ELSEWHERE = new Set([
 ])
 
 export function listRatchetScripts(scriptsDir) {
-  return readdirSync(scriptsDir)
-    .filter((name) => RATCHET_SCRIPT.test(name) && !RUN_ELSEWHERE.has(name))
-    .sort()
+  return readdirSync(scriptsDir, { recursive: true })
+    .filter(
+      (name) => RATCHET_SCRIPT.test(path.basename(name)) && !RUN_ELSEWHERE.has(path.basename(name))
+    )
+    .sort((a, b) => {
+      const left = path.basename(a)
+      const right = path.basename(b)
+      return left < right ? -1 : left > right ? 1 : 0
+    })
 }
 
 function runRatchet(scriptsDir, name, root) {
@@ -28,8 +34,10 @@ function runRatchet(scriptsDir, name, root) {
     const child = spawn(process.execPath, [path.join(scriptsDir, name)], { cwd: root })
     child.stdout.on('data', (chunk) => (output += chunk))
     child.stderr.on('data', (chunk) => (output += chunk))
-    child.on('error', (error) => resolve({ name, ok: false, output: `${output}${error.message}` }))
-    child.on('close', (code) => resolve({ name, ok: code === 0, output }))
+    child.on('error', (error) =>
+      resolve({ name: path.basename(name), ok: false, output: `${output}${error.message}` })
+    )
+    child.on('close', (code) => resolve({ name: path.basename(name), ok: code === 0, output }))
   })
 }
 

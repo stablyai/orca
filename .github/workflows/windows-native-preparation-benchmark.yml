@@ -69,7 +69,7 @@ jobs:
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           BENCHMARK_RUNNER: ${{ matrix.os }}
-        run: node config/scripts/benchmark-windows-security-reuse.mjs
+        run: node config/scripts/performance/windows-security/benchmark-windows-security-reuse.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:
