@@ -1371,7 +1371,6 @@
 8 test-no-real-time-wait:tests/e2e/terminal-column-desync-repro.spec.ts
 8 test-no-wall-clock:src/main/ai-vault-search/session-search-indexer.test.ts
 8 test-no-wall-clock:src/main/ssh/orcad-exited-own-fence.test.ts
-8 test-no-wall-clock:src/renderer/src/components/native-chat/structured-child-records-switch.test.tsx
 8 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.test.tsx
 8 test-timeout-needs-reason:src/main/worker-thread-child-process/worker-thread-child-process.test.ts
 9 test-no-real-time-wait:tests/e2e/chinese-ime-chat-input-repro.spec.ts
