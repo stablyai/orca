@@ -81,4 +81,72 @@ describe('projectPluginAgentStatusChangedPayload', () => {
     expect(projected?.workspaceId).toBeNull()
     expect(projected?.mainAgent).toEqual({ state: 'working', stateStartedAt: 7 })
   })
+
+  describe('prompt kind', () => {
+    const QUESTION = JSON.stringify({
+      questions: [
+        {
+          question: 'Which database should the migration target?',
+          header: 'Database',
+          multiSelect: false,
+          options: [{ label: 'Postgres' }, { label: 'SQLite' }]
+        }
+      ]
+    })
+    const APPROVAL = JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } })
+
+    it('projects `prompt: question` for a needs-you row holding an AskUserQuestion, and never its text', () => {
+      const projected = projectPluginAgentStatusChangedPayload(
+        row({
+          payload: {
+            state: 'waiting',
+            prompt: 'ship it',
+            agentType: 'claude',
+            toolName: 'AskUserQuestion',
+            interactivePrompt: QUESTION
+          }
+        })
+      )
+      expect(projected).toEqual({
+        workspaceId: 'wt-1',
+        paneKey: PANE,
+        state: 'waiting',
+        prompt: 'question',
+        receivedAt: 1_700_000_000_000
+      })
+      expect(agentStatusChangedPayloadSchema.parse(projected)).toEqual(projected)
+      expect(JSON.stringify(projected)).not.toContain('migration')
+      expect(JSON.stringify(projected)).not.toContain('Postgres')
+    })
+
+    it('omits `prompt` for an approval request', () => {
+      const projected = projectPluginAgentStatusChangedPayload(
+        row({
+          payload: {
+            state: 'blocked',
+            prompt: 'ship it',
+            agentType: 'claude',
+            toolName: 'Bash',
+            interactivePrompt: APPROVAL
+          }
+        })
+      )
+      expect(projected).not.toHaveProperty('prompt')
+    })
+
+    it('omits `prompt` for a working row even if a stale question is still attached', () => {
+      const projected = projectPluginAgentStatusChangedPayload(
+        row({
+          payload: {
+            state: 'working',
+            prompt: 'ship it',
+            agentType: 'claude',
+            toolName: 'AskUserQuestion',
+            interactivePrompt: QUESTION
+          }
+        })
+      )
+      expect(projected).not.toHaveProperty('prompt')
+    })
+  })
 })

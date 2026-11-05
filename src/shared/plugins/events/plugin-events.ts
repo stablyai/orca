@@ -53,6 +53,8 @@ export const agentStatusChangedPayloadSchema = z.object({
   title: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH).optional(),
   /** The combined status the user sees: `working` while the main agent or any live child works. */
   state: z.enum(AGENT_STATUS_STATES),
+  /** Present only while the agent waits on a question; never carries its text. */
+  prompt: z.literal('question').optional(),
   receivedAt: z.number().finite().positive(),
   /** Distinguish the main agent from combined child activity; absent on older hosts or without main-agent evidence. State keeps its meaning. */
   mainAgent: z
@@ -85,7 +87,7 @@ export const PLUGIN_EVENT_SUMMARIES: Record<PluginEventName, string> = {
   'workspace.created': 'A worktree workspace was created.',
   'workspace.removed': 'A worktree workspace was removed.',
   'agent.status.changed':
-    'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it.',
+    'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, `terminalId` names its terminal when Orca lists it, and `prompt` is `question` while the agent waits on one (host API 1.4).',
   'workspace.changed':
     'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context.'
 }

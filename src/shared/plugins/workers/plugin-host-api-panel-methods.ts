@@ -28,6 +28,8 @@ const agentsListResult = z.object({
         /** Which agent runs there (`claude`, `codex`, ...), when Orca knows. */
         agent: z.string().max(128).nullable(),
         state: z.enum(AGENT_STATUS_STATES),
+        /** Present only while the agent waits on a question; never carries its text. */
+        prompt: z.literal('question').optional(),
         /** When it entered `state`, in ms since the epoch. */
         stateStartedAt: z.number().finite()
       })
@@ -53,8 +55,9 @@ export const PLUGIN_PANEL_BRIDGE_API = {
   }),
   'agents.list': spec({
     summary:
-      'The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after.',
+      'The agents in the focused workspace: their terminal, title, agent kind and status, and `prompt: "question"` while one waits on a question (host API 1.4). `agent.status.changed` reports each change after.',
     since: 2,
+    fieldsSince: 4,
     scope: 'active-workspace',
     capability: 'agent:read',
     mutation: false,

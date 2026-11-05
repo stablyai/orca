@@ -12,6 +12,8 @@ export type PluginHostMethodSpec<
   since: number
   /** Minor in which panels and editors gained a method workers had since `since`. */
   framesSince?: number
+  /** Minor that added an optional result field to an existing method. */
+  fieldsSince?: number
   /** Minor that deprecated it; it keeps working until the next major. */
   deprecatedSince?: number
   /** Machine-readable resource boundary enforced by the host binding. */
@@ -36,10 +38,11 @@ export const spec = <P extends z.ZodType, R extends z.ZodType>(
   entry: PluginHostMethodSpec<P, R>
 ): PluginHostMethodSpec<P, R> => entry
 
-/** The minor a surface first got the method. */
+/** The newest minor that changed the method for a surface, counting added result fields. */
 export function pluginHostMethodSinceFor(
   entry: PluginHostMethodSpec,
   surface: PluginSurface
 ): number {
-  return surface === 'worker' ? entry.since : Math.max(entry.since, entry.framesSince ?? 0)
+  const since = surface === 'worker' ? entry.since : Math.max(entry.since, entry.framesSince ?? 0)
+  return Math.max(since, entry.fieldsSince ?? 0)
 }

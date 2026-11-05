@@ -109,8 +109,8 @@ declare module 'orca' {
     "files.saveAs": { params: { suggestedName?: string; mimeType?: string; data: string | ArrayBuffer }; result: { status: "saved" | "cancelled" } }
     /** Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name. */
     "plugin.request": { params: { name: string; input?: JsonValue; timeoutMs?: number }; result: { output: JsonValue } }
-    /** The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after. */
-    "agents.list": { params: Record<string, never> | undefined; result: { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number }[] } }
+    /** The agents in the focused workspace: their terminal, title, agent kind and status, and `prompt: "question"` while one waits on a question (host API 1.4). `agent.status.changed` reports each change after. */
+    "agents.list": { params: Record<string, never> | undefined; result: { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; prompt?: "question"; stateStartedAt: number }[] } }
     /** Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you. */
     "events.subscribe": { params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }; result: { ok: true } }
   }
@@ -120,8 +120,8 @@ declare module 'orca' {
     "workspace.created": { workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }
     /** A worktree workspace was removed. */
     "workspace.removed": { workspaceId: string; kind: "worktree" | "folder"; path: string }
-    /** An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it. */
-    "agent.status.changed": { workspaceId: string | null; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }
+    /** An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, `terminalId` names its terminal when Orca lists it, and `prompt` is `question` while the agent waits on one (host API 1.4). */
+    "agent.status.changed": { workspaceId: string | null; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; prompt?: "question"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }
     /** The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context. */
     "workspace.changed": { context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
   }

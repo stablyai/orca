@@ -320,10 +320,8 @@ export function getPluginHostMethodSpec(name: string): PluginHostMethodSpec | nu
   return isPluginHostMethodName(name) ? PLUGIN_HOST_API[name] : null
 }
 
-/** The minor this host implements: the newest `since` in the table. */
-export const PLUGIN_HOST_API_MINOR = Math.max(
-  ...PLUGIN_HOST_METHOD_NAMES.map((name) => PLUGIN_HOST_API[name].since)
-)
+/** The minor this host implements: the newest `since` or `fieldsSince` in the table. */
+export const PLUGIN_HOST_API_MINOR = pluginHostApiMinorFor(PLUGIN_HOST_METHOD_NAMES, 'worker')
 
 /** Methods a surface may call, for `hello` and `host.has`. */
 export function pluginHostMethodsFor(surface: PluginSurface): PluginHostMethodName[] {
