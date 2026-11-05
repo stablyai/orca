@@ -13,7 +13,7 @@ import {
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
-import { finishedWorkerDispatch } from './finished-worker-mail'
+import { finishedWorkerDispatch, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import {
   askedQuestionReceipt,
   waitForQuestionAnswer
@@ -80,6 +80,7 @@ export const ORCHESTRATION_ASK_METHODS = [
           'question'
         )
       if (!askingDispatch) {
+        refuseFinishedRemoteWorker(db, paneKey)
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'

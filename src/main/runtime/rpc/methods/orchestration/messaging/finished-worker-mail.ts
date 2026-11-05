@@ -8,6 +8,7 @@ import type { DispatchContextRow } from '../../../../orchestration/types'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 import { reportCorrectsUnobservedPrompt } from '../../../../orchestration/worker-report-admission'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isDispatchMutationMessageType } from '../schemas'
 import type { MessageRouting } from '../routing'
 
@@ -87,6 +88,17 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
             next: 'Delivered to your coordinator as a message; your finished task is unchanged. End your turn.'
           }
         : sent
+  }
+}
+
+/** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal. */
+export function refuseFinishedRemoteWorker(db: OrchestrationDb, paneKey: string | undefined): void {
+  const attachment = paneKey ? db.findLatestRemoteAttachmentForPane(paneKey) : undefined
+  if (attachment) {
+    throw new OrchestrationError(
+      'run_home_unreachable',
+      `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that a finished worker cannot reach yet. Nothing was sent; give the message to the user instead.`
+    )
   }
 }
 

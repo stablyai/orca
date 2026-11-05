@@ -55,4 +55,45 @@ describe('a worker after its worker_done', () => {
       ['question', 'Question']
     ])
   })
+
+  it('tells a finished worker on a paired host that its coordinator is out of reach', async () => {
+    const { db, runtime, ctx } = harness.setup(false)
+    db.createRemoteDispatchAttachment({
+      dispatchId: 'ctx_remote',
+      runId: 'run_home',
+      taskId: 'task_remote',
+      homePeerFingerprint: 'peer_fp',
+      protocolVersion: 1,
+      runtimeEpoch: 'epoch_1',
+      mutationReceipt: {
+        callerFingerprint: 'peer_fp',
+        requestId: 'attach_1',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'attach_payload'
+      }
+    })
+    db.prepareRemoteAttachmentAuthority({
+      dispatchId: 'ctx_remote',
+      paneKey: 'tab_worker:leaf_worker',
+      processIncarnation: 'runtime_test:term_worker:1',
+      worktreeId: 'folder_workspace',
+      terminalHandle: 'term_worker',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    db.markRemoteAttachmentReady('ctx_remote')
+    db.settleRemoteAttachmentInRelayTransaction('ctx_remote', 'succeeded')
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_worker' ? 'tab_worker:leaf_worker' : null
+    )
+
+    for (const [method, params] of [
+      ['orchestration.send', { subject: 'Later' }],
+      ['orchestration.ask', { question: 'Anything else?', wait: false }]
+    ] as const) {
+      await expect(
+        harness.call(method, { from: 'term_worker', ...params }, ctx)
+      ).rejects.toMatchObject({ code: 'run_home_unreachable' })
+    }
+  })
 })

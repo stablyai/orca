@@ -34,7 +34,7 @@ import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
-import { finishedWorkerSend } from './finished-worker-mail'
+import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import {
   followThroughWorkerReport,
   passHeldWorkerMail,
@@ -166,6 +166,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         to = reporting ? dispatchReportMailbox(db, reporting) : `run:${routing.run.id}`
       }
       if (!to) {
+        refuseFinishedRemoteWorker(db, senderPaneKey)
         throw new OrchestrationError(
           'run_required',
           'No recipient or active Dispatch Run could be resolved. No effects were applied.',
