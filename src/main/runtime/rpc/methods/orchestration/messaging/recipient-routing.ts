@@ -135,7 +135,7 @@ export function selectRunBoundDispatchRecipient(
   }
 }
 
-// Replies share send routing; unresolved historical senders keep their original address.
+// Replies share send routing, so a `dispatch:` result is routed as send routes it; unresolved historical senders keep their original address.
 export function resolveReplyRecipient(params: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -148,14 +148,7 @@ export function resolveReplyRecipient(params: {
     return { to: originalFrom, runId: originalFrom.slice('run:'.length) }
   }
   if (originalFrom.startsWith('dispatch:')) {
-    const dispatchId = originalFrom.slice('dispatch:'.length)
-    // Federation owns its own recipient and liveness checks.
-    if (db.getFederatedDispatch(dispatchId)) {
-      return unchanged
-    }
-    assertDispatchMailboxDeliverable(runtime, db, dispatchId)
-    const runBound = resolveRunBoundDispatchRecipient(runtime, db, dispatchId)
-    return runBound ?? unchanged
+    return unchanged
   }
   const recipient = resolveBareOrchestrationRecipient({
     runtime,
@@ -163,6 +156,20 @@ export function resolveReplyRecipient(params: {
     handle: originalFrom,
     senderRunId: originalRunId
   })
+  // No one reads a finished worker's terminal-only mailbox; its last Dispatch continues it instead.
+  if (!recipient.ok || recipient.warning?.code === 'legacy_terminal_recipient') {
+    const finished = db.getLatestDispatchForTerminal(
+      originalFrom,
+      runtime.getLiveTerminalPaneKey(originalFrom) ?? undefined
+    )
+    if (
+      finished &&
+      !ACTIVE_DISPATCH_STATUSES.includes(finished.status) &&
+      !db.getFederatedDispatch(finished.id)
+    ) {
+      return { to: `dispatch:${finished.id}`, runId: finished.run_id }
+    }
+  }
   return recipient.ok ? { to: recipient.to, runId: recipient.runId ?? originalRunId } : unchanged
 }
 

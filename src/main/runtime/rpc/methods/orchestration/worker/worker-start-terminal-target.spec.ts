@@ -47,6 +47,34 @@ export function registerWorkerStartTerminalTargetTests(): void {
       const started = await harness.startWorker({ terminal: 'term_worker' })
       expect(started.dispatchId).toEqual(expect.any(String))
     })
+
+    it('runs a terminal from another worktree in that worktree unless --worktree names one', async () => {
+      vi.mocked(harness.runtime.showTerminal).mockImplementation(
+        async (handle) =>
+          ({
+            handle,
+            worktreeId: handle === 'term_worker' ? 'repo::other' : 'repo::worktree',
+            status: 'running'
+          }) as never
+      )
+      vi.mocked(harness.runtime.showManagedTerminalWorkspace).mockImplementation(
+        async (selector) =>
+          ({ id: selector === 'id:repo::other' ? 'repo::other' : 'repo::worktree' }) as never
+      )
+      const start = (worktree?: string) =>
+        harness.call('orchestration.workerStart', {
+          task: harness.db.createTask({ spec: 'reuse', runId: harness.activeRunId }).id,
+          from: 'term_coord',
+          terminal: 'term_worker',
+          ...(worktree ? { worktree } : {})
+        })
+
+      await expect(start('current')).rejects.toMatchObject({ code: 'terminal_worktree_mismatch' })
+      const started = await start()
+      expect(
+        harness.db.getWorkerDispatch((started as { dispatchId: string }).dispatchId)
+      ).toMatchObject({ worktree_id: 'repo::other' })
+    })
   })
 
   // Manual inject is another self-adoption path; compare target with caller too.

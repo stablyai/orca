@@ -15,23 +15,28 @@ import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 import { withReceiptNext } from './receipt-next-text'
 import { printOrchestrationResult } from './agent-view'
 import { formatMessageViewText, toMessageView, type MessageView } from './message-agent-views'
+import { printWorkerFollowUp } from './message-send-handler'
+import type { WorkerFollowUpReceipt } from './worker-start-agent-view'
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration reply': async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await callOrchestrationMutation<{ message: { id: string }; next?: string }>(
-      client,
-      flags,
-      'orchestration.reply',
-      {
-        id: getRequiredStringFlag(flags, 'id'),
-        body: getRequiredStringFlag(flags, 'body'),
-        run: getOptionalStringFlag(flags, 'run'),
-        from
-      }
-    )
+    const result = await callOrchestrationMutation<
+      { message: { id: string }; next?: string } | WorkerFollowUpReceipt
+    >(client, flags, 'orchestration.reply', {
+      id: getRequiredStringFlag(flags, 'id'),
+      body: getRequiredStringFlag(flags, 'body'),
+      run: getOptionalStringFlag(flags, 'run'),
+      from
+    })
+    // A reply to a finished worker continues it, as a send to its Dispatch does.
+    if ('delivery' in result.result) {
+      printWorkerFollowUp({ ...result, result: result.result }, json, flags.has('full'))
+      return
+    }
+    const replied = { ...result, result: result.result }
     if (!flags.has('full')) {
-      printOrchestrationResult(result, json, {
+      printOrchestrationResult(replied, json, {
         fields: (value) => ({
           messageId: value.message.id,
           next: value.next
@@ -39,7 +44,7 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
       })
       return
     }
-    printResult(result, json, (value) => withReceiptNext(`Replied ${value.message.id}`, value))
+    printResult(replied, json, (value) => withReceiptNext(`Replied ${value.message.id}`, value))
   },
 
   'orchestration inbox': async ({ flags, client, json }) => {

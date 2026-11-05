@@ -6,7 +6,7 @@ import { formatWorkerStart } from './worker-output'
 import { WORKER_FOLLOW_UP_VIEW, type WorkerFollowUpReceipt } from './worker-start-agent-view'
 import { withResolvedNextCommands } from '../../orchestration-mutation-recovery'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
-import { RuntimeClientError } from '../../runtime-client'
+import { RuntimeClientError, type RuntimeRpcSuccess } from '../../runtime-client'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { requireWorkerDoneSettlement } from '../orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
@@ -127,23 +127,16 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
       throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
-    if (!flags.has('full')) {
-      if ('delivery' in result.result) {
-        const followUp = withResolvedNextCommands(result.result)
-        printOrchestrationResult({ ...result, result: followUp }, json, WORKER_FOLLOW_UP_VIEW)
-      } else {
-        printOrchestrationResult({ ...result, result: result.result }, json, { fields: sendFields })
-      }
+    if ('delivery' in result.result) {
+      printWorkerFollowUp({ ...result, result: result.result }, json, flags.has('full'))
       return
     }
-    if ('delivery' in result.result && result.result.state !== 'ready') {
-      process.exitCode = 1
+    const sent = { ...result, result: result.result }
+    if (!flags.has('full')) {
+      printOrchestrationResult(sent, json, { fields: sendFields })
+      return
     }
-    const rendered =
-      'delivery' in result.result
-        ? { ...result, result: withResolvedNextCommands(result.result) }
-        : result
-    printResult(rendered, json, (value) => {
+    printResult(sent, json, (value) => {
       const warnings = 'warnings' in value ? (value.warnings ?? []) : []
       const withWarnings = (line: string): string =>
         withReceiptNext(
@@ -157,14 +150,6 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
             ? ` (terminal auto-release at ${lifecycle.autoReleaseAt})`
             : ''
         return withWarnings(`Sent ${value.message.id}${autoRelease}`)
-      }
-      if ('delivery' in value) {
-        return withWarnings(
-          `Follow-up of ${value.followUpOf} (${value.delivery})\n${formatWorkerStart(
-            // The mode line describes a new launch; only a fresh start is one.
-            value.delivery === 'started_fresh' ? value : { ...value, mode: undefined }
-          )}`
-        )
       }
       if ('relay' in value) {
         if (value.relay.destination === 'worker') {
@@ -220,4 +205,32 @@ function sendFields(value: Exclude<OrchestrationSendResult, { delivery: string }
     recipients: value.recipients,
     ...common
   }
+}
+
+/** A message a finished worker took as its next Task: printed as the follow-up worker-start it became. */
+export function printWorkerFollowUp(
+  response: RuntimeRpcSuccess<WorkerFollowUpReceipt & { warnings?: SendRecipientWarning[] }>,
+  json: boolean,
+  full: boolean
+): void {
+  const rendered = { ...response, result: withResolvedNextCommands(response.result) }
+  if (!full) {
+    printOrchestrationResult(rendered, json, WORKER_FOLLOW_UP_VIEW)
+    return
+  }
+  if (response.result.state !== 'ready') {
+    process.exitCode = 1
+  }
+  printResult(rendered, json, (value) =>
+    withReceiptNext(
+      [
+        `Follow-up of ${value.followUpOf} (${value.delivery})\n${formatWorkerStart(
+          // The mode line describes a new launch; only a fresh start is one.
+          value.delivery === 'started_fresh' ? value : { ...value, mode: undefined }
+        )}`,
+        ...(value.warnings ?? []).map((warning) => `Warning: ${warning.message}`)
+      ].join('\n'),
+      value
+    )
+  )
 }

@@ -219,8 +219,8 @@ export class RuntimeClient {
       const readiness = resolveWorkerStartReadinessTimeoutMs(requested)
       return Math.max(resolveWorkerStartClientTimeoutMs(readiness), this.requestTimeoutMs)
     }
-    // A send to a finished worker starts its follow-up, which waits as worker-start does.
-    if (method === 'orchestration.send') {
+    // A send or reply to a finished worker starts its follow-up, which waits as worker-start does.
+    if (method === 'orchestration.send' || method === 'orchestration.reply') {
       return Math.max(resolveWorkerStartClientTimeoutMs(), this.requestTimeoutMs)
     }
     if (

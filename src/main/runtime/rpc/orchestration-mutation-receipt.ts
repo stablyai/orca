@@ -190,12 +190,18 @@ export function attachMutationReceipt(
   return { ...(result as Record<string, unknown>), mutation: { requestId, replayed } }
 }
 
+const FOLLOW_UP_STARTING_METHODS = new Set([
+  'orchestration.workerStart',
+  'orchestration.send',
+  'orchestration.reply'
+])
+
 export function getPendingWorkerStartRecovery(
   method: string,
   receipt: string | null
 ): { dispatchId: string } | undefined {
-  // A send to a finished worker accepts a follow-up worker-start the same way.
-  if ((method !== 'orchestration.workerStart' && method !== 'orchestration.send') || !receipt) {
+  // A send or reply to a finished worker accepts a follow-up worker-start the same way.
+  if (!FOLLOW_UP_STARTING_METHODS.has(method) || !receipt) {
     return undefined
   }
   try {

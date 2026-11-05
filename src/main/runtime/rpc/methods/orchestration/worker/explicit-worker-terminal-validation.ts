@@ -54,6 +54,19 @@ export async function assertExplicitWorkerTerminalUsable(args: {
   }
 }
 
+/** With no --worktree, a named worker works where it already is. */
+export async function explicitWorkerWorktreeSelector(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  terminal: OrchestrationParty
+): Promise<string> {
+  const chat = chatAssigneeOf(terminal)
+  const worktreeId = chat
+    ? (await admitChatAssignee(runtime, chat, db)).location.workspaceId
+    : (await runtime.showTerminal(terminal.address)).worktreeId
+  return worktreeId ? `id:${worktreeId}` : 'current'
+}
+
 /** A `--terminal` party: a terminal pane, or a chat named by its Orca session ID. */
 export async function assertExplicitWorkerUsable(args: {
   runtime: OrcaRuntimeService

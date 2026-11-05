@@ -14,7 +14,6 @@ import {
 } from '../schemas'
 import { resolveMessageRun } from '../routing'
 import {
-  assertDispatchMailboxDeliverable,
   resolveBareOrchestrationRecipient,
   resolveRunBoundDispatchRecipient,
   type SendRecipientWarning
@@ -33,13 +32,9 @@ import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
-import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
+import { routeDispatchAddressedMail } from './dispatch-addressed-mail'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
-import {
-  followThroughWorkerReport,
-  passHeldWorkerMail,
-  settledDispatchId
-} from './settled-worker-follow-through'
+import { followThroughWorkerReport, settledDispatchId } from './settled-worker-follow-through'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
@@ -204,7 +199,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         sendWarnings.length > 0 ? { ...receipt, warnings: sendWarnings } : receipt
 
       if (!isGroupAddress(to)) {
-        let addressedDispatchId = to.startsWith('dispatch:')
+        const addressedDispatchId = to.startsWith('dispatch:')
           ? to.slice('dispatch:'.length)
           : undefined
         const federatedTarget =
@@ -213,39 +208,28 @@ export const ORCHESTRATION_SEND_METHODS = [
             : undefined
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
-          const plan = planWorkerFollowUp(db, addressedDispatchId, params.type ?? 'status')
-          // Only a settled worker awaits; mail to a working one stays synchronous until it is inserted.
-          const followUp =
-            plan?.kind === 'start'
-              ? await startWorkerFollowUp({
-                  ctx: {
-                    runtime,
-                    orchestrationCompatibilityEvidence,
-                    orchestrationCaller,
-                    orchestrationMutation
-                  },
-                  db,
-                  plan,
-                  from,
-                  message: params
-                })
-              : plan
+          const routed = await routeDispatchAddressedMail({
+            ctx: {
+              runtime,
+              orchestrationCompatibilityEvidence,
+              orchestrationCaller,
+              orchestrationMutation
+            },
+            db,
+            dispatchId: addressedDispatchId,
+            type: params.type ?? 'status',
+            from,
+            message: params
+          })
           // A dispatch: address carries no recipient warnings, so `next` stays last.
-          if (followUp?.kind === 'started') {
-            if (typeof followUp.receipt.dispatchId === 'string') {
-              passHeldWorkerMail(runtime, db, followUp.receipt.dispatchId)
-            }
-            return followUp.receipt
+          if (routed.kind === 'started') {
+            return routed.receipt
           }
-          if (followUp) {
-            addressedDispatchId = followUp.dispatchId
-            to = `dispatch:${addressedDispatchId}`
-          }
-          assertDispatchMailboxDeliverable(runtime, db, addressedDispatchId)
+          to = `dispatch:${routed.dispatchId}`
           const runBound = resolveRunBoundDispatchRecipient(
             runtime,
             db,
-            addressedDispatchId,
+            routed.dispatchId,
             params.run
           )
           if (runBound) {
