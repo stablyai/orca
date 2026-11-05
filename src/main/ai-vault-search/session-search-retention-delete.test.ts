@@ -174,3 +174,42 @@ it('keeps a file a read refreshed after the expiry list was taken', async () => 
     await index.close()
   }
 })
+
+function freelist(db: SyncDatabase): number {
+  return Number(db.pragma('freelist_count', { simple: true }))
+}
+
+it('leaves freelist pages alone when an unlimited purge deletes nothing', async () => {
+  const index = await openSessionSearchIndexFile('ss-retention-idle')
+  const store = new SessionSearchStore(index.path)
+  try {
+    seed(index.db, 1, 200, 2)
+    // Free pages without orphaning any row: the session itself stays indexed.
+    index.db.exec('DELETE FROM messages WHERE session_row_id = 1 AND id % 2 = 0')
+    index.db.exec('DELETE FROM messages_fts WHERE rowid % 2 = 0')
+    const before = freelist(index.db)
+    expect(before).toBeGreaterThan(0)
+
+    // The recurring unlimited purge (every full sweep and freshness wait) must
+    // not move pages, or steady sweeps rewrite the file forever (#36666).
+    await store.purgeOlderThan(null)
+    expect(freelist(index.db)).toBe(before)
+  } finally {
+    store.close()
+    await index.close()
+  }
+})
+
+it('still reclaims pages after a purge that really deleted sessions', async () => {
+  const index = await openSessionSearchIndexFile('ss-retention-reclaim')
+  const store = new SessionSearchStore(index.path)
+  try {
+    seed(index.db, 1, 1025, 1)
+    await store.purgeOlderThan(100)
+    expect(count(index.db, 'messages')).toBe(0)
+    expect(freelist(index.db)).toBe(0)
+  } finally {
+    store.close()
+    await index.close()
+  }
+})
