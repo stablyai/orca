@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { compactIpcErrorMessage } from '@/lib/ipc-error'
 import { hostDictationErrorMessage } from '../../../../shared/host-dictation-error-messages'
+import { LOCAL_SPEECH_UNAVAILABLE_ERROR } from '../../../../shared/speech-types'
 
 function openVoiceSettings(): void {
   useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
@@ -13,6 +14,22 @@ export function showDictationStartErrorToast(message: string): void {
   const hostMessage = hostDictationErrorMessage(compactIpcErrorMessage(message) ?? '')
   if (hostMessage) {
     toast.error(hostMessage)
+  } else if (message.includes(LOCAL_SPEECH_UNAVAILABLE_ERROR)) {
+    toast.error(
+      translate(
+        'auto.components.dictation.DictationController.f2c6b6d4aa',
+        'Offline speech transcription is unavailable on Windows ARM64. Select an OpenAI transcription model in Voice settings.'
+      ),
+      {
+        action: {
+          label: translate(
+            'auto.components.dictation.DictationController.bb7f599ee7',
+            'Open Settings'
+          ),
+          onClick: openVoiceSettings
+        }
+      }
+    )
   } else if (message.includes('Permission') || message.includes('NotAllowed')) {
     toast.error(
       translate(

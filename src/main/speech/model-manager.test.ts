@@ -82,6 +82,20 @@ describe('ModelManager', () => {
     }
   })
 
+  it('does not report x64-only local model states on Windows ARM64', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-arm64-'))
+    try {
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
+      const states = await manager.getModelStates('win32', 'arm64')
+
+      expect(states.map((state) => state.id)).toEqual(
+        SPEECH_MODEL_CATALOG.filter((model) => model.provider === 'openai').map((model) => model.id)
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('verifies downloaded model file hashes before installation', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {

@@ -1,7 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence/loading-store/store'
 import type { ModelManager } from '../speech/model-manager'
 import type { SttService } from '../speech/stt-service'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
@@ -80,7 +79,6 @@ vi.mock('../speech/model-catalog', () => ({
   isLocalSpeechModel: () => true
 }))
 vi.mock('../speech/stt-worker-paths', () => ({
-  LOCAL_SPEECH_UNAVAILABLE_ERROR: 'voice_model_not_ready:unavailable',
   getSttWorkerPath: () => 'unused-worker',
   getSherpaModulePath: () => 'unused-module',
   hasLocalSpeechRecognizer: () => true
@@ -333,6 +331,7 @@ describe('speech worker exit ownership', () => {
 
   let window: TestWindow
   beforeEach(() => {
+    vi.spyOn(process, 'arch', 'get').mockReturnValue('x64')
     environment.handlers.clear()
     environment.workers = []
     environment.readyOnInit = true
@@ -349,7 +348,7 @@ describe('speech worker exit ownership', () => {
       modelManager as ModelManager
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mocked runtime accessors do not read the store.
-    registerSpeechHandlers({} as Store)
+    registerSpeechHandlers({ getSettings: () => ({}) } as never)
   })
   afterEach(async () => {
     for (const finish of finishUploads.splice(0)) {
@@ -362,6 +361,7 @@ describe('speech worker exit ownership', () => {
     await vi.waitFor(() => expect(service()['state'].activeOwner).toBeNull())
     await service().prepareModelForDeletion('test-model')
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
   it('bounds close listeners through repeated starts and stops with no remaining worker', async () => {
