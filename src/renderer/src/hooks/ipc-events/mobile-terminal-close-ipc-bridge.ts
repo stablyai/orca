@@ -4,6 +4,7 @@ import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '@/lib/language-detect'
 import { followWorkspaceSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
+import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isHtmlFilePath } from '@/components/terminal-pane/local-html-file-destinations'
 import { createProjectMovePauseFollower } from '@/components/sidebar/project-move-pause-follower'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
@@ -52,7 +53,11 @@ function openRuntimeHtmlPreview(
   navigation: RuntimeNavigationTarget | undefined
 ): boolean {
   const store = useAppStore.getState()
-  if (getWorkspaceFilePreviewPlan(store, worktreeId, filePath).status === 'unsupported') {
+  if (
+    getWorkspaceFilePreviewPlan(store, worktreeId, filePath).status === 'unsupported' ||
+    // Main never serves SSH-owned preview grants, so the tab would only show an error.
+    getConnectionIdForFileFromState(store, worktreeId, filePath)
+  ) {
     return false
   }
   const focus = navigation === undefined || navigationTargetsHost(navigation)
