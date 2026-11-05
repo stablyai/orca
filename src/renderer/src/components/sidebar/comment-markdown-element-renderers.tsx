@@ -14,7 +14,7 @@ import {
 } from './comment-markdown-github-attachment-media'
 import { ExpandableMarkdownImage } from './MarkdownImageLightbox'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
-import { readGitHubCalloutKind } from '@/lib/remark-github-callouts'
+import { readGitHubCalloutKind, readGitHubCalloutTitle } from '@/lib/remark-github-callouts'
 
 export type CommentMarkdownLinkClickHandler = (
   event: React.MouseEvent<HTMLElement>,
@@ -155,8 +155,13 @@ export function createCompactCommentMarkdownComponents(
     hr: () => <hr className="my-1 border-border/50" />,
     blockquote: ({ node, children }) => {
       const calloutKind = readGitHubCalloutKind(node?.properties.dataCallout)
+      const calloutTitle = readGitHubCalloutTitle(node?.properties.dataCalloutTitle)
       return calloutKind ? (
-        <MarkdownGitHubCallout kind={calloutKind} className="my-0.5 border-l-2 pl-2">
+        <MarkdownGitHubCallout
+          kind={calloutKind}
+          title={calloutTitle}
+          className="my-0.5 border-l-2 pl-2"
+        >
           {children}
         </MarkdownGitHubCallout>
       ) : (
@@ -283,8 +288,13 @@ export function createDocumentCommentMarkdownComponents(
     hr: () => <hr className="my-4 border-border/60" />,
     blockquote: ({ node, children }) => {
       const calloutKind = readGitHubCalloutKind(node?.properties.dataCallout)
+      const calloutTitle = readGitHubCalloutTitle(node?.properties.dataCalloutTitle)
       return calloutKind ? (
-        <MarkdownGitHubCallout kind={calloutKind} className="my-3 border-l-2 pl-3">
+        <MarkdownGitHubCallout
+          kind={calloutKind}
+          title={calloutTitle}
+          className="my-3 border-l-2 pl-3"
+        >
           {children}
         </MarkdownGitHubCallout>
       ) : (

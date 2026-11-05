@@ -37,7 +37,9 @@ import {
 } from './comment-markdown-block-pipeline'
 import {
   GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
-  remarkGitHubCallouts
+  GITHUB_CALLOUT_TITLE_SANITIZE_ATTRIBUTE,
+  remarkGitHubCallouts,
+  rewriteClaudeInsightBlocks
 } from '@/lib/remark-github-callouts'
 import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
 
@@ -192,7 +194,8 @@ const commentMarkdownSanitizeSchema: SanitizeSchema = {
     a: [...(defaultSchema.attributes?.a ?? []), 'href', 'title'],
     blockquote: [
       ...(defaultSchema.attributes?.blockquote ?? []),
-      GITHUB_CALLOUT_SANITIZE_ATTRIBUTE
+      GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
+      GITHUB_CALLOUT_TITLE_SANITIZE_ATTRIBUTE
     ],
     details: [...(defaultSchema.attributes?.details ?? []), 'open'],
     img: [...(defaultSchema.attributes?.img ?? []), 'src', 'alt', 'title', 'width', 'height'],
@@ -332,7 +335,17 @@ const CommentMarkdown = React.memo(
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
     }, [extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
-    const blocks = useMarkdownBlocks(content, growing, math, activeRemarkPlugins, extension)
+    const normalizedContent = React.useMemo(
+      () => rewriteClaudeInsightBlocks(content, growing),
+      [content, growing]
+    )
+    const blocks = useMarkdownBlocks(
+      normalizedContent,
+      growing,
+      math,
+      activeRemarkPlugins,
+      extension
+    )
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {
       setHadWordFade(true)
