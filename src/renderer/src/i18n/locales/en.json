@@ -21027,7 +21027,10 @@
       "workerAutoClose": {
         "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
         "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
-        "keepOpen": "Keep open"
+        "keepOpen": "Keep open",
+        "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
+        "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
+        "temporaryBadge": "Temporary"
       }
     },
     "wslHostMark": {

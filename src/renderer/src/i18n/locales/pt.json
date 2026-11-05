@@ -21610,7 +21610,10 @@
       "workerAutoClose": {
         "running": "Worker temporário de orquestração · Fecha 2 minutos após terminar",
         "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
-        "keepOpen": "Manter aberto"
+        "keepOpen": "Manter aberto",
+        "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
+        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
+        "temporaryBadge": "Temporário"
       }
     },
     "wslHostMark": {
