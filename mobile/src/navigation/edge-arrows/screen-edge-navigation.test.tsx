@@ -66,8 +66,59 @@ afterEach(() => {
 })
 
 describe('ScreenEdgeNavigationOverlay (sticky pane 4-side & zoom-stable gamepad controls)', () => {
-  it('places arrow-keys settings dock bottom-right, lifts above bottomInset/bottomRightOffset, repeats on hold, and cycles Pills -> Strips -> Orbs -> Gamepad -> Pills', async () => {
+  it('renders Floating Orbs (0.5 rest opacity) and hides the quick-switcher dock by default when storage is unset', async () => {
+    const events: string[] = []
+    const target: EdgeNavigationTarget = {
+      id: 'session-terminal-default-orbs',
+      kind: 'terminal',
+      preparePress: (direction: EdgeDirection) => ({
+        tap: () => {
+          events.push(`tap:${direction}`)
+        }
+      })
+    }
+
+    await act(async () => {
+      renderer = create(
+        createElement(
+          GlobalEdgeNavigationProvider,
+          null,
+          createElement(PaneEdgeNavigationOverlay, { target, bottomInset: 180 })
+        )
+      )
+    })
+
+    const layer = renderer!.root.findByProps({ testID: 'pane-edge-arrows-layer' })
+    act(() => {
+      layer.props.onLayout({ nativeEvent: { layout: { width: 360, height: 420 } } })
+    })
+
+    expect(renderer!.root.findAllByProps({ testID: 'edge-arrow-settings-dock' })).toHaveLength(0)
+    expect(renderer!.root.findAllByProps({ testID: 'edge-arrow-flavour-chip' })).toHaveLength(0)
+
+    for (const direction of ['up', 'down', 'left', 'right'] as const) {
+      const btn = renderer!.root.findByProps({ testID: `edge-arrow-${direction}` })
+      expect(btn.props['data-flavour']).toBe('orbs')
+      act(() => {
+        btn.props.onPressIn()
+        btn.props.onPressOut()
+        btn.props.onPress()
+      })
+    }
+    expect(events).toEqual(['tap:up', 'tap:down', 'tap:left', 'tap:right'])
+  })
+
+  it('places opt-in arrow-keys settings dock bottom-right, lifts above bottomInset/bottomRightOffset, repeats on hold, and cycles Orbs -> Gamepad -> Pills -> Strips -> Orbs', async () => {
     vi.useFakeTimers()
+    storage.set(
+      'orca:terminal-accessory-layout',
+      JSON.stringify({
+        version: 2,
+        orderedBuiltInIds: ['escape', 'tab'],
+        visibleBuiltInIds: ['escape', 'tab'],
+        edgeSwitcherChipHidden: false
+      })
+    )
     const events: string[] = []
     let repeatTimer: ReturnType<typeof setInterval> | null = null
     const target: EdgeNavigationTarget = {
@@ -129,12 +180,12 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side & zoom-stable gamepad 
     const downStyle = renderer!.root
       .findByProps({ testID: 'edge-arrow-down' })
       .props.style({ pressed: false })
-    expect(upStyle).toEqual(expect.arrayContaining([{ top: 6, left: 152 }]))
-    expect(downStyle).toEqual(expect.arrayContaining([{ bottom: 6, left: 152 }]))
+    expect(upStyle).toEqual(expect.arrayContaining([{ top: 6, left: 161 }]))
+    expect(downStyle).toEqual(expect.arrayContaining([{ bottom: 6, left: 161 }]))
 
     for (const direction of ['up', 'down', 'left', 'right'] as const) {
       const btn = renderer!.root.findByProps({ testID: `edge-arrow-${direction}` })
-      expect(btn.props['data-flavour']).toBe('pills')
+      expect(btn.props['data-flavour']).toBe('orbs')
       act(() => {
         btn.props.onPressIn()
         btn.props.onPressOut()
@@ -164,21 +215,7 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side & zoom-stable gamepad 
     })
     expect(renderer!.root.findAllByType('Modal' as unknown as React.ElementType)).toHaveLength(1)
 
-    // Cycle Pills -> Strips -> Orbs -> Gamepad -> Pills via bottom-right quick-switcher chip
-    await act(async () => {
-      renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' }).props.onPress()
-    })
-    expect(renderer!.root.findByProps({ testID: 'edge-arrow-up' }).props['data-flavour']).toBe(
-      'strips'
-    )
-
-    await act(async () => {
-      renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' }).props.onPress()
-    })
-    expect(renderer!.root.findByProps({ testID: 'edge-arrow-up' }).props['data-flavour']).toBe(
-      'orbs'
-    )
-
+    // Cycle Orbs -> Gamepad -> Pills -> Strips -> Orbs via bottom-right quick-switcher chip
     await act(async () => {
       renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' }).props.onPress()
     })
@@ -193,6 +230,20 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side & zoom-stable gamepad 
     })
     expect(renderer!.root.findByProps({ testID: 'edge-arrow-up' }).props['data-flavour']).toBe(
       'pills'
+    )
+
+    await act(async () => {
+      renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' }).props.onPress()
+    })
+    expect(renderer!.root.findByProps({ testID: 'edge-arrow-up' }).props['data-flavour']).toBe(
+      'strips'
+    )
+
+    await act(async () => {
+      renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' }).props.onPress()
+    })
+    expect(renderer!.root.findByProps({ testID: 'edge-arrow-up' }).props['data-flavour']).toBe(
+      'orbs'
     )
   })
 
@@ -360,7 +411,16 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side & zoom-stable gamepad 
     expect(pinched2x.height).toBe(700)
   })
 
-  it('renders 4-side edge arrow keys and dock controls half-transparent (0.5) at rest and brightens on press', async () => {
+  it('renders 4-side edge arrow keys and opt-in dock controls half-transparent (0.5) at rest and brightens on press', async () => {
+    storage.set(
+      'orca:terminal-accessory-layout',
+      JSON.stringify({
+        version: 2,
+        orderedBuiltInIds: ['escape', 'tab'],
+        visibleBuiltInIds: ['escape', 'tab'],
+        edgeSwitcherChipHidden: false
+      })
+    )
     const target: EdgeNavigationTarget = {
       id: 'session-terminal-opacity',
       kind: 'terminal',
@@ -395,27 +455,30 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side & zoom-stable gamepad 
       return current
     }
 
-    // Check rest (0.5) and pressed (0.92) opacity across Pills -> Strips -> Orbs -> Gamepad
-    for (const expectedFlavour of ['pills', 'strips', 'orbs', 'gamepad'] as const) {
+    // Check rest (0.5) and pressed (0.92) opacity across Orbs -> Gamepad -> Pills -> Strips
+    for (const expectedFlavour of ['orbs', 'gamepad', 'pills', 'strips'] as const) {
       for (const direction of ['up', 'down', 'left', 'right'] as const) {
         const arrow = renderer!.root.findByProps({ testID: `edge-arrow-${direction}` })
         expect(arrow.props['data-flavour']).toBe(expectedFlavour)
         expect(resolveEffectiveOpacity(arrow.props.style({ pressed: false }))).toBe(0.5)
         expect(resolveEffectiveOpacity(arrow.props.style({ pressed: true }))).toBe(0.92)
       }
-      if (expectedFlavour === 'gamepad') {
-        for (const id of ['north', 'west', 'east', 'south'] as const) {
-          const action = renderer!.root.findByProps({ testID: `gamepad-action-${id}` })
-          expect(resolveEffectiveOpacity(action.props.style({ pressed: false }))).toBe(0.5)
-          expect(resolveEffectiveOpacity(action.props.style({ pressed: true }))).toBe(0.92)
-        }
-      }
       const chip = renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' })
       expect(resolveEffectiveOpacity(chip.props.style({ pressed: false }))).toBe(0.5)
       expect(resolveEffectiveOpacity(chip.props.style({ pressed: true }))).toBe(0.95)
-      act(() => {
+      await act(async () => {
         chip.props.onPress()
       })
+    }
+
+    // Cycle once more from Orbs -> Gamepad to assert action diamond rest/pressed opacity directly
+    await act(async () => {
+      renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' }).props.onPress()
+    })
+    for (const id of ['north', 'west', 'east', 'south'] as const) {
+      const action = renderer!.root.findByProps({ testID: `gamepad-action-${id}` })
+      expect(resolveEffectiveOpacity(action.props.style({ pressed: false }))).toBe(0.5)
+      expect(resolveEffectiveOpacity(action.props.style({ pressed: true }))).toBe(0.92)
     }
   })
 })

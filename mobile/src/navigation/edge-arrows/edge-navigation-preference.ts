@@ -7,7 +7,8 @@ import {
 
 export type { EdgeNavigationMode }
 export const EDGE_NAVIGATION_MODES = ['pills', 'strips', 'orbs', 'gamepad', 'off'] as const
-export const DEFAULT_EDGE_NAVIGATION_MODE: EdgeNavigationMode = 'pills'
+export const DEFAULT_EDGE_NAVIGATION_MODE: EdgeNavigationMode = 'orbs'
+export const DEFAULT_EDGE_SWITCHER_CHIP_HIDDEN = true
 
 export function resolveEdgeNavigationMode(
   layout: Pick<TerminalAccessoryLayout, 'edgeNavigationMode'> | null | undefined
@@ -25,7 +26,9 @@ export function resolveEdgeNavigationMode(
 export function isEdgeSwitcherChipHidden(
   layout: Pick<TerminalAccessoryLayout, 'edgeSwitcherChipHidden'> | null | undefined
 ): boolean {
-  return layout?.edgeSwitcherChipHidden === true
+  return typeof layout?.edgeSwitcherChipHidden === 'boolean'
+    ? layout.edgeSwitcherChipHidden
+    : DEFAULT_EDGE_SWITCHER_CHIP_HIDDEN
 }
 
 export function cycleEdgeNavigationMode(current: EdgeNavigationMode): EdgeNavigationMode {
@@ -38,7 +41,10 @@ export function cycleEdgeNavigationMode(current: EdgeNavigationMode): EdgeNaviga
   if (current === 'orbs') {
     return 'gamepad'
   }
-  return 'pills'
+  if (current === 'gamepad') {
+    return 'pills'
+  }
+  return DEFAULT_EDGE_NAVIGATION_MODE
 }
 
 export function setTerminalEdgeNavigationMode(
@@ -46,19 +52,11 @@ export function setTerminalEdgeNavigationMode(
   edgeNavigationMode: EdgeNavigationMode,
   currentBuiltInIds = getDefaultTerminalAccessoryBuiltInIds()
 ): TerminalAccessoryLayout {
-  const preference = createTerminalAccessoryLayoutPreference(
+  const { version: _version, ...nextLayout } = createTerminalAccessoryLayoutPreference(
     { ...layout, edgeNavigationMode },
     currentBuiltInIds
   )
-  return {
-    directionPadEnabled: preference.directionPadEnabled,
-    orderedBuiltInIds: preference.orderedBuiltInIds,
-    visibleBuiltInIds: preference.visibleBuiltInIds,
-    ...(preference.edgeNavigationMode !== undefined
-      ? { edgeNavigationMode: preference.edgeNavigationMode }
-      : {}),
-    ...(preference.edgeSwitcherChipHidden === true ? { edgeSwitcherChipHidden: true } : {})
-  }
+  return nextLayout
 }
 
 export function setTerminalEdgeSwitcherChipHidden(
@@ -66,17 +64,9 @@ export function setTerminalEdgeSwitcherChipHidden(
   hidden: boolean,
   currentBuiltInIds = getDefaultTerminalAccessoryBuiltInIds()
 ): TerminalAccessoryLayout {
-  const preference = createTerminalAccessoryLayoutPreference(
+  const { version: _version, ...nextLayout } = createTerminalAccessoryLayoutPreference(
     { ...layout, edgeSwitcherChipHidden: hidden },
     currentBuiltInIds
   )
-  return {
-    directionPadEnabled: preference.directionPadEnabled,
-    orderedBuiltInIds: preference.orderedBuiltInIds,
-    visibleBuiltInIds: preference.visibleBuiltInIds,
-    ...(preference.edgeNavigationMode !== undefined
-      ? { edgeNavigationMode: preference.edgeNavigationMode }
-      : {}),
-    ...(preference.edgeSwitcherChipHidden === true ? { edgeSwitcherChipHidden: true } : {})
-  }
+  return nextLayout
 }

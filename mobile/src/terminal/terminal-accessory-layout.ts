@@ -42,7 +42,9 @@ function optionalEdgeFields(candidate: {
       : undefined
   return {
     ...(mode !== undefined ? { edgeNavigationMode: mode } : {}),
-    ...(candidate.edgeSwitcherChipHidden === true ? { edgeSwitcherChipHidden: true } : {})
+    ...(typeof candidate.edgeSwitcherChipHidden === 'boolean'
+      ? { edgeSwitcherChipHidden: candidate.edgeSwitcherChipHidden }
+      : {})
   }
 }
 

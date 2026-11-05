@@ -183,17 +183,49 @@ export function useZoomStableViewport(
     }
     const win = globalThis.window
     const vv = win.visualViewport
-    vv?.addEventListener('resize', sync)
-    vv?.addEventListener('scroll', sync)
-    win.addEventListener('resize', sync)
-    win.addEventListener('scroll', sync, true)
-    return () => {
-      vv?.removeEventListener('resize', sync)
-      vv?.removeEventListener('scroll', sync)
-      win.removeEventListener('resize', sync)
-      win.removeEventListener('scroll', sync, true)
+    let rafId: number | null = null
+    const scheduleSync = () => {
+      if (rafId !== null) {
+        return
+      }
+      if (typeof win.requestAnimationFrame === 'function') {
+        rafId = win.requestAnimationFrame(() => {
+          rafId = null
+          sync()
+        })
+      } else {
+        sync()
+      }
     }
-  }, [measure])
+    const handleWindowScroll = (event: Event) => {
+      const target = event?.target
+      const layerNode = layerRef.current
+      if (
+        globalThis.HTMLElement !== undefined &&
+        globalThis.Node !== undefined &&
+        layerNode instanceof globalThis.HTMLElement &&
+        target instanceof globalThis.Node &&
+        layerNode !== target &&
+        layerNode.contains(target)
+      ) {
+        return
+      }
+      scheduleSync()
+    }
+    vv?.addEventListener('resize', scheduleSync, { passive: true })
+    vv?.addEventListener('scroll', scheduleSync, { passive: true })
+    win.addEventListener('resize', scheduleSync, { passive: true })
+    win.addEventListener('scroll', handleWindowScroll, { capture: true, passive: true })
+    return () => {
+      if (rafId !== null && typeof win.cancelAnimationFrame === 'function') {
+        win.cancelAnimationFrame(rafId)
+      }
+      vv?.removeEventListener('resize', scheduleSync)
+      vv?.removeEventListener('scroll', scheduleSync)
+      win.removeEventListener('resize', scheduleSync)
+      win.removeEventListener('scroll', handleWindowScroll, true)
+    }
+  }, [layerRef, measure])
 
   return metrics
 }
