@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { RpcContext } from '../../../core'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
@@ -170,16 +168,10 @@ describe('a worker after its worker_done', () => {
     await expect(resume()).resolves.toMatchObject({ answer: 'Nothing else.' })
   })
 
-  const PANE = 'tab_worker:leaf_worker'
-
-  // A remote worker this host ran in the pane's process, settled.
-  function finishRemoteWorker(
-    db: OrchestrationDb,
-    processIncarnation: string,
-    dispatchId = 'ctx_remote'
-  ): void {
+  it('tells a finished worker on a paired host that its coordinator is out of reach', async () => {
+    const { db, runtime, ctx } = harness.setup(false)
     db.createRemoteDispatchAttachment({
-      dispatchId,
+      dispatchId: 'ctx_remote',
       runId: 'run_home',
       taskId: 'task_remote',
       homePeerFingerprint: 'peer_fp',
@@ -187,71 +179,25 @@ describe('a worker after its worker_done', () => {
       runtimeEpoch: 'epoch_1',
       mutationReceipt: {
         callerFingerprint: 'peer_fp',
-        requestId: `attach_${dispatchId}`,
+        requestId: 'attach_1',
         method: 'orchestration.federationAttachStart',
         payloadHash: 'attach_payload'
       }
     })
     db.prepareRemoteAttachmentAuthority({
-      dispatchId,
-      paneKey: PANE,
-      processIncarnation,
+      dispatchId: 'ctx_remote',
+      paneKey: 'tab_worker:leaf_worker',
+      processIncarnation: 'runtime_test:term_worker:1',
       worktreeId: 'folder_workspace',
       terminalHandle: 'term_worker',
       setupState: 'not_applicable',
       effects: []
     })
-    db.markRemoteAttachmentReady(dispatchId)
-    db.settleRemoteAttachmentInRelayTransaction(dispatchId, 'succeeded')
-  }
-
-  // A local worker this host ran in the pane's process, finished unless still working.
-  async function localWorker(
-    db: OrchestrationDb,
-    ctx: RpcContext,
-    processIncarnation: string,
-    finished = true
-  ): Promise<{ runId: string; dispatchId: string }> {
-    const run = db.createRun({
-      objective: 'local',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: null
-    })
-    const task = db.createTask({ spec: 'local work', runId: run.id })
-    const dispatch = createRootDispatch(
-      db,
-      task.id,
-      'term_worker',
-      PANE,
-      undefined,
-      processIncarnation
-    )
-    if (finished) {
-      await harness.call(
-        'orchestration.send',
-        {
-          from: 'term_worker',
-          type: 'worker_done',
-          subject: 'Done',
-          payload: JSON.stringify({
-            taskId: task.id,
-            dispatchId: dispatch.id,
-            outcome: 'succeeded'
-          })
-        },
-        ctx
-      )
-    }
-    return { runId: run.id, dispatchId: dispatch.id }
-  }
-
-  it('tells a finished worker on a paired host that its coordinator is out of reach', async () => {
-    const { db, runtime, ctx } = harness.setup(false)
-    finishRemoteWorker(db, 'runtime_test:term_worker:1')
+    db.markRemoteAttachmentReady('ctx_remote')
+    db.settleRemoteAttachmentInRelayTransaction('ctx_remote', 'succeeded')
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
-      handle === 'term_worker' ? PANE : null
+      handle === 'term_worker' ? 'tab_worker:leaf_worker' : null
     )
-    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:1')
 
     for (const [method, params] of [
       ['orchestration.send', { subject: 'Later' }],
@@ -262,130 +208,6 @@ describe('a worker after its worker_done', () => {
         harness.call(method, { from: 'term_worker', ...params }, ctx)
       ).rejects.toMatchObject({ code: 'run_home_unreachable' })
     }
-  })
-
-  it('never guesses between a remote and a local Dispatch the terminal holds', async () => {
-    const { db, runtime, ctx } = harness.setup(false)
-    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
-      handle === 'term_worker' ? PANE : null
-    )
-    const runs = vi.mocked(runtime.getTerminalProcessIncarnation)
-    const send = (params: Record<string, unknown> = {}) =>
-      harness.call('orchestration.send', { from: 'term_worker', subject: 'Later', ...params }, ctx)
-    const ask = () =>
-      harness.call(
-        'orchestration.ask',
-        { from: 'term_worker', question: 'More?', wait: false },
-        ctx
-      )
-
-    runs.mockReturnValue('runtime_test:term_worker:1')
-    const local = await localWorker(db, ctx, 'runtime_test:term_worker:1')
-    finishRemoteWorker(db, 'runtime_test:term_worker:1')
-    const ambiguous = (recipient: string) => ({
-      code: 'recipient_ambiguous',
-      message: expect.stringContaining(`use --to ${recipient}.`)
-    })
-    await expect(send()).rejects.toMatchObject(ambiguous(`dispatch:${local.dispatchId}`))
-    await expect(ask()).rejects.toMatchObject(ambiguous(`dispatch:${local.dispatchId}`))
-    await expect(send({ to: `dispatch:${local.dispatchId}` })).resolves.toMatchObject({
-      message: { to_handle: `run:${local.runId}` }
-    })
-    const asked = harness.call(
-      'orchestration.ask',
-      {
-        from: 'term_worker',
-        question: 'Finished?',
-        to: `dispatch:${local.dispatchId}`,
-        timeoutMs: 1
-      },
-      ctx
-    )
-    await expect(asked).resolves.toMatchObject({ timedOut: true })
-    expect(db.getUnreadMessages(`run:${local.runId}`).at(-1)?.type).toBe('question')
-
-    // A local worker working there names its coordinator the same way.
-    const working = await localWorker(db, ctx, 'runtime_test:term_worker:1', false)
-    const coordinator = `run:${working.runId}`
-    await expect(send()).rejects.toMatchObject(ambiguous(coordinator))
-    await expect(send({ to: coordinator })).resolves.toMatchObject({
-      message: { to_handle: coordinator }
-    })
-    await expect(
-      harness.call(
-        'orchestration.ask',
-        { from: 'term_worker', question: 'Working?', to: coordinator, wait: false },
-        ctx
-      )
-    ).resolves.toMatchObject({ messageId: expect.any(String) })
-    expect(db.getUnreadMessages(coordinator).at(-1)?.type).toBe('question')
-  })
-
-  it('finds the remote worker by the process it ran in, not the newest remote row', async () => {
-    const { db, runtime, ctx } = harness.setup(false)
-    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
-      handle === 'term_worker' ? PANE : null
-    )
-    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:1')
-    finishRemoteWorker(db, 'runtime_test:term_worker:1', 'ctx_remote_ran_here')
-    finishRemoteWorker(db, 'runtime_test:term_worker:9', 'ctx_remote_elsewhere')
-    await expect(
-      harness.call('orchestration.send', { from: 'term_worker', subject: 'Later' }, ctx)
-    ).rejects.toMatchObject({
-      code: 'run_home_unreachable',
-      message: expect.stringContaining('ctx_remote_ran_here')
-    })
-  })
-
-  it('lets a new process in the pane speak as its own local worker', async () => {
-    const { db, runtime, ctx } = harness.setup(false)
-    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
-      handle === 'term_worker' ? PANE : null
-    )
-    finishRemoteWorker(db, 'runtime_test:term_worker:1')
-    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:2')
-    const local = await localWorker(db, ctx, 'runtime_test:term_worker:2')
-    await expect(
-      harness.call('orchestration.send', { from: 'term_worker', subject: 'Later' }, ctx)
-    ).resolves.toMatchObject({ message: { to_handle: `run:${local.runId}` } })
-  })
-
-  it('reaches the coordinator of the last worker in the pane after its tab moved and came back', async () => {
-    const { db, runtime, ctx } = harness.setup(false)
-    const finish = async (handle: string, paneKey: string) => {
-      const run = db.createRun({
-        objective: handle,
-        coordinatorHandle: 'term_coord',
-        coordinatorPaneKey: null
-      })
-      const task = db.createTask({ spec: handle, runId: run.id })
-      const dispatch = createRootDispatch(db, task.id, handle, paneKey)
-      vi.mocked(runtime.getTerminalPaneKey).mockReturnValue(paneKey)
-      await harness.call(
-        'orchestration.send',
-        {
-          from: handle,
-          type: 'worker_done',
-          subject: 'Done',
-          payload: JSON.stringify({
-            taskId: task.id,
-            dispatchId: dispatch.id,
-            outcome: 'succeeded'
-          })
-        },
-        ctx
-      )
-      return run.id
-    }
-    await finish('term_first', 'tab_home:cccccccc-cccc-4ccc-8ccc-cccccccccccc')
-    const last = await finish('term_moved', 'tab_away:cccccccc-cccc-4ccc-8ccc-cccccccccccc')
-    // Back in its first tab under a new handle, the pane is still the last worker's.
-    vi.mocked(runtime.getTerminalPaneKey).mockReturnValue(
-      'tab_home:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
-    )
-    await expect(
-      harness.call('orchestration.send', { from: 'term_back', subject: 'Later' }, ctx)
-    ).resolves.toMatchObject({ message: { to_handle: `run:${last}` } })
   })
 
   it('takes only the chat session that finished for the finished worker', async () => {

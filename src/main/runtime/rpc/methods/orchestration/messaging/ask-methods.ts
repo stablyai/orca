@@ -16,8 +16,7 @@ import { assertWorkerCanReport } from '../../../../orchestration/worker-report-a
 import {
   continuesDispatch,
   finishedWorkerDispatch,
-  refuseFinishedRemoteWorker,
-  type FinishedSender
+  refuseFinishedRemoteWorker
 } from './finished-worker-mail'
 import {
   askedQuestionReceipt,
@@ -74,25 +73,23 @@ export const ORCHESTRATION_ASK_METHODS = [
           workerState: remoteAttachment.state
         })
       }
-      const asker: FinishedSender = {
-        address: from,
-        paneKey: paneKey ?? null,
-        orcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
-        processIncarnation: () => runtime.getTerminalProcessIncarnation(from) ?? undefined
-      }
-      // A pane still running a finished remote worker asks as it, as send does, so no older local Dispatch takes the question.
-      refuseFinishedRemoteWorker(db, asker, params.to)
       const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
       // A finished worker still asks its coordinator; the question changes nothing about its Task.
       const askingDispatch =
         workingDispatch ??
         finishedWorkerDispatch(
           db,
-          asker,
+          {
+            address: from,
+            paneKey: paneKey ?? null,
+            orcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
+            processIncarnation: () => runtime.getTerminalProcessIncarnation(from) ?? undefined
+          },
           { run: undefined, dispatchId: undefined, dispatch: undefined },
           'question'
         )
       if (!askingDispatch) {
+        refuseFinishedRemoteWorker(db, paneKey, undefined)
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'
@@ -141,13 +138,12 @@ export const ORCHESTRATION_ASK_METHODS = [
           )
         }
         const reportTo = dispatchReportMailbox(db, askingDispatch)
-        // Naming its own Dispatch, as a terminal shared with a remote worker must, means its coordinator.
-        const askTo = params.to === `dispatch:${askingDispatch.id}` ? undefined : params.to
         if (
-          askTo &&
-          askTo !== `run:${run.id}` &&
-          askTo !== reportTo &&
-          resolveOrchestrationParty(askTo, db).address !== mailboxAddressOf(runCoordinatorKey(run))
+          params.to &&
+          params.to !== `run:${run.id}` &&
+          params.to !== reportTo &&
+          resolveOrchestrationParty(params.to, db).address !==
+            mailboxAddressOf(runCoordinatorKey(run))
         ) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
@@ -155,7 +151,7 @@ export const ORCHESTRATION_ASK_METHODS = [
           )
         }
         // An explicit Run or coordinator target still reaches the Run; otherwise the asker's creator.
-        const to = askTo && askTo !== reportTo ? `run:${run.id}` : reportTo
+        const to = params.to && params.to !== reportTo ? `run:${run.id}` : reportTo
         const created = db.createQuestion({
           runId: run.id,
           dispatchId: askingDispatch.id,

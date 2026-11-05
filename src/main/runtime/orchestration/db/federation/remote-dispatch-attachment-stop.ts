@@ -77,34 +77,18 @@ export function findActiveRemoteAttachmentForPane(
   return findRemoteAttachmentForPane(this, paneKey, `${potentiallyLiveRemoteAttachmentSql()} AND`)
 }
 
-/** The newest remote Dispatch this pane ran in its current process, finished or not; one recorded without a
- *  process may have been any. The process is read only for a pane that ran one. */
-export function findRemoteAttachmentForPaneProcess(
+/** The newest remote Dispatch this pane ran, finished or not. */
+export function findLatestRemoteAttachmentForPane(
   this: OrchestrationDb,
-  paneKey: string,
-  processIncarnation: () => string | null
+  paneKey: string
 ): RemoteDispatchAttachmentRow | undefined {
-  const latest = findRemoteAttachmentForPane(this, paneKey, '')
-  if (!latest) {
-    return undefined
-  }
-  const process = processIncarnation()
-  if (!latest.process_incarnation || latest.process_incarnation === process) {
-    return latest
-  }
-  return findRemoteAttachmentForPane(
-    this,
-    paneKey,
-    '(process_incarnation IS NULL OR process_incarnation = ?) AND',
-    [process]
-  )
+  return findRemoteAttachmentForPane(this, paneKey, '')
 }
 
 function findRemoteAttachmentForPane(
   db: OrchestrationDb,
   paneKey: string,
-  stateFilter: string,
-  filterParams: (string | null)[] = []
+  stateFilter: string
 ): RemoteDispatchAttachmentRow | undefined {
   if (!parsePaneKey(paneKey)) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
@@ -114,7 +98,7 @@ function findRemoteAttachmentForPane(
          WHERE ${stateFilter} pane_key = ?
          ORDER BY rowid DESC LIMIT 1`
       )
-      .get(...filterParams, paneKey) as RemoteDispatchAttachmentRow | undefined
+      .get(paneKey) as RemoteDispatchAttachmentRow | undefined
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
   return db.db
@@ -125,7 +109,7 @@ function findRemoteAttachmentForPane(
          AND ${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL} = ?
        ORDER BY rowid DESC LIMIT 1`
     )
-    .get(...filterParams, paneKeyMatchSuffix(paneKey)) as RemoteDispatchAttachmentRow | undefined
+    .get(paneKeyMatchSuffix(paneKey)) as RemoteDispatchAttachmentRow | undefined
 }
 
 export type RemoteDispatchAttachmentStopMethods = {
@@ -133,7 +117,7 @@ export type RemoteDispatchAttachmentStopMethods = {
   settleRemoteAttachmentStop: typeof settleRemoteAttachmentStop
   markRemoteAttachmentStopUnknown: typeof markRemoteAttachmentStopUnknown
   findActiveRemoteAttachmentForPane: typeof findActiveRemoteAttachmentForPane
-  findRemoteAttachmentForPaneProcess: typeof findRemoteAttachmentForPaneProcess
+  findLatestRemoteAttachmentForPane: typeof findLatestRemoteAttachmentForPane
 }
 
 export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }): void {
@@ -142,6 +126,6 @@ export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }):
     settleRemoteAttachmentStop,
     markRemoteAttachmentStopUnknown,
     findActiveRemoteAttachmentForPane,
-    findRemoteAttachmentForPaneProcess
+    findLatestRemoteAttachmentForPane
   })
 }
