@@ -29,6 +29,7 @@ import type {
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
+import type { PRReadMark } from './github/pr-read-mark'
 
 export type PersistedUIState = {
   /** Paired-server project removals still owed to their server; optional so older builds ignore it. */
@@ -162,6 +163,8 @@ export type PersistedUIState = {
   activityClearedAtByPaneKey?: Record<string, number>
   /** Renderer ui:set explicit unread turn stamps survive restart alongside acknowledgments and cutoffs. */
   manuallyUnreadTurnsByPaneKey?: Record<string, number>
+  /** Renderer ui:set PR read marks; a PR reads as unread again once its row moves past the mark. */
+  prReadMarks?: Record<string, PRReadMark>
   /** User-hidden setup-guide sidebar entry; a reversible declutter pref (Help menu stays available), not completion. */
   setupGuideSidebarDismissed?: boolean
   /** One-shot marker for the browser setup-guide milestone; profiles missing it are evaluated once in the renderer (completion needs runtime probes). */

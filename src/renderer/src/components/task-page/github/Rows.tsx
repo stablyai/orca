@@ -44,6 +44,14 @@ import {
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { useAppStore } from '@/store'
+import { isPRRead } from '@/store/slices/pr-read-state'
+import {
+  markPROpened,
+  PRReadMenuItem,
+  PRUnreadDot,
+  githubWorkItemPillLabel
+} from './pr-read-affordances'
 export function TaskPageGitHubRows({
   model
 }: {
@@ -63,6 +71,7 @@ export function TaskPageGitHubRows({
     handleUseWorkItem,
     handleOpenOrUseGitHubWorkItem
   } = model
+  const prReadMarks = useAppStore((s) => s.prReadMarks)
   return (
     <div className="divide-y divide-border/40">
       {!showGitHubTaskSkeletons &&
@@ -79,30 +88,16 @@ export function TaskPageGitHubRows({
             ? getWorktreeAttachmentLabel(attachedWorkspace)
             : null
           const prDelta = item.type === 'pr' ? formatPRDelta(item) : null
+          const isUnreadPR = item.type === 'pr' && !isPRRead(prReadMarks, item)
+          const isDraftPR = isTaskPageGitHubDraftPR(item)
           const githubTaskIdPill = (
             <span
               // Avoid a pill fill that would stack with the row hover tint.
               className="inline-flex items-center gap-1 rounded-md border border-border/40 px-1.5 py-0.5 text-muted-foreground"
-              aria-label={
-                item.type === 'pr'
-                  ? isTaskPageGitHubDraftPR(item)
-                    ? translate(
-                        'auto.components.TaskPage.draftPullRequestNumber',
-                        'Draft pull request #{{number}}',
-                        { number: item.number }
-                      )
-                    : translate(
-                        'auto.components.TaskPage.pullRequestNumber',
-                        'Pull request #{{number}}',
-                        { number: item.number }
-                      )
-                  : translate('auto.components.TaskPage.issueNumber', 'Issue #{{number}}', {
-                      number: item.number
-                    })
-              }
+              aria-label={githubWorkItemPillLabel(item, isUnreadPR)}
             >
               {item.type === 'pr' ? (
-                isTaskPageGitHubDraftPR(item) ? (
+                isDraftPR ? (
                   <GitPullRequestDraft
                     className={cn('size-3', getTaskPageGitHubPRIconTone(item))}
                     aria-hidden="true"
@@ -126,10 +121,14 @@ export function TaskPageGitHubRows({
               key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}`}
               role="button"
               tabIndex={0}
-              onClick={() => openGitHubDetailPage(item)}
+              onClick={() => {
+                markPROpened(item)
+                openGitHubDetailPage(item)
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault()
+                  markPROpened(item)
                   openGitHubDetailPage(item)
                 }
               }}
@@ -140,7 +139,7 @@ export function TaskPageGitHubRows({
               )}
             >
               <div className={GITHUB_TASK_STICKY_ID_CELL_CLASS}>
-                {isTaskPageGitHubDraftPR(item) ? (
+                {isDraftPR ? (
                   <Tooltip>
                     <TooltipTrigger asChild>{githubTaskIdPill}</TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
@@ -154,6 +153,7 @@ export function TaskPageGitHubRows({
 
               <div className={GITHUB_TASK_STICKY_TITLE_CELL_CLASS}>
                 <div className="flex min-w-0 items-center gap-2">
+                  {isUnreadPR ? <PRUnreadDot /> : null}
                   <h3 className="truncate text-[13px] font-medium text-foreground">{item.title}</h3>
                   {item.type === 'pr' && item.state !== 'open' && item.state !== 'draft' ? (
                     <TaskPageGitHubWorkItemStateBadge
@@ -326,6 +326,7 @@ export function TaskPageGitHubRows({
                           {translate('auto.components.TaskPage.b6329379ca', 'Start new workspace')}
                         </DropdownMenuItem>
                       ) : null}
+                      <PRReadMenuItem item={item} isUnreadPR={isUnreadPR} />
                       <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
                         <ExternalLink className="size-4" />
                         {translate('auto.components.TaskPage.c1d1600362', 'Open in browser')}

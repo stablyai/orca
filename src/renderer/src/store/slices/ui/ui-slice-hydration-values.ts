@@ -8,7 +8,8 @@ import type { UISlice } from './ui-slice-contract'
 import {
   sanitizeAcknowledgedAgentsByPaneKey,
   sanitizeActivityClearedAtByPaneKey,
-  sanitizePaneKeyTimestampRecord
+  sanitizePaneKeyTimestampRecord,
+  sanitizePRReadMarks
 } from './ui-slice-hydration-sanitizers'
 
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
@@ -144,13 +145,17 @@ export function hydrateAgentReadState(
   ui: PersistedUIState
 ): Pick<
   UISlice,
-  'acknowledgedAgentsByPaneKey' | 'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
+  | 'acknowledgedAgentsByPaneKey'
+  | 'activityClearedAtByPaneKey'
+  | 'manuallyUnreadTurnsByPaneKey'
+  | 'prReadMarks'
 > {
   return {
     acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
       ui.acknowledgedAgentsByPaneKey
     ),
     activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(ui.activityClearedAtByPaneKey),
-    manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
+    manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey),
+    prReadMarks: sanitizePRReadMarks(ui.prReadMarks)
   }
 }
