@@ -68,7 +68,7 @@ export const open = defineFixture({
   }
 })
 
-function splitFixture(chatLeafId: string) {
+function splitFixture(chatLeafId: string, title?: string) {
   return defineFixture({
     width: 420,
     store: {
@@ -83,7 +83,8 @@ function splitFixture(chatLeafId: string) {
           },
           activeLeafId: chatLeafId,
           expandedLeafId: null,
-          chatLeafId
+          chatLeafId,
+          titlesByLeafId: title ? { '11111111-1111-4111-8111-111111111111': title } : undefined
         }
       }
     },
@@ -92,3 +93,5 @@ function splitFixture(chatLeafId: string) {
 }
 export const splitOwner = splitFixture('11111111-1111-4111-8111-111111111111')
 export const splitSibling = splitFixture('22222222-2222-4222-8222-222222222222')
+
+export const splitDefaultTitle = splitFixture('11111111-1111-4111-8111-111111111111', 'Terminal 7')

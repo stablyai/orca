@@ -1,5 +1,7 @@
 import { useId, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
+import { useAppStore } from '@/store'
+import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { Button } from '@/components/ui/button'
@@ -26,10 +28,26 @@ export function SidebarAgentRenameDialog({
   onClose: () => void
 }): React.JSX.Element {
   const name = useAgentRowConversationName(agent)
-  const [value, setValue] = useState(name ?? '')
+  const [initialValue] = useState(() => {
+    const state = useAppStore.getState()
+    const tab = state.unifiedTabsByWorktree[agent.tab.worktreeId]?.find(
+      (item) => item.id === agent.tab.id || item.entityId === agent.tab.id
+    )
+    const layout =
+      tab?.contentType === 'terminal' ? state.terminalLayoutsByTabId[tab.entityId] : undefined
+    const leafId = parsePaneKey(agent.paneKey)?.leafId
+    const customTitle =
+      layout?.root?.type === 'split'
+        ? leafId
+          ? layout.titlesByLeafId?.[leafId]
+          : undefined
+        : tab?.customLabel
+    return customTitle ?? name ?? ''
+  })
+  const [value, setValue] = useState(initialValue)
   const id = useId()
   const submit = () => {
-    if (renameSidebarAgent(agent, value)) {
+    if (value.trim() === initialValue.trim() || renameSidebarAgent(agent, value)) {
       onClose()
     } else {
       toast.error(
