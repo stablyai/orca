@@ -182,8 +182,8 @@ export type ReflowRepaintTrust = {
   normalRepainted: boolean
   /** The same for the alternate buffer. */
   alternateRepainted: boolean
-  /** Tail of the last chunk, so an escape sequence split across chunks is still recognized. */
-  escapeCarry: string
+  /** Start of a paint signal cut off at the previous chunk boundary, so a split one still counts. */
+  signalCarry: string
 }
 
 export type RuntimeVisibleTerminalState = {

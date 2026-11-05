@@ -237,13 +237,13 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     // Why: nothing resized the PTY, so the TUI does not repaint and its cells keep the old grid.
     if (applied.cols !== cols || applied.rows !== rows) {
       state.unrepaintedReflowGrid = { cols, rows }
-      // A TUI that paints repaints a whole screen per buffer; distrust each buffer until that much
-      // fresh output arrived on it, and ignore what was queued before this boundary (#38418).
+      // A TUI that paints repaints a whole screen per buffer; distrust each buffer until an explicit
+      // full-screen erase proves it, and ignore what was queued before this boundary (#38418).
       state.reflowRepaintTrust = {
         boundarySequence: this.getPtyOutputSequence(ptyId),
         normalRepainted: false,
         alternateRepainted: false,
-        escapeCarry: ''
+        signalCarry: ''
       }
     }
   }

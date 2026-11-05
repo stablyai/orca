@@ -247,14 +247,14 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         // The reflowed grid distrusts cells wrapped at an older width. Only a reliable signal of a
         // fresh paint retires it: an explicit full-screen erase on the buffer that was active when it
         // ran — byte counts prove nothing — or a whole-screen seed from the renderer/provider.
-        // Output queued before the reflow cannot retire it, and a chunk that both toggles the
-        // alternate screen and erases is ambiguous, so it retires nothing (#38418).
+        // Output queued before the reflow cannot retire it, and an erase that shares a chunk with a
+        // buffer toggle (even one split across chunks) is ambiguous, so it retires nothing (#38418).
         const trust = state.reflowRepaintTrust
         if (trust && outputSequence > trust.boundarySequence) {
-          const followed = `${trust.escapeCarry}${chunk}`
-          trust.escapeCarry = incompleteEraseCarry(followed)
-          const ambiguous = followed.includes('[?1049h') || followed.includes('[?1049l')
-          if (followed.includes('[2J') && !ambiguous) {
+          const followed = `${trust.signalCarry}${chunk}`
+          trust.signalCarry = incompleteRepaintSignalCarry(followed)
+          const toggled = ALTERNATE_SCREEN_TOGGLES.some((toggle) => followed.includes(toggle))
+          if (followed.includes(FULL_SCREEN_ERASE) && !toggled) {
             if (alternateAtStart) {
               trust.alternateRepainted = true
             } else {
@@ -320,12 +320,19 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
 }
 
 const FULL_SCREEN_ERASE = '\u001b[2J'
+const ALTERNATE_SCREEN_TOGGLES = ['\u001b[?1049h', '\u001b[?1049l']
 
-/** Suffix of `text` that is an incomplete full-screen erase, so a completed one is never re-detected. */
-function incompleteEraseCarry(text: string): string {
-  for (let length = Math.min(FULL_SCREEN_ERASE.length - 1, text.length); length > 0; length -= 1) {
-    if (FULL_SCREEN_ERASE.startsWith(text.slice(-length))) {
-      return text.slice(-length)
+/**
+ * Suffix of `text` that begins a paint signal, so a signal split across chunks is still recognized
+ * while a completed one is never re-detected.
+ */
+function incompleteRepaintSignalCarry(text: string): string {
+  const signals = [FULL_SCREEN_ERASE, ...ALTERNATE_SCREEN_TOGGLES]
+  const longest = Math.max(...signals.map((signal) => signal.length)) - 1
+  for (let length = Math.min(longest, text.length); length > 0; length -= 1) {
+    const suffix = text.slice(-length)
+    if (signals.some((signal) => signal.length > suffix.length && signal.startsWith(suffix))) {
+      return suffix
     }
   }
   return ''

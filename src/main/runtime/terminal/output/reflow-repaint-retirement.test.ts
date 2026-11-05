@@ -108,6 +108,20 @@ describe('reflow distrust boundaries', () => {
     expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
   })
 
+  it('credits an erase after a toggle split across chunks to neither buffer', async () => {
+    // The toggle's last byte arrives with the erase, so the buffer read before the write is stale.
+    const runtime = reflowed()
+    runtime.onPtyData(PTY_ID, ALT_ENTER.slice(0, -1), 2)
+    runtime.onPtyData(PTY_ID, `${ALT_ENTER.slice(-1)}${ERASE}`, 3)
+    await settle(runtime)
+    const state = runtime['headlessTerminals'].get(PTY_ID)!
+    expect(state.reflowRepaintTrust?.normalRepainted).toBe(false)
+    runtime.onPtyData(PTY_ID, ALT_LEAVE, 4)
+    await settle(runtime)
+    // Back on the normal buffer, which the erase never painted.
+    expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
+  })
+
   it('ignores output that was queued before the reflow boundary', async () => {
     const runtime = new RuledRuntime()
     runtime.onPtyData(PTY_ID, BANNER, 1)
