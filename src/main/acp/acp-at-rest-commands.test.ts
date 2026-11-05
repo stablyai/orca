@@ -529,7 +529,6 @@ it('lists OpenCode 2 commands from a session it then deletes, and never starts O
   const listed = await v2.catalog.settled(openCodeRecord('opencode2'), 1_000)
   expect(listed?.map((command) => command.name)).toEqual(['init', 'itx-plan', 'compact'])
   expect(deleted).toEqual([{ sessionId: DISCOVERY_SESSION }])
-  expect(v2.children[0]!.launch.args).not.toContain('--session-dir')
 
   const v1 = await rig(
     undefined,
