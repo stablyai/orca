@@ -18,23 +18,19 @@ function prune(tabsByWorkspace: Readonly<Record<string, readonly Tab[]>>): void 
   }
 }
 
-export function recordPaneUse(
-  worktreeId: string,
-  entityId: string,
-  tabsByWorkspace: () => Readonly<Record<string, readonly Tab[]>>
-): void {
-  const uses = useAtByWorkspace.get(worktreeId)
-  // Why: only a tab's first use scans for closed tabs; repeated clicks and keys stay O(1).
-  if (!uses?.has(entityId)) {
-    prune(tabsByWorkspace())
-  }
-  const current = useAtByWorkspace.get(worktreeId) ?? new Map<string, number>()
-  current.set(entityId, Date.now())
-  useAtByWorkspace.set(worktreeId, current)
+/** O(1) per click or key; records of closed tabs go when the next selection is added. */
+export function recordPaneUse(worktreeId: string, entityId: string): void {
+  const uses = useAtByWorkspace.get(worktreeId) ?? new Map<string, number>()
+  uses.set(entityId, Date.now())
+  useAtByWorkspace.set(worktreeId, uses)
 }
 
-export function paneUseAt(worktreeId: string, entityId: string): number | undefined {
-  return useAtByWorkspace.get(worktreeId)?.get(entityId)
+/** Reads one tab's use, after dropping records of tabs that no longer exist. */
+export function readPaneUse(
+  tabsByWorkspace: Readonly<Record<string, readonly Tab[]>>
+): (worktreeId: string, entityId: string) => number | undefined {
+  prune(tabsByWorkspace)
+  return (worktreeId, entityId) => useAtByWorkspace.get(worktreeId)?.get(entityId)
 }
 
 export function clearPaneUseForTests(): void {

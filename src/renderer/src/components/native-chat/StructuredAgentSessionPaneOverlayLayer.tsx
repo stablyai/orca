@@ -40,12 +40,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
   const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   const recordUse = useCallback(
-    () =>
-      recordPaneUse(
-        tab.worktreeId,
-        tab.entityId,
-        () => useAppStore.getState().unifiedTabsByWorktree
-      ),
+    () => recordPaneUse(tab.worktreeId, tab.entityId),
     [tab.entityId, tab.worktreeId]
   )
   if (!target) {

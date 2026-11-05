@@ -58,8 +58,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   }, [isVisible, shouldMeasureHiddenStartup])
 
   const recordUse = useCallback(
-    () =>
-      recordPaneUse(worktreeId, terminalTabId, () => useAppStore.getState().unifiedTabsByWorktree),
+    () => recordPaneUse(worktreeId, terminalTabId),
     [terminalTabId, worktreeId]
   )
 

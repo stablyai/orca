@@ -9,13 +9,12 @@ import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
-import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { requestNativeChatComposerFocus } from './use-native-chat-composer-reveal-focus'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 import { appendQuoteToChatDraft } from './native-chat-selection-quote-draft'
 import { formatNativeChatQuote } from './native-chat-quote-selection'
-import { paneUseAt } from './chat-pane-use'
+import { readPaneUse } from './chat-pane-use'
 
 type WorkspaceChatState = Pick<AppState, 'unifiedTabsByWorktree' | 'terminalLayoutsByTabId'>
 
@@ -39,7 +38,9 @@ function chatTarget(state: WorkspaceChatState, tab: Tab): WorkspaceChatTarget | 
 export function findWorkspaceChatTarget(
   state: WorkspaceChatState,
   worktreeId: string,
-  usedAt: (worktreeId: string, entityId: string) => number | undefined = paneUseAt
+  usedAt: (worktreeId: string, entityId: string) => number | undefined = readPaneUse(
+    state.unifiedTabsByWorktree
+  )
 ): WorkspaceChatTarget | null {
   let best: WorkspaceChatTarget | null = null
   let bestAt = -1
@@ -78,15 +79,9 @@ export function addSelectionToWorkspaceChatOrExplain(sourceId: string, reference
   }
   state.focusGroup(worktreeId, tab.groupId)
   state.activateTab(tab.id, { worktreeId })
-  const expandedLeafId = state.terminalLayoutsByTabId[tab.entityId]?.expandedLeafId
-  if (expandedLeafId && expandedLeafId !== chatLeafId) {
-    // An expanded shell beside the chat hides it; collapse it as moving to another pane does.
-    window.dispatchEvent(
-      new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, { detail: { tabId: tab.entityId } })
-    )
-  }
-  // Activating the chat leaf, not the tab, is what hands focus to the chat's composer.
-  activateTabAndFocusPane(tab.entityId, chatLeafId)
+  // Activating the chat leaf, not the tab, is what hands focus to the chat's composer; an
+  // expanded shell beside it would hide it, so that collapses as moving to another pane does.
+  activateTabAndFocusPane(tab.entityId, chatLeafId, { collapseExpandedPane: true })
   activateTerminalTabOnOwner(worktreeId, tab.entityId, chatLeafId)
   requestNativeChatComposerFocus(tab.entityId)
 }
