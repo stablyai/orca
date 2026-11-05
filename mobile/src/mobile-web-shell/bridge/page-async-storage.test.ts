@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../page-storage-keys'
-import pageAsyncStorage, { PageStorageRefusedError, publishPageStorage } from './page-async-storage'
+import pageAsyncStorage, {
+  PageStorageRefusedError,
+  publishPageStorage,
+  refreshPageTerminalShortcuts
+} from './page-async-storage'
 
 type Write = { key: string; value: string | null }
 
@@ -41,6 +45,57 @@ async function refusalOf(write: Promise<void>): Promise<PageStorageRefusedError>
 beforeEach(() => {
   granted = true
   publish()
+})
+
+describe('Chat UI on a session page', () => {
+  const CHAT_UI = 'orca:defaultSessionView'
+
+  it('keeps a primed chat when a refresh omits the key', async () => {
+    publish({ [CHAT_UI]: 'chat', 'orca:terminal-accessory-layout': 'row' })
+    refreshPageTerminalShortcuts({}, [])
+    await expect(pageAsyncStorage.getItem(CHAT_UI)).resolves.toBe('chat')
+    await expect(pageAsyncStorage.getItem('orca:terminal-accessory-layout')).resolves.toBeNull()
+  })
+
+  it('replaces that chat when the refresh names terminal', async () => {
+    publish({ [CHAT_UI]: 'chat' })
+    refreshPageTerminalShortcuts({ [CHAT_UI]: 'terminal' }, [])
+    await expect(pageAsyncStorage.getItem(CHAT_UI)).resolves.toBe('terminal')
+  })
+
+  it('asks the shell when init omitted Chat UI, and keeps the answer', async () => {
+    const reads: string[] = []
+    publishPageStorage(
+      {},
+      () => true,
+      HOST_ID,
+      SESSION_ROUTE,
+      [],
+      null,
+      async (key) => {
+        reads.push(key)
+        return key === CHAT_UI ? 'chat' : null
+      }
+    )
+    await expect(pageAsyncStorage.getItem(CHAT_UI)).resolves.toBe('chat')
+    await expect(pageAsyncStorage.getItem(CHAT_UI)).resolves.toBe('chat')
+    expect(reads).toEqual([CHAT_UI])
+  })
+
+  it('stays unset when the shell refuses the read', async () => {
+    publishPageStorage(
+      {},
+      () => true,
+      HOST_ID,
+      SESSION_ROUTE,
+      [],
+      null,
+      async () => {
+        throw new Error('this page may not read that key')
+      }
+    )
+    await expect(pageAsyncStorage.getItem(CHAT_UI)).resolves.toBeNull()
+  })
 })
 
 describe('what init primed', () => {

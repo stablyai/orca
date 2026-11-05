@@ -1,3 +1,4 @@
+import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
 import type { MobileQuickCommandLaunch } from '../terminal/quick-commands'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
@@ -18,6 +19,10 @@ import {
   withoutUnansweredLaunch,
   type PendingSessionSelection
 } from './pending-session-selection'
+import {
+  loadMobileStructuredChatLaunchContext,
+  mobileNewTabHostLaunchSurface
+} from './mobile-structured-chat-launch'
 
 export const PROMPT_UNCONFIRMED_MESSAGE =
   "The agent started, but couldn't confirm the prompt was sent."
@@ -64,16 +69,27 @@ export async function launchNewTabAgentThroughHost(args: {
   const { options, pendingSelectionRef, showToast } = args
   const prompt = options?.agentPrompt ?? options?.initialPrompt
   const reservation = reserveMobileAgentLaunch(args.agent)
-  const afterTabId = args.hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
+  // Chat UI lives on the phone. A headless host keeps its terminal default unless the launch asks for chat.
+  // Overlay agents never request a surface, so only the others pay for the registry and status reads.
+  const launchContext = isNativeChatSupportedAgent(args.agent)
+    ? null
+    : await loadMobileStructuredChatLaunchContext({
+        client: args.client,
+        hostCapabilities: args.hostCapabilities
+      })
+  const hostCapabilities = launchContext?.hostCapabilities ?? args.hostCapabilities
+  const surface = mobileNewTabHostLaunchSurface(args.agent, launchContext)
+  const afterTabId = hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
     ? hostTabIdOf(args.getSessionTabs(), args.activeSessionTabId)
     : undefined
   // Arm selection before requesting: tabs publish before prompt delivery settles, and later user picks must win.
   pendingSelectionRef.current = launchedSelection(args.lock, reservation, null)
   const launched = await launchAgentInExistingWorkspace({
     client: args.client,
-    hostCapabilities: args.hostCapabilities,
+    hostCapabilities,
     worktreeId: args.worktreeId,
     agent: args.agent,
+    ...(surface ? { surface } : {}),
     reservation,
     ...(afterTabId ? { placement: { afterTabId } } : {}),
     ...(prompt?.trim() ? { prompt: { text: prompt, delivery: 'submit' as const } } : {}),

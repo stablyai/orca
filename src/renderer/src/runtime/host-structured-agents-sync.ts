@@ -14,16 +14,16 @@ import {
 } from './local-runtime-capabilities'
 import { localStructuredChatsInUse, newAgentLaunchesMayOpenChats } from './local-structured-chats'
 
-// Older hosts install structured storage just to answer; ask only with chats in use so unused profiles avoid that cost.
+// Paired hosts on older builds install structured storage just to answer; ask them only once chat is in use.
 function launchesMayOpenChats(state: Pick<AppState, 'settings'>): boolean {
   return newAgentLaunchesMayOpenChats(state.settings)
 }
 
 async function syncLocalHost(settings: AppState['settings']): Promise<void> {
-  if (!(await localStructuredChatsInUse(settings))) {
-    return
+  // This build lists agents without installing storage, so Chat | CLI can be offered before any chat exists.
+  if (await localStructuredChatsInUse(settings)) {
+    void useAppStore.getState().ensureNativeDetectedAgents()
   }
-  void useAppStore.getState().ensureNativeDetectedAgents()
   await loadHostStructuredAgents(
     LOCAL_EXECUTION_HOST_ID,
     await ensureLocalRuntimeCapabilities(),
@@ -44,7 +44,7 @@ function syncPairedHosts(statuses: AppState['runtimeStatusByEnvironmentId']): vo
   retainHostStructuredAgents(hostIds)
 }
 
-/** Read registered agents when structured chat is in use and host capabilities arrive; paired runtime changes re-read. Local Chat | CLI choice and capability changes retry early unknown reads. Returns unsubscribe. */
+/** Read this computer's registered agents so Chat | CLI can be offered before any chat exists. Paired hosts are read once chat is in use, and a capability change retries an early unknown local read. Returns unsubscribe. */
 export function installHostStructuredAgentsSync(): () => void {
   const initial = useAppStore.getState()
   void syncLocalHost(initial.settings)

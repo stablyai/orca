@@ -82,12 +82,14 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.stop'
     ],
     // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act.
+    // native.storage.read is optional: a shell that lacks it still serves the session, and Chat UI stays at its default.
     optionalGrants: [
       'externalNavigation',
       'native.media.name',
       'native.pdf.view',
       'native.image.act',
-      'terminalKeyRail'
+      'terminalKeyRail',
+      'native.storage.read'
     ]
   }
 ]

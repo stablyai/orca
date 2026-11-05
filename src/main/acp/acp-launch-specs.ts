@@ -37,6 +37,7 @@ import { OPENCODE_TRANSCRIPT_IMPORT } from '../opencode/opencode-transcript-impo
 import { assertOpenCodeCopyUsesLocalStore } from '../../shared/opencode-launch-command'
 import { OMP_SESSION_HISTORY } from '../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../omp/omp-transcript-import'
+import { HERMES_LAUNCH_SPEC } from '../hermes/hermes-acp-launch-spec'
 import {
   ANTIGRAVITY_ACP_COMMAND,
   ANTIGRAVITY_ACP_RUNTIME
@@ -330,7 +331,8 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
-  ANTIGRAVITY_LAUNCH_SPEC
+  ANTIGRAVITY_LAUNCH_SPEC,
+  HERMES_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

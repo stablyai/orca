@@ -11,7 +11,7 @@ import {
   writeMirroredStorage
 } from '../storage/mirrored-storage-keys'
 
-import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
+import { NATIVE_PAGE_STORAGE_REFRESH_KEYS } from './page-storage-keys'
 import { createFakeBridgePortPair } from './bridge/bridge-port-pair-test-harness'
 
 const store = vi.hoisted(() => ({
@@ -53,7 +53,8 @@ beforeEach(() => {
   store.pending.length = 0
 })
 
-it.each(TERMINAL_SHORTCUT_STORAGE_KEYS)(
+// Text scale also publishes a page-local pinch write; the dedicated zoom test covers that path.
+it.each(NATIVE_PAGE_STORAGE_REFRESH_KEYS.filter((key) => key !== 'orca:terminalTextScale'))(
   'publishes the final queued native save for %s, only while focused',
   async (key) => {
     focus.active = false
