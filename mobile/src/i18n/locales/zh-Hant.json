@@ -567,6 +567,22 @@
       "stopped": "{{hostName}} 已停止。請在你的電腦上啟動它。",
       "server": "伺服器",
       "unavailable": "無法從手機存取 {{hostName}}。請在你的電腦上開啟它的一個專案。"
+    },
+    "goal": {
+      "chip": "目標",
+      "exitMode": "退出目標模式",
+      "placeholder": "描述您的目標，定義可衡量的結果以獲得最佳結果",
+      "pursuing": "正在追求目標",
+      "set": "目標已設定",
+      "paused": "目標已暫停",
+      "blocked": "目標受阻",
+      "limited": "目標受限",
+      "clear": "清除目標",
+      "expand": "顯示完整目標",
+      "collapse": "隱藏完整目標",
+      "attachmentsUnsupported": "在設定目標之前刪除附件。",
+      "pause": "暫停",
+      "resume": "繼續"
     }
   },
   "common": {

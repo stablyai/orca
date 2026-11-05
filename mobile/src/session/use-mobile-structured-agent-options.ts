@@ -79,6 +79,7 @@ export function useMobileStructuredAgentOptions(args: {
     updateOptionState,
     conversationSupport,
     imageSupport,
+    threadGoalSupport,
     receiveCatalog,
     isCurrentContext,
     controller,
@@ -225,6 +226,7 @@ export function useMobileStructuredAgentOptions(args: {
       conversationSupport?.sessionId === sessionId && conversationSupport.compactInstructions,
     contextUsageSupport:
       conversationSupport?.sessionId === sessionId ? conversationSupport.contextUsage : undefined,
+    threadGoalSupport: threadGoalSupport?.sessionId === sessionId ? threadGoalSupport : null,
     acceptsImages:
       (imageSupport?.sessionId === sessionId ? imageSupport.acceptsImages : undefined) ??
       (agent !== null && isAgentSessionHandleProvider(agent)),

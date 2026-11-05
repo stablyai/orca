@@ -606,6 +606,22 @@
       "stopped": "{{hostName}} está detenido. Inícialo en tu ordenador.",
       "server": "El servidor",
       "unavailable": "{{hostName}} no está disponible desde tu teléfono. Abre uno de sus proyectos en tu ordenador."
+    },
+    "goal": {
+      "chip": "Objetivo",
+      "exitMode": "Salir del modo objetivo",
+      "placeholder": "Describe tu objetivo y define resultados medibles para obtener mejores resultados",
+      "pursuing": "Objetivo en curso",
+      "set": "Objetivo establecido",
+      "paused": "Objetivo en pausa",
+      "blocked": "Objetivo bloqueado",
+      "limited": "Objetivo limitado",
+      "clear": "Borrar objetivo",
+      "expand": "Mostrar objetivo completo",
+      "collapse": "Ocultar objetivo completo",
+      "attachmentsUnsupported": "Elimina los adjuntos antes de establecer un objetivo.",
+      "pause": "Pausar",
+      "resume": "Reanudar"
     }
   },
   "common": {

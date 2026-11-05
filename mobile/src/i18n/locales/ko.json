@@ -567,6 +567,22 @@
       "stopped": "{{hostName}}이(가) 중지되었습니다. 컴퓨터에서 시작하세요.",
       "server": "서버",
       "unavailable": "휴대폰에서 {{hostName}}을(를) 사용할 수 없습니다. 컴퓨터에서 해당 프로젝트 중 하나를 여세요."
+    },
+    "goal": {
+      "chip": "목표",
+      "exitMode": "목표 모드 종료",
+      "placeholder": "목표를 설명하고, 최상의 결과를 위해 측정 가능한 결과를 정의하세요.",
+      "pursuing": "목표 추구 중",
+      "set": "목표 설정됨",
+      "paused": "일시중지된 목표",
+      "blocked": "목표가 차단되었습니다.",
+      "limited": "목표 제한됨",
+      "clear": "목표 지우기",
+      "expand": "전체 목표 표시",
+      "collapse": "전체 목표 숨기기",
+      "attachmentsUnsupported": "목표를 설정하기 전에 첨부 파일을 제거하세요.",
+      "pause": "일시정지",
+      "resume": "재개"
     }
   },
   "common": {
