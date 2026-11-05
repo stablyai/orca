@@ -13,6 +13,7 @@ import {
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
+import { finishedWorkerDispatch } from './finished-worker-mail'
 import {
   askedQuestionReceipt,
   waitForQuestionAnswer
@@ -68,25 +69,36 @@ export const ORCHESTRATION_ASK_METHODS = [
           workerState: remoteAttachment.state
         })
       }
-      const activeDispatch = db.getActiveDispatchForIdentity(from, paneKey)
-      if (!activeDispatch) {
+      const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
+      // A finished worker still asks its coordinator; the question changes nothing about its Task.
+      const askingDispatch =
+        workingDispatch ??
+        finishedWorkerDispatch(
+          db,
+          { address: from, paneKey: paneKey ?? null },
+          { run: undefined, dispatchId: undefined, dispatch: undefined },
+          'question'
+        )
+      if (!askingDispatch) {
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'
         )
       }
-      assertWorkerCanReport({
-        dispatchId: activeDispatch.id,
-        from,
-        workerState: db.getWorkerDispatch(activeDispatch.id)?.state,
-        processCurrent:
-          !activeDispatch.process_incarnation ||
-          db.isDispatchProcessCurrent({
-            dispatchId: activeDispatch.id,
-            paneKey: paneKey ?? null,
-            processIncarnation: runtime.getTerminalProcessIncarnation(from)
-          })
-      })
+      if (workingDispatch) {
+        assertWorkerCanReport({
+          dispatchId: workingDispatch.id,
+          from,
+          workerState: db.getWorkerDispatch(workingDispatch.id)?.state,
+          processCurrent:
+            !workingDispatch.process_incarnation ||
+            db.isDispatchProcessCurrent({
+              dispatchId: workingDispatch.id,
+              paneKey: paneKey ?? null,
+              processIncarnation: runtime.getTerminalProcessIncarnation(from)
+            })
+        })
+      }
       const options =
         params.options
           ?.split(',')
@@ -94,27 +106,27 @@ export const ORCHESTRATION_ASK_METHODS = [
           .filter(Boolean) ?? []
       let question = params.resume ? db.getQuestion(params.resume) : undefined
       if (params.resume) {
-        if (!question || question.dispatch_id !== activeDispatch.id) {
+        if (!question || question.dispatch_id !== askingDispatch.id) {
           throw new OrchestrationError(
             'question_not_found',
             `Question ${params.resume} does not belong to this active Dispatch.`
           )
         }
       } else {
-        const run = db.getRun(activeDispatch.run_id)
+        const run = db.getRun(askingDispatch.run_id)
         if (!run || run.legacy === 1) {
           throw new OrchestrationError(
             'run_not_found',
-            `Run ${activeDispatch.run_id} was not found.`
+            `Run ${askingDispatch.run_id} was not found.`
           )
         }
         if (params.run && params.run !== run.id) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
-            `Dispatch ${activeDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
+            `Dispatch ${askingDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
           )
         }
-        const reportTo = dispatchReportMailbox(db, activeDispatch)
+        const reportTo = dispatchReportMailbox(db, askingDispatch)
         if (
           params.to &&
           params.to !== `run:${run.id}` &&
@@ -124,14 +136,14 @@ export const ORCHESTRATION_ASK_METHODS = [
         ) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
-            `ask from Dispatch ${activeDispatch.id} must target its owning Run ${run.id}.`
+            `ask from Dispatch ${askingDispatch.id} must target its owning Run ${run.id}.`
           )
         }
         // An explicit Run or coordinator target still reaches the Run; otherwise the asker's creator.
         const to = params.to && params.to !== reportTo ? `run:${run.id}` : reportTo
         const created = db.createQuestion({
           runId: run.id,
-          dispatchId: activeDispatch.id,
+          dispatchId: askingDispatch.id,
           askerHandle: from,
           question: params.question as string,
           options,

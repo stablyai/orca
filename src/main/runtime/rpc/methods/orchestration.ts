@@ -7,6 +7,7 @@ import { ORCHESTRATION_MUTATION_REQUEST_METHODS } from './orchestration/runs/mut
 import { ORCHESTRATION_SEND_METHODS } from './orchestration/messaging/send-methods'
 import { ORCHESTRATION_CHECK_METHODS } from './orchestration/messaging/check-methods'
 import { ORCHESTRATION_MESSAGE_METHODS } from './orchestration/messaging/message-methods'
+import { ORCHESTRATION_INBOX_METHODS } from './orchestration/messaging/inbox-methods'
 import { ORCHESTRATION_DISPATCH_METHODS } from './orchestration/runs/dispatch-methods'
 import { ORCHESTRATION_ASK_METHODS } from './orchestration/messaging/ask-methods'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration/gates/gates'
@@ -23,6 +24,7 @@ export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
   ...ORCHESTRATION_SEND_METHODS,
   ...ORCHESTRATION_CHECK_METHODS,
   ...ORCHESTRATION_MESSAGE_METHODS,
+  ...ORCHESTRATION_INBOX_METHODS,
   ...ORCHESTRATION_DISPATCH_METHODS,
   ...ORCHESTRATION_ASK_METHODS,
   ...ORCHESTRATION_GATE_METHODS,

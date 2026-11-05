@@ -34,6 +34,7 @@ import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
+import { finishedWorkerSend } from './finished-worker-mail'
 import {
   followThroughWorkerReport,
   passHeldWorkerMail,
@@ -125,13 +126,17 @@ export const ORCHESTRATION_SEND_METHODS = [
       const runGroup =
         params.to && isGroupAddress(params.to) && !params.to.toLowerCase().startsWith('@worktree:')
       // Run groups validate their own audience; message scope cannot select a parent Dispatch.
-      const routing = resolveMessageRun(runtime, {
+      let routing = resolveMessageRun(runtime, {
         sender,
         to: params.to,
         runId: runGroup ? undefined : params.run,
         payload: runGroup ? undefined : params.payload,
         type: params.type
       })
+      const finished = runGroup ? undefined : finishedWorkerSend(db, sender, routing, params)
+      if (finished) {
+        ;({ params, routing } = finished)
+      }
       if (
         params.type === 'worker_done' &&
         !isWorkerReportOutcome(parseRemoteWorkerPayload(params.payload).outcome)
@@ -285,7 +290,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           db,
           params.type === 'worker_done' ? settledDispatchId(sent) : undefined
         )
-        return sent
+        return finished?.receipt(sent) ?? sent
       }
       return sendGroupMessage({
         params,

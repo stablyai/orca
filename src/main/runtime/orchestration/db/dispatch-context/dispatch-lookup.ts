@@ -1,5 +1,4 @@
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
-import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { DispatchContextRow } from '../../types'
 import {
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
@@ -8,26 +7,11 @@ import {
 } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
+import { findDispatchForAssignee, LATEST_DISPATCH_BY_HANDLE_SQL } from './dispatch-assignee-lookup'
 import {
   activeDispatchMailboxBranch,
   equivalentDispatchMailboxOwners
 } from '../dispatch-mailbox-selection'
-
-// Hoist explicit projections so graph-publish queries hit the statement cache.
-const ACTIVE_DISPATCH_BY_HANDLE_SQL =
-  // Newest-first avoids selecting a stale row when one handle has multiple active Dispatches.
-  `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
-       WHERE assignee_handle = ? AND status IN ('pending', 'dispatched')
-       ORDER BY rowid DESC LIMIT 1`
-const ACTIVE_DISPATCH_BY_PANE_KEY_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
-       WHERE assignee_pane_key = ? AND status IN ('pending', 'dispatched')
-       ORDER BY rowid DESC LIMIT 1`
-const ACTIVE_DISPATCH_BY_PANE_SUFFIX_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
-       WHERE assignee_pane_key IS NOT NULL
-         AND status IN ('pending', 'dispatched') AND instr(assignee_pane_key, ':') > 1
-         AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
-       ORDER BY rowid DESC LIMIT 1`
-const LATEST_DISPATCH_BY_HANDLE_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE assignee_handle = ? ORDER BY rowid DESC LIMIT 1`
 
 function presentationAddressKey(column: string, address: string | null): string {
   return `${column}:${address}`
@@ -249,29 +233,16 @@ export function findActiveDispatchForAssignee(
   assigneeHandle: string,
   assigneePaneKey?: string
 ): DispatchContextRow | undefined {
-  const byHandle = this.db.prepare(ACTIVE_DISPATCH_BY_HANDLE_SQL).get(assigneeHandle) as
-    | DispatchContextRow
-    | undefined
-  if (byHandle) {
-    return byHandle
-  }
+  return findDispatchForAssignee(this, 'active', assigneeHandle, assigneePaneKey)
+}
 
-  if (!assigneePaneKey) {
-    return undefined
-  }
-
-  const exactPane = this.db.prepare(ACTIVE_DISPATCH_BY_PANE_KEY_SQL).get(assigneePaneKey) as
-    | DispatchContextRow
-    | undefined
-  if (exactPane) {
-    return exactPane
-  }
-  if (!parsePaneKey(assigneePaneKey)) {
-    return undefined
-  }
-  return this.db
-    .prepare(ACTIVE_DISPATCH_BY_PANE_SUFFIX_SQL)
-    .get(paneKeyMatchSuffix(assigneePaneKey)) as DispatchContextRow | undefined
+/** The newest Dispatch this identity was given, settled or not; a worker that finished still owns it. */
+export function getLatestDispatchForIdentity(
+  this: OrchestrationDb,
+  handle: string,
+  paneKey?: string
+): DispatchContextRow | undefined {
+  return findDispatchForAssignee(this, 'latest', handle, paneKey)
 }
 
 export function getLatestDispatchForTerminal(
@@ -304,6 +275,7 @@ export type DispatchLookupMethods = {
   findActiveDispatchForAssignee: typeof findActiveDispatchForAssignee
   listSessionDispatchesForPresentation: typeof listSessionDispatchesForPresentation
   getLatestDispatchForTerminal: typeof getLatestDispatchForTerminal
+  getLatestDispatchForIdentity: typeof getLatestDispatchForIdentity
   hasOpenHelperDispatch: typeof hasOpenHelperDispatch
 }
 
@@ -316,6 +288,7 @@ export function attachDispatchLookup(ctor: { prototype: object }): void {
     isDispatchMessageSender,
     findActiveDispatchForAssignee,
     getLatestDispatchForTerminal,
+    getLatestDispatchForIdentity,
     hasOpenHelperDispatch,
     listSessionDispatchesForPresentation
   })
