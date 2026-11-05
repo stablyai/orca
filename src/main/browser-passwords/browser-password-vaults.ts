@@ -49,8 +49,8 @@ export function deleteBrowserPasswordVault(
   return deleted
 }
 
-/** For a deleted browser profile: the deletion already happened, so a failure can only be reported. */
-export function forgetBrowserPasswordVault(browserProfileId: string): void {
+/** For a browser profile being deleted; false while its saved logins are still on disk. */
+export function forgetBrowserPasswordVault(browserProfileId: string): boolean {
   let deleted: BrowserPasswordStoreResult<true>
   try {
     deleted = deleteBrowserPasswordVault(browserProfileId)
@@ -60,4 +60,5 @@ export function forgetBrowserPasswordVault(browserProfileId: string): void {
   if (!deleted.ok) {
     console.warn('[browser-passwords] Could not delete saved logins for profile', browserProfileId)
   }
+  return deleted.ok
 }

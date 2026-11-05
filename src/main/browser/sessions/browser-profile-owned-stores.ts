@@ -3,8 +3,12 @@ import { forgetBrowserSiteDisplay } from '../site-settings/browser-site-display-
 import { forgetBrowserSitePermissions } from '../site-settings/browser-site-permission-store'
 
 /** Drops everything Orca stores per browser profile outside its Chromium partition. */
-export function forgetBrowserProfileOwnedStores(profileId: string): void {
+export function forgetBrowserProfileOwnedStores(profileId: string): boolean {
+  // Why the vault first, and false keeps the profile: once the profile is gone nothing could retry it.
+  if (!forgetBrowserPasswordVault(profileId)) {
+    return false
+  }
   forgetBrowserSitePermissions(profileId)
   forgetBrowserSiteDisplay(profileId)
-  forgetBrowserPasswordVault(profileId)
+  return true
 }

@@ -287,13 +287,12 @@ class BrowserSessionRegistry {
 
   async deleteProfile(profileId: string): Promise<boolean> {
     const profile = this.profiles.get(profileId)
-    if (!profile || profile.scope === 'default') {
+    if (!profile || profile.scope === 'default' || !forgetBrowserProfileOwnedStores(profileId)) {
       return false
     }
     this.profiles.delete(profileId)
     this.persistProfiles()
     this.onProfilesChanged?.()
-    forgetBrowserProfileOwnedStores(profileId)
     this.persistMeta(
       forgetBrowserSessionProfileMeta(this.loadPersistedMeta(), profile, this.defaultPartition)
     )
