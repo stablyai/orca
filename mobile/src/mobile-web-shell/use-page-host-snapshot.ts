@@ -10,6 +10,7 @@ import {
 } from '../storage/mirrored-storage-keys'
 import {
   isHostWorkspaceStorageKey,
+  isNativePagePreferenceKey,
   isPageStorageKeyForRoute,
   pageStorageEntriesForInit,
   pageStorageKeysForRoute,
@@ -121,6 +122,10 @@ export function usePageHostSnapshot(
 
   const readWorkspaceKey = useCallback(
     async (key: string): Promise<string | null> => {
+      // Chat UI is an exact preference. Session pages do not own the host area, so it is not a workspace key.
+      if (isNativePagePreferenceKey(key)) {
+        return readMirroredKeyOrStore(key)
+      }
       if (!hostArea || !isHostWorkspaceStorageKey(key, hostId)) {
         throw new Error('this page may not read that key')
       }

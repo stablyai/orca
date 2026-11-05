@@ -1,4 +1,5 @@
 import type { z } from 'zod'
+import type { AcpLoadedSessionBody } from './acp-dialects/acp-dialect'
 import { AcpAuthRequiredError, AcpRpcError, acpAuthRequiredError } from './acp-errors'
 import {
   NewSessionResponseSchema,
@@ -28,6 +29,8 @@ export type AcpSessionStartOptions = NewSessionRequest & {
   sessionId?: string
   resumePreference?: 'load' | 'resume'
   authMethodId?: string
+  /** When set, an accepted load can still mean the session is gone. */
+  loadedSessionMissing?: (response: AcpLoadedSessionBody) => boolean
 }
 type Request = <T>(method: string, params: unknown, schema: z.ZodType<T>) => Promise<T>
 
@@ -37,7 +40,13 @@ export async function setupAcpSession(
   request: Request
 ): Promise<AcpSessionStarted> {
   const setup = async (): Promise<AcpSessionStarted> => {
-    const { sessionId, resumePreference, authMethodId: _auth, ...params } = options
+    const {
+      sessionId,
+      resumePreference,
+      authMethodId: _auth,
+      loadedSessionMissing,
+      ...params
+    } = options
     if (sessionId === undefined) {
       const response = await request('session/new', params, newSessionSchema)
       return { kind: 'new', sessionId: response.sessionId, response }
@@ -46,11 +55,12 @@ export async function setupAcpSession(
     const load = capabilities?.loadSession === true
     const resume = capabilities?.sessionCapabilities?.resume != null
     if (load && (resumePreference !== 'resume' || !resume)) {
-      return {
-        kind: 'load',
-        sessionId,
-        response: await request('session/load', { ...params, sessionId }, loadSessionSchema)
+      const response = await request('session/load', { ...params, sessionId }, loadSessionSchema)
+      // Same code a missing session reports, so reopen starts a new one.
+      if (loadedSessionMissing?.(response)) {
+        throw new AcpRpcError(-32002, 'Resource not found')
       }
+      return { kind: 'load', sessionId, response }
     }
     if (resume) {
       return {
