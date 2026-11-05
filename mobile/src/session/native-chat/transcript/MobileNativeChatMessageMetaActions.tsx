@@ -9,7 +9,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatQuoteContext } from './mobile-native-chat-quote-context'
 
 /** Copy, and Quote for agent replies, under a chat turn. */
-export function MobileNativeChatMessageCopyActions({
+export function MobileNativeChatMessageMetaActions({
   text,
   quotable
 }: {

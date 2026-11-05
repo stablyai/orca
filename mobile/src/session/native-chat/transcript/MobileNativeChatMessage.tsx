@@ -28,7 +28,7 @@ import { MobileNativeChatNoticeRow } from './MobileNativeChatNoticeRow'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { MobileNativeChatUserMessageFold } from './MobileNativeChatUserMessageFold'
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
-import { MobileNativeChatMessageCopyActions } from './MobileNativeChatMessageCopyActions'
+import { MobileNativeChatMessageMetaActions } from './MobileNativeChatMessageMetaActions'
 import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
 import { MobileNativeChatResolutionReceipt } from '../MobileNativeChatResolutionReceipt'
 import {
@@ -374,7 +374,7 @@ function MobileNativeChatMessageImpl({
         {isChatTurn && !agentFrom ? (
           <View style={styles.meta}>
             {copyText.length > 0 ? (
-              <MobileNativeChatMessageCopyActions
+              <MobileNativeChatMessageMetaActions
                 key={message.id}
                 text={copyText}
                 quotable={message.role === 'assistant'}
