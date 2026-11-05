@@ -9,6 +9,7 @@ import type { PluginFileMatch } from './plugin-file-match'
 import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
 
 export const PLUGIN_CONTRIBUTION_SUMMARY_LIMIT = 64
+const PLUGIN_CONTRIBUTION_DETAIL_LIMIT = 160
 
 export type PluginContributionSummaryItem = {
   kind: PluginContributionPoint
@@ -31,7 +32,7 @@ export const pluginContributionSummarySchema = z
         detail: z
           .string()
           .min(1)
-          .max(160)
+          .max(PLUGIN_CONTRIBUTION_DETAIL_LIMIT)
           .optional()
           .meta(pluginFieldDoc('Extra context, such as file extensions.', NEXT))
       })
@@ -49,6 +50,19 @@ export const pluginContributionSummarySchema = z
 
 function fileMatchDetail(match: PluginFileMatch): string | undefined {
   return [...match.extensions, ...match.filenames].join(', ') || undefined
+}
+
+function customEditorDetail(
+  editor: PluginFileMatch & { binaryFallback?: boolean }
+): string | undefined {
+  const files = fileMatchDetail(editor)
+  if (!editor.binaryFallback) {
+    return files
+  }
+  const disclosure = 'Unsupported binary files (any file name)'
+  const fileLimit = PLUGIN_CONTRIBUTION_DETAIL_LIMIT - disclosure.length - 2
+  const shownFiles = files && files.length > fileLimit ? `${files.slice(0, fileLimit - 1)}…` : files
+  return [shownFiles, disclosure].filter(Boolean).join(', ')
 }
 
 /** What a manifest adds, as catalogs list it. Catalog CI generates the summary with this, and
@@ -84,18 +98,7 @@ export function pluginContributionSummary(
     ...named('terminalThemes', c.terminalThemes, (theme) => theme.title),
     ...named('iconThemes', c.iconThemes, (theme) => theme.title),
     ...named('syntaxes', c.syntaxes, (syntax) => syntax.title, fileMatchDetail),
-    ...named(
-      'customEditors',
-      c.customEditors,
-      (editor) => editor.title,
-      (editor) =>
-        [
-          fileMatchDetail(editor),
-          editor.binaryFallback ? 'Unsupported binary files (any file name)' : undefined
-        ]
-          .filter(Boolean)
-          .join(', ') || undefined
-    ),
+    ...named('customEditors', c.customEditors, (editor) => editor.title, customEditorDetail),
     ...named(
       'newFiles',
       c.newFiles,

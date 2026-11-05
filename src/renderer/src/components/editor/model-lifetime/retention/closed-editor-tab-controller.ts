@@ -255,7 +255,9 @@ export function attachClosedEditorTabCleanup(
         liveFile.filePath !== file.filePath ||
         (file.mode === 'edit' && ownerKeyOf(liveFile, currentState) !== priorOwnerOf(file))
       ) {
-        clearPluginEditorContent(file.id)
+        if (!liveFile || liveFile.mode !== file.mode || liveFile.filePath !== file.filePath) {
+          clearPluginEditorContent(file.id)
+        }
         const descriptor = {
           id: file.id,
           mode: file.mode,

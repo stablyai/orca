@@ -138,6 +138,29 @@ describe('custom editor file and split lifetime', () => {
     expect(acknowledged).toMatchObject({ met: true, status: { guestUrl: 'left' } })
   })
 
+  it('keeps mounted editor delivery across an owner-only buffer rekey', async () => {
+    await act(async () =>
+      root.render(
+        <>
+          <View file={a} guest="a" />
+          <Tab file={a} />
+        </>
+      )
+    )
+    await act(async () =>
+      useAppStore.setState((state) => ({
+        editorBufferIdOf: { ...state.editorBufferIdOf, [a.id]: 'detached:a' }
+      }))
+    )
+    expect(container.querySelector('[data-tab="a"]')?.textContent).toBe('Hex')
+    const acknowledged = await waitForPluginEditor(
+      a.id,
+      (status) => status.contentReady === true && pluginEditorDocumentLoaded(status),
+      0
+    )
+    expect(acknowledged).toMatchObject({ met: true, status: { guestUrl: 'a' } })
+  })
+
   it('retains an inactive file’s tab editor until that file entity closes', async () => {
     await act(async () =>
       root.render(
