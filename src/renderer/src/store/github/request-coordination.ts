@@ -1,3 +1,4 @@
+import type { PRCheckContract } from '@/lib/pr-check-observation-contract'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-request-types'
@@ -52,7 +53,11 @@ export const inflightProjectViewRequests = new Map<string, InflightProjectView>(
 export const prRequestGenerations = new Map<string, number>()
 export const prRefreshStartedHostedReviewEntries = new Map<
   string,
-  AppState['hostedReviewCache'][string]
+  {
+    entry: AppState['hostedReviewCache'][string] | undefined
+    checkContract?: PRCheckContract
+    expiresAt: number
+  }
 >()
 export const prRefreshStartedLinkedReviewScopes = new Map<
   string,

@@ -151,6 +151,7 @@ export function ChecksCompactHeader({
   summaryLabel,
   counts,
   listLength,
+  showSummary = false,
   refreshAction,
   rerunAction,
   secondaryActions
@@ -159,6 +160,7 @@ export function ChecksCompactHeader({
   summaryColor: string
   summaryLabel: string
   counts: { pending: number; failing: number }
+  showSummary?: boolean
   listLength: number
   refreshAction: React.JSX.Element
   rerunAction: React.JSX.Element | null
@@ -179,7 +181,7 @@ export function ChecksCompactHeader({
             <div className="text-[13px] font-medium leading-5 text-foreground">
               {translate('auto.components.PullRequestPage.94d95cf1f7', 'Checks')}
             </div>
-            {listLength > 0 && (
+            {(listLength > 0 || showSummary) && (
               <div className="truncate text-[11px] leading-4 text-muted-foreground">
                 {summaryLabel}
               </div>
