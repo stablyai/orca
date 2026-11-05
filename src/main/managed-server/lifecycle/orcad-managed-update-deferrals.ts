@@ -1,40 +1,41 @@
 import type { OrcadManagedDeferral } from '../../../shared/orcad-managed-runtime'
-import { compareAppVersions } from '../../../shared/app-version'
 
 type RecordedDeferral = OrcadManagedDeferral & { deferredAt: string }
 
-const deferrals = new Map<string, RecordedDeferral>()
+type StoredDeferral = RecordedDeferral & {
+  /** The host's active version when the deferral was recorded. */
+  activeAtDeferral: string | null
+}
+
+const deferrals = new Map<string, StoredDeferral>()
 
 export function recordManagedOrcadUpdateDeferral(
   environmentId: string,
   deferral: OrcadManagedDeferral,
+  activeAtDeferral: string | null,
   now = new Date()
 ): void {
-  deferrals.set(environmentId, { ...deferral, deferredAt: now.toISOString() })
+  deferrals.set(environmentId, { ...deferral, deferredAt: now.toISOString(), activeAtDeferral })
 }
 
 export function clearManagedOrcadUpdateDeferral(environmentId: string): void {
   deferrals.delete(environmentId)
 }
 
-function readManagedOrcadUpdateDeferral(environmentId: string): RecordedDeferral | null {
-  return deferrals.get(environmentId) ?? null
-}
-
-/** Forget deferrals resolved by another desktop activating the candidate or a newer release. */
+/** Forget a deferral once the host's active version moves: it described a host state that is gone,
+ *  and builds of one release differ only by an unorderable content hash (#38400). */
 export function currentManagedOrcadUpdateDeferral(
   environmentId: string,
   activeVersion: string | null
 ): RecordedDeferral | null {
-  const deferral = readManagedOrcadUpdateDeferral(environmentId)
-  if (
-    deferral &&
-    activeVersion &&
-    (activeVersion === deferral.candidateVersion ||
-      compareAppVersions(activeVersion, deferral.candidateVersion) > 0)
-  ) {
+  const stored = deferrals.get(environmentId)
+  if (!stored) {
+    return null
+  }
+  if (stored.activeAtDeferral !== activeVersion) {
     clearManagedOrcadUpdateDeferral(environmentId)
     return null
   }
+  const { activeAtDeferral: _activeAtDeferral, ...deferral } = stored
   return deferral
 }

@@ -5,35 +5,45 @@ import {
   recordManagedOrcadUpdateDeferral
 } from './orcad-managed-update-deferrals'
 
-function defer(candidateVersion: string): void {
-  recordManagedOrcadUpdateDeferral('env-1', {
-    outcome: 'deferred',
-    candidateVersion,
-    code: 'orcad_activation_fence_busy',
-    reason: 'Another update holds this host.',
-    forceable: false
-  })
+const ACTIVE = '0.1.0+fb47a73e01d4'
+const CANDIDATE = '0.1.0+9150d77ce015'
+
+function defer(activeAtDeferral: string | null): void {
+  recordManagedOrcadUpdateDeferral(
+    'env-1',
+    {
+      outcome: 'deferred',
+      candidateVersion: CANDIDATE,
+      code: 'orcad_activation_fence_busy',
+      reason: 'Another update holds this host.',
+      forceable: false
+    },
+    activeAtDeferral
+  )
 }
 
 afterEach(() => clearManagedOrcadUpdateDeferral('env-1'))
 
 describe('a recorded update deferral', () => {
-  it('is dropped once another desktop activated its candidate', () => {
-    defer('0.1.0+9150d77ce015')
-    expect(currentManagedOrcadUpdateDeferral('env-1', '0.1.0+9150d77ce015')).toBeNull()
-    expect(currentManagedOrcadUpdateDeferral('env-1', '0.1.0+fb47a73e01d4')).toBeNull()
-  })
-
-  it('is dropped once the host runs a newer release', () => {
-    defer('0.1.0+9150d77ce015')
-    expect(currentManagedOrcadUpdateDeferral('env-1', '0.2.0+aaaaaaaaaaaa')).toBeNull()
-  })
-
-  it('stays while the host still runs an older or different build', () => {
-    defer('0.1.0+9150d77ce015')
-    expect(currentManagedOrcadUpdateDeferral('env-1', '0.1.0+fb47a73e01d4')).toMatchObject({
-      candidateVersion: '0.1.0+9150d77ce015'
+  it.each([null, ACTIVE])("stays while the host's active version is still %s", (active) => {
+    defer(active)
+    expect(currentManagedOrcadUpdateDeferral('env-1', active)).toEqual({
+      outcome: 'deferred',
+      candidateVersion: CANDIDATE,
+      code: 'orcad_activation_fence_busy',
+      reason: 'Another update holds this host.',
+      forceable: false,
+      deferredAt: expect.any(String)
     })
-    expect(currentManagedOrcadUpdateDeferral('env-1', null)).not.toBeNull()
+  })
+
+  it.each([
+    // #38400: same release, different content hash; the versions cannot be ordered.
+    ['another build of the same release', ACTIVE, '0.1.0+aaaaaaaaaaaa'],
+    ['a first build', null, ACTIVE]
+  ])('is dropped once the host moves to %s', (_label, activeAtDeferral, movedTo) => {
+    defer(activeAtDeferral)
+    expect(currentManagedOrcadUpdateDeferral('env-1', movedTo)).toBeNull()
+    expect(currentManagedOrcadUpdateDeferral('env-1', activeAtDeferral)).toBeNull()
   })
 })
