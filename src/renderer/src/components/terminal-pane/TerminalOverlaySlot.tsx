@@ -10,8 +10,6 @@ import type { HiddenTerminalPrewarm } from './terminal-pane-types'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
 
-const readUnifiedTabs = () => useAppStore.getState().unifiedTabsByWorktree
-
 type TerminalOverlaySlotProps = {
   terminalTabId: string
   terminalGeneration: number | undefined
@@ -60,7 +58,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   }, [isVisible, shouldMeasureHiddenStartup])
 
   const recordUse = useCallback(
-    () => recordPaneUse(worktreeId, terminalTabId, readUnifiedTabs),
+    () => recordPaneUse(worktreeId, terminalTabId),
     [terminalTabId, worktreeId]
   )
 

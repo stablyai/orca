@@ -38,9 +38,7 @@ function chatTarget(state: WorkspaceChatState, tab: Tab): WorkspaceChatTarget | 
 export function findWorkspaceChatTarget(
   state: WorkspaceChatState,
   worktreeId: string,
-  usedAt: (worktreeId: string, entityId: string) => number | undefined = readPaneUse(
-    state.unifiedTabsByWorktree
-  )
+  usedAt: (worktreeId: string, entityId: string) => number | undefined = readPaneUse
 ): WorkspaceChatTarget | null {
   let best: WorkspaceChatTarget | null = null
   let bestAt = -1

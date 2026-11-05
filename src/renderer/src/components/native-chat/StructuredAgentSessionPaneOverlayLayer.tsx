@@ -12,8 +12,6 @@ import NativeChatView from './NativeChatView'
 import { recordPaneUse } from './chat-pane-use'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 
-const readUnifiedTabs = () => useAppStore.getState().unifiedTabsByWorktree
-
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
   agentSessionAgent: NonNullable<Tab['agentSessionAgent']>
@@ -42,7 +40,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
   const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   const recordUse = useCallback(
-    () => recordPaneUse(tab.worktreeId, tab.entityId, readUnifiedTabs),
+    () => recordPaneUse(tab.worktreeId, tab.entityId),
     [tab.entityId, tab.worktreeId]
   )
   if (!target) {
