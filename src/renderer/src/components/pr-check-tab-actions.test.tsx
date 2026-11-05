@@ -123,8 +123,8 @@ beforeEach(() => {
   lookup.mockResolvedValue({ ...initial, headSha: 'b'.repeat(40), checksSummary: summary })
   rows.mockResolvedValue(failed)
   rerun.mockResolvedValue({ ok: true, count: 1 })
-  Object.assign(globalThis, {
-    window: { api: { gh: { prChecks: rows, workItemByOwnerRepo: lookup, rerunPRChecks: rerun } } }
+  Object.assign(window, {
+    api: { gh: { prChecks: rows, workItemByOwnerRepo: lookup, rerunPRChecks: rerun } }
   })
   setLocalRuntimeCapabilitiesForTests([capability])
 })
