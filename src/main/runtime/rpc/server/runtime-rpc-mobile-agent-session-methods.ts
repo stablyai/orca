@@ -22,6 +22,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.options',
   'agentSession.modelCatalog',
   'agentSession.conversationCommand',
+  // Gated on the phone by agent-session.thread-goal.phone.v1.
+  'agentSession.threadGoal',
   'agentSession.commands',
   'agentSession.history',
   'agentSession.currentRequests',

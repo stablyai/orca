@@ -1,5 +1,5 @@
-import { isAgentSessionThreadGoalFrame } from '../../../../shared/agent-session/agent-session-thread-goal'
-import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { isAgentSessionThreadGoalFrame } from '../../agent-session/agent-session-thread-goal'
+import type { NativeChatMessage } from '../native-chat-types'
 
 /** Show goal transitions in the banner only; retain them in the journal. */
 export function omitNativeChatThreadGoalRows(

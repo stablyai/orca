@@ -27,6 +27,7 @@ import type { MobileStructuredQueuedMessageControls } from './use-mobile-structu
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import type { NativeChatContextUsageSummary } from '../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { MobileStructuredInterruptedContinue } from './use-mobile-structured-interrupted-continue'
+import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
 
 export type StructuredMobileSession = Omit<
   ReturnType<typeof useMobileStructuredAgentOptions>,
@@ -66,6 +67,8 @@ export type StructuredMobileSession = Omit<
     commandRefusalCauses: MobileNativeChatCommandRefusalCauses
     backgroundTasks: MobileStructuredBackgroundTasks
     interruptedContinue: MobileStructuredInterruptedContinue
+    /** Null unless the host reports goals for this chat. */
+    threadGoal: MobileStructuredThreadGoal | null
     visualSource: MobileNativeChatVisualSource | null
     imagePreviewsByMessageId: Record<string, string[]>
   }
