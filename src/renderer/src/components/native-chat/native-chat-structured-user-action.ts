@@ -6,10 +6,8 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 export function completeNativeChatStructuredUserAction(
   agent: AgentType,
   transport: NativeChatStructuredComposerTransport,
-  revealsTranscript: boolean
+  reveal: (() => void) | undefined
 ): void {
   emitNativeChatMessageSent({ agent, runtime: transport.runtime })
-  if (revealsTranscript) {
-    transport.onSubmitted?.()
-  }
+  reveal?.()
 }

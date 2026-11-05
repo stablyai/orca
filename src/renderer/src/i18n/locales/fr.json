@@ -3496,7 +3496,6 @@
             "e8b3741ff7": "Ignoré",
             "a9957007eb": "Ignorer {{value0}}",
             "bef0adef9b": "Branche",
-            "0b1766738a": "Dépôt",
             "bbb1ab6a6f": "Sélectionner {{value0}}",
             "b771c92598": "Supprimer la sélection",
             "7eee951968": "Analyse des espaces de travail",
@@ -3505,7 +3504,6 @@
             "b2c1331844": "Supprimer les espaces de travail inactifs",
             "7f451a3e2c": "Impossible d'ignorer la suggestion de nettoyage",
             "662b8ec3f8": "Échec du scan de nettoyage des espaces de travail",
-            "4d0b72481c": "Ignorer",
             "9cc26c019d": "Supprimer",
             "0e2d235c63": "Analyse des espaces de travail prête",
             "4a35c08764": "À examiner",
@@ -3513,9 +3511,6 @@
             "1d3503357d": "Vous pouvez fermer cette fenêtre et revenir pendant que la suppression continue.",
             "4c2990886e": "{{value0}}/{{value1}} supprimés",
             "86ba852118": "{{value0}}, {{value1}} en échec",
-            "deletingCount": "Suppression des espaces de travail : {{value0}}",
-            "deleteCount": "Supprimer les espaces de travail : {{value0}} ?",
-            "selectedForDeletionCount": "Sélectionnés pour suppression : {{value0}}",
             "deleteButtonCount": "Supprimer {{value0}}",
             "archivedStatus": "Archivé",
             "74f6c16279": "Retour"
@@ -3530,7 +3525,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Contexte",
             "flagsLabel": "Indicateurs",
             "collapseDetails": "Réduire les détails",
@@ -5876,9 +5870,6 @@
           "hiding_one": "{{count}} worktree détecté masqué",
           "hiding_other": "{{count}} worktrees détectés masqués",
           "hiding_many": "{{count}} worktrees détectés masqués",
-          "hidingInRepo_one": "{{count}} worktree détecté masqué dans {{repo}}",
-          "hidingInRepo_other": "{{count}} worktrees détectés masqués dans {{repo}}",
-          "hidingInRepo_many": "{{count}} worktrees détectés masqués dans {{repo}}",
           "keepHiddenAriaLabel_one": "Garder {{count}} worktree détecté masqué pour {{repo}} ; récupérez-le depuis le menu du projet",
           "keepHiddenAriaLabel_other": "Garder {{count}} worktrees détectés masqués pour {{repo}} ; récupérez-les depuis le menu du projet",
           "keepHiddenAriaLabel_many": "Garder {{count}} worktrees détectés masqués pour {{repo}} ; récupérez-les depuis le menu du projet",
@@ -15001,7 +14992,6 @@
           "ff92d15436": "Orca vous préviendra quand les agents auront terminé ou auront besoin d'aide.",
           "b054332836": "Configurer les notifications",
           "f396db9f20": "Donnez-lui vos couleurs",
-          "322fc50a18": "Orca fonctionne avec tous les agents CLI. Choisissez celui que vous solliciterez le plus. Changez quand vous voulez.",
           "198b148b3c": "Choisissez votre agent par défaut",
           "windowsTerminalTitle": "Définir les valeurs par défaut du terminal Windows",
           "windowsTerminalSubtitle": "Choisissez le shell PAR DÉFAUT des nouveaux volets et le comportement du clic droit dans le terminal.",
@@ -15457,8 +15447,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "ex. ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Commande personnalisée",
-            "4b2fc4b80c": "Effort de réflexion",
-            "be8917699e": "Modèle",
             "560d4feb00": "Personnalisé",
             "29d119fe95": "Agent",
             "f9382b48a1": "Activer l'auteur IA",
@@ -19639,8 +19627,6 @@
       },
       "turnDiff": {
         "partial": "Différence partielle",
-        "showDiff": "Afficher les différences",
-        "hideDiff": "Masquer les différences",
         "changedFiles_one": "{{count}} fichier modifié",
         "changedFiles_other": "{{count}} fichiers modifiés",
         "changedFiles_many": "{{count}} fichiers modifiés"
@@ -20173,9 +20159,7 @@
         "browse": {
           "noSizes": "Aucune taille d'espace de travail mesurée pour l'instant.",
           "noSizesDescription": "Les tailles apparaissent une fois l'utilisation disque mesurée.",
-          "measureSizes": "Analyser",
           "measureSizesTitle": "Analyser les tailles des espaces de travail",
-          "measureSizesDescription": "Analysez l'utilisation disque pour comparer, trier et filtrer les espaces de travail par taille.",
           "sizeOnDisk": "Taille sur disque : {{value0}}",
           "checkingGitRow": "Vérification de l'état git",
           "searchPlaceholder": "Rechercher par nom, dépôt, branche, chemin, hôte",
@@ -20595,6 +20579,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Mettre les messages suivants en file d’attente",
+        "scrollToLatestOnSendTitle": "Défiler jusqu’au dernier message à l’envoi",
+        "scrollToLatestOnSendCopy": "Envoyer après avoir remonté le fil fait défiler jusqu’au dernier message et suit la réponse. Désactivez cette option pour garder votre position.",
+        "scrollToLatestOnSendSearchPosition": "position",
         "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour, au lieu d’entrer dans le tour en cours. Cmd/Ctrl+Entrée fait l’inverse pour un message.",
         "inlineVisualsTitle": "Visuels intégrés",
         "inlineVisualsCopy": "Laissez l'agent afficher des graphiques, des diagrammes et des maquettes dans ses réponses. S'applique aux nouveaux chats.",
@@ -20611,7 +20598,13 @@
         "usageLimitContinueCopy": "Orca envoie « Continue where you left off. » quand la limite est réinitialisée. S’applique à tous les chats dont l’heure de réinitialisation est connue.",
         "usageLimitContinueSearchLimit": "limite d’utilisation",
         "usageLimitContinueSearchReset": "réinitialisation",
-        "usageLimitContinueToggleLabel": "Activer ou désactiver la reprise des chats à la réinitialisation d’une limite"
+        "usageLimitContinueToggleLabel": "Activer ou désactiver la reprise des chats à la réinitialisation d’une limite",
+        "idleStopTitle": "Arrêter les agents inactifs après",
+        "idleStopCopy": "Arrête l'agent d'un chat une fois que le chat est resté inactif aussi longtemps, pour libérer de la mémoire. Le chat est conservé et votre prochain message relance l'agent. Choisissez Jamais pour les agents qui continuent de travailler en arrière-plan entre les tours.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "délai",
+        "idleStopSearchKeepAlive": "maintenir actif",
+        "idleStopNever": "Jamais"
       }
     },
     "agentChildRow": {
@@ -20753,7 +20746,10 @@
       "workerAutoClose": {
         "running": "Worker temporaire d’orchestration · Se ferme 2 minutes après sa fin",
         "finished": "Worker temporaire d’orchestration terminé · Fermeture dans {{countdown}}",
-        "keepOpen": "Garder ouvert"
+        "keepOpen": "Garder ouvert",
+        "bannerRunning": "Worker d’orchestration · Se ferme 2 minutes après sa fin",
+        "bannerFinished": "Worker d’orchestration terminé · Fermeture dans {{countdown}}",
+        "temporaryBadge": "Temporaire"
       }
     },
     "wslHostMark": {
@@ -20944,10 +20940,8 @@
       "offTerminal": "Vous préférez le terminal ? Il reste entièrement pris en charge. Vos agents continuent de s'y ouvrir jusqu'à ce que vous choisissiez Chat.",
       "onIntro": "L'interface de chat n'est plus expérimentale et fait désormais partie d'Orca. Vos agents continuent de s'ouvrir sous forme de chats, avec des messages enrichis, des visuels et des images.",
       "onTerminal": "Le terminal reste lui aussi entièrement pris en charge. Vous pouvez y remettre n'importe quel agent à tout moment.",
-      "changeInSettings": "Modifiable à tout moment dans <link>Paramètres → Agents</link>.",
       "stayInTerminal": "Rester dans le terminal",
       "cta": "Utiliser l'interface de chat",
-      "saveFailed": "Impossible d'activer l'interface de chat. Choisissez Chat dans Paramètres → Agents.",
       "demoTabTitle": "Expliquer la connexion",
       "demoPrompt": "Explique comment fonctionne la connexion",
       "demoReply": "La connexion commence dans {{file}} : le navigateur envoie à /login, le serveur vérifie le mot de passe et crée une session, puis vous redirige vers l’app. Voici le flux :",

@@ -114,6 +114,11 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
         }
       }
     }
+    for (const key of args.restoredDismissalKeys ?? []) {
+      if (typeof key === 'string') {
+        delete next[key]
+      }
+    }
     for (const dismissal of args.dismissals ?? []) {
       if (
         dismissal &&

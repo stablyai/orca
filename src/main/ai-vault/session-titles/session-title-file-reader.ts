@@ -7,6 +7,12 @@ import {
 } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 
+import {
+  codexHomeFromSessionFilePath,
+  readCodexSessionIndexTitles,
+  withCodexSessionIndexTitles
+} from '../scanners/codex/session-scanner-codex-title-index'
+
 const TITLE_PARSE_CONCURRENCY = 4
 
 export type AiVaultSessionTitleCache = {
@@ -27,6 +33,18 @@ async function readOneTitle(
     return cache?.get(request) ?? null
   }
   try {
+    const home = request.agent === 'codex' ? codexHomeFromSessionFilePath(transcriptPath) : null
+    if (home) {
+      const title = (await readCodexSessionIndexTitles(home)).get(request.sessionId)
+      if (signal?.aborted) {
+        return null
+      }
+      if (title) {
+        const resolved = { agent: request.agent, sessionId: request.sessionId, title }
+        cache?.set(resolved)
+        return resolved
+      }
+    }
     const stats = await wslGatedLstat(transcriptPath, 'scan', signal)
     if (!stats.isFile() || signal?.aborted) {
       return null
@@ -43,7 +61,10 @@ async function readOneTitle(
         },
         codexHome: null
       },
-      process.platform
+      process.platform,
+      undefined,
+      undefined,
+      signal
     )
     if (
       signal?.aborted ||
@@ -65,7 +86,14 @@ async function readOneTitle(
   }
 }
 
-export async function readAiVaultSessionTitlesFromFiles(
+export function readAiVaultSessionTitlesFromFiles(
+  requests: AiVaultSessionTitleRequest[],
+  options: { cache?: AiVaultSessionTitleCache; signal?: AbortSignal } = {}
+): Promise<AiVaultSessionTitlesResult> {
+  return withCodexSessionIndexTitles(() => readSessionTitles(requests, options))
+}
+
+async function readSessionTitles(
   requests: AiVaultSessionTitleRequest[],
   options: { cache?: AiVaultSessionTitleCache; signal?: AbortSignal } = {}
 ): Promise<AiVaultSessionTitlesResult> {

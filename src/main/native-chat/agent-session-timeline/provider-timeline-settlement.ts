@@ -72,10 +72,14 @@ export type ProviderTimelineSettlementEnding = {
 export function providerTimelineSettlement(
   journal: StructuredAgentSessionTransitionJournal,
   scope: ProviderTimelineSettlementScope,
-  ending?: ProviderTimelineSettlementEnding
+  ending?: ProviderTimelineSettlementEnding,
+  keep?: ReadonlySet<string>
 ): JournalLifecycleMutationInput[] {
   const mutations: JournalLifecycleMutationInput[] = []
   journal.visitItemsWithLinkage((itemId, _sequence, body, attribution) => {
+    if (keep?.has(itemId)) {
+      return
+    }
     const turnScope = attribution.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
     const historical = scope === 'session' && journal.item(itemId)
     if (historical && isHistoricalProviderTimelineItem(historical, (key) => journal.item(key))) {

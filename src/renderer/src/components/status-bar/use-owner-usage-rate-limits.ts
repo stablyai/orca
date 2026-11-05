@@ -107,7 +107,7 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
     }
     let active = true
     const reopen = (): void => setStreamGeneration((value) => value + 1)
-    // Why: orcad does not poll on its own, so a long-lived stream would freeze the meters.
+    // Why: older hosts never poll for a paired stream, so a long-lived one would freeze the meters.
     const staleTimer = setTimeout(reopen, REMOTE_USAGE_STALE_REOPEN_MS)
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined
     const lost = (): void => {

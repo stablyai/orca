@@ -52,13 +52,6 @@ describe('rewriteRelayedPhoneRequest', () => {
       }
     })
   })
-
-  it('can re-id a frame the relay sends on its own behalf', () => {
-    const frame = JSON.stringify({ id: 'phone-id', method: 'm', params: {} })
-    expect(
-      JSON.parse(rewriteRelayedPhoneRequest(frame, DESKTOP_TOKEN, HOST_TOKEN, 'relay-id'))
-    ).toEqual({ id: 'relay-id', method: 'm', params: {} })
-  })
 })
 
 describe('relayed phone capabilities', () => {

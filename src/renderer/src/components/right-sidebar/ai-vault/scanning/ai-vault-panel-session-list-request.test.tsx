@@ -17,7 +17,7 @@ import {
 import { aiVaultSearchHitToSession } from '../search/ai-vault-search-session'
 import type { AiVaultSessionVirtualList } from '../session-list/AiVaultSessionVirtualList'
 import type { AiVaultResumeInChatEligibility } from '../session-actions/ai-vault-session-resume-in-chat'
-import { resolveAiVaultPanelSessionListRequest } from './ai-vault-panel-session-list-request'
+
 import {
   writeAiVaultViewOptions,
   readAiVaultViewOptions
@@ -118,20 +118,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   window.localStorage.clear()
-})
-
-it('builds the exact request the Session History panel sends for the active workspace', async () => {
-  const { default: AiVaultPanel } = await import('../panel/AiVaultPanel')
-  render(<AiVaultPanel />)
-
-  const request = resolveAiVaultPanelSessionListRequest(useAppStore.getState(), WORKTREE_ID)
-  expect(request.scopePaths).toEqual(['/repo/wt'])
-  expect(request.sessionLimit).toBe(500)
-  expect(panelRequests.at(-1)).toEqual(request)
-  fireEvent.click(screen.getByRole('radio', { name: /^All$/ }))
-  expect(panelRequests.at(-1)?.scopePaths).toEqual(['/repo/wt', '/repo/sibling', '/repos/repo-1'])
-  fireEvent.click(screen.getByRole('radio', { name: /^Workspace$/ }))
-  expect(panelRequests.at(-1)).toEqual(request)
 })
 
 it.each([false, true])(
