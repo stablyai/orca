@@ -1,3 +1,4 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -14,7 +15,12 @@ export function createActiveWorkspaceTerminalActions(
   get: TerminalStoreGet
 ): Pick<TerminalSlice, 'openNewTerminalTabInActiveWorkspace'> {
   return {
-    openNewTerminalTabInActiveWorkspace: async (groupId, targetWorktreeId, executionHostId) => {
+    openNewTerminalTabInActiveWorkspace: async (
+      groupId,
+      targetWorktreeId,
+      executionHostId,
+      shellOverride
+    ) => {
       const state = get()
       const worktreeId = targetWorktreeId ?? state.activeWorktreeId
       if (!worktreeId) {
@@ -30,9 +36,14 @@ export function createActiveWorkspaceTerminalActions(
       if (worktreeRoute && worktreeRoute.kind !== 'resolved') {
         return
       }
+      const selectedHost = parseExecutionHostId(executionHostId)
       const runtimeEnvironmentId = worktreeRoute
         ? worktreeRoute.route.runtimeEnvironmentId
-        : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+        : executionHostId
+          ? selectedHost?.kind === 'runtime'
+            ? selectedHost.environmentId
+            : null
+          : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
       if (runtimeEnvironmentId) {
         const { createWebRuntimeSessionTerminal } =
           await import('@/runtime/web-runtime-terminal-creation')
@@ -41,7 +52,8 @@ export function createActiveWorkspaceTerminalActions(
             worktreeId,
             environmentId: runtimeEnvironmentId,
             targetGroupId: groupId,
-            activate: true
+            activate: true,
+            ...(shellOverride === undefined ? {} : { shell: shellOverride })
           },
           { userAct: true }
         )
@@ -53,7 +65,7 @@ export function createActiveWorkspaceTerminalActions(
       const terminal = get().createTab(
         worktreeId,
         groupId,
-        undefined,
+        shellOverride,
         executionHostId ? { executionHostId } : undefined
       )
       get().setActiveTab(terminal.id)

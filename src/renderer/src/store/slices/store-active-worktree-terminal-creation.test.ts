@@ -201,31 +201,45 @@ describe('explicit workspace terminal creation', () => {
   )
 })
 
-it('routes a captured host despite a same-id workspace on another host', async () => {
-  const store = createTestStore()
-  const id = 'repo1::/path/twin'
-  seedStore(store, {
-    worktreesByRepo: {
-      repo1: [
-        makeWorktree({ id, repoId: 'repo1', path: '/path/twin', hostId: 'local' }),
-        makeWorktree({
-          id,
-          repoId: 'repo1',
-          path: '/path/twin',
-          hostId: 'runtime:peer',
-          runtimeOwnerEnvironmentId: 'peer'
-        })
-      ]
-    },
-    activeWorktreeId: 'another-workspace',
-    activeWorkspaceExecutionHostId: 'local'
-  })
-  await store.getState().openNewTerminalTabInActiveWorkspace('menu-group', id, 'runtime:peer')
-  expect(remoteCreate).toHaveBeenCalledWith(
-    { worktreeId: id, environmentId: 'peer', targetGroupId: 'menu-group', activate: true },
-    { userAct: true }
-  )
-  expect(store.getState().tabsByWorktree[id] ?? []).toEqual([])
-  await store.getState().openNewTerminalTabInActiveWorkspace('menu-group', id, 'local')
-  expect(store.getState().unifiedTabsByWorktree[id]?.[0]?.executionHostId).toBe('local')
-})
+it.each([undefined, 'pwsh.exe'])(
+  'routes a captured host and shell despite another active host (%s)',
+  async (shellOverride) => {
+    const store = createTestStore()
+    const id = 'repo1::/path/twin'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id, repoId: 'repo1', path: '/path/twin', hostId: 'local' }),
+          makeWorktree({
+            id,
+            repoId: 'repo1',
+            path: '/path/twin',
+            hostId: 'runtime:peer',
+            runtimeOwnerEnvironmentId: 'peer'
+          })
+        ]
+      },
+      activeWorktreeId: 'another-workspace',
+      activeWorkspaceExecutionHostId: 'local'
+    })
+    await store
+      .getState()
+      .openNewTerminalTabInActiveWorkspace('menu-group', id, 'runtime:peer', shellOverride)
+    expect(remoteCreate).toHaveBeenCalledWith(
+      {
+        worktreeId: id,
+        environmentId: 'peer',
+        targetGroupId: 'menu-group',
+        activate: true,
+        ...(shellOverride === undefined ? {} : { shell: 'pwsh.exe' })
+      },
+      { userAct: true }
+    )
+    expect(store.getState().tabsByWorktree[id] ?? []).toEqual([])
+    await store
+      .getState()
+      .openNewTerminalTabInActiveWorkspace('menu-group', id, 'local', shellOverride)
+    expect(store.getState().unifiedTabsByWorktree[id]?.[0]?.executionHostId).toBe('local')
+    expect(store.getState().tabsByWorktree[id]?.[0]?.shellOverride).toBe(shellOverride)
+  }
+)

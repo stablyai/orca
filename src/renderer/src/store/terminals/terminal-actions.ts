@@ -101,7 +101,8 @@ export type TerminalActions = {
   openNewTerminalTabInActiveWorkspace: (
     groupId: string,
     worktreeId?: string,
-    executionHostId?: ExecutionHostId
+    executionHostId?: ExecutionHostId,
+    shellOverride?: string
   ) => Promise<void>
   /** Synchronous retirement: provider teardown starts before state removal but is never awaited. */
   closeTab: (

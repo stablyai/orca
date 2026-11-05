@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useShallow } from 'zustand/react/shallow'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -19,10 +20,12 @@ const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: NonNullable<
 
 export function useTabGroupWorkspaceModel({
   groupId,
-  worktreeId
+  worktreeId,
+  executionHostId
 }: {
   groupId: string
   worktreeId: string
+  executionHostId?: ExecutionHostId
 }) {
   const worktreeState = useAppStore(
     useShallow((state) => ({
@@ -74,7 +77,12 @@ export function useTabGroupWorkspaceModel({
     activateAgentSession
   } = useTabGroupActivationCommands({ groupId, worktreeId, groupTabs, worktreeState })
 
-  const creationCommands = useTabGroupCreationCommands({ groupId, worktreeId, worktreeState })
+  const creationCommands = useTabGroupCreationCommands({
+    groupId,
+    worktreeId,
+    worktreeState,
+    executionHostId
+  })
 
   return {
     group,

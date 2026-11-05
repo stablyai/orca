@@ -109,7 +109,7 @@ function WorktreeCreateMenu({
     track(() =>
       useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId, worktreeId)
     )
-  const model = useTabGroupWorkspaceModel({ worktreeId, groupId })
+  const model = useTabGroupWorkspaceModel({ worktreeId, groupId, executionHostId })
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId, executionHostId })
   const { commands } = model
   const activeTabId = model.activeTab?.entityId ?? null

@@ -153,7 +153,7 @@
 1 src/renderer/src/components/status-bar/use-workspace-space-manager-panel.ts
 1 src/renderer/src/components/status-bar/workspace-space-decision-details.ts
 1 src/renderer/src/components/tab-bar/web-runtime-tab-move-mirror.ts
-3 src/renderer/src/components/tab-group/useTabGroupCreationCommands.ts
+2 src/renderer/src/components/tab-group/useTabGroupCreationCommands.ts
 1 src/renderer/src/components/task-page/jira/task-page-jira-status-order.ts
 2 src/renderer/src/components/task-page/jira/IssueAssigneeField.tsx
 1 src/renderer/src/components/task-page/linear/Filters.tsx
