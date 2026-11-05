@@ -11,7 +11,7 @@ import {
 } from '../../../shared/plugins/catalog/plugin-catalog'
 import { formatPluginSchemaIssues } from '../../../shared/plugins/manifest/plugin-schema-issues'
 import { gitExecFileAsyncBuffer } from '../../git/runner'
-import { extractCatalogImages } from './plugin-catalog-image-extraction'
+import { extractCatalogImages, type CatalogBlobReader } from './plugin-catalog-image-extraction'
 import { fillMonorepoReleaseImages } from './plugin-catalog-monorepo-images'
 import { readPluginGitCommit } from '../installation/plugin-git-repository'
 import { readPluginGitBatchBlobs, type PluginGitTreeEntry } from '../installation/plugin-git-tree'
@@ -21,6 +21,7 @@ const MARKETPLACE_INDEX_MAX_BYTES = 16 * 1024 * 1024
 // Why its own cap: a catalog repository may hold far more than one plugin, and only its index is read.
 const MARKETPLACE_DOWNLOAD_MAX_BYTES = 512 * 1024 * 1024
 const MARKETPLACE_GIT_TIMEOUT_MS = 120_000
+const CATALOG_BLOB_CACHE_MAX_BYTES = 64 * 1024 * 1024
 
 export type PluginMarketplaceFetchResult = {
   marketplaceCommit: string
@@ -79,6 +80,26 @@ async function readMarketplaceAtCommit(
     maxBuffer: MARKETPLACE_INDEX_MAX_BYTES
   })
   const index = parsePluginMarketplaceIndex(filename, bytes.stdout)
+  const batched = await extractBatchedMarketplaceImages(index, repository, commit, catalogUrl)
+  if (batched) {
+    return batched
+  }
+  const readBlob: CatalogBlobReader = async (path, maxBytes) => {
+    const files = new Map<string, CatalogFile>()
+    await loadCatalogFiles(repository, commit, new Map([[path, maxBytes]]), files)
+    return files.get(path)?.bytes ?? null
+  }
+  return extractCatalogImages(index, readBlob, (entry, read) =>
+    fillMonorepoReleaseImages(entry, catalogUrl, read)
+  )
+}
+
+async function extractBatchedMarketplaceImages(
+  index: PluginMarketplace,
+  repository: string,
+  commit: string,
+  catalogUrl: string
+): Promise<{ marketplace: PluginMarketplace; images: Buffer[] } | null> {
   const files = new Map<string, CatalogFile>()
   // Rerun extraction until every file it asks for is loaded, so each round's misses share two Git calls.
   for (;;) {
@@ -97,7 +118,9 @@ async function readMarketplaceAtCommit(
     if (missing.size === 0) {
       return extracted
     }
-    await loadCatalogFiles(repository, commit, missing, files)
+    if (!(await loadCatalogFiles(repository, commit, missing, files))) {
+      return null
+    }
   }
 }
 
@@ -113,8 +136,13 @@ async function loadCatalogFiles(
   commit: string,
   requests: ReadonlyMap<string, number>,
   files: Map<string, CatalogFile>
-): Promise<void> {
+): Promise<boolean> {
   const options = { cwd: repository, timeout: MARKETPLACE_GIT_TIMEOUT_MS }
+  const reads: Extract<PluginGitTreeEntry, { kind: 'blob' }>[] = []
+  let cachedBytes = 0
+  for (const file of files.values()) {
+    cachedBytes += file?.bytes?.byteLength ?? 0
+  }
   for (const chunk of chunkByLength([...requests.keys()], LS_TREE_PATH_CHUNK_CHARS)) {
     try {
       const listing = await gitExecFileAsyncBuffer(
@@ -131,10 +159,14 @@ async function loadCatalogFiles(
           listed.set(match[3]!, { object: match[1]!, size: Number(match[2]) })
         }
       }
-      const reads: Extract<PluginGitTreeEntry, { kind: 'blob' }>[] = []
       for (const path of chunk) {
         const found = listed.get(gitTreePath(path))
         if (found && found.size <= requests.get(path)!) {
+          cachedBytes += found.size
+          if (cachedBytes > CATALOG_BLOB_CACHE_MAX_BYTES) {
+            // Fall back before reading this round; extraction's own budget controls sequential reads.
+            return false
+          }
           reads.push({
             kind: 'blob',
             path,
@@ -146,26 +178,32 @@ async function loadCatalogFiles(
           files.set(path, found ? { size: found.size, bytes: null } : null)
         }
       }
-      if (reads.length === 0) {
-        continue
-      }
-      const objects = [...new Map(reads.map((read) => [read.object, read])).values()]
-      const batch = await gitExecFileAsyncBuffer(['cat-file', '--batch'], {
-        ...options,
-        stdin: objects.map((read) => `${read.object}\n`).join(''),
-        maxBuffer: objects.reduce((total, read) => total + read.size + 128, 0)
-      })
-      const contents = readPluginGitBatchBlobs(batch.stdout, objects)
-      for (const read of reads) {
-        files.set(read.path, { size: read.size, bytes: contents.get(read.object) ?? null })
-      }
     } catch {
-      // A failed read leaves the file out, as a missing one is.
       for (const path of chunk) {
         files.set(path, null)
       }
     }
   }
+  if (reads.length === 0) {
+    return true
+  }
+  try {
+    const objects = [...new Map(reads.map((read) => [read.object, read])).values()]
+    const batch = await gitExecFileAsyncBuffer(['cat-file', '--batch'], {
+      ...options,
+      stdin: objects.map((read) => `${read.object}\n`).join(''),
+      maxBuffer: objects.reduce((total, read) => total + read.size + 128, 0)
+    })
+    const contents = readPluginGitBatchBlobs(batch.stdout, objects)
+    for (const read of reads) {
+      files.set(read.path, { size: read.size, bytes: contents.get(read.object) ?? null })
+    }
+  } catch {
+    for (const read of reads) {
+      files.set(read.path, null)
+    }
+  }
+  return true
 }
 
 function chunkByLength(paths: string[], maxChars: number): string[][] {
