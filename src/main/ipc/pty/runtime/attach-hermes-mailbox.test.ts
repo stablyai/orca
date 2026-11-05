@@ -99,6 +99,8 @@ describe('mail to a Hermes terminal attached without a renderer', () => {
         expect(ptySizes.get(PTY_ID)).toEqual({ cols: 120, rows: 40 })
         await runtime.serializeMainTerminalBuffer(PTY_ID)
         runtime.onPtyData(PTY_ID, '\x1b]0;Hermes ready\x07', Date.now())
+        await vi.advanceTimersByTimeAsync(0)
+        expect(runtime['ptysById'].get(PTY_ID)?.lastAgentStatus).toBe('idle')
         runtime.notifyMessageArrived(mailbox, 'status')
         await vi.advanceTimersByTimeAsync(1000)
 
@@ -134,10 +136,19 @@ describe('mail to a Hermes terminal attached without a renderer', () => {
       }
     } as unknown as IPtyProvider
     setLocalPtyProvider(provider)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach needs only the optional delivery callbacks.
-    const deps = {} as unknown as PtyRuntimeControllerDeps
-    expect(await attachPtyFromRuntimeController(deps, PTY_ID)).toBe(true)
-    expect(ptySizes.get(PTY_ID)).toEqual({ cols: 140, rows: 48 })
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const { runtime } = createRuntime(db, { headless: true, launchAgent: 'hermes' })
+      const reflow = vi.spyOn(runtime, 'reflowHeadlessTerminalToPtyGrid')
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach needs only runtime; its delivery callbacks are optional.
+      const deps = { runtime } as unknown as PtyRuntimeControllerDeps
+      expect(await attachPtyFromRuntimeController(deps, PTY_ID)).toBe(true)
+      expect(ptySizes.get(PTY_ID)).toEqual({ cols: 140, rows: 48 })
+      expect(reflow).toHaveBeenCalledWith(PTY_ID, 140, 48)
+      expect(reflow).not.toHaveBeenCalledWith(PTY_ID, 120, 40)
+    } finally {
+      db.close()
+    }
   })
 
   it('keeps a resize that returns to the pre-attach dimensions', async () => {
