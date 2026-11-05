@@ -1,4 +1,4 @@
-import { createClaudeStructuredLaunchResolver } from '../../../runtime/structured-agent-launch-composition.test-support'
+import { createClaudeStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
@@ -15,8 +15,8 @@ import {
   type ClaudeProfileRouterSettings
 } from '../../../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
-import { resolveStructuredClaudeAccountHomePath } from '../../../runtime/structured-agent-account-home'
-import { structuredAgentRuntimeMetadata } from '../../../runtime/structured-agent-runtime-metadata'
+import { resolveStructuredClaudeAccountHomePath } from '../../../runtime/agent-session/environment/structured-agent-account-home'
+import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 
 const roots: string[] = []
 afterEach(() => {

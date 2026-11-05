@@ -18,6 +18,22 @@ export function isFileExplorerNodeReadOnly(
   return isFileExplorerPathReadOnly(node.path, worktreePath, outsideWorkspaceRoot)
 }
 
+/** Dragging a selected row moves the whole selection, so one read-only path blocks it. */
+export function isFileExplorerSelectionDragBlocked(
+  nodePath: string,
+  selectedPaths: ReadonlySet<string>,
+  worktreePath: string | null,
+  outsideWorkspaceRoot: boolean
+): boolean {
+  return (
+    selectedPaths.has(nodePath) &&
+    selectedPaths.size > 1 &&
+    [...selectedPaths].some((path) =>
+      isFileExplorerPathReadOnly(path, worktreePath, outsideWorkspaceRoot)
+    )
+  )
+}
+
 export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boolean): boolean {
   return node.isDirectory && isExpanded
 }

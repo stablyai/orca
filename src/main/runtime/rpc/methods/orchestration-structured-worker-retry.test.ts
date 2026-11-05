@@ -15,7 +15,7 @@ import {
 } from './orchestration-structured-worker-session'
 import { deliverWorkerDispatchPreamble } from './orchestration/worker/deliver-worker-dispatch-preamble'
 import { tearDownFailedWorkerStart } from './orchestration/worker/failed-worker-start-teardown'
-import { structuredWorkerIdentities } from '../../structured-worker-identity'
+import { structuredWorkerIdentities } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { rpcContext, runtimeStub } from './agent-launch.test-fixture'
 
 let rig: RestTestRig

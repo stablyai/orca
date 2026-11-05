@@ -15,6 +15,8 @@ import { PluginVmRecipeRegistry } from '../plugin-vm-recipe-registry'
 import { PluginCommandRegistry } from '../plugin-command-registry'
 import { verifyDeclarativePluginContent } from '../plugin-declarative-content-integrity'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
+import type { PluginAppearanceService } from '../appearance/plugin-appearance-service'
+import type { PluginServiceOptions } from '../plugin-service-options'
 
 type ContentFamily = {
   reconcile: (
@@ -37,11 +39,15 @@ export class PluginContentPackRegistry {
   constructor(
     contentVerifier: PluginContentVerifier,
     /** No caller predicate may readmit revoked contributions. */
-    private readonly isKilled: (pluginKey: string) => boolean
+    private readonly isKilled: (pluginKey: string) => boolean,
+    private readonly appearance?: PluginAppearanceService | null
   ) {
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
-    this.themes = createPluginThemeRegistry(contentVerifier)
-    this.terminalThemes = createPluginTerminalThemeRegistry(contentVerifier)
+    this.themes = createPluginThemeRegistry(contentVerifier, appearance?.overlayAppThemes)
+    this.terminalThemes = createPluginTerminalThemeRegistry(
+      contentVerifier,
+      appearance?.overlayTerminalThemes
+    )
     this.iconThemes = new PluginIconThemeRegistry(contentVerifier)
     this.syntaxes = new PluginSyntaxRegistry(contentVerifier)
     this.vmRecipes = new PluginVmRecipeRegistry()
@@ -53,6 +59,7 @@ export class PluginContentPackRegistry {
     isApproved: (plugin: ValidDiscoveredPlugin) => boolean,
     keybindings: KeybindingOverrides = {}
   ): Promise<void> {
+    this.appearance?.reconcile(discovered)
     const approvedKeys = new Set(
       discovered
         .filter((plugin): plugin is ValidDiscoveredPlugin => !isInvalidDiscoveredPlugin(plugin))
@@ -138,4 +145,15 @@ export class PluginContentPackRegistry {
       }
     ]
   }
+}
+
+export function createPluginContentPacks(
+  contentVerifier: PluginContentVerifier,
+  options: PluginServiceOptions
+): PluginContentPackRegistry {
+  return new PluginContentPackRegistry(
+    contentVerifier,
+    (key) => Boolean(options.getPluginKillListEntry?.(key)),
+    options.appearance
+  )
 }

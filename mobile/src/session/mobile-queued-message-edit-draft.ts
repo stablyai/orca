@@ -19,7 +19,8 @@ import type { MobileQueuedEditLease } from './mobile-queued-message-edit-lease'
 import { pickedSkillsInText } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   queuedEditKeptImages,
-  queuedEditTextForKeptImages
+  queuedEditTextForKeptImages,
+  type QueuedMessageImageBlock
 } from '../../../src/shared/queued-message-edit'
 import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
 import {
@@ -192,12 +193,16 @@ export function seedMobileQueuedEditInputs(
   updateMobileNativeChatDraftInputs(scopeKey, () => ({
     skills: body.skills ?? [],
     files: [],
-    images: queuedEditKeptImages(body).map(({ id, block }) => ({
-      id,
-      path: block.path ?? block.url ?? '',
-      previewUri: block.url ?? block.path ?? ''
-    }))
+    images: queuedEditKeptImages(body).map(({ id, block }) => mobileDraftImageOfBlock(id, block))
   }))
+}
+
+/** A sent image as a composer chip: the host path sends it, the URL (when any) previews it. */
+export function mobileDraftImageOfBlock(
+  id: string,
+  block: QueuedMessageImageBlock
+): MobileNativeChatDraftInputs['images'][number] {
+  return { id, path: block.path ?? block.url ?? '', previewUri: block.url ?? block.path ?? '' }
 }
 
 // A handed-back edit takes the dictation in the composer it went back to.

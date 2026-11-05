@@ -65,7 +65,7 @@ export function TerminalTitlebarTabs({
       activeTabId={activeTabId}
       worktreeId={renderedActiveWorktreeId}
       onActivate={handleActivateTab}
-      onClose={handleCloseTab}
+      onClose={(tabId) => handleCloseTab(tabId, 'user')}
       onCloseOthers={handleCloseOthers}
       onCloseToRight={handleCloseTabsToRight}
       onCloseToLeft={handleCloseTabsToLeft}

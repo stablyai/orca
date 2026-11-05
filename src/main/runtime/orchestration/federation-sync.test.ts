@@ -1,3 +1,4 @@
+import { serializeRemoteRuntimeRpcRequest } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
@@ -699,4 +700,97 @@ describe('federation relay acknowledgments', () => {
 
     expect(ackCalls()).toHaveLength(1)
   })
+})
+
+describe('bounded outgoing answer relay', () => {
+  it.each(['drain', 'ahead', 'no-progress', 'superseded'] as const)(
+    'keeps canonical bytes and obeys durable ACK on %s',
+    async (mode) => {
+      const harness = createIdleSyncHarness(0)
+      const db = harness.runtime.getOrchestrationDb()
+      const payload = JSON.stringify({ body: '\u0001'.repeat(10000) })
+      const items = Array.from({ length: 16 }, (_, i) => ({
+        dispatch_id: 'dispatch_remote',
+        direction: 'to_worker' as const,
+        sequence: i + 1,
+        message_id: `m${i}`,
+        kind: 'control_message',
+        payload,
+        byte_count: Buffer.byteLength(payload),
+        created_at: '',
+        acked_at: null,
+        answer_sender_report: JSON.stringify({ version: 1, name: 'Known A', agent: 'codex' })
+      }))
+      let pending = items
+      db.listPendingFederationRelay = () => pending
+      const acknowledgments: number[] = []
+      db.acknowledgeFederationRelay = ({ throughSequence }) => {
+        acknowledgments.push(throughSequence)
+        pending = pending.filter((item) => item.sequence > throughSequence)
+      }
+      const calls: number[][] = []
+      let measurements = 0
+      let current = true
+      const original = harness.remoteCall.getMockImplementation()!
+      harness.remoteCall.mockImplementation(async (...args) => {
+        if (args[1] !== 'orchestration.federationImport') {
+          return original(...args)
+        }
+        const envelope = args[4]
+        const prepare = args[5]?.prepareRequest
+        if (!prepare) {
+          throw new Error('missing actual transport preparation')
+        }
+        const serialize = (params: unknown, selectedEnvelope: typeof envelope) =>
+          serializeRemoteRuntimeRpcRequest({
+            requestId: '12345678-1234-1234-1234-123456789012',
+            deviceToken: 'x'.repeat(65536),
+            method: args[1],
+            params,
+            envelope: selectedEnvelope
+          })
+        const selected = prepare({
+          params: args[2],
+          envelope,
+          measure: (params, selectedEnvelope) => {
+            measurements++
+            return Buffer.byteLength(serialize(params, selectedEnvelope))
+          }
+        })
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real prefix preparer returns the supplied relay items unchanged.
+        const sent = selected.params as { items: typeof items }
+        expect(
+          Buffer.byteLength(serialize(selected.params, selected.envelope))
+        ).toBeLessThanOrEqual(786304)
+        expect(sent.items.every((item) => item.payload === payload)).toBe(true)
+        expect(selected.envelope?.orchestrationRequestId).toBe(
+          `relay_import_dispatch_remote_${sent.items.at(-1)!.sequence}`
+        )
+        calls.push(sent.items.map((item) => item.sequence))
+        if (mode === 'superseded') {
+          current = false
+        }
+        return {
+          acknowledgedThrough:
+            mode === 'ahead' ? 16 : mode === 'no-progress' ? 0 : sent.items.at(-1)!.sequence
+        }
+      })
+      await syncFederatedDispatch(harness.runtime, 'dispatch_remote', () => current)
+      expect(calls[0].length).toBeLessThan(16)
+      expect(measurements).toBeLessThanOrEqual(calls.length * 6)
+      if (mode === 'drain') {
+        expect(calls.flat()).toEqual(Array.from({ length: 16 }, (_, i) => i + 1))
+        expect(pending).toEqual([])
+      }
+      if (mode === 'ahead') {
+        expect(calls).toHaveLength(1)
+        expect(acknowledgments).toEqual([16])
+      }
+      if (mode === 'no-progress' || mode === 'superseded') {
+        expect(calls).toHaveLength(1)
+        expect(acknowledgments).toEqual([])
+        expect(pending).toHaveLength(16)
+      }
+    }
+  )
 })

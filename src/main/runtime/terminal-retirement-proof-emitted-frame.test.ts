@@ -4,10 +4,12 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { store, TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
-const { committingSpawn } = await import('./bind-first-pane.test-fixture')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { store, TEST_WORKTREE_ID } =
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./orca-runtime-tests/bind-first-pane.test-fixture')
 
 const retired = {
   parentTabId: 'tab',

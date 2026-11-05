@@ -21,12 +21,12 @@ import {
 } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { migrateLegacyNativeChatVisualsFolders } from '../../native-chat/native-chat-scratch-folder-migration'
 
-import type { StructuredAgentSessionRuntimeDeps } from '../structured-agent-session-runtime-contract'
+import type { StructuredAgentSessionRuntimeDeps } from './installation/structured-agent-session-runtime-contract'
 
 import {
   ensureStructuredAgentModelCatalogOwner,
   stopStructuredAgentModelCatalogOwner
-} from '../structured-agent-model-catalog-wiring'
+} from './model-catalog/structured-agent-model-catalog-wiring'
 
 let installing: Promise<InstalledRuntime> | null = null
 
@@ -145,6 +145,6 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   }
   // Before the host serves reads: a chat opened right after an update finds its visuals in place.
   await migrateLegacyNativeChatVisualsFolders(deps.stateDirectory, logger)
-  const { installOnJournal } = await import('../structured-agent-session-host-assembly')
+  const { installOnJournal } = await import('./installation/structured-agent-session-host-assembly')
   return await installOnJournal({ ...deps, logger }, recordStore, catalogOwner)
 }

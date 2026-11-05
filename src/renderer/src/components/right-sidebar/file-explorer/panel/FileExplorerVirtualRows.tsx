@@ -13,7 +13,7 @@ import { getFileExplorerOperationExecutionHostId } from '../navigation/file-expl
 import type { WorkspaceFileDragSource } from '@/lib/workspace-file-drag'
 import {
   isFileExplorerNodeReadOnly,
-  isFileExplorerPathReadOnly
+  isFileExplorerSelectionDragBlocked
 } from './file-explorer-row-action-visibility'
 
 type FileExplorerVirtualRowsProps = {
@@ -202,12 +202,12 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
 
         const n = node!
         const nodeReadOnly = isFileExplorerNodeReadOnly(n, worktreePath, readOnly)
-        const dragDisabled =
-          selectedPaths.has(n.path) &&
-          selectedPaths.size > 1 &&
-          [...selectedPaths].some((path) =>
-            isFileExplorerPathReadOnly(path, worktreePath, readOnly)
-          )
+        const dragDisabled = isFileExplorerSelectionDragBlocked(
+          n.path,
+          selectedPaths,
+          worktreePath,
+          readOnly
+        )
         // Paths are already normalized at construction; avoid two redundant regexes per row render.
         const normalizedRelativePath = n.relativePath
         const nodeStatus = n.isDirectory

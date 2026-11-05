@@ -6,6 +6,7 @@ import { NativeChatToolLine } from './NativeChatToolLine'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { createNativeChatFileHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import type { NativeChatEditFile } from '../../../../shared/native-chat/tools/native-chat-edit-model'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
 afterEach(cleanup)
 
@@ -21,15 +22,21 @@ const editFile = (overrides: Partial<NativeChatEditFile>): NativeChatEditFile =>
   ...overrides
 })
 
+function withLinks(ui: React.ReactElement, onLinkClick: () => void): React.ReactElement {
+  return <NativeChatLinkClickContext value={onLinkClick}>{ui}</NativeChatLinkClickContext>
+}
+
 describe('tool row file targets', () => {
   it('opens a read file in Orca without toggling the row', () => {
     const onLinkClick = vi.fn()
     render(
-      <NativeChatToolLine
-        block={{ type: 'tool-call', name: 'Read', input: { file_path: '/repo/src/main.ts' } }}
-        result={{ type: 'tool-result', output: 'contents' }}
-        onLinkClick={onLinkClick}
-      />
+      withLinks(
+        <NativeChatToolLine
+          block={{ type: 'tool-call', name: 'Read', input: { file_path: '/repo/src/main.ts' } }}
+          result={{ type: 'tool-result', output: 'contents' }}
+        />,
+        onLinkClick
+      )
     )
     const link = screen.getByRole('link', { name: '/repo/src/main.ts' })
     expect(link).toHaveTextContent('main.ts')
@@ -45,10 +52,12 @@ describe('tool row file targets', () => {
   it('opens from the keyboard', () => {
     const onLinkClick = vi.fn()
     render(
-      <NativeChatToolLine
-        block={{ type: 'tool-call', name: 'Write', input: { file_path: 'new.ts', content: 'a' } }}
-        onLinkClick={onLinkClick}
-      />
+      withLinks(
+        <NativeChatToolLine
+          block={{ type: 'tool-call', name: 'Write', input: { file_path: 'new.ts', content: 'a' } }}
+        />,
+        onLinkClick
+      )
     )
     fireEvent.keyDown(screen.getByRole('link'), { key: 'Enter' })
     expect(onLinkClick).toHaveBeenCalledWith(
@@ -66,17 +75,19 @@ describe('tool row file targets', () => {
     expect(screen.queryByRole('link')).toBeNull()
     cleanup()
     render(
-      <NativeChatToolLine
-        block={{ type: 'tool-call', name: 'Grep', input: { pattern: 'TODO', path: '/repo' } }}
-        onLinkClick={vi.fn()}
-      />
+      withLinks(
+        <NativeChatToolLine
+          block={{ type: 'tool-call', name: 'Grep', input: { pattern: 'TODO', path: '/repo' } }}
+        />,
+        vi.fn()
+      )
     )
     expect(screen.queryByRole('link')).toBeNull()
   })
 
   it('opens an edited file from its diff card without expanding the card', () => {
     const onLinkClick = vi.fn()
-    render(<NativeChatDiffCard file={editFile({})} onLinkClick={onLinkClick} />)
+    render(withLinks(<NativeChatDiffCard file={editFile({})} />, onLinkClick))
     fireEvent.click(screen.getByRole('link', { name: 'src/main.ts' }))
     expect(onLinkClick).toHaveBeenCalledWith(
       expect.anything(),
@@ -87,18 +98,20 @@ describe('tool row file targets', () => {
 
   it('opens the new name of a renamed file, and nothing for a deleted one', () => {
     render(
-      <NativeChatDiffCard
-        file={editFile({ changeKind: 'renamed', oldPath: 'old.ts', path: 'new.ts' })}
-        onLinkClick={vi.fn()}
-      />
+      withLinks(
+        <NativeChatDiffCard
+          file={editFile({ changeKind: 'renamed', oldPath: 'old.ts', path: 'new.ts' })}
+        />,
+        vi.fn()
+      )
     )
     expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual(['new.ts'])
     cleanup()
     render(
-      <NativeChatDiffCard
-        file={editFile({ changeKind: 'deleted', lines: [] })}
-        onLinkClick={vi.fn()}
-      />
+      withLinks(
+        <NativeChatDiffCard file={editFile({ changeKind: 'deleted', lines: [] })} />,
+        vi.fn()
+      )
     )
     expect(screen.queryByRole('link')).toBeNull()
   })

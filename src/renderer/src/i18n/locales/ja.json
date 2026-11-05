@@ -3214,7 +3214,6 @@
             "e8b3741ff7": "無視済み",
             "a9957007eb": "{{value0}} を無視する",
             "bef0adef9b": "ブランチ",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}} を選択",
             "b771c92598": "選択したものを削除",
             "7eee951968": "作業場の安全性の確認",
@@ -3223,7 +3222,6 @@
             "b2c1331844": "非アクティブなワークスペースの削除",
             "7f451a3e2c": "クリーンアップの提案を無視できませんでした",
             "662b8ec3f8": "ワークスペースのクリーンアップスキャンに失敗しました",
-            "4d0b72481c": "無視",
             "9cc26c019d": "削除",
             "0e2d235c63": "非アクティブなワークスペースのスキャン準備完了",
             "4a35c08764": "レビュー",
@@ -3231,9 +3229,6 @@
             "1d3503357d": "削除の続行中にこれを閉じて後で戻れます。",
             "4c2990886e": "{{value0}}/{{value1}} 件を削除済み",
             "86ba852118": "{{value0}}、{{value1}} 件が失敗",
-            "deletingCount": "削除中のワークスペース: {{value0}}",
-            "deleteCount": "ワークスペースを削除しますか: {{value0}}?",
-            "selectedForDeletionCount": "削除対象として選択済み: {{value0}}",
             "deleteButtonCount": "{{value0}} を削除",
             "archivedStatus": "アーカイブ済み",
             "74f6c16279": "戻る"
@@ -3248,7 +3243,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "コミット",
             "contextLabel": "コンテキスト",
             "flagsLabel": "フラグ",
             "collapseDetails": "詳細を折りたたむ",
@@ -5402,8 +5396,6 @@
           "expandAriaLabel": "{{repo}} の非表示のワークツリー一覧を展開",
           "hiding_one": "{{count}} 件のワークツリーを非表示中",
           "hiding_other": "{{count}} 件のワークツリーを非表示中",
-          "hidingInRepo_one": "{{repo}} の {{count}} 件のワークツリーを非表示中",
-          "hidingInRepo_other": "{{repo}} の {{count}} 件のワークツリーを非表示中",
           "keepHiddenAriaLabel_one": "{{repo}} で検出されたワークツリー {{count}} 件を非表示のままにする（プロジェクトメニューから再表示できます）",
           "keepHiddenAriaLabel_other": "{{repo}} で検出されたワークツリー {{count}} 件を非表示のままにする（プロジェクトメニューから再表示できます）",
           "keepHiddenTooltip": "非表示のままにする（プロジェクトメニューから再表示できます）",
@@ -14857,8 +14849,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例: ollama run llama3.1 {{value0}}",
             "9ee54037a4": "カスタムコマンド",
-            "4b2fc4b80c": "考える努力",
-            "be8917699e": "モデル",
             "560d4feb00": "カスタム",
             "29d119fe95": "Agent",
             "f9382b48a1": "AI 著者を有効にする",
@@ -18952,8 +18942,6 @@
       },
       "turnDiff": {
         "partial": "部分的な差分",
-        "showDiff": "差分を表示",
-        "hideDiff": "差分を非表示",
         "changedFiles_other": "変更されたファイル {{count}} 個"
       },
       "receipt": {
@@ -19443,9 +19431,7 @@
         "browse": {
           "noSizes": "ワークスペースのサイズはまだ測定されていません。",
           "noSizesDescription": "サイズは、ディスク使用量が測定された後に表示されます。",
-          "measureSizes": "スキャン",
           "measureSizesTitle": "スキャンワークスペースのサイズ",
-          "measureSizesDescription": "ディスク使用量をスキャンして、サイズ別にワークスペースを比較、並べ替え、フィルター処理します。",
           "sizeOnDisk": "ディスク上のサイズ: {{value0}}",
           "checkingGitRow": "gitのステータスを確認する",
           "searchPlaceholder": "名前、リポジトリ、ブランチ、パス、ホストを検索します",
@@ -19955,7 +19941,10 @@
       "workerAutoClose": {
         "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
         "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
-        "keepOpen": "開いたままにする"
+        "keepOpen": "開いたままにする",
+        "bannerRunning": "オーケストレーションワーカー · 完了の2分後に閉じます",
+        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
+        "temporaryBadge": "一時的"
       }
     },
     "wslHostMark": {
@@ -20555,10 +20544,8 @@
       "offTerminal": "ターミナルのほうが好みですか？ターミナルは引き続き完全にサポートされます。チャットを選ぶまで、Agent はこれまでどおりターミナルで開きます。",
       "onIntro": "チャット UI は実験的機能を卒業し、Orca の標準機能になりました。Agent はこれまでどおりチャットとして開き、リッチなメッセージ、ビジュアル、画像を表示できます。",
       "onTerminal": "ターミナルも引き続き完全にサポートされます。どの Agent もいつでもターミナルに戻せます。",
-      "changeInSettings": "<link>設定 → Agent</link> でいつでも変更できます。",
       "stayInTerminal": "ターミナルのまま使う",
       "cta": "チャット UI を使う",
-      "saveFailed": "チャット UI をオンにできませんでした。設定 → Agent でチャットを選んでください。",
       "demoTabTitle": "ログインの説明",
       "demoPrompt": "ログインの仕組みを図にして",
       "demoReply": "ログインは {{file}} から始まります。ブラウザが /login に送信し、サーバーがパスワードを確認してセッションを作成し、アプリにリダイレクトします。流れは次のとおりです:",

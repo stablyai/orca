@@ -4,7 +4,7 @@ import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import { resolveStructuredEnvAccountHomePath } from '../runtime/structured-agent-account-home'
+import { resolveStructuredEnvAccountHomePath } from '../runtime/agent-session/environment/structured-agent-account-home'
 
 type AccountPin = { accountHomeVariable: string } | { accountLocatorKind: 'opencode' }
 
