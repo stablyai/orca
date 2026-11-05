@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
 import { MobileNativeChatForkedFromContext } from './mobile-native-chat-notice-context'
@@ -8,20 +8,17 @@ import {
   useMobileNativeChatFork
 } from './native-chat/use-mobile-native-chat-fork'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
-import { useMobileForkSourceNavigation } from './use-mobile-fork-source-navigation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 /** The chat's "Fork from this response" and the chat a "Forked from" divider opens. */
 export function MobileNativeChatForkProvider({
   controller,
-  navigate,
   children
 }: {
   controller: MobileSessionController
-  navigate: (worktreeId: string, paneKey: string) => void
   children: React.ReactNode
 }): React.JSX.Element {
-  const { client, nativeChatController: chat } = controller
+  const { client, nativeChatController: chat, openNativeSession, worktreeId } = controller
   // The controller is rebuilt each render; a fork reads its session state at the press.
   const latestController = useRef(controller)
   useLayoutEffect(() => {
@@ -43,11 +40,17 @@ export function MobileNativeChatForkProvider({
     sessionForkSupport: chat.nativeChatForkSupport,
     createFork
   })
-  const openSource = useMobileForkSourceNavigation(
-    client,
-    navigate,
-    controller.showToast,
-    controller.worktreeId
+  // A fork and its source share a workspace and host.
+  const openSource = useMemo(
+    () =>
+      client
+        ? (sourceSessionId: string) =>
+            void openNativeSession({
+              kind: 'history',
+              structuredSession: { sessionId: sourceSessionId, workspaceId: worktreeId }
+            })
+        : undefined,
+    [client, openNativeSession, worktreeId]
   )
   return (
     <MobileNativeChatForkContext.Provider value={fork}>
