@@ -9,6 +9,7 @@ import type {
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
@@ -33,7 +34,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   /** Sends now, restarts a failed start with the message, or refuses while the chat starts. */
   sendThroughLaunch: (
     text: string,
-    withImages: boolean,
+    requiresSession: boolean,
     send: () => boolean | 'queued'
   ) => boolean | 'queued'
   starting: boolean
@@ -58,26 +59,34 @@ export function useNativeChatStructuredComposerTransport(args: {
   )
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
-    const setThreadGoalObjective = threadGoal?.hostChanges
-      ? (objective: string) =>
-          sendBlockedReason === null
-            ? threadGoal.change({ kind: 'set', objective })
+    // A held host takes no turn; pausing or clearing a goal starts none.
+    const changeThreadGoal = threadGoal?.hostChanges
+      ? (change: AgentSessionThreadGoalChange) =>
+          sendBlockedReason === null ||
+          change.kind === 'clear' ||
+          (change.kind === 'status' && change.status === 'paused')
+            ? threadGoal.change(change)
             : Promise.resolve(false)
       : null
     return {
       capturePresentation: controller.capturePresentation,
       send: (text, attachments, ...request) =>
         sendBlockedReason === null &&
-        sendThroughLaunch(text, attachments.length > 0, () =>
-          controller.send(
-            text,
-            attachments.map(({ path, connectionId }) => ({
-              path,
-              previewUri: path,
-              ...(connectionId ? { connectionId } : {})
-            })),
-            ...request
-          )
+        sendThroughLaunch(
+          text,
+          attachments.length > 0 ||
+            request[0]?.prepareAttachments !== undefined ||
+            Boolean(request[0]?.skills?.length),
+          () =>
+            controller.send(
+              text,
+              attachments.map(({ path, connectionId }) => ({
+                path,
+                previewUri: path,
+                ...(connectionId ? { connectionId } : {})
+              })),
+              ...request
+            )
         ),
       dispatchCommand: (text: string) =>
         dispatchStructuredAgentSessionComposerCommand(text, {
@@ -92,9 +101,15 @@ export function useNativeChatStructuredComposerTransport(args: {
           conversationCommands: controller.conversationCommands,
           compactInstructions: controller.compactInstructions,
           runConversationCommand: controller.runConversationCommand,
-          ...(setThreadGoalObjective ? { setThreadGoalObjective } : {})
+          ...(changeThreadGoal ? { changeThreadGoal } : {})
         }).then(localizeStructuredComposerOutcome),
-      ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
+      ...(changeThreadGoal
+        ? {
+            threadGoal: {
+              setObjective: (objective: string) => changeThreadGoal({ kind: 'set', objective })
+            }
+          }
+        : {}),
       sendOut: controller.sendOut || starting,
       sendFollowUp: controller.sendFollowUp,
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),

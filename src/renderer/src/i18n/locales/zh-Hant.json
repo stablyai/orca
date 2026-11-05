@@ -5887,8 +5887,6 @@
           "expandAriaLabel": "展開 {{repo}} 中隱藏的工作樹",
           "hiding_one": "已隱藏 {{count}} 個偵測到的工作樹",
           "hiding_other": "已隱藏 {{count}} 個偵測到的工作樹",
-          "hidingInRepo_one": "已隱藏 {{repo}} 中的 {{count}} 個偵測到的工作樹",
-          "hidingInRepo_other": "已隱藏 {{repo}} 中的 {{count}} 個偵測到的工作樹",
           "keepHiddenAriaLabel_one": "讓 {{repo}} 中的 {{count}} 個偵測到的工作樹保持隱藏；可從專案選單恢復顯示",
           "keepHiddenAriaLabel_other": "讓 {{repo}} 中的 {{count}} 個偵測到的工作樹保持隱藏；可從專案選單恢復顯示",
           "keepHiddenTooltip": "保持隱藏，可從專案選單恢復顯示",
@@ -14850,7 +14848,6 @@
           "ff92d15436": "Orca 會在代理程式完成工作或需要協助時發出通知。",
           "b054332836": "設定通知",
           "f396db9f20": "讓這裡有家的感覺",
-          "322fc50a18": "Orca 支援所有 CLI 代理程式。選擇你最常用的一個，隨時可切換。",
           "198b148b3c": "選擇預設代理程式",
           "windowsTerminalTitle": "設定 Windows 終端機預設值",
           "windowsTerminalSubtitle": "為新窗格選擇預設 Shell，以及終端機中右鍵按一下的行為。",
@@ -19081,8 +19078,6 @@
       },
       "turnDiff": {
         "partial": "部分差異",
-        "showDiff": "顯示差異",
-        "hideDiff": "隱藏差異",
         "changedFiles_other": "{{count}} 個已變更的檔案"
       },
       "receipt": {
@@ -20526,10 +20521,8 @@
       "offTerminal": "比較喜歡終端機？終端機仍會獲得完整支援。在您選擇聊天之前，代理程式都會繼續在終端機中開啟。",
       "onIntro": "聊天介面已結束實驗階段，正式成為 Orca 的一部分。您的代理程式會繼續以聊天方式開啟，支援豐富訊息、視覺內容和圖片。",
       "onTerminal": "終端機同樣會獲得完整支援。您隨時可以把任何代理程式切換回終端機。",
-      "changeInSettings": "隨時可在<link>設定 → 代理程式</link>中變更。",
       "stayInTerminal": "繼續使用終端機",
       "cta": "使用聊天介面",
-      "saveFailed": "無法開啟聊天介面。請在「設定 → 代理程式」中選擇聊天。",
       "demoTabTitle": "說明登入流程",
       "demoPrompt": "說明登入是怎麼運作的",
       "demoReply": "登入從 {{file}} 開始：瀏覽器送出到 /login，伺服器檢查密碼並建立工作階段，然後將您重新導向到應用程式。流程如下：",

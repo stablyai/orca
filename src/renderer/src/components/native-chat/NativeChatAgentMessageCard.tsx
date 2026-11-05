@@ -268,7 +268,8 @@ function PreviewAgentMessageCard({
           ref={clip}
           id={clipId}
           className={cn(
-            'overflow-hidden leading-6',
+            // List numbers hang left of the text; the clip spans the gap and padding so they stay whole.
+            '-mx-3 overflow-hidden px-3 leading-6',
             overflows && !disclosure.open && 'mask-b-from-[calc(100%-1.75rem)]'
           )}
           style={disclosure.open ? undefined : { maxHeight: `${AGENT_MESSAGE_FOLDED_LINES}lh` }}

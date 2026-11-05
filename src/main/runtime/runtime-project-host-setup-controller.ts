@@ -39,6 +39,8 @@ import {
   assertWslMoveReposWritable
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { runtimeVisibleProjectHostSetups } from './runtime-visible-catalog'
+import { assertNoProjectWorktreeCreate } from '../workspaces/creation/worktree-create-in-flight'
+import { releaseWorktreeCreatePreparationsForRepo } from '../workspaces/creation/preparation/worktree-create-preparation-project-removal'
 import {
   findProjectHostSetup,
   SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
@@ -205,8 +207,13 @@ export class RuntimeProjectHostSetupController {
       throw new Error('runtime_unavailable')
     }
     assertWslMoveHostSetupIdWritable(store, args)
-    if (args.force === false) {
-      this.assertSetupRemovalIsUnused(store, args)
+    const repo = this.findSetupRepo(args)
+    if (repo) {
+      assertNoProjectWorktreeCreate(repo)
+      if (args.force === false) {
+        this.assertSetupRemovalIsUnused(store, repo)
+      }
+      releaseWorktreeCreatePreparationsForRepo(store, repo)
     }
     const result = store.deleteProjectHostSetup(args)
     if (!result) {
@@ -226,20 +233,20 @@ export class RuntimeProjectHostSetupController {
     invalidateAuthorizedRootsCache()
   }
 
-  // Only explicit force:false adds refusal; omission preserves older clients' delete behavior.
-  private assertSetupRemovalIsUnused(store: RuntimeStore, target: ProjectHostSetupTarget): void {
+  // The exact host row the store will delete, never its same-id sibling.
+  private findSetupRepo(target: ProjectHostSetupTarget): Repo | undefined {
     const setup = findProjectHostSetup(this.listSetups(), target)
-    // Measure the exact host row the store will delete, never its same-id sibling.
-    const repo = setup?.repoId
+    return setup?.repoId
       ? this.deps
           .listRepos()
           .find(
             (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
           )
       : undefined
-    if (!repo) {
-      return
-    }
+  }
+
+  // Only explicit force:false adds refusal; omission preserves older clients' delete behavior.
+  private assertSetupRemovalIsUnused(store: RuntimeStore, repo: Repo): void {
     const refusal = describeProjectRemovalRefusal({
       liveTerminals: this.deps.countLiveTerminalsForRepo(repo),
       workspacesWithMetadata: countRepoWorkspacesWithMetadata(

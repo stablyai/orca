@@ -22,15 +22,9 @@ import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/cod
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
 import { getDaemonProvider } from '../daemon/daemon-provider-state'
 import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
-
-import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { getPreferredPairedRuntimeConnection } from '../../shared/remote-runtime/host-catalog/runtime-environments'
-import {
-  type OrchestrationEnvironmentTransport,
-  pairedOrchestrationPeers
-} from '../runtime/orchestration/environment-transport'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
@@ -67,28 +61,6 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   const stats = state.stats
   if (!store || !stats) {
     throw new Error('Store and stats must be initialized before runtime')
-  }
-  const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
-    resolve: (selector) => {
-      const environment = resolveEnvironment(getRuntimeEnvironmentRegistryRoot(), selector)
-      const connection = getPreferredPairedRuntimeConnection(environment)
-      return {
-        environmentId: environment.id,
-        name: environment.name,
-        ...pairedOrchestrationPeers(connection.hostPublicKeyB64, connection.credential.deviceToken),
-        pairingRevision: environment.pairingRevision ?? environment.createdAt
-      }
-    },
-    call: (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
-      callRuntimeEnvironment(
-        getRuntimeEnvironmentRegistryRoot(),
-        selector,
-        method,
-        params,
-        timeoutMs,
-        expectedPairingRevision,
-        envelope
-      )
   }
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
@@ -134,7 +106,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         homePath,
         resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
-    orchestrationEnvironmentTransport,
+    orchestrationEnvironmentTransport: createOrchestrationEnvironmentTransport(),
     workspaceSleepPlatform: {
       callEnvironment: (environmentId, method, params, timeoutMs) =>
         callRuntimeEnvironment(

@@ -12,7 +12,7 @@ import {
 } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
-import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
+import type { NativeChatTurnDiff } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import {
   buildNativeChatTranscriptSlots,
   nativeChatSlotIndexOf,

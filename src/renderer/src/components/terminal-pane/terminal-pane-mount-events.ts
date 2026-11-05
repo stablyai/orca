@@ -94,7 +94,8 @@ export function installTerminalPaneMountEvents(args: {
       manager: mgr,
       getPtyIdForLeaf: (leafId) =>
         useAppStore.getState().terminalLayoutsByTabId[deps.tabId]?.ptyIdsByLeafId?.[leafId],
-      closeTab: () => closeTerminalTab(deps.tabId, { skipRunningProcessConfirm: true }),
+      closeTab: (reason) =>
+        closeTerminalTab(deps.tabId, { reason, skipRunningProcessConfirm: true }),
       closeTabPreservingPty: () => {
         const store = useAppStore.getState()
         if (detail.retireSurface && detail.leafId) {
