@@ -181,6 +181,8 @@ const styles = themedStyleSheet(() => ({
   },
   title: {
     flexShrink: 1,
+    // Lets a long unbroken workspace name wrap inside the row instead of overflowing it.
+    minWidth: 0,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'

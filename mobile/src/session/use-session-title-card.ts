@@ -14,14 +14,14 @@ export function useSessionTitleCard(besideTabs: boolean, obscured: boolean) {
     const title = titleRef.current
     const bar = barRef.current
     if (!title || !bar) {
-      return false
+      place(null)
+      return
     }
     title.measureInWindow((x) => {
       bar.measureInWindow((_x, barY, _width, barHeight) => {
         place({ side: 'below', left: x - root.x, top: barY + barHeight - root.y })
       })
     })
-    return true
   }, [])
   const card = useAnchoredDetailCard({ geometry: String(besideTabs), obscured, measure })
   return { ...card, barRef, titleRef, besideTabs }

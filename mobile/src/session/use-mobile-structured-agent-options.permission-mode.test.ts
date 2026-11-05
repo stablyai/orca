@@ -73,6 +73,7 @@ async function mountOptions(props: ProbeProps) {
       sessionId: 'session-1',
       enabled: true,
       fence: probe.fence,
+      unloadedTurnRevisions: undefined,
       turnId: null,
       mutate,
       optionStamp: probe.optionStamp,

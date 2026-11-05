@@ -70,12 +70,17 @@ function MobileNativeChatContextUsageRing({
     (root, place) => {
       const composer = composerRef.current
       if (!composer) {
-        return false
+        place(null)
+        return
       }
-      composer.measureInWindow((x, y, width) => {
-        place({ side: 'above', right: x + width - root.x, bottom: y - root.y - spacing.sm })
+      // A prompt card hides the composer; a zero box means there is nothing to sit above.
+      composer.measureInWindow((x, y, width, height) => {
+        place(
+          width > 0 && height > 0
+            ? { side: 'above', right: x + width - root.x, bottom: y - root.y - spacing.sm }
+            : null
+        )
       })
-      return true
     },
     [composerRef]
   )

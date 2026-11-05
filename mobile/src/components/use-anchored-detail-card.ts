@@ -58,11 +58,11 @@ function reduce(state: State, action: Action): State {
   }
 }
 
-/** Places the card from window coordinates; false when its views are gone, which closes the request. */
+/** Places the card from window coordinates; null when its views are gone or hidden, which closes it. */
 export type DetailCardMeasure = (
   root: { x: number; y: number },
-  place: (placement: DetailCardPlacement) => void
-) => boolean
+  place: (placement: DetailCardPlacement | null) => void
+) => void
 
 /** Open, measure, animate and dismiss state for an AnchoredDetailCard; any change to `geometry`
  *  closes it, while a change to `follow` moves an open card to its anchor's new place. */
@@ -121,14 +121,11 @@ export function useAnchoredDetailCard({
       let disposed = false
       const current = generation.current
       layer.measureInWindow((rootX, rootY) => {
-        const placed = measureRef.current({ x: rootX, y: rootY }, (placement) => {
+        measureRef.current({ x: rootX, y: rootY }, (placement) => {
           if (!disposed && current === generation.current) {
-            done({ ...placement, origin: { x: rootX, y: rootY } })
+            done(placement && { ...placement, origin: { x: rootX, y: rootY } })
           }
         })
-        if (!placed && !disposed) {
-          done(null)
-        }
       })
       return () => {
         disposed = true
@@ -146,19 +143,21 @@ export function useAnchoredDetailCard({
     )
   }, [request, geometry, obscured, measureAnchor])
   const shown = state.visual?.target === 1 && !obscured
-  const followed = useRef(follow)
+  // A height-only resize (split screen) moves a bottom anchor too.
+  const followKey = [follow, window.height, size.height].join(':')
+  const followed = useRef(followKey)
   useLayoutEffect(() => {
-    if (followed.current === follow) {
+    if (followed.current === followKey) {
       return
     }
-    followed.current = follow
+    followed.current = followKey
     if (!shown) {
       return
     }
     return measureAnchor((anchor) =>
       dispatch(anchor ? { type: 'moved', anchor } : { type: 'close' })
     )
-  }, [follow, shown, measureAnchor])
+  }, [followKey, shown, measureAnchor])
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     setSize(event.nativeEvent.layout)
   }, [])
