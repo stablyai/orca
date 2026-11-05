@@ -573,66 +573,6 @@ describe('automation target availability', () => {
     ).toBe('ssh-connecting')
   })
 
-  it('blocks manual runs when the saved source account needs provider auth', () => {
-    expect(
-      getAutomationTargetAvailability({
-        automation: makeAutomation({
-          sourceContext: {
-            kind: 'task-source',
-            provider: 'github',
-            projectId: 'github:stablyai/orca',
-            hostId: 'local',
-            repoId: 'repo-1',
-            providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
-          }
-        }),
-        repo: makeRepo(),
-        workspace: makeWorkspace(),
-        projectHostSetups: [],
-        sshConnectionStates: new Map(),
-        sourceHostAvailability: [{ hostId: 'local', reason: 'missing-provider-auth' }]
-      })
-    ).toMatchObject({
-      canRunNow: false,
-      reason: 'source-auth-needed',
-      message: 'Connect the saved GitHub source account before running manually.'
-    })
-  })
-
-  it('blocks manual runs when the saved source host cannot support the provider', () => {
-    expect(
-      getAutomationTargetAvailability({
-        automation: makeAutomation({
-          sourceContext: {
-            kind: 'task-source',
-            provider: 'gitlab',
-            projectId: 'gitlab:stablyai/orca',
-            hostId: 'runtime:old-server',
-            repoId: 'repo-1',
-            providerIdentity: {
-              provider: 'gitlab',
-              projectId: 'stablyai/orca',
-              namespace: 'stablyai',
-              project: 'orca',
-              webUrl: 'https://gitlab.com/stablyai/orca'
-            }
-          }
-        }),
-        repo: makeRepo(),
-        workspace: makeWorkspace(),
-        projectHostSetups: [],
-        sshConnectionStates: new Map(),
-        sourceHostAvailability: [
-          { hostId: 'runtime:old-server', reason: 'missing-task-source-capability' }
-        ]
-      })
-    ).toMatchObject({
-      canRunNow: false,
-      reason: 'source-provider-unsupported',
-      message: 'The saved GitLab source is not supported on this automation host.'
-    })
-  })
-
   it('explains runtime-host automation availability before the unsupported manual-run fallback', () => {
     const automation = makeAutomation({
       runContext: {

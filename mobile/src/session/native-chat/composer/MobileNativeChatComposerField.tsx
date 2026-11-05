@@ -14,6 +14,7 @@ export function MobileNativeChatComposerField({
   dictationPreview,
   placeholder,
   ref,
+  onKeyboardSubmit: _onKeyboardSubmit,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()

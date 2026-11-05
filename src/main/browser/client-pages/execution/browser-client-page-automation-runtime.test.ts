@@ -23,6 +23,7 @@ describe('BrowserClientPageAutomationRuntime', () => {
     expect(fixture.executeRpc).toHaveBeenCalledWith(
       'browser.click',
       { x: 10, page: 'page-a' },
+      true,
       expect.any(AbortSignal)
     )
 
@@ -117,6 +118,7 @@ function input(overrides: Record<string, unknown> = {}) {
     browserProfileId: 'profile-a',
     method: 'browser.click' as const,
     params: { x: 10 },
+    agent: true,
     registration,
     ...overrides
   }

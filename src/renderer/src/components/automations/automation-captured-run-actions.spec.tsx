@@ -281,7 +281,6 @@ export function registerCapturedAutomationRunActionTests({
             lastRunByAutomationId: new Map(),
             relativeNow: 1,
             hostTargetFor,
-            automationSourceHostAvailabilityByRowKey: new Map(),
             onSelect: vi.fn(),
             onRunNow,
             onEdit: vi.fn(),
@@ -327,7 +326,6 @@ export function registerCapturedAutomationRunActionTests({
           reportOwnerAction: vi.fn(),
           invalidateRowHost: vi.fn()
         },
-        sourceAvailability: { automationSourceHostAvailabilityByRowKey: new Map() },
         pageRefresh: { hydratePersistedUIState: refresh, refresh }
       } satisfies Parameters<typeof createAutomationRunActions>[0])
       runNow = () => actions.runNow(row)
