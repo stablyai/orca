@@ -13,6 +13,10 @@ vi.mock(
 )
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+// Adoption forks the AI Vault service for the chat's title; naming is covered elsewhere.
+vi.mock('../../ai-vault/session-titles/session-title-resolver', () => ({
+  resolveLocalAiVaultSessionTitles: async () => ({ titles: [] })
+}))
 import {
   createTestParams,
   CREATE_TEST_CALLER as CALLER
