@@ -19,6 +19,7 @@ export type PreparedPluginAppearance = {
   settings: Partial<GlobalSettings>
 }
 
+/** Validates owned color artifacts and derives the app/editor/terminal slot selection. */
 export function preparePluginAppearanceColors(
   pluginKey: string,
   pluginName: string,

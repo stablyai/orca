@@ -42,6 +42,7 @@ function assertActive(scope: PluginHostCallScope): void {
 }
 
 export class PluginAppearanceService {
+  // Why random revisions: ABA settings changes must still invalidate stale conditional writes.
   private readonly owners = new Map<string, OwnerState>()
   private revision = randomBytes(32).toString('hex')
   private fingerprint: string | null = null
@@ -56,6 +57,7 @@ export class PluginAppearanceService {
     }
   ) {}
 
+  /** Current conditional-update revision for the desktop appearance selection. */
   read(): PluginHostResult<'appearance.read'> {
     const settings = this.options.settings.getSettings()
     const selection = {
@@ -82,6 +84,7 @@ export class PluginAppearanceService {
     return { revision: this.revision }
   }
 
+  /** Invalidates the revision when the user or another writer changes the selection. */
   settingsChanged(updates: Partial<GlobalSettings>): void {
     if (
       Object.keys(updates).some((key) =>
@@ -105,6 +108,7 @@ export class PluginAppearanceService {
     }
   }
 
+  /** Validates, persists, and selects one owner's colors; restores the prior snapshot on settings failure. */
   apply(
     pluginKey: string,
     input: PluginHostParams<'appearance.apply'>,
@@ -164,6 +168,7 @@ export class PluginAppearanceService {
     }
   }
 
+  /** Reloads persisted snapshots at startup and drops owners that are no longer installed. */
   reconcile(discovered: readonly DiscoveredPlugin[]): void {
     const present = new Set<string>()
     for (const plugin of discovered) {
@@ -197,6 +202,7 @@ export class PluginAppearanceService {
     }
   }
 
+  /** App themes owned by approved plugins; unapproved owners stay hidden and fall back to built-ins. */
   readonly overlayAppThemes = (
     entries: readonly PluginThemeRegistration[]
   ): readonly PluginThemeRegistration[] =>
@@ -205,6 +211,7 @@ export class PluginAppearanceService {
       this.active().map((theme) => theme.app)
     )
 
+  /** Terminal themes owned by approved plugins; mirrors the app overlay contract. */
   readonly overlayTerminalThemes = (
     entries: readonly PluginTerminalThemeRegistration[]
   ): readonly PluginTerminalThemeRegistration[] =>
@@ -254,6 +261,7 @@ export class PluginAppearanceService {
   }
 }
 
+/** Wires the appearance service to the desktop settings store and plugin approvals. */
 export function createPluginAppearanceService(
   settings: PluginAppearanceSettingsStore,
   userDataPath: string,

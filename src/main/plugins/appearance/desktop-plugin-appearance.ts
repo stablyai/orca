@@ -4,6 +4,7 @@ import type { PluginService } from '../plugin-service'
 import { createPluginAppearanceService } from './plugin-appearance-service'
 
 export function createDesktopPluginAppearance(store: Store, plugins: () => PluginService | null) {
+  // Why here: desktop settings writes must also retarget Electron's native theme source.
   const appearance = createPluginAppearanceService(
     {
       getSettings: () => store.getSettings(),
