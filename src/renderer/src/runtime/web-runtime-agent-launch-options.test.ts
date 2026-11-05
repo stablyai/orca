@@ -77,6 +77,16 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 afterEach(() => resetWebSessionCloseIntentForTests())
 
+import { tabAgentPickerLaunchInputs } from '@/components/tab-bar/tab-agent-launch-options'
+import {
+  agentPickerDraft,
+  type AgentPickerEntry
+} from '../../../shared/agent-launch/picker/agent-launch-picker'
+import { agentPickerChoiceSeeds } from '../../../shared/agent-launch/picker/agent-launch-picker-defaults'
+import {
+  applyAgentPickerEdit,
+  acceptAgentPickerArguments
+} from '../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
@@ -326,6 +336,64 @@ it('keeps host authority on older hosts and composes inexpressible picks only fr
   const nonAction = params('terminal.createAgentSession')
   expect(nonAction.agentArgs).toBe('--effort high --permission-mode auto --add-dir /host-tools')
   expect(nonAction).not.toHaveProperty('launchPreferences')
+})
+
+it('keeps picker-seeded desktop Arguments off a v1.4.239 host and retains explicit Arguments edits', async () => {
+  capabilities = ['agent-session.host-authority.v1']
+  vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockResolvedValue({
+    defaultTuiAgent: 'claude',
+    disabledTuiAgents: [],
+    agentCmdOverrides: {},
+    agentDefaultArgs: { claude: '--permission-mode auto --add-dir /host-tools' },
+    environmentNames: {},
+    permissionMode: 'mixed',
+    agentPermission: {
+      default: 'auto',
+      overrides: {},
+      userArgs: { claude: '--add-dir /host-tools' }
+    }
+  })
+  const row = { agent: 'claude', kind: 'cli', executionHostId: 'runtime:paired' } as const
+  const entry: AgentPickerEntry = {
+    agent: 'claude',
+    label: 'Claude',
+    rows: [row],
+    surfaces: ['terminal'],
+    defaultSurface: 'terminal',
+    catalog: { origin: 'unknown' },
+    ...agentPickerChoiceSeeds('claude', {
+      agentPermissionDefault: 'ask',
+      agentDefaultArgs: { claude: '--model desktop-only-qa' }
+    })
+  }
+  let draft = applyAgentPickerEdit(entry, agentPickerDraft(entry), {
+    kind: 'permission',
+    value: 'full-access'
+  })
+  draft = applyAgentPickerEdit(entry, draft, {
+    kind: 'choice',
+    patch: { options: { effort: 'high' } }
+  })
+  await launch(tabAgentPickerLaunchInputs(row, draft, entry))
+  expect(params('terminal.createAgentSession').agentArgs).toBe(
+    '--effort high --dangerously-skip-permissions --add-dir /host-tools'
+  )
+  expect(params('terminal.createAgentSession')).not.toHaveProperty('launchPreferences')
+  expect(mocks.toastError).not.toHaveBeenCalled()
+  call.mockClear()
+  const authored = acceptAgentPickerArguments(
+    entry,
+    applyAgentPickerEdit(entry, draft, {
+      kind: 'arguments',
+      text: '--model launch-only --add-dir /launch-tools'
+    })
+  )
+  await launch(tabAgentPickerLaunchInputs(row, authored, entry))
+  const command = params('session.tabs.createTerminal').command
+  expect(command).toContain("'--model' 'launch-only'")
+  expect(command).toContain("'--add-dir' '/launch-tools'")
+  expect(command).toContain("'--dangerously-skip-permissions'")
+  expect(command).not.toContain('desktop-only-qa')
 })
 
 it.each([

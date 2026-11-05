@@ -1,5 +1,13 @@
 // @vitest-environment happy-dom
 import type { ReactNode } from 'react'
+import {
+  agentPickerDraft,
+  type AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import {
+  acceptAgentPickerArguments,
+  applyAgentPickerEdit
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   act,
@@ -681,7 +689,7 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   })
 })
 
-it('forwards configured choices and retains matching Terminal Arguments for either requested surface', () => {
+it('forwards configured choices and retains explicitly edited Terminal Arguments for either requested surface', () => {
   launchMock.mockClear()
   launchMock.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 'new-tab' } })
   const hook = renderHook(() =>
@@ -692,15 +700,29 @@ it('forwards configured choices and retains matching Terminal Arguments for eith
     })
   )
   const choices = { model: 'astra', options: { effort: 'low' }, permissionMode: 'ask' as const }
-  hook.result.current(
-    { agent: 'codex', kind: 'cli', executionHostId: 'runtime:server' },
-    {
-      agent: 'codex',
-      surface: 'terminal',
-      choices,
-      arguments: '--add-dir docs'
-    }
+  const entry: AgentPickerEntry = {
+    agent: 'codex',
+    label: 'Codex',
+    rows: [],
+    surfaces: ['terminal', 'chat'],
+    defaultSurface: 'terminal',
+    terminal: {},
+    structured: {},
+    arguments: '',
+    catalog: { origin: 'unknown' }
+  }
+  const authored = acceptAgentPickerArguments(
+    entry,
+    applyAgentPickerEdit(
+      entry,
+      { ...agentPickerDraft(entry), choices },
+      {
+        kind: 'arguments',
+        text: '--add-dir docs'
+      }
+    )
   )
+  hook.result.current({ agent: 'codex', kind: 'cli', executionHostId: 'runtime:server' }, authored)
   expect(launchMock.mock.calls[0][0]).toMatchObject({
     requestedSurface: 'terminal',
     selectedExecutionHostId: 'runtime:server',
@@ -709,12 +731,7 @@ it('forwards configured choices and retains matching Terminal Arguments for eith
   })
   hook.result.current(
     { agent: 'codex', kind: 'chat', executionHostId: 'runtime:server' },
-    {
-      agent: 'codex',
-      surface: 'chat',
-      choices,
-      arguments: '--add-dir docs'
-    }
+    { ...authored, surface: 'chat' }
   )
   expect(launchMock.mock.calls[1][0]).toMatchObject({
     requestedSurface: 'chat',
