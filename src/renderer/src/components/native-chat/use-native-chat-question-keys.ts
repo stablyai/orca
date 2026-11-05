@@ -14,9 +14,7 @@ export function useNativeChatQuestionKeys(
     const card = cardRef.current
     const isNumberKey = /^[1-9]$/.test(event.key)
     const isArrow = event.key === 'ArrowDown' || event.key === 'ArrowUp'
-    const field = card?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      '[data-native-chat-answer-field]'
-    )
+    const field = card?.querySelector<HTMLTextAreaElement>('[data-native-chat-answer-field]')
     const inField = field != null && target === field
     if (
       event.defaultPrevented ||
@@ -55,7 +53,6 @@ export function useNativeChatQuestionKeys(
       if (
         rows.length === 0 ||
         (inField &&
-          field instanceof HTMLTextAreaElement &&
           (field.selectionStart !== field.selectionEnd ||
             field.selectionStart !== (up ? 0 : field.value.length)))
       ) {

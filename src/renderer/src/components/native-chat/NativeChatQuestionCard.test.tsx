@@ -474,7 +474,7 @@ describe('NativeChatQuestionCard', () => {
     passAutoAdvanceBeat()
     expect(document.activeElement?.textContent).toContain('Tabs')
     pressKey({ key: 'ArrowUp' }, document.activeElement!)
-    expect(document.activeElement).toBe(container.querySelector('input'))
+    expect(document.activeElement).toBe(container.querySelector('textarea'))
     pressKey({ key: 'ArrowUp' }, document.activeElement!)
     expect(document.activeElement?.textContent).toContain('Spaces')
     pressKey({ key: 'Enter' }, document.activeElement!)
@@ -519,7 +519,7 @@ describe('NativeChatQuestionCard', () => {
     render(tabsOrSpaces, onAnswer, true, true)
     typeAnswer('two spaces')
     clickOption('Tabs')
-    const input = container.querySelector('input')!
+    const input = container.querySelector('textarea')!
     input.setSelectionRange(0, 0)
     const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
     act(() => rows[1]!.focus())
