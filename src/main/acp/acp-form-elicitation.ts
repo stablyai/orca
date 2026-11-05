@@ -5,12 +5,12 @@ import {
 } from '../../shared/agent-session/agent-session-question-answer'
 import type { AgentJournalQuestion } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
-import type { AcpRequestPresentation } from './acp-dialects/acp-dialect'
+import { pendingAcpResolution, type AcpRequestPresentation } from './acp-dialects/acp-dialect'
 import { AcpRpcError } from './acp-errors'
-import { pendingAcpResolution } from './acp-timeline-requests'
 
 export const ACP_FORM_ELICITATION_METHOD = 'elicitation/create'
-// The card shows at most four questions; this tells the agent why the rest went unanswered.
+// OMP pairs each choice field `qN` with a free-text `qN__other`.
+const OTHER_SUFFIX = '__other'
 const NOT_SHOWN_ANSWER = `Not shown to the user: Orca shows at most ${MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS} questions at once. Ask again.`
 
 const choiceSchema = z.looseObject({
@@ -38,6 +38,8 @@ const formSchema = z.object({
 type Choice = { value: string; label: string; description?: string }
 type Field = { key: string; otherKey?: string; choices?: Choice[]; question: AgentJournalQuestion }
 
+const unsupportedForm = () => new AcpRpcError(-32602, 'Unsupported ACP elicitation form')
+
 // A form field with no choices becomes a text answer; enums and arrays become pickable options.
 function fieldChoices(property: z.infer<typeof propertySchema>): Choice[] | undefined {
   if (property.type === 'boolean') {
@@ -55,7 +57,7 @@ function fieldChoices(property: z.infer<typeof propertySchema>): Choice[] | unde
       ...(choice.description ? { description: choice.description } : {})
     })) ?? values?.map((value) => ({ value, label: value }))
   if (choices?.length === 0 || (property.type === 'array' && !choices)) {
-    throw new AcpRpcError(-32602, 'Unsupported ACP elicitation form')
+    throw unsupportedForm()
   }
   return choices
 }
@@ -64,26 +66,25 @@ function fieldChoices(property: z.infer<typeof propertySchema>): Choice[] | unde
 export function acpFormElicitationPresentation(params: unknown): AcpRequestPresentation {
   const parsed = formSchema.safeParse(params)
   if (!parsed.success) {
-    throw new AcpRpcError(-32602, 'Unsupported ACP elicitation form')
+    throw unsupportedForm()
   }
   const { message, requestedSchema } = parsed.data
   const properties = requestedSchema.properties
-  // OMP pairs each choice field `qN` with a free-text `qN__other`.
   const keys = Object.keys(properties).filter(
-    (key) => !(key.endsWith('__other') && Object.hasOwn(properties, key.slice(0, -7)))
+    (key) =>
+      !(key.endsWith(OTHER_SUFFIX) && Object.hasOwn(properties, key.slice(0, -OTHER_SUFFIX.length)))
   )
   if (keys.length === 0) {
-    throw new AcpRpcError(-32602, 'Unsupported ACP elicitation form')
+    throw unsupportedForm()
   }
   const fields: Field[] = keys.slice(0, MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS).map((key, index) => {
     const property = properties[key]!
-    const otherKey = Object.hasOwn(properties, `${key}__other`) ? `${key}__other` : undefined
+    const otherKey = Object.hasOwn(properties, key + OTHER_SUFFIX) ? key + OTHER_SUFFIX : undefined
     const choices = fieldChoices(property)
     const id = `q${index + 1}`
-    const textOnly = !choices
     const question: AgentJournalQuestion = {
       id,
-      question: (keys.length === 1 ? message : property.title) || message,
+      question: keys.length === 1 ? message : property.title || message,
       ...(choices && property.description ? { header: property.description } : {}),
       multiSelect: property.type === 'array',
       options: (choices ?? []).map((choice, choiceIndex) => ({
@@ -91,8 +92,8 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
         label: choice.value === property.default ? `${choice.label} (Recommended)` : choice.label,
         ...(choice.description ? { description: choice.description } : {})
       })),
-      ...(textOnly || otherKey ? { freeTextQuestionId: id } : {}),
-      ...(textOnly
+      ...(!choices || otherKey ? { freeTextQuestionId: id } : {}),
+      ...(!choices
         ? {
             freeTextInput: {
               allowEmpty: true,
@@ -104,7 +105,7 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
           }
         : {})
     }
-    return { key, ...(otherKey ? { otherKey } : {}), ...(choices ? { choices } : {}), question }
+    return { key, otherKey, choices, question }
   })
   const questions = fields.map((field) => field.question)
   // Clients without `questions` read the top-level fields, which can carry only one single-choice question.
@@ -134,12 +135,14 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
       const content: Record<string, string | boolean | string[]> = {}
       for (const { key, otherKey, choices, question } of fields) {
         const answer = answers.find((entry) => entry.questionId === question.id)!
-        const values = answer.optionIds.map(
-          (id) => choices![question.options.findIndex((option) => option.id === id)]!.value
-        )
         if (!choices) {
           content[key] = answer.other ?? ''
-        } else if (question.multiSelect) {
+          continue
+        }
+        const values = answer.optionIds.map(
+          (id) => choices[question.options.findIndex((option) => option.id === id)]!.value
+        )
+        if (question.multiSelect) {
           content[key] = values
         } else if (values[0] !== undefined) {
           content[key] = properties[key]!.type === 'boolean' ? values[0] === 'true' : values[0]
@@ -149,7 +152,7 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
         }
       }
       for (const key of keys.slice(MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS)) {
-        const otherKey = key.endsWith('__other') ? key : `${key}__other`
+        const otherKey = key.endsWith(OTHER_SUFFIX) ? key : key + OTHER_SUFFIX
         if (Object.hasOwn(properties, otherKey)) {
           content[otherKey] = NOT_SHOWN_ANSWER
         }

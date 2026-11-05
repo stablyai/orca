@@ -1,10 +1,6 @@
 import { z } from 'zod'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpAgentError } from '../acp-errors'
-import {
-  ACP_FORM_ELICITATION_METHOD,
-  acpFormElicitationPresentation
-} from '../acp-form-elicitation'
 import type { AcpCompactionReply, AcpDialect } from './acp-dialect'
 
 // Read raw result text instead of the repeated command echo in content.
@@ -121,8 +117,6 @@ export const OMP_ACP_DIALECT: AcpDialect = {
   clampsUnlistedEffort: true,
   // OMP offers its `ask` tool and extension dialogs only to clients that answer forms.
   clientCapabilities: { elicitation: { form: {} } },
-  request: (method, params) =>
-    method === ACP_FORM_ELICITATION_METHOD ? acpFormElicitationPresentation(params) : undefined,
   normalizeToolUpdate,
   compactionReply,
   authenticationRequired: (error) => {

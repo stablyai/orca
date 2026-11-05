@@ -52,7 +52,6 @@ export type AcpSessionRuntimeOptions = {
   /** OMP's typed busy refusal confirms this prompt never ran. */
   retryBusyPrompts?: boolean
   clientInfo?: InitializeRequest['clientInfo']
-  /** Merged into the base capabilities; only for requests `onRequest` answers. */
   clientCapabilities?: Pick<ClientCapabilities, 'elicitation'>
   peer?: AcpPeerOptions
   onPermission?: AcpPermissionHandler

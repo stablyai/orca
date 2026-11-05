@@ -17,6 +17,13 @@ import type {
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
 
+export const pendingAcpResolution = {
+  state: 'pending',
+  selectedOptionId: null,
+  resolvedBy: null,
+  resolvedAt: null
+} as const
+
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
   reply(response: AgentSessionPromptResponse | null): unknown
@@ -122,7 +129,7 @@ export type AcpDialect = {
   }
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
-  /** Advertised only when `request` answers what it turns on. */
+  /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */
   clientCapabilities?: Pick<ClientCapabilities, 'elicitation'>
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
