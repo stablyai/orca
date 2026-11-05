@@ -12,7 +12,7 @@ import {
   ACTIVE_CLAUDE_ACCOUNT,
   type ProjectClaudeAccountPreference
 } from '../../shared/claude/project-claude-account-preference'
-import { terminalCreateClaudeAccountIdField } from '../runtime/terminal/launch/runtime-agent-launch-resolution'
+import { terminalCreateClaudeAccountIdField } from '../runtime/terminal/launch/terminal-create-claude-account-field'
 import { resolveRuntimeSpawnClaudeAccount } from './pty/runtime/spawn-claude-account'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './pty/runtime/spawn-state'
 import type { PtyRuntimeControllerDeps } from './pty/runtime/controller-deps'
