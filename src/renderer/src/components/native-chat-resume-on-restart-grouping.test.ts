@@ -4,7 +4,6 @@ import {
   groupResumeCandidates,
   groupResumeCandidatesByHost,
   groupResumeWorkspacesByRepo,
-  nestResumeSections,
   nestResumeWorkspaces,
   resolveResumeGroupHeader,
   resumeSelectionState,
@@ -171,78 +170,6 @@ describe('nesting child workspaces', () => {
       ],
       ['d', []]
     ])
-  })
-})
-
-describe('resume sections', () => {
-  const layout = (sections: ReturnType<typeof nestResumeSections>): unknown =>
-    sections.map((section) => [
-      section.hostId,
-      section.projects.map((project) => [
-        project.repoGroup.repoId,
-        project.roots.map((root) => resumeWorkspaceCandidates(root).map((c) => c.sessionId))
-      ])
-    ])
-  const machines = (...candidates: ResumeCandidate[]) =>
-    groupResumeCandidatesByHost(candidates).map((machine) => ({
-      hostId: machine.hostId,
-      workspaces: groupResumeCandidates(machine.candidates)
-    }))
-  const noCrossStoreParent = () => undefined
-
-  it('keeps a local chat apart from a server workspace its hostless catalog parent shares an id with', () => {
-    const sections = nestResumeSections(
-      machines(
-        candidate({ sessionId: 'local-c', workspaceId: 'c', executionHostId: undefined }),
-        candidate({ sessionId: 'server-p', workspaceId: 'p', executionHostId: 'runtime:srv' })
-      ),
-      (group) => (group.workspaceId === 'c' ? ['p'] : []),
-      () => 'repo',
-      noCrossStoreParent
-    )
-
-    expect(layout(sections)).toEqual([
-      ['local', [['repo', [['local-c']]]]],
-      ['runtime:srv', [['repo', [['server-p']]]]]
-    ])
-  })
-
-  it('keeps a same-machine child in its own project', () => {
-    const sections = nestResumeSections(
-      machines(
-        candidate({ sessionId: 'a1', workspaceId: 'a' }),
-        candidate({ sessionId: 'b1', workspaceId: 'b' })
-      ),
-      (group) => (group.workspaceId === 'b' ? ['a'] : []),
-      (group) => (group.workspaceId === 'a' ? 'repo-a' : 'repo-b'),
-      noCrossStoreParent
-    )
-
-    expect(layout(sections)).toEqual([
-      [
-        'local',
-        [
-          ['repo-a', [['a1']]],
-          ['repo-b', [['b1']]]
-        ]
-      ]
-    ])
-  })
-
-  it('moves a server chat under its cross-store parent on this computer', () => {
-    const offered = machines(
-      candidate({ sessionId: 'local-p', workspaceId: 'p' }),
-      candidate({ sessionId: 'server-c', workspaceId: 'c', executionHostId: 'runtime:srv' })
-    )
-    const [local, server] = offered
-    const sections = nestResumeSections(
-      offered,
-      () => [],
-      () => 'repo',
-      (group) => (group === server?.workspaces[0] ? local?.workspaces[0] : undefined)
-    )
-
-    expect(layout(sections)).toEqual([['local', [['repo', [['local-p', 'server-c']]]]]])
   })
 })
 

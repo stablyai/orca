@@ -15,7 +15,6 @@ import {
 import { useAppStore } from '../store'
 import * as workspaceDisplay from './native-chat-resume-workspace-display'
 import {
-  useCrossStoreResumeParents,
   useLineageAncestors,
   useRepoIdByWorkspace,
   useWorkspaceWorktree
@@ -34,15 +33,15 @@ import {
 import {
   groupResumeCandidates,
   groupResumeCandidatesByHost,
-  nestResumeSections,
-  resumeGroupHostId,
+  groupResumeWorkspacesByRepo,
+  nestResumeWorkspaces,
   resolveResumeGroupHeader,
   resumeSelectionState,
   resumeWorkspaceKind,
   resumeWorkspaceCandidates,
   toggleResumeSelection,
   type ResumeCandidate,
-  type ResumeMachineSection,
+  type ResumeWorkspaceGroup,
   type ResumeWorkspaceNode
 } from './native-chat-resume-on-restart-grouping'
 
@@ -99,15 +98,12 @@ function GroupNode({
 function WorkspaceNode({
   node,
   hostId,
-  parentHostId = hostId,
   depth,
   tree,
   fallbackDisplays
 }: {
   node: ResumeWorkspaceNode
   hostId: ExecutionHostId
-  /** A chat moved under a parent on another machine names its own machine. */
-  parentHostId?: ExecutionHostId
   depth: number
   tree: TreeProps
   fallbackDisplays?: workspaceDisplay.WorkspaceFallbacks
@@ -142,11 +138,6 @@ function WorkspaceNode({
               {branch}
             </span>
           )}
-          {hostId !== parentHostId && (
-            <WorktreeHostContextBadge
-              label={getHostContextLabel(hostId, { hostLabelById: tree.hostLabelById })}
-            />
-          )}
           {!worktree && fallback?.parentPath && (
             <ProjectOptionDetail
               detail={fallback.parentPath}
@@ -177,10 +168,9 @@ function WorkspaceNode({
       </ResumeTreeDepthContext.Provider>
       {node.children.map((child) => (
         <WorkspaceNode
-          key={`${resumeGroupHostId(child.group, hostId)}:${child.group.workspaceId}`}
+          key={child.group.workspaceId}
           node={child}
-          hostId={resumeGroupHostId(child.group, hostId)}
-          parentHostId={hostId}
+          hostId={hostId}
           depth={depth + 1}
           tree={tree}
           fallbackDisplays={fallbackDisplays}
@@ -251,18 +241,27 @@ function ProjectNode({
 /** A machine's projects, each a node; workspaces the store cannot place sit at project depth. */
 function MachineContents({
   hostId,
-  projects,
+  workspaces,
   depth,
   tree
 }: {
   hostId: ExecutionHostId
-  projects: ResumeMachineSection['projects']
+  workspaces: readonly ResumeWorkspaceGroup[]
   depth: number
   tree: TreeProps
 }): React.JSX.Element {
+  const byId = new Map(workspaces.map((group) => [group.workspaceId, group]))
+  const lookup =
+    <T,>(read: (group: ResumeWorkspaceGroup) => T, fallback: T) =>
+    (id: string) => {
+      const group = byId.get(id)
+      return group ? read(group) : fallback
+    }
+  const ancestorsOf = lookup(tree.ancestorsOf, [])
   return (
     <>
-      {projects.map(({ repoGroup, roots: nodes }) => {
+      {groupResumeWorkspacesByRepo(workspaces, lookup(tree.repoIdOf, null)).map((repoGroup) => {
+        const nodes = nestResumeWorkspaces(repoGroup.workspaces, ancestorsOf)
         const fallbackDisplays = workspaceDisplay.deriveFallbacks(repoGroup)
         // A group the store cannot place has no project to name or select; Select all covers it.
         return repoGroup.repoId === null ? (
@@ -293,14 +292,18 @@ function MachineContents({
 
 function MachineNode({
   hostId,
-  projects,
+  candidates,
+  workspaces,
+  hostLabelById,
   tree
 }: {
   hostId: ExecutionHostId
-  projects: ResumeMachineSection['projects']
+  candidates: readonly ResumeCandidate[]
+  workspaces: readonly ResumeWorkspaceGroup[]
+  hostLabelById: ReadonlyMap<ExecutionHostId, string>
   tree: TreeProps
 }): React.JSX.Element {
-  const name = getHostContextLabel(hostId, { hostLabelById: tree.hostLabelById })
+  const name = getHostContextLabel(hostId, { hostLabelById })
   return (
     <GroupNode
       nodeKey={`machine:${hostId}`}
@@ -311,10 +314,7 @@ function MachineNode({
         'Select all chats on {{value0}}',
         { value0: name }
       )}
-      covered={coveredKeys(
-        projects.flatMap((project) => project.roots.flatMap(resumeWorkspaceCandidates)),
-        tree
-      )}
+      covered={coveredKeys(candidates, tree)}
       tree={tree}
       label={
         <>
@@ -328,7 +328,7 @@ function MachineNode({
         </>
       }
     >
-      <MachineContents hostId={hostId} projects={projects} depth={1} tree={tree} />
+      <MachineContents hostId={hostId} workspaces={workspaces} depth={1} tree={tree} />
     </GroupNode>
   )
 }
@@ -364,8 +364,6 @@ export function ResumeOnRestartGroups({
   const allWorkspaces = useMemo(() => machines.flatMap((machine) => machine.workspaces), [machines])
   const repoIdOf = useRepoIdByWorkspace(allWorkspaces)
   const ancestorsOf = useLineageAncestors(allWorkspaces)
-  const crossStoreParentOf = useCrossStoreResumeParents(allWorkspaces)
-  const sections = nestResumeSections(machines, ancestorsOf, repoIdOf, crossStoreParentOf)
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
     () => new Map(hostOptions.map((host) => [host.id, host.label])),
@@ -379,7 +377,7 @@ export function ResumeOnRestartGroups({
     onToggle,
     ...expansion,
     repoIdOf,
-    hostLabelById,
+    ancestorsOf,
     failureFor,
     onFailureAction,
     renderStatus,
@@ -391,19 +389,21 @@ export function ResumeOnRestartGroups({
   return (
     <ResumeTreeSelectingContext.Provider value={selecting}>
       <div className="flex flex-col">
-        {sections.map((section) =>
+        {machines.map((machine) =>
           showMachines ? (
             <MachineNode
-              key={section.hostId}
-              hostId={section.hostId}
-              projects={section.projects}
+              key={machine.hostId}
+              hostId={machine.hostId}
+              candidates={machine.candidates}
+              workspaces={machine.workspaces}
+              hostLabelById={hostLabelById}
               tree={tree}
             />
           ) : (
             <MachineContents
-              key={section.hostId}
-              hostId={section.hostId}
-              projects={section.projects}
+              key={machine.hostId}
+              hostId={machine.hostId}
+              workspaces={machine.workspaces}
               depth={0}
               tree={tree}
             />

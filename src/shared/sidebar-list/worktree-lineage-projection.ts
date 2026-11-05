@@ -273,25 +273,18 @@ export function getSidebarLineageParentsByIdentity(
   return parentByIdentity
 }
 
-/** The rows a worktree nests under in the sidebar, nearest first; a lineage cycle nests nothing.
- * With resolved identities (selectSidebarLineageParentIdentities), parents on other machines count too. */
+/** The rows a worktree nests under in the sidebar, nearest first; a lineage cycle nests nothing. */
 export function getSidebarLineageAncestors(
   worktree: Worktree,
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   rowsByHostIdentity: ReadonlyMap<string, Worktree>,
-  cyclicLineageIds: ReadonlySet<string>,
-  parentIdentities?: SidebarLineageParentIdentities
+  cyclicLineageIds: ReadonlySet<string>
 ): Worktree[] {
   const ancestors: Worktree[] = []
   const seen = new Set([getWorktreeHostIdentity(worktree)])
   let current = worktree
   while (!cyclicLineageIds.has(current.id)) {
-    const parentIdentity = parentIdentities?.get(getWorktreeHostIdentity(current))
-    const parent = parentIdentities
-      ? parentIdentity === undefined
-        ? undefined
-        : rowsByHostIdentity.get(parentIdentity)
-      : getSidebarLineageParent(current, lineageById, rowsByHostIdentity)
+    const parent = getSidebarLineageParent(current, lineageById, rowsByHostIdentity)
     if (!parent || seen.has(getWorktreeHostIdentity(parent))) {
       break
     }

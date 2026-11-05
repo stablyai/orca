@@ -1,6 +1,5 @@
 import {
   buildCrossStoreLineageView,
-  lineageStoreKeyOfRow,
   OWN_LINEAGE_STORE_KEY,
   type CrossStoreLineageView
 } from '../../../shared/worktree/cross-store-lineage-resolution'
@@ -12,7 +11,6 @@ import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified
 import { getIndexedAllWorktrees } from './worktree-repo-index'
 import { selectWorktreesByRepo } from './workspace-record-selectors'
 import type { AppState } from './types'
-import type { Worktree } from '../../../shared/worktree/types'
 
 type CrossStoreLineageInputs = Pick<
   AppState,
@@ -53,7 +51,6 @@ let cached: {
   crossStoreLineageByStoreKey: AppState['crossStoreLineageByStoreKey']
   identityKey: string
   parents: SidebarLineageParentIdentities
-  crossStoreParents: SidebarLineageParentIdentities
 } | null = null
 
 /** Sidebar parents over every visible store, or undefined while no store holds a cross-store record
@@ -61,21 +58,6 @@ let cached: {
 export function selectSidebarLineageParentIdentities(
   state: CrossStoreLineageInputs
 ): SidebarLineageParentIdentities | undefined {
-  return resolveLineageParents(state)?.parents
-}
-
-/** Only the resolved edges whose parent is in another store than its child; undefined with no records. */
-export function selectCrossStoreLineageParentIdentities(
-  state: CrossStoreLineageInputs
-): SidebarLineageParentIdentities | undefined {
-  return resolveLineageParents(state)?.crossStoreParents
-}
-
-function resolveLineageParents(
-  state: CrossStoreLineageInputs
-):
-  | { parents: SidebarLineageParentIdentities; crossStoreParents: SidebarLineageParentIdentities }
-  | undefined {
   // Partial store snapshots (tests, early boot) may lack the slice.
   if (
     !Object.values(state.crossStoreLineageByStoreKey ?? {}).some(
@@ -93,29 +75,18 @@ function resolveLineageParents(
     cached.crossStoreLineageByStoreKey === state.crossStoreLineageByStoreKey &&
     cached.identityKey === identityKey
   ) {
-    return cached
+    return cached.parents
   }
-  const rows = new Map<string, Worktree>(
+  const rows = new Map(
     getIndexedAllWorktrees(worktreesByRepo).map((row) => [getWorktreeHostIdentity(row), row])
   )
   const parents = resolveSidebarLineageParentIdentities(state.worktreeLineageById, rows, view)
-  const crossStoreParents = new Map(
-    [...parents].filter(([child, parent]) => {
-      const childRow = rows.get(child)
-      const parentRow = rows.get(parent)
-      // Why: a hostless row names no store, so it never proves a cross-store edge.
-      const childStore = childRow && lineageStoreKeyOfRow(childRow)
-      const parentStore = parentRow && lineageStoreKeyOfRow(parentRow)
-      return childStore !== undefined && parentStore !== undefined && childStore !== parentStore
-    })
-  )
   cached = {
     rowsByRepo: worktreesByRepo,
     worktreeLineageById: state.worktreeLineageById,
     crossStoreLineageByStoreKey: state.crossStoreLineageByStoreKey,
     identityKey,
-    parents,
-    crossStoreParents
+    parents
   }
-  return cached
+  return parents
 }

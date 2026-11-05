@@ -12,11 +12,7 @@ import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import {
-  selectCrossStoreLineageParentIdentities,
-  selectSidebarLineageParentIdentities
-} from '@/store/cross-store-lineage-parents'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
 import type { ResumeWorkspaceGroup } from './native-chat-resume-on-restart-grouping'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
@@ -78,43 +74,4 @@ export function useLineageAncestors(
     )
   }, [workspaces, worktreesByRepo, worktreeLineageById])
   return (group) => ancestors.get(group) ?? []
-}
-
-/** The offered workspace a chat's resolved cross-store parent chain reaches on another machine.
- * Only cross-store records start a chain; hostless offers are this computer's. */
-export function useCrossStoreResumeParents(
-  workspaces: readonly ResumeWorkspaceGroup[]
-): (group: ResumeWorkspaceGroup) => ResumeWorkspaceGroup | undefined {
-  const parents = useAppStore(selectSidebarLineageParentIdentities)
-  const crossStoreParents = useAppStore(selectCrossStoreLineageParentIdentities)
-  const parentByGroup = useMemo(() => {
-    const result = new Map<ResumeWorkspaceGroup, ResumeWorkspaceGroup>()
-    if (!parents || !crossStoreParents) {
-      return result
-    }
-    const hostOf = (group: ResumeWorkspaceGroup): ExecutionHostId =>
-      group.candidates[0]?.executionHostId ?? LOCAL_EXECUTION_HOST_ID
-    const offerByIdentity = new Map<string, ResumeWorkspaceGroup>(
-      workspaces.map((group) => [
-        composeWorktreeHostIdentity(hostOf(group), group.workspaceId),
-        group
-      ])
-    )
-    for (const group of workspaces) {
-      let identity = crossStoreParents.get(
-        composeWorktreeHostIdentity(hostOf(group), group.workspaceId)
-      )
-      const seen = new Set<string>()
-      while (identity !== undefined && !offerByIdentity.has(identity) && !seen.has(identity)) {
-        seen.add(identity)
-        identity = parents.get(identity)
-      }
-      const parent = identity === undefined ? undefined : offerByIdentity.get(identity)
-      if (parent && hostOf(parent) !== hostOf(group)) {
-        result.set(group, parent)
-      }
-    }
-    return result
-  }, [workspaces, parents, crossStoreParents])
-  return (group) => parentByGroup.get(group)
 }
