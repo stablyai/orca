@@ -20256,7 +20256,6 @@
       "dismissDeliveryNotice": "Dismiss",
       "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
-      "addSelectionTerminalNotChat": "Switch this terminal to chat view to add text to it",
       "messageNotSent": "Message not sent",
       "messageSending": "Sending…",
       "userMessage": {

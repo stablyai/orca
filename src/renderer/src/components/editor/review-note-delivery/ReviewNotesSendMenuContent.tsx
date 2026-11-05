@@ -38,11 +38,7 @@ import type { LaunchSource } from '../../../../../shared/telemetry-property-sche
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
-import {
-  addQuoteToWorkspaceChat,
-  addToChatUnavailableLabel,
-  withAddToChatEligibility
-} from '@/components/native-chat/native-chat-workspace-selection'
+import { addQuoteToAgent } from '@/components/native-chat/native-chat-workspace-selection'
 import React, { useCallback, useMemo } from 'react'
 
 type OrderedSendTarget = {
@@ -63,7 +59,7 @@ export function ReviewNotesSendMenuContent({
   worktreeId: string
   groupId: string
   prompt: string
-  /** 'add-to-chat' puts the prompt in the picked chat's composer, or a new agent's input, unsent. */
+  /** 'add-to-chat' puts the prompt where the picked or new agent takes input, never sending it. */
   mode?: 'send' | 'add-to-chat'
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchSource?: LaunchSource
@@ -110,19 +106,10 @@ export function ReviewNotesSendMenuContent({
     ptyIdsByTabId,
     worktreeId
   ])
-  const orderedSendTargets = useMemo(() => {
-    const ordered = orderSendTargetsByWorktreeAgentRows(sendTargets, agentRows)
-    return mode === 'add-to-chat'
-      ? ordered.map((row) => ({
-          ...row,
-          target: withAddToChatEligibility(
-            row.target,
-            { unifiedTabsByWorktree, terminalLayoutsByTabId },
-            worktreeId
-          )
-        }))
-      : ordered
-  }, [agentRows, mode, sendTargets, terminalLayoutsByTabId, unifiedTabsByWorktree, worktreeId])
+  const orderedSendTargets = useMemo(
+    () => orderSendTargetsByWorktreeAgentRows(sendTargets, agentRows),
+    [agentRows, sendTargets]
+  )
 
   const runNotesSend = useCallback(
     (
@@ -193,9 +180,16 @@ export function ReviewNotesSendMenuContent({
         return
       }
       if (mode === 'add-to-chat') {
-        if (!addQuoteToWorkspaceChat(worktreeId, target.messageTarget, prompt)) {
-          toast.message(addToChatUnavailableLabel(target))
-        }
+        void addQuoteToAgent(worktreeId, target.messageTarget, prompt).then((result) => {
+          if (result.status !== 'sent') {
+            toast.info(
+              activeAgentNotesSendFailureMessage(result.status, {
+                explicitTarget: true,
+                code: result.code
+              })
+            )
+          }
+        })
         return
       }
 

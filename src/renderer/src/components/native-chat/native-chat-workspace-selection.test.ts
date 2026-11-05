@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
-import type { NotesSendAgentTarget } from '@/lib/notes-send-agent-targets'
-import { withAddToChatEligibility, workspaceChatTargetFor } from './native-chat-workspace-selection'
+import { addQuoteToAgent, workspaceChatTargetFor } from './native-chat-workspace-selection'
+
+const sendMessageToAgent = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/agent-message-send', () => ({ sendMessageToAgent }))
 
 const CHAT_LEAF = '6f1c2a4e-8b3d-4c5a-9e7f-1a2b3c4d5e6f'
 
@@ -74,26 +76,16 @@ describe('workspaceChatTargetFor', () => {
     ).toBeNull()
   })
 
-  it('disables a picker row with no composer and leaves other rows as they are', () => {
-    const row = (messageTarget: NotesSendAgentTarget['messageTarget']): NotesSendAgentTarget => ({
-      paneKey: 'pane',
-      tabId: 'tab',
-      messageTarget,
-      agentType: 'claude',
-      tabTitle: '',
-      status: 'eligible'
-    })
-    const chatRow = row({ kind: 'structured-session', sessionId: 'session-1' })
-    expect(withAddToChatEligibility(chatRow, state, 'wt-1')).toBe(chatRow)
-    expect(
-      withAddToChatEligibility(
-        row({ kind: 'terminal', tabId: 'term-plain', leafId: CHAT_LEAF }),
-        state,
-        'wt-1'
-      )
-    ).toMatchObject({
-      status: 'disabled',
-      disabledReason: 'Switch this terminal to chat view to add text to it'
+  // A plain terminal agent has no composer: it gets the notes send's paste, without the Enter.
+  it('pastes into a plain terminal agent without submitting', async () => {
+    sendMessageToAgent.mockResolvedValue({ status: 'sent' })
+    const target = { kind: 'terminal' as const, tabId: 'term-plain', leafId: CHAT_LEAF }
+    await expect(addQuoteToAgent('wt-1', target, '> quote')).resolves.toEqual({ status: 'sent' })
+    expect(sendMessageToAgent).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      target,
+      prompt: '> quote',
+      submit: false
     })
   })
 })

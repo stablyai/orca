@@ -1,12 +1,12 @@
-// "Add to chat" from a file, preview or terminal: the selection goes to the chat the user picks.
+// "Add to chat" from a file, preview or terminal: the selection goes, unsent, to the agent the user picks.
 import type { Tab } from '../../../../shared/tab-types'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import type { AgentMessageTarget } from '@/lib/agent-message-target'
-import type { NotesSendAgentTarget } from '@/lib/notes-send-agent-targets'
-import { translate } from '@/i18n/i18n'
+import { sendMessageToAgent } from '@/lib/agent-message-send'
+import type { ActiveAgentNotesSendResult } from '@/lib/active-agent-note-send-result'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
@@ -47,27 +47,6 @@ export function workspaceChatTargetFor(
     : null
 }
 
-/** Unsent text needs a composer; a plain terminal agent only takes a send. */
-export function withAddToChatEligibility(
-  target: NotesSendAgentTarget,
-  state: WorkspaceChatState,
-  worktreeId: string
-): NotesSendAgentTarget {
-  return target.status !== 'eligible' ||
-    workspaceChatTargetFor(state, worktreeId, target.messageTarget)
-    ? target
-    : { ...target, status: 'disabled', disabledReason: addToChatUnavailableLabel(target) }
-}
-
-export function addToChatUnavailableLabel(target: NotesSendAgentTarget): string {
-  return target.messageTarget.kind === 'terminal'
-    ? translate(
-        'components.native-chat.addSelectionTerminalNotChat',
-        'Switch this terminal to chat view to add text to it'
-      )
-    : translate('auto.components.editor.ReviewNotesSendMenu.chatGone', 'Chat is no longer open')
-}
-
 /** Appends the quote to the picked chat's draft, then shows that chat; nothing is sent. */
 export function addQuoteToWorkspaceChat(
   worktreeId: string,
@@ -85,12 +64,44 @@ export function addQuoteToWorkspaceChat(
     activateStructuredAgentSessionTab({ worktreeId, tabId: tab.id })
     return true
   }
-  state.focusGroup(worktreeId, tab.groupId)
-  state.activateTab(tab.id, { worktreeId })
-  // Activating the chat leaf, not the tab, is what hands focus to the chat's composer; an
-  // expanded shell beside it would hide it, so that collapses as moving to another pane does.
-  activateTabAndFocusPane(tab.entityId, chatLeafId, { collapseExpandedPane: true })
-  activateTerminalTabOnOwner(worktreeId, tab.entityId, chatLeafId)
+  revealTerminalPane(worktreeId, tab, chatLeafId)
   requestNativeChatComposerFocus(tab.entityId)
   return true
+}
+
+function revealTerminalPane(worktreeId: string, tab: Tab, leafId: string): void {
+  const state = useAppStore.getState()
+  state.focusGroup(worktreeId, tab.groupId)
+  state.activateTab(tab.id, { worktreeId })
+  // Activating the leaf, not the tab, is what hands it focus (a chat leaf passes it to its
+  // composer); an expanded pane beside it would hide it, so that collapses as moving to another pane does.
+  activateTabAndFocusPane(tab.entityId, leafId, { collapseExpandedPane: true })
+  activateTerminalTabOnOwner(worktreeId, tab.entityId, leafId)
+}
+
+/**
+ * Puts the quote where the picked agent takes input, never sending it: a chat's composer, or a
+ * plain terminal agent's input through the notes send's guarded paste without its Enter.
+ */
+export async function addQuoteToAgent(
+  worktreeId: string,
+  target: AgentMessageTarget,
+  quote: string
+): Promise<ActiveAgentNotesSendResult> {
+  if (addQuoteToWorkspaceChat(worktreeId, target, quote)) {
+    return { status: 'sent' }
+  }
+  if (target.kind !== 'terminal') {
+    return { status: 'not-writable', code: 'session-send-refused' }
+  }
+  const result = await sendMessageToAgent({ worktreeId, target, prompt: quote, submit: false })
+  const tab = useAppStore
+    .getState()
+    .unifiedTabsByWorktree[worktreeId]?.find(
+      (candidate) => candidate.contentType === 'terminal' && candidate.entityId === target.tabId
+    )
+  if (result.status === 'sent' && tab) {
+    revealTerminalPane(worktreeId, tab, target.leafId)
+  }
+  return result
 }

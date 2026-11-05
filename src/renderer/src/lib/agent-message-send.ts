@@ -16,8 +16,10 @@ export async function sendMessageToAgent(args: {
   worktreeId: string
   target: AgentMessageTarget
   prompt: string
+  /** False leaves the prompt unsent in a terminal agent's input; a chat takes it in its composer instead. */
+  submit?: boolean
 }): Promise<ActiveAgentNotesSendResult> {
-  const { target, worktreeId } = args
+  const { target, worktreeId, submit = true } = args
   const prompt = args.prompt.trim()
   if (!prompt) {
     return { status: 'empty', code: 'empty' }
@@ -26,8 +28,13 @@ export async function sendMessageToAgent(args: {
     return sendNotesToActiveAgentSession({
       worktreeId,
       prompt,
-      noteTarget: { tabId: target.tabId, leafId: target.leafId }
+      noteTarget: { tabId: target.tabId, leafId: target.leafId },
+      submit
     })
+  }
+  // A chat's unsent text belongs in its composer; this path only sends to it.
+  if (!submit) {
+    return { status: 'not-writable', code: 'session-send-refused' }
   }
   const state = useAppStore.getState()
   const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(

@@ -34,9 +34,7 @@ type NotesSendMenuFixtureHarness = {
   worktreeAgentRows: DashboardAgentRowData[]
   noteTargets: NotesSendAgentTarget[]
   now: number
-  addQuoteToWorkspaceChat: Mock
-  /** Tabs whose chat has a composer, for Add to chat. */
-  composerTabIds: string[]
+  addQuoteToAgent: Mock
 }
 
 const harness: NotesSendMenuFixtureHarness = vi.hoisted(() => ({
@@ -47,8 +45,7 @@ const harness: NotesSendMenuFixtureHarness = vi.hoisted(() => ({
   worktreeAgentRows: [] as DashboardAgentRowData[],
   noteTargets: new Array<NotesSendAgentTarget>(),
   now: 600_000,
-  addQuoteToWorkspaceChat: vi.fn(),
-  composerTabIds: new Array<string>()
+  addQuoteToAgent: vi.fn()
 }))
 
 vi.mock('react', async () => {
@@ -189,12 +186,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 vi.mock('@/components/native-chat/native-chat-workspace-selection', () => ({
-  addQuoteToWorkspaceChat: harness.addQuoteToWorkspaceChat,
-  addToChatUnavailableLabel: () => 'No composer',
-  withAddToChatEligibility: (target: NotesSendAgentTarget) =>
-    harness.composerTabIds.includes(target.tabId)
-      ? target
-      : { ...target, status: 'disabled', disabledReason: 'No composer' }
+  addQuoteToAgent: harness.addQuoteToAgent
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
