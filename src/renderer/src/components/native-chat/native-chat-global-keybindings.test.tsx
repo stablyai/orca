@@ -3,13 +3,13 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
-import { worktree } from '../components/sidebar/worktree-list/grouping/worktree-list-groups-test-fixtures'
-import { useGlobalKeybindings } from './use-global-keybindings'
-import { useNativeChatComposerKeyDown } from '../components/native-chat/use-native-chat-composer-keydown'
-import { RENAME_TERMINAL_TAB_EVENT } from '../components/tab-bar/terminal-tab-rename-request'
-import { installMainWindowShortcutRouting } from '../../../main/window/main-window-shortcut-routing'
-import { registerWorkspaceShortcutIpcBridge } from '../hooks/ipc-events/workspace-shortcut-ipc-bridge'
-import type { MainWindowFocusLifecycle } from '../../../main/window/main-window-focus-lifecycle'
+import { worktree } from '../sidebar/worktree-list/grouping/worktree-list-groups-test-fixtures'
+import { useGlobalKeybindings } from '../../app-shell/use-global-keybindings'
+import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
+import { RENAME_TERMINAL_TAB_EVENT } from '../tab-bar/terminal-tab-rename-request'
+import { installMainWindowShortcutRouting } from '../../../../main/window/main-window-shortcut-routing'
+import { registerWorkspaceShortcutIpcBridge } from '../../hooks/ipc-events/workspace-shortcut-ipc-bridge'
+import type { MainWindowFocusLifecycle } from '../../../../main/window/main-window-focus-lifecycle'
 import type { BrowserWindow, Input } from 'electron'
 
 const fixture = vi.hoisted(() => ({
@@ -48,11 +48,11 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
 vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
 }))
-vi.mock('../components/sidebar/workspace-actions/deletion/delete-worktree-flow', () => ({
+vi.mock('../sidebar/workspace-actions/deletion/delete-worktree-flow', () => ({
   runWorktreeDelete: fixture.deleteWorktree
 }))
 vi.mock('electron', () => ({ app: { isPackaged: true } }))
-vi.mock('./app-window-chrome', () => ({
+vi.mock('../../app-shell/app-window-chrome', () => ({
   get shortcutPlatform() {
     return fixture.platform
   }
