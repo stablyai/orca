@@ -211,7 +211,10 @@ async function moveLeafToNewTab(
   }
   // Failed persistence rolls main back; unknown outcomes fault persistence and reload converges on main’s committed side.
   console.warn('[terminal-pane-detach] main did not move the pane', answer)
-  reportMoveFailed()
+  // A move another client asked for is refused to that client; this window's user did not drag it.
+  if (!args.targetTabId) {
+    reportMoveFailed()
+  }
   return null
 }
 
