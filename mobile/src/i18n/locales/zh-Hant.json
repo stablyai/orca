@@ -24,6 +24,7 @@
     "panel": {
       "all": "全部",
       "emptyScope": "此範圍內沒有過往的代理程式工作階段。",
+      "loading": "正在載入代理程式工作階段…",
       "missingResumeId": "此工作階段缺少恢復識別碼。",
       "noSearchResults": "沒有符合搜尋條件的工作階段。",
       "noSessions": "沒有代理程式工作階段",

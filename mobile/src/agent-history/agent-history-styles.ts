@@ -129,5 +129,10 @@ export const styles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 17
+  },
+  footerLoading: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center'
   }
 }))

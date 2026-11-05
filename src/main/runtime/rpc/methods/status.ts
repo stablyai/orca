@@ -2,6 +2,8 @@ import { defineMethod } from '../core'
 import { getRemoteServerUpdaterSnapshot } from '../../remote-server-updater'
 import { getPublishedHostDescriptor } from '../../hosts/platform-probe/host-descriptor'
 import { StatusGetParams } from '../../../../shared/rpc-contract/status-params'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
+import { prewarmAiVaultSessionListCache } from '../../../ai-vault/cached-session-list'
 import { readHostMachineWithin } from '../../hosts/platform-probe/runtime-host-machine'
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../hosts/platform-probe/runtime-machine-name'
 
@@ -23,8 +25,19 @@ export const STATUS_METHODS = [
       ])
       const snapshot = getRemoteServerUpdaterSnapshot(runtime.getRuntimeId())
       const hostDescriptor = getPublishedHostDescriptor(runtime.getRuntimeId())
+      const status = runtime.getStatus()
+      let activePath: string | undefined
+      try {
+        const lastActiveId = runtime.getUIState?.().lastActiveWorktreeId
+        activePath = lastActiveId
+          ? splitWorktreeIdForFilesystem(lastActiveId)?.worktreePath
+          : undefined
+      } catch {
+        // Store may be uninitialized in minimal runtime test stubs.
+      }
+      prewarmAiVaultSessionListCache(activePath ? [activePath] : undefined)
       return {
-        ...runtime.getStatus(),
+        ...status,
         ...(hostDescriptor ? { hostDescriptor } : {}),
         ...(hostMachine ? { hostMachine } : {}),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),

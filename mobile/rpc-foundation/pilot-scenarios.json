@@ -14985,6 +14985,7 @@
         {
           "complete": "aiVault.listSessions#1",
           "params": {
+            "afterFingerprint": null,
             "force": false,
             "limit": 500,
             "scopePaths": ["/repo/feature"]
@@ -15084,6 +15085,7 @@
         {
           "complete": "aiVault.listSessions#1",
           "params": {
+            "afterFingerprint": null,
             "force": false,
             "limit": 500,
             "scopePaths": ["/repo/feature"]
@@ -20486,6 +20488,7 @@
         {
           "complete": "aiVault.listSessions#1",
           "params": {
+            "afterFingerprint": null,
             "force": false,
             "limit": 500,
             "scopePaths": ["/repo/feature"]

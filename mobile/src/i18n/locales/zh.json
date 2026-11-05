@@ -24,6 +24,7 @@
     "panel": {
       "all": "全部",
       "emptyScope": "此范围内暂无历史智能体会话。",
+      "loading": "正在加载智能体会话…",
       "missingResumeId": "此会话缺少恢复 ID。",
       "noSearchResults": "没有符合搜索条件的会话。",
       "noSessions": "暂无智能体会话",

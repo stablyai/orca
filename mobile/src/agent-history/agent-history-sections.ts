@@ -8,6 +8,8 @@ import {
   type AiVaultSession
 } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 
+import type { MobileSegment } from '../components/MobileSegmentedControl'
+import type { Translate } from '../i18n/mobile-i18n'
 import {
   buildMobileAgentHistoryCard,
   type MobileAgentHistoryCard
@@ -18,6 +20,15 @@ export type MobileAgentHistorySection = {
   key: string
   label: string
   data: MobileAgentHistoryCard[]
+}
+
+/** Workspace, project, and all. On the phone, project means the active repo. */
+export function mobileAgentHistoryScopeSegments(t: Translate): MobileSegment<AiVaultScope>[] {
+  return [
+    { value: 'workspace', label: t('agentHistory.panel.workspace', 'Workspace') },
+    { value: 'project', label: t('agentHistory.panel.project', 'Project') },
+    { value: 'all', label: t('agentHistory.panel.all', 'All') }
+  ]
 }
 
 // Host scopePaths only widen discovery, so narrow Workspace/Project by cwd prefix client-side (desktop's scope paths); All stays unfiltered.
