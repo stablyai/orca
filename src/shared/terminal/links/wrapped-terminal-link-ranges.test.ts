@@ -266,4 +266,18 @@ describe('buildHardWrappedPathLogicalLineCandidates', () => {
       end: { x: secondFragment.length * 2, y: 2 }
     })
   })
+
+  it('reconstructs hard-wrapped Chinese file paths across rows', () => {
+    const rows = [
+      makeBufferLine('章-验棺.md第01章-验棺.md（路径：D:\\code'),
+      makeBufferLine('  \\写作\\小说\\三国坞堡穿越\\卷一\\正文\\第01章-'),
+      makeBufferLine('  验棺.md）')
+    ]
+    const candidates = buildHardWrappedPathLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)
+    expect(
+      candidates.some(
+        (item) => item.text === 'D:\\code\\写作\\小说\\三国坞堡穿越\\卷一\\正文\\第01章-验棺.md'
+      )
+    ).toBe(true)
+  })
 })
