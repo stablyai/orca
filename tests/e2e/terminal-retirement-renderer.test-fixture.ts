@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { createStore } from '../../src/main/persistence/persistence-test-harness'
 import type { setRuntimeDesktopSurface as SetRuntimeDesktopSurface } from '../../src/main/runtime/runtime-desktop-surface'
@@ -99,11 +99,17 @@ export async function loadRetirementRenderer(
     setRuntimeDesktopSurface({
       showNotification: () => false,
       findWindowById: () => {
+        const webContentsView: Pick<WebContents, 'isDestroyed' | 'setBackgroundThrottling'> = {
+          isDestroyed: (): boolean => false,
+          setBackgroundThrottling: () => {}
+        }
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Lookup/attachment consumes only the native destruction and throttling methods implemented here.
+        const webContents = webContentsView as WebContents
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime lookup/attachment uses only isDestroyed and webContents' isDestroyed/setBackgroundThrottling here.
         return {
-          isDestroyed: () => false,
-          webContents: { isDestroyed: () => false, setBackgroundThrottling: () => {} }
-        } as BrowserWindow
+          isDestroyed: (): boolean => false,
+          webContents
+        } satisfies Pick<BrowserWindow, 'isDestroyed' | 'webContents'> as BrowserWindow
       },
       onIpc: () => {},
       removeIpcListener: () => {}

@@ -1,10 +1,17 @@
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
-import type { BrowserWindow, ipcMain } from 'electron'
+import type {
+  BrowserWindow,
+  IpcMainEvent,
+  IpcMainInvokeEvent,
+  WebContents,
+  ipcMain
+} from 'electron'
 import { testState } from '../../persistence/persistence-test-harness'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { Store } from '../../persistence/loading-store/store'
+import type { FanoutEventSource } from '../events/event-listener-fanout'
 
 type InvokeHandler = Parameters<typeof ipcMain.handle>[1]
 type IpcListener = Parameters<typeof ipcMain.on>[1]
@@ -48,9 +55,13 @@ export async function installAcknowledgedCloseRelay(
   const unsubs: (() => void)[] = []
   type Request = Parameters<Parameters<typeof window.api.ui.onTerminalTabCloseRequest>[0]>[0]
   let requestConsumer: ((request: Request) => void) | undefined
-  const webContents = Object.assign(new EventEmitter(), {
+  const webContentsView: Pick<
+    WebContents,
+    'id' | 'isDestroyed' | 'send' | 'setBackgroundThrottling'
+  > &
+    FanoutEventSource = Object.assign(new EventEmitter(), {
     id: 1,
-    isDestroyed: () => false,
+    isDestroyed: (): boolean => false,
     setBackgroundThrottling: () => {},
     send: (channel: string, request: Request) => {
       if (channel !== 'ui:terminalTabCloseRequest' || !requestConsumer) {
@@ -59,16 +70,27 @@ export async function installAcknowledgedCloseRelay(
       queueMicrotask(() => requestConsumer?.(request))
     }
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The relay consumes only this native value view and the real EventEmitter listener methods.
+  const webContents = webContentsView as WebContents
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The close relay uses only isDestroyed and this EventEmitter webContents' send/lifecycle methods.
-  const win = { isDestroyed: () => false, webContents } as BrowserWindow
+  const win = {
+    isDestroyed: (): boolean => false,
+    webContents
+  } satisfies Pick<BrowserWindow, 'isDestroyed' | 'webContents'> as BrowserWindow
   registerSessionHandlers(store, runtime)
   const invoke = async (channel: string, ...args: unknown[]) => {
     const handler = closeIpc.handlers.get(channel)
     if (!handler) {
       throw new Error('session handler missing')
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Session handlers use only sender identity; this is the relay's exact webContents.
-    return handler({ sender: webContents } as Parameters<InvokeHandler>[0], ...args)
+    return handler(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Session handlers use only sender identity; this is the relay's exact webContents.
+      { sender: webContents } satisfies Pick<
+        IpcMainInvokeEvent,
+        'sender'
+      > as Parameters<InvokeHandler>[0],
+      ...args
+    )
   }
   Object.assign(window.api, {
     session: {
@@ -101,17 +123,29 @@ export async function installAcknowledgedCloseRelay(
             ...response,
             error: 'wrong-sender'
           })
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The response consumer reads only sender identity before checking this mismatched request ID.
-          listener({ sender: webContents } as Parameters<IpcListener>[0], {
-            ...response,
-            requestId: 'other-request',
-            error: 'wrong-request'
-          })
+          listener(
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The response consumer reads only sender identity before checking this mismatched request ID.
+            { sender: webContents } satisfies Pick<
+              IpcMainEvent,
+              'sender'
+            > as Parameters<IpcListener>[0],
+            {
+              ...response,
+              requestId: 'other-request',
+              error: 'wrong-request'
+            }
+          )
         }
         onAck()
         for (const listener of listeners) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The response consumer reads only sender identity; the selected window owns these webContents.
-          listener({ sender: webContents } as Parameters<IpcListener>[0], response)
+          listener(
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The response consumer reads only sender identity; the selected window owns these webContents.
+            { sender: webContents } satisfies Pick<
+              IpcMainEvent,
+              'sender'
+            > as Parameters<IpcListener>[0],
+            response
+          )
         }
       })
     }
