@@ -191,3 +191,65 @@ it('sends its end only after acking what the poll in flight took', async () => {
 
   expect(mailPosts).toEqual(['poll', 'ack', 'end'])
 })
+
+it('acks polled mail as not submitted when the session id cannot be read', async () => {
+  const handlers = new Map<string, Hook>()
+  const register: (on: On) => void = runInNewContext(
+    `${CLAUDE_AGENT_VIEW_MOD_SOURCE.replace('export function register', 'function register')}\nregister`
+  )
+  register((event, matcherOrHook, hook) => {
+    const handler = typeof matcherOrHook === 'function' ? matcherOrHook : hook
+    if (handler) {
+      handlers.set(event, handler)
+    }
+  })
+  const timers: { ms: number; tick: () => Promise<unknown> }[] = []
+  const acks: Record<string, unknown>[] = []
+  let reads = 0
+  const submit = vi.fn(async () => ({ text: 'ok' }))
+  const api = {
+    env: {
+      get: async (key: string) =>
+        ({
+          ORCA_PANE_KEY: 'tab:11111111-1111-4111-8111-111111111111',
+          ORCA_AGENT_HOOK_PORT: '1234',
+          ORCA_AGENT_HOOK_TOKEN: 'test-token'
+        })[key]
+    },
+    // The poll reads the id once; the read before submitting fails.
+    session: {
+      id: async () => {
+        reads += 1
+        if (reads > 1) {
+          throw new Error('session gone')
+        }
+        return 'session-1'
+      }
+    },
+    clock: {
+      now: async () => 1_700_000_000_000,
+      every: (ms: number, tick: () => Promise<unknown>) => timers.push({ ms, tick })
+    },
+    prompt: { submit },
+    http: {
+      fetch: async (_url: string, options: { body: string }) => {
+        const body = JSON.parse(options.body)
+        if (body.action === 'ack') {
+          acks.push(body)
+        }
+        const reply = body.action === 'poll' ? { submissions: [{ id: 'sub-1', text: 'mail' }] } : {}
+        return { ok: true, text: JSON.stringify(reply) }
+      }
+    }
+  }
+
+  await handlers.get('session.start')?.(
+    api,
+    { isInteractive: true, surface: 'terminal' },
+    async () => ({})
+  )
+  await timers.find((timer) => timer.ms === 1000)?.tick()
+
+  expect(submit).not.toHaveBeenCalled()
+  expect(acks).toEqual([expect.objectContaining({ id: 'sub-1', submitted: false })])
+})

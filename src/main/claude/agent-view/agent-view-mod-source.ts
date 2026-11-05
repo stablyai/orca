@@ -82,7 +82,10 @@ let mailTimerStarted = false
       for (const item of Array.isArray(reply.submissions) ? reply.submissions : []) {
         let submitted = false
         // A /clear or resume during an await starts another session; its mail is not this one's.
-        const current = mailIdentity === session && (await $.session.id()) === session.sessionId
+        let current = false
+        try {
+          current = mailIdentity === session && (await $.session.id()) === session.sessionId
+        } catch {}
         try {
           if (current) {
             const result = await $.prompt.submit({ text: String(item.text) })
