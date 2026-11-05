@@ -1372,7 +1372,6 @@
 7 test-no-real-time-wait:tests/e2e/korean-ime-terminal-shift-enter-commit.spec.ts
 7 test-no-wall-clock:src/main/runtime/worker-terminal-wrap-provenance.test.ts
 7 test-no-wall-clock:src/main/skills/skill-install-lock.test.ts
-7 test-no-wall-clock:src/renderer/src/components/automations/AutomationListLocalRows.test.tsx
 7 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.behavior.test.tsx
 7 test-no-wall-clock:src/renderer/src/store/slices/jira.test.ts
 7 test-no-wall-clock:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
