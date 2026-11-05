@@ -71,8 +71,9 @@ describe('changed-code quality line matching', () => {
     expect(scan.args[scan.args.indexOf('import/no-cycle') - 1]).toBe('--allow')
   })
 
-  it('leaves Cloud source to the independent Cloud quality checks', () => {
+  it('leaves Cloud and standalone plugins to their own quality checks', () => {
     expect(isRootCodeQualityPath('cloud/apps/relay/src/index.ts')).toBe(false)
+    expect(isRootCodeQualityPath('phorca-plugins/pr-guide/comment-ui.jsx')).toBe(false)
     expect(isRootCodeQualityPath('src/main/index.ts')).toBe(true)
   })
 })

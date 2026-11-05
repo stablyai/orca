@@ -8,7 +8,8 @@ import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
-const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
+// Standalone plugin packages run their own build and tests.
+const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/', 'phorca-plugins/']
 const CASTING_RULE = 'typescript/consistent-type-assertions'
 const CASTING_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*typescript\/consistent-type-assertions/
