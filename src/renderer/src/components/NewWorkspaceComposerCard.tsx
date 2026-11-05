@@ -28,6 +28,9 @@ import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceCo
 import { NewWorkspaceComposerFooter } from './new-workspace/NewWorkspaceComposerFooter'
 import { NewWorkspaceComposerNameSection } from './new-workspace/NewWorkspaceComposerNameSection'
 import { NewWorkspaceComposerProjectSection } from './new-workspace/NewWorkspaceComposerProjectSection'
+import { NewWorkspaceComposerPromptSection } from './new-workspace/NewWorkspaceComposerPromptSection'
+import { NewWorkspaceComposerPromptToolbar } from './new-workspace/NewWorkspaceComposerPromptToolbar'
+import { NewWorkspaceComposerTargetNotices } from './new-workspace/NewWorkspaceComposerTargetNotices'
 import {
   EMPTY_EPHEMERAL_VM_RECIPES,
   EMPTY_PROJECT_HOST_SETUP_OPTIONS,
@@ -92,6 +95,7 @@ export default function NewWorkspaceComposerCard(
   const openModal = useAppStore((state) => state.openModal)
   const activeModal = useAppStore((state) => state.activeModal)
   const defaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
+  const promptFirst = useAppStore((state) => state.settings?.promptFirstComposer === true)
   const disabledTuiAgents = useAppStore(
     (state) => state.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
@@ -176,13 +180,21 @@ export default function NewWorkspaceComposerCard(
     },
     [attachDropOwner, cancelNameInputFocusFrame, composerRef, onComposerNodeChange]
   )
-  const focusNameInput = React.useCallback((): void => {
+  // Why: picking a project hands focus to whatever gets typed next: the prompt
+  // in the prompt-first layout, the name/source field in the classic one.
+  const focusNextInput = React.useCallback((): void => {
     cancelNameInputFocusFrame()
     nameInputFocusFrameRef.current = requestAnimationFrame(() => {
       nameInputFocusFrameRef.current = null
+      if (promptFirst) {
+        composerRef?.current
+          ?.querySelector<HTMLElement>('[data-workspace-prompt-input="true"]')
+          ?.focus()
+        return
+      }
       nameInputRef?.current?.focus()
     })
-  }, [cancelNameInputFocusFrame, nameInputRef])
+  }, [cancelNameInputFocusFrame, composerRef, nameInputRef, promptFirst])
   const handleAddProject = React.useCallback((): void => {
     if (onAddProjectOverride) {
       onAddProjectOverride()
@@ -260,6 +272,24 @@ export default function NewWorkspaceComposerCard(
     agentTrigger?.focus()
   }, [composerRef])
 
+  const targetPickerProps = {
+    projectOptions,
+    projectHostSetupOptions,
+    ephemeralVmRecipes,
+    projectDescriptionId,
+    onAddProject: handleAddProject,
+    shouldShowRunTargetPicker,
+    handleProjectHostSetupChange: (setupId: string) => onProjectHostSetupChange?.(setupId),
+    handleAddSshHost: () => setAddRemoteHostMode('ssh'),
+    handleAddRemoteServer: () => setAddRemoteHostMode('server'),
+    handleConnectRunTargetHost,
+    handleSetLocation
+  }
+  const agentPickerProps = {
+    visibleQuickAgents,
+    defaultTuiAgent,
+    handleSetDefaultAgent
+  }
   useContextualTour(
     'workspace-creation',
     projectOptions.length > 0 && Boolean(selectedProjectId),
@@ -287,34 +317,53 @@ export default function NewWorkspaceComposerCard(
       )}
     >
       <div className={cn('min-h-0 min-w-0 space-y-4 pt-3', contentClassName)}>
-        <NewWorkspaceComposerProjectSection
-          {...props}
-          disabled={sparseEditing}
-          projectOptions={projectOptions}
-          projectHostSetupOptions={projectHostSetupOptions}
-          ephemeralVmRecipes={ephemeralVmRecipes}
-          projectDescriptionId={projectDescriptionId}
-          onAddProject={handleAddProject}
-          focusNameInput={focusNameInput}
-          shouldShowRunTargetPicker={shouldShowRunTargetPicker}
-          handleProjectHostSetupChange={(setupId) => onProjectHostSetupChange?.(setupId)}
-          handleAddSshHost={() => setAddRemoteHostMode('ssh')}
-          handleAddRemoteServer={() => setAddRemoteHostMode('server')}
-          handleConnectRunTargetHost={handleConnectRunTargetHost}
-          handleSetLocation={handleSetLocation}
-          sshStatusLabel={sshStatusLabel}
-          connectButtonLabel={connectButtonLabel}
-          selectedProjectName={selectedProjectName}
-        />
-        <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
-        <NewWorkspaceComposerAgentSection
-          {...props}
-          createDisabled={props.createDisabled || sparseEditing}
-          advancedLocked={sparseEditing}
-          visibleQuickAgents={visibleQuickAgents}
-          defaultTuiAgent={defaultTuiAgent}
-          handleSetDefaultAgent={handleSetDefaultAgent}
-        />
+        {promptFirst ? (
+          <>
+            <NewWorkspaceComposerPromptSection
+              {...props}
+              createDisabled={props.createDisabled || sparseEditing}
+              toolbar={
+                <NewWorkspaceComposerPromptToolbar
+                  {...props}
+                  {...targetPickerProps}
+                  {...agentPickerProps}
+                  disabled={sparseEditing}
+                  createDisabled={props.createDisabled || sparseEditing}
+                  focusPromptInput={focusNextInput}
+                  submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
+                />
+              }
+            />
+            <NewWorkspaceComposerTargetNotices
+              {...props}
+              projectOptions={projectOptions}
+              projectDescriptionId={projectDescriptionId}
+              sshStatusLabel={sshStatusLabel}
+              connectButtonLabel={connectButtonLabel}
+              selectedProjectName={selectedProjectName}
+            />
+            <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
+          </>
+        ) : (
+          <>
+            <NewWorkspaceComposerProjectSection
+              {...props}
+              {...targetPickerProps}
+              disabled={sparseEditing}
+              focusNameInput={focusNextInput}
+              sshStatusLabel={sshStatusLabel}
+              connectButtonLabel={connectButtonLabel}
+              selectedProjectName={selectedProjectName}
+            />
+            <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
+            <NewWorkspaceComposerAgentSection
+              {...props}
+              {...agentPickerProps}
+              createDisabled={props.createDisabled || sparseEditing}
+              advancedLocked={sparseEditing}
+            />
+          </>
+        )}
         <NewWorkspaceComposerAdvancedSection
           {...props}
           onSparseEditingChange={setSparseEditing}
@@ -333,6 +382,7 @@ export default function NewWorkspaceComposerCard(
           <NewWorkspaceComposerFooter
             {...props}
             submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
+            hidePrimaryAction={promptFirst}
           />
         </div>
       ) : null}

@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import type { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import { resolveQuickCreatePrompt } from '@/lib/quick-create-prompt'
 import type { ComposerModel } from './composer-model'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -128,6 +129,7 @@ export async function prepareQuickComposerStartup(
     executionHostId: ComposerModel['selectedRepoExecutionHostId']
     linkedWorkItem: Parameters<typeof resolveQuickCreateLinkedWorkItemPrompt>[0]
     note: string
+    typedPrompt?: string
   }
 ): Promise<QuickComposerStartup & { prompt: string; draftPrompt: string | null }> {
   const preferences = input.agent
@@ -137,10 +139,11 @@ export async function prepareQuickComposerStartup(
         executionHostId: input.executionHostId ?? undefined
       })
     : undefined
-  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
-    input.agent ? input.linkedWorkItem : null,
-    input.note
-  )
+  const { prompt, draftPrompt } = resolveQuickCreatePrompt({
+    typedPrompt: input.agent ? (input.typedPrompt ?? '') : '',
+    linkedWorkItem: input.agent ? input.linkedWorkItem : null,
+    note: input.note
+  })
   return {
     prompt,
     draftPrompt,

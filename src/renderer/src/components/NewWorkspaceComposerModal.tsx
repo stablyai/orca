@@ -4,19 +4,13 @@ import {
   type AgentPickerEntry
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
-import type { DirectWorkItemSetupRequest } from '@/lib/direct-work-item-setup'
 import { agentChoicePending } from '@/lib/host-chat-program'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { cn } from '@/lib/utils'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog, {
   restoreAgentSettingsInvoker
@@ -28,20 +22,17 @@ import {
   pickQuickWorkspaceAgent,
   resolveQuickWorkspaceAgentSelection
 } from '@/lib/quick-workspace-agent-selection'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
-import type { WorkspaceStatus } from '../../../shared/worktree/types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import { useComposerDialogYieldsToPane } from '@/components/new-workspace/use-composer-dialog-yields-to-pane'
+import { DialogComposerHeading } from '@/components/new-workspace/DialogComposerHeading'
+import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
@@ -53,31 +44,13 @@ const HostedAddRepoDialog = lazyWithRetry(
   }
 )
 
-type ComposerModalData = {
-  directSetup?: DirectWorkItemSetupRequest
-  prefilledName?: string
-  initialRepoId?: string
-  initialEphemeralVmRecipeId?: string
-  initialProjectGroupId?: string
-  linkedWorkItem?: LinkedWorkItemSummary | null
-  initialGitHubWorkItem?: GitHubWorkItem | null
-  taskSourceContext?: TaskSourceContext | null
-  initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
-  initialBaseBranch?: string
-  initialWorkspaceStatus?: WorkspaceStatus
-  enableIssueAutomation?: boolean
-  /** Creation-surface telemetry; each opener supplies it, otherwise use unknown. */
-  telemetrySource?: WorkspaceCreateTelemetrySource
-  contextualTourSource?: string
-  setupGuideTourRequestId?: string
-}
-
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
   const modalData = useAppStore((s) => s.modalData as ComposerModalData | undefined)
   const closeModal = useAppStore((s) => s.closeModal)
+  const yieldsToPane = useComposerDialogYieldsToPane(visible)
 
-  if (!visible) {
+  if (!visible || yieldsToPane) {
     return null
   }
 
@@ -97,6 +70,7 @@ function ComposerModalBody({
   modalData: ComposerModalData
   onClose: () => void
 }): React.JSX.Element {
+  const promptFirst = useAppStore((s) => s.settings?.promptFirstComposer === true)
   const dialogRef = useRef<HTMLDivElement>(null)
   const submitCancelledRef = useRef(false)
   const handleDismiss = useCallback(() => {
@@ -109,7 +83,10 @@ function ComposerModalBody({
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent
         ref={dialogRef}
-        className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
+        className={cn(
+          'flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden',
+          promptFirst ? 'sm:max-w-2xl' : 'sm:max-w-lg'
+        )}
         onEscapeKeyDown={(event) => {
           if (dialogRef.current?.querySelector('[data-sparse-preset-editor]')) {
             event.preventDefault()
@@ -122,27 +99,34 @@ function ComposerModalBody({
           getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
-        <QuickTabBody
+        <WorkspaceComposerBody
           modalData={modalData}
           onClose={onClose}
           isSubmissionCancelled={isSubmissionCancelled}
           active
+          heading={DialogComposerHeading}
         />
       </DialogContent>
     </Dialog>
   )
 }
 
-function QuickTabBody({
+/** Composer state and card, hosted by the dialog or the center pane; `heading` renders the host's title. */
+export function WorkspaceComposerBody({
   modalData,
   onClose,
   isSubmissionCancelled,
-  active
+  active,
+  heading: Heading,
+  cardContentClassName = '-mx-2 flex-1 overflow-y-auto px-2 pb-1 scrollbar-sleek'
 }: {
   modalData: ComposerModalData
   onClose: () => void
   isSubmissionCancelled: () => boolean
   active: boolean
+  heading: React.ComponentType<{ title: string; description: string }>
+  /** The dialog scrolls the card body; the pane lets it size to content. */
+  cardContentClassName?: string
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const {
@@ -270,6 +254,7 @@ function QuickTabBody({
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
       setupOnly: quickAgent === null,
       launchChoice: launchSelection.choice,
+      typedPrompt: cardProps.agentPrompt,
       ...(launchInputs ? { launchInputs } : {})
     })
   }, [
@@ -278,7 +263,8 @@ function QuickTabBody({
     launchSelection.choice,
     submitQuick,
     pickerDraft,
-    quickAgentPick.entry
+    quickAgentPick.entry,
+    cardProps.agentPrompt
   ])
   // Layer Add Project without replacing the composer. Retain it for close animation and clone/scan cancellation; folder/non-Git navigation still tears down the modal.
   const [addProjectOpen, setAddProjectOpen] = useState(false)
@@ -353,27 +339,25 @@ function QuickTabBody({
 
   return (
     <>
-      <DialogHeader className="gap-1">
-        <DialogTitle className="text-base font-semibold">
-          {isFolderWorkspaceTarget
+      <Heading
+        title={
+          isFolderWorkspaceTarget
             ? translate(
                 'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
                 'Create Folder Workspace'
               )
-            : primaryActionLabel}
-        </DialogTitle>
-        <DialogDescription className="sr-only">
-          {translate(
-            'components.newWorkspace.createDescription',
-            'Choose the project and workspace name. Select an agent if you want to start one.'
-          )}
-        </DialogDescription>
-      </DialogHeader>
+            : primaryActionLabel
+        }
+        description={translate(
+          'components.newWorkspace.createDescription',
+          'Choose the project and workspace name. Select an agent if you want to start one.'
+        )}
+      />
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
         // Keep focus rings and the Advanced hover highlight inside the scroll padding.
         containerClassName="px-2"
-        contentClassName="-mx-2 flex-1 overflow-y-auto px-2 pb-1 scrollbar-sleek"
+        contentClassName={cardContentClassName}
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}

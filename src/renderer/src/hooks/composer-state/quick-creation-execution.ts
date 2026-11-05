@@ -1,6 +1,6 @@
 import type { QuickCreationExecutionInput } from './composer-model'
 
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import { resolveQuickCreatePrompt } from '@/lib/quick-create-prompt'
 import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -9,6 +9,7 @@ import { isWorkspaceStatusAllowedOnHost } from '@/store/host-workspace-status-co
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import type { ComposerCreateHandoff } from '@/lib/composer-create-handoff'
+import { getComposerCreationOptions } from '@/lib/composer-create-handoff'
 import { translate } from '@/i18n/i18n'
 import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
@@ -92,8 +93,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
 
-      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } = resolveQuickCreatePrompt({
+        typedPrompt: agent === null ? '' : (options?.typedPrompt ?? ''),
+        linkedWorkItem: promptLinkedWorkItem,
+        note: trimmedNote
+      })
 
       const startupPolicySettlement = await settleComposerSubmit(
         persistSetupAgentStartupPolicy(),
@@ -152,6 +156,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         agent,
         linkedWorkItem: submitLinkedWorkItem,
         note: trimmedNote,
+        typedPrompt: options?.typedPrompt,
         repoId,
         executionHostId: selectedRepoExecutionHostId,
         settings,
@@ -241,11 +246,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         clearNewWorkspaceDraft()
       }
 
-      if (handoff) {
-        handoff.start(request)
-      } else {
-        runBackgroundWorktreeCreation(request)
-      }
+      const startCreation = handoff?.start ?? runBackgroundWorktreeCreation
+      startCreation(request, getComposerCreationOptions(createMultiple, settings))
 
       // The composer already closed at handoff; closing again could dismiss a newer modal.
       if (handoff?.isHandedOff()) {

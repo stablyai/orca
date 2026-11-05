@@ -19,6 +19,8 @@ type NewWorkspaceComposerFooterProps = Pick<
   | 'primaryActionLabel'
 > & {
   submitShortcutModifierLabel: string
+  /** The prompt-first layout puts the send button inside the prompt box instead. */
+  hidePrimaryAction?: boolean
 }
 
 export function NewWorkspaceComposerFooter({
@@ -30,7 +32,8 @@ export function NewWorkspaceComposerFooter({
   createDisabled,
   creating,
   primaryActionLabel,
-  submitShortcutModifierLabel
+  submitShortcutModifierLabel,
+  hidePrimaryAction = false
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
   return (
     <>
@@ -54,7 +57,8 @@ export function NewWorkspaceComposerFooter({
       <div
         className={cn(
           'flex items-center gap-3',
-          showCreateMultiple ? 'justify-between' : 'justify-end'
+          showCreateMultiple ? 'justify-between' : 'justify-end',
+          hidePrimaryAction && !showCreateMultiple && 'hidden'
         )}
       >
         {showCreateMultiple ? (
@@ -71,16 +75,18 @@ export function NewWorkspaceComposerFooter({
             </span>
           </button>
         ) : null}
-        <Button
-          onClick={() => void onCreate()}
-          disabled={createDisabled}
-          size="sm"
-          className="text-xs"
-        >
-          {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-          {primaryActionLabel}
-          <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
-        </Button>
+        {hidePrimaryAction ? null : (
+          <Button
+            onClick={() => void onCreate()}
+            disabled={createDisabled}
+            size="sm"
+            className="text-xs"
+          >
+            {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
+            {primaryActionLabel}
+            <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
+          </Button>
+        )}
       </div>
     </>
   )

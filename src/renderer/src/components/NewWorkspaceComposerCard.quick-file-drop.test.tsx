@@ -96,7 +96,11 @@ describe('quick-create modal card without an attachment destination', () => {
       </TooltipProvider>
     )
     const card = container.querySelector('[data-workspace-composer-root]')!
-    expect(container.querySelector('textarea')?.getAttribute('placeholder')).toBe('Write a note')
+    expect(
+      container
+        .querySelector('textarea:not([data-workspace-prompt-input])')
+        ?.getAttribute('placeholder')
+    ).toBe('Write a note')
     expect(container.querySelector('[data-attachment-path]')).toBeNull()
     const transfer = { types: ['Files'], files: [new File(['x'], 'notes.txt')], dropEffect: 'link' }
     await act(async () => {

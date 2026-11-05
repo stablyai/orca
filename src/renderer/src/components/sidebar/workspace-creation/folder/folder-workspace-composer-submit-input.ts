@@ -25,6 +25,8 @@ export type SubmitFolderWorkspaceCreateParams = {
   linkedWorkItem: LinkedWorkItemSummary | null
   linkedTaskSourceContext?: TaskSourceContext | null
   note: string
+  /** Composer prompt text; auto-submits with any linked context appended, like git targets. */
+  typedPrompt?: string
   quickAgent: TuiAgent | null
   launchChoice?: AgentLaunchChoice
   launchInputs?: AgentLaunchInputViews

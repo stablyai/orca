@@ -62,6 +62,8 @@ export type QuickSubmitOptions = {
   setupOnly?: boolean
   launchChoice?: AgentLaunchChoice
   launchInputs?: WorktreeCreationRequest['launchInputs']
+  /** Text typed in the composer's prompt box; auto-submits as the agent's first message. */
+  typedPrompt?: string
 }
 
 export function buildQuickCreationRequest(

@@ -5,6 +5,7 @@ import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/worktree-creation-surface'
+import { selectWorkspaceComposerPaneActive } from '@/lib/workspace-composer-pane-surface'
 import { useAppStore } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
@@ -61,8 +62,10 @@ export function useAppChromeLayout() {
   const shouldMountTerminalWorkbench = canMountTerminalWorkbenchNow || hasMountedTerminalWorkbench
   // Creation owns faux chrome throughout; retain the previous workspace without its real chrome.
   const creationLayoutActive = useAppStore(selectWorktreeCreationSurfaceShown)
+  // Why: the prompt-first composer replaces the center pane, so the workbench and its chrome step aside like during creation.
+  const composerPaneActive = useAppStore(selectWorkspaceComposerPaneActive)
   const workspaceChromeActive =
-    activeView === 'terminal' && hasActiveWorktree && !creationLayoutActive
+    activeView === 'terminal' && hasActiveWorktree && !creationLayoutActive && !composerPaneActive
   // Activity/Space own full pages and hide the workspace sidebar.
   const showSidebar =
     activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
@@ -113,6 +116,7 @@ export function useAppChromeLayout() {
     activePendingCreationId,
     activeTabCanExpand,
     collapsedSidebarHeaderWidth,
+    composerPaneActive,
     creationLayoutActive,
     hasActiveWorktree,
     isFullScreen,
