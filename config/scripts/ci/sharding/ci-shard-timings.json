@@ -210,7 +210,6 @@
       "config/scripts/mobile-web-app/shell/mobile-web-app-working-spinner-render.test.mjs": 232,
       "config/scripts/mobile-web-app/platform-seams/mobile-web-app-editable-host-font-size.test.mjs": 167,
       "config/scripts/mobile-web-app/platform-seams/mobile-web-app-external-link-seam.test.mjs": 167,
-      "config/scripts/mobile-web-app/platform-seams/mobile-web-app-haptics-seam.test.mjs": 181,
       "config/scripts/mobile-web-app/preview/mobile-web-app-html-preview-render.test.mjs": 333,
       "config/scripts/mobile-web-app/preview/mobile-web-app-media-preview-render.test.mjs": 196,
       "config/scripts/mobile-web-app/preview/mobile-web-app-svg-preview-render.test.mjs": 340,
