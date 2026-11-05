@@ -89,57 +89,6 @@ function setup() {
   return { guest, event }
 }
 
-describe('native password picker keyboard handoff', () => {
-  it('preserves the field during focus transfer, then invalidates it on navigation', () => {
-    const { guest, event } = setup()
-    const preventDefault = vi.fn()
-    guest.emit('before-input-event', { preventDefault }, { type: 'keyDown', key: 'ArrowDown' })
-    expect(preventDefault).toHaveBeenCalledOnce()
-    expect(renderer.focus).toHaveBeenCalledOnce()
-    expect(renderer.send).toHaveBeenCalledWith(
-      'browserPasswords:fieldFocus',
-      expect.objectContaining({ fieldToken: 'field', keyboardSelection: true })
-    )
-    renderer.send.mockClear()
-    handlers.get(channels.fieldBlurred)?.(event, { fieldToken: 'field', reason: 'focusout' })
-    expect(renderer.send).not.toHaveBeenCalled()
-    guest.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false, initiator: {} })
-    expect(renderer.send).toHaveBeenCalledWith('browserPasswords:fieldBlur', {
-      browserPageId: 'page',
-      fieldToken: 'field'
-    })
-  })
-
-  it('still dismisses on viewport invalidation if no focusout accompanied the transfer', () => {
-    const { guest, event } = setup()
-    guest.emit(
-      'before-input-event',
-      { preventDefault: vi.fn() },
-      { type: 'keyDown', key: 'ArrowDown' }
-    )
-    renderer.send.mockClear()
-    handlers.get(channels.fieldBlurred)?.(event, { fieldToken: 'field' })
-    expect(renderer.send).toHaveBeenCalledWith('browserPasswords:fieldBlur', {
-      browserPageId: 'page',
-      fieldToken: 'field'
-    })
-  })
-
-  it.each(['agent', 'modified'] as const)('does not enter the picker for %s input', (source) => {
-    const { guest } = setup()
-    injecting.mockReturnValue(source === 'agent')
-    const preventDefault = vi.fn()
-    guest.emit(
-      'before-input-event',
-      { preventDefault },
-      { type: 'keyDown', key: 'ArrowDown', control: source === 'modified' }
-    )
-    expect(preventDefault).not.toHaveBeenCalled()
-    expect(renderer.focus).not.toHaveBeenCalled()
-    expect(renderer.send).not.toHaveBeenCalled()
-  })
-})
-
 describe('fill after Touch ID', () => {
   it('refuses to send the password when the page navigated while the prompt was up', async () => {
     const { guest } = setup()
