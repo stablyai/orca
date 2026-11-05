@@ -1,3 +1,7 @@
+import {
+  completePRCheckOwnerScope,
+  acceptPRCheckObservation
+} from '../../../src/shared/github/complete-pr-check-owner'
 import { useCallback, useRef } from 'react'
 import { prSidebarResourceKey, type PrSidebarState } from './mobile-pr-sidebar-state'
 
@@ -20,6 +24,25 @@ export function settleLoadedPr(
   next: PrSidebarState,
   background: boolean
 ): { settled: PrSidebarState; result: 'applied' | 'failed' } {
+  if (
+    accepted.kind === 'ready' &&
+    next.kind === 'ready' &&
+    completePRCheckOwnerScope(next.data.pr) !== undefined &&
+    completePRCheckOwnerScope(next.data.pr) === completePRCheckOwnerScope(accepted.data.pr) &&
+    !next.data.pr.checksSummary
+  ) {
+    next = {
+      ...next,
+      data: {
+        ...next.data,
+        pr: acceptPRCheckObservation(next.data.pr, accepted.data.pr, {
+          scope: completePRCheckOwnerScope(next.data.pr)!,
+          complete: true,
+          current: true
+        })!
+      }
+    }
+  }
   if (!background || !pollChecksReadFailed(accepted, next)) {
     return { settled: next, result: 'applied' }
   }

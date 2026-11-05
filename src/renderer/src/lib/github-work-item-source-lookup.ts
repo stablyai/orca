@@ -1,3 +1,5 @@
+import { capturePRCheckContract, type PRCheckContract } from './pr-check-observation-contract'
+import { acceptPRCheckObservation } from '../../../shared/github/complete-pr-check-owner'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { getWorkItemRepo } from './work-item-repo-row'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
@@ -8,6 +10,8 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { callGitHubTargetOperation } from './github-work-item-target-request'
 import {
   GITHUB_EXACT_OPERATION_UNSUPPORTED,
+  matchesGitHubWorkItemTarget,
+  GitHubWorkItemTargetError,
   requireGitHubWorkItemTargetDetails
 } from '../../../shared/github/work-item-target'
 import {
@@ -22,6 +26,7 @@ type GitHubWorkItemLookupArgs = {
   sourceContext?: TaskSourceContext | null
   number: number
   type?: 'issue' | 'pr'
+  checkContract?: PRCheckContract
 }
 
 type GitHubWorkItemByOwnerRepoLookupArgs = GitHubWorkItemLookupArgs & {
@@ -73,6 +78,15 @@ export async function lookupGitHubWorkItemForSource(
 ): Promise<GitHubWorkItem | null> {
   const records = await captureTaskRecords(args)
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
+  const contract =
+    args.type === 'pr'
+      ? (args.checkContract ??
+        capturePRCheckContract(
+          (await import('@/store')).useAppStore.getState,
+          target,
+          args.sourceContext
+        ))
+      : null
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(
@@ -83,7 +97,10 @@ export async function lookupGitHubWorkItemForSource(
             number: args.number,
             type: args.type
           },
-          { timeoutMs: 30_000 }
+          {
+            timeoutMs: 30_000,
+            ...(args.checkContract ? contract?.rpcOptions : contract?.sourceRpcOptions)
+          }
         )
       : await window.api.gh.workItem({
           repoPath: args.repoPath,
@@ -91,7 +108,13 @@ export async function lookupGitHubWorkItemForSource(
           number: args.number,
           type: args.type
         })
-  const row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
+  if (contract && !(args.checkContract ? contract.current() : contract.sourceCurrent())) {
+    return null
+  }
+  let row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
+  if (row && contract?.complete && contract.current() && !('preview' in args && args.preview)) {
+    row = acceptPRCheckObservation(row, null, { ...contract, current: contract.current() })
+  }
   return row && records ? records.cache.acceptSearch([row], records.binding)[0] : row
 }
 
@@ -103,6 +126,15 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
   }
   const records = await captureTaskRecords(args)
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
+  const contract =
+    args.type === 'pr'
+      ? (args.checkContract ??
+        capturePRCheckContract(
+          (await import('@/store')).useAppStore.getState,
+          target,
+          args.sourceContext
+        ))
+      : null
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(
@@ -119,8 +151,14 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           },
           {
             timeoutMs: 30_000,
+            ...(args.checkContract ? contract?.rpcOptions : contract?.sourceRpcOptions),
             ...args.rpcOptions,
             beforeSend: () => {
+              const contractOptions = args.checkContract
+                ? contract?.rpcOptions
+                : contract?.sourceRpcOptions
+              contractOptions?.beforeSend?.()
+              args.rpcOptions?.beforeSend?.()
               if (args.accepts?.() === false) {
                 throw new Error('Task source changed.')
               }
@@ -141,7 +179,21 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
   if (args.accepts?.() === false) {
     return null
   }
-  const row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
+  if (contract && !(args.checkContract ? contract.current() : contract.sourceCurrent())) {
+    return null
+  }
+  let row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
+  const requestedTarget = {
+    repository: { owner: args.owner, repo: args.repo, ...(args.host ? { host: args.host } : {}) },
+    number: args.number,
+    type: args.type
+  }
+  if (row && !matchesGitHubWorkItemTarget(row, requestedTarget)) {
+    throw new GitHubWorkItemTargetError(requestedTarget)
+  }
+  if (row && contract?.complete && contract.current() && !('preview' in args && args.preview)) {
+    row = acceptPRCheckObservation(row, null, { ...contract, current: contract.current() })
+  }
   // A canonical verification read publishes through its record, not as a search reading.
   return row && records && !args.accepts
     ? records.cache.acceptSearch([row], records.binding)[0]
@@ -156,6 +208,14 @@ export async function lookupGitHubWorkItemDetailsForSource(
   }
   const sourceContext = args.sourceContext
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
+  const contract =
+    args.type === 'pr'
+      ? capturePRCheckContract(
+          (await import('@/store')).useAppStore.getState,
+          args.target ?? getGitHubSourceRuntimeTarget(sourceContext),
+          sourceContext
+        )
+      : null
   let result: GitHubWorkItemDetails | null
   try {
     result = await callGitHubTargetOperation<GitHubWorkItemDetails | null>({
@@ -175,8 +235,10 @@ export async function lookupGitHubWorkItemDetailsForSource(
         type: args.type
       },
       rpcOptions: {
+        ...contract?.sourceRpcOptions,
         ...args.rpcOptions,
         beforeSend: () => {
+          contract?.sourceRpcOptions.beforeSend?.()
           args.rpcOptions?.beforeSend?.()
           if (args.accepts?.() === false) {
             throw new Error('Task context changed.')
@@ -205,6 +267,15 @@ export async function lookupGitHubWorkItemDetailsForSource(
   }
   if (args.accepts?.() === false) {
     return null
+  }
+  if (contract && !contract.sourceCurrent()) {
+    return null
+  }
+  if (result && contract?.complete && contract.current()) {
+    result.item = acceptPRCheckObservation(result.item, null, {
+      ...contract,
+      current: contract.current()
+    })!
   }
   if (args.ownerRepo) {
     requireGitHubWorkItemTargetDetails(result, {
