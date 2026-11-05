@@ -52,10 +52,13 @@ export function MobileNativeChatComposerField({
   const paste = useEffectEvent((event: ClipboardEvent) => onWebPaste?.(event))
   // react-native-web forwards no paste prop; its TextInput ref is the textarea itself.
   useEffect(() => {
-    const field = input.current as unknown as HTMLElement | null
+    const field: unknown = input.current
+    if (!(field instanceof HTMLElement)) {
+      return
+    }
     const listener = (event: ClipboardEvent) => paste(event)
-    field?.addEventListener('paste', listener)
-    return () => field?.removeEventListener('paste', listener)
+    field.addEventListener('paste', listener)
+    return () => field.removeEventListener('paste', listener)
   }, [input])
   const shown = dictationPreview
     ? `${dictationPreview.before}${dictationPreview.text}${dictationPreview.after}`

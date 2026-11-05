@@ -7,7 +7,7 @@ type ClipboardDataLike<F extends ClipboardFileLike> = {
   getData: (format: string) => string
 }
 
-type ClipboardEventDataLike<F extends ClipboardFileLike> = {
+export type ClipboardEventDataLike<F extends ClipboardFileLike> = {
   readonly clipboardData: ClipboardDataLike<F> | null
 }
 

@@ -1,6 +1,7 @@
 import {
   clipboardEventImageFile,
-  clipboardEventPromptText
+  clipboardEventPromptText,
+  type ClipboardEventDataLike
 } from '../../../../../src/shared/native-chat/input/native-chat-clipboard-event'
 import { isNativeChatLongPaste } from '../../../../../src/shared/native-chat/input/native-chat-long-paste'
 import { useClipboardReader, type ClipboardReader } from '../../../platform/clipboard'
@@ -20,8 +21,7 @@ export type MobileNativeChatComposerPasteTargets = {
   readonly clipboard: Pick<ClipboardReader, 'readImage' | 'contents'>
 }
 
-type PasteEvent = {
-  readonly clipboardData: DataTransfer | null
+type PasteEvent = ClipboardEventDataLike<File> & {
   readonly defaultPrevented: boolean
   preventDefault: () => void
 }
