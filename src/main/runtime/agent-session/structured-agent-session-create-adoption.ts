@@ -218,6 +218,29 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   }
 }
 
+/** A conversation the CLI never saved has no history to import, so the chat starts a new one
+ *  instead of refusing; an unreadable transcript still refuses. */
+export async function resolveStructuredAgentSessionAdoptionForCreateOrFresh(
+  input: Parameters<typeof resolveStructuredAgentSessionAdoptionForCreate>[0]
+): Promise<Awaited<ReturnType<typeof resolveStructuredAgentSessionAdoptionForCreate>> | null> {
+  try {
+    return await resolveStructuredAgentSessionAdoptionForCreate(input)
+  } catch (error) {
+    if (
+      !isAgentSessionRefusalError(error) ||
+      error.refusal.code !== 'agent_session_identity_required' ||
+      error.refusal.details?.reason !== 'transcriptNotFound'
+    ) {
+      throw error
+    }
+    console.warn(
+      '[agent-session] resumed conversation has no saved transcript; starting a new chat',
+      { agent: input.agent, providerSessionId: input.providerSessionId }
+    )
+    return null
+  }
+}
+
 /** Only adopt seeds the handle chain; ensure already passes providerHandle without adopting. */
 export function structuredAgentSessionAdoptAttach(input: {
   definition: {
