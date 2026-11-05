@@ -1958,6 +1958,7 @@
       "managedAccountEnvOverride": "이 Claude 실행은 자체 Anthropic 로그인 변수를 설정합니다. 관리되는 Claude 계정을 사용하려면 해당 변수를 제거하세요.",
       "managedAccountUnsupported": "WSL에 Claude 계정이 추가되어 있는 동안에는 Claude 채팅에 Windows Claude 계정이 필요합니다.",
       "modelUnavailable": "{{agent}}이(가) {{detail}}을(를) 사용하지 못했습니다. 다른 모델을 선택하고 다시 보내세요.",
+      "modelUnavailableUpdate": "{{agent}}이(가) {{detail}}을(를) 사용하지 못했습니다. 다시 시작한 후에도 유지하려면 {{agent}}을(를) {{minimumVersion}} 이상으로 업데이트하거나, 다른 모델을 선택하고 다시 보내세요.",
       "noTurnToStop": "{{agent}}에 중지할 실행 중인 턴이 없었습니다.",
       "notDelivered": "이 메시지는 전달되지 않았습니다.",
       "notDeliveredSendAgain": "이 메시지는 전달되지 않았습니다. 계속하려면 다시 보내세요.",

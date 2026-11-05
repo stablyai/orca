@@ -18442,6 +18442,7 @@
         "providerExitedRejection": "{{agent}} 在发送此消息前已停止。",
         "providerExitedAnswer": "{{agent}} 已停止，因此您的回答未发送。发送消息以继续。",
         "modelUnavailable": "{{agent}} 无法使用 {{detail}}。请选择其他模型并重新发送。",
+        "modelUnavailableUpdate": "{{agent}} 无法使用 {{detail}}。请将 {{agent}} 更新到 {{minimumVersion}} 或更高版本，以便重启后继续使用；或者选择其他模型并重新发送。",
         "providerRejected": "{{agent}} 未接受此消息。",
         "providerRejectedQuoted": "{{agent}} 未接受此消息：{{detail}}。",
         "attachmentEmpty": "此消息中的一张图片为空，因此消息未发送。",

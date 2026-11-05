@@ -222,7 +222,9 @@ export function acpStructuredLaunchPart(
       : null
     const fullAccess = basis.permissionMode === 'full-access'
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    const model = spec.launchesWithModel ? record.options?.model : undefined
+    // A load restores the conversation's own model, and a stale role there would stop the agent
+    // before it opens; resumed chats apply their model through the session instead.
+    const model = spec.launchesWithModel && !head ? record.options?.model : undefined
     const args = spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null, model })
     return {
       launch: {

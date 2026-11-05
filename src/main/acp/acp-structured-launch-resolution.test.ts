@@ -54,20 +54,22 @@ function grokRecord(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRe
   }
 }
 
-function ompRecord(options: Record<string, string>): AgentSessionRecord {
+function ompRecord(options: Record<string, string>, resumes: boolean): AgentSessionRecord {
   return grokRecord({
     provider: 'omp',
     accountHome: { variable: 'PI_CODING_AGENT_DIR', path: '/home/user/.omp/agent' },
     options,
-    providerHandleChain: [
-      {
-        linkId: 'link-created',
-        origin: 'created',
-        mintedAtFence: 1,
-        observedAt: 1,
-        handle: { transport: 'acp', agent: 'omp', nativeId: 'omp-1' }
-      }
-    ]
+    providerHandleChain: resumes
+      ? [
+          {
+            linkId: 'link-created',
+            origin: 'created',
+            mintedAtFence: 1,
+            observedAt: 1,
+            handle: { transport: 'acp', agent: 'omp', nativeId: 'omp-1' }
+          }
+        ]
+      : []
   })
 }
 
@@ -292,17 +294,21 @@ describe('ACP launch resolution', () => {
     expect(readJournal).not.toHaveBeenCalled()
   })
 
-  it("puts an OMP chat's saved model on the launch line, where OMP resolves roles", async () => {
-    const launch = await resolver(
-      ompRecord({ model: '@worker_be', effort: 'medium' }),
-      () => null,
-      OMP
-    ).resolve({
-      identity
-    })
-    expect(launch.args.slice(-2)).toEqual(['--model', '@worker_be'])
-    expect(launch.args).not.toContain('--thinking')
-    expect(launch.launchModel).toBe('@worker_be')
+  it('starts a new OMP chat with its saved model on the launch line, where OMP resolves roles', async () => {
+    const start = (resumes: boolean) =>
+      resolver(
+        ompRecord({ model: '@worker_be', effort: 'medium' }, resumes),
+        () => null,
+        OMP
+      ).resolve({ identity })
+    const fresh = await start(false)
+    expect(fresh.args.slice(-2)).toEqual(['--model', '@worker_be'])
+    expect(fresh.args).not.toContain('--thinking')
+    expect(fresh.launchModel).toBe('@worker_be')
+    // A load restores the conversation's own model; the session applies the saved one instead.
+    const resumed = await start(true)
+    expect(resumed.args).not.toContain('--model')
+    expect(resumed.launchModel).toBeUndefined()
   })
 
   it("asks the agent to approve everything only under the chat's full access", async () => {

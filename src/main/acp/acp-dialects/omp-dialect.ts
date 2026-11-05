@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpAgentError } from '../acp-errors'
-import type { AcpCompactionReply, AcpDialect } from './acp-dialect'
+import type { AcpCompactionReply, AcpDialect, AcpModelCommandReply } from './acp-dialect'
 
 // Read raw result text instead of the repeated command echo in content.
 // Only timed foreground completion implies exit zero; service/background launches prove no exit.
@@ -106,6 +106,22 @@ function compactionReply(text: string): AcpCompactionReply | undefined {
     : { outcome: 'failed', detail: reply }
 }
 
+// `/model` (builtin-modes.ts) says "Model set to p/id." only after the model and any :level apply.
+const MODEL_SET = /^Model set to (\S+)\.$/
+
+function modelCommandReply(text: string): AcpModelCommandReply {
+  const reply = text.trim()
+  const applied = MODEL_SET.exec(reply)?.[1]
+  if (applied) {
+    return { applied }
+  }
+  // A failure after the switch still says "Failed to set model"; the value stays unapplied.
+  return {
+    refused: /\bNo API key\b/.test(reply) ? 'notSignedIn' : 'modelUnavailable',
+    detail: reply
+  }
+}
+
 function errorDetails(error: AcpAgentError): string | undefined {
   return error.code === -32603
     ? promptErrorDataSchema.safeParse(error.data).data?.details
@@ -117,6 +133,14 @@ export const OMP_ACP_DIALECT: AcpDialect = {
   clampsUnlistedEffort: true,
   normalizeToolUpdate,
   compactionReply,
+  modelCommand: {
+    // #setModelById (acp-agent.ts) takes listed provider/id values only.
+    refusedByOption: (error) => errorDetails(error)?.startsWith('Unknown ACP model: ') === true,
+    // Checked against published packages: 18.1.8's `/model` matches ids, 18.1.9's resolves roles.
+    resolvesSelectorsFrom: '18.1.9',
+    text: (value) => `/model ${value}`,
+    reply: modelCommandReply
+  },
   authenticationRequired: (error) => {
     const details = errorDetails(error)
     return (

@@ -447,6 +447,7 @@ describe('OMP launch-line model', () => {
     options.adoptLaunchModel('@worker_be')
     const setOption = vi.fn(async () => undefined)
     await applyAcpMessageOptions(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: with no model command and no rejection, the send path reads only session.options.
       { options } as unknown as AcpStructuredSession,
       { model: '@worker_be', effort: 'medium' },
       setOption,

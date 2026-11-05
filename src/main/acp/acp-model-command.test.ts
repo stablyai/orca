@@ -1,0 +1,159 @@
+import { describe, expect, it, vi } from 'vitest'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
+import { AcpAgentError } from './acp-errors'
+import { acpLaunchSpecFor } from './acp-launch-specs'
+import { applyAcpMessageOptions } from './acp-message-execution-options'
+import { acpModelCommandFor } from './acp-model-command'
+import { writeAcpSessionOption } from './acp-session-option-write'
+import type { AcpSessionEvent } from './acp-session-runtime'
+import { AcpStructuredOptions } from './acp-structured-options'
+import { routeAcpSessionEvent, type AcpStructuredSession } from './acp-structured-session'
+import type { SessionConfigOption, SessionUpdate } from './generated/acp-protocol.generated'
+
+const config = (model: string, thinking: string): SessionConfigOption[] => [
+  {
+    id: 'model',
+    name: 'Model',
+    category: 'model',
+    type: 'select',
+    currentValue: model,
+    options: [
+      { value: 'p/a', name: 'A' },
+      { value: 'p/b', name: 'B' }
+    ]
+  },
+  {
+    id: 'thinking',
+    name: 'Thinking',
+    category: 'thought_level',
+    type: 'select',
+    currentValue: thinking,
+    options: [
+      { value: 'low', name: 'Low' },
+      { value: 'high', name: 'High' }
+    ]
+  }
+]
+
+const event = (update: SessionUpdate): AcpSessionEvent => ({
+  kind: 'known',
+  notification: { sessionId: 'omp-1', update }
+})
+
+// OMP 18.15 `/model`: reply text, then its explicit config push, then end_turn (acp-agent.ts:1263-1295).
+function rig(updates: SessionUpdate[], version = '18.15.0') {
+  const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
+  options.adoptSession({ configOptions: config('p/a', 'low') }, 'loaded')
+  const lane = { translator: { sessionEvent: vi.fn(() => []) }, apply: vi.fn() }
+  const prompt = vi.fn(async () => {
+    for (const update of updates) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only the lane's translator and apply, which this fake provides.
+      routeAcpSessionEvent({ lane, options } as never, event(update), 1)
+    }
+    return { stopReason: 'end_turn' }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send path reads only spec, options, turns.running and connection.prompt/initialize, which this fake provides.
+  const session = {
+    spec: acpLaunchSpecFor('omp')!,
+    options,
+    turns: { running: false },
+    connection: { prompt, initialize: async () => ({ agentInfo: { name: 'omp', version } }) }
+  } as unknown as AcpStructuredSession
+  const send = (model: string) =>
+    applyAcpMessageOptions(
+      session,
+      { model },
+      async () => {
+        throw new AcpAgentError(-32603, 'Internal error', {
+          details: `Unknown ACP model: ${model}`
+        })
+      },
+      () => true,
+      undefined,
+      acpModelCommandFor(session, { agent: 'omp', timeoutMs: 1_000 })
+    )
+  return { options, lane, prompt, send }
+}
+
+const reply = (text: string): SessionUpdate => ({
+  sessionUpdate: 'agent_message_chunk',
+  content: { type: 'text', text }
+})
+const pushed = (model: string, thinking: string): SessionUpdate => ({
+  sessionUpdate: 'config_option_update',
+  configOptions: config(model, thinking)
+})
+
+describe("OMP's own model command", () => {
+  it('applies a role the model option refuses through /model, without anything reaching the chat', async () => {
+    const { options, lane, prompt, send } = rig([
+      reply('Model set to p/b.'),
+      { sessionUpdate: 'session_info_update', title: 'chat' },
+      pushed('p/b', 'high')
+    ])
+    await expect(send('@worker_be:high')).resolves.toBe(true)
+    expect(prompt).toHaveBeenCalledWith([{ type: 'text', text: '/model @worker_be:high' }])
+    expect(options.appliedInput.get('model')).toBe('@worker_be:high')
+    // Only the config push reaches the lane; the reply and title notice belong to the command.
+    expect(lane.translator.sessionEvent).toHaveBeenCalledTimes(1)
+    expect(options.read().current.model).toBe('p/b')
+  })
+
+  it.each([
+    ['18.15.0', "OMP couldn't use @worker_be. Pick another model and send again."],
+    [
+      '17.0.5',
+      "OMP couldn't use @worker_be. Update OMP to 18.1.9 or later to keep it after a restart, or pick another model and send again."
+    ]
+  ])(
+    "names the agent and the next step when OMP %s can't use the role, and leaves it unapplied",
+    async (version, words) => {
+      // A failure can follow the model's own switch; it still counts as not applied.
+      const { options, send } = rig(
+        [pushed('p/b', 'low'), reply('Failed to set model: prompt rebuild failed')],
+        version
+      )
+      const error: AgentSessionOptionRejectedError = await send('@worker_be').catch((e) => e)
+      expect(
+        agentSessionFailureWords(error.rejection!, { surface: 'rejection', agentName: 'OMP' })
+          .reason
+      ).toBe(words)
+      expect(options.appliedInput.has('model')).toBe(false)
+    }
+  )
+
+  it('applies the role again on the next send once OMP moves off what it resolved to', async () => {
+    const { options, prompt, send } = rig([reply('Model set to p/b.'), pushed('p/b', 'high')])
+    await send('@worker_be:high')
+    // Its own late echo is not a change; the role stays applied.
+    options.adoptConfigOptions(config('p/b', 'high'))
+    await send('@worker_be:high')
+    expect(prompt).toHaveBeenCalledTimes(1)
+    // Native `/model p/b:low`: same model, other thinking, so the selector no longer holds.
+    options.adoptConfigOptions(config('p/b', 'low'))
+    await send('@worker_be:high')
+    expect(prompt).toHaveBeenCalledTimes(2)
+  })
+
+  it('retires launch-line proof on a native model change, but keeps ordinary control proof', async () => {
+    const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
+    options.adoptSession({ configOptions: config('p/a', 'high') }, 'new')
+    options.adoptLaunchModel('@worker_be')
+    options.adoptConfigOptions(config('p/b', 'high'))
+    expect(options.appliedInput.has('model')).toBe(false)
+    // A successful model option write keeps the shipped rule: observations never override it.
+    await writeAcpSessionOption(
+      {
+        setConfigOption: async () => ({ configOptions: config('p/a', 'high') }),
+        setModel: vi.fn()
+      },
+      options,
+      options.write('model', 'p/a')!,
+      { agent: 'omp', key: 'model', value: 'p/a', timeoutMs: 1_000 }
+    )
+    options.adoptConfigOptions(config('p/b', 'low'))
+    expect(options.appliedInput.get('model')).toBe('p/a')
+  })
+})

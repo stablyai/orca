@@ -2028,6 +2028,7 @@
       "managedAccountEnvOverride": "Este inicio de Claude define sus propias variables de inicio de sesión de Anthropic. Quítelas para usar una cuenta de Claude administrada.",
       "managedAccountUnsupported": "Mientras haya una cuenta de Claude agregada en WSL, los chats de Claude necesitan una cuenta de Claude de Windows.",
       "modelUnavailable": "{{agent}} no pudo usar {{detail}}. Elige otro modelo y vuelve a enviar el mensaje.",
+      "modelUnavailableUpdate": "{{agent}} no pudo usar {{detail}}. Actualiza {{agent}} a {{minimumVersion}} o posterior para conservarlo tras un reinicio, o elige otro modelo y vuelve a enviar el mensaje.",
       "noTurnToStop": "{{agent}} no tenía ningún turno en curso que detener.",
       "notDelivered": "Este mensaje no se entregó.",
       "notDeliveredSendAgain": "Este mensaje no se entregó. Vuelva a enviarlo para continuar.",
