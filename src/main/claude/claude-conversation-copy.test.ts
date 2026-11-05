@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { copyClaudeConversation } from './claude-conversation-copy'
+import { materializeClaudeRewindTranscript } from './claude-rewind-transcript'
 
 const accounts = vi.hoisted(() => ({ homes: [] as string[] }))
 vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
@@ -44,7 +45,7 @@ afterEach(async () => {
   await rm(root, { force: true, recursive: true })
 })
 
-function copy(uuid: string, settled: boolean, before?: string, opener?: string) {
+function copy(uuid: string, settled: boolean, before?: string, opener?: string, source = SOURCE) {
   return copyClaudeConversation({
     identity: {
       sessionId: 'orca-source',
@@ -53,15 +54,15 @@ function copy(uuid: string, settled: boolean, before?: string, opener?: string) 
       agent: 'claude',
       providerHandle: null
     },
-    providerSessionId: SOURCE,
+    providerSessionId: source,
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: selectedHome },
     title: 'Source fork',
     checkpoint: {
       selectedItemId: uuid,
       settled,
-      throughMessage: { sessionId: SOURCE, uuid },
-      ...(opener ? { rootMessage: { sessionId: SOURCE, uuid: opener } } : {}),
-      ...(before ? { beforeMessage: { sessionId: SOURCE, uuid: before } } : {})
+      throughMessage: { sessionId: source, uuid },
+      ...(opener ? { rootMessage: { sessionId: source, uuid: opener } } : {}),
+      ...(before ? { beforeMessage: { sessionId: source, uuid: before } } : {})
     }
   })
 }
@@ -157,3 +158,49 @@ it('resolves an early response beyond the catch-up suffix budget', async () => {
     forkedFrom: { messageUuid: 'a33ccffb-9cd3-54dc-bd5c-bad5de38fdd7' }
   })
 })
+
+it.each(['fork', 'rewind'] as const)(
+  'forks inherited responses from real SDK %s output ending in custom-title',
+  async (origin) => {
+    const prefix = rows.slice(0, 52)
+    await writeFile(sourcePath, `${prefix.map((row) => JSON.stringify(row)).join('\n')}\n`)
+    const last = prefix.findLast((row) => row.type === 'assistant')!
+    const first =
+      origin === 'fork'
+        ? await copy(last.uuid, true)
+        : await materializeClaudeRewindTranscript(
+            sourcePath,
+            {
+              sessionId: 'rewind-child',
+              sourceSessionId: SOURCE,
+              throughEntryId: rows[50].uuid,
+              replacesSessionId: SOURCE
+            },
+            join(selectedHome, 'projects', 'workspace')
+          )
+    const copied = parseRows(
+      await readFile(
+        join(selectedHome, 'projects', 'workspace', `${first.sessionId}.jsonl`),
+        'utf8'
+      )
+    )
+    expect(copied.at(-1)).toMatchObject({ type: 'custom-title' })
+    expect(copied.at(-1)?.parentUuid).toBeUndefined()
+    const reply = copied.findLast((row) => row.type === 'assistant')!
+    const second = await copy(reply.uuid, true, undefined, undefined, first.sessionId)
+    const secondRows = parseRows(await readFile(second.filePath!, 'utf8'))
+    expect(secondRows.findLast((row) => row.type === 'assistant')).toMatchObject({
+      forkedFrom: { sessionId: first.sessionId, messageUuid: reply.uuid }
+    })
+    const nextPrompt = copied.find((row) => row.forkedFrom?.messageUuid === rows[34].uuid)!
+    const earlierReply = copied.find((row) => row.type === 'assistant')!
+    const bounded = await copy(earlierReply.uuid, true, nextPrompt.uuid, undefined, first.sessionId)
+    const boundedRows = parseRows(await readFile(bounded.filePath!, 'utf8'))
+    expect(boundedRows.some((row) => row.forkedFrom?.messageUuid === nextPrompt.uuid)).toBe(false)
+    expect(boundedRows.findLast((row) => row.type === 'user')).toMatchObject({
+      forkedFrom: {
+        messageUuid: copied.find((row) => row.forkedFrom?.messageUuid === rows[26].uuid)!.uuid
+      }
+    })
+  }
+)

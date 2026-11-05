@@ -30,11 +30,21 @@ export function claudeConversationForkBoundary(
       row.parent_tool_use_id == null
     ) {
       byUuid.set(row.uuid, row)
-      newest = row
+      if (
+        row.type === 'user' ||
+        row.type === 'assistant' ||
+        row.type === 'attachment' ||
+        (row.type === 'system' && typeof row.parentUuid === 'string')
+      ) {
+        newest = row
+      }
     }
   }
   const chain: Record<string, unknown>[] = []
-  for (let row = newest; row;) {
+  for (
+    let row = checkpoint.beforeMessage ? byUuid.get(checkpoint.beforeMessage.uuid) : newest;
+    row;
+  ) {
     chain.push(row)
     byUuid.delete(String(row.uuid))
     const parent = typeof row.parentUuid === 'string' ? row.parentUuid : row.logicalParentUuid

@@ -235,7 +235,9 @@ export async function copyCodexConversation(
         }
       }
       if (input.title) {
-        await setThreadName(rpc.request, id, input.title)
+        await setThreadName(rpc.request, id, input.title).catch((error: unknown) => {
+          console.warn('[codex-conversation-copy] naming the copied chat failed', error)
+        })
       }
       return { sessionId: id }
     }

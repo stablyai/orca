@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { parentPort, workerData } from 'node:worker_threads'
 
-import { renameDurable, writeTempFileDurable } from '../filesystem/durable-file-write'
+import { publishClaudeConversationTranscript } from './claude-conversation-transcript-publication'
 import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
 import {
   claudeConversationForkBoundary,
@@ -57,13 +57,11 @@ async function fork(input: ClaudeConversationForkWork) {
           return
         }
         await mkdir(input.destinationDirectory, { recursive: true })
-        await writeTempFileDurable(
+        await publishClaudeConversationTranscript(
           input.temporaryPath,
-          entries.map((entry) => `${JSON.stringify(entry)}\n`).join(''),
-          0o600
+          join(input.destinationDirectory, `${key.sessionId}.jsonl`),
+          entries
         )
-        const destination = join(input.destinationDirectory, `${key.sessionId}.jsonl`)
-        await renameDurable(input.temporaryPath, destination)
       }
     }
   })

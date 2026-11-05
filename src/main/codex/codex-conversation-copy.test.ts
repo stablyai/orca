@@ -213,3 +213,19 @@ it('reports a provider in-progress rejection without suggesting an update', asyn
   state.request.mockRejectedValue(new Error('Cannot fork thread with an in-progress turn'))
   await expect(copy()).rejects.toThrow('Wait for it to finish')
 })
+
+it('adopts the copied thread even when its native name cannot be set', async () => {
+  await history(SOURCE, turn('canonical', 1))
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  state.request.mockImplementation(async (method) => {
+    if (method === 'thread/name/set') {
+      throw new Error('unsupported thread/name/set')
+    }
+    return { thread: { id: CHILD } }
+  })
+  try {
+    await expect(copy()).resolves.toEqual({ sessionId: CHILD })
+  } finally {
+    warn.mockRestore()
+  }
+})
