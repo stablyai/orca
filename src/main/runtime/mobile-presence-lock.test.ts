@@ -1,7 +1,7 @@
 import { mobilePresenceStore as store } from './orca-runtime-test-mocks/mobile-presence-store'
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
-import * as inputAdmission from './terminal-input-admission'
+import * as inputAdmission from './terminal/input/terminal-input-admission'
 import './mobile-subscribe-integration.spec'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
@@ -46,12 +46,13 @@ vi.mock('../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn(),
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
+const repoBranchConflictMock = vi.hoisted(() => vi.fn().mockResolvedValue(null))
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
-    getBranchConflictKind: vi.fn().mockResolvedValue(null)
+    getBranchConflictKind: repoBranchConflictMock
   }
 })
 
@@ -975,3 +976,8 @@ describe('mobile presence lock — desktop take-back survives automatic resubscr
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 })
+
+vi.mock('../git/repo-branch-conflict', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchConflictKind: repoBranchConflictMock
+}))

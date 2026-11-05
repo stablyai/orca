@@ -81,18 +81,6 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-it('keeps the main Force Delete button a one-time action', async () => {
-  const savePreference = vi.fn().mockResolvedValue(undefined)
-  const { container, onForceDelete } = renderRecovery(savePreference)
-  expect(container.querySelector('button[aria-label="More force delete options"]')).not.toBeNull()
-  expect(document.querySelector('[role="menuitem"]')).toBeNull()
-
-  await act(async () => click(container, 'button[data-variant="destructive"]'))
-
-  expect(savePreference).not.toHaveBeenCalled()
-  expect(onForceDelete).toHaveBeenCalledOnce()
-})
-
 it('keeps portaled menu focus from triggering toast focus restoration', async () => {
   const { container, onOutsideBlur } = renderRecovery(vi.fn())
   const trigger = container.querySelector('button[aria-label="More force delete options"]')

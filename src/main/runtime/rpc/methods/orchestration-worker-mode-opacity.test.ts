@@ -13,7 +13,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   CHAT_REDISPATCH_PARAGRAPH,
   TERMINAL_REDISPATCH_PARAGRAPH

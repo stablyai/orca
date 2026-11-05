@@ -18,7 +18,10 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import type { RuntimeStore } from '../runtime-store-contract'
-import { runtimeVisibleFolderWorkspaces, runtimeVisibleRepos } from '../runtime-visible-catalog'
+import {
+  runtimeVisibleFolderWorkspaces,
+  runtimeVisibleRepos
+} from '../workspaces/catalog/runtime-visible-catalog'
 
 export type DesktopSidebarFactSources = {
   store: Pick<

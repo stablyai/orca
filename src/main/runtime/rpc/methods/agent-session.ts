@@ -1,5 +1,5 @@
 import { ensureAgentSessionFeatureRequirement } from '../agent-launch-feature-requirement'
-import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
+import { terminalImageViewerSupported } from '../../terminal/launch/terminal-image-viewer-env'
 import {
   type RuntimeAgentSessionRpcCaller,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,

@@ -7,8 +7,8 @@ import {
 } from '../../shared/skills'
 import {
   BundledSkillAutoUpdateRequestSchema,
-  BundledSkillExecuteRequestSchema,
-  BundledSkillPlanRequestSchema,
+  LocalBundledSkillExecuteRequestSchema,
+  LocalBundledSkillPlanRequestSchema,
   type BundledSkillInstallResult,
   type BundledSkillPlan
 } from '../../shared/bundled-skill-plan'
@@ -77,12 +77,12 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
   handleMainWindowSkillIpc(
     'skills:bundledPlan',
     async (_event, value: unknown): Promise<BundledSkillPlan> =>
-      runtime.planLocalBundledSkills(BundledSkillPlanRequestSchema.parse(value ?? {}))
+      runtime.planLocalBundledSkills(LocalBundledSkillPlanRequestSchema.parse(value ?? {}))
   )
   handleMainWindowSkillIpc(
     'skills:bundledExecute',
     async (_event, value: unknown): Promise<BundledSkillInstallResult> =>
-      runtime.executeLocalBundledSkills(BundledSkillExecuteRequestSchema.parse(value))
+      runtime.executeLocalBundledSkills(LocalBundledSkillExecuteRequestSchema.parse(value))
   )
   handleMainWindowSkillIpc(
     'skills:bundledAutoUpdate',

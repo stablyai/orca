@@ -6,7 +6,7 @@ import type { TerminalViewAttributes } from '../../shared/terminal/protocol/quer
 import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
 import type { RuntimePaneCreateClaim } from '../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
-import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
 import type {
   AutomaticWorkResumeOutcome,

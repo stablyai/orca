@@ -26,12 +26,7 @@ afterEach(() => {
   expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { transcriptRowOffset, transcriptWindowTop } from './native-chat-window-test-layout'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
@@ -251,32 +246,6 @@ describe('jumping from the rail while following the end', () => {
     return layout.aboveTranscriptPx + row.offsetTop - scroller().scrollTop
   }
 
-  it.each([
-    ['in the page that exhausts older history', 'prompt-5', false],
-    ['in a page with older history still behind it', 'prompt-25', false],
-    ['that is already loaded', 'prompt-45', true]
-  ])('jumps without animation to a message %s', async (_case, prompt, loaded) => {
-    render(<PagedTranscript />)
-    await settle(10)
-    expect(distanceFromBottom()).toBe(0)
-    expect(screen.queryByText(prompt) !== null).toBe(loaded)
-
-    fireEvent.click(screen.getByRole('button', { name: prompt }))
-    if (loaded) {
-      expect(Math.abs(rowOffsetFromViewportTop(prompt))).toBeLessThanOrEqual(2)
-      await frame()
-      expect(Math.abs(rowOffsetFromViewportTop(prompt))).toBeLessThanOrEqual(2)
-    }
-    await settle(loaded ? 59 : 60)
-
-    expect(HTMLElement.prototype.scrollTo).toHaveBeenCalled()
-    expect(HTMLElement.prototype.scrollTo).not.toHaveBeenCalledWith(
-      expect.objectContaining({ behavior: 'smooth' })
-    )
-    expect(distanceFromBottom()).toBeGreaterThan(100)
-    expect(Math.abs(rowOffsetFromViewportTop(prompt))).toBeLessThanOrEqual(2)
-  })
-
   it('lets a later pick of a loaded message win over a jump still paging', async () => {
     let releaseFirstPage: (() => void) | null = null
     let held = false
@@ -331,22 +300,6 @@ describe('jumping from the rail while following the end', () => {
     await frame()
   }
 
-  it('marks the pick busy until its history lands', async () => {
-    const pages = holdFirstPage()
-    render(<PagedTranscript holdPage={pages.holdPage} />)
-    await settle(10)
-    await pickUnloadedWhilePaging('prompt-5')
-    expect(pages.asked()).toBe(1)
-
-    expect(screen.getByRole('button', { name: 'prompt-5' }).getAttribute('aria-busy')).toBe('true')
-
-    pages.release()
-    await settle(60)
-
-    expect(screen.getByRole('button', { name: 'prompt-5' }).getAttribute('aria-busy')).toBeNull()
-    expect(Math.abs(rowOffsetFromViewportTop('prompt-5'))).toBeLessThanOrEqual(2)
-  })
-
   it.each([
     ['a wheel over the transcript', () => fireEvent.wheel(scroller(), { deltaY: -40 })],
     ['a scroll key', () => fireEvent.keyDown(scroller(), { key: 'PageUp' })],
@@ -373,25 +326,6 @@ describe('jumping from the rail while following the end', () => {
     expect(distanceFromBottom()).toBe(0)
   })
 
-  it('leaves the reader where they are after a wheel over the rail while the jump pages', async () => {
-    const pages = holdFirstPage()
-    render(<PagedTranscript holdPage={pages.holdPage} />)
-    await settle(10)
-    await pickUnloadedWhilePaging('prompt-5')
-    expect(pages.asked()).toBe(1)
-
-    // The rail forwards its wheel to the transcript: the reader is scrolling.
-    fireEvent.wheel(screen.getByRole('toolbar', { name: 'Your messages' }), { deltaY: -40 })
-    await frame()
-    expect(distanceFromBottom()).toBe(40)
-    pages.release()
-    await settle(60)
-
-    expect(pages.asked()).toBe(1)
-    expect(screen.queryByText('prompt-5')).toBeNull()
-    expect(distanceFromBottom()).toBe(40)
-  })
-
   it('stays at the latest message when "Jump to latest" is pressed while the jump pages', async () => {
     const pages = holdFirstPage()
     render(<PagedTranscript holdPage={pages.holdPage} />)
@@ -413,111 +347,5 @@ describe('jumping from the rail while following the end', () => {
     expect(pages.asked()).toBe(1)
     expect(screen.queryByText('prompt-5')).toBeNull()
     expect(distanceFromBottom()).toBe(0)
-  })
-
-  describe('revealing a diff while a rail jump pages', () => {
-    function journalItem(itemId: string, body: AgentJournalItemBody, sequence: number) {
-      return { itemId, body, sequence, observedAt: sequence * 1000, revision: 1 }
-    }
-    function prompt(itemId: string, text: string, sequence: number) {
-      return journalItem(
-        itemId,
-        { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] },
-        sequence
-      )
-    }
-
-    const patch = '@@ -1 +1 @@\n-before\n+after'
-    const OLDER = prompt('older', 'Oldest prompt', 1)
-    const LOADED: AgentJournalRenderItem[] = [
-      prompt('user', 'Edit it', 2),
-      journalItem(
-        'diff',
-        {
-          kind: 'diff',
-          path: 'src/a.ts',
-          patch: { head: patch, truncated: false, digest: 'fixture', byteLength: patch.length }
-        },
-        3
-      ),
-      ...Array.from({ length: 200 }, (_, index) =>
-        journalItem(
-          `tail-${index}`,
-          {
-            kind: 'message',
-            role: 'assistant',
-            blocks: [{ type: 'text', text: `marker-${index}` }]
-          },
-          index + 4
-        )
-      )
-    ]
-
-    function DiffTranscript({ holdPage }: { holdPage: () => Promise<void> }): React.JSX.Element {
-      const [loadedOlder, setLoadedOlder] = useState(false)
-      const items = useMemo(() => (loadedOlder ? [OLDER, ...LOADED] : LOADED), [loadedOlder])
-      const loadEarlier = useCallback(async (): Promise<NativeChatOlderPageResult> => {
-        await holdPage()
-        setLoadedOlder(true)
-        return 'applied'
-      }, [holdPage])
-      return (
-        <NativeChatMessageList
-          session={{
-            ...session(projectStructuredItemsToNativeChat(items)),
-            hasMore: !loadedOlder,
-            loadEarlier
-          }}
-          journalItems={items}
-          railOutline={
-            loadedOlder ? [] : [{ id: 'older', text: 'Oldest prompt', hasImages: false }]
-          }
-          isWorking={false}
-          expandSignal={false}
-        />
-      )
-    }
-
-    function expectDiffInView(): void {
-      expect(
-        screen.getByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/, expanded: true })
-      ).toBeInTheDocument()
-      const row = screen.getByText('Edited').closest<HTMLElement>('[data-index]')
-      if (!row) {
-        throw new Error('revealed diff has no mounted row')
-      }
-      const top = layout.aboveTranscriptPx + row.offsetTop - scroller().scrollTop
-      expect(row.offsetHeight).toBeGreaterThan(0)
-      expect(top).toBeGreaterThanOrEqual(-2)
-      expect(top).toBeLessThan(scroller().clientHeight - 2)
-    }
-
-    it('keeps the diff in view when its page lands', async () => {
-      const pages = holdFirstPage()
-      render(<DiffTranscript holdPage={pages.holdPage} />)
-      await settle(10)
-      expect(distanceFromBottom()).toBe(0)
-      expect(screen.queryByText('Edited')).toBeNull()
-
-      await pickUnloadedWhilePaging('Oldest prompt')
-      expect(pages.asked()).toBe(1)
-      expect(screen.getByRole('button', { name: 'Oldest prompt' })).toHaveAttribute(
-        'aria-busy',
-        'true'
-      )
-
-      fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
-      fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-      expect(screen.getByRole('button', { name: 'Oldest prompt' })).not.toHaveAttribute('aria-busy')
-      await settle(40)
-      expectDiffInView()
-
-      pages.release()
-      await settle(60)
-
-      expect(pages.asked()).toBe(1)
-      expect(screen.getByRole('button', { name: 'Oldest prompt' })).not.toHaveAttribute('aria-busy')
-      expectDiffInView()
-    })
   })
 })

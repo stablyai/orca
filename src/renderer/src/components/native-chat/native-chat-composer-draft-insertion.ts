@@ -14,9 +14,9 @@ import type {
 export function insertNativeChatComposerDraftText(
   scope: string,
   text: string,
-  options?: { paste?: boolean; owner?: NativeChatComposerDraftOwner }
+  options?: { paste?: boolean; owner?: NativeChatComposerDraftOwner; draftOnly?: boolean }
 ): void {
-  const mounted = nativeChatComposerScopeDestination(scope)
+  const mounted = options?.draftOnly ? null : nativeChatComposerScopeDestination(scope)
   const insertMounted = options?.paste
     ? (mounted?.insertPastedText ?? mounted?.insertTypedText)
     : mounted?.insertTypedText
@@ -24,7 +24,7 @@ export function insertNativeChatComposerDraftText(
     return
   }
   const insert = <T extends NativeChatComposerDraft>(draft: T): T => {
-    const next = `${draft.text}${draft.text && !/\s$/.test(draft.text) ? ' ' : ''}${text}`
+    const next = `${draft.text}${draft.text && !/\s$/.test(draft.text) && !/^\s/.test(text) ? ' ' : ''}${text}`
     return {
       ...draft,
       ...(options?.owner ? { owner: options.owner } : {}),

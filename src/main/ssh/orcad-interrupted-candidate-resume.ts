@@ -18,12 +18,13 @@ import {
   slotLiveness
 } from './orcad-recovery-slot'
 import type { OrcadIncumbentRecoveryOptions } from './orcad-incumbent-recovery'
+import { isOrcadLaunchFailure } from './orcad-launch-failure'
 
-/** Under the held fence, return null for undo; a refusal leaves the host untouched for an operator. */
+/** Under the held fence, return null (or the candidate's launch failure) for undo; a refusal leaves the host untouched for an operator. */
 export async function resumeInterruptedOrcadCandidate(
   options: OrcadIncumbentRecoveryOptions,
   transaction: OrcadActivateTransaction
-): Promise<ServeReadiness | OrcadManagedRefusal | null> {
+): Promise<ServeReadiness | OrcadManagedRefusal | { launchFailure: Error } | null> {
   const snapshotState = transaction.snapshot.state
   const incumbent = transaction.recordBefore.active
   if (
@@ -66,7 +67,8 @@ export async function resumeInterruptedOrcadCandidate(
   } catch (error) {
     // Only candidate evidence permits undo; unanswered hosts retain the fence.
     if (error instanceof OrcadActiveReadinessError && error.verdict !== 'unverifiable') {
-      return null
+      // Undo still follows; the failed candidate launch is a failed run all the same.
+      return isOrcadLaunchFailure(error) ? { launchFailure: error } : null
     }
     throw error
   }

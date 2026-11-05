@@ -32,6 +32,10 @@ export function rollbackLifecycleWriteTransaction(
   db: Database.Database,
   transaction: LifecycleWriteTransaction
 ): void {
+  // SQLite ends the whole transaction itself on I/O and disk-full errors; rolling back again would replace that error.
+  if (!db.isTransaction) {
+    return
+  }
   if (transaction.savepoint) {
     db.exec(`ROLLBACK TO ${transaction.savepoint}`)
     db.exec(`RELEASE ${transaction.savepoint}`)

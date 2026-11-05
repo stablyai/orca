@@ -5,7 +5,10 @@ import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktrees/creation/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../ipc/pty/kill-all'
-import { disconnectDaemon, shutdownDaemon } from '../daemon/daemon-provider-state'
+import {
+  disconnectDaemon,
+  shutdownDaemon
+} from '../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
@@ -26,7 +29,7 @@ import { quitTeardownStartGate } from './quit/quit-teardown-start-gate'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray } from '../tray/system-tray'
 import { shutdownTelemetry } from '../telemetry/client'
-import { shutdownObservability } from '../observability'
+import { shutdownObservability } from '../observability/index'
 import { isQuittingForUpdate } from '../updater/updater-service'
 import { recordUpdaterLifecycle } from '../updater/updater-lifecycle-diagnostics'
 import { stopTccPromptNotice } from '../macos-permissions/macos-tcc-prompt-notice'

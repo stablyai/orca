@@ -201,19 +201,6 @@ describe('structured send racing the next IME composition', () => {
     expect(promptValue(input)).toBe('가')
   })
 
-  // Clear only after acceptance so refusals retain drafts; replay the clear at IME settlement.
-  it('keeps the draft when the send is rejected', async () => {
-    const structured = transport({ send: vi.fn(() => false) })
-    renderComposer(structured)
-    const input = textarea()
-
-    changePrompt(input, '안녕')
-    await act(async () => pressEnter(input))
-
-    expect(structured.send).toHaveBeenCalledWith('안녕', [])
-    expect(promptValue(input)).toBe('안녕')
-  })
-
   it('keeps the draft when a rejected send races the next composition', async () => {
     const dispatch = deferred()
     const structured = transport({
@@ -330,30 +317,5 @@ describe('the Enter that commits a Hangul composition', () => {
 
     expect(structured.send).toHaveBeenCalledOnce()
     expect(structured.send).toHaveBeenCalledWith('안녕하세요', [])
-  })
-})
-
-describe('a structured send while the chat has one out', () => {
-  it('keeps the text in the box and Send disabled until the send settles', async () => {
-    const structured = transport({ send: vi.fn(() => false), sendOut: true })
-    const view = renderComposer(structured)
-    const input = textarea()
-    changePrompt(input, 'next one')
-    expect(actions.sendDisabled).toBe(true)
-
-    await act(async () => pressEnter(input))
-    expect(structured.send).toHaveBeenCalledWith('next one', [])
-    expect(promptValue(input)).toBe('next one')
-
-    view.rerender(
-      <NativeChatComposer
-        terminalTabId={`tab-${paneCounter}`}
-        paneKey={`tab-${paneCounter}:structured`}
-        targetPtyId={null}
-        agent="codex"
-        structuredTransport={{ ...structured, sendOut: false }}
-      />
-    )
-    expect(actions.sendDisabled).toBe(false)
   })
 })

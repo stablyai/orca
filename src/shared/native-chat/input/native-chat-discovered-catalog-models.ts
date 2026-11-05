@@ -41,6 +41,7 @@ export function catalogModelsFromModelDiscovery(
     ...(model.description ? { description: model.description } : {}),
     ...(model.isDefault ? { isDefault: true as const } : {}),
     ...(model.contextWindowTokens ? { contextWindowTokens: model.contextWindowTokens } : {}),
+    ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
     options:
       agent === 'claude'
         ? createClaudeCatalogOptions({

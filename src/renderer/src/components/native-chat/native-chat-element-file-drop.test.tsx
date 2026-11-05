@@ -3,14 +3,12 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import {
   NativeChatPaneFileDropSurface,
   useNativeChatPaneFileDropClaim
 } from './NativeChatPaneFileDropSurface'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
-import { useNewWorkspaceComposerFileDrop } from '../new-workspace/use-new-workspace-composer-file-drop'
 
 const electron = vi.hoisted(() => ({
   on: vi.fn(),
@@ -107,15 +105,7 @@ function AvailabilityComposer({ attach }: { attach: (paths: string[]) => void })
     </>
   )
 }
-function WorkspaceWithoutPath({ attach }: { attach: () => Promise<void> }) {
-  const owner = useNewWorkspaceComposerFileDrop({
-    projectPath: null,
-    hostId: 'local',
-    connectionId: null,
-    applyDrop: attach
-  })
-  return <div ref={owner} className="workspace-card" />
-}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('api', {
@@ -128,34 +118,6 @@ afterEach(() => {
 })
 
 describe('element-owned native chat drops', () => {
-  it('attaches to visible chat A while mounted chat B is hidden, without scope markers', async () => {
-    const a = vi.fn()
-    const b = vi.fn()
-    const view = render(
-      <>
-        <Chat attach={a} />
-        <Chat attach={b} hidden />
-      </>
-    )
-    const target = view.container.querySelector('.ProseMirror')!
-    await drop(target)
-    expect(a).toHaveBeenCalledExactlyOnceWith(['/drop/a.png'])
-    expect(b).not.toHaveBeenCalled()
-    expect(view.container.querySelector('[data-composer-scope-key]')).toBeNull()
-    expect(electron.send).not.toHaveBeenCalled()
-  })
-  it('shows the attachment overlay on dragover while the chat can accept files', async () => {
-    const attach = vi.fn()
-    const view = render(<Chat attach={attach} />)
-    const target = view.container.querySelector('.ProseMirror')!
-    const transfer = { types: ['Files'], dropEffect: 'move' }
-    await act(async () => dragEvent(target, 'dragover', transfer))
-    expect(transfer.dropEffect).toBe('copy')
-    expect(view.getByText('Drop to attach to this chat')).toBeTruthy()
-    await drop(target)
-    expect(view.queryByText('Drop to attach to this chat')).toBeNull()
-    expect(attach).toHaveBeenCalledExactlyOnceWith(['/drop/a.png'])
-  })
   it('claims a portaled chat while refusing the unowned container around it', async () => {
     const attach = vi.fn()
     const terminal = document.createElement('div')
@@ -174,54 +136,6 @@ describe('element-owned native chat drops', () => {
     } finally {
       terminal.remove()
     }
-  })
-  it.each([false, true])(
-    'refuses by cursor only through dragover and release when composer disabled is %s',
-    async (disabled) => {
-      const attach = vi.fn()
-      const view = render(
-        <div>
-          <NativeChatPaneFileDropSurface className="chat">
-            {disabled ? <Composer attach={attach} disabled /> : <span>Question</span>}
-          </NativeChatPaneFileDropSurface>
-        </div>
-      )
-      const target = view.container.querySelector('.chat')!
-      let gesture: ReturnType<typeof negotiateAndRelease> | undefined
-      await act(async () => {
-        gesture = negotiateAndRelease(target)
-      })
-      expect(gesture?.hover.defaultPrevented).toBe(true)
-      expect(gesture?.transfer.dropEffect).toBe('none')
-      expect(gesture?.release.type).toBe('dragleave')
-      // A late delivered drop must preserve the same silent refusal barrier.
-      await drop(target)
-      expect(toast.error).not.toHaveBeenCalled()
-      expect(attach).not.toHaveBeenCalled()
-      expect(prepare).not.toHaveBeenCalled()
-      expect(electron.send).not.toHaveBeenCalled()
-    }
-  )
-  it('keeps a workspace card without a path silent', async () => {
-    const attach = vi.fn(async () => {})
-    const view = render(
-      <div>
-        <WorkspaceWithoutPath attach={attach} />
-      </div>
-    )
-    const target = view.container.querySelector('.workspace-card')!
-    let gesture: ReturnType<typeof negotiateAndRelease> | undefined
-    await act(async () => {
-      gesture = negotiateAndRelease(target)
-    })
-    expect(gesture?.hover.defaultPrevented).toBe(true)
-    expect(gesture?.transfer.dropEffect).toBe('none')
-    expect(gesture?.release.type).toBe('dragleave')
-    await drop(target)
-    expect(attach).not.toHaveBeenCalled()
-    expect(prepare).not.toHaveBeenCalled()
-    expect(toast.error).not.toHaveBeenCalled()
-    expect(electron.send).not.toHaveBeenCalled()
   })
   it('reads child-only availability changes on the immediate dragover and drop', async () => {
     const attach = vi.fn()

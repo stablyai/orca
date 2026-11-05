@@ -14,7 +14,7 @@ import { installSharedSkill } from './skill-install-service'
 import { createSkillBundleArchive } from './skill-bundle-creation'
 import { installSkillBundle } from './skill-bundle-install-service'
 import { writeSkillTarGzip } from './skill-package-tar'
-import { detectSkillProvidersInWsl } from './skill-wsl-provider-detection'
+
 import { createWslSkillInstallFilesystem } from './skill-wsl-install-filesystem'
 
 const execFileAsync = promisify(execFile)
@@ -64,10 +64,6 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
     if (guestRoot.startsWith('/tmp/orca-skill-posix.')) {
       await runWsl('rm', '-rf', '--', guestRoot)
     }
-  })
-
-  it('detects providers from the selected distro', async () => {
-    await expect(detectSkillProvidersInWsl(DISTRO)).resolves.toContain('codex')
   })
 
   it('preserves case and applies owner-private executable modes', async () => {

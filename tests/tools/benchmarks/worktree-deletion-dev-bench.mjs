@@ -16,6 +16,7 @@ import path from 'node:path'
 // Use declared @playwright/test’s re-export instead of relying on a hoisted transitive playwright install.
 import { chromium } from '@playwright/test'
 import * as branchFixture from './worktree-deletion-branch-fixture.mjs'
+import { round, summarize } from './worktree-deletion-timing-samples.mjs'
 
 const DEFAULT_ITERATIONS = 3
 const DEFAULT_HISTORY_FILES = 10_000
@@ -136,14 +137,18 @@ function launchDevInstance({ label, repoRoot }, fixture, port) {
     REMOTE_DEBUGGING_PORT: String(port)
   }
   delete env.ELECTRON_RUN_AS_NODE
-  const child = spawn(process.execPath, ['config/scripts/run-electron-vite-dev.mjs'], {
-    cwd: repoRoot,
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    // Why: own process group so teardown can signal the Electron/Vite grandchildren, not just the launcher.
-    detached: process.platform !== 'win32',
-    windowsHide: true
-  })
+  const child = spawn(
+    process.execPath,
+    ['config/scripts/development/launch/run-electron-vite-dev.mjs'],
+    {
+      cwd: repoRoot,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      // Why: own process group so teardown can signal the Electron/Vite grandchildren, not just the launcher.
+      detached: process.platform !== 'win32',
+      windowsHide: true
+    }
+  )
   const log = { stdout: '', stderr: '' }
   child.stdout?.on('data', (chunk) => {
     log.stdout = appendLog(log.stdout, chunk)
@@ -573,28 +578,6 @@ function killDevInstanceTree(child, signal) {
   } catch {
     child.kill(signal)
   }
-}
-
-function summarize(values) {
-  const samples = values.map((value) => round(value)).sort((a, b) => a - b)
-  if (samples.length === 0) {
-    return { count: 0, median: 0, p95: 0, max: 0, samples }
-  }
-  return {
-    count: samples.length,
-    median: percentile(samples, 0.5),
-    p95: percentile(samples, 0.95),
-    max: samples.at(-1),
-    samples
-  }
-}
-
-function percentile(sorted, fraction) {
-  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)]
-}
-
-function round(value) {
-  return Math.round(value * 100) / 100
 }
 
 function delay(ms) {

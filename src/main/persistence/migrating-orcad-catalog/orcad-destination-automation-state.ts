@@ -1,3 +1,4 @@
+import { automationCanonicalDefinition } from '../../../shared/automation-launch-setup'
 import { MAX_AUTOMATION_RUNS_PER_AUTOMATION } from '../../../shared/automation-run-retention'
 import {
   isFinalAutomationRunStatus,
@@ -19,7 +20,9 @@ export function prepareOrcadMigrationAutomationState(
   runs: readonly AutomationRun[] | undefined,
   state: PersistedState
 ): PreparedOrcadMigrationAutomationState {
-  const incomingAutomations = (automations ?? []).map((entry) => structuredClone(entry))
+  const incomingAutomations = (automations ?? []).map((entry) =>
+    structuredClone(automationCanonicalDefinition(entry))
+  )
   const incomingRuns = (runs ?? []).map((entry) => structuredClone(entry))
   const newAutomations = selectNewRows(
     incomingAutomations,

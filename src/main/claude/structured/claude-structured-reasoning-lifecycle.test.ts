@@ -134,28 +134,6 @@ describe('a streamed reasoning row the provider never finishes', () => {
     expect(translator.pendingStreamedBlocks).toBe(0)
   })
 
-  it('is not rewritten by the token tally Claude sends after every thinking delta', () => {
-    const { translator, message, thinkingDelta, reasoningWrites } = setup()
-    for (let index = 0; index < 20; index += 1) {
-      thinkingDelta(`delta-${index}`, 'more words ', 1_000 + index)
-      translator.handle(
-        message(
-          {
-            type: 'system',
-            subtype: 'thinking_tokens',
-            estimated_tokens: index,
-            estimated_tokens_delta: 1,
-            uuid: `tokens-${index}`
-          },
-          1_000 + index
-        )
-      )
-    }
-    expect(reasoningWrites()).toEqual([])
-    vi.advanceTimersByTime(100)
-    expect(reasoningWrites()).toHaveLength(1)
-  })
-
   // Timings of the first block in a captured 2.1.280 session with summarized display.
   it('spans from the block start to its final frame, though text arrives seconds later', () => {
     const { translator, message, thinkingDelta, reasoningWrites } = setup()

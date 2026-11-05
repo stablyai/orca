@@ -1,4 +1,4 @@
-import { selectFreshAgentRowForMobileTab } from '../../runtime-hook-agent-row-selection'
+import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-tabs/session-tabs-change-publication'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type {
@@ -9,11 +9,11 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
 import { mergeMobileSessionTabGroups } from '../../mobile-session-tab-merge'
-import { buildHeadlessMobileSessionTabGroups } from '../../mobile-session-layout-projection'
+import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
 import { projectRuntimeMobileSessionTabs } from '../../runtime-mobile-session-projection'
 import type { RuntimeMobileSessionProjectionHost } from '../../runtime-mobile-session-projection-contract'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import type { RuntimeAgentRowSnapshot } from '../../runtime-worktree-agent-rows'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
+import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext

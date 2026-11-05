@@ -4,10 +4,11 @@ import { toRemoteRuntimePtyId } from '../../shared/remote-runtime/remote-runtime
 import { OrchestrationError } from './orchestration/orchestration-error'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { store, makeRuntimeStoreWithWorkspaceSession } =
-  await import('./orca-runtime-test-fixtures.spec')
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 

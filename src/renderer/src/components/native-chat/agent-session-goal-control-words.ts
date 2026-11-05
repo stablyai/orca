@@ -18,7 +18,8 @@ const WORDS = new Map<string, () => string>([
   [
     COPY.stopUnconfirmed,
     () => translate('components.native-chat.goalControl.stopUnconfirmed', COPY.stopUnconfirmed)
-  ]
+  ],
+  [COPY.noGoal, () => translate('components.native-chat.goalControl.noGoal', COPY.noGoal)]
 ])
 
 export function agentSessionGoalControlWords(text: string): string {

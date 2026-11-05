@@ -15,14 +15,14 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
 import { resolveRuntimeAgentDetectionHost } from '../../runtime-agent-detection-host'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/cli-command'
 import {
   readOrchestrationFleetAgentStatusSnapshot,
   readAgentOrchestrationProjectionRecords,
   readCapturedOrchestrationFleetAgentStatusSnapshot
 } from '../../orchestration-fleet-agent-status-snapshot'
-import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
+import { resolveStructuredWorkerAuthority } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
 import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
 

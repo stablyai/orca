@@ -83,7 +83,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const queueFollowUps = useAppStore((store) => nativeChatQueueFollowUps(store.settings))
   const composerRef = useRef<NativeChatComposerHandle>(null)
   // Paste target while a question card replaces the composer.
-  const questionAnswerInputRef = useRef<HTMLInputElement>(null)
+  const questionAnswerInputRef = useRef<HTMLTextAreaElement>(null)
   const { rewindHost, focusComposer } = useNativeChatRewindHost(props, composerRef)
   const controller = useStructuredAgentSession({
     ...props,
@@ -207,7 +207,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     optionPickerRequest,
     setOptionPickerRequest,
     onError: reportComposerError,
-    onSubmitted: submits.revealLatest,
+    reveal: submits,
     sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason
   })
   const continuation = useNativeChatInterruptedContinuation({

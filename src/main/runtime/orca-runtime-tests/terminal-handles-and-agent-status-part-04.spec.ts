@@ -1,7 +1,8 @@
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
@@ -9,7 +10,7 @@ import {
   createRuntime,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('does not let the active browser webContents steal session focus from terminals', async () => {

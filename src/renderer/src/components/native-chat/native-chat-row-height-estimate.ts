@@ -1,5 +1,6 @@
 // Keep estimates arithmetic over cached metrics; per-measurement block scans would traverse the whole transcript.
 
+import { NATIVE_CHAT_TURN_DIFF_FILE_LIMIT } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { agentMessageIsCompact } from '../../../../shared/agent-session/agent-message-presentation'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
@@ -24,6 +25,7 @@ export type NativeChatRowChromeMetrics = {
   hasReceipt: boolean
   hasStatus: boolean
   hasTurnDiff: boolean
+  turnDiffFileCount?: number
   /** Folded prose/tools paint only a roster and must not reserve their expanded height. */
   folded?: boolean
   /** Inside a subagent's section, where assistant prose keeps its controls in flow. */
@@ -176,7 +178,15 @@ export function estimateNativeChatRowHeight(
     partCount += 1
   }
   if (chrome.hasTurnDiff) {
-    height += TURN_DIFF_PX * scale
+    height +=
+      TURN_DIFF_PX *
+      scale *
+      (1 +
+        Math.min(chrome.turnDiffFileCount ?? 0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT) +
+        (chrome.turnDiffFileCount !== undefined &&
+        chrome.turnDiffFileCount > NATIVE_CHAT_TURN_DIFF_FILE_LIMIT
+          ? 1
+          : 0))
     partCount += 1
   }
   height += Math.max(0, partCount - 1) * NATIVE_CHAT_ROW_GAP_PX

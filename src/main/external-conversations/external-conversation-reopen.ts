@@ -1,5 +1,5 @@
 import type { ExternalConversationLink } from '../../shared/external-conversation-link'
-import type { LaunchedAgentReadinessRuntime } from '../runtime/launched-agent-composer-readiness'
+import type { LaunchedAgentReadinessRuntime } from '../runtime/terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { waitForStartedAgentReady } from '../runtime/rpc/methods/agent-launch-terminal-prompt'
 import type { AgentSessionResumeRefusal } from '../runtime/session-lifecycle/projection/resume-agent-session-in-workspace'

@@ -23,9 +23,9 @@ import {
   wslDistroForPath
 } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import type { BrowserExecutionHostKeyResolution } from '../runtime-browser-client-page-adoption'
 import { browserNetworkExecutionHostKey } from '../../browser/network/execution-routes/browser-network-execution-route'
 
@@ -272,11 +272,13 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
 
   routeClientHostedBrowserRpc(
     method: string,
-    params: unknown
+    params: unknown,
+    caller: RpcContext['caller']
   ): Promise<ClientHostedBrowserRpcRoute> {
     return routeRuntimeBrowserClientAutomation({
       method,
       params,
+      caller,
       pages: getRuntimeBrowserPageRegistry(this),
       leases: getBrowserHostLeaseRegistry(this),
       resolveWorkspace: (selector) =>

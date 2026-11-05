@@ -39,6 +39,7 @@ describe('legacy worker terminal recovery events', () => {
 
     expect(
       rollbackLegacyWorkerTerminalSurfaceInStore(store as never, {
+        lastPaneCloseReason: 'cleanup',
         tabId: 'legacy-worker',
         leafId: LEAF_ID,
         preservePty: true,
@@ -82,6 +83,7 @@ describe('legacy worker terminal recovery events', () => {
 
     expect(
       rollbackLegacyWorkerTerminalSurfaceInStore(store as never, {
+        lastPaneCloseReason: 'cleanup',
         tabId: 'legacy-worker',
         leafId: LEAF_ID,
         preservePty: true,

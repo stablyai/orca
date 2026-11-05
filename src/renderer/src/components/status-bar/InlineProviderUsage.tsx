@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { barColor, clampUsedPercent } from './tooltip'
-import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
+import { formatRateLimitWindowChipLabel } from '../../../../shared/rate-limit-window-label'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsageRosterRowState } from './usage-roster-row-state'
 import { translate } from '@/i18n/i18n'

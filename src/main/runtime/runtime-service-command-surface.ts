@@ -1,4 +1,4 @@
-import type { RuntimeAccountController } from './runtime-account-controller'
+import type { RuntimeAccountController } from './agent-session/environment/runtime-account-controller'
 import type { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
 import type { RuntimeBrowserDriverController } from './runtime-browser-driver-controller'
 import type { RuntimeClientEventBus } from './runtime-client-event-bus'

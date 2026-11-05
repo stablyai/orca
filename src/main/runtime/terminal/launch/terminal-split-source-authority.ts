@@ -1,6 +1,6 @@
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { OrcaRuntimeWithSplitPaneInMain } from './terminal-split-in-main'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
+import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session/workspace-session-pane-ownership'
 import type {
@@ -10,7 +10,7 @@ import type {
 import {
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin
-} from '../../claude-agent-teams-shim-env'
+} from './claude-agent-teams-shim-env'
 import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { splitPanePendingError } from './terminal-split-retry'
