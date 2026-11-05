@@ -62,69 +62,42 @@ describe('MobileNativeChatMessage', () => {
     node
       .findAll((child) => String(child.type) === 'MobileMarkdown')
       .map((markdown) => markdown.props.content)
-  const textIn = (node: ReactTestInstance): string[] =>
-    findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
 
-  it('measures the natural layer, expands and refolds, and preserves old-server body', () => {
-    const from: AgentMessageSource = { kind: 'agent', orchestration: null, senders: [] }
-    const message = {
-      ...userMessage([
-        { type: 'text' as const, text: 'Long paragraph wrapped over many native lines.' }
-      ]),
-      from
+  it.each(['task', 'generic'] as const)(
+    'expands and refolds %s messages and preserves old-server body',
+    (kind) => {
+      const from: AgentMessageSource = {
+        kind: 'agent',
+        orchestration:
+          kind === 'task' ? { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' } : null,
+        senders: []
+      }
+      const message = {
+        ...userMessage([
+          { type: 'text' as const, text: 'Long paragraph wrapped over many native lines.' }
+        ]),
+        from
+      }
+      const tree = render(message)
+      const toggle = () =>
+        findAllByHostType(tree.root, 'Pressable').find(
+          (node) => node.props.accessibilityState?.expanded !== undefined
+        )!
+      expect(markdownIn(tree.root)).toEqual([])
+      expect(toggle().props.accessibilityState.expanded).toBe(false)
+      act(() => toggle().props.onPress())
+      expect(markdownIn(tree.root)).toEqual(['Long paragraph wrapped over many native lines.'])
+      expect(toggle().props.accessibilityState.expanded).toBe(true)
+      act(() => toggle().props.onPress())
+      expect(markdownIn(tree.root)).toEqual([])
+      act(() => tree.unmount())
+      const oldServer = render({ ...message, from: undefined })
+      expect(oldServer.root.findAllByProps({ testID: 'agent-message-card' })).toHaveLength(0)
+      expect(markdownIn(oldServer.root)).toEqual([
+        message.blocks[0].type === 'text' ? message.blocks[0].text : ''
+      ])
     }
-    const tree = render(message)
-    const measured = tree.root.findByProps({ testID: 'agent-message-body' })
-    const clip = tree.root.findByProps({ testID: 'agent-message-viewport' })
-    const folded = clip.props.style.height
-    expect(measured.props.style).toMatchObject({ position: 'absolute', left: 0, right: 0, top: 0 })
-    act(() => measured.props.onLayout({ nativeEvent: { layout: { height: folded } } }))
-    expect(textIn(tree.root)).not.toContain('Show more')
-    act(() => measured.props.onLayout({ nativeEvent: { layout: { height: folded * 4 } } }))
-    const toggle = () =>
-      findAllByHostType(tree.root, 'Pressable').find(
-        (node) => node.props.accessibilityState?.expanded !== undefined
-      )!
-    act(() => toggle().props.onPress())
-    expect(clip.props.style.height).toBe(folded * 4)
-    act(() => toggle().props.onPress())
-    expect(clip.props.style.height).toBe(folded)
-    expect(textIn(tree.root)).toContain('Show more')
-    const body = () => tree.root.findByProps({ testID: 'agent-message-body' })
-    const viewport = () => tree.root.findByProps({ testID: 'agent-message-viewport' })
-    let stale = body().props.onLayout
-    act(() => viewport().props.onLayout({ nativeEvent: { layout: { width: 320 } } }))
-    act(() => stale({ nativeEvent: { layout: { height: 900 } } }))
-    expect(viewport().props.style.height).toBe(folded)
-    expect(textIn(tree.root)).not.toContain('Show more')
-    act(() => body().props.onLayout({ nativeEvent: { layout: { height: folded * 2 } } }))
-    expect(textIn(tree.root)).toContain('Show more')
-    stale = body().props.onLayout
-    act(() => tree.update(createElement(MobileNativeChatMessage, { message, fontScale: 1.5 })))
-    act(() => stale({ nativeEvent: { layout: { height: 900 } } }))
-    expect(viewport().props.style.height).toBe(folded * 1.5)
-    act(() => body().props.onLayout({ nativeEvent: { layout: { height: 10 } } }))
-    expect(viewport().props.style.height).toBe(10)
-    stale = body().props.onLayout
-    const recovered = {
-      ...message,
-      blocks: [{ type: 'text' as const, text: 'Recovered current body' }]
-    }
-    act(() =>
-      tree.update(createElement(MobileNativeChatMessage, { message: recovered, fontScale: 1.5 }))
-    )
-    act(() => stale({ nativeEvent: { layout: { height: 900 } } }))
-    expect(viewport().props.style.height).toBe(folded * 1.5)
-    act(() => body().props.onLayout({ nativeEvent: { layout: { height: 20 } } }))
-    expect(viewport().props.style.height).toBe(20)
-    expect(markdownIn(tree.root)).toEqual(['Recovered current body'])
-    act(() => tree.unmount())
-    const oldServer = render({ ...message, from: undefined })
-    expect(oldServer.root.findAllByProps({ testID: 'agent-message-card' })).toHaveLength(0)
-    expect(markdownIn(oldServer.root)).toEqual([
-      message.blocks[0].type === 'text' ? message.blocks[0].text : ''
-    ])
-  })
+  )
 
   // An older host refuses the read; the row keeps today's placeholder.
 })

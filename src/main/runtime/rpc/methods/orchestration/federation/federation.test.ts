@@ -1,3 +1,4 @@
+import { registerFederationAnswerAtomicityTest } from './federation-answer-atomicity.test-support'
 import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -360,6 +361,9 @@ describe('orchestration federation', () => {
       body: 'Should I include slow integration tests?'
     })
 
+    const snapshot = vi
+      .spyOn(homeRuntime.orchestrationSenderNames, 'snapshotOf')
+      .mockReturnValue({ name: 'Known coordinator A', agent: 'codex' })
     const reply = await homeDispatcher.dispatch({
       id: 'rpc_home_reply',
       authToken: 'coordinator-token',
@@ -373,7 +377,19 @@ describe('orchestration federation', () => {
       }
     })
     expect(reply).toMatchObject({ ok: true, result: { question: { status: 'answered' } } })
+    snapshot.mockReturnValue({ name: 'Later coordinator B', agent: 'claude' })
     await syncFederationBarrier(homeRuntime, homeDb)
+    const acceptedAnswer = workerDb.getMessageById(
+      workerDb.getRemoteQuestion(question!.id)!.answer_message_id!
+    )!
+    expect(JSON.parse(acceptedAnswer.answer_sender_snapshot!)).toMatchObject({
+      version: 1,
+      sender: {
+        name: 'Known coordinator A',
+        agent: 'codex',
+        party: { terminalHandle: null, orcaSessionId: null }
+      }
+    })
 
     await expect(ask).resolves.toMatchObject({
       ok: true,
@@ -391,6 +407,14 @@ describe('orchestration federation', () => {
       })[0]
     ).toMatchObject({ acked_at: expect.any(String) })
   })
+
+  registerFederationAnswerAtomicityTest(() => ({
+    homeDb,
+    workerDb,
+    homeRuntime,
+    homeDispatcher,
+    createHomeTask
+  }))
 
   it('keeps a timed-out remote question resumable', async () => {
     const task = createHomeTask()

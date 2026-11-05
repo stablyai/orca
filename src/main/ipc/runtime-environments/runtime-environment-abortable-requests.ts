@@ -2,6 +2,7 @@ import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pai
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import type {
+  RuntimeRequestPreparation,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
@@ -17,9 +18,10 @@ export function sendRemoteRuntimeRequestAbortable(
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
-  clientCapabilities: readonly RuntimeCapability[] = []
+  clientCapabilities: readonly RuntimeCapability[] = [],
+  prepareRequest?: RuntimeRequestPreparation
 ): Promise<RuntimeRpcResponse<unknown>> {
-  if (signal || clientCapabilities.length > 0) {
+  if (signal || clientCapabilities.length > 0 || prepareRequest) {
     return sendRemoteRuntimeRequest(
       connection,
       method,
@@ -27,7 +29,8 @@ export function sendRemoteRuntimeRequestAbortable(
       timeoutMs,
       envelope,
       signal,
-      clientCapabilities
+      clientCapabilities,
+      ...(prepareRequest ? ([prepareRequest] as const) : [])
     )
   }
   return envelope
