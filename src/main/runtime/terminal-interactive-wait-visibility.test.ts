@@ -3,7 +3,7 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalAgentStatus
 } from '../../shared/runtime-terminal-contracts'
-import { RuntimeMachineName } from './runtime-machine-name'
+import { RuntimeMachineName } from './hosts/platform-probe/runtime-machine-name'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeTuiIdlePty } from './terminal/wait/tui-idle-wait-test-harness'
 import { readFileSync } from 'node:fs'

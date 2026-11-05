@@ -9,7 +9,7 @@ import {
   createAgentPromptSubmissionRuntime
 } from './agent-prompt-submission-runtime-test-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { makeStore } from '../../runtime-rpc-worktree-store-fixtures'
+import { makeStore } from '../../rpc/server/runtime-rpc-worktree-store-fixtures'
 
 const createPromptRuntime = createAgentPromptSubmissionRuntime
 

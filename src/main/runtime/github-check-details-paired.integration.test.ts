@@ -15,7 +15,7 @@ import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pa
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from './orca-runtime'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
 import { RuntimeGitHubReviewQueryCommands } from './integrations/github/runtime-github-review-query-commands'
 import { GITHUB_PULL_REQUEST_METHODS } from './rpc/methods/github-pull-request-methods'
 import { clearGhAccountTokenCacheForTests } from '../github/gh-account-token'

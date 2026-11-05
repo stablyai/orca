@@ -9,7 +9,7 @@ import {
   fingerprintOrchestrationPeer,
   pairedOrchestrationPeers
 } from './orchestration/environment-transport'
-import { devicePrincipalOf } from './device-principal'
+import { devicePrincipalOf } from './rpc/server/pairing/device-principal'
 import { OrchestrationDb } from './orchestration/db'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'

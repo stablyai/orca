@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithReadKittyFile } from '../../orca-runtime-read-kitty-file'
+import { OrcaRuntimeWithReadKittyFile } from '../../files/paths/orca-runtime-read-kitty-file'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'

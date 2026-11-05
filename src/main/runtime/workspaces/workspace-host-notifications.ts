@@ -5,7 +5,7 @@ import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../session
 import type { RuntimeWorkspaceRepoScanRefresh } from './catalog/workspace-repo-scan-refresh'
 import { OrcaRuntimeWithGetStatus } from '../orca-runtime-get-status'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { getPublicSshState } from '../public-ssh-state'
+import { getPublicSshState } from '../hosts/platform-probe/public-ssh-state'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'

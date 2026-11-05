@@ -43,7 +43,7 @@ import type { StructuredPointerTarget } from '../orchestration/structured-mailbo
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type * as PtyControllerContract from '../runtime-pty-controller-contract'
-import type { RuntimeClientEventBus } from '../runtime-client-event-bus'
+import type { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
 

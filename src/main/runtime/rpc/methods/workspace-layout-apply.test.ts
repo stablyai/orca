@@ -5,7 +5,7 @@ import type { LayoutApplyOutcome } from '../../../../shared/workspace-layout/wor
 import type { Tab } from '../../../../shared/tab-types'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
-import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobile-method-allowlist'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../server/runtime-rpc-mobile-method-allowlist'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 import { LAYOUT_APPLY_METHODS } from './workspace-layout'
