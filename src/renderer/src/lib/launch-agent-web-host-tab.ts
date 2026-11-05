@@ -84,6 +84,7 @@ export async function launchAgentInWebHostTab(args: {
         cmdOverrides: {},
         agentArgs: null,
         platform: args.launchPlatform ?? 'linux',
+        shell: args.launchShell,
         isRemote: true
       },
       prompt,

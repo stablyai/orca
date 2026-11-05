@@ -9,11 +9,13 @@ import {
 import { projectAgentLaunchProfile } from '../../../shared/agent-launch/choices/agent-launch-profile'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { sourceControlActionAgentArgs } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { agentArgsSetPermission } from '../../../shared/agent-launch/permissions/agent-permission-args'
 import { liftAgentPermissionArgs } from '../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import { readLaunchPermissionChoice } from '../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { YOLO_TUI_AGENT_ENV } from '../../../shared/agent-launch/permissions/tui-agent-permissions'
 import {
   resolveStartupShell,
+  tokenizeStartupCommand,
   type AgentStartupShell
 } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
@@ -31,8 +33,17 @@ export async function pairedAgentLaunchInputs(args: {
   actionAgentArgs?: string
   agentArgs?: string | null
 }) {
-  const { agent, sessionOptions } = args
-  const launchPreferences = toAgentLaunchPreferences(sessionOptions, agent)
+  const { agent } = args
+  const launchPreferences = toAgentLaunchPreferences(args.sessionOptions, agent)
+  const sessionOptions =
+    args.sessionOptions &&
+    Object.fromEntries(
+      Object.entries(args.sessionOptions).filter(([key]) =>
+        key === 'permissionMode' || key === 'mode'
+          ? launchPreferences?.mode !== undefined
+          : key !== 'effort' || launchPreferences?.effort !== undefined
+      )
+    )
   const explicitArgs = args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}
   const hasActionArgs = args.actionAgentArgs !== undefined
   if (args.complete && !hasActionArgs) {
@@ -88,6 +99,16 @@ export async function pairedAgentLaunchInputs(args: {
       })
   )
   const legacyPermission = liftAgentPermissionArgs(agent, snapshot.agentDefaultArgs[agent])
+  const textOnly = !snapshot.agentPermission && !snapshot.agentChoices
+  // Why: a pick can replace only permission text the legacy parser can separate safely.
+  if (
+    textOnly &&
+    permissionMode &&
+    (agentArgsSetPermission(agent, legacyPermission.args) ||
+      !tokenizeStartupCommand(legacyPermission.args, shell).ok)
+  ) {
+    return { preparedAgentCommand: true }
+  }
   // Why: snapshots with no readable permission cannot safely replace the action's Arguments.
   if (
     hasActionArgs &&
@@ -97,10 +118,11 @@ export async function pairedAgentLaunchInputs(args: {
     return { preparedAgentCommand: true }
   }
   const settings = {
-    agentDefaultArgs:
-      snapshot.agentChoices?.userArgs ??
-      snapshot.agentPermission?.userArgs ??
-      snapshot.agentDefaultArgs,
+    agentDefaultArgs: snapshot.agentChoices?.userArgs ??
+      snapshot.agentPermission?.userArgs ?? {
+        ...snapshot.agentDefaultArgs,
+        ...(permissionMode ? { [agent]: legacyPermission.args } : {})
+      },
     agentLaunchChoices: snapshot.agentChoices?.defaults,
     agentCmdOverrides: snapshot.agentCmdOverrides,
     agentPermissionDefault: snapshot.agentPermission?.default ?? legacyPermission.choice ?? 'own',

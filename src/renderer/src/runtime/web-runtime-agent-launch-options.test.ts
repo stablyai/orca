@@ -275,7 +275,6 @@ it('keeps host authority on older hosts and composes inexpressible picks only fr
   const nonAction = params('terminal.createAgentSession')
   expect(nonAction.agentArgs).toBe('--effort high --permission-mode auto --add-dir /host-tools')
   expect(nonAction).not.toHaveProperty('launchPreferences')
-  expect(`claude --model opus ${nonAction.agentArgs}`.match(/--model/g)).toHaveLength(1)
 })
 
 it.each([
@@ -318,6 +317,79 @@ it.each([
     expect(params('terminal.createAgentSession').agentArgs).toBe(expected)
   }
 )
+
+it('replaces recognized permission text from a historical host snapshot and retains ambiguous launches', async () => {
+  capabilities = ['agent-session.host-authority.v1']
+  const snapshot = {
+    defaultTuiAgent: 'claude' as const,
+    disabledTuiAgents: [],
+    agentCmdOverrides: {},
+    agentDefaultArgs: { claude: '--dangerously-skip-permissions --add-dir /host-tools' },
+    permissionMode: 'mixed' as const,
+    environmentNames: {}
+  }
+  vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockResolvedValue(snapshot)
+  await launch({ sessionOptions: { permissionMode: 'ask' } })
+  expect(params('terminal.createAgentSession').agentArgs).toBe(
+    '--permission-mode default --add-dir /host-tools'
+  )
+  expect(params('terminal.createAgentSession')).not.toHaveProperty('launchPreferences')
+  call.mockClear()
+  vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockResolvedValue({
+    ...snapshot,
+    agentDefaultArgs: {
+      claude: '--permission-mode auto --permission-mode default --add-dir /host-tools'
+    }
+  })
+  await launch({ sessionOptions: { permissionMode: 'ask' } })
+  expect(params('session.tabs.createTerminal').command).toContain('desktop-claude')
+  expect(params('session.tabs.createTerminal').command).toContain("'--permission-mode' 'default'")
+})
+
+it('keeps a cmd multiline draft out of the create request and pastes it after startup', async () => {
+  await launch({
+    launchPlatform: 'win32',
+    launchShell: 'cmd',
+    prompt: 'first line\nsecond line',
+    promptDelivery: 'draft'
+  })
+  const request = params('terminal.createAgentSession')
+  expect(request).not.toHaveProperty('prompt')
+  expect(request).not.toHaveProperty('promptDelivery')
+  expect(mocks.deliverLaunchPromptToAgentTab).toHaveBeenCalledWith(
+    expect.objectContaining({
+      content: 'first line\nsecond line',
+      agent: 'claude',
+      submit: false
+    })
+  )
+})
+
+it('leaves chat-only permission out of an OpenCode terminal action request', async () => {
+  const projection = projectSourceControlActionLaunch(
+    {
+      agentId: 'opencode',
+      surface: 'terminal',
+      launchPreferences: { agentId: 'opencode', permissionMode: 'ask' }
+    },
+    'opencode',
+    { basePrompt: 'Inspect the change' }
+  )
+  const result = await launch({
+    agent: 'opencode',
+    sessionOptions: projection.sessionOptions,
+    prompt: projection.commandInput
+  })
+  expect(result.outcome.status).toBe('created')
+  const request = params('terminal.createAgentSession')
+  expect(request).toMatchObject({
+    agent: 'opencode',
+    prompt: 'Inspect the change',
+    sessionOptions: {}
+  })
+  expect(request).not.toHaveProperty('launchPreferences')
+  expect(request).not.toHaveProperty('agentArgs')
+})
 
 it('preserves empty action text and inherits permission from text-only host snapshots', async () => {
   await launch({ actionAgentArgs: '' })
