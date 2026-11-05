@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import {
   startRendererTimingProbe,
   stopRendererTimingProbe
-} from './idle-cpu-renderer-timing-probe.mjs'
+} from './performance/idle-cpu/idle-cpu-renderer-timing-probe.mjs'
 
 // Called with an already-attached main Orca page; never launches, focuses, or reloads it.
 export async function captureLiveInputLag(page, durationMs = 30_000) {

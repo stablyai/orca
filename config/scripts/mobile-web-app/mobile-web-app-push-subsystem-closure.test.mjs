@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 import { describe, expect, it } from 'vitest'
-import { mobileWebAppBuildOptions } from '../build-mobile-web-app-bundle.mjs'
+import { mobileWebAppBuildOptions } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { collectMobileWebAppRoutes } from './mobile-web-app-route-manifest.mjs'
 

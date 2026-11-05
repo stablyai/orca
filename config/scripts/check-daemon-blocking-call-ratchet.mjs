@@ -1,8 +1,11 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { createGatedCallCollector } from './gated-call-use-collector.mjs'
-import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
-import { isTestOnlySourcePath } from './test-only-source-path.mjs'
+import { createGatedCallCollector } from './static-analysis/process-boundaries/gated-call-use-collector.mjs'
+import {
+  readTrackedSources,
+  runCountRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
+import { isTestOnlySourcePath } from './static-analysis/process-boundaries/test-only-source-path.mjs'
 
 // The terminal daemon and orcad serve every pane from one event loop; a blocking call there freezes all of them (#34410).
 

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
+import { resolveOxlintInvocation } from './tool-invocation/oxlint-cli-invocation.mjs'
 
 import {
   collectCurrentSuppressions,

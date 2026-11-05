@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { readdirSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
 import { testImportClosure } from './e2e-test-import-closure.mjs'
-import { MANUAL_ONLY_E2E_SPECS, selectPrE2eSpecs } from './pr-e2e-source-routing.mjs'
+import {
+  MANUAL_ONLY_E2E_SPECS,
+  selectPrE2eSpecs
+} from './workflow/source-routing/pr-e2e-source-routing.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const MANAGED_SSH_SPEC = /^tests\/e2e\/ssh-orcad-.*\.spec\.ts$/

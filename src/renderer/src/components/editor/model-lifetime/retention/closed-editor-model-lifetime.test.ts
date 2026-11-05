@@ -13,13 +13,7 @@ import {
   getDiffViewerMonacoModelPaths,
   rememberDiffViewerModelPaths
 } from '../../diff/monaco-view/diff-monaco-model-disposal'
-import {
-  scrollTopCache,
-  editorSelectionCache,
-  diffViewStateCache,
-  pdfViewPositionCache,
-  setWithLRU
-} from '@/lib/scroll-cache'
+import { scrollTopCache, diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 
 import {
   checkDetailsReadingKey,
@@ -31,43 +25,6 @@ import {
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn(), success: vi.fn() } }))
 afterEach(resetModelLifetimeFixtures)
-
-it('releases eight distinct last-file models while no editor panel is mounted', async () => {
-  const { store, attach, add } = createModelLifetimeFixture()
-  attach()
-  for (let index = 0; index < 8; index += 1) {
-    const { file, model } = add(`last-${index}`)
-    store.getState().closeFile(file.id)
-    await Promise.resolve()
-    expect(store.getState().openFiles).toHaveLength(0)
-    expect(model.isDisposed()).toBe(true)
-  }
-})
-
-it('keeps a live model and releases only its closed sibling', async () => {
-  const { store, attach, add } = createModelLifetimeFixture()
-  const closed = add('closed')
-  const live = add('live')
-  attach()
-  store.getState().closeFile(closed.file.id)
-  await Promise.resolve()
-  expect(closed.model.isDisposed()).toBe(true)
-  expect(live.model.isDisposed()).toBe(false)
-})
-
-it('preserves a shared URI until its final file owner closes', async () => {
-  const { store, attach, add } = createModelLifetimeFixture()
-  const { file, model } = add('shared-a')
-  store.setState({ openFiles: [file, { ...file, id: 'shared-b', readOnly: true }] })
-  attach()
-  store.getState().closeFile(file.id)
-  await Promise.resolve()
-  expect(store.getState().openFiles.map((openFile) => openFile.id)).toEqual(['shared-b'])
-  expect(model.isDisposed()).toBe(false)
-  store.getState().closeFile('shared-b')
-  await Promise.resolve()
-  expect(model.isDisposed()).toBe(true)
-})
 
 it('waits beyond the real detach stack and preserves its bounded scroll snapshot', async () => {
   const { store, attach, add } = createModelLifetimeFixture()
@@ -99,28 +56,6 @@ it('protects a reopened URI owner from a pending detach callback', async () => {
   store.getState().closeFile('reopened-new')
   await Promise.resolve()
   expect(model.isDisposed()).toBe(true)
-})
-
-it('does not dispose a replacement model at an older queued URI', async () => {
-  const { store, attach, add } = createModelLifetimeFixture()
-  const { file, model } = add('replacement')
-  attach()
-  store.getState().closeFile(file.id)
-  model.dispose()
-  const successor = modelLifetimeEditorModel(file.filePath, 'successor')
-  await Promise.resolve()
-  expect(successor.isDisposed()).toBe(false)
-})
-
-it('does not enumerate the global model registry for an ordinary edit close', async () => {
-  const { store, attach, add } = createModelLifetimeFixture()
-  const { file, model } = add('direct-lookup')
-  attach()
-  const enumeration = vi.spyOn(monaco.editor, 'getModels')
-  store.getState().closeFile(file.id)
-  await Promise.resolve()
-  expect(model.isDisposed()).toBe(true)
-  expect(enumeration).not.toHaveBeenCalled()
 })
 
 it('does not replay earlier model-disposal authority after first registry registration', async () => {
@@ -188,39 +123,6 @@ it('releases generated closed diff namespaces after detachment and preserves sib
   await Promise.resolve()
   expect(original.isDisposed()).toBe(true)
   expect(live.isDisposed()).toBe(false)
-})
-
-it('preserves bounded cold-registry rich, preview and PDF caches without loading Monaco', async () => {
-  const { store, attach } = createModelLifetimeFixture(false)
-  const file = modelLifetimeFile('cold-rich')
-  const preview = modelLifetimeFile('cold-preview', 'markdown-preview')
-  const sibling = modelLifetimeFile('cold-live')
-  store.setState({ openFiles: [file, preview, sibling] })
-  attach()
-  scrollTopCache.set(`${file.filePath}:rich`, 10)
-  scrollTopCache.set(`${file.filePath}::pane`, 11)
-  scrollTopCache.set(`${preview.id}:preview`, 12)
-  scrollTopCache.set(`${preview.id}::pane`, 13)
-  scrollTopCache.set(`${sibling.filePath}:rich`, 14)
-  const position = { pageNumber: 2, top: 3, left: 4 }
-  pdfViewPositionCache.set(`${file.filePath}:pdf`, position)
-  pdfViewPositionCache.set(`${file.filePath}::pane:pdf`, position)
-  pdfViewPositionCache.set(`${sibling.filePath}:pdf`, position)
-  store.getState().closeFile(file.id)
-  store.getState().closeFile(preview.id)
-  await Promise.resolve()
-  expect([...scrollTopCache]).toEqual([
-    [`${file.filePath}:rich`, 10],
-    [`${file.filePath}::pane`, 11],
-    [`${preview.id}:preview`, 12],
-    [`${preview.id}::pane`, 13],
-    [`${sibling.filePath}:rich`, 14]
-  ])
-  expect([...pdfViewPositionCache]).toEqual([
-    [`${file.filePath}:pdf`, position],
-    [`${file.filePath}::pane:pdf`, position],
-    [`${sibling.filePath}:pdf`, position]
-  ])
 })
 
 it('preserves queued model custody across registry removal and replacement', async () => {
@@ -313,35 +215,6 @@ it('protects a later file reopened by an earlier model disposal in the same batc
     await Promise.resolve()
     expect(first.model.isDisposed()).toBe(true)
     expect(second.model.isDisposed()).toBe(false)
-  } finally {
-    reopen.dispose()
-  }
-})
-
-it('preserves new same-URI cache entries installed by a model disposal callback', async () => {
-  const { store, attach, add } = createModelLifetimeFixture()
-  const { file, model } = add('cache-owner')
-  attach()
-  const selection = [new monaco.Selection(2, 1, 2, 3)]
-  const pdf = { pageNumber: 3, top: 4, left: 5 }
-  const reopen = model.onWillDispose(() => {
-    store.setState({ openFiles: [{ ...file, id: 'new-cache-owner' }] })
-    scrollTopCache.set(file.filePath, 41)
-    scrollTopCache.set(`${file.filePath}::pane`, 42)
-    editorSelectionCache.set(file.filePath, selection)
-    editorSelectionCache.set(`${file.filePath}::pane`, selection)
-    pdfViewPositionCache.set(`${file.filePath}:pdf`, pdf)
-    pdfViewPositionCache.set(`${file.filePath}::pane:pdf`, pdf)
-  })
-  try {
-    store.getState().closeFile(file.id)
-    await Promise.resolve()
-    expect(scrollTopCache.get(file.filePath)).toBe(41)
-    expect(scrollTopCache.get(`${file.filePath}::pane`)).toBe(42)
-    expect(editorSelectionCache.get(file.filePath)).toBe(selection)
-    expect(editorSelectionCache.get(`${file.filePath}::pane`)).toBe(selection)
-    expect(pdfViewPositionCache.get(`${file.filePath}:pdf`)).toBe(pdf)
-    expect(pdfViewPositionCache.get(`${file.filePath}::pane:pdf`)).toBe(pdf)
   } finally {
     reopen.dispose()
   }

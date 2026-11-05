@@ -10,6 +10,7 @@ import type {
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
@@ -66,10 +67,13 @@ export function useNativeChatStructuredComposerTransport(args: {
   })
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
-    const setThreadGoalObjective = threadGoal?.hostChanges
-      ? (objective: string) =>
-          sendBlockedReason === null
-            ? threadGoal.change({ kind: 'set', objective })
+    // A held host takes no turn; pausing or clearing a goal starts none.
+    const changeThreadGoal = threadGoal?.hostChanges
+      ? (change: AgentSessionThreadGoalChange) =>
+          sendBlockedReason === null ||
+          change.kind === 'clear' ||
+          (change.kind === 'status' && change.status === 'paused')
+            ? threadGoal.change(change)
             : Promise.resolve(false)
       : null
     return {
@@ -108,9 +112,15 @@ export function useNativeChatStructuredComposerTransport(args: {
           conversationCommands: controller.conversationCommands,
           compactInstructions: controller.compactInstructions,
           runConversationCommand: controller.runConversationCommand,
-          ...(setThreadGoalObjective ? { setThreadGoalObjective } : {})
+          ...(changeThreadGoal ? { changeThreadGoal } : {})
         }).then(localizeStructuredComposerOutcome),
-      ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
+      ...(changeThreadGoal
+        ? {
+            threadGoal: {
+              setObjective: (objective: string) => changeThreadGoal({ kind: 'set', objective })
+            }
+          }
+        : {}),
       sendOut: controller.sendOut || starting,
       sendFollowUp: controller.sendFollowUp,
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),

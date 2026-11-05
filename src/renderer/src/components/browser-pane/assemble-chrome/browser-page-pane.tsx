@@ -375,6 +375,7 @@ export function BrowserPagePane({
       {pageViewport?.container
         ? createPortal(
             <BrowserPageViewportOverlays
+              isActive={isActive}
               markup={markup}
               feedbackBadgeRef={zoom.feedbackBadgeRef}
               findOpen={findOpen}

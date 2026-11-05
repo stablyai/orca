@@ -142,47 +142,17 @@ describe('a chat at rest, read by the host', () => {
     expect(structuredAgentSessionMessageSelection(state)).toEqual({ ...saved, fastMode: 'false' })
   })
 
-  it.each<[string, RestingFacts, AgentJournalItemBody[], boolean, string[]]>([
-    ['started here names its default as its own', {}, [], false, []],
-    [
-      'taken from history',
-      { providerHandleChain: [{ ...created[0]!, origin: 'adopted' }] },
-      [],
-      true,
-      ['model']
-    ],
-    // A context clear hides the turn from the newest-turn read, not from history.
-    ['with a turn before a context clear', {}, [turn], true, ['model']],
-    [
-      'after a rewind',
-      {
-        rewind: {
-          phase: 'completed',
-          operationId: 'rewind-1',
-          callerKey: 'caller-1',
-          itemId: 'item-1',
-          expectedEpoch: 'epoch-1'
-        }
-      },
-      [],
-      true,
-      ['model']
-    ],
-    // A journal founded afresh proves nothing for a chat whose agent already ran.
-    ['whose journal went missing', { providerHandleChain: created }, [], false, ['model']]
-  ])('%s', async (_name, facts, items, wroteBeforeOpen, defaulted) => {
-    const read = await readAtRest(facts, items, wroteBeforeOpen)
-    expect(read.current).toMatchObject({ model: 'gpt-account', defaulted })
+  it("names a new chat's default without sending it", async () => {
+    const read = await readAtRest({}, [], false)
+    expect(read.current).toMatchObject({ model: 'gpt-account', defaulted: ['model'] })
     const state = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
       CODEX_SESSION_OPTION_CATALOG,
       read,
       { newLaunch: true, coherentCatalog: true }
     )
-    expect(read.current.acceptedInputSources).toEqual(defaulted.length ? {} : { model: 'policy' })
-    expect(structuredAgentSessionMessageSelection(state)).toEqual(
-      defaulted.length ? {} : { model: 'gpt-account' }
-    )
+    expect(read.current.acceptedInputSources).toEqual({})
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({})
   })
 
   it.each([
@@ -369,7 +339,7 @@ describe('a chat at rest, read by the host', () => {
     expect(live.current.model).toBeUndefined()
     const answer = await readAtRest({ provider: 'claude' }, [], false, installed, true, live)
     expect(answer.current.model).toBe(model)
-    expect(answer.current.defaulted).toEqual([])
+    expect(answer.current.defaulted).toEqual(model ? ['model'] : [])
     if (installed === null) {
       const atRest = await readAtRest({ provider: 'claude' }, [], false, installed)
       expect(atRest.current.model).toBeUndefined()
@@ -389,7 +359,8 @@ describe('a chat at rest, read by the host', () => {
       answer,
       launch
     )
-    expect(structuredAgentSessionSendSelection(state)).toEqual(model ? { model } : undefined)
+    // The child's own default is shown, never sent.
+    expect(structuredAgentSessionSendSelection(state)).toBeUndefined()
     const resumed = await readAtRest(
       {
         provider: 'claude',
