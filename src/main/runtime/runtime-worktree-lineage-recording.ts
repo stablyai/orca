@@ -50,7 +50,7 @@ export type CrossStoreLineageResolution = {
 
 export function crossStoreCliLineage(
   parent: CrossStoreParentRef,
-  inferredFrom: 'env-workspace' | 'cwd-context' | undefined
+  inferredFrom: 'env-workspace' | 'terminal-context' | 'cwd-context' | undefined
 ): CrossStoreLineageResolution {
   return {
     kind: 'crossStore',

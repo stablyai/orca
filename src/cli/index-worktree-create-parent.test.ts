@@ -595,6 +595,9 @@ describe('orca cli worktree awareness', () => {
       if (method === 'status.get') {
         return okFixture('req_status', { capabilities })
       }
+      if (method === 'terminal.show') {
+        return okFixture('req_terminal', { terminal: { worktreeId: 'repo::/tmp/repo' } })
+      }
       if (method === 'worktree.show') {
         const parent = { ...buildWorktree('/tmp/repo', 'main'), instanceId: 'parent-instance' }
         return okFixture('req_show', { worktree: parent })
@@ -635,5 +638,50 @@ describe('orca cli worktree awareness', () => {
       crossStoreParentInferredFrom: 'env-workspace',
       noParent: false
     })
+  })
+
+  it('nests a create on another machine under the caller terminal workspace alone', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_caller'
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    pairRuntimeEnvironment(listEnvironmentsMock, 'build-box')
+    mockServerCreate(['worktree.lineage.crossMachine'])
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:srv', '--name', 'child', '--environment', 'build-box'],
+      '/elsewhere'
+    )
+
+    expect(createParams()).toMatchObject({
+      crossStoreParent: { workspaceKey: 'worktree:repo::/tmp/repo' },
+      crossStoreParentInferredFrom: 'terminal-context'
+    })
+  })
+
+  it('creates unparented on a server that cannot link across machines, so its own inference stays off', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo::/tmp/repo'
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    pairRuntimeEnvironment(listEnvironmentsMock, 'build-box')
+    mockServerCreate([])
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:srv',
+        '--name',
+        'child',
+        '--comment',
+        'task_ab12',
+        '--environment',
+        'build-box'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(createParams()).toMatchObject({ noParent: true })
+    expect(createParams()).not.toHaveProperty('crossStoreParent')
   })
 })
