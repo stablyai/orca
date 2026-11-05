@@ -6,44 +6,49 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { WorkspaceCleanupForgetLocallyButton } from './workspace-cleanup-forget-locally-button'
+import { getWorkspaceCleanupCandidateAccessibleName } from './workspace-cleanup-host-label'
 
 // Pull the chevron's glyph, not its button, onto the right gutter shared with the header.
 const CHEVRON_INK_ALIGN = '-mr-2'
 
-type CandidateRowActionsProps = {
+type CandidateRowTrailingProps = {
   candidate: WorkspaceCleanupCandidate
   identity: string
-  accessibleName: string
   expanded: boolean
   hasExpandableDetails: boolean
-  ignored: boolean
+  /** Queueable and not already deleting; gates Remove. */
   selectable: boolean
+  lastActivityLabel: string
+  /** Joined from the workspace-space scan; null when this row was not measured. */
+  sizeLabel: string | null
+  /** False until any row has a measured size. */
+  showSizeColumn: boolean
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
   onRestore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
   onForgetLocally?: (candidate: WorkspaceCleanupCandidate) => void
   onToggleExpanded: (identity: string) => void
   onView: (candidate: WorkspaceCleanupCandidate) => void
-  /** Rendered between the hover actions and the chevron so it stays readable while actions show. */
-  metrics: React.ReactNode
 }
 
-export function CandidateRowActions({
+/** Hover actions, then fixed time/size columns, then the chevron, so the numbers never move. */
+export function CandidateRowTrailing({
   candidate,
   identity,
-  accessibleName,
   expanded,
   hasExpandableDetails,
-  ignored,
   selectable,
+  lastActivityLabel,
+  sizeLabel,
+  showSizeColumn,
   onIgnore,
   onRestore,
   onRemove,
   onForgetLocally,
   onToggleExpanded,
-  onView,
-  metrics
-}: CandidateRowActionsProps): React.JSX.Element {
+  onView
+}: CandidateRowTrailingProps): React.JSX.Element {
+  const accessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
   const expandLabel = expanded
     ? translate(
         'auto.components.workspace.cleanup.candidateRow.collapseDetails',
@@ -65,7 +70,18 @@ export function CandidateRowActions({
           )}
           onClick={() => onView(candidate)}
         />
-        {!ignored ? (
+        {candidate.blockers.includes('dismissed') ? (
+          <RowIconAction
+            icon={Eye}
+            tooltip={translate('components.workspace.cleanup.browse.stopIgnoring', 'Stop ignoring')}
+            ariaLabel={translate(
+              'components.workspace.cleanup.browse.stopIgnoringNamed',
+              'Stop ignoring {{value0}}',
+              { value0: accessibleName }
+            )}
+            onClick={() => onRestore(candidate)}
+          />
+        ) : (
           <RowIconAction
             icon={EyeOff}
             tooltip={translate(
@@ -78,17 +94,6 @@ export function CandidateRowActions({
               { value0: accessibleName }
             )}
             onClick={() => onIgnore(candidate)}
-          />
-        ) : (
-          <RowIconAction
-            icon={Eye}
-            tooltip={translate('components.workspace.cleanup.browse.stopIgnoring', 'Stop ignoring')}
-            ariaLabel={translate(
-              'components.workspace.cleanup.browse.stopIgnoringNamed',
-              'Stop ignoring {{value0}}',
-              { value0: accessibleName }
-            )}
-            onClick={() => onRestore(candidate)}
           />
         )}
         {selectable ? (
@@ -112,7 +117,30 @@ export function CandidateRowActions({
           <ActionSlotPlaceholder />
         )}
       </div>
-      {metrics}
+      <div className="flex items-center gap-4 text-xs tabular-nums text-muted-foreground">
+        <RowMetric
+          label={translate(
+            'components.workspace.cleanup.browse.lastActive',
+            'Last active {{value0}}',
+            { value0: lastActivityLabel }
+          )}
+          value={lastActivityLabel}
+        />
+        {showSizeColumn ? (
+          <RowMetric
+            label={translate(
+              'components.workspace.cleanup.browse.sizeOnDisk',
+              'Size on disk: {{value0}}',
+              {
+                value0:
+                  sizeLabel ??
+                  translate('components.workspace.cleanup.browse.notMeasured', 'Not measured')
+              }
+            )}
+            value={sizeLabel ?? '—'}
+          />
+        ) : null}
+      </div>
       {hasExpandableDetails ? (
         <RowIconAction
           tooltip={expandLabel}
@@ -127,6 +155,22 @@ export function CandidateRowActions({
         <ActionSlotPlaceholder className={CHEVRON_INK_ALIGN} />
       )}
     </div>
+  )
+}
+
+// Self-describing values ("2h ago", "4.8 GB") right-aligned so rows compare down the column.
+function RowMetric({ label, value }: { label: string; value: string }): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="min-w-14 truncate text-right" aria-label={label}>
+          {value}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

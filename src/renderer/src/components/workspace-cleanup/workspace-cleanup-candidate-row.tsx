@@ -12,7 +12,6 @@ import {
   SquareTerminal
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -47,7 +46,7 @@ import {
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { resolveRepoHeaderColor } from '@/components/sidebar/worktree-list/rows/project-header-color'
 import type { Repo } from '../../../../shared/repo-types'
-import { CandidateRowActions } from './workspace-cleanup-candidate-row-actions'
+import { CandidateRowTrailing } from './workspace-cleanup-candidate-row-trailing'
 import {
   getWorkspaceCleanupCandidateAccessibleName,
   getWorkspaceCleanupCandidateHostLabel
@@ -126,7 +125,6 @@ export const CandidateRow = React.memo(function CandidateRow({
   // Queued/deleting state must disable row actions even when removing was omitted.
   const queueable = canQueueWorkspaceCleanupCandidate(candidate)
   const selectable = queueable && !removing && !deleting
-  const ignored = candidate.blockers.includes('dismissed')
   const blockers = getWorkspaceCleanupBlockerLabels(candidate)
   const contextDetails = formatContextDetails(candidate)
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
@@ -140,8 +138,6 @@ export const CandidateRow = React.memo(function CandidateRow({
   const contextCount = getContextCount(candidate)
   const candidateAccessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
   const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
-  const sizeValue =
-    sizeLabel ?? translate('components.workspace.cleanup.browse.notMeasured', 'Not measured')
   const hasExpandableDetails =
     blockers.length > 0 ||
     candidate.path.length > 0 ||
@@ -348,70 +344,23 @@ export const CandidateRow = React.memo(function CandidateRow({
           ) : null}
         </div>
 
-        <CandidateRowActions
+        <CandidateRowTrailing
           candidate={candidate}
           identity={identity}
-          accessibleName={candidateAccessibleName}
           expanded={expanded}
           hasExpandableDetails={hasExpandableDetails}
-          ignored={ignored}
           selectable={selectable}
+          lastActivityLabel={lastActivityLabel}
+          sizeLabel={sizeLabel}
+          showSizeColumn={showSizeColumn}
           onIgnore={onIgnore}
           onRestore={onRestore}
           onRemove={onRemove}
           onForgetLocally={onForgetLocally}
           onToggleExpanded={onToggleExpanded}
           onView={onView}
-          metrics={
-            <div className="flex items-center gap-4 text-xs tabular-nums text-muted-foreground">
-              <CandidateRowMetric
-                label={translate(
-                  'components.workspace.cleanup.browse.lastActive',
-                  'Last active {{value0}}',
-                  { value0: lastActivityLabel }
-                )}
-                value={lastActivityLabel}
-                className="min-w-14"
-              />
-              {showSizeColumn ? (
-                <CandidateRowMetric
-                  label={translate(
-                    'components.workspace.cleanup.browse.sizeOnDisk',
-                    'Size on disk: {{value0}}',
-                    { value0: sizeValue }
-                  )}
-                  value={sizeLabel ?? '—'}
-                  className="min-w-14"
-                />
-              ) : null}
-            </div>
-          }
         />
       </div>
     </div>
   )
 })
-
-// Self-describing values ("2h ago", "4.8 GB") right-aligned so rows compare down the column.
-function CandidateRowMetric({
-  label,
-  value,
-  className
-}: {
-  label: string
-  value: string
-  className?: string
-}): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className={cn('truncate text-right', className)} aria-label={label}>
-          {value}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
-}

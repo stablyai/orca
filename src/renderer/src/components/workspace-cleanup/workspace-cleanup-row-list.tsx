@@ -9,6 +9,10 @@ import { WorkspaceCleanupEmptyState } from './workspace-cleanup-dialog-notices'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'
 import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
+import {
+  findWorkspaceCleanupCandidateRepo,
+  groupWorkspaceCleanupReposById
+} from './workspace-cleanup-presentation'
 import { resolveWorkspaceCleanupRemovalHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupRowListState = {
@@ -44,7 +48,7 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
   const scannedCount = scannedCandidates.length
   const settled = !loading && hasScanned
   const repos = useAppStore((s) => s.repos)
-  const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
+  const reposById = useMemo(() => groupWorkspaceCleanupReposById(repos), [repos])
   // Count hosts across every scanned row so filtering down to one host does not hide the label.
   const showHostLabels = useMemo(
     () =>
@@ -90,7 +94,7 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
             identity={row.identity}
             candidate={row.candidate}
             reviewInfo={row.review}
-            repo={repoById.get(row.repoId) ?? null}
+            repo={findWorkspaceCleanupCandidateRepo(row.candidate, reposById)}
             showHostLabel={showHostLabels}
             showSizeColumn={showSizeColumn}
             last={rows.length > 1 && index === rows.length - 1}

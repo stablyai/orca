@@ -65,13 +65,9 @@ export function WorkspaceCleanupSortHeader({
       {selectedCount > 0 ? (
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <span className="truncate text-xs font-medium text-foreground">
-            {translate(
-              'components.workspace.cleanup.browse.selectedSelectableCount',
-              '{{value0}} selected',
-              {
-                value0: selectedCount
-              }
-            )}
+            {translate('components.workspace.cleanup.browse.selectedCount', '{{value0}} selected', {
+              value0: selectedCount
+            })}
           </span>
           <Button
             variant="destructive"

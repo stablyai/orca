@@ -126,6 +126,8 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
         ])
       )
     ]
+    // Persist first: a failed restore must not leave the row eligible for bulk delete.
+    await window.api.workspaceCleanup.dismiss({ dismissals: [], restoredDismissalKeys })
     set((state) => {
       const next = { ...state.workspaceCleanupDismissals }
       for (const key of restoredDismissalKeys) {
@@ -133,7 +135,6 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       }
       return withWorkspaceCleanupDismissals(state, next)
     })
-    await window.api.workspaceCleanup.dismiss({ dismissals: [], restoredDismissalKeys })
   },
   resetWorkspaceCleanupDismissals: async () => {
     set((state) => withWorkspaceCleanupDismissals(state, {}))
