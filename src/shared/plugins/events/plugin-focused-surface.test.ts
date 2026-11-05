@@ -5,7 +5,7 @@ const WT = 'repo-1::/home/me/src/app'
 
 function session(
   contentType: 'terminal' | 'agent-session' | 'editor' | 'diff' | 'browser' | 'simulator',
-  tab: { id: string; label: string; customLabel?: string | null }
+  tab: { id: string; label: string; customLabel?: string | null; entityId?: string }
 ) {
   return {
     activeWorktreeId: WT,
@@ -28,8 +28,9 @@ function session(
 }
 
 describe('readPluginFocusedSurface', () => {
-  it('names the active agent tab of the active group, with an id that joins its paneKey', () => {
-    const agentTab = { id: 'structured-agent-session-s1', label: 'Fix the login bug' }
+  it('names the active agent tab of the active group, with the canonical id its paneKey starts with', () => {
+    // An alias tab: its own id differs from the canonical one the status rows use.
+    const agentTab = { id: 'opening-tab', entityId: 's1', label: 'Fix the login bug' }
     expect(readPluginFocusedSurface(session('agent-session', agentTab), true)).toEqual({
       kind: 'agent',
       title: 'Fix the login bug',

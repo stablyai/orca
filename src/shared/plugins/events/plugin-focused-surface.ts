@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { clampUtf8TextPrefix } from '../../utf8-byte-limits'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
+import { structuredAgentSessionTabId } from '../../agent-session/view/structured-agent-session-projection'
 
 export const PLUGIN_FOCUSED_SURFACE_TITLE_MAX_BYTES = 80
 const PLUGIN_FOCUSED_AGENT_ID_MAX_LENGTH = 2048
@@ -58,12 +59,12 @@ export function readPluginFocusedSurface(
     return null
   }
   const title = projectPluginFocusedTitle(tab.customLabel ?? tab.generatedLabel ?? tab.label)
+  // Why from the session id: alias and history tabs have their own id, but status rows use the canonical one.
+  const agentId = kind === 'agent' ? structuredAgentSessionTabId(tab.entityId) : null
   return {
     kind,
     title,
-    ...(kind === 'agent' && tab.id.length <= PLUGIN_FOCUSED_AGENT_ID_MAX_LENGTH
-      ? { agentId: tab.id }
-      : {})
+    ...(agentId && agentId.length <= PLUGIN_FOCUSED_AGENT_ID_MAX_LENGTH ? { agentId } : {})
   }
 }
 
