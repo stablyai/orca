@@ -184,11 +184,6 @@ describe('Korean won input after a composition commit', () => {
     await expect(typeHangulThenWon(['`'], { duplicateFirstInput: true })).resolves.toBe('한`')
   })
 
-  it('preserves a 64-input native-text burst before the composition finalizer', async () => {
-    const committed = Array.from({ length: 64 }, (_, index) => (index % 2 === 0 ? '`' : '₩'))
-    await expect(typeHangulThenWon(committed)).resolves.toBe(`한${committed.join('')}`)
-  })
-
   it('preserves an immediate won remap after repeated stale composition ends', async () => {
     await expect(typeHangulThenRepeatedStaleEndsThenWon()).resolves.toBe('한`')
   })

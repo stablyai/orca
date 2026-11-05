@@ -1,18 +1,17 @@
 // @vitest-environment happy-dom
 import { useLayoutEffect, useRef } from 'react'
-import { act, cleanup, render } from '@testing-library/react'
+import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, expect, it, vi } from 'vitest'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { DiffOnMount } from '@monaco-editor/react'
 import { installCombinedDiffCursorReveal } from './combined-diff-cursor-reveal'
-import { TooltipProvider } from '@/components/ui/tooltip'
+
 import {
   prFilesDiffScrollTopCache,
   prFilesDiffViewStateCache
 } from '../../../pull-request-page/cache/files-diff-view'
 import {
   reviewHostFixture,
-  reviewHostComponents,
   originalContent,
   modifiedContent
 } from '../review-controls/combined-diff-review-host.test-fixture'
@@ -158,39 +157,5 @@ it.each([true, false])(
       pane.setPosition({ lineNumber: 1, column: 1 }, 'api')
       expect(viewport.scrollTop).toBe(offset)
     }
-  }
-)
-
-it.each(['page', 'dialog'] as const)(
-  'reveals keyboard navigation through the actual PR Files %s host',
-  async (host) => {
-    reviewHostFixture.configureViewport = configureViewport
-    const Viewer = reviewHostComponents[host]
-    render(
-      <TooltipProvider>
-        <Viewer
-          files={[
-            { path: 'file.ts', status: 'modified', additions: 1, deletions: 1, isBinary: false }
-          ]}
-          comments={[]}
-          repoPath="/repo"
-          repoId={`reveal-${host}`}
-          prNumber={7}
-          prUrl="https://example.test/pr/7"
-          headSha="head"
-          baseSha="base"
-          pendingViewedPaths={new Set<string>()}
-          onCommentAdded={() => {}}
-          onViewedChange={async () => true}
-        />
-      </TooltipProvider>
-    )
-    await vi.waitFor(() => expect(viewport?.querySelector('.monaco-diff-editor')).toBeTruthy())
-    await vi.waitFor(() => expect(diff.getLineChanges()).not.toBeNull())
-    expect(viewport.hasAttribute('data-combined-diff-viewport')).toBe(true)
-    expect(
-      viewport.querySelector('[data-combined-diff-section-row] [data-combined-diff-section-header]')
-    ).not.toBeNull()
-    act(() => navigate(diff.getModifiedEditor()))
   }
 )

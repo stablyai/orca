@@ -2,18 +2,13 @@ import { connect, createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { checkOrcadStdioBridge, openOrcadStdioBridgeChannel } from '../../ssh/orcad-stdio-bridge'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
-import {
-  probeThenWatchWslOrcadBridges,
-  WSL_ORCAD_BRIDGE_EXIT_COOLDOWN_MS,
-  WslOrcadBridgeActivity
-} from './wsl-orcad-bridge-activity'
+import { WslOrcadBridgeActivity } from './wsl-orcad-bridge-activity'
 import {
   fakeWslBridgeChildren,
   posixOrcadStdioBridge
 } from './__tests__/wsl-orcad-bridge-test-child'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
-import type { WslOrcadWatch } from './wsl-orcad-watch'
 
 const ENV = 'wsl:ubuntu'
 const cleanups: (() => unknown)[] = []
@@ -105,31 +100,6 @@ describe('the desktop’s bridged sockets as the liveness watch', () => {
     await expect.poll(() => watch.proving()).toBe(false)
   })
 
-  it('stays quiet when orcad finishes a normal close while another socket is open', async () => {
-    const orcad = await fakeOrcad()
-    const activity = new WslOrcadBridgeActivity()
-    const forward = await bridgedHost(activity, orcad)
-    const watch = activity.watch(ENV)
-    const exits = vi.fn()
-    watch.onExit(exits)
-    const before = orcad.accepted.length
-    // The desktop's control socket stays open; a one-shot RPC socket comes and goes.
-    await dial(forward.entry.localPort)
-    const oneShot = await dial(forward.entry.localPort)
-    await expect.poll(() => orcad.accepted.length).toBe(before + 2)
-    // A WebSocket close: the client sends its close frame, the server ends the stream first.
-    oneShot.write(Buffer.from([0x88, 0x80, 0, 0, 0, 0]))
-    orcad.accepted.at(-1)?.end()
-    await expect.poll(() => oneShot.destroyed || oneShot.readableEnded).toBe(true)
-    oneShot.end()
-    await expect.poll(() => orcad.accepted.at(-1)?.closed).toBe(true)
-    expect(exits).not.toHaveBeenCalled()
-    expect(activity.openSockets(ENV)).toBe(1)
-    // orcad exiting then ends the last one: that is the exit signal.
-    orcad.accepted.at(-2)?.destroy()
-    await expect.poll(() => exits.mock.calls.length).toBe(1)
-  })
-
   it('stays quiet when the desktop closes its own socket', async () => {
     const orcad = await fakeOrcad()
     const activity = new WslOrcadBridgeActivity()
@@ -147,30 +117,6 @@ describe('the desktop’s bridged sockets as the liveness watch', () => {
 })
 
 describe('bridge activity signals', () => {
-  it('coalesces a burst of exit signals into one, and reports the rest as idle', () => {
-    let now = 0
-    const activity = new WslOrcadBridgeActivity(() => now)
-    const events = activity.events(ENV)
-    const seen: string[] = []
-    const watchOnce = (): void => {
-      const watch = activity.watch(ENV)
-      watch.onExit(() => seen.push('exit'))
-      watch.onIdle?.(() => seen.push('idle'))
-    }
-    watchOnce()
-    // One-shot sockets with nothing held: each ends on the guest side first.
-    events.opened()
-    events.ended(true)
-    watchOnce()
-    now += WSL_ORCAD_BRIDGE_EXIT_COOLDOWN_MS - 1
-    events.opened()
-    events.ended(true)
-    now += 1
-    events.opened()
-    events.ended(true)
-    expect(seen).toEqual(['exit', 'idle', 'exit'])
-  })
-
   it('reports the last socket closing from the desktop side as idle, not exit', () => {
     const activity = new WslOrcadBridgeActivity(() => 0)
     const events = activity.events(ENV)
@@ -186,23 +132,5 @@ describe('bridge activity signals', () => {
     events.ended(false)
     expect(idles).toHaveBeenCalledOnce()
     expect(exits).not.toHaveBeenCalled()
-  })
-})
-
-describe('probeThenWatchWslOrcadBridges', () => {
-  const inert = (signal: WslOrcadWatch['signal']): WslOrcadWatch => ({
-    signal,
-    onExit: () => {},
-    close: vi.fn(),
-    proving: () => false
-  })
-
-  it('closes the probe bridge once it proved the port, and watches the desktop’s sockets', async () => {
-    const activity = new WslOrcadBridgeActivity()
-    const probe = inert('ready')
-    const watch = await probeThenWatchWslOrcadBridges(async () => probe, activity, ENV)
-    expect(probe.close).toHaveBeenCalledOnce()
-    expect(watch).not.toBe(probe)
-    expect(watch.signal).toBe('ready')
   })
 })

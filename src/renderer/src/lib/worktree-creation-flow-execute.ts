@@ -290,7 +290,7 @@ export async function executeWorktreeCreation(
       structuredLaunchAccepted = structuredSession.accepted
       activation = structuredSession.activation
       primaryTabId = structuredSession.primaryTabId
-      if (structuredSession.cancelled) {
+      if (structuredSession.cancelled || structuredSession.retainedInput) {
         return
       }
     }

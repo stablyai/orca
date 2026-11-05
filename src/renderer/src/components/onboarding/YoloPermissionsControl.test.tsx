@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { useState } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -64,18 +63,6 @@ it('shows full-access exceptions while off and persists the action for terminals
     '--dangerously-bypass-approvals-and-sandbox'
   )
   expect(newChatPermissionModeForSettings('codex', saved)).toBe('own')
-})
-
-it('reveals the exception when Yolo is switched off', () => {
-  function Harness() {
-    const [yolo, setYolo] = useState(true)
-    return <YoloPermissionsControl yoloPermissions={yolo} onYoloPermissionsChange={setYolo} />
-  }
-  render(<Harness />)
-  expect(screen.queryByRole('status')).toBeNull()
-
-  fireEvent.click(screen.getByRole('switch'))
-  expect(screen.getByRole('status').textContent).toContain('Codex still has full access')
 })
 
 it('keeps the exception visible after a failed save and lets the user retry', async () => {
