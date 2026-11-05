@@ -110,7 +110,7 @@ export type HistoryReader = {
   snapshot?: (
     journal: AgentSessionJournal,
     snapshot?: AgentJournalSnapshot,
-    touched?: ReadonlySet<string>
+    touched?: Set<string>
   ) => AgentJournalSnapshot
   queueSourceIds?: (journal: AgentSessionJournal, messageId: string) => readonly string[]
 }

@@ -1,5 +1,6 @@
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import { sessionCrewChanges } from '../../runtime/orchestration/crew/crew-changes'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AgentJournalRenderItemSchema } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
@@ -72,7 +73,10 @@ it('refreshes an idle open child and a same-cursor reconnect after the source is
   await appendItems(2)
   let current = marker()
   const events: AgentSessionSubscribeEvent[] = []
-  const subscribers = new AgentSessionSubscribers({ readForkMarker: () => current })
+  const subscribers = new AgentSessionSubscribers({
+    readForkMarker: () => current,
+    readForkJournal: () => fixture.journal
+  })
   const close = subscribers.open({
     id: 'open',
     sessionId: 'session-1',
@@ -83,7 +87,10 @@ it('refreshes an idle open child and a same-cursor reconnect after the source is
   })
   current = { ...current, sourceName: 'Renamed chat' }
   events.length = 0
-  subscribers.refreshForkSources(() => fixture.journal, ['source-session'])
+  const prefixReads = vi.spyOn(fixture.journal, 'currentRead')
+  sessionCrewChanges.notify(
+    Object.assign(new Set<'names'>(['names']), { recordIds: ['source-session'] })
+  )
   expect(events).toMatchObject([
     {
       type: 'batch',
@@ -93,6 +100,8 @@ it('refreshes an idle open child and a same-cursor reconnect after the source is
       }
     }
   ])
+  expect(prefixReads).not.toHaveBeenCalled()
+  prefixReads.mockRestore()
   current = { ...current, sourceName: 'another chat' }
   events.length = 0
   const reconnect = subscribers.open({
@@ -117,13 +126,23 @@ it('clamps a removed inherited boundary to start while retaining the parent rela
   const old = fixture.journal.currentRead().items
   const parent = marker().forkedFrom
   const childBoundary = remapForkChildBoundary(parent.childBoundary, old, [])
-  const reader = withForkMarker(undefined, () => ({
-    sourceName: 'Original chat',
-    forkedFrom: { ...parent, childBoundary }
-  }))
+  let current = marker()
+  const reader = withForkMarker(undefined, () => current)
+  readAgentSessionHydrationPage(fixture.journal, 1, reader)
+  const cursor = fixture.journal.cursor()
   await fixture.journal.replaceEpochItems('handle_forked', 1, [])
-  const page = readAgentSessionHydrationPage(fixture.journal, 1, reader)
-  expect(page.items).toMatchObject([
+  current = { sourceName: 'Original chat', forkedFrom: { ...parent, childBoundary } }
+  const result = readAgentSessionHistory(
+    fixture.journal,
+    {
+      sessionId: 'session-1',
+      direction: 'after',
+      cursor
+    },
+    { reader, rowReplay: true }
+  )
+  expect(result).toMatchObject({ ok: false, reset: 'epoch_changed' })
+  expect(result.page.items).toMatchObject([
     {
       itemId: FORK_MARKER_ITEM_ID,
       sequence: 0,
@@ -158,4 +177,109 @@ it('uses the source chat display fallback until a live conversation name exists'
   expect(readForkMarker(store, 'child')?.sourceName).toBe('Claude Chat')
   source.conversationName = 'Renamed source'
   expect(readForkMarker(store, 'child')?.sourceName).toBe('Renamed source')
+})
+
+it('restores the surviving anchor group and removes the marker when its anchor is removed', async () => {
+  await fixture.journal.appendLifecycleBatch({
+    settlementId: 'inherited-group',
+    fence: 1,
+    mutations: [1, 2].map((id) => ({
+      kind: 'item' as const,
+      identity: item(id),
+      body: body(`item-${id}`),
+      turnScope: { kind: 'thread' as const }
+    }))
+  })
+  const read = () => ({
+    ...marker(),
+    forkedFrom: {
+      ...marker().forkedFrom,
+      childBoundary: { kind: 'item' as const, itemId: agentJournalItemKey(item(1)) }
+    }
+  })
+  const reader = withForkMarker(undefined, read)
+  const initial = readAgentSessionHydrationPage(fixture.journal, 1, reader)
+  expect(initial.items.map((row) => [row.itemId, row.sequenceIndex])).toEqual([
+    [agentJournalItemKey(item(1)), 0],
+    [FORK_MARKER_ITEM_ID, 1],
+    [agentJournalItemKey(item(2)), 2]
+  ])
+  const cursor = fixture.journal.cursor()
+  await fixture.journal.appendTombstone(item(1), { fence: 1 })
+  const request = { sessionId: 'session-1', direction: 'after' as const, cursor }
+  const delta = readAgentSessionHistory(fixture.journal, request, { reader, rowReplay: true })
+  expect(delta.page.items).toMatchObject([
+    { itemId: agentJournalItemKey(item(2)), sequenceIndex: 1 }
+  ])
+  expect(delta.page.removedItemIds).toEqual([agentJournalItemKey(item(1)), FORK_MARKER_ITEM_ID])
+  // Byte-bound delivery can retry the same read before emitting it.
+  expect(readAgentSessionHistory(fixture.journal, request, { reader, rowReplay: true })).toEqual(
+    delta
+  )
+  // A reconnect creates a new reader over the same committed journal view.
+  expect(
+    readAgentSessionHistory(fixture.journal, request, {
+      reader: withForkMarker(undefined, () => read()),
+      rowReplay: true
+    })
+  ).toEqual(delta)
+})
+
+it('moves the marker on an idle same-epoch remap and restores the former group', async () => {
+  await fixture.journal.appendLifecycleBatch({
+    settlementId: 'old-boundary-group',
+    fence: 1,
+    mutations: [1, 2].map((id) => ({
+      kind: 'item' as const,
+      identity: item(id),
+      body: body(`item-${id}`),
+      turnScope: { kind: 'thread' as const }
+    }))
+  })
+  await fixture.journal.appendItem(item(3), body('child reply'), {
+    fence: 1,
+    turnScope: { kind: 'thread' }
+  })
+  let current: ForkMarker = {
+    ...marker(),
+    forkedFrom: {
+      ...marker().forkedFrom,
+      childBoundary: { kind: 'item', itemId: agentJournalItemKey(item(1)) }
+    }
+  }
+  const events: AgentSessionSubscribeEvent[] = []
+  const subscribers = new AgentSessionSubscribers({
+    readForkMarker: () => current,
+    readForkJournal: () => fixture.journal
+  })
+  const close = subscribers.open({
+    id: 'remap',
+    sessionId: 'session-1',
+    journal: fixture.journal,
+    fence: 1,
+    emit: (event) => events.push(event)
+  })
+  try {
+    events.length = 0
+    current = {
+      ...current,
+      forkedFrom: {
+        ...current.forkedFrom,
+        childBoundary: { kind: 'item', itemId: agentJournalItemKey(item(3)) }
+      }
+    }
+    sessionCrewChanges.notify(
+      Object.assign(new Set<'records'>(['records']), { recordIds: ['source-session'] })
+    )
+    const rows = events.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
+    expect(rows.map((row) => [row.itemId, row.sequenceIndex ?? 0])).toEqual([
+      [agentJournalItemKey(item(1)), 0],
+      [agentJournalItemKey(item(2)), 1],
+      [agentJournalItemKey(item(3)), 0],
+      [FORK_MARKER_ITEM_ID, 1]
+    ])
+    expect(events).toMatchObject([{ type: 'batch', batch: { cursor: fixture.journal.cursor() } }])
+  } finally {
+    close()
+  }
 })

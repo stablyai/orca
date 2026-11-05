@@ -68,26 +68,27 @@ export class ForkMarkerSubscriptions {
   }
 
   refresh(subscriber: Subscriber, journal: AgentSessionJournal, force = false): void {
-    const view = JSON.stringify(subscriber.readForkMarker?.())
+    const marker = subscriber.readForkMarker?.()
+    const view = JSON.stringify(marker)
     if (!force && subscriber.forkMarkerView === view) {
       return
     }
     subscriber.forkMarkerView = view
     const reader = subscriberHistoryReader(subscriber)
-    const snapshot = reader.snapshot?.(journal)
-    const marker = snapshot?.items.find((item) => item.itemId === FORK_MARKER_ITEM_ID)
     if (!marker) {
       return
     }
-    const items = snapshot!.items
-      .filter((item) => item.sequence === marker.sequence)
-      .map((item) => reader.form(item).item)
+    const snapshot = reader.snapshot?.(journal, undefined, new Set([FORK_MARKER_ITEM_ID]))
+    const items = snapshot?.items.map((item) => reader.form(item).item) ?? []
+    const removedItemIds = items.some((item) => item.itemId === FORK_MARKER_ITEM_ID)
+      ? []
+      : [FORK_MARKER_ITEM_ID]
     this.port().emit(
       subscriber,
       {
         type: 'batch',
         sessionId: subscriber.sessionId,
-        batch: { ...emptyAgentSessionBatch(subscriber.cursor), items },
+        batch: { ...emptyAgentSessionBatch(subscriber.cursor), items, removedItemIds },
         fence: subscriber.fence,
         hostNow: this.now()
       },
