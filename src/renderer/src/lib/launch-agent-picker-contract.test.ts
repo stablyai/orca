@@ -33,7 +33,8 @@ import {
   store,
   mockToastError,
   mockCreateWebRuntimeSessionTerminal,
-  mockIsWebRuntimeSessionActive
+  mockIsWebRuntimeSessionActive,
+  mockRuntimeEnvironmentSupportsCapabilities
 } from './launch-agent-in-new-tab-test-fixture'
 
 import { buildNewTabAgentMenuRows } from '../../../shared/agent-launch/picker/agent-launch-picker-rows'
@@ -55,7 +56,8 @@ vi.mock(
 )
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: inventory.legacy,
-  runtimeEnvironmentSupportsCapability: async () => false
+  runtimeEnvironmentSupportsCapability: async () => false,
+  runtimeEnvironmentSupportsCapabilities: async () => [false, false]
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: inventory.session
@@ -140,6 +142,10 @@ describe('picker window launch contract', () => {
     'keeps ordinary and configured-default launch input/failure contracts on %s',
     async (target) => {
       inventory.settings.mockResolvedValue(null)
+      mockRuntimeEnvironmentSupportsCapabilities.mockResolvedValue([
+        target === 'paired',
+        target === 'paired'
+      ])
       const launcher = await import('./launch-agent-in-new-tab')
       const dispatch = vi.spyOn(launcher, 'launchAgentInNewTab')
       const { launchAgentInNewTab } = launcher
@@ -295,7 +301,11 @@ describe('picker window launch contract', () => {
       const omnibox = await perform({}, 'omnibox')
       expect(searched).toEqual(expectedSearch)
       expect(omnibox).toEqual(expectedSearch)
-      expect(expectedSearch.command ?? expectedSearch.remote?.command ?? '').toContain('opus')
+      if (target === 'paired') {
+        expect(expectedSearch.remote).toMatchObject({ sessionOptions: { model: 'opus' } })
+      } else {
+        expect(expectedSearch.command ?? expectedSearch.remote?.command ?? '').toContain('opus')
+      }
       const explicit = {
         ...option.setup!,
         surface: 'terminal' as const,

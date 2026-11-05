@@ -65,6 +65,7 @@ export async function launchAgentInWebHostTab(args: {
   )
   const hasPrompt = prompt.length > 0
   const pairingRevision = environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
+  let legacyPreparationCancelled = false
   let startup: LaunchAgentStartupPromptPlan
   let launch: CreateWebRuntimeSessionTerminalArgs
   try {
@@ -132,6 +133,9 @@ export async function launchAgentInWebHostTab(args: {
         const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
           kind: 'git-worktree',
           worktreeId
+        }).catch((error: unknown) => {
+          legacyPreparationCancelled = error instanceof Error && error.name === 'AbortError'
+          throw error
         })
         startup = args.buildStartup(
           preferences.agentLaunchChoices ??
@@ -171,6 +175,13 @@ export async function launchAgentInWebHostTab(args: {
     hostTabId?: string
   }): { delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion => {
     if (outcome.status === 'failed') {
+      if (legacyPreparationCancelled) {
+        return {
+          delivered: false,
+          failureNotified: true,
+          outcome: { status: 'failed', message: '' }
+        }
+      }
       toast.error(failureMessage)
       return { delivered: false, failureNotified: true, outcome }
     }

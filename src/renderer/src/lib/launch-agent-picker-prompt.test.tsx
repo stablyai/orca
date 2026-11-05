@@ -7,7 +7,8 @@ import {
   mockCreateStructuredCodexSessionLaunchIntent,
   mockLaunchStructuredCodexSession,
   structuredLaunchIntent,
-  launchErrorMocks
+  launchErrorMocks,
+  mockToastError
 } from './launch-agent-structured-chat-test-fixture'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
@@ -487,6 +488,9 @@ it.each([
       }
     }
     await waitFor(() => expect(readNativeChatComposerDraft(scope).text).toBe('review @/repo/file'))
+    if (failure === 'preferences') {
+      expect(mockToastError).not.toHaveBeenCalled()
+    }
     vi.mocked(hostPreferences.ensureAgentLaunchPreferences).mockResolvedValue({
       defaultTuiAgent: undefined,
       disabledTuiAgents: undefined

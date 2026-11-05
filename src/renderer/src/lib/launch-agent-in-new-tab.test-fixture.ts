@@ -141,7 +141,9 @@ vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
     return {
       outcome: await mockCreateWebRuntimeSessionTerminal({
         ...request,
-        ...(await legacyAgentLaunch?.())
+        ...(args.preparedAgentCommand || !args.agentSessionCreateCapability
+          ? await legacyAgentLaunch?.()
+          : {})
       })
     }
   }

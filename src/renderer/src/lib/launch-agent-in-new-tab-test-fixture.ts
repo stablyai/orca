@@ -103,9 +103,11 @@ export const store = {
 
 vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => 'tab-1' }))
 
+export const mockRuntimeEnvironmentSupportsCapabilities = vi.fn(async () => [false, false])
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: async () => false,
-  runtimeEnvironmentSupportsCapabilities: async () => [false, false],
+  runtimeEnvironmentSupportsCapabilities: mockRuntimeEnvironmentSupportsCapabilities,
   callRuntimeRpc: vi.fn()
 }))
 vi.mock('@/store', () => ({
@@ -154,7 +156,9 @@ vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
     return {
       outcome: await mockCreateWebRuntimeSessionTerminal({
         ...request,
-        ...(await legacyAgentLaunch?.())
+        ...(args.preparedAgentCommand || !args.agentSessionCreateCapability
+          ? await legacyAgentLaunch?.()
+          : {})
       })
     }
   }
@@ -178,6 +182,7 @@ export const COMMAND_CODE_CLICK = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockRuntimeEnvironmentSupportsCapabilities.mockResolvedValue([false, false])
   setLocalRuntimeCapabilitiesForTests([])
   mockIsWebRuntimeSessionActive.mockReturnValue(false)
   mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
