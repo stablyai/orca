@@ -1,3 +1,4 @@
+import type { RuntimeRangeDocument } from '@/runtime/runtime-range-document'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -47,7 +48,7 @@ type PluginCustomEditorFrameProps = {
   /** Set for a binary editor: its bytes once loaded (null before). Text props are then unused. */
   binaryDocument?: CustomEditorBinaryDocument | null
   onBytesChange?: (document: CustomEditorBinaryDocument) => void
-  rangeDocument?: import('@/runtime/runtime-range-document').RuntimeRangeDocument
+  rangeDocument?: RuntimeRangeDocument
   rangeFileType?: string
 }
 
@@ -163,7 +164,9 @@ export default function PluginCustomEditorFrame({
 
   useEffect(() => () => rangeDocument?.close(), [rangeDocument])
   useEffect(() => {
-    if (liveEntry.status === 'error' || liveEntry.status === 'unresponsive') rangeDocument?.close()
+    if (liveEntry.status === 'error' || liveEntry.status === 'unresponsive') {
+      rangeDocument?.close()
+    }
   }, [liveEntry.status, rangeDocument])
   const entry = useCustomEditorReloadFlush(liveEntry, host.flush)
   const { captureLoad, captureSize } = usePluginEditorCaptureView(fileId)

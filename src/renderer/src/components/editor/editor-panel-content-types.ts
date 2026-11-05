@@ -1,3 +1,4 @@
+import type { RuntimeRangeDocument } from '@/runtime/runtime-range-document'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
@@ -39,7 +40,7 @@ export type FileContent = {
   isStale?: boolean
   /** How the loader reached the file, so a binary custom editor can page its bytes from the same host. */
   byteSource?: RuntimeFileReadArgs
-  rangeDocument?: import('@/runtime/runtime-range-document').RuntimeRangeDocument
+  rangeDocument?: RuntimeRangeDocument
   rangeSourceKey?: string
 }
 

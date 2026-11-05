@@ -332,7 +332,9 @@ it('reads and cancels a ranged document through its shared authenticated owner',
   try {
     await writeFile(path, 'owner-bound bytes')
     const document = await documents.open('shared-control-owner', async () => {
-      if (holdReads) await readPermit.promise
+      if (holdReads) {
+        await readPermit.promise
+      }
       return path
     })
     supportsMock.mockResolvedValue(acceptedOutcome('capable'))
@@ -355,7 +357,9 @@ it('reads and cancels a ranged document through its shared authenticated owner',
         callbacks: { onResponse: (response: unknown) => void }
       ) => {
         const pending = documents.read('shared-control-owner', request)
-        if (request.requestToken === 'cancel') readStarted.resolve()
+        if (request.requestToken === 'cancel') {
+          readStarted.resolve()
+        }
         const result = await pending
         callbacks.onResponse({ id: 'read', ok: true, result, _meta: { runtimeId: 'runtime' } })
         return { requestId: 'read', close: () => {}, sendBinary: () => false }
@@ -367,7 +371,9 @@ it('reads and cancels a ranged document through its shared authenticated owner',
     })
     await subscribeRuntimeEnvironment('/profile', 'env', 'files.rangeDocumentRead', params, 1000, {
       onEvent: (event) => {
-        if (event.type === 'response') received.resolve(event.response)
+        if (event.type === 'response') {
+          received.resolve(event.response)
+        }
       },
       onClose: () => {}
     })
@@ -382,7 +388,9 @@ it('reads and cancels a ranged document through its shared authenticated owner',
         method: string,
         request: { id: string; requestToken: string }
       ) => {
-        if (method !== 'files.rangeDocumentCancel') throw new Error('unexpected_method')
+        if (method !== 'files.rangeDocumentCancel') {
+          throw new Error('unexpected_method')
+        }
         documents.cancel('shared-control-owner', request.id, request.requestToken)
         return { id: 'cancel', ok: true, result: { ok: true }, _meta: { runtimeId: 'runtime' } }
       }

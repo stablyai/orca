@@ -5,7 +5,14 @@ import {
   EDITOR_RANGE_DIRTY_MESSAGE
 } from './editor-range-document'
 import { useAppStore } from '@/store'
-import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { readRuntimeFileBytes } from '@/runtime/runtime-paged-file-read'
@@ -72,6 +79,10 @@ function RangeSurface({
   onSave: (content: string) => Promise<boolean>
 }): React.JSX.Element {
   const dirty = useAppStore((state) => isEditorRangeDocumentDirty(state, file.id, file))
+  const fileRef = useRef(file)
+  useLayoutEffect(() => {
+    fileRef.current = file
+  }, [file])
   const [source, setSource] = useState<RuntimeRangeDocument | null>(
     fileContent.rangeDocument ?? null
   )
@@ -90,7 +101,7 @@ function RangeSurface({
     let active = true
     let owned: RuntimeRangeDocument | undefined
     setError('')
-    void openEditorRangeDocument(args, file.id, file).then(
+    void openEditorRangeDocument(args, file.id, fileRef.current).then(
       (next) => {
         if (!active) {
           next.dispose()
@@ -100,7 +111,9 @@ function RangeSurface({
         setSource(next)
       },
       (failure: unknown) => {
-        if (active) setError(failure instanceof Error ? failure.message : String(failure))
+        if (active) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
       }
     )
     return () => {
@@ -108,14 +121,16 @@ function RangeSurface({
       owned?.dispose()
     }
   }, [fileContent.rangeDocument, fileContent.byteSource, file.filePath, file.id, attempt])
-  if (error)
+  if (error) {
     return <SurfaceMessage onRetry={() => setAttempt((value) => value + 1)}>{error}</SurfaceMessage>
-  if (!source)
+  }
+  if (!source) {
     return (
       <SurfaceMessage>
         {translate('auto.components.editor.PluginCustomEditorFrame.loading', 'Loading editor…')}
       </SurfaceMessage>
     )
+  }
   return (
     <div className="flex h-full min-h-0 flex-col">
       {dirty ? (
@@ -175,13 +190,17 @@ export default function PluginBytesCustomEditorSurface({
     [fileId]
   )
   useEffect(() => {
-    if (isRange) return
+    if (isRange) {
+      return
+    }
     retainEditorBytes(fileId)
     return () => releaseEditorBytes(fileId)
   }, [fileId, isRange])
 
   useEffect(() => {
-    if (isRange) return
+    if (isRange) {
+      return
+    }
     // Unsaved bytes keep the baseline they were made against; rereading would hide a conflict.
     if (!loadKey || hasEditorBytesDraft(fileId)) {
       return

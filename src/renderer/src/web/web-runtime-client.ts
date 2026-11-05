@@ -135,26 +135,19 @@ export class WebRuntimeClient {
         return this.subscribeOnCurrentConnection(method, params, callbacks, options)
       }
       return SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(method)
-        ? this.subscribeFileWatch(params, callbacks, options)
+        ? subscribeWebRuntimeFileWatch({
+            params,
+            callbacks,
+            subscribe: (wrappedCallbacks) =>
+              this.subscribeOnCurrentConnection('files.watch', params, wrappedCallbacks, options),
+            call: (callMethod, callParams, callOptions) =>
+              this.call(callMethod, callParams, callOptions),
+            teardownRetries: this.fileWatchTeardownRetries
+          })
         : this.subscribeDedicated(method, params, callbacks, options)
     } catch (error) {
       return Promise.reject(error)
     }
-  }
-
-  private async subscribeFileWatch(
-    params: unknown,
-    callbacks: WebRuntimeSubscriptionCallbacks,
-    options?: SubscribeOptions
-  ): Promise<WebRuntimeSubscriptionHandle> {
-    return subscribeWebRuntimeFileWatch({
-      params,
-      callbacks,
-      subscribe: (wrappedCallbacks) =>
-        this.subscribeOnCurrentConnection('files.watch', params, wrappedCallbacks, options),
-      call: (callMethod, callParams, callOptions) => this.call(callMethod, callParams, callOptions),
-      teardownRetries: this.fileWatchTeardownRetries
-    })
   }
 
   subscribeCrewAttempt(

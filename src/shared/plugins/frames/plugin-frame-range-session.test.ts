@@ -7,7 +7,9 @@ const descriptor = { version: 7, byteLength: 3, maxReadBytes: 262144, readOnly: 
 
 function requestId(shell: ReturnType<typeof mountShell>, method: string): number {
   const request = shell.posted().findLast((message) => message.method === method)
-  if (typeof request?.id !== 'number') throw new Error(`No ${method} request`)
+  if (typeof request?.id !== 'number') {
+    throw new Error(`No ${method} request`)
+  }
   return request.id
 }
 

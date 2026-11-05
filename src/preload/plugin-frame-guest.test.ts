@@ -187,7 +187,9 @@ it('delivers an acknowledged one GiB range scan through the actual isolated prel
   let eof = false
   let failure: unknown
   transport().subscribe((message) => {
-    if (typeof message !== 'object' || message === null) return
+    if (typeof message !== 'object' || message === null) {
+      return
+    }
     if ('error' in message) {
       failure = message.error
       return
@@ -254,4 +256,32 @@ it('keeps unknown and oversized range envelopes in the ordinary control budget',
     admit({ ...request, params: { ...request.params, path: '/not-authorized' } })
   ).toMatchObject({ code: 'rate_limited' })
   expect(admit({ ...request, junk: new ArrayBuffer(1024 * 1024) })).toEqual({ code: 'too_large' })
+})
+
+it('refuses acknowledged range traffic when its aggregate byte window is full', () => {
+  const admit = createPluginFrameSendBudget(() => 0, {
+    maxMessages: 1000,
+    maxBytes: 500,
+    perMs: 100
+  })
+  let refusal: unknown
+  for (let id = 0; id < 20; id += 1) {
+    refusal = admit({
+      orca: 1,
+      kind: 'req',
+      id,
+      method: 'editor.readRange',
+      params: { version: 1, offset: id, length: 1 }
+    })
+    if (refusal) {
+      break
+    }
+    admit.settle({
+      orca: 1,
+      kind: 'res',
+      id,
+      result: { version: 1, bytes: new ArrayBuffer(1), eof: false }
+    })
+  }
+  expect(refusal).toMatchObject({ code: 'rate_limited' })
 })

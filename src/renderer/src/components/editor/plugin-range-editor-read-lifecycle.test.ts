@@ -37,8 +37,9 @@ it('settles cancelled and invalidated reads so the preload admits new reads afte
   const frameWindow = {
     postMessage: (message: unknown) => {
       admit.settle(message)
-      if (isPluginJsonObject(message) && message.kind === 'res' && typeof message.id === 'number')
+      if (isPluginJsonObject(message) && message.kind === 'res' && typeof message.id === 'number') {
         responses.get(message.id)?.resolve(message)
+      }
     }
   }
   const host = createCustomEditorHost({

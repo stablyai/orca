@@ -45,18 +45,22 @@ function isRangeWireRequest(value: unknown): value is RangeWireRequest {
     typeof value.id !== 'number' ||
     !Number.isSafeInteger(value.id) ||
     value.id < 0
-  )
+  ) {
     return false
+  }
   const keys = Reflect.ownKeys(value)
   if (
     keys.length !== 5 ||
     !keys.every(
       (key) => typeof key === 'string' && ['orca', 'kind', 'id', 'method', 'params'].includes(key)
     )
-  )
+  ) {
     return false
+  }
   const params = value.params
-  if (!isPlainRangeObject(params)) return false
+  if (!isPlainRangeObject(params)) {
+    return false
+  }
   const fields = Reflect.ownKeys(params)
   return (
     fields.length === 3 &&
@@ -79,51 +83,58 @@ function isRangeWireRequest(value: unknown): value is RangeWireRequest {
 function rangeFailure(error: unknown): PluginError {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : ''
   const detail = error instanceof Error ? error.message : ''
-  if (code === 'range_document_dirty')
+  if (code === 'range_document_dirty') {
     return pluginError('not_permitted', EDITOR_RANGE_DIRTY_MESSAGE)
+  }
   if (
     error instanceof z.ZodError ||
     code === 'range_document_invalid_range' ||
     detail.includes('range_document_invalid_range')
-  )
+  ) {
     return pluginError('invalid_params', 'The requested document range is invalid.')
+  }
   if (
     code === 'rate_limited' ||
     code === 'range_document_busy' ||
     detail.includes('range_document_busy')
-  )
+  ) {
     return pluginError(
       'rate_limited',
       'The document already has unfinished reads. Try again when they settle.'
     )
+  }
   if (
     code === 'cancelled' ||
     code === 'range_document_cancelled' ||
     detail.includes('range_document_cancelled')
-  )
+  ) {
     return pluginError('cancelled', 'The document operation was cancelled.')
+  }
   if (
     code === 'conflict' ||
     code === 'range_document_stale' ||
     code === 'range_document_changed' ||
     detail.includes('range_document_stale') ||
     detail.includes('range_document_changed')
-  )
+  ) {
     return pluginError(
       'conflict',
       'The document changed. Discard old ranges and reload explicitly.'
     )
-  if (code === 'range_document_too_large' || detail.includes('range_document_too_large'))
+  }
+  if (code === 'range_document_too_large' || detail.includes('range_document_too_large')) {
     return pluginError('too_large', 'The document exceeds the 1 GiB range limit.')
+  }
   if (
     code === 'range_document_unsupported' ||
     code === 'range_document_unknown' ||
     code === 'method_not_found'
-  )
+  ) {
     return pluginError(
       'unavailable',
       'This document source is unavailable. Check access or update its Orca host.'
     )
+  }
   return pluginError(
     'action_failed',
     'The document operation failed. Check access and reload explicitly.'
@@ -142,11 +153,17 @@ export function createRangeEditorHost(
   const budget = createPanelMessageBudget()
   const value = () => source.value(fileType)
   const post = (message: PluginEnvelope, transfer: Transferable[] = []) => {
-    if (ready) options.getFrameWindow()?.postMessage(message, '*', transfer)
+    if (ready) {
+      options.getFrameWindow()?.postMessage(message, '*', transfer)
+    }
   }
   let unsubscribe: (() => void) | undefined
   const onInvalidate = () => {
-    for (const entry of pending.values()) if (entry.read) entry.controller.abort()
+    for (const entry of pending.values()) {
+      if (entry.read) {
+        entry.controller.abort()
+      }
+    }
     post(pluginEvent(FRAME_EVENTS.editorRangeInvalidated, value()))
   }
   return {
@@ -155,11 +172,15 @@ export function createRangeEditorHost(
         const message = readPluginEnvelope(data)
         if (message?.kind === 'cancel') {
           const entry = pending.get(message.id)
-          if (!entry) return false
+          if (!entry) {
+            return false
+          }
           entry.controller.abort()
           return true
         }
-        if (message?.kind !== 'req' || !editorMethods.has(message.method)) return false
+        if (message?.kind !== 'req' || !editorMethods.has(message.method)) {
+          return false
+        }
         const { id, method, params } = message
         const messageBytes = structuredCloneMessageBytes(data, 64 * 1024)
         const range = messageBytes <= 1024 && isRangeWireRequest(data) ? data.params : null
@@ -201,8 +222,12 @@ export function createRangeEditorHost(
         const entry = { controller, read: method === EDITOR_METHODS.readRange }
         pending.set(id, entry)
         const run = async (): Promise<unknown> => {
-          if (range) return source.read(range, controller.signal)
-          if (params !== undefined) emptyParamsSchema.parse(params)
+          if (range) {
+            return source.read(range, controller.signal)
+          }
+          if (params !== undefined) {
+            emptyParamsSchema.parse(params)
+          }
           switch (method) {
             case EDITOR_METHODS.rangeSession:
               await source.bind()
@@ -221,13 +246,17 @@ export function createRangeEditorHost(
         void run()
           .then(
             (result) => {
-              if (controller.signal.aborted || !sameFrame()) return
+              if (controller.signal.aborted || !sameFrame()) {
+                return
+              }
               const bytes =
                 result && typeof result === 'object' && 'bytes' in result ? result.bytes : null
               post(pluginResult(id, result), bytes instanceof ArrayBuffer ? [bytes] : [])
             },
             (error: unknown) => {
-              if (controller.signal.aborted || !sameFrame()) return
+              if (controller.signal.aborted || !sameFrame()) {
+                return
+              }
               post(pluginFailure(id, rangeFailure(error)))
             }
           )
@@ -235,7 +264,9 @@ export function createRangeEditorHost(
             if (entry.read && controller.signal.aborted && sameFrame()) {
               post(pluginFailure(id, pluginError('cancelled', 'The document read was cancelled.')))
             }
-            if (pending.get(id) === entry) pending.delete(id)
+            if (pending.get(id) === entry) {
+              pending.delete(id)
+            }
           })
         return true
       },
@@ -243,7 +274,9 @@ export function createRangeEditorHost(
         ready = true
         unsubscribe ??= source.onInvalidate(onInvalidate)
         post(pluginEvent(FRAME_EVENTS.editorRangeDocument, value()))
-        if (source.requiresReload) post(pluginEvent(FRAME_EVENTS.editorRangeInvalidated, value()))
+        if (source.requiresReload) {
+          post(pluginEvent(FRAME_EVENTS.editorRangeInvalidated, value()))
+        }
       },
       onEvent(event, context) {
         handleCustomEditorFrameEvent(event, context, options)
@@ -257,7 +290,9 @@ export function createRangeEditorHost(
     reset() {
       ready = false
       generation += 1
-      for (const entry of pending.values()) entry.controller.abort()
+      for (const entry of pending.values()) {
+        entry.controller.abort()
+      }
       pending.clear()
       source.close()
       unsubscribe?.()

@@ -20,7 +20,9 @@ it('refuses guest file addresses and edits while reading only its bound document
   const transport: RangeDocumentTransport = {
     open: async () => descriptor,
     read: async (params) => {
-      if (params.id !== 'host-only') throw new Error('Wrong document authority')
+      if (params.id !== 'host-only') {
+        throw new Error('Wrong document authority')
+      }
       return { version: 3, contentBase64: 'FiE=', bytesRead: 2, eof: true }
     },
     reload: async () => descriptor,
@@ -32,8 +34,9 @@ it('refuses guest file addresses and edits while reading only its bound document
   const responses = new Map<number, (response: unknown) => void>()
   const window = {
     postMessage(message: unknown) {
-      if (isPluginJsonObject(message) && message.kind === 'res' && typeof message.id === 'number')
+      if (isPluginJsonObject(message) && message.kind === 'res' && typeof message.id === 'number') {
         responses.get(message.id)?.(message)
+      }
     }
   }
   const host = createCustomEditorHost({
@@ -103,8 +106,9 @@ it('keeps deleted-file paths out of guest reload failures and requires explicit 
   const messages = new Map<number, (value: unknown) => void>()
   const frameWindow = {
     postMessage: (value: unknown) => {
-      if (isPluginJsonObject(value) && value.kind === 'res' && typeof value.id === 'number')
+      if (isPluginJsonObject(value) && value.kind === 'res' && typeof value.id === 'number') {
         messages.get(value.id)?.(value)
+      }
     }
   }
   const host = createCustomEditorHost({

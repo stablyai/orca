@@ -5,16 +5,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
-import { openEditorRangeDocument, isEditorRangeDocumentDirty } from './editor-range-document'
-import { pluginFramesIsolated } from '@/store/plugin-frame-isolation'
-import {
-  collectActivePluginCustomEditors,
-  customEditorsForFile,
-  resolveCustomEditorChoice,
-  useCustomEditorViewStore
-} from '@/store/plugin-custom-editors'
-import { usePluginPanelsStore } from '@/store/plugin-panels'
-import { matchPluginFile } from '../../../../shared/plugins/contributions/plugin-file-match'
+import { readEditorRangeFileContent } from './editor-range-document'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
@@ -26,7 +17,6 @@ import {
 } from '../../../../shared/execution-host'
 import {
   WORKTREE_OWNER_NOT_READY_ERROR,
-  type FileContent,
   type EditorPanelFileContentLoader,
   type UseEditorPanelFileContentLoaderParams
 } from './editor-panel-content-types'
@@ -243,80 +233,23 @@ export function useEditorPanelFileContentLoader({
         }
         const readPathKey = `${readScope ?? ''}::${filePath}`
         const key = `${readPathKey}::${JSON.stringify(acquisition?.provenance)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}${options?.wakeWslDistro ? '::wake' : ''}`
-        const isolated = pluginFramesIsolated()
-        const candidates = customEditorsForFile(
-          filePath,
-          collectActivePluginCustomEditors(usePluginPanelsStore.getState().plugins),
-          isolated
-        )
-        const chosen = resolveCustomEditorChoice(
-          candidates,
-          useCustomEditorViewStore.getState().choices[id]
-        )
-        const rangeCandidates = candidates.filter(
-          (editor) =>
-            editor.contentKind === 'bytes' &&
-            editor.documentAccess === 'ranges' &&
-            (editor.frame !== 'isolated' || isolated)
-        )
-        const chosenRange = chosen && rangeCandidates.includes(chosen) ? chosen : null
-        const explicitRanges =
-          chosenRange !== null && matchPluginFile(filePath, chosenRange) !== null
-        if (chosenRange && readArgs.terminalArtifactGrantId) {
-          throw new Error(
-            'Ranged documents do not support terminal artifact grants. Open the file through its owning workspace.'
-          )
-        }
-        const rangeSourceKey = JSON.stringify({ ...readArgs, wakeWslDistro: undefined })
         const previousRange = fileContentsRef?.current[id]
-        const read = async (): Promise<FileContent> => {
-          if (
-            chosenRange &&
-            !readArgs.terminalArtifactGrantId &&
-            !isEditorRangeDocumentDirty(useAppStore.getState(), id, restoredOpenFile)
-          ) {
-            const source =
-              !options?.replaceRangeDocument &&
-              previousRange?.rangeSourceKey === rangeSourceKey &&
-              previousRange.rangeDocument
-                ? previousRange.rangeDocument
-                : await openEditorRangeDocument(readArgs, id, restoredOpenFile).catch(
-                    (error: unknown) => {
-                      if (
-                        error &&
-                        typeof error === 'object' &&
-                        'code' in error &&
-                        error.code === 'range_document_dirty'
-                      )
-                        return null
-                      throw error
-                    }
-                  )
-            if (source) {
-              if (!requestCurrent()) {
-                if (source !== previousRange?.rangeDocument) source.dispose()
-                return { content: '', isBinary: true }
-              }
-              if (explicitRanges || source.descriptor.isBinary) {
-                return {
-                  content: '',
-                  isBinary: source.descriptor.isBinary,
-                  size: source.descriptor.byteLength,
-                  byteSource: readArgs,
-                  rangeDocument: source,
-                  rangeSourceKey
-                }
-              }
-              source.dispose()
-            }
-          }
-          return readEditorCsvFileContent(readArgs, allowPagedPreview)
-        }
-        const result = chosenRange
-          ? await read()
-          : await readEditorPanelFileContent(key, options, read)
+        const result = await readEditorRangeFileContent({
+          args: readArgs,
+          fileId: id,
+          file: restoredOpenFile,
+          previous: previousRange,
+          replaceRangeDocument: options?.replaceRangeDocument,
+          isCurrent: requestCurrent,
+          readSource: () =>
+            readEditorPanelFileContent(key, options, () =>
+              readEditorCsvFileContent(readArgs, allowPagedPreview)
+            )
+        })
         if (!requestCurrent()) {
-          if (result.rangeDocument !== previousRange?.rangeDocument) result.rangeDocument?.dispose()
+          if (result.rangeDocument !== previousRange?.rangeDocument) {
+            result.rangeDocument?.dispose()
+          }
           return
         }
         if (result.csvPreview && useAppStore.getState().editorDrafts[id] !== undefined) {
@@ -331,13 +264,7 @@ export function useEditorPanelFileContentLoader({
           useAppStore.getState().setCsvPreviewOnly(id, Boolean(result.csvPreview))
         }
         delete fileLoadRetryAttemptsRef.current[id]
-        // Why: a bytes custom editor pages a binary file on the same route; a grant has no ranged reads.
-        const byteSource =
-          (result.isBinary || rangeCandidates.length > 0) && !readArgs.terminalArtifactGrantId
-            ? readArgs
-            : null
-        const loaded = byteSource ? { ...result, byteSource } : result
-        setFileContents((prev) => (requestCurrent() ? { ...prev, [id]: loaded } : prev))
+        setFileContents((prev) => (requestCurrent() ? { ...prev, [id]: result } : prev))
         stampCleanTabDiskBaseline(id, result)
       } catch (err) {
         if (!requestCurrent()) {

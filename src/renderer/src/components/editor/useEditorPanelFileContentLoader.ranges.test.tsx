@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
+
 import { act, useLayoutEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
@@ -15,7 +17,7 @@ import { useEditorPanelFileContentLoader } from './useEditorPanelFileContentLoad
 
 const mocks = vi.hoisted(() => ({ fullRead: vi.fn() }))
 vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/runtime/runtime-file-read-client')>()),
+  ...(await importOriginal<typeof RuntimeFileReadClient>()),
   readRuntimeFileContent: mocks.fullRead
 }))
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -95,7 +97,9 @@ function loader() {
     ) => load!(path, id, undefined, undefined, options),
     content: () => contents.file,
     dispose: () => {
-      for (const value of Object.values(contents)) value.rangeDocument?.dispose()
+      for (const value of Object.values(contents)) {
+        value.rangeDocument?.dispose()
+      }
       act(() => root.unmount())
     }
   }
@@ -109,8 +113,9 @@ it.each([
   'opens a %i-byte selected %s source without old full-file admission',
   async (byteLength, priority) => {
     install(priority)
-    if (priority === 'option')
+    if (priority === 'option') {
       useCustomEditorViewStore.setState({ choices: { file: 'test.range/bytes' } })
+    }
     mocks.fullRead.mockRejectedValue(new Error('Old whole-file admission must not run'))
     Object.assign(window, {
       api: {
@@ -153,7 +158,9 @@ it.each([
   'preserves normal Source text for %s with priority %s and choice %s',
   async (extension, priority, choice) => {
     install(priority, extension)
-    if (choice) useCustomEditorViewStore.setState({ choices: { file: choice } })
+    if (choice) {
+      useCustomEditorViewStore.setState({ choices: { file: choice } })
+    }
     Object.assign(window, {
       api: {
         fs: {
@@ -201,7 +208,9 @@ it('keeps independent document owners when two panels load the same file', async
           openIds.delete(id)
         },
         rangeDocumentRead: async ({ id }: { id: string }) => {
-          if (!openIds.has(id)) throw new Error('Document authority closed')
+          if (!openIds.has(id)) {
+            throw new Error('Document authority closed')
+          }
           return { version: 1, contentBase64: 'FiE=', bytesRead: 2, eof: true }
         }
       }
@@ -249,7 +258,9 @@ it('reads from the current range owner after an explicit panel Reload retires th
           openIds.delete(id)
         },
         rangeDocumentRead: async ({ id }: { id: string }) => {
-          if (!openIds.has(id)) throw new Error('Document authority closed')
+          if (!openIds.has(id)) {
+            throw new Error('Document authority closed')
+          }
           return { version: 1, contentBase64: 'FiE=', bytesRead: 2, eof: true }
         }
       }
@@ -277,7 +288,9 @@ it('reads from the current range owner after an explicit panel Reload retires th
     })
     const contents = current.fileContents
     useLayoutEffect(() => {
-      if (contents.file) initialCommitted.resolve()
+      if (contents.file) {
+        initialCommitted.resolve()
+      }
     }, [contents])
     return null
   }

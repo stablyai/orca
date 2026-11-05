@@ -39,12 +39,13 @@ import type {
 
 /** The frame only ever holds the document: Orca owns the buffer, dirty state and save. */
 export function createCustomEditorHost(options: CustomEditorHostOptions): CustomEditorHost {
-  if (options.rangeDocument)
+  if (options.rangeDocument) {
     return createRangeEditorHost(
       options,
       options.rangeDocument.source,
       options.rangeDocument.fileType
     )
+  }
   const budget =
     options.budget ??
     createPanelMessageBudget({

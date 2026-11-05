@@ -90,18 +90,22 @@ function isRangeWireRequest(value: unknown): value is RangeWireRequest {
     typeof value.id !== 'number' ||
     !Number.isSafeInteger(value.id) ||
     value.id < 0
-  )
+  ) {
     return false
+  }
   const keys = Reflect.ownKeys(value)
   if (
     keys.length !== 5 ||
     !keys.every(
       (key) => typeof key === 'string' && ['orca', 'kind', 'id', 'method', 'params'].includes(key)
     )
-  )
+  ) {
     return false
+  }
   const params = value.params
-  if (!isPlainRangeObject(params)) return false
+  if (!isPlainRangeObject(params)) {
+    return false
+  }
   const fields = Reflect.ownKeys(params)
   return (
     fields.length === 3 &&
@@ -153,34 +157,45 @@ export function createPluginFrameSendBudget(
   now: () => number = () => Date.now(),
   rate = PRELOAD_PLUGIN_FRAME_RATE
 ): PluginFrameSendBudget {
-  const sent: { at: number; bytes: number }[] = []
+  const sent: { at: number; bytes: number; messages: number }[] = []
   let windowBytes = 0
+  let windowMessages = 0
   const pendingReads = new Set<number>()
   const admit = (message: unknown): PluginFrameSendRefusal | null => {
-    const at = now()
+    const at = Math.floor(now())
     for (let oldest = sent[0]; oldest && oldest.at <= at - rate.perMs; oldest = sent[0]) {
       sent.shift()
       windowBytes -= oldest.bytes
+      windowMessages -= oldest.messages
     }
     const lane = laneCap(message)
     const bytes = measurePluginFrameMessageBytes(message, lane.maxBytes, lane.walk)
     if (bytes > lane.maxBytes) {
       return { code: 'too_large' }
     }
-    if (bytes <= 1024 && isRangeWireRequest(message)) {
-      if (pendingReads.size >= 2 || pendingReads.has(message.id))
-        return { code: 'rate_limited', retryAfterMs: 0 }
-      pendingReads.add(message.id)
-      return null
+    const range = bytes <= 1024 && isRangeWireRequest(message) ? message : null
+    if (range && (pendingReads.size >= 2 || pendingReads.has(range.id))) {
+      return { code: 'rate_limited', retryAfterMs: 0 }
     }
-    if (sent.length >= rate.maxMessages || windowBytes + bytes > rate.maxBytes) {
+    if ((!range && windowMessages >= rate.maxMessages) || windowBytes + bytes > rate.maxBytes) {
       return {
         code: 'rate_limited',
         retryAfterMs: Math.max(0, (sent[0]?.at ?? at) + rate.perMs - at)
       }
     }
-    sent.push({ at, bytes })
+    const messages = range ? 0 : 1
+    const latest = sent.at(-1)
+    if (latest?.at === at) {
+      latest.bytes += bytes
+      latest.messages += messages
+    } else {
+      sent.push({ at, bytes, messages })
+    }
     windowBytes += bytes
+    windowMessages += messages
+    if (range) {
+      pendingReads.add(range.id)
+    }
     return null
   }
   return Object.assign(admit, {
@@ -190,8 +205,9 @@ export function createPluginFrameSendBudget(
         message.orca === 1 &&
         message.kind === 'res' &&
         typeof message.id === 'number'
-      )
+      ) {
         pendingReads.delete(message.id)
+      }
     }
   })
 }

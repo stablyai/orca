@@ -50,12 +50,18 @@ export function useEditorPanelContentState({
         content.rangeDocument ? [content.rangeDocument] : []
       )
     )
-    for (const source of retainedRangeDocuments.current) if (!next.has(source)) source.dispose()
+    for (const source of retainedRangeDocuments.current) {
+      if (!next.has(source)) {
+        source.dispose()
+      }
+    }
     retainedRangeDocuments.current = next
   }, [fileContents])
   useEffect(
     () => () => {
-      for (const source of retainedRangeDocuments.current) source.dispose()
+      for (const source of retainedRangeDocuments.current) {
+        source.dispose()
+      }
     },
     []
   )

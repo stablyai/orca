@@ -18,9 +18,12 @@ export function registerFilesystemRangedDocumentHandlers({
   const documents = new RangedFileDocuments()
   const lifetimes = new Map<number, ReturnType<typeof abortWhenRendererGone>>()
   ipcMain.handle('fs:rangeDocumentOpen', async (event, args: RangedFileDocumentLocalOpen) => {
-    if (!args || typeof args.filePath !== 'string')
+    if (!args || typeof args.filePath !== 'string') {
       throw new Error('range_document_invalid_request')
-    if (args.connectionId) throw new SshHostNotServedError(args.connectionId)
+    }
+    if (args.connectionId) {
+      throw new SshHostNotServedError(args.connectionId)
+    }
     let lifetime = lifetimes.get(event.sender.id)
     if (!lifetime) {
       lifetime = abortWhenRendererGone(event.sender)

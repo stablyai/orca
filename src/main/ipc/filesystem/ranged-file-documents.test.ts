@@ -135,7 +135,9 @@ describe('ranged document owner', () => {
       release = resolve
     })
     const document = await documents.open(owner, async () => {
-      if (checking) await barrier
+      if (checking) {
+        await barrier
+      }
       return path
     })
     checking = true
@@ -154,7 +156,9 @@ describe('ranged document owner', () => {
       release = resolve
     })
     const document = await documents.open(owner, async () => {
-      if (checking) await barrier
+      if (checking) {
+        await barrier
+      }
       return path
     })
     checking = true
@@ -172,7 +176,9 @@ describe('ranged document owner', () => {
     await writeFile(path, 'secret')
     let authorized = true
     const document = await documents.open(owner, async () => {
-      if (!authorized) throw new Error('permission_denied')
+      if (!authorized) {
+        throw new Error('permission_denied')
+      }
       return path
     })
     authorized = false

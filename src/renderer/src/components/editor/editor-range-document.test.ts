@@ -148,13 +148,17 @@ it('fences a pending reload across a dirty then clean transition and reopens onl
           return { ...descriptor, id }
         },
         rangeDocumentReload: async ({ id }: { id: string }) => {
-          if (!openIds.has(id)) throw new Error('Cannot reload closed owner')
+          if (!openIds.has(id)) {
+            throw new Error('Cannot reload closed owner')
+          }
           started.resolve()
           await releaseReload.promise
           return { ...descriptor, id, version: 2 }
         },
         rangeDocumentRead: async ({ id, version }: { id: string; version: number }) => {
-          if (!openIds.has(id)) throw new Error('Cannot read closed owner')
+          if (!openIds.has(id)) {
+            throw new Error('Cannot read closed owner')
+          }
           return { version, contentBase64: 'AEE=', bytesRead: 2, eof: true }
         },
         rangeDocumentClose: async ({ id }: { id: string }) => {
