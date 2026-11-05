@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
+import { PLUGIN_APPEARANCE_SINCE } from '../workers/plugin-host-api-appearance'
 import {
   pluginFieldDoc,
   PLUGIN_HOST_ACTIONS_SINCE,
@@ -20,7 +21,8 @@ export const PLUGIN_CAPABILITY_KINDS = [
   'notifications:show',
   'storage:own',
   'secrets:own',
-  'settings:own'
+  'settings:own',
+  'appearance:write'
 ] as const
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
@@ -36,7 +38,8 @@ export const PLUGIN_CAPABILITY_SINCE: Record<PluginCapabilityKind, string> = {
   'notifications:show': PLUGIN_SCHEMA_SINCE_V1,
   'storage:own': PLUGIN_MANIFEST_V2_SINCE,
   'secrets:own': PLUGIN_MANIFEST_V2_SINCE,
-  'settings:own': PLUGIN_SCHEMA_SINCE_V1
+  'settings:own': PLUGIN_SCHEMA_SINCE_V1,
+  'appearance:write': PLUGIN_APPEARANCE_SINCE
 }
 
 /** Format 1 capability names and what each now grants. `events:subscribe` split by event domain. */
@@ -73,7 +76,8 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'notifications:show': 'Show desktop notifications labeled with the plugin name',
   'storage:own': "Store data in the plugin's own storage folder",
   'secrets:own': "Store and read secrets in the plugin's own encrypted file",
-  'settings:own': "Read and change the plugin's own settings"
+  'settings:own': "Read and change the plugin's own settings",
+  'appearance:write': 'Publish and select desktop application, editor and terminal colors'
 }
 
 /** Canonicalize order, duplicates and field order so equivalent grants preserve consent across manifest formatting changes. */

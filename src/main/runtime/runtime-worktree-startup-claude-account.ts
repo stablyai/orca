@@ -5,7 +5,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { LocalWindowsTerminalRuntimeOptions } from '../../shared/local-windows-terminal-runtime'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { getCodexSelectionTargetForPty } from '../ipc/pty/host-env/codex-home'
-import { newWorktreeLaunchScope } from './agent-launch-scope-runtime'
+import { newWorktreeLaunchScope } from './terminal/launch/agent-launch-scope-runtime'
 import { resolveLocalProjectRuntimeForRepo } from '../workspaces/execution-host/local-project-runtime-resolution'
 import { resolveLocalPtyOptions } from '../workspaces/execution-host/local-project-runtime-pty-options'
 

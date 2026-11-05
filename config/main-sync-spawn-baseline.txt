@@ -37,7 +37,7 @@
 1 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 1 src/main/pty/process-retirement/posix-pty-process-table.ts
 1 src/main/pty/shell-startup/pwsh.ts
-1 src/main/runtime/runtime-skill-install-authority.ts
+1 src/main/runtime/integrations/skill/runtime-skill-install-authority.ts
 2 src/main/startup/cli-launch-redirect.ts
 1 src/main/startup/linux-secret-service-probe.ts
 1 src/main/workspace-hooks/worktree-runner-script.ts

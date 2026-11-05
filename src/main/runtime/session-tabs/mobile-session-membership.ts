@@ -9,7 +9,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedLeaf
 } from '../../../shared/runtime-types'
-import { retireTerminalSurfacesFromSnapshot } from '../mobile-session-terminal-retirement'
+import { retireTerminalSurfacesFromSnapshot } from '../terminal/surface/mobile-session-terminal-retirement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 

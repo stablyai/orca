@@ -5,11 +5,11 @@ import {
   type ClaudeAgentTeamsMode
 } from '../../../../shared/claude-agent-teams-tmux-compat'
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
-import { buildClaudeAgentTeamsLaunchPlan } from '../../claude-agent-teams-shim-env'
+import { buildClaudeAgentTeamsLaunchPlan } from './claude-agent-teams-shim-env'
 import {
   inferCapturedClaudeAgentTeamsMode,
   withRecordedClaudeAccount
-} from '../../runtime-agent-launch-resolution'
+} from './runtime-agent-launch-resolution'
 
 export async function buildRuntimeAgentTeamsLaunchPlan(input: {
   launch: Pick<

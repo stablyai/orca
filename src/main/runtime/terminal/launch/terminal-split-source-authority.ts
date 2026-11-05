@@ -10,7 +10,7 @@ import type {
 import {
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin
-} from '../../claude-agent-teams-shim-env'
+} from './claude-agent-teams-shim-env'
 import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { splitPanePendingError } from './terminal-split-retry'

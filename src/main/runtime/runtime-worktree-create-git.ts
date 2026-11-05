@@ -12,7 +12,7 @@ import {
   getSelectedReviewBranch,
   getSelectedReviewLookupHints,
   type SelectedReviewBranchInput
-} from './selected-review-branch'
+} from './integrations/reviews/selected-review-branch'
 import { hasLocalGitOptions, normalizeLocalBranchName } from './runtime-worktree-selection'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 

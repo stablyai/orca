@@ -9,11 +9,11 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
+import { spawnSurfaceClaimSequence } from '../surface/pty-recorded-surface-topology'
 import type {
   PtyRegistrationClaim,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'

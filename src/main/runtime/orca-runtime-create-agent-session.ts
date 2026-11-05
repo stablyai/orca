@@ -19,8 +19,8 @@ import type {
 import {
   deterministicAgentSessionUuid,
   isAgentSessionOperationOutcomeUnknown
-} from './runtime-agent-launch-resolution'
-import { AgentLaunchUnbuildableError } from './runtime-agent-terminal-startup'
+} from './terminal/launch/runtime-agent-launch-resolution'
+import { AgentLaunchUnbuildableError } from './terminal/launch/runtime-agent-terminal-startup'
 
 export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
   abstract resolveWorkspaceTerminalStartupCwd(

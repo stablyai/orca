@@ -1,6 +1,9 @@
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
 import { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from './headless-terminal-tab-close'
-import { recordPtySurface, spawnSurfaceClaimSequence } from '../pty-recorded-surface-topology'
+import {
+  recordPtySurface,
+  spawnSurfaceClaimSequence
+} from '../terminal/surface/pty-recorded-surface-topology'
 import { withSelectedTabs } from '../headless-tab-group-selection'
 import type { RuntimeMobileSessionTabGroup } from '../../../shared/runtime-session-contracts'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'

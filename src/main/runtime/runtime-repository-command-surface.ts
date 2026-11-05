@@ -1,5 +1,5 @@
-import type { RuntimeGitHubRepositoryQueryCommands } from './runtime-github-repository-query-commands'
-import type { RuntimeHostedReviewCommands } from './runtime-hosted-review-commands'
+import type { RuntimeGitHubRepositoryQueryCommands } from './integrations/github/runtime-github-repository-query-commands'
+import type { RuntimeHostedReviewCommands } from './integrations/reviews/runtime-hosted-review-commands'
 import type { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import type { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import type { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'

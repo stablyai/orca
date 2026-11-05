@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { HostAccountLaunchEnvParams } from '../../shared/host-account-launch-env'
 
 import { RuntimeAccountController, type RuntimeAccountServices } from './runtime-account-controller'
-import { withHostAccountLaunchEnv } from './runtime-agent-terminal-startup'
+import { withHostAccountLaunchEnv } from './terminal/launch/runtime-agent-terminal-startup'
 
 export function registerHostAccountLaunchEnvTests(): void {
   const LAUNCH_ENV = HostAccountLaunchEnvParams.parse({

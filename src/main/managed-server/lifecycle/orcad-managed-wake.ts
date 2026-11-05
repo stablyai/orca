@@ -28,16 +28,31 @@ import {
 
 type OrcadManagedWake =
   | { outcome: 'serving' | 'not-activated' | 'unverifiable' }
-  | { outcome: 'fenced' }
+  /** A recovery launch that failed is still a failed run. */
+  | { outcome: 'fenced'; launchFailure?: Error }
   | { outcome: 'started'; readiness: ServeReadiness }
-  | { outcome: 'recovery-refused'; reason: string }
+  | { outcome: 'recovery-refused'; reason: string; launchFailure?: Error }
+
+/** Proven stopped, but the caller's gate refused a new launch; only gated wakes can see it. */
+type OrcadManagedGatedWake = OrcadManagedWake | { outcome: 'launch-refused' }
 
 /** Start only proven-stopped active slots; leave live or unverifiable processes alone. */
 export function wakeStoppedManagedOrcad(
   options: OrcadSlotOptions,
-  onStarting: () => void = () => {}
-): Promise<OrcadManagedWake> {
-  return serializedWake(options, (host) => wakeAfterPrior(options, host, onStarting))
+  onStarting?: () => void
+): Promise<OrcadManagedWake>
+/** `mayLaunch` is checked under the fence, at the launch decision itself. */
+export function wakeStoppedManagedOrcad(
+  options: OrcadSlotOptions,
+  onStarting: (() => void) | undefined,
+  mayLaunch: () => boolean
+): Promise<OrcadManagedGatedWake>
+export function wakeStoppedManagedOrcad(
+  options: OrcadSlotOptions,
+  onStarting: () => void = () => {},
+  mayLaunch: () => boolean = () => true
+): Promise<OrcadManagedGatedWake> {
+  return serializedWake(options, (host) => wakeAfterPrior(options, host, onStarting, mayLaunch))
 }
 
 /**
@@ -105,8 +120,9 @@ function serializedWake<T>(
 async function wakeAfterPrior(
   options: OrcadSlotOptions,
   host: string,
-  onStarting: () => void
-): Promise<OrcadManagedWake> {
+  onStarting: () => void,
+  mayLaunch: () => boolean
+): Promise<OrcadManagedGatedWake> {
   const before = await readOrcadActivationRecord(options)
   if (!before.active) {
     return { outcome: 'not-activated' }
@@ -119,6 +135,10 @@ async function wakeAfterPrior(
   if (!(await orcadActivationFenceExists(options))) {
     interruptedWakes.delete(host)
   } else if (!(await releaseOwnInterruptedWakeFence(options, host))) {
+    // Recovery can relaunch the slot, so a refused launch skips it too.
+    if (!mayLaunch()) {
+      return { outcome: 'launch-refused' }
+    }
     const recovered = await recoverAbandonedFence(options, onStarting)
     if (recovered) {
       return recovered
@@ -129,11 +149,14 @@ async function wakeAfterPrior(
   interruptedWakes.set(host, token)
   const result = await withOrcadActivationLock(
     options,
-    async (): Promise<OrcadManagedWake> => {
+    async (): Promise<OrcadManagedGatedWake> => {
       // Other clients may change the active slot; reread under the fence.
       const active = (await readOrcadActivationRecord(options)).active
       if (!active) {
         return { outcome: 'not-activated' }
+      }
+      if (!mayLaunch()) {
+        return { outcome: 'launch-refused' }
       }
       const identity = await resolveOrcadSlotIdentity(options, active)
       onStarting()
@@ -159,11 +182,14 @@ async function recoverAbandonedFence(
       return null
     case 'pending':
       return { outcome: 'fenced' }
-    case 'refused':
+    case 'refused': {
+      // A failed launch inside recovery is still a failed run.
+      const failure = recovery.launchFailure ? { launchFailure: recovery.launchFailure } : {}
       // Retry unverifiable recovery at the next fence check, as with a busy owner.
       return recovery.code === ORCAD_RECOVERY_UNVERIFIABLE_CODE
-        ? { outcome: 'fenced' }
-        : { outcome: 'recovery-refused', reason: recovery.reason }
+        ? { outcome: 'fenced', ...failure }
+        : { outcome: 'recovery-refused', reason: recovery.reason, ...failure }
+    }
     case 'recovered':
       if (!recovery.readiness) {
         return { outcome: 'not-activated' }

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { TerminalShellLifecycleScanner } from '../terminal-shell-lifecycle-scanner'
-import { PtyShellOwnershipMirror } from '../../../runtime/pty-shell-ownership-mirror'
+import { PtyShellOwnershipMirror } from '../../../runtime/terminal/query/pty-shell-ownership-mirror'
 
 const A = '\x1b]133;A\x07'
 const B = '\x1b]133;B\x07'

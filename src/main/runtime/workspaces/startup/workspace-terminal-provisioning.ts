@@ -15,7 +15,7 @@ import { preparePinnableClaudeAuth } from '../../../ipc/pty/claude-pinned-spawn'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
 import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
