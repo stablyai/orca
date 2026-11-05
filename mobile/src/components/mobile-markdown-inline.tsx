@@ -155,9 +155,7 @@ function renderPhrasing(
     case 'link': {
       const only = node.children.length === 1 ? node.children[0] : undefined
       return only?.type === 'inlineCode'
-        ? renderInlineCode(key, only.value, ctx, outer, () =>
-            openMarkdownHref(node.url, ctx)
-          )
+        ? renderInlineCode(key, only.value, ctx, outer, () => openMarkdownHref(node.url, ctx))
         : renderLink(key, plainText(node), node.url, ctx, outer)
     }
     case 'image':
