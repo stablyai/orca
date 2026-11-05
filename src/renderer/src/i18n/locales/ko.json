@@ -14849,8 +14849,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "예: ollama run llama3.1 {{value0}}",
             "9ee54037a4": "사용자 지정 명령",
-            "4b2fc4b80c": "사고 강도",
-            "be8917699e": "모델",
             "560d4feb00": "사용자 정의",
             "29d119fe95": "에이전트",
             "f9382b48a1": "AI author 활성화",

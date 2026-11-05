@@ -15447,8 +15447,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "ex. ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Commande personnalisée",
-            "4b2fc4b80c": "Effort de réflexion",
-            "be8917699e": "Modèle",
             "560d4feb00": "Personnalisé",
             "29d119fe95": "Agent",
             "f9382b48a1": "Activer l'auteur IA",

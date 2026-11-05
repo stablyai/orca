@@ -15297,8 +15297,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例如 ollama run llama3.1 {{value0}}",
             "9ee54037a4": "自訂命令",
-            "4b2fc4b80c": "思考強度",
-            "be8917699e": "模型",
             "560d4feb00": "自訂",
             "29d119fe95": "代理程式",
             "f9382b48a1": "啟用 AI 作者",
