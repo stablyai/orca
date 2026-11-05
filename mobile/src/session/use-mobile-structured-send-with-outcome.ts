@@ -92,7 +92,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     | 'invokeAction'
     | 'conversationCommands'
     | 'compactInstructions'
-    | 'setThreadGoalObjective'
+    | 'changeThreadGoal'
   >
   sessionCommands?: readonly AgentSessionSlashCommand[]
   onSendError: MobileNativeChatSendErrorReporter
@@ -170,8 +170,10 @@ export function useMobileStructuredSendWithOutcome(args: {
         )
         return 'rejected'
       }
-      if (objective !== null && controller.setThreadGoalObjective) {
-        return (await controller.setThreadGoalObjective(objective)) ? 'accepted' : 'rejected'
+      if (objective !== null && controller.changeThreadGoal) {
+        return (await controller.changeThreadGoal({ kind: 'set', objective }))
+          ? 'accepted'
+          : 'rejected'
       }
       const messageText = objective === null ? text : `/goal ${objective}`
       const commandOutcome = await dispatchMobileStructuredCommand({

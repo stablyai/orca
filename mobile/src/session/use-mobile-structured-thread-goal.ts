@@ -39,7 +39,7 @@ export type MobileStructuredThreadGoal = {
 }
 
 type ChatSend = (text: string) => Promise<MobileNativeChatSendOutcome>
-type GoalCommands = Pick<StructuredAgentSessionComposerOptions, 'setThreadGoalObjective'>
+type GoalCommands = Pick<StructuredAgentSessionComposerOptions, 'changeThreadGoal'>
 
 /** The chat's goal and the composer commands that set it; the chat's send is bound after it is built. */
 export function useMobileStructuredThreadGoal<TCommands extends object>(
@@ -161,13 +161,7 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
     ]
   )
   const goalCommands = useMemo(
-    () =>
-      changes === 'host'
-        ? {
-            ...commands,
-            setThreadGoalObjective: (objective: string) => change({ kind: 'set', objective })
-          }
-        : commands,
+    () => ({ ...commands, changeThreadGoal: changes === 'host' ? change : undefined }),
     [change, changes, commands]
   )
   return { threadGoal, commands: goalCommands, sendRef }

@@ -1,12 +1,16 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalThreadGoal } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { WorkspaceServerContext } from '../transport/workspace-server-context'
+import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
+import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import {
   useMobileStructuredThreadGoal,
   type MobileStructuredThreadGoal
 } from './use-mobile-structured-thread-goal'
+
+const PHONE_GOALS = 'agent-session.thread-goal.phone.v1'
 
 const GOAL: AgentJournalThreadGoal = {
   objective: 'Ship the parser',
@@ -32,12 +36,12 @@ function mount(route: Route) {
   function Probe(): null {
     const result = useMobileStructuredThreadGoal(
       {
-        hostSupport: { phoneThreadGoal: route.phoneThreadGoal } as never,
+        hostSupport: structuredAgentSessionHostSupport(route.phoneThreadGoal ? [PHONE_GOALS] : []),
         enabled: true,
         connected: true,
         onSendError: () => {}
       },
-      { items: [], epoch: null, hostClock: null },
+      { items: [], epoch: null, hostClock: undefined },
       {
         sessionKey: 'chat-1',
         report:
@@ -47,7 +51,8 @@ function mount(route: Route) {
         turnId: null,
         workingStartedAt: null,
         working: false,
-        mutate: mutate as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only the result status.
+        mutate: mutate as unknown as MobileStructuredAgentMutate,
         commands: {}
       }
     )
@@ -55,7 +60,7 @@ function mount(route: Route) {
     goal = result.threadGoal
     return null
   }
-  const tree = (children: ReactNode) =>
+  const tree = (children: ReactElement): ReactElement =>
     route.desktopRelays === undefined
       ? children
       : createElement(
@@ -64,13 +69,13 @@ function mount(route: Route) {
             value: {
               client: null,
               state: 'connected',
-              desktopCapabilities: route.desktopRelays ? ['agent-session.thread-goal.phone.v1'] : []
+              desktopCapabilities: route.desktopRelays ? [PHONE_GOALS] : []
             }
           },
           children
         )
   act(() => {
-    create(tree(createElement(Probe)) as never)
+    create(tree(createElement(Probe)))
   })
   return { goal: () => goal!, mutate, send }
 }

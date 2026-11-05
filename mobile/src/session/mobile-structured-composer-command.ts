@@ -51,7 +51,7 @@ export async function dispatchMobileStructuredCommand(input: {
   if (
     !isStructuredAgentSessionHostCommand(
       input.text,
-      input.controller.setThreadGoalObjective !== undefined
+      input.controller.changeThreadGoal !== undefined
     )
   ) {
     return input.pending.current ? 'rejected' : null
