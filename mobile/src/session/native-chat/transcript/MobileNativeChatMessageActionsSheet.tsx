@@ -1,6 +1,6 @@
-import { useContext, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Copy, GitBranch, TextSelect, X } from 'lucide-react-native'
+import { Copy, TextSelect, X } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { ActionSheetContent } from '../../../components/ActionSheetModal'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
@@ -12,7 +12,6 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
-import { MobileNativeChatForkContext } from '../use-mobile-native-chat-fork'
 
 type Props = {
   message: NativeChatMessage
@@ -32,8 +31,6 @@ export function MobileNativeChatMessageActionsSheet({
   // Streaming updates must not reset an active native text selection.
   const [text] = useState(() => mobileNativeChatDisplayCopyText(message))
   const closeSheet = () => setSheetVisible(false)
-  const fork = useContext(MobileNativeChatForkContext)
-  const forkOffer = fork?.offerFor(message) ?? 'hidden'
 
   return (
     <>
@@ -73,26 +70,7 @@ export function MobileNativeChatMessageActionsSheet({
               onPress: () => {
                 selectRequested.current = true
               }
-            },
-            ...(fork && forkOffer !== 'hidden'
-              ? [
-                  {
-                    id: 'forkFromResponse',
-                    label: t(
-                      'chat.messageActionsSheet.forkFromResponse',
-                      'Fork from this response'
-                    ),
-                    icon: GitBranch,
-                    hint: t(
-                      'chat.messageActionsSheet.forkFromResponseHint',
-                      'A new chat with this whole response, up to the end of its turn'
-                    ),
-                    // Disabled while the host is still asked, or while a fork from this chat opens.
-                    disabled: forkOffer === 'disabled',
-                    onPress: () => fork.fork(message)
-                  }
-                ]
-              : [])
+            }
           ]}
         />
       </BottomDrawer>

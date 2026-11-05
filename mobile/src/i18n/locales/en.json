@@ -2929,15 +2929,15 @@
       "responding": "Agent is responding"
     },
     "message": {
-      "copyMessage": "Copy message"
+      "copyMessage": "Copy message",
+      "forkFromResponse": "Fork from this response",
+      "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
     },
     "messageActionsSheet": {
       "copyMessage": "Copy message",
       "copyFailed": "Copy failed",
       "clipboardRejected": "The clipboard rejected the text.",
-      "selectText": "Select text",
-      "forkFromResponse": "Fork from this response",
-      "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
+      "selectText": "Select text"
     },
     "notice": {
       "stoppedManually": "Stopped manually",
