@@ -4,6 +4,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { OrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { CHAT_WORKER_AUTHORITY } from '../chat-assignee-admission'
 import type { WorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
+import type { SleepingAgentLaunchConfig } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   resolveStructuredWorkerIdentity,
@@ -38,6 +39,8 @@ export type ReopenedWorker = {
   userOpened: boolean
   /** A reopened chat's custody identity; a resumed terminal's comes from its new pane. */
   authority?: { paneKey: string; processIncarnation: string; hostScope: string }
+  /** The recipe the resumed pane launched with, which the new Dispatch records for its own reopen. */
+  launchRecipe?: SleepingAgentLaunchConfig
 }
 
 /** Resume a closed terminal worker's conversation in a new background tab; never a shell. Null: start a fresh agent. */
@@ -58,7 +61,12 @@ export async function reopenWorkerTerminal(
     mutationId: dispatchId
   })
   if (resumed.ok) {
-    return { handle: resumed.handle, chat: false, userOpened: false }
+    return {
+      handle: resumed.handle,
+      chat: false,
+      userOpened: false,
+      launchRecipe: resumed.launchConfig
+    }
   }
   switch (resumed.reason) {
     case 'window_owns_wake':

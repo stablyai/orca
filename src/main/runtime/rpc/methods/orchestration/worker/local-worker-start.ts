@@ -197,9 +197,10 @@ export async function startLocalWorker(args: {
       effects
     }
     recordCreatedWorkerTerminalCustody(runtime, setupStage, created && !structuredSession)
-    // Record the launch recipe now that custody exists: a reopen replays this
-    // launch's flags instead of falling back to the agent's default (#37693).
-    recordWorkerLaunchRecipe(db, started.dispatch.id, placed.terminalCreation?.launchConfig)
+    // Record what this launch replays: its own terminal's recipe, or the one the resumed
+    // pane launched with — a reopen creates no terminal here (#37693).
+    const recipe = placed.terminalCreation?.launchConfig ?? placed.reopened?.launchRecipe
+    recordWorkerLaunchRecipe(db, started.dispatch.id, recipe)
     if (persistGatedSetupSpawnFailure(setupStage)) {
       failedStage = 'setup_start'
       throw new Error('Setup terminal failed to start before the gated agent launch.')

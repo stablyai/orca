@@ -256,7 +256,8 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
           ok: true,
           handle: 'term_reopened',
           paneKey: h.runtime.getTerminalPaneKey('term_reopened')!,
-          ptyId: 'pty:term_reopened'
+          ptyId: 'pty:term_reopened',
+          launchConfig: { agentArgs: '--dangerously-skip-permissions', agentEnv: {} }
         })
       }
       await success('worker-release', '--dispatch', helper.dispatchId)
@@ -266,6 +267,12 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
       expect(sent.result).toMatchObject({ delivery, state: 'ready' })
       if (delivery === 'reopened') {
         expect(h.runtime.resumeAgentSessionInWorkspace).toHaveBeenCalledOnce()
+        // The new Dispatch keeps the recipe its resumed pane launched with, so its own
+        // reopen does not fall back to current settings (#37693).
+        const continued = receipt.parse(sent.result)
+        expect(
+          JSON.parse(h.db.getWorkerTerminalResourceByOwner(continued.dispatchId)!.launch_recipe!)
+        ).toMatchObject({ agentArgs: '--dangerously-skip-permissions' })
       }
     }
   )

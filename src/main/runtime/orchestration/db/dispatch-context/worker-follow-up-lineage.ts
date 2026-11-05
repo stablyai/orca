@@ -1,7 +1,7 @@
 import { resolveWorkerLineageFacts, FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
 export { FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
 import type { SleepingAgentLaunchConfig } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { buildSleepingAgentLaunchConfig } from '../../../../../shared/sleeping-agent-launch-config'
+import { buildSleepingAgentLaunchConfig } from '../../../../../shared/agent-session/lifecycle/sleeping-agent-launch-config'
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata

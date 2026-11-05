@@ -205,7 +205,9 @@ describe('resumeAgentSessionInWorkspace', () => {
       nativeOpen = false
       await expect(resume({ mutationId: 'after-native-close' })).resolves.toMatchObject({
         ok: true,
-        ptyId: 'resumed-C'
+        ptyId: 'resumed-C',
+        // The caller can persist what the pane actually launched with (#37693).
+        launchConfig: { agentArgs: '--permission-mode plan' }
       })
       expect(effectiveCommands[1]).toContain(SESSION.id)
       expect(spawn).toHaveBeenCalledTimes(2)
