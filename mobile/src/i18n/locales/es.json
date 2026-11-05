@@ -1251,8 +1251,7 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Copiar nombre",
-      "copyRelativePath": "Copiar ruta relativa",
-      "copyFailed": "No se pudo copiar"
+      "copyRelativePath": "Copiar ruta relativa"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código fuente Markdown cargado",

@@ -1212,8 +1212,7 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Adı Kopyala",
-      "copyRelativePath": "Göreli Yolu Kopyala",
-      "copyFailed": "Kopyalanamadı"
+      "copyRelativePath": "Göreli Yolu Kopyala"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Yüklenen Markdown kaynağını kopyala",

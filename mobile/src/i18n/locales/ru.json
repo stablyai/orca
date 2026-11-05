@@ -1290,8 +1290,7 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Копировать имя",
-      "copyRelativePath": "Копировать относительный путь",
-      "copyFailed": "Не удалось скопировать"
+      "copyRelativePath": "Копировать относительный путь"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",

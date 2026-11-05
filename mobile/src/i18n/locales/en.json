@@ -1865,8 +1865,7 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",
-      "copyRelativePath": "Copy Relative Path",
-      "copyFailed": "Couldn't copy"
+      "copyRelativePath": "Copy Relative Path"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Couldn't verify the SSH connection. Reconnect the host and try again."

@@ -1208,8 +1208,7 @@
     },
     "fileExplorerRowActions": {
       "copyName": "이름 복사",
-      "copyRelativePath": "상대 경로 복사",
-      "copyFailed": "복사할 수 없습니다."
+      "copyRelativePath": "상대 경로 복사"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "불러온 Markdown 소스 복사",

@@ -1208,8 +1208,7 @@
     },
     "fileExplorerRowActions": {
       "copyName": "複製名稱",
-      "copyRelativePath": "複製相對路徑",
-      "copyFailed": "無法複製"
+      "copyRelativePath": "複製相對路徑"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",

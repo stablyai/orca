@@ -1208,8 +1208,7 @@
     },
     "fileExplorerRowActions": {
       "copyName": "名前をコピー",
-      "copyRelativePath": "相対パスをコピー",
-      "copyFailed": "コピーできませんでした"
+      "copyRelativePath": "相対パスをコピー"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",
