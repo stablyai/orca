@@ -1,11 +1,4 @@
-import type {
-  BlockContent,
-  DefinitionContent,
-  Details,
-  Parent,
-  PhrasingContent,
-  RootContent
-} from 'mdast'
+import type { Details, Parent, PhrasingContent, RootContent } from 'mdast'
 
 // GitHub's `<details>` sections, which desktop draws as native disclosure widgets.
 
@@ -117,23 +110,5 @@ export function appendHtmlBlock(
     } else {
       current.children.push({ type: 'html', value: piece.value })
     }
-  }
-}
-
-declare module 'mdast' {
-  interface Details extends Parent {
-    type: 'details'
-    /** Authored `open`: the section starts expanded. */
-    open: boolean
-    summary: PhrasingContent[]
-    /** Its `</details>` came inside a paragraph, list or quote: it closes when that does. */
-    closesWithContainer?: boolean
-    children: (BlockContent | DefinitionContent)[]
-  }
-  interface RootContentMap {
-    details: Details
-  }
-  interface BlockContentMap {
-    details: Details
   }
 }

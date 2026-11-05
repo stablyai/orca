@@ -2,6 +2,9 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["../.oxlintrc.json"],
   "ignorePatterns": [
+    // Declaration merging needs interfaces, which React Doctor's root rules flag; its disable
+    // comments would read as unused under this config's off rule.
+    "src/components/mobile-markdown-mdast-nodes.d.ts",
     "src/terminal/terminal-webview-engine.generated.ts",
     "src/components/pr-sidebar/mermaid-page-engine.generated.ts"
   ],
