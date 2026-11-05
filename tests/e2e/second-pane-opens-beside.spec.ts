@@ -108,7 +108,9 @@ test('the second pane opens beside the first, the third opens opposite as a tab'
     },
     [worktreeId, rightGroupId] as const
   )
-  await expect.poll(() => readPanes(orcaPage, worktreeId)).toMatchObject({ leaves: 1 })
+  await expect
+    .poll(() => readPanes(orcaPage, worktreeId))
+    .toMatchObject({ leaves: 1, groupBodies: 1 })
 
   await orcaPage.evaluate((wt) => {
     window.__store?.getState().createTab(wt, undefined, undefined, { activate: false })
@@ -171,7 +173,9 @@ test('a saved layout comes back as it was, split or not', async (// oxlint-disab
     await first.page.evaluate((wt) => {
       window.__store?.getState().createTab(wt)
     }, worktreeId)
-    await expect.poll(() => readPanes(first.page, worktreeId)).toMatchObject({ leaves: 2 })
+    await expect
+      .poll(() => readPanes(first.page, worktreeId))
+      .toMatchObject({ leaves: 2, groupBodies: 2 })
     await session.close(firstApp)
     firstApp = null
 
@@ -179,7 +183,9 @@ test('a saved layout comes back as it was, split or not', async (// oxlint-disab
     secondApp = second.app
     await waitForSessionReady(second.page)
     await ensureTerminalVisible(second.page)
-    await expect.poll(() => readPanes(second.page, worktreeId)).toMatchObject({ leaves: 2 })
+    await expect
+      .poll(() => readPanes(second.page, worktreeId))
+      .toMatchObject({ leaves: 2, groupBodies: 2 })
 
     // Collapse to one pane holding two tabs, quit again: restore must keep ONE leaf.
     await second.page.evaluate((wt) => {
@@ -194,7 +200,9 @@ test('a saved layout comes back as it was, split or not', async (// oxlint-disab
         }
       }
     }, worktreeId)
-    await expect.poll(() => readPanes(second.page, worktreeId)).toMatchObject({ leaves: 1 })
+    await expect
+      .poll(() => readPanes(second.page, worktreeId))
+      .toMatchObject({ leaves: 1, groupBodies: 1 })
     await session.close(secondApp)
     secondApp = null
 
@@ -202,7 +210,9 @@ test('a saved layout comes back as it was, split or not', async (// oxlint-disab
     secondApp = third.app
     await waitForSessionReady(third.page)
     await ensureTerminalVisible(third.page)
-    await expect.poll(() => readPanes(third.page, worktreeId)).toMatchObject({ leaves: 1 })
+    await expect
+      .poll(() => readPanes(third.page, worktreeId))
+      .toMatchObject({ leaves: 1, groupBodies: 1 })
     expect(
       await third.page.evaluate(
         (wt) => (window.__store?.getState().unifiedTabsByWorktree[wt] ?? []).length,
