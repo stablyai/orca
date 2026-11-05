@@ -112,7 +112,7 @@ vi.mock('../platform/haptics', () => ({
 }))
 
 vi.mock('./mobile-file-explorer-row-actions-sheet', () => ({
-  MobileFileExplorerRowActionsSheet: () => null
+  useMobileFileExplorerRowActions: () => ({ openRowActions: () => {}, rowActionsSheet: null })
 }))
 
 vi.mock('../transport/host-client-hooks', () => ({

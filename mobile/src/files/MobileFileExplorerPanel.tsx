@@ -9,7 +9,6 @@ import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { getDirectoryCacheState, type DirectoryCache, type FileExplorerRow } from './file-tree'
-import type { TreeNode } from './file-tree'
 import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
@@ -25,7 +24,7 @@ import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-op
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
-import { MobileFileExplorerRowActionsSheet } from './mobile-file-explorer-row-actions-sheet'
+import { useMobileFileExplorerRowActions } from './mobile-file-explorer-row-actions-sheet'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
 import {
   MobileLoadErrorState,
@@ -66,7 +65,7 @@ export function MobileFileExplorerPanel(props: {
   const [error, setError] = useState<string | null>(null)
   const [legacyListTruncated, setLegacyListTruncated] = useState(false)
   const [filterBarHeight, setFilterBarHeight] = useState(0)
-  const [actionsNode, setActionsNode] = useState<TreeNode | null>(null)
+  const { openRowActions, rowActionsSheet } = useMobileFileExplorerRowActions()
   const insets = useSafeAreaInsets()
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
@@ -316,7 +315,7 @@ export function MobileFileExplorerPanel(props: {
         onPreviewFile={previewFile}
         onRetryDirectory={retryDirectory}
         onToggleDirectory={onToggleDirectory}
-        onOpenActions={setActionsNode}
+        onOpenActions={openRowActions}
       />
     )
   }
@@ -416,7 +415,7 @@ export function MobileFileExplorerPanel(props: {
           onCoveredHeightChange={setFilterBarHeight}
         />
       ) : null}
-      <MobileFileExplorerRowActionsSheet node={actionsNode} onClose={() => setActionsNode(null)} />
+      {rowActionsSheet}
     </View>
   )
 }
