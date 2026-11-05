@@ -127,3 +127,67 @@ it('hands back mail polled for a session that ended before it was submitted', as
     expect.objectContaining({ id: 'sub-1', submitted: false, sessionId: 'session-1' })
   ])
 })
+
+it('sends its end only after acking what the poll in flight took', async () => {
+  const handlers = new Map<string, Hook>()
+  const register: (on: On) => void = runInNewContext(
+    `${CLAUDE_AGENT_VIEW_MOD_SOURCE.replace('export function register', 'function register')}\nregister`
+  )
+  register((event, matcherOrHook, hook) => {
+    const handler = typeof matcherOrHook === 'function' ? matcherOrHook : hook
+    if (handler) {
+      handlers.set(event, handler)
+    }
+  })
+  const timers: { ms: number; tick: () => Promise<unknown> }[] = []
+  const mailPosts: string[] = []
+  let ended: Promise<unknown> | undefined
+  const api = {
+    env: {
+      get: async (key: string) =>
+        ({
+          ORCA_PANE_KEY: 'tab:11111111-1111-4111-8111-111111111111',
+          ORCA_AGENT_HOOK_PORT: '1234',
+          ORCA_AGENT_HOOK_TOKEN: 'test-token'
+        })[key]
+    },
+    session: { id: async () => 'session-1' },
+    clock: {
+      now: async () => 1_700_000_000_000,
+      every: (ms: number, tick: () => Promise<unknown>) => timers.push({ ms, tick })
+    },
+    prompt: { submit: vi.fn(async () => ({ text: 'ok' })) },
+    http: {
+      fetch: async (url: string, options: { body: string }) => {
+        const body = JSON.parse(options.body)
+        if (url.endsWith(CLAUDE_TERMINAL_MAIL_PATH)) {
+          mailPosts.push(body.action)
+        }
+        if (body.action === 'poll') {
+          // Claude's session ends while the poll is in flight.
+          ended = handlers.get('session.end')?.(
+            api,
+            { sessionId: 'session-1', reason: 'clear' },
+            async () => ({})
+          )
+          return {
+            ok: true,
+            text: JSON.stringify({ submissions: [{ id: 'sub-1', text: 'mail' }] })
+          }
+        }
+        return { ok: true, text: '{}' }
+      }
+    }
+  }
+
+  await handlers.get('session.start')?.(
+    api,
+    { isInteractive: true, surface: 'terminal' },
+    async () => ({})
+  )
+  await timers.find((timer) => timer.ms === 1000)?.tick()
+  await ended
+  await vi.waitFor(() => expect(mailPosts).toHaveLength(3))
+
+  expect(mailPosts).toEqual(['poll', 'ack', 'end'])
+})

@@ -311,7 +311,7 @@ describe('mailbox pointer through the agent prompt channel', () => {
 })
 
 describe('mailbox pointer staging when resolving the prompt channel throws', () => {
-  it('settles the flight instead of leaving the mail reserved', () => {
+  it('releases the reservation, since nothing reached the agent', () => {
     const db = new OrchestrationDb(':memory:')
     const message = db.insertMessage({
       runId: 'run_legacy_local',
@@ -335,6 +335,11 @@ describe('mailbox pointer staging when resolving the prompt channel throws', () 
     expect(state.hasFlight('pty-1')).toBe(false)
     expect(state.hasActiveWatermark('run:run-1')).toBe(false)
     expect(writePty).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({
+      delivered_at: null,
+      pointer_enter_pending: 0,
+      pointer_pty_id: null
+    })
     db.close()
   })
 })

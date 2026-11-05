@@ -12,7 +12,12 @@ import type {
   OrchestrationMailboxDeliveryFlight,
   OrchestrationMailboxPointerState
 } from './mailbox-pointer-state'
-import { submitPointerThroughChannel } from './mailbox-pointer-channel-submit'
+import { MAILBOX_POINTER_WRITE_ATTEMPTED } from './db/messages/mailbox-pointer-enter-state'
+import {
+  REFUSED_PROMPT_RETRY_MS,
+  submitPointerThroughChannel,
+  type AgentPromptChannel
+} from './mailbox-pointer-channel-submit'
 import {
   submitOrchestrationMailboxPointer,
   type OrchestrationMailboxPointerSubmitTarget
@@ -95,14 +100,37 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     args.state.deactivateWatermark(args.mailboxHandle, args.newestSequence, ptyId)
     args.settle(ptyId, flight)
   }
+  // Nothing has reached the agent yet: release the reservation and retry after a pause.
+  const releaseBeforeHandoff = (): void => {
+    try {
+      args.deps
+        .getDb()
+        ?.releaseMailboxPointerEnter(flight.stagedMessageIds, reservationTarget, [
+          MAILBOX_POINTER_WRITE_ATTEMPTED
+        ])
+    } catch {
+      // Runtime teardown can close the DB; recovery revalidates the reservation.
+    }
+    if (args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)) {
+      setTimeout(() => args.redrive(args.mailboxHandle, true), REFUSED_PROMPT_RETRY_MS).unref?.()
+    }
+    args.settle(ptyId, flight)
+  }
+  let pointer: string
+  let channel: AgentPromptChannel | null
   try {
-    const pointer = formatMessagePointer(
+    pointer = formatMessagePointer(
       args.messages.length,
       args.mailboxHandle,
       args.deps.getCliCommand(expectedTarget.terminal.handle),
       args.heldDeliveryId
     )
-    const channel = args.deps.resolvePromptChannel?.(args.terminal) ?? null
+    channel = args.deps.resolvePromptChannel?.(args.terminal) ?? null
+  } catch {
+    releaseBeforeHandoff()
+    return
+  }
+  try {
     if (channel) {
       submitPointerThroughChannel({
         channel,

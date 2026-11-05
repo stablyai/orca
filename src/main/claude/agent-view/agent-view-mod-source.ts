@@ -14,7 +14,7 @@ let endedSessionId
 let observedView
 let viewRevision = 0
 let mailIdentity
-let mailPolling = false
+let mailPoll
 let mailTimerStarted = false
 
   async function post($, action, data = {}, session = identity, path = ${JSON.stringify(CLAUDE_AGENT_VIEW_PATH)}) {
@@ -64,9 +64,13 @@ let mailTimerStarted = false
   }
 
   // Orchestration mail arrives as a turn of its own: nothing is typed into the terminal.
-  async function pollMail($) {
-    if (mailPolling || !paneKey) return
-    mailPolling = true
+  function pollMail($) {
+    if (mailPoll || !paneKey) return mailPoll
+    mailPoll = pollMailOnce($).finally(() => { mailPoll = undefined })
+    return mailPoll
+  }
+
+  async function pollMailOnce($) {
     try {
       const sessionId = await $.session.id()
       if (sessionId === endedSessionId) return
@@ -87,10 +91,7 @@ let mailTimerStarted = false
         } catch {}
         await post($, 'ack', { id: String(item.id), submitted }, session, ${JSON.stringify(CLAUDE_TERMINAL_MAIL_PATH)})
       }
-    } catch {
-    } finally {
-      mailPolling = false
-    }
+    } catch {}
   }
 
 export function register(on) {
@@ -149,8 +150,12 @@ export function register(on) {
     const session = identity
     const result = await next(event)
     void post($, 'end', {}, session).catch(() => {})
-    void post($, 'end', {}, mailIdentity, ${JSON.stringify(CLAUDE_TERMINAL_MAIL_PATH)}).catch(() => {})
+    // After the poll in flight has acked what it took: an end first would leave those unverifiable.
+    const mailSession = mailIdentity
     mailIdentity = undefined
+    void Promise.resolve(mailPoll)
+      .then(() => post($, 'end', {}, mailSession, ${JSON.stringify(CLAUDE_TERMINAL_MAIL_PATH)}))
+      .catch(() => {})
     endedSessionId = event.sessionId
     identity = undefined
     if (event.reason !== 'clear' && event.reason !== 'resume') paneKey = undefined
