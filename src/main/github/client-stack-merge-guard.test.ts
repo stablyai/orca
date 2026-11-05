@@ -1,4 +1,3 @@
-import { installIndependentCheckFixtures } from './client-test-harness'
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -40,7 +39,10 @@ vi.mock('./github-api-repository', async (importOriginal) =>
 
 import { getPRForBranch } from './client/lookup/get-pr-for-branch'
 import { mergePR } from './client/merge/merge-pr'
-import { resetGraphQLRateLimitGuardMocks } from './client-test-harness'
+import {
+  installIndependentCheckFixtures,
+  resetGraphQLRateLimitGuardMocks
+} from './client-test-harness'
 
 const { getOwnerRepoMock, acquireMock, releaseMock } = clientMocks
 

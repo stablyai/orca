@@ -1,4 +1,3 @@
-import { installIndependentCheckFixtures } from './client-test-harness'
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -42,7 +41,7 @@ vi.mock('./github-api-repository', async (importOriginal) =>
 )
 
 import { getPRForBranch } from './client/lookup/get-pr-for-branch'
-import { resetPRForBranchMocks } from './client-test-harness'
+import { installIndependentCheckFixtures, resetPRForBranchMocks } from './client-test-harness'
 
 const { getOwnerRepoMock, resolvePRRepositoryCandidatesMock, gitExecFileAsyncMock } = clientMocks
 

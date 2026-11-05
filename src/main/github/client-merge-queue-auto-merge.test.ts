@@ -1,4 +1,3 @@
-import { installIndependentCheckFixtures } from './client-test-harness'
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,7 +47,10 @@ import { resolveReviewThread } from './client/update/resolve-review-thread'
 import { setPRAutoMerge } from './client/merge/pr-auto-merge'
 import { updatePRTitle } from './client/update/pr-details'
 import { _getMergeQueueCacheSizeForTests } from './client/detect/repository-merge-metadata-cache'
-import { resetGraphQLRateLimitGuardMocks } from './client-test-harness'
+import {
+  installIndependentCheckFixtures,
+  resetGraphQLRateLimitGuardMocks
+} from './client-test-harness'
 
 const {
   getOwnerRepoMock,

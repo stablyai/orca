@@ -156,7 +156,7 @@ export function mockPRLookupRoutes(
       [...metadata].some(
         ([target, item]) =>
           args[1] ===
-          `repos/${target.split(':')[0]}/commits/${item.headRefOid}/check-runs?per_page=100&page=1`
+          `repos/${target.split(':')[0]}/commits/${String(item.headRefOid)}/check-runs?per_page=100&page=1`
       )
     ) {
       throw new Error('checks recovery unavailable')
