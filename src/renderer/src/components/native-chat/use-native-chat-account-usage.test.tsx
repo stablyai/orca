@@ -51,17 +51,20 @@ const result: AgentSessionAccountUsage = {
 }
 function Chat({
   turnId = null,
-  sessionId = 'chat'
+  sessionId = 'chat',
+  promptId = null
 }: {
   turnId?: string | null
   sessionId?: string
+  promptId?: string | null
 }) {
   const usage = useNativeChatAccountUsage({
     supported: true,
     sessionId,
     target,
     fence: 1,
-    turnId
+    turnId,
+    promptId
   })
   return (
     <>
@@ -117,6 +120,28 @@ describe('chat usage card', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await screen.findByText('chat@example.com')
     expect(screen.getByText('Codex limits were reset.')).toBeTruthy()
+  })
+
+  it('clears when a waiting approval is answered, and a reset finishing after the chat closes reads nothing', async () => {
+    let finish!: (value: unknown) => void
+    mocks.read.mockResolvedValue(result)
+    mocks.reset.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const view = render(<Chat promptId="approval-1" />)
+    fireEvent.click(screen.getByText('Usage'))
+    await screen.findByText('chat@example.com')
+    view.rerender(<Chat promptId={null} />)
+    expect(screen.queryByText('chat@example.com')).toBeNull()
+    fireEvent.click(screen.getByText('Usage'))
+    await screen.findByText('chat@example.com')
+    fireEvent.click(screen.getByRole('button', { name: 'Reset now' }))
+    view.unmount()
+    await act(async () => finish({ outcome: 'reset' }))
+    expect(mocks.read).toHaveBeenCalledTimes(2)
   })
 
   it('does not reopen a dismissed card when an already-confirmed reset completes', async () => {

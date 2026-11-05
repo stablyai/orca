@@ -10,14 +10,17 @@ export function useNativeChatAccountUsage(args: {
   target: RuntimeClientTarget
   fence: number | null
   turnId: string | null
+  /** The approval or question waiting on the person; answering or raising one resumes work. */
+  promptId: string | null
 }) {
-  const { sessionId, target, supported, fence, turnId } = args
+  const { sessionId, target, supported, fence, turnId, promptId } = args
   const identity = `${target.kind === 'local' ? 'local' : target.environmentId}:${sessionId}:${fence}`
   const [panel, setPanel] = useState<{
     /** Which `/usage` opening this panel belongs to; late replies for any other are dropped. */
     request: number
     identity: string
     turnId: string | null
+    promptId: string | null
     result: AgentSessionAccountUsage | null
     /** A reset's outcome, kept across the refresh it triggers. */
     notice: string | null
@@ -27,18 +30,24 @@ export function useNativeChatAccountUsage(args: {
   const shownRequest = useRef<number | null>(null)
   useEffect(() => {
     shownRequest.current = panel?.request ?? null
+    // Unmounting retires callbacks that outlive the chat (a reset finishing later).
+    return () => {
+      shownRequest.current = null
+    }
   }, [panel])
   const dismiss = useCallback(() => setPanel(null), [])
   if (
     panel !== null &&
-    (panel.identity !== identity || (turnId !== null && panel.turnId !== turnId))
+    (panel.identity !== identity ||
+      (turnId !== null && panel.turnId !== turnId) ||
+      panel.promptId !== promptId)
   ) {
     setPanel(null)
   }
   const open = useCallback(
     async (notice: string | null = null) => {
       const request = ++nextRequest.current
-      setPanel({ request, identity, turnId, result: null, notice })
+      setPanel({ request, identity, turnId, promptId, result: null, notice })
       const result = await callStructuredAgentSession<AgentSessionAccountUsage>(
         target,
         'agentSession.accountUsage',
@@ -46,7 +55,7 @@ export function useNativeChatAccountUsage(args: {
       ).catch(() => ({ status: 'failed' as const }))
       setPanel((current) => (current?.request === request ? { ...current, result } : current))
     },
-    [identity, sessionId, target, turnId]
+    [identity, sessionId, target, turnId, promptId]
   )
   return {
     command: supported

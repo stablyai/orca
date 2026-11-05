@@ -63,7 +63,8 @@ export function useNativeChatStructuredComposerTransport(args: {
     sessionId: props.sessionId,
     target: props.target,
     fence: controller.accountUsageFence,
-    turnId: controller.turnId
+    turnId: controller.turnId,
+    promptId: controller.prompts[0]?.itemId ?? null
   })
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
