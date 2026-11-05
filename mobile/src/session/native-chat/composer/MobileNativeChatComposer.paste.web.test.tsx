@@ -8,12 +8,6 @@ import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 vi.mock('./MobileNativeChatComposerField', () => import('./MobileNativeChatComposerField.web'))
 vi.mock('../../../platform/keyboard-occlusion', () => ({ useKeyboardOcclusion: () => 0 }))
-vi.mock('../../../platform/clipboard', () => ({
-  useClipboardReader: () => ({
-    readImage: async () => null,
-    contents: async () => ({ text: false, image: false })
-  })
-}))
 vi.mock('lucide-react-native', () => ({
   Plus: () => null,
   AtSign: () => null,

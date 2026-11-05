@@ -4,7 +4,7 @@ import {
   type ClipboardEventDataLike
 } from '../../../../../src/shared/native-chat/input/native-chat-clipboard-event'
 import { isNativeChatLongPaste } from '../../../../../src/shared/native-chat/input/native-chat-long-paste'
-import { useClipboardReader, type ClipboardReader } from '../../../platform/clipboard'
+import type { ClipboardReader } from '../../../platform/clipboard'
 import type { PickedMobileImage } from '../../../platform/media-picker-contract'
 import { encodeBase64Bytes } from '../../../transport/base64-byte-codec'
 import {
@@ -14,8 +14,8 @@ import {
 } from '../../mobile-clipboard-image'
 import { resizeMobileClipboardImage } from '../../mobile-clipboard-image-resize'
 
-/** Reads the images one paste carried, sized for upload. */
-export type MobilePastedImages = () => Promise<readonly PickedMobileImage[]>
+/** One paste's image: the event's file, or null when WebKit left the bytes out and the shell clipboard holds them. */
+export type MobilePastedImages = { readonly file: File | null }
 
 type PasteEvent = ClipboardEventDataLike<File> & {
   readonly defaultPrevented: boolean
@@ -46,9 +46,14 @@ async function readEventImage(file: Blob): Promise<PickedMobileImage> {
   return { base64: await sizedForUpload(source, size.width, size.height) }
 }
 
-async function readClipboardImage(
+/** Sized for upload; the clipboard reader is the uploader's, so the composer needs no shell bridge. */
+export async function readMobilePastedImages(
+  { file }: MobilePastedImages,
   clipboard: Pick<ClipboardReader, 'readImage' | 'contents'>
 ): Promise<readonly PickedMobileImage[]> {
+  if (file) {
+    return [await readEventImage(file)]
+  }
   if (!(await clipboard.contents()).image) {
     return []
   }
@@ -59,18 +64,17 @@ async function readClipboardImage(
 }
 
 /** Text pastes stay native unless long; images attach as chips like Photos picks. A disabled composer leaves pastes to the field. */
-export function useMobileNativeChatComposerPaste({
+export function mobileNativeChatComposerPasteHandler({
   disabled,
   onPasteImages,
   onAttachPastedText
 }: {
   disabled: boolean
   /** Undefined when this chat takes no images. */
-  onPasteImages: ((read: MobilePastedImages) => void) | undefined
+  onPasteImages: ((paste: MobilePastedImages) => void) | undefined
   /** Undefined when the host keeps no phone files, so a long paste stays prompt text. */
   onAttachPastedText: ((text: string) => void) | undefined
 }): (event: PasteEvent) => void {
-  const clipboard = useClipboardReader()
   return (event) => {
     if (disabled || event.defaultPrevented) {
       return
@@ -88,10 +92,6 @@ export function useMobileNativeChatComposerPaste({
       event.preventDefault()
     }
     // The shell WebView can offer Paste for an image yet leave its bytes out of the event.
-    onPasteImages(
-      imageFile
-        ? async () => [await readEventImage(imageFile)]
-        : () => readClipboardImage(clipboard)
-    )
+    onPasteImages({ file: imageFile })
   }
 }

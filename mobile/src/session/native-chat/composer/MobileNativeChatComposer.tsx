@@ -28,7 +28,7 @@ import {
 } from '../input/MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import {
-  useMobileNativeChatComposerPaste,
+  mobileNativeChatComposerPasteHandler,
   type MobilePastedImages
 } from './mobile-native-chat-composer-paste'
 import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
@@ -88,7 +88,7 @@ type Props = MobileNativeChatMicProps & {
   contextUsage?: NativeChatContextUsageSummary | null
   onAttachImage?: () => void
   /** Images pasted into the field attach like a Photos pick. */
-  onPasteImages?: (read: MobilePastedImages) => void
+  onPasteImages?: (paste: MobilePastedImages) => void
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
@@ -159,7 +159,7 @@ export function MobileNativeChatComposer({
     setPicker({ page: request.id, refocus: false })
   }
   const files = structured?.files ?? NO_FILES
-  const onWebPaste = useMobileNativeChatComposerPaste({
+  const onWebPaste = mobileNativeChatComposerPasteHandler({
     disabled: disabled || editSession?.locked === true,
     onPasteImages,
     onAttachPastedText: structured?.onAttachPastedText

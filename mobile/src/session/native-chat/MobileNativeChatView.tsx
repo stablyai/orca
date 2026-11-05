@@ -105,7 +105,7 @@ type ChatViewProps = MobileNativeChatSendProps &
     draftKey: string | null
     onComposerTextChange: (text: string) => void
     onAttachImage?: () => void
-    onPasteImages?: (read: MobilePastedImages) => void
+    onPasteImages?: (paste: MobilePastedImages) => void
     attachments?: PendingNativeChatImage[]
     onRemoveAttachment?: (id: string) => void
     isAttaching?: boolean

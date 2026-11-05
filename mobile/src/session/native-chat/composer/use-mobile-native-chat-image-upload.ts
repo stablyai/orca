@@ -17,7 +17,11 @@ import {
   uploadMobileNativeChatImages,
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
-import type { MobilePastedImages } from './mobile-native-chat-composer-paste'
+import {
+  readMobilePastedImages,
+  type MobilePastedImages
+} from './mobile-native-chat-composer-paste'
+import { useClipboardReader } from '../../../platform/clipboard'
 
 type CurrentRef<T> = { readonly current: T }
 type UploadedNativeChatImage = Omit<PendingNativeChatImage, 'id'>
@@ -55,6 +59,7 @@ export function useMobileNativeChatImageUpload(args: {
   } = args
   const [isAttaching, setIsAttaching] = useState(false)
   const picker = useMediaPicker()
+  const clipboard = useClipboardReader()
   const attachingCount = useRef(0)
   const connStateRef = useRef(connState)
   useLayoutEffect(() => {
@@ -85,7 +90,10 @@ export function useMobileNativeChatImageUpload(args: {
           canContinue: () => destination.active,
           client,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImages: (from) => (typeof from === 'function' ? from() : picker.pickImages(from)),
+          pickImages: (from) =>
+            typeof from === 'string'
+              ? picker.pickImages(from)
+              : readMobilePastedImages(from, clipboard),
           onImageUploaded: (image) => uploadedImages.push(image),
           onUploadStart: () => {
             started = true
@@ -146,6 +154,7 @@ export function useMobileNativeChatImageUpload(args: {
       onAttachSuccess,
       onError,
       onImagesUploaded,
+      clipboard,
       picker,
       scopeKey,
       showToast,
