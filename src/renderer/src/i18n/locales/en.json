@@ -19857,7 +19857,8 @@
         "permissionDenied": "{{agent}} denied permission. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
-        "modelFallback": "Claude switched models: {{from}} → {{to}}."
+        "modelFallback": "Claude switched models: {{from}} → {{to}}.",
+        "forkedFrom": "Forked from"
       },
       "composer": {
         "send": "Send",
@@ -20602,7 +20603,18 @@
         "cancel": "Don't continue"
       },
       "settings": "Chat settings",
-      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message."
+      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
+      "fork": {
+        "action": "Fork from this response",
+        "pending": "Forking this chat…",
+        "checking": "Checking whether this chat can fork…",
+        "tooltip": "Fork from this response. The new chat includes this whole response, up to the end of its turn.",
+        "unconfirmed": "{{agent}} couldn't confirm the fork",
+        "unconfirmedDetail": "It may have opened anyway. Check Session History before forking again.",
+        "failed": "{{agent}} couldn't fork this chat",
+        "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
+        "failedDetail": "Your chat is unchanged. Try again."
+      }
     },
     "tab": {
       "bar": {

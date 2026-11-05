@@ -2935,7 +2935,9 @@
       "copyMessage": "Copy message",
       "copyFailed": "Copy failed",
       "clipboardRejected": "The clipboard rejected the text.",
-      "selectText": "Select text"
+      "selectText": "Select text",
+      "forkFromResponse": "Fork from this response",
+      "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
     },
     "notice": {
       "stoppedManually": "Stopped manually",
@@ -2945,7 +2947,8 @@
       "permissionDenied": "{{agent}} denied permission. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
-      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+      "modelFallback": "Claude switched models: {{from}} → {{to}}.",
+      "forkedFrom": "Forked from"
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
@@ -3163,6 +3166,12 @@
       "updateFromWorker": "Update from worker",
       "messageFrom": "Message from",
       "showMore": "Show more"
+    },
+    "fork": {
+      "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",
+      "unconfirmed": "{{agent}} couldn't confirm the fork. It may have opened anyway; check Session History before forking again.",
+      "failed": "{{agent}} couldn't fork this chat. {{detail}}",
+      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
     }
   },
   "sourceControl": {
