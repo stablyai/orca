@@ -137,7 +137,8 @@ export async function activateFileExplorerNode(args: {
       relativePath: escapesWorktree ? node.path : fileExplorerNodeTabRelativePath(node),
       worktreeId: activeWorktreeId,
       runtimeEnvironmentId: fileRuntimeEnvironmentId ?? undefined,
-      ...(node.relativePath === node.path ? { readOnly: true } : {}),
+      // Why: project folder links also list absolute paths, but their files stay editable.
+      ...(node.relativePath === node.path && !node.outsideProject ? { readOnly: true } : {}),
       language: detectLanguage(node.name),
       mode: 'edit'
     },

@@ -39,4 +39,36 @@ describe('activateFileExplorerNode', () => {
       expect.anything()
     )
   })
+
+  it('keeps a file listed through a project folder link editable', async () => {
+    const openFile = vi.fn()
+    useAppStore.setState({
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
+      }
+    })
+
+    await activateFileExplorerNode({
+      node: {
+        name: 'notes.md',
+        path: '/shared/notes.md',
+        relativePath: '/shared/notes.md',
+        isDirectory: false,
+        depth: 1,
+        operationOwner: { kind: 'local' },
+        outsideProject: true
+      },
+      activeWorktreeId: 'wt-1',
+      openFile,
+      toggleDir: vi.fn(),
+      loadDir: vi.fn(),
+      statPath: vi.fn(),
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath: vi.fn()
+    })
+
+    expect(openFile).toHaveBeenCalledOnce()
+    expect(openFile.mock.calls[0][0]).toMatchObject({ filePath: '/shared/notes.md' })
+    expect(openFile.mock.calls[0][0]).not.toHaveProperty('readOnly')
+  })
 })
