@@ -251,3 +251,41 @@ it('keeps the interruption verdict and stays current as a command turn it skips 
   const state = expectScanned()
   expect(state.summary).toMatchObject({ status: 'idle', turnOutcome: 'cancellation' })
 })
+
+it('follows a turn that becomes a command turn after it was read', async () => {
+  const journal = await openJournal('session-membership')
+  const projections = new StructuredAgentSessionJournalProjections()
+  const read = () => {
+    const snapshot = journal.statusRead()
+    const { state } = projections.read(journal, null)
+    expect(state).toEqual(
+      projectStructuredAgentSessionStatusState(snapshot.items, snapshot.submissions, 7)
+    )
+    return state.summary
+  }
+  await append(journal, 'user-ask', prompt('Ask'))
+  await append(journal, 'user-compact', {
+    kind: 'message',
+    role: 'user',
+    blocks: [],
+    command: { name: 'compact' }
+  })
+  const turnBody = (userItemId: string): AgentJournalItemBody => ({
+    kind: 'turn',
+    turnId: 'x',
+    state: 'completed',
+    outcome: 'success',
+    userItemId
+  })
+  await append(journal, 'turn-x', turnBody('orca:user-ask'))
+  await append(
+    journal,
+    'reply-x',
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] },
+    'turn-x'
+  )
+  expect(read().lastAssistantMessage).toBe('Answer')
+  // Revising the turn to the command's entry makes its reply command output, which previews skip.
+  await append(journal, 'turn-x', turnBody('orca:user-compact'))
+  expect(read().lastAssistantMessage).toBeUndefined()
+})
