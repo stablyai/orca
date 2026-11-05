@@ -20635,6 +20635,9 @@
           "noCredit": "No Codex reset credit is left on this account.",
           "alreadyRedeemed": "That reset credit was already used."
         }
+      },
+      "activity": {
+        "transcriptUnavailable": "Transcript unavailable"
       }
     },
     "tab": {
