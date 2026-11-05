@@ -4,6 +4,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { AgentSessionAcquisitionRootExitObservedError } from '../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
 import { AgentSessionPromptAnswerRejectedError } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
+import { resultFrame } from '../claude-fold-steer-frame-builders.test-fixture'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV as SPAWN_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import type { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
@@ -252,7 +253,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     ).resolves.toEqual({ cancelled: true })
   })
 
-  it('opens each queued exact replay with its own request origin', async () => {
+  it('opens queued replays in later provider cycles with their own request origins', async () => {
     const claude = fakeClaude({ replayUuid: null })
     const events: ClaudeStructuredSessionEvent[] = []
     const adapter = await acquired(claude, {}, events)
@@ -281,8 +282,16 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     echo(0)
     await dispatch('client-b', 200)
     await dispatch('client-c', 300)
-    echo(1)
-    echo(2)
+    for (const index of [1, 2]) {
+      connection.handlers.onMessage?.(
+        resultFrame(0, PROVIDER_SESSION_ID, `result-${index}`, {
+          userMessageUuids: [`turn-${index}`],
+          durationMs: 1,
+          numTurns: 1
+        }).frame
+      )
+      echo(index)
+    }
 
     expect(
       events

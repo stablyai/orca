@@ -78,11 +78,7 @@ export function resolveClaudeReplayTurn(
       (candidate) => candidate.sentUuid === userMessageUuid
     )
     if (exact) {
-      const foldReceipt = isUserReplay && claudeReplayIsFoldReceipt(session, exact, uuid)
-      settleWaiter(session, exact, uuid, onSettledLate)
-      return isUserReplay && !foldReceipt
-        ? { requestedAt: exact.requestedAt, clientMessageId: exact.clientMessageId }
-        : null
+      return settleLiveDispatch(session, exact, uuid, isUserReplay, onSettledLate)
     }
     const retired = session.retiredDispatchWaiters.find(
       (candidate) => candidate.sentUuid === userMessageUuid
@@ -101,11 +97,7 @@ export function resolveClaudeReplayTurn(
 
   const exact = session.dispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (exact) {
-    const foldReceipt = isUserReplay && claudeReplayIsFoldReceipt(session, exact, uuid)
-    settleWaiter(session, exact, uuid, onSettledLate)
-    return isUserReplay && !foldReceipt
-      ? { requestedAt: exact.requestedAt, clientMessageId: exact.clientMessageId }
-      : null
+    return settleLiveDispatch(session, exact, uuid, isUserReplay, onSettledLate)
   }
   const retired = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (retired) {
@@ -123,8 +115,7 @@ export function resolveClaudeReplayTurn(
       )
       if (compatible.length === 1) {
         const [candidate] = compatible
-        settleWaiter(session, candidate!, uuid, onSettledLate)
-        return { requestedAt: candidate!.requestedAt, clientMessageId: candidate!.clientMessageId }
+        return settleLiveDispatch(session, candidate!, uuid, true, onSettledLate)
       }
     } else if (!session.replayContentFallbackBlocked && session.dispatchWaiters.length === 0) {
       const lateCompatible = session.retiredDispatchWaiters.filter(
@@ -161,13 +152,19 @@ export function resolveClaudeReplayTurn(
   return null
 }
 
-/** Adopted UUIDs after root cycle work prove folded delivery; a new root init resets this evidence. */
-function claudeReplayIsFoldReceipt(
+/** Delivery identity does not decide whether a safely matched echo joins the working cycle. */
+function settleLiveDispatch(
   session: ClaudeSession,
   waiter: ClaudeDispatchWaiter,
-  replayUuid: string
-): boolean {
-  return replayUuid === waiter.sentUuid && session.translator?.openTurnInLiveProviderCycle === true
+  uuid: string,
+  isUserReplay: boolean,
+  onSettledLate?: ClaudeLateDispatchSettlement
+): ClaudeReplayTurnOrigin | null {
+  const opensTurn = isUserReplay && session.translator?.openTurnInLiveProviderCycle !== true
+  settleWaiter(session, waiter, uuid, onSettledLate)
+  return opensTurn
+    ? { requestedAt: waiter.requestedAt, clientMessageId: waiter.clientMessageId }
+    : null
 }
 
 function claudeResultUserMessageUuids(message: Record<string, unknown>): string[] {

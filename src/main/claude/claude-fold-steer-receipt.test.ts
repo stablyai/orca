@@ -487,17 +487,68 @@ describe('Claude fold receipt for a mid-turn send (captured orders)', () => {
 })
 
 describe('Claude fold receipt boundaries (synthetic orders)', () => {
-  it('lost result: a root init starts a cycle with no work yet, so the next adopted replay is a boundary', async () => {
+  it('two reminted echoes settle their own sends inside one reply, then a later reply opens normally', async () => {
     const rig = await riggedAdapter()
-    const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
-    rig.deliver(userReplay(1_000, PROVIDER_SESSION_ID, uuidA, 'first prompt'))
-    const uuidB = await rig.dispatchAt(1_500, 'client-b', STEER_PROMPT)
-    rig.deliver(initFrame(2_000, PROVIDER_SESSION_ID))
-    rig.deliver(userReplay(3_000, PROVIDER_SESSION_ID, uuidB, STEER_PROMPT))
+    await rig.dispatchAt(10, 'client-a', 'first distinct prompt')
+    await rig.dispatchAt(20, 'client-b', STEER_PROMPT)
+    rig.deliver(userReplay(1_000, PROVIDER_SESSION_ID, 'remint-a', 'first distinct prompt'))
+    rig.deliver(assistantText(1_100, PROVIDER_SESSION_ID, 'reply-a', 'continuing'))
+    rig.deliver(userReplay(1_200, PROVIDER_SESSION_ID, 'remint-b', STEER_PROMPT))
+    rig.deliver(assistantText(1_300, PROVIDER_SESSION_ID, 'reply-b', 'done'))
+    rig.deliver(
+      resultFrame(2_000, PROVIDER_SESSION_ID, 'result-ab', {
+        userMessageUuids: [],
+        durationMs: 1_990,
+        numTurns: 1
+      })
+    )
 
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([uuidA, uuidB])
-    expect(replayEventFor(rig.events, uuidB)).toMatchObject({ startsTurn: true })
+    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual(['remint-a'])
+    expect(rig.turns().every((turn) => turn.state !== 'interrupted')).toBe(true)
+    expect(rig.turns().at(-1)).toMatchObject({ turnId: 'remint-a', state: 'completed' })
+    expect(replayEventFor(rig.events, 'remint-b')).not.toHaveProperty('startsTurn')
+    expect(rig.settled.mock.calls.map(([outcome]) => outcome)).toEqual([
+      {
+        sessionId: 'session-1',
+        clientMessageId: 'client-a',
+        providerIdentity: {
+          provider: 'claude',
+          sessionId: PROVIDER_SESSION_ID,
+          uuid: 'remint-a'
+        }
+      },
+      {
+        sessionId: 'session-1',
+        clientMessageId: 'client-b',
+        providerIdentity: {
+          provider: 'claude',
+          sessionId: PROVIDER_SESSION_ID,
+          uuid: 'remint-b'
+        }
+      }
+    ])
+
+    await rig.dispatchAt(2_100, 'client-c', 'a later prompt')
+    rig.deliver(userReplay(2_200, PROVIDER_SESSION_ID, 'remint-c', 'a later prompt'))
+    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual(['remint-a', 'remint-c'])
+    expect(replayEventFor(rig.events, 'remint-c')).toMatchObject({ startsTurn: true })
   })
+
+  it.each(['adopted', 'reminted'])(
+    'lost result: root init makes the next %s replay a boundary',
+    async (identity) => {
+      const rig = await riggedAdapter()
+      const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
+      rig.deliver(userReplay(1_000, PROVIDER_SESSION_ID, uuidA, 'first prompt'))
+      const uuidB = await rig.dispatchAt(1_500, 'client-b', STEER_PROMPT)
+      rig.deliver(initFrame(2_000, PROVIDER_SESSION_ID))
+      const replayB = identity === 'adopted' ? uuidB : 'new-cycle-remint'
+      rig.deliver(userReplay(3_000, PROVIDER_SESSION_ID, replayB, STEER_PROMPT))
+
+      expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([uuidA, replayB])
+      expect(replayEventFor(rig.events, replayB)).toMatchObject({ startsTurn: true })
+    }
+  )
 
   it('provider wake: an adopted replay during the live wake cycle folds into the wake turn', async () => {
     // Combine captured wake-cycle semantics (p3-background-wake) with a mid-cycle replay (p3-early-steer).
@@ -528,7 +579,7 @@ describe('Claude fold receipt boundaries (synthetic orders)', () => {
     })
   })
 
-  it('a fresh replay uuid with user_message_uuid correlation keeps the opener path, not a fold receipt', async () => {
+  it('a fresh replay uuid with explicit correlation folds into the working turn', async () => {
     const rig = await riggedAdapter()
     const uuidA = await rig.dispatchAt(10, 'client-a', 'first prompt')
     rig.deliver(userReplay(1_000, PROVIDER_SESSION_ID, uuidA, 'first prompt'))
@@ -536,8 +587,8 @@ describe('Claude fold receipt boundaries (synthetic orders)', () => {
     const fresh = userReplay(2_000, PROVIDER_SESSION_ID, 'fresh-turn-2', STEER_PROMPT)
     rig.deliver({ ...fresh, frame: { ...fresh.frame, user_message_uuid: uuidB } })
 
-    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([uuidA, 'fresh-turn-2'])
-    expect(replayEventFor(rig.events, 'fresh-turn-2')).toMatchObject({ startsTurn: true })
+    expect([...new Set(rig.turns().map((turn) => turn.turnId))]).toEqual([uuidA])
+    expect(replayEventFor(rig.events, 'fresh-turn-2')).not.toHaveProperty('startsTurn')
     expect(rig.settled).toHaveBeenCalledWith({
       sessionId: 'session-1',
       clientMessageId: 'client-b',
