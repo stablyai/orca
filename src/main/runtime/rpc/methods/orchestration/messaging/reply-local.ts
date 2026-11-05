@@ -31,7 +31,7 @@ export async function replyToMessage(args: {
   const dispatchId = to.startsWith('dispatch:') ? to.slice('dispatch:'.length) : undefined
   // Federation owns its own recipient and liveness checks.
   if (dispatchId && !db.getFederatedDispatch(dispatchId)) {
-    const route = routeDispatchAddressedMail({
+    let routed = routeDispatchAddressedMail({
       ctx,
       db,
       dispatchId,
@@ -39,7 +39,9 @@ export async function replyToMessage(args: {
       from: fields.from,
       message: fields
     })
-    const routed = route.kind === 'start' ? route.finish(await route.start()) : route
+    while (routed.kind === 'start') {
+      routed = routed.finish(await routed.start())
+    }
     if (routed.kind === 'started') {
       db.markAsRead([original.id])
       const followUp = routed.receipt.dispatchId

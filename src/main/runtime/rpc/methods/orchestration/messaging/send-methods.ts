@@ -208,7 +208,7 @@ export const ORCHESTRATION_SEND_METHODS = [
             : undefined
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
-          const route = routeDispatchAddressedMail({
+          let routed = routeDispatchAddressedMail({
             ctx: {
               runtime,
               orchestrationCompatibilityEvidence,
@@ -221,7 +221,9 @@ export const ORCHESTRATION_SEND_METHODS = [
             from,
             message: params
           })
-          const routed = route.kind === 'start' ? route.finish(await route.start()) : route
+          while (routed.kind === 'start') {
+            routed = routed.finish(await routed.start())
+          }
           // A dispatch: address carries no recipient warnings, so `next` stays last.
           if (routed.kind === 'started') {
             return routed.receipt
