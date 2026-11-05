@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createPluginAgentStatusForwarder,
   pluginRuntimeDelegate,
+  watchPluginUiFocus,
   watchPluginWorkspaceContext
 } from './plugin-runtime-binding'
 import { projectPluginWorkspaceAgents } from './workers/plugin-workspace-projection'
@@ -119,6 +120,116 @@ describe('workspace.changed', () => {
         context: { branch: 'main', displayName: 'w', terminals: [] }
       })
       stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('ui.focus.changed', () => {
+  it('emits only changes after the value a subscriber can already read, coalescing bursts', async () => {
+    vi.useFakeTimers()
+    try {
+      let listening = false
+      const events = { wantsEvent: vi.fn(() => listening), emitEvent: vi.fn() }
+      let surface: { kind: 'terminal'; title: string } | null = { kind: 'terminal', title: 'zsh' }
+      let changed: () => void = () => undefined
+      const { stop } = watchPluginUiFocus({
+        events,
+        readFocusedSurface: () => surface,
+        onFocusInputChanged: (listener) => {
+          changed = listener
+          return () => undefined
+        },
+        delayMs: 10
+      })
+      surface = { kind: 'terminal', title: 'vim' }
+      changed()
+      await vi.advanceTimersByTimeAsync(20)
+      listening = true
+      changed()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).not.toHaveBeenCalled()
+      surface = null
+      changed()
+      changed()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).toHaveBeenCalledOnce()
+      expect(events.emitEvent).toHaveBeenCalledWith('ui.focus.changed', {
+        focusedSurface: null,
+        receivedAt: expect.any(Number)
+      })
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not swallow a change back when a plugin subscribed right after an unheard one', async () => {
+    vi.useFakeTimers()
+    try {
+      let listening = false
+      const events = { wantsEvent: vi.fn(() => listening), emitEvent: vi.fn() }
+      const a = { kind: 'terminal' as const, title: 'a' }
+      let surface: { kind: 'terminal'; title: string } = a
+      let changed: () => void = () => undefined
+      const { stop } = watchPluginUiFocus({
+        events,
+        readFocusedSurface: () => surface,
+        onFocusInputChanged: (listener) => {
+          changed = listener
+          return () => undefined
+        },
+        delayMs: 10
+      })
+      surface = { kind: 'terminal', title: 'b' }
+      changed()
+      listening = true
+      surface = a
+      changed()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).toHaveBeenCalledWith('ui.focus.changed', {
+        focusedSurface: a,
+        receivedAt: expect.any(Number)
+      })
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('sends a pending change before a read returns it, so a change back is not swallowed', async () => {
+    vi.useFakeTimers()
+    try {
+      const events = { wantsEvent: vi.fn(() => true), emitEvent: vi.fn() }
+      const a = { kind: 'terminal' as const, title: 'a' }
+      const b = { kind: 'terminal' as const, title: 'b' }
+      let surface: { kind: 'terminal'; title: string } = a
+      let changed: () => void = () => undefined
+      const watcher = watchPluginUiFocus({
+        events,
+        readFocusedSurface: () => surface,
+        onFocusInputChanged: (listener) => {
+          changed = listener
+          return () => undefined
+        },
+        delayMs: 10
+      })
+      surface = b
+      changed()
+      expect(watcher.readFocusedSurface()).toEqual(b)
+      expect(events.emitEvent).toHaveBeenLastCalledWith('ui.focus.changed', {
+        focusedSurface: b,
+        receivedAt: expect.any(Number)
+      })
+      surface = a
+      changed()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).toHaveBeenLastCalledWith('ui.focus.changed', {
+        focusedSurface: a,
+        receivedAt: expect.any(Number)
+      })
+      watcher.stop()
     } finally {
       vi.useRealTimers()
     }

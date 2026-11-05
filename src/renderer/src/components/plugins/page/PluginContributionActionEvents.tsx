@@ -34,6 +34,11 @@ function eventTitle(event: PluginEventName): string {
         'auto.components.settings.PluginContributionActionEvents.workspaceChanged',
         'When you switch workspace or its terminals change'
       )
+    case 'ui.focus.changed':
+      return translate(
+        'auto.components.settings.PluginContributionActionEvents.uiFocusChanged',
+        'When you switch tabs or leave Orca'
+      )
   }
 }
 

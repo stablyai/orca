@@ -6,6 +6,7 @@ import {
   PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS,
   pluginBridgeNameSchema
 } from './plugin-panel-bridge-protocol'
+import { pluginFocusedSurfaceSchema } from '../events/plugin-focused-surface'
 
 const pluginRequestParams = z.strictObject({
   name: pluginBridgeNameSchema,
@@ -38,7 +39,7 @@ const agentsListResult = z.object({
 const eventsSubscribeParams = z.strictObject({ event: z.enum(PLUGIN_EVENT_NAMES) })
 const eventsSubscribeResult = z.object({ ok: z.literal(true) })
 
-/** Panels and their own worker; spread into PLUGIN_HOST_API. */
+/** Panels and their own worker, and the reads they share with it; spread into PLUGIN_HOST_API. */
 export const PLUGIN_PANEL_BRIDGE_API = {
   'plugin.request': spec({
     summary:
@@ -61,6 +62,17 @@ export const PLUGIN_PANEL_BRIDGE_API = {
     surfaces: ALL_SURFACES,
     params: agentsListParams,
     result: agentsListResult
+  }),
+  'ui.readFocus': spec({
+    summary:
+      'Which kind of tab the person is looking at in Orca and its title (a file or site name, never a path or URL), or null while the Orca window is unfocused.',
+    since: 5,
+    scope: 'active-workspace',
+    capability: 'ui:focus',
+    mutation: false,
+    surfaces: ALL_SURFACES,
+    params: z.strictObject({}).optional(),
+    result: z.object({ focusedSurface: pluginFocusedSurfaceSchema })
   }),
   'events.subscribe': spec({
     summary:

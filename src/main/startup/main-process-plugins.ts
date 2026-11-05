@@ -36,6 +36,7 @@ import { rebuildAppMenu } from '../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { logStartupMilestone } from './startup-diagnostics'
 import { agentHookServer } from '../agent-hooks/server'
+import { bindPluginUiFocus } from '../plugins/plugin-ui-focus-binding'
 import {
   bindPluginRuntime,
   createPluginAgentStatusForwarder,
@@ -235,7 +236,8 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     }
   })
   // Bound here, not in the IPC handlers: a headless serve never opens a window to register them.
-  const pluginDelegate = bindPluginRuntime(pluginService, runtime, agentHookServer)
+  const readFocus = bindPluginUiFocus(store, state.isServeMode, pluginService)
+  const pluginDelegate = bindPluginRuntime(pluginService, runtime, agentHookServer, readFocus)
   // Headless RPC resolves this service too; consent shares the desktop hash-keyed write path.
   setPluginServiceForRpc(state.pluginService, {
     applyConsent: (request) =>

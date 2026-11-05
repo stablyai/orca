@@ -14,6 +14,8 @@ List each in `contributes.events` (`{ "on": "<event>" }`), with `main`, the `tru
   `{ workspaceId: string | null; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }`
 - `workspace.changed` (capability `workspace:read`; since 1.4.246): The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context.
   `{ context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }`
+- `ui.focus.changed` (capability `ui:focus`; since 1.4.250): The focused kind of tab or its title changed, or the Orca window gained or lost focus; `focusedSurface` is what `ui.readFocus` now answers. Call `ui.readFocus` for the value before the first change.
+  `{ focusedSurface: { kind: "terminal" | "agent" | "editor" | "browser"; title: string | null; agentId?: string } | null; receivedAt: number }`
 
 ## Frame events (`orca.on(event, handler)` in HTML panels and custom editors)
 

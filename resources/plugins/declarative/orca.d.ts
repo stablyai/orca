@@ -111,8 +111,10 @@ declare module 'orca' {
     "plugin.request": { params: { name: string; input?: JsonValue; timeoutMs?: number }; result: { output: JsonValue } }
     /** The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after. */
     "agents.list": { params: Record<string, never> | undefined; result: { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number }[] } }
+    /** Which kind of tab the person is looking at in Orca and its title (a file or site name, never a path or URL), or null while the Orca window is unfocused. */
+    "ui.readFocus": { params: Record<string, never> | undefined; result: { focusedSurface: { kind: "terminal" | "agent" | "editor" | "browser"; title: string | null; agentId?: string } | null } }
     /** Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you. */
-    "events.subscribe": { params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }; result: { ok: true } }
+    "events.subscribe": { params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "ui.focus.changed" }; result: { ok: true } }
   }
   /** Workspace and agent events `on(event)` delivers, with the read capability of their domain. */
   export type PluginEvents = {
@@ -124,6 +126,8 @@ declare module 'orca' {
     "agent.status.changed": { workspaceId: string | null; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }
     /** The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context. */
     "workspace.changed": { context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
+    /** The focused kind of tab or its title changed, or the Orca window gained or lost focus; `focusedSurface` is what `ui.readFocus` now answers. Call `ui.readFocus` for the value before the first change. */
+    "ui.focus.changed": { focusedSurface: { kind: "terminal" | "agent" | "editor" | "browser"; title: string | null; agentId?: string } | null; receivedAt: number }
   }
   // </generated>
   export type HostMethod = keyof HostMethods

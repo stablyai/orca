@@ -1,5 +1,6 @@
 import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginAgentStatusChangedPayload } from '../../shared/plugins/events/plugin-events'
+import type { PluginFocusedSurface } from '../../shared/plugins/events/plugin-focused-surface'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/workers/plugin-host-api'
 import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
 import type { PluginService } from './plugin-service'
@@ -47,10 +48,14 @@ export function pluginRuntimeDelegate(
 export function bindPluginRuntime(
   service: PluginService,
   runtime: OrcaRuntimeService,
-  hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] }
+  hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] },
+  readFocusedSurface: () => PluginFocusedSurface
 ): PluginRuntimeDelegate {
   const statuses = () => hookServer.getStatusSnapshot()
-  const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime))
+  const delegate = {
+    ...pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime)),
+    readFocusedSurface
+  }
   service.setRuntimeDelegate(delegate)
   installPluginHookRunner(service, runtime)
   installPluginResidentWorkerWarmer(service)
@@ -146,6 +151,58 @@ export function watchPluginWorkspaceContext(input: {
     stop()
     if (timer) {
       clearTimeout(timer)
+    }
+  }
+}
+
+/**
+ * `ui.focus.changed`: after session writes settle or window focus moves, re-read the focused
+ * surface and emit when it differs from the last one sent. `ui.readFocus` must read through the result.
+ */
+export function watchPluginUiFocus(input: {
+  events: PluginEvents
+  readFocusedSurface: () => PluginFocusedSurface
+  onFocusInputChanged: (listener: () => void) => () => void
+  delayMs?: number
+}): { readFocusedSurface: () => PluginFocusedSurface; stop: () => void } {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  // Why track while nobody listens: a new subscriber reads `ui.readFocus` first, so only later changes are news.
+  let last = JSON.stringify(input.readFocusedSurface())
+  const check = (): void => {
+    timer = null
+    const focusedSurface = input.readFocusedSurface()
+    const signature = JSON.stringify(focusedSurface)
+    if (signature === last) {
+      return
+    }
+    last = signature
+    if (input.events.wantsEvent('ui.focus.changed')) {
+      input.events.emitEvent('ui.focus.changed', { focusedSurface, receivedAt: Date.now() })
+    }
+  }
+  const stop = input.onFocusInputChanged(() => {
+    if (!input.events.wantsEvent('ui.focus.changed')) {
+      // Why now, not debounced: a plugin may read focus and subscribe before the timer would run.
+      last = JSON.stringify(input.readFocusedSurface())
+      return
+    }
+    // Why debounce: blur then focus fire back to back when moving between Orca's own windows.
+    timer ??= setTimeout(check, input.delayMs ?? WORKSPACE_CHANGE_DEBOUNCE_MS)
+  })
+  return {
+    // Why flush first: a read inside the debounce must not get ahead of what listeners were sent.
+    readFocusedSurface: () => {
+      if (timer) {
+        clearTimeout(timer)
+        check()
+      }
+      return input.readFocusedSurface()
+    },
+    stop: () => {
+      stop()
+      if (timer) {
+        clearTimeout(timer)
+      }
     }
   }
 }
