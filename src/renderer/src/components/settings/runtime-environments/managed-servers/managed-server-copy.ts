@@ -1,6 +1,7 @@
-import type {
-  OrcadManagedPendingMigrationRow,
-  OrcadManagedRuntimeStatus
+import {
+  ORCAD_RECOVERY_INSTANCE_LOCK_HELD_CODE,
+  type OrcadManagedPendingMigrationRow,
+  type OrcadManagedRuntimeStatus
 } from '../../../../../../shared/orcad-managed-runtime'
 import type { OrcadMigrationBlocker } from '../../../../../../shared/orcad-migration/orcad-migration-preflight'
 import { translate } from '@/i18n/i18n'
@@ -152,6 +153,12 @@ export function managedServerOutcomeLabel(result: {
     return translate(
       'auto.components.settings.managedServers.outcome.defaultServer',
       'Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.'
+    )
+  }
+  if (code === ORCAD_RECOVERY_INSTANCE_LOCK_HELD_CODE) {
+    return translate(
+      'auto.components.settings.managedServers.outcome.instanceLockHeld',
+      'Not done: another Orca server is still running on this host and holding it. Stop it — or the service that keeps it running — and try again.'
     )
   }
   if (result.verdict === 'live' || LIVE_TERMINAL_CODES.has(code)) {

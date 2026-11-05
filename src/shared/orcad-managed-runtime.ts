@@ -53,6 +53,9 @@ export type OrcadManagedRollbackResult =
 /** A recovery that needs the operator to accept restoring a snapshot over changed state. */
 export const ORCAD_RECOVERY_CHANGED_STATE_CODE = 'orcad_recovery_changed_state'
 
+/** Recovery was refused because another orcad holds the host's data root, usually an externally supervised one. */
+export const ORCAD_RECOVERY_INSTANCE_LOCK_HELD_CODE = 'orcad_recovery_instance_lock_held'
+
 export type OrcadManagedRecoveryResult =
   | { outcome: 'none' }
   | { outcome: 'pending'; code: string; reason: string }

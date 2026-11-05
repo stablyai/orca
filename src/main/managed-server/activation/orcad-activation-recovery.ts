@@ -20,7 +20,10 @@ import {
   recoverOrcadIncumbent,
   type OrcadIncumbentRecoveryOptions
 } from '../../ssh/orcad-incumbent-recovery'
-import type { OrcadManagedRefusal } from '../../../shared/orcad-managed-runtime'
+import {
+  ORCAD_RECOVERY_INSTANCE_LOCK_HELD_CODE,
+  type OrcadManagedRefusal
+} from '../../../shared/orcad-managed-runtime'
 import { resumeInterruptedOrcadCandidate } from '../../ssh/orcad-interrupted-candidate-resume'
 import { errorMessage } from '../../../shared/error-message'
 
@@ -38,6 +41,23 @@ export type OrcadActivationRecoveryResult =
 type OrcadActivationRecoveryOptions = OrcadIncumbentRecoveryOptions
 
 export const ORCAD_RECOVERY_UNVERIFIABLE_CODE = 'orcad_recovery_unverifiable'
+
+/** The host's own answer names the live lock: another orcad is running there, so activation cannot
+ *  take the data root. A service manager or container that restarts it keeps it that way (#38400). */
+export function orcadRecoveryHeldByLiveServer(
+  answer: string
+): { code: string; reason: string } | null {
+  if (!answer.includes('orcad_instance_lock_held')) {
+    return null
+  }
+  return {
+    code: ORCAD_RECOVERY_INSTANCE_LOCK_HELD_CODE,
+    reason:
+      'Another orcad is running on this host and holds its data root, so the interrupted ' +
+      'activation cannot be reconciled. If a service manager or container keeps that server ' +
+      'alive, stop or restart it, then update the host again. The host remains fenced.'
+  }
+}
 
 /** Both pre-fence answers, read moments ago on this connect; they only skip the same two reads. */
 export type OrcadActivationIdlePreRead = { transactionAbsent: boolean; fenceOpen: boolean }
@@ -69,6 +89,15 @@ export async function recoverInterruptedOrcadActivation(
       return result
     })
   } catch (error) {
+    const held = orcadRecoveryHeldByLiveServer(errorMessage(error))
+    if (held) {
+      return {
+        outcome: 'refused',
+        verdict: 'unverifiable',
+        code: held.code,
+        reason: held.reason
+      }
+    }
     if (error instanceof RemoteInstallLockBusyError) {
       return {
         outcome: 'pending',

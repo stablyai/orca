@@ -43,7 +43,11 @@ import { acquireInstallLock } from '../install/remote-install-lock'
 import { writeAtomicOrcadRemoteRecord } from '../install/orcad-remote-record-file'
 import { deployOrcad } from '../../ssh/orcad-remote-deploy'
 import { rollbackOrcad } from '../install/orcad-remote-rollback'
-import { recoverInterruptedOrcadActivation } from './orcad-activation-recovery'
+import {
+  orcadRecoveryHeldByLiveServer,
+  recoverInterruptedOrcadActivation
+} from './orcad-activation-recovery'
+import { ORCAD_RECOVERY_INSTANCE_LOCK_HELD_CODE } from '../../../shared/orcad-managed-runtime'
 import { wakeStoppedManagedOrcad } from '../lifecycle/orcad-managed-wake'
 import { planManagedOrcadAutoUpdate } from '../lifecycle/orcad-managed-update-decision'
 import { parseOrcadActivationRecord } from './orcad-activation-record'
@@ -543,4 +547,20 @@ it('restores the pre-activation snapshot under a fence token that contains a tar
   await rollback()
   expect(host.activeVersion()).toBe(OLD)
   expect(host.commands.filter((command) => command.includes('nohup')).length).toBeGreaterThan(0)
+})
+
+describe('recovery refused by a live orcad holding the data root', () => {
+  it('names the live lock instead of calling the state unreadable', () => {
+    const held = orcadRecoveryHeldByLiveServer(
+      'Error: orcad_instance_lock_held: Another process took the data root /home/u/.orca.'
+    )
+    expect(held).toMatchObject({ code: ORCAD_RECOVERY_INSTANCE_LOCK_HELD_CODE })
+    expect(held?.reason).toContain('service manager or container')
+    expect(held?.reason).toContain('remains fenced')
+  })
+
+  it('leaves any other answer to the existing unverifiable classification', () => {
+    expect(orcadRecoveryHeldByLiveServer('Error: orcad_activation_build_mismatch')).toBeNull()
+    expect(orcadRecoveryHeldByLiveServer('')).toBeNull()
+  })
 })
