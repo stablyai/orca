@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/agent-session/agent-session-context-clear'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -37,13 +38,15 @@ export function useNativeChatFork(input: {
   items: readonly AgentJournalRenderItem[]
   epoch: string | null
   contextFloor: AgentJournalCursor | undefined
+  /** The chat's options read on its installed agent; the host's own discovery owns it. */
+  sessionForkSupport: AgentSessionOptionsResult['forkSupport']
 }): NativeChatForkSurface | undefined {
   const host = useStructuredAgentSessionHostCapabilityState(
     input.target,
     AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY
   )
   const registered = useHostStructuredAgent(input.target, input.agent)
-  const support = nativeChatForkSupport(host, registered)
+  const support = nativeChatForkSupport(host, registered, input.sessionForkSupport)
   const latest = useRef(input)
   useLayoutEffect(() => {
     latest.current = input

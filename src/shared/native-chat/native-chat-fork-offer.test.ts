@@ -105,15 +105,25 @@ describe('a displayed row forks only through the agent message it shows', () => 
 })
 
 describe('nativeChatForkSupport', () => {
+  const forks = { capabilities: { fork: 'checkpoint' as const } }
+  const tipForks = { capabilities: { fork: 'tip' as const } }
+
   it('waits on an unanswered host or agent list, and hides once either says no', () => {
-    const forks = { capabilities: { fork: 'checkpoint' as const } }
-    expect(nativeChatForkSupport('unknown', forks)).toEqual({ kind: 'unknown' })
-    expect(nativeChatForkSupport('supported', undefined)).toEqual({ kind: 'unknown' })
-    expect(nativeChatForkSupport('unsupported', forks)).toEqual({ kind: 'none' })
-    expect(nativeChatForkSupport('supported', { capabilities: {} })).toEqual({ kind: 'none' })
-    expect(nativeChatForkSupport('supported', forks)).toEqual({
+    expect(nativeChatForkSupport('unknown', forks, 'supported')).toEqual({ kind: 'unknown' })
+    expect(nativeChatForkSupport('supported', undefined, 'supported')).toEqual({ kind: 'unknown' })
+    expect(nativeChatForkSupport('unsupported', forks, 'supported')).toEqual({ kind: 'none' })
+    expect(nativeChatForkSupport('supported', { capabilities: {} }, 'supported')).toEqual({
+      kind: 'none'
+    })
+  })
+
+  it('follows the chat options verdict on its installed agent', () => {
+    expect(nativeChatForkSupport('supported', tipForks, 'unsupported')).toEqual({ kind: 'none' })
+    expect(nativeChatForkSupport('supported', tipForks, 'unknown')).toEqual({ kind: 'unknown' })
+    expect(nativeChatForkSupport('supported', tipForks, undefined)).toEqual({ kind: 'unknown' })
+    expect(nativeChatForkSupport('supported', tipForks, 'supported')).toEqual({
       kind: 'known',
-      fork: 'checkpoint'
+      fork: 'tip'
     })
   })
 })

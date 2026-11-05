@@ -4,6 +4,7 @@ import {
   decodeAgentSessionAgentsResult,
   type AgentSessionRegisteredAgent
 } from '../../../../src/shared/agent-session/agent-session-registered-agents'
+import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
 import { AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
 import { latestAgentSessionContextClearSequence } from '../../../../src/shared/agent-session/agent-session-context-clear'
 import {
@@ -77,6 +78,8 @@ export function useMobileNativeChatFork(input: {
   messages: readonly NativeChatMessage[]
   turnJournal: NativeChatTurnJournal | null
   agentWorking: boolean
+  /** The chat's options read on its installed agent; the host's own discovery owns it. */
+  sessionForkSupport: AgentSessionOptionsResult['forkSupport']
   createFork: (
     agent: AgentSessionHandleProvider,
     forkFrom: StructuredAgentSessionForkSource
@@ -88,7 +91,10 @@ export function useMobileNativeChatFork(input: {
       ? 'supported'
       : 'unsupported'
   const registered = useRegisteredAgent(input.client, host, input.agent)
-  const support = useMemo(() => nativeChatForkSupport(host, registered), [host, registered])
+  const support = useMemo(
+    () => nativeChatForkSupport(host, registered, input.sessionForkSupport),
+    [host, registered, input.sessionForkSupport]
+  )
   const { messages, turnJournal, agentWorking, sessionId, agent, createFork } = input
   const turns = useMemo(() => {
     const membership = nativeChatTurnMembership(messages, turnJournal)

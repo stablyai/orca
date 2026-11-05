@@ -208,6 +208,9 @@ export function useMobileStructuredAgentOptions(args: {
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : NO_COMMANDS,
     compactInstructions:
       conversationSupport?.sessionId === sessionId && conversationSupport.compactInstructions,
+    /** The options read's word on whether the installed agent forks; absent until it answers. */
+    forkSupport:
+      conversationSupport?.sessionId === sessionId ? conversationSupport.forkSupport : undefined,
     acceptsImages:
       (imageSupport?.sessionId === sessionId ? imageSupport.acceptsImages : undefined) ??
       (agent !== null && isAgentSessionHandleProvider(agent)),
