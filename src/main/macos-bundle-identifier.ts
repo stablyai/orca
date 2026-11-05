@@ -13,6 +13,13 @@ export function readBundleIdentifierFromExecutablePath(execPath: string): string
   }
 }
 
+// Every unpackaged Electron app (e.g. `pnpm dev --stable-name`) runs under this id, so it never identifies Orca.
+const SHARED_ELECTRON_IDENTIFIERS = new Set(['com.github.Electron'])
+
+export function isSharedElectronIdentifier(identifier: string): boolean {
+  return SHARED_ELECTRON_IDENTIFIERS.has(identifier)
+}
+
 let cachedIdentifier: string | null | undefined
 
 /**
