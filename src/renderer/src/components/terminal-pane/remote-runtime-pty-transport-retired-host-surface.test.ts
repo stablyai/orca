@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
+  readyHostSessionInventoryResponse,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 
@@ -59,6 +60,9 @@ function answerAsHostThatRetired({ retired, show }: HostAnswers): void {
           ]
         }
       }
+    }
+    if (args.method === 'terminal.resolvePane') {
+      return { ok: false, error: { code: 'terminal_not_found', message: 'terminal_not_found' } }
     }
     if (args.method === 'terminal.show') {
       if (show === 'terminal_not_found') {
@@ -203,6 +207,35 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
       expect(onHostReboundExitedPty).toHaveBeenCalledWith('remote:env-1@@terminal-restarted')
     )
     expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-ended', 127)
+    transport.destroy?.()
+  })
+
+  it('keeps a pane the host restarted after the close record it first read', async () => {
+    const answerBeforeRetirement = runtimeCall.getMockImplementation()
+    answerAsHostThatRetired({ retired: 'terminal-ended', show: EXITED_127 })
+    const retiredAnswer = runtimeCall.getMockImplementation()
+    let lists = 0
+    runtimeCall.mockImplementation(async (args: { method: string; params?: unknown }) => {
+      if (args.method === 'session.tabs.list' && lists++ > 0) {
+        resolvedPaneHandle = 'terminal-restarted'
+        return readyHostSessionInventoryResponse('terminal-restarted')
+      }
+      if (args.method === 'terminal.resolvePane' && lists > 1) {
+        return answerBeforeRetirement?.(args)
+      }
+      if (args.method === 'session.tabs.activate' && lists > 1) {
+        return answerBeforeRetirement?.(args)
+      }
+      return retiredAnswer?.(args)
+    })
+    const { transport, onPtyExit } = await createHostMirror()
+
+    void transport.connect({ url: '', callbacks: {} })
+
+    await vi.waitFor(() => expect(latestSubscribePayload().terminal).toBe('terminal-restarted'), {
+      timeout: 5_000
+    })
+    expect(onPtyExit).not.toHaveBeenCalled()
     transport.destroy?.()
   })
 })
