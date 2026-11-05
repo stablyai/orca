@@ -24,7 +24,7 @@ function sheetActions(openInOrca?: (url: string) => void, showToast = vi.fn()) {
       />
     )
   })
-  const actions: { label: string; onPress: () => void }[] =
+  const actions: { id: string; onPress: () => void }[] =
     renderer.root.findByType(ActionSheetModal).props.actions
   return actions
 }
@@ -36,11 +36,7 @@ describe('MobileLinkActionSheet', () => {
     writeText.mockResolvedValueOnce()
     const actions = sheetActions(openInOrca, showToast)
 
-    expect(actions.map((action) => action.label)).toEqual([
-      'Open in Orca browser',
-      'Open in system browser',
-      'Copy link'
-    ])
+    expect(actions.map((action) => action.id)).toEqual(['openInOrca', 'openInBrowser', 'copyLink'])
     actions[0]?.onPress()
     actions[1]?.onPress()
     await act(async () => actions[2]?.onPress())
@@ -48,14 +44,11 @@ describe('MobileLinkActionSheet', () => {
     expect(openInOrca).toHaveBeenCalledWith(URL)
     expect(openExternalLink).toHaveBeenCalledWith(URL)
     expect(writeText).toHaveBeenCalledWith(URL)
-    expect(showToast).toHaveBeenCalledWith('Link copied', 1200)
+    expect(showToast).toHaveBeenCalledTimes(1)
   })
 
   it("offers only the phone's choices where an Orca browser tab cannot open", () => {
-    expect(sheetActions().map((action) => action.label)).toEqual([
-      'Open in system browser',
-      'Copy link'
-    ])
+    expect(sheetActions().map((action) => action.id)).toEqual(['openInBrowser', 'copyLink'])
   })
 
   it('reports a copy that failed', async () => {

@@ -2769,8 +2769,7 @@
       "openInBrowser": "Open in system browser",
       "copyLink": "Copy link",
       "linkCopied": "Link copied",
-      "copyFailed": "Could not copy the link",
-      "title": "Link"
+      "copyFailed": "Could not copy the link"
     },
     "useDiffReviewGitHub": {
       "waitingForDesktop": "Waiting for desktop..."

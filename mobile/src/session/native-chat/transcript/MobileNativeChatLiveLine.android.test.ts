@@ -27,6 +27,7 @@ vi.mock('./MobileNativeChatReasoningRow', () => ({
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
+vi.mock('../../MobileLinkActionSheet', () => ({ MobileLinkActionSheet: 'LinkActionSheet' }))
 vi.mock('../visual/MobileNativeChatImageViewer', () => ({
   MobileNativeChatImageViewer: 'ImageViewer'
 }))
@@ -49,7 +50,7 @@ const block: NativeChatLiveReasoning = {
 const chat = (reasoning: NativeChatLiveReasoning | null | undefined) =>
   createElement(
     MobileNativeChatRowOverlaysHost,
-    { conversation: { surfaceId: 'chat', sessionId: 's1' } },
+    { conversation: { surfaceId: 'chat', sessionId: 's1' }, showToast: () => {} },
     reasoning === undefined
       ? null
       : createElement(MobileNativeChatLiveLine, {

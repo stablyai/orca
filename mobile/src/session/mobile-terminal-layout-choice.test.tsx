@@ -48,7 +48,6 @@ vi.mock('../browser/MobileBrowserPane', () => ({ MobileBrowserPane: () => null }
 vi.mock('./native-chat/MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
 vi.mock('./MobileSessionFileReader', () => ({ FileReader: () => null }))
 vi.mock('./MobileSessionMarkdownReader', () => ({ MarkdownReader: () => null }))
-vi.mock('./MobileLinkActionSheet', () => ({ MobileLinkActionSheet: () => null }))
 vi.mock('../terminal/TerminalWebView', () => ({ TerminalWebView: 'TerminalWebView' }))
 const stored = vi.hoisted(() => new Map<string, string>())
 vi.mock('@react-native-async-storage/async-storage', () => ({

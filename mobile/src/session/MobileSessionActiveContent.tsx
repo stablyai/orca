@@ -23,8 +23,6 @@ import { FileReader } from './MobileSessionFileReader'
 import { MobileSessionContentState } from './MobileSessionContentState'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 import { loadMarkdownPreviewImage } from '../files/mobile-markdown-image-source'
-import { MarkdownLinkHandlerContext } from '../components/markdown-link-handler'
-import { MobileLinkActionSheet } from './MobileLinkActionSheet'
 
 export function MobileSessionActiveContent({
   controller
@@ -112,19 +110,21 @@ export function MobileSessionActiveContent({
     activeTerminalKeyboardLift,
     toastAnimatedStyle,
     createTabBusy,
-    handleCreateBrowser,
+    handleCreateBrowserRef,
     isFloatingWorkspaceRoute
   } = controller
-  const [tappedLink, setTappedLink] = useState<string | null>(null)
   // Why: a browser tab needs a real worktree and a connected host known to stream it; elsewhere
   // only the phone's browser is offered, so the sheet never shows a choice that would refuse.
-  const openInOrca =
-    client &&
-    !controller.showOfflineState &&
+  const canOpenUrlInOrca =
+    client !== null &&
+    controller.presentedConnState === 'connected' &&
     !isFloatingWorkspaceRoute &&
     browserScreencastSupported === true
-      ? (url: string) => void handleCreateBrowser(url)
-      : undefined
+  const openUrlInOrca = useMemo(
+    () =>
+      canOpenUrlInOrca ? (url: string) => void handleCreateBrowserRef.current?.(url) : undefined,
+    [canOpenUrlInOrca, handleCreateBrowserRef]
+  )
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
   const nativeChatImageSource = useMemo(
@@ -329,50 +329,44 @@ export function MobileSessionActiveContent({
             onOpenUrl={handleTerminalOpenUrl}
           />
         ))}
-        <MarkdownLinkHandlerContext.Provider value={setTappedLink}>
-          <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
-            <MobileDictationMeterContext.Provider value={dictation.meter}>
-              <MobileAgentMessageProvider
-                key={JSON.stringify([hostId, executionHost, worktreeId])}
-                tabs={controller.sessionTabs}
-                terminals={controller.terminals}
-                scopeKey={nativeChatImageSource}
-                open={openSender}
-              >
-                <MobileNativeChatOverlay
-                  controller={nativeChatController}
-                  imageSource={nativeChatImageSource}
-                  activeSessionTabId={controller.activeSessionTab?.id}
-                  onOpenFile={handleNativeChatFileTap}
-                  images={nativeChatImages}
-                  structuredComposer={nativeChatStructuredComposer}
-                  onMicPress={dictationEnabled ? handleDictationToggle : undefined}
-                  micActive={dictation.isStarting || dictation.isRecording}
-                  micStarting={dictation.isStarting}
-                  micProcessing={dictation.isProcessing}
-                  dictationMode={dictationMode}
-                  onMicPressIn={handleDictationPressIn}
-                  onMicPressOut={handleDictationPressOut}
-                  inputLockReason={nativeChatOverlayInputLockReason}
-                  sendErrorMessage={nativeChatSendError.message}
-                  onClearSendError={nativeChatSendError.clear}
-                  sendSurfaceId={controller.nativeChatScopeKey ?? ''}
-                  sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
-                  getSendCompletionGeneration={controller.getSendCompletionGeneration}
-                  keyboardInset={keyboardLift}
-                  // A workspace routed to another server stops with that server, whose name the phone lacks.
-                  hostName={executionHost === undefined && hostProfile ? hostTitle : null}
-                />
-              </MobileAgentMessageProvider>
-            </MobileDictationMeterContext.Provider>
-          </MobileNativeChatDictationPreviewContext.Provider>
-        </MarkdownLinkHandlerContext.Provider>
-        <MobileLinkActionSheet
-          url={tappedLink}
-          onClose={() => setTappedLink(null)}
-          openInOrca={openInOrca}
-          showToast={showToast}
-        />
+        <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
+          <MobileDictationMeterContext.Provider value={dictation.meter}>
+            <MobileAgentMessageProvider
+              key={JSON.stringify([hostId, executionHost, worktreeId])}
+              tabs={controller.sessionTabs}
+              terminals={controller.terminals}
+              scopeKey={nativeChatImageSource}
+              open={openSender}
+            >
+              <MobileNativeChatOverlay
+                controller={nativeChatController}
+                imageSource={nativeChatImageSource}
+                activeSessionTabId={controller.activeSessionTab?.id}
+                onOpenFile={handleNativeChatFileTap}
+                images={nativeChatImages}
+                structuredComposer={nativeChatStructuredComposer}
+                onMicPress={dictationEnabled ? handleDictationToggle : undefined}
+                micActive={dictation.isStarting || dictation.isRecording}
+                micStarting={dictation.isStarting}
+                micProcessing={dictation.isProcessing}
+                dictationMode={dictationMode}
+                onMicPressIn={handleDictationPressIn}
+                onMicPressOut={handleDictationPressOut}
+                inputLockReason={nativeChatOverlayInputLockReason}
+                sendErrorMessage={nativeChatSendError.message}
+                onClearSendError={nativeChatSendError.clear}
+                sendSurfaceId={controller.nativeChatScopeKey ?? ''}
+                sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
+                getSendCompletionGeneration={controller.getSendCompletionGeneration}
+                keyboardInset={keyboardLift}
+                // A workspace routed to another server stops with that server, whose name the phone lacks.
+                hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+                onOpenUrlInOrca={openUrlInOrca}
+                showToast={showToast}
+              />
+            </MobileAgentMessageProvider>
+          </MobileDictationMeterContext.Provider>
+        </MobileNativeChatDictationPreviewContext.Provider>
         {toastMessage && (
           <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
             <Text style={styles.toastText}>{toastMessage}</Text>
