@@ -25,7 +25,7 @@ export function bindPluginUiFocus(
       store.getWorkspaceSession(),
       isServeMode || BrowserWindow.getFocusedWindow() !== null
     )
-  watchPluginUiFocus({
+  return watchPluginUiFocus({
     events,
     readFocusedSurface,
     onFocusInputChanged: (listener) => {
@@ -38,6 +38,5 @@ export function bindPluginUiFocus(
         app.off('browser-window-blur', listener)
       }
     }
-  })
-  return readFocusedSurface
+  }).readFocusedSurface
 }

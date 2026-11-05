@@ -157,14 +157,14 @@ export function watchPluginWorkspaceContext(input: {
 
 /**
  * `ui.focus.changed`: after session writes settle or window focus moves, re-read the focused
- * surface and emit when it differs from the last one sent.
+ * surface and emit when it differs from the last one sent. `ui.readFocus` must read through the result.
  */
 export function watchPluginUiFocus(input: {
   events: PluginEvents
   readFocusedSurface: () => PluginFocusedSurface
   onFocusInputChanged: (listener: () => void) => () => void
   delayMs?: number
-}): () => void {
+}): { readFocusedSurface: () => PluginFocusedSurface; stop: () => void } {
   let timer: ReturnType<typeof setTimeout> | null = null
   // Why track while nobody listens: a new subscriber reads `ui.readFocus` first, so only later changes are news.
   let last = JSON.stringify(input.readFocusedSurface())
@@ -189,10 +189,20 @@ export function watchPluginUiFocus(input: {
     // Why debounce: blur then focus fire back to back when moving between Orca's own windows.
     timer ??= setTimeout(check, input.delayMs ?? WORKSPACE_CHANGE_DEBOUNCE_MS)
   })
-  return () => {
-    stop()
-    if (timer) {
-      clearTimeout(timer)
+  return {
+    // Why flush first: a read inside the debounce must not get ahead of what listeners were sent.
+    readFocusedSurface: () => {
+      if (timer) {
+        clearTimeout(timer)
+        check()
+      }
+      return input.readFocusedSurface()
+    },
+    stop: () => {
+      stop()
+      if (timer) {
+        clearTimeout(timer)
+      }
     }
   }
 }
