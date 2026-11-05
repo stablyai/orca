@@ -4,7 +4,11 @@ import type { AgentJournalCursor } from '../../../../shared/agent-session/journa
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
-import { NativeChatForkContext, NativeChatForkedFromContext } from './native-chat-fork-context'
+import {
+  NativeChatForkContext,
+  NativeChatForkedFromContext,
+  NativeChatForkGutterContext
+} from './native-chat-fork-context'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { useNativeChatFork } from './use-native-chat-fork'
@@ -60,7 +64,9 @@ export function NativeChatRowActionsProvider({
     <NativeChatRewindContext.Provider value={chat.rewind.surface}>
       <NativeChatForkContext.Provider value={fork}>
         <NativeChatForkedFromContext.Provider value={openSource}>
-          {children}
+          <NativeChatForkGutterContext.Provider value>
+            {children}
+          </NativeChatForkGutterContext.Provider>
         </NativeChatForkedFromContext.Provider>
       </NativeChatForkContext.Provider>
     </NativeChatRewindContext.Provider>
