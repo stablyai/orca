@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 import baseConfig from './vitest.config'
-import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
+import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
 
 const contracts = [
   'src/renderer/src/components/terminal-pane/pty-connection/saved-resume-cancellation.test.ts',
@@ -22,8 +22,8 @@ const contracts = [
   'src/renderer/src/components/terminal-pane/agent-completion-coordinator-queued-inspection-disposal.test.ts',
   'src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-queue-retention.test.ts',
   'src/renderer/src/store/store-identity-churn-probe.test.ts',
-  'config/scripts/app-store-performance-plugin.test.mjs',
-  'config/scripts/quadratic-buffer-concat-plugin.test.mjs',
+  'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
+  'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs',
   'src/main/claude-usage/scanner-incremental-append.test.ts',
   'src/main/claude-usage/store-checkpoint-persistence.test.ts'
 ]

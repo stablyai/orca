@@ -24,14 +24,15 @@ import {
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import type { CodexSession } from './codex-structured-session-state'
 
-export type CodexRenameInvocationDeps = CodexStructuredInvocationDeps & {
+export type CodexProviderInvocationDeps = CodexStructuredInvocationDeps & {
   resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
 }
 
-async function renameCwd(
+/** The chat's pinned launch directory when it still exists, else the hidden probe directory. */
+export async function codexProviderProbeCwd(
   record: AgentSessionRecord,
-  deps: CodexRenameInvocationDeps
+  deps: CodexProviderInvocationDeps
 ): Promise<string> {
   const cwd = resolve(
     agentSessionPinnedLaunchDirectory(record) ??
@@ -84,7 +85,7 @@ export async function renameCodexProviderSession(input: {
   record: AgentSessionRecord
   providerSessionId: string
   name: string
-  invocation?: CodexRenameInvocationDeps
+  invocation?: CodexProviderInvocationDeps
 }): Promise<void> {
   const { session, providerSessionId, name } = input
   const live = session && !session.ended && !session.connection.closed ? session : null
@@ -107,10 +108,24 @@ export async function renameCodexProviderSession(input: {
   if (!invocation) {
     throw new Error('Codex rename invocation is not configured')
   }
+  await runCodexProviderAppServer(record, invocation, { timeoutMs: RENAME_TIMEOUT_MS }, (rpc) =>
+    setThreadName(rpc.request, providerSessionId, name)
+  )
+}
+
+/** Runs one short-lived app-server for a chat at rest, launched as the chat is (configured
+ *  command, arguments and environment, pinned home and directory) without resuming its thread. */
+export async function runCodexProviderAppServer<T>(
+  record: AgentSessionRecord,
+  invocation: CodexProviderInvocationDeps,
+  options: { timeoutMs: number; signal?: AbortSignal },
+  body: (rpc: CodexAppServerRpc) => Promise<T>
+): Promise<T> {
   const codexHome = requireLegacyAgentSessionAccountHome(record.accountHome).path
-  const cwd = await renameCwd(record, invocation)
+  const cwd = await codexProviderProbeCwd(record, invocation)
   const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
     ...invocation,
+    ...(options.signal ? { signal: options.signal } : {}),
     resolveWorkingDirectory: () => cwd
   })
   const args = codexStructuredLaunchArgs(await invocation.resolveLaunchArgs())
@@ -119,7 +134,7 @@ export async function renameCodexProviderSession(input: {
       (entry): entry is [string, string] => entry[1] !== undefined
     )
   )
-  await runCodexAppServerSession(
+  return runCodexAppServerSession(
     {
       command,
       args: [...prefixArgs, ...args, ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS],
@@ -127,8 +142,8 @@ export async function renameCodexProviderSession(input: {
       cliPath: command,
       env: { ...env, CODEX_HOME: codexHome },
       envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV],
-      timeoutMs: RENAME_TIMEOUT_MS
+      ...options
     },
-    (rpc) => setThreadName(rpc.request, providerSessionId, name)
+    body
   )
 }

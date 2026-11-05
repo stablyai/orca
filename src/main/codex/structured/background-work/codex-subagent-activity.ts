@@ -52,7 +52,6 @@ export function isCodexRootAgentActivity(activity: CodexSubagentActivity): boole
   return segments.length === 1 && segments[0] === CODEX_ROOT_AGENT_SEGMENT
 }
 
-/** Trim before collision numbering so visually identical labels share an ordinal group. */
 export function codexSubagentLabel(activity: CodexSubagentActivity): string | null {
   return codexSubagentPathLabel(activity.agentPath)
 }

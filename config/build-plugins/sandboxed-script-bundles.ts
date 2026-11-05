@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { build, type Plugin } from 'vite'
-import { verifySandboxPreloadImports } from '../scripts/sandbox-preload-imports.mjs'
+import { verifySandboxPreloadImports } from '../scripts/desktop-build/output-contracts/sandbox-preload-imports.mjs'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE

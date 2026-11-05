@@ -19941,7 +19941,10 @@
       "workerAutoClose": {
         "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힘",
         "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
-        "keepOpen": "열어 두기"
+        "keepOpen": "열어 두기",
+        "bannerRunning": "오케스트레이션 워커 · 완료 2분 후 닫힘",
+        "bannerFinished": "오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
+        "temporaryBadge": "임시"
       }
     },
     "wslHostMark": {

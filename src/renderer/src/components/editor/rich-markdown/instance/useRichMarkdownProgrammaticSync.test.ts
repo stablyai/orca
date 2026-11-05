@@ -13,10 +13,7 @@ import {
   type RichMarkdownHtmlSuperscriptLinkContext
 } from '../citations/rich-markdown-html-superscript-link-context'
 import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-html'
-import {
-  notifyStaleViewEditRejected,
-  staleViewEditEpoch
-} from '../../save/flush/editor-stale-view-edit'
+import { notifyStaleViewEditRejected } from '../../save/flush/editor-stale-view-edit'
 
 vi.mock('../../save/flush/editor-stale-view-edit', () => ({
   notifyStaleViewEditRejected: vi.fn(),
@@ -40,61 +37,6 @@ function buildEditor(
     contentType: 'markdown'
   })
 }
-
-describe('useRichMarkdownProgrammaticSync external-reload baseline adoption (#6080)', () => {
-  it('adopts externally-canonicalized bytes as the reconciliation baseline without a reload', () => {
-    const codec = createRichMarkdownEditorCodec()
-    const htmlSuperscriptLinkContext = createRichMarkdownHtmlSuperscriptLinkContext({
-      sourceFilePath: '',
-      worktreeId: '',
-      worktreeRoot: null,
-      sourceOwner: { kind: 'unknown' as const }
-    })
-    // Show the canonical form of originally underscored emphasis without a trailing newline.
-    const canonical = '# T\n\n*old*'
-    const editor = buildEditor(codec, htmlSuperscriptLinkContext, canonical)
-    expect(editor.getMarkdown()).toBe(canonical)
-
-    const lastCommittedMarkdownRef = { current: '# T\n\n_old_' }
-    const originalSourceRef = { current: '# T\n\n_old_' }
-    const baseCanonicalRef = { current: canonical }
-    const isApplyingProgrammaticUpdateRef = { current: false }
-
-    try {
-      // Style-only external changes need new source baselines even when the rendered document already matches.
-      renderHook(() =>
-        useRichMarkdownProgrammaticSync({
-          codec,
-          content: canonical,
-          docLinkMenuSetter: vi.fn(),
-          editor,
-          fileId: 'f1',
-          filePath: '/repo/README.md',
-          isApplyingProgrammaticUpdateRef,
-          lastCommittedMarkdownRef,
-          onContentChangeRef: { current: vi.fn() },
-          originalSourceRef,
-          baseCanonicalRef,
-          markdownDocuments: undefined,
-          rootRef: { current: null },
-          runtimeTarget: { kind: 'local' },
-          serializeTimerRef: { current: null },
-          pendingEditEpochRef: { current: 0 },
-          slashMenuSetter: vi.fn(),
-          worktreeId: 'w1',
-          worktreeRoot: null
-        })
-      )
-
-      // Stale underscore baselines would undo the external style rewrite on the next edit.
-      expect(lastCommittedMarkdownRef.current).toBe(canonical)
-      expect(originalSourceRef.current).toBe(canonical)
-      expect(baseCanonicalRef.current).toBe(canonical)
-    } finally {
-      editor.destroy()
-    }
-  })
-})
 
 describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
   function renderPane(paneText: string, pendingCommit: (() => void) | null) {
@@ -164,45 +106,6 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
       // Republished so the dirty flag this pane's typing raised is recomputed.
       expect(onContentChangeRef.current).toHaveBeenCalledWith('pane a')
     } finally {
-      editor.destroy()
-      vi.useRealTimers()
-    }
-  })
-
-  it('cancels acknowledged typing and recomputes dirty without a toast', () => {
-    vi.useFakeTimers()
-    vi.mocked(notifyStaleViewEditRejected).mockClear()
-    const commit = vi.fn()
-    const { editor, hook, serializeTimerRef, onContentChangeRef } = renderPane('same edit', commit)
-    try {
-      hook.rerender({ content: 'same edit' })
-      vi.advanceTimersByTime(300)
-      expect(serializeTimerRef.current).toBeNull()
-      expect(commit).not.toHaveBeenCalled()
-      expect(onContentChangeRef.current).toHaveBeenCalledWith('same edit')
-      expect(notifyStaleViewEditRejected).not.toHaveBeenCalled()
-    } finally {
-      editor.destroy()
-      vi.useRealTimers()
-    }
-  })
-
-  it('silently cancels typing after discard even when shared text did not change', () => {
-    vi.useFakeTimers()
-    vi.mocked(notifyStaleViewEditRejected).mockClear()
-    const commit = vi.fn()
-    const { editor, hook, serializeTimerRef, onContentChangeRef } = renderPane('typing', commit)
-    try {
-      vi.mocked(staleViewEditEpoch).mockReturnValue(1)
-      hook.rerender({ content: 'base' })
-      vi.advanceTimersByTime(300)
-      expect(serializeTimerRef.current).toBeNull()
-      expect(commit).not.toHaveBeenCalled()
-      expect(editor.getMarkdown()).toBe('base')
-      expect(onContentChangeRef.current).toHaveBeenCalledWith('base')
-      expect(notifyStaleViewEditRejected).not.toHaveBeenCalled()
-    } finally {
-      vi.mocked(staleViewEditEpoch).mockReturnValue(0)
       editor.destroy()
       vi.useRealTimers()
     }

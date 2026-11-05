@@ -12,21 +12,17 @@ import {
 import { randomUUID } from 'node:crypto'
 import { withSelectedTabs } from '../headless-tab-group-selection'
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
-import type { OrcaRuntimeWithPersistHeadlessTerminalTitle } from '../workspaces/workspace-file-session-targets'
+import type { RuntimeMobileSessionTabOrder } from './mobile-session-tab-order'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 
 export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabProperties {
   protected abstract resolveMobileSessionHostTabId(
-    ...args: Parameters<
-      OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveMobileSessionHostTabId']
-    >
-  ): ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveMobileSessionHostTabId']>
+    ...args: Parameters<RuntimeMobileSessionTabOrder['resolveMobileSessionHostTabId']>
+  ): ReturnType<RuntimeMobileSessionTabOrder['resolveMobileSessionHostTabId']>
 
   protected abstract normalizeMobileSessionTabOrder(
-    ...args: Parameters<
-      OrcaRuntimeWithPersistHeadlessTerminalTitle['normalizeMobileSessionTabOrder']
-    >
-  ): ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['normalizeMobileSessionTabOrder']>
+    ...args: Parameters<RuntimeMobileSessionTabOrder['normalizeMobileSessionTabOrder']>
+  ): ReturnType<RuntimeMobileSessionTabOrder['normalizeMobileSessionTabOrder']>
 
   protected abstract toMobileSessionTabsResult(
     ...args: Parameters<

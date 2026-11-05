@@ -6,7 +6,7 @@ import {
   buildProcessTableIndex,
   collectDescendantsFromIndex
 } from '../../shared/process-table-index'
-import { parseDaemonPidFile } from '../daemon/daemon-pid-file-parse'
+import { parseDaemonPidFile } from '../daemon/endpoint/identity/daemon-pid-file-parse'
 import type { WindowsProcessRow } from '../windows/windows-process-table'
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
 

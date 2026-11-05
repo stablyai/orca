@@ -1,4 +1,4 @@
-import type { TerminalCreateOptions } from '../../runtime/runtime-terminal-contracts'
+import type { TerminalCreateOptions } from '../../runtime/terminal/launch/terminal-create-options'
 import type { LaunchWorkspace } from '../../../shared/launch-parity-window-request.test-fixture'
 import { POSIX_PATH, WSL_PATH } from '../../../shared/launch-parity-window-cases.test-fixture'
 

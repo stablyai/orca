@@ -43,6 +43,20 @@ export function isContextualTourSessionConsumed(
   )
 }
 
+// A step added ahead of actions the user already did must not reopen the tour for them; only a
+// run already started this session (or a forced replay) continues past those actions.
+export function isContextualTourStartBlockedByProgress(
+  state: Pick<UISlice, 'featureInteractions' | 'contextualToursStartedThisSession'>,
+  tourId: ContextualTourId
+): boolean {
+  return (
+    !state.contextualToursStartedThisSession.includes(tourId) &&
+    getContextualTour(tourId).steps.some((step) =>
+      isContextualTourStepDone(step, state.featureInteractions)
+    )
+  )
+}
+
 export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     contextualToursSeenIds: [],
@@ -89,6 +103,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           autoEligible: options?.force === true || s.contextualToursAutoEligible === true,
           onboardingVisible: s.contextualToursOnboardingVisible,
           seenIds: options?.force === true ? [] : s.contextualToursSeenIds,
+          progressBlocked: options?.force !== true && isContextualTourStartBlockedByProgress(s, id),
           sessionConsumed: options?.force !== true && isContextualTourSessionConsumed(s, id),
           activeTourId: s.activeContextualTourId,
           activeModal: s.activeModal,

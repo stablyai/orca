@@ -28,7 +28,7 @@ import {
   resolveStructuredAgentSessionAdoption,
   structuredAdoptionConflictError
 } from '../../native-chat/structured-agent-session-history-adoption'
-import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from './installation/structured-agent-runtime-metadata'
 import type {
   StructuredAgentTranscriptImport,
   StructuredAgentTranscriptImportSettings

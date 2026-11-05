@@ -1,4 +1,4 @@
-import { createPiRpcLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { createPiRpcLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
