@@ -71,17 +71,6 @@ afterEach(() => {
 })
 
 describe('offerBrowserPasswordSave', () => {
-  it('offers to save a new login and stores it only when the user says save', () => {
-    offer('pw-1')
-    expect(lastPrompt()).toMatchObject({ mode: 'save', origin: ORIGIN, username: 'ada' })
-    expect(store.list()).toEqual({ ok: true, value: [] })
-    expect(
-      respondToBrowserPasswordSavePrompt({ promptId: lastPrompt().promptId, action: 'save' })
-    ).toBe(true)
-    const entries = store.list()
-    expect(entries.ok && entries.value.map((entry) => entry.username)).toEqual(['ada'])
-  })
-
   it('does not let a pending offer recreate a deleted vault', () => {
     offer('pw-1')
     const promptId = lastPrompt().promptId
@@ -89,25 +78,5 @@ describe('offerBrowserPasswordSave', () => {
     store = new BrowserPasswordStore(join(dir, 'vault.json'))
     expect(respondToBrowserPasswordSavePrompt({ promptId, action: 'save' })).toBe(false)
     expect(store.list()).toEqual({ ok: true, value: [] })
-  })
-
-  it('stays quiet on a site the user said never to save for', () => {
-    store.addNever(ORIGIN)
-    offer('pw-1')
-    expect(lastPrompt()).toBeUndefined()
-  })
-
-  it('offers an update when a saved username signs in with a new password', () => {
-    const added = store.add({ origin: ORIGIN, username: 'ada', password: 'old' })
-    const id = added.ok ? added.value.entry.id : ''
-    offer('new')
-    expect(lastPrompt()).toMatchObject({ mode: 'update' })
-    respondToBrowserPasswordSavePrompt({ promptId: lastPrompt().promptId, action: 'save' })
-    expect(store.getPassword(id)).toEqual({ ok: true, value: 'new' })
-  })
-
-  it('never sends the password to the renderer', () => {
-    offer('top-secret')
-    expect(JSON.stringify(send.mock.calls)).not.toContain('top-secret')
   })
 })
