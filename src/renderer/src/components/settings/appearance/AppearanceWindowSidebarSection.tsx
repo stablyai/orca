@@ -1,8 +1,6 @@
 import type React from 'react'
 
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
-import type { FeatureInteractionId } from '../../../../../shared/feature-interaction-catalog'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
 import { useAppStore } from '../../../store/index'
@@ -21,6 +19,7 @@ import {
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { getStatusBarToggles } from './appearance-status-bar-search'
+import { recordStatusBarToggleInteraction } from './status-bar-toggle-interaction'
 import {
   getUsagePercentageDisplayEntry,
   USAGE_PERCENTAGE_DISPLAY_SETTING_ID
@@ -35,19 +34,6 @@ type AppearanceWindowSidebarSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   forceVisiblePrimary?: boolean
-}
-
-function recordStatusBarToggleInteraction(
-  id: StatusBarItem,
-  recordFeatureInteraction: (feature: FeatureInteractionId) => void
-): void {
-  if (id === 'resource-usage') {
-    recordFeatureInteraction('resource-manager')
-  } else if (id === 'ports' || id === 'ssh') {
-    recordFeatureInteraction(id)
-  } else if (id !== 'zcode') {
-    recordFeatureInteraction('usage-tracking')
-  }
 }
 
 const STATUS_BAR_KEYWORDS = ['status bar', 'indicators']
