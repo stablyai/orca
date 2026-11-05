@@ -109,6 +109,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       snapshot: lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view)),
       ready: acceptsPicks && interactionReadyRef.current,
       providerStarting,
+      existingChat: !newLaunch || args.hasTurn === true,
       isCurrentContext,
       ...(!transportEnabled || fence === null
         ? {

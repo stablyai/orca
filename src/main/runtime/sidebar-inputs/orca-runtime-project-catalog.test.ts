@@ -10,7 +10,7 @@ import { ALL_RPC_METHODS } from '../rpc/methods'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { requireSwitchedOn } from './require-switched-on'
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 

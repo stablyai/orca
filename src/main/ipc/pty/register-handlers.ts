@@ -1,4 +1,4 @@
-import { settledDaemonRestart } from '../../daemon/daemon-restart-state'
+import { settledDaemonRestart } from '../../daemon/providers/lifecycle/daemon-restart-state'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence/loading-store/store'

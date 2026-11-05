@@ -294,7 +294,11 @@ it('keeps a Node harness smoke without widening it for an unrelated modified SSH
 })
 
 it.each([
-  ['src/main/daemon/daemon-authenticated-client-activity.test.ts', NODE_SERVER_RUNNERS, true],
+  [
+    'src/main/daemon/server/testing/daemon-authenticated-client-activity.test.ts',
+    NODE_SERVER_RUNNERS,
+    true
+  ],
   [
     'src/main/daemon/daemon-endpoint-windows.test.ts',
     ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],

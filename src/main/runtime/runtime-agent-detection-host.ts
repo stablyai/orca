@@ -8,7 +8,7 @@ import {
   type AgentDetectionHost,
   type WorkspaceAgentDetectionStore
 } from '../preflight/workspace-agent-detection'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import type { ResolvedWorktree } from './workspaces/catalog/runtime-worktree-path-identity'
 
 type AgentDetectionContext = {
   store: WorkspaceAgentDetectionStore | null | undefined

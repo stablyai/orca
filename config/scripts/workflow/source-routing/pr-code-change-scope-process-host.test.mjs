@@ -22,7 +22,7 @@ it('keeps unrelated host packages out of the mobile web build checks', () => {
 
 it.each([
   'src/packages/process-host/src/run-process.ts',
-  'config/scripts/smoke-process-host-node18.mjs',
+  'config/scripts/desktop-distribution/runtime-verification/smoke-process-host-node18.mjs',
   'config/scripts/desktop-distribution/runtime-verification/packaged-process-host-fixture.mjs'
 ])('qualifies the Node 18 package floor for %s', (file) => {
   expect(classifyPrJobs([file]).managed_hook_node18).toBe(true)

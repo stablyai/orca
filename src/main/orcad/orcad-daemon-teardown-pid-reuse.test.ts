@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanupDaemonForProtocol } from '../daemon/daemon-protocol-cleanup'
+import { cleanupDaemonForProtocol } from '../daemon/launch/daemon-protocol-cleanup'
 import type { WindowsProcessIdentityRow } from '../windows/windows-process-table'
 import {
   __setDaemonProcessTableReaderForTests,
@@ -11,7 +11,7 @@ import {
   recordProfileDaemons
 } from './orcad-daemon-teardown-fixture'
 
-vi.mock('../daemon/daemon-protocol-cleanup', () => ({ cleanupDaemonForProtocol: vi.fn() }))
+vi.mock('../daemon/launch/daemon-protocol-cleanup', () => ({ cleanupDaemonForProtocol: vi.fn() }))
 
 // Windows preserves dead-parent PPIDs and reuses PIDs; older children can falsely claim the daemon.
 describe('daemon descendant walk under Windows pid reuse', () => {

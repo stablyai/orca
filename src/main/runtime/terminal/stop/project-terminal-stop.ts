@@ -22,7 +22,7 @@ import {
   listStructuredSessionsForProject,
   retireStructuredSessionTabsForWorktree,
   unclosedStructuredSessions
-} from '../../structured-session-worktree-teardown'
+} from '../../workspaces/removal/structured-session-worktree-teardown'
 
 const PROJECT_INVENTORY_REFRESH_BUDGET_MS = 3_000
 // Inside repo.rm's 15 s client timeout after the 10 s terminal budget.

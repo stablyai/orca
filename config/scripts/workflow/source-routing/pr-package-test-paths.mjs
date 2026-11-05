@@ -56,6 +56,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/workspace-package-build/build-',
   'config/scripts/remote-host-build/wsl-guest/build-',
   'config/scripts/smoke-packaged',
+  'config/scripts/desktop-distribution/runtime-verification/smoke-packaged',
   'config/scripts/install-electron-package-binary',
   'config/scripts/electron-installation/platform-layout/install-electron-package-binary',
   'config/scripts/verify-packaged',
@@ -66,6 +67,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/verify-linux-glibc',
   'config/scripts/native-build/linux/verify-linux-glibc',
   'config/scripts/run-electron-vite',
+  'config/scripts/development/launch/run-electron-vite',
   'config/scripts/desktop-build/execution/run-electron-vite',
   'skills/',
   'skill-guides/',
@@ -89,13 +91,18 @@ export const LINUX_PACKAGE_PREFIXES = [
   'config/docker/headless-serve-shutdown/',
   'config/docker/daemon-shutdown-descendants/',
   'config/scripts/run-linux-cli-launch-contract',
+  'config/scripts/runtime-verification/desktop-transport/run-linux-cli-launch-contract',
   'config/scripts/run-headless-linux-pairing-docker',
+  'config/scripts/runtime-verification/daemon-lifecycle/run-headless-linux-pairing-docker',
   'config/scripts/run-daemon-shutdown-descendants-docker',
+  'config/scripts/runtime-verification/daemon-lifecycle/run-daemon-shutdown-descendants-docker',
   'config/scripts/static-appimage-package-contract',
+  'config/scripts/desktop-distribution/appimage/static-appimage-package-contract',
   'native/computer-use-linux/',
   'native/wayland-clipboard/',
   'resources/linux/',
-  'config/scripts/run-headless-serve'
+  'config/scripts/run-headless-serve',
+  'config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve'
 ]
 
 export const WINDOWS_PACKAGE_PREFIXES = [
@@ -154,12 +161,12 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'config/scripts/desktop-distribution/runtime-verification/verify-packaged-windows-agent-hook.test.mjs',
   'config/scripts/test-fixtures/script-copy-closure/script-module-dependencies.test.mjs',
   'src/main/windows/windows-registry-addon.test.ts',
-  'src/main/daemon/daemon-host-process-package.test.ts',
+  'src/main/daemon/executable-host/windows/testing/daemon-host-process-package.test.ts',
   'src/shared/windows-security-addon.win32.test.ts',
   'src/shared/windows-private-credential-file.test.ts',
   'config/scripts/native-build/windows/windows-process-tree-gyp-path.test.mjs',
   'config/scripts/native-build/windows/windows-process-tree-gyp-rebuild.test.mjs',
-  'config/scripts/package-electron-runtime-contract.test.mjs',
+  'config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/electron-builder-runtime-resources.test.mjs',
   'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
@@ -191,9 +198,9 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/windows/windows-process-table-native-addon.win32.test.ts',
   'src/main/windows/windows-administrator-status.win32.test.ts',
   'src/main/windows/windows-administrator-restart.win32.test.ts',
-  'src/main/daemon/daemon-pid-identity-native.win32.test.ts',
-  'src/main/daemon/node-pty-conout-worker-errors.test.ts',
-  'src/main/daemon/node-pty-windows-output-error.win32.test.ts',
+  'src/main/daemon/endpoint/identity/testing/daemon-pid-identity-native.win32.test.ts',
+  'src/main/daemon/pty-subprocess/testing/node-pty-conout-worker-errors.test.ts',
+  'src/main/daemon/pty-subprocess/testing/node-pty-windows-output-error.win32.test.ts',
   'src/main/persistence/profile-state/profile-state-access-windows-native.win32.test.ts',
   'src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/execution/wsl-runner.test.ts',
@@ -209,7 +216,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/startup/windows-app-data-path.test.ts',
   'src/main/startup/windows-std-handle-inheritance.win32.test.ts',
   'src/main/startup/windows-isolated-spawner.win32.test.ts',
-  'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
+  'src/main/runtime/workspaces/catalog/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-file-fsync-flags.test.ts',
   'src/shared/secure-path-windows-acl.win32.test.ts',
   'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
@@ -228,6 +235,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
 const WINDOWS_PROCESS_PROBE_PREFIXES = [
   'config/nsis/',
   'config/scripts/nsis-process-check',
+  'config/scripts/desktop-distribution/nsis/nsis-process-check',
   'config/scripts/idle-cpu-process-sampling',
   'config/scripts/performance/idle-cpu/idle-cpu-process-sampling',
   'config/vitest.config.',
@@ -257,7 +265,7 @@ export const WINDOWS_PACKAGE_TESTS = [
   ...WINDOWS_BOUNDARY_TESTS,
   ...LINUX_PACKAGE_TESTS,
   // The "Test Windows installer process probe" step runs these serially.
-  'config/scripts/nsis-process-check.test.mjs',
+  'config/scripts/desktop-distribution/nsis/nsis-process-check.test.mjs',
   'config/scripts/performance/idle-cpu/idle-cpu-process-sampling.test.mjs'
 ]
 

@@ -9,7 +9,7 @@ import {
 } from '@orca/test-mobile/mobile-web-shell/bridge-host-test-fakes'
 import { createStableLogicalRpcClient } from '@orca/test-mobile/transport/stable-logical-rpc-client'
 import type { HostConnectionInputs } from '@orca/test-mobile/transport/client-context-connection-metrics'
-import { RuntimeGitHubRepositoryQueryCommands } from '@orca/test-host/main/runtime/runtime-github-repository-query-commands'
+import { RuntimeGitHubRepositoryQueryCommands } from '@orca/test-host/main/runtime/integrations/github/runtime-github-repository-query-commands'
 import { GITHUB_REPO_WORK_ITEM_METHODS } from '@orca/test-host/main/runtime/rpc/methods/github-repo-work-item-methods'
 import type { OrcaRuntimeService } from '@orca/test-host/main/runtime/orca-runtime'
 import { eraseRpcMethods } from '@orca/test-host/main/runtime/rpc/core'

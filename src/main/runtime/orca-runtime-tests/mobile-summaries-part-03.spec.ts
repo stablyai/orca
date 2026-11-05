@@ -1,21 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-import { bindPaneFirst } from '../bind-first-pane.test-fixture'
+import { bindPaneFirst } from './bind-first-pane.test-fixture'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
-import {
-  OrcaRuntimeService,
-  getDefaultWorkspaceSession,
-  setPlatform,
-  win32,
-  worktreePathComparison
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
+import { win32 } from 'node:path'
+import * as worktreePathComparison from '../../workspaces/catalog/worktree-path-comparison-key'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // No SSH Git provider is installed, so these fixtures use stored rows.

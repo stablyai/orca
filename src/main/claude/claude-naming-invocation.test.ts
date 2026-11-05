@@ -5,7 +5,7 @@ import { expect, it, vi } from 'vitest'
 import { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
 import * as installedRouter from '../claude-accounts/claude-profile-installed-router'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import type { StructuredAgentLaunchSources } from '../runtime/structured-agent-launch-composition'
+import type { StructuredAgentLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { claudeNamingInvocation } from './claude-naming-invocation'
 
 it('captures configured command, overlay and pure selected-account policy before awaited input resolution', async ({

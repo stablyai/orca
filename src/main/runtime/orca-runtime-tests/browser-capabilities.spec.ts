@@ -1,20 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  deleteWorktreeHistoryDirMock,
-  getBrowserHostLeaseRegistry,
-  getRuntimeBrowserPageRegistry
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { deleteWorktreeHistoryDirMock } from '../orca-runtime-test-mocks/setup.spec'
+import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
+import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   createRuntime,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import {
   attachClientBrowserHost,
   publishClientHostedPage
-} from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-scenario-builders.spec'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {

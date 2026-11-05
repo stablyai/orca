@@ -8,7 +8,7 @@ import { MIRROR_LEAVES_STEP_1 } from '../../src/main/runtime/runtime-leaf-record
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../src/main/runtime/runtime-terminal-state-records'
+} from '../../src/main/runtime/terminal/records/runtime-terminal-state-records'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import type { RuntimeSyncWindowGraphResult } from '../../src/shared/runtime-session-contracts'
 

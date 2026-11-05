@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
-import { syncSinglePty } from '../orca-runtime-test-fixtures.spec'
-import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import { syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
 const SPINNER_INTERVAL_MS = 80
 const EPOCH = 1_700_000_000_000
 
