@@ -172,11 +172,22 @@ export async function stopHelperAfterStart(
   ).catch((error: unknown) => {
     console.warn('[orchestration] helper stop after its start failed', dispatchId, error)
   })
-  if (receipt && receipt.state !== 'stopped' && !receipt.alreadySettled) {
+  const unconfirmed = receipt?.helpers?.filter((helper) => helper.outcome === 'unconfirmed') ?? []
+  if (
+    receipt &&
+    ((receipt.state !== 'stopped' && !receipt.alreadySettled) ||
+      receipt.helperStopError ||
+      unconfirmed.length)
+  ) {
     console.warn('[orchestration] helper stop after its start is unconfirmed', {
       dispatchId,
       state: receipt.state,
-      lastError: receipt.lastError
+      lastError: receipt.lastError,
+      helperStopError: receipt.helperStopError,
+      unconfirmed: unconfirmed.map((helper) => ({
+        dispatchId: helper.dispatchId,
+        lastError: helper.lastError
+      }))
     })
   }
 }
