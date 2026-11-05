@@ -16,12 +16,10 @@ import type { MobileNativeChatImageSource } from '../visual/mobile-native-chat-i
 export function MobileNativeChatRowOverlaysHost({
   conversation,
   imageSource,
-  onQuote,
   children
 }: {
   conversation: MobileNativeChatConversation
   imageSource?: MobileNativeChatImageSource
-  onQuote?: (text: string) => void
   children?: React.ReactNode
 }): React.JSX.Element {
   // Keep pressed message text with its conversation so streaming cannot rewrite an open sheet.
@@ -36,10 +34,9 @@ export function MobileNativeChatRowOverlaysHost({
         triggerMediumImpact()
         setShown({ actionsFor })
       },
-      imageSource,
-      quote: onQuote
+      imageSource
     }),
-    [setShown, imageSource, onQuote]
+    [setShown, imageSource]
   )
   // Memoize overlay callbacks so streamed words cannot rebuild them.
   const opened = useMemo(() => {

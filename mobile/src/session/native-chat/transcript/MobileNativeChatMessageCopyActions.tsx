@@ -6,7 +6,7 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
+import { MobileNativeChatQuoteContext } from './mobile-native-chat-quote-context'
 
 /** Copy, and Quote for agent replies, under a chat turn. */
 export function MobileNativeChatMessageCopyActions({
@@ -18,7 +18,7 @@ export function MobileNativeChatMessageCopyActions({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { quote } = useContext(MobileNativeChatRowOverlaysContext)
+  const quote = useContext(MobileNativeChatQuoteContext)
   return (
     // The 24 pt boxes centre 14 pt glyphs; pulling 5 pt back lines the first glyph up with the tool icons.
     <View style={styles.row}>

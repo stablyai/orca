@@ -187,7 +187,6 @@ export function MobileNativeChatOverlay({
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
-      onQuote={quoteInComposer}
     >
       <MobileQueuedMessageComposerContext.Provider value={queuedComposerContext}>
         <View style={styles.overlay}>
@@ -254,6 +253,7 @@ export function MobileNativeChatOverlay({
                     composerScopeKey={controller.chatComposerScopeKey}
                     draftKey={controller.chatDraftKey}
                     onComposerTextChange={controller.setChatComposerText}
+                    onQuote={quoteInComposer}
                     onAttachImage={
                       controller.nativeChatAcceptsImages
                         ? () => void images.attachImage('library')

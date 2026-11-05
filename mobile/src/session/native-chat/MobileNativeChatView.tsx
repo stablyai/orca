@@ -55,7 +55,7 @@ import {
 import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatScrollRootsBoundary } from '../MobileNativeChatScrollRootsBoundary'
 import { MobileNativeChatRowList } from './transcript/MobileNativeChatRowList'
-import { MobileNativeChatQuoteWhileComposerShown } from './transcript/MobileNativeChatQuoteWhileComposerShown'
+import { MobileNativeChatQuoteContext } from './transcript/mobile-native-chat-quote-context'
 import { useMobileNativeChatRowRenderer } from './transcript/use-mobile-native-chat-row-renderer'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { OlderPagePhase } from '../use-mobile-older-page-loader'
@@ -102,6 +102,7 @@ type ChatViewProps = MobileNativeChatSendProps &
     composerScopeKey?: string | null
     draftKey: string | null
     onComposerTextChange: (text: string) => void
+    onQuote?: (text: string) => void
     onAttachImage?: () => void
     attachments?: PendingNativeChatImage[]
     onRemoveAttachment?: (id: string) => void
@@ -195,6 +196,7 @@ export function MobileNativeChatView({
   onRespondPermission,
   composerTray: { content: trayContent, composerInputRef: inputRef } = NO_COMPOSER_TRAY,
   onOpenFile,
+  onQuote,
   keyboardInset = 0
 }: Props): React.JSX.Element {
   useMobileColorScheme()
@@ -324,7 +326,8 @@ export function MobileNativeChatView({
         />
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
-          <MobileNativeChatQuoteWhileComposerShown composerShown={!promptOwnsInput}>
+          {/* A prompt card hides the composer, so a quote would land out of sight. */}
+          <MobileNativeChatQuoteContext.Provider value={promptOwnsInput ? undefined : onQuote}>
             <MobileNativeChatDisclosureContext.Provider value={disclosures}>
               <MobileNativeChatScrollRootsBoundary
                 {...{ rowKeys, layoutKey }}
@@ -343,7 +346,7 @@ export function MobileNativeChatView({
                 </GestureDetector>
               </MobileNativeChatScrollRootsBoundary>
             </MobileNativeChatDisclosureContext.Provider>
-          </MobileNativeChatQuoteWhileComposerShown>
+          </MobileNativeChatQuoteContext.Provider>
           <MobileNativeChatFloatingControls
             showJumpToTail={tail.showJumpToTail}
             onJumpToTail={jumpToTail}
