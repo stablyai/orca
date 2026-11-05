@@ -15,7 +15,7 @@ export type RepoSlugMatches = { origin: Repo[]; upstream: Repo[] }
 
 /** Fork-parent alias, or null if untrusted. Require resolved origin identity as host fallback for older upstream metadata, or GHES parents could collapse into github.com. */
 export function repoUpstreamIdentityKey(
-  repo: Repo,
+  repo: Pick<Repo, 'upstream'>,
   originIdentityKey: string | null | undefined
 ): string | null {
   const upstream = repo.upstream
