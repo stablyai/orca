@@ -850,6 +850,8 @@ jobs:
           native-runtime: node
 
       - name: Install Electron package binary for tests
+        # Why: the Windows leg would otherwise run this POSIX fallback in PowerShell.
+        shell: bash
         run: |
           ELECTRON_INSTALL_SCRIPT=config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
           if [ ! -f "$ELECTRON_INSTALL_SCRIPT" ]; then
