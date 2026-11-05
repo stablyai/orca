@@ -13,6 +13,7 @@ import {
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
+import { isTerminalLinkTooltipEnabled } from './terminal-link-tooltip-visibility'
 import { installTerminalLinkifierClickPriming } from './terminal-linkifier-click-priming'
 import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
@@ -191,6 +192,9 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       }
     },
     hover: (_event, text) => {
+      if (!isTerminalLinkTooltipEnabled()) {
+        return
+      }
       oscTooltipHoverToken += 1
       const hoverToken = oscTooltipHoverToken
       const hint = getUrlOpenLinkHint(pane.id)

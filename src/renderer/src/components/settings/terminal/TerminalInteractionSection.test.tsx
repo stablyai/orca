@@ -47,3 +47,61 @@ describe('TerminalInteractionSection scroll on input', () => {
     expect(screen.getByRole('switch', { name: 'Scroll to Bottom on Input' })).toBeTruthy()
   })
 })
+
+describe('TerminalInteractionSection link target preview', () => {
+  beforeEach(() => {
+    useAppStore.setState({ settingsSearchQuery: '' })
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('shows the switch checked by default and requests the off value on toggle', () => {
+    const updateSettings = vi.fn()
+    render(
+      <TerminalInteractionSection
+        settings={createGlobalSettingsFixture()}
+        updateSettings={updateSettings}
+        searchQuery=""
+      />
+    )
+
+    const linkTooltipSwitch = screen.getByRole('switch', { name: 'Link Target Preview' })
+    expect(linkTooltipSwitch).toBeTruthy()
+    expect(linkTooltipSwitch.getAttribute('aria-checked')).toBe('true')
+
+    linkTooltipSwitch.click()
+    expect(updateSettings).toHaveBeenCalledWith({ terminalLinkTooltipEnabled: false })
+  })
+
+  it('treats an explicitly stored false as unchecked and requests true on toggle', () => {
+    const updateSettings = vi.fn()
+    render(
+      <TerminalInteractionSection
+        settings={{ ...createGlobalSettingsFixture(), terminalLinkTooltipEnabled: false }}
+        updateSettings={updateSettings}
+        searchQuery=""
+      />
+    )
+
+    const linkTooltipSwitch = screen.getByRole('switch', { name: 'Link Target Preview' })
+    expect(linkTooltipSwitch.getAttribute('aria-checked')).toBe('false')
+
+    linkTooltipSwitch.click()
+    expect(updateSettings).toHaveBeenCalledWith({ terminalLinkTooltipEnabled: true })
+  })
+
+  it('stays reachable through the localized search keyword', () => {
+    useAppStore.setState({ settingsSearchQuery: 'tooltip' })
+    render(
+      <TerminalInteractionSection
+        settings={createGlobalSettingsFixture()}
+        updateSettings={vi.fn()}
+        searchQuery="tooltip"
+      />
+    )
+
+    expect(screen.getByRole('switch', { name: 'Link Target Preview' })).toBeTruthy()
+  })
+})

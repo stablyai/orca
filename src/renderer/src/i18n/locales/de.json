@@ -20459,7 +20459,9 @@
         "copyTrimsGutterDescription": "Den linken Rand vor der Agentenausgabe entfernen, damit kopierter Text nicht eingerückt ist. Entfernt wird nur die gemeinsame Einrückung aller ausgewählten Zeilen.",
         "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren.",
         "scrollOnUserInput": "Bei Eingabe nach unten scrollen",
-        "scrollOnUserInputDescription": "Tippen oder Einfügen im hochgescrollten Zustand springt zur neuesten Ausgabe. Deaktiviere dies, um deine Position zu behalten."
+        "scrollOnUserInputDescription": "Tippen oder Einfügen im hochgescrollten Zustand springt zur neuesten Ausgabe. Deaktiviere dies, um deine Position zu behalten.",
+        "linkTooltip": "Link-Ziel-Vorschau",
+        "linkTooltipDescription": "Zeigt die Leiste mit dem Link-Ziel am unteren Rand des Bereichs an, während der Zeiger über erkannte Links und Pfade bewegt wird."
       },
       "terminal": {
         "clipboard": {
@@ -20482,7 +20484,12 @@
           "bottom": "unten",
           "scrollback": "scrollback",
           "snap": "einrasten",
-          "position": "position"
+          "position": "position",
+          "link": "link",
+          "tooltip": "tooltip",
+          "preview": "vorschau",
+          "url": "url",
+          "bar": "leiste"
         }
       },
       "nativeChat": {

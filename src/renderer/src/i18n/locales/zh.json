@@ -19758,7 +19758,9 @@
         "copyTrimsGutterDescription": "将左侧装订线智能体输出绘制在后面，因此复制的文本不会缩进。仅删除每个选定行共享的缩进。",
         "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。",
         "scrollOnUserInput": "输入时滚动到底部",
-        "scrollOnUserInputDescription": "向上滚动时键入或粘贴会跳至最新输出。关闭此项可保持当前位置。"
+        "scrollOnUserInputDescription": "向上滚动时键入或粘贴会跳至最新输出。关闭此项可保持当前位置。",
+        "linkTooltip": "链接目标预览",
+        "linkTooltipDescription": "悬停在检测到的链接和路径上时，在窗格底部显示链接目标栏。"
       },
       "terminal": {
         "clipboard": {
@@ -19781,7 +19783,12 @@
           "bottom": "底部",
           "scrollback": "回滚",
           "snap": "吸附",
-          "position": "位置"
+          "position": "位置",
+          "link": "链接",
+          "tooltip": "提示",
+          "preview": "预览",
+          "url": "网址",
+          "bar": "栏"
         }
       },
       "nativeChat": {

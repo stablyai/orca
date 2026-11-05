@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal, type ILink, type ITerminalOptions } from '@xterm/xterm'
 
 import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/wrapped-terminal-http-link-provider'
+import { isTerminalLinkTooltipEnabled } from '../../components/terminal-pane/terminal-link-tooltip-visibility'
 import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal/links/terminal-http-url-extraction'
 import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
@@ -78,7 +79,7 @@ export function createPaneDOM(
   const linkHandlers = {
     activate: (event, uri) => options.onLinkClick?.(id, event, uri),
     hover: (_event, uri) => {
-      if (uri) {
+      if (uri && isTerminalLinkTooltipEnabled()) {
         linkTooltipHoverToken += 1
         const hoverToken = linkTooltipHoverToken
         const openLinkHint = options.linkOpenHint(id)

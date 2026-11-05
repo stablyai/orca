@@ -6,6 +6,7 @@ import { preferLongestNonOverlappingMatches } from '../../../../shared/longest-n
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { buildCandidateLogicalLinesForBufferPosition } from '../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
+import { isTerminalLinkTooltipEnabled } from './terminal-link-tooltip-visibility'
 import { shouldOpenTerminalFileWithSystemDefault } from './terminal-file-open-routing'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { fileLinkTargetExists, resolveFileLinkTarget } from './terminal-file-link-target'
@@ -160,6 +161,9 @@ export function createFilePathLinkProvider(
                 }
               },
               hover: () => {
+                if (!isTerminalLinkTooltipEnabled()) {
+                  return
+                }
                 // Only local paths can use the Shift+modifier OS escape hatch.
                 const canOpenWithSystemDefault =
                   shouldOpenTerminalFileWithSystemDefault(fileContext)

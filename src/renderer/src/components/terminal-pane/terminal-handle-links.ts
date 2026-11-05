@@ -1,6 +1,7 @@
 import type { ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 
 import { type AppState, useAppStore } from '@/store'
+import { isTerminalLinkTooltipEnabled } from './terminal-link-tooltip-visibility'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
@@ -233,6 +234,9 @@ export function createTerminalHandleLinkProvider(
               }
             },
             hover: () => {
+              if (!isTerminalLinkTooltipEnabled()) {
+                return
+              }
               const showActions = deps.getLinkActionContext
                 ? deps.getLinkActionContext() !== null
                 : true

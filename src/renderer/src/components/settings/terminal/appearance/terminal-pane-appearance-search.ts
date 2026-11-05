@@ -61,6 +61,27 @@ export const getTerminalScrollOnUserInputSearchEntry = createLocalizedCatalog(()
   }
 ])
 
+export const getTerminalLinkTooltipSearchEntry = createLocalizedCatalog(() => [
+  {
+    title: translate('components.settings.TerminalInteraction.linkTooltip', 'Link Target Preview'),
+    description: translate(
+      'components.settings.TerminalInteraction.linkTooltipDescription',
+      'Show the link target bar at the bottom of the pane while hovering detected links and paths.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('components.settings.terminal.search.link', 'link'),
+      ...translateSearchKeyword('components.settings.terminal.search.tooltip', 'tooltip'),
+      ...translateSearchKeyword('components.settings.terminal.search.preview', 'preview'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.d1fa00a9cb', 'hover'),
+      ...translateSearchKeyword('components.settings.terminal.search.url', 'url'),
+      ...translateSearchKeyword('components.settings.terminal.search.bar', 'bar'),
+      // Keep product names searchable without translation.
+      'Ghostty',
+      'ghostty'
+    ]
+  }
+])
+
 export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.scrollSpeed.title', 'Scroll Speed'),
@@ -80,6 +101,7 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
     ]
   },
   ...getTerminalScrollOnUserInputSearchEntry(),
+  ...getTerminalLinkTooltipSearchEntry(),
   {
     title: translate(
       'auto.components.settings.terminal.search.ask_before_closing_running_terminals_title',
