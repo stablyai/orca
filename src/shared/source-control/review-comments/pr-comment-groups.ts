@@ -42,6 +42,17 @@ export function isResolvedPRCommentGroup(group: PRCommentGroup): boolean {
   return getPRCommentGroupRoot(group).isResolved === true
 }
 
+/** Drops every comment in a resolved review thread; standalone comments are never resolvable. */
+export function excludeResolvedPRCommentThreads(comments: readonly PRComment[]): PRComment[] {
+  const resolvedThreadIds = new Set<string>()
+  for (const group of groupPRComments(comments)) {
+    if (group.kind === 'thread' && isResolvedPRCommentGroup(group)) {
+      resolvedThreadIds.add(group.threadId)
+    }
+  }
+  return comments.filter((comment) => !comment.threadId || !resolvedThreadIds.has(comment.threadId))
+}
+
 export function getPRCommentGroupId(group: PRCommentGroup): string {
   return group.kind === 'thread' ? `thread:${group.threadId}` : `comment:${group.comment.id}`
 }
