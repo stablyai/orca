@@ -30,15 +30,13 @@ const lineEnding = (code: Code): boolean => code !== null && code < -2
 const whitespace = (code: Code): boolean => code === null || code < 0 || code === 32
 const digit = (code: Code): code is number => code !== null && code >= 48 && code <= 57
 const currencyTerminators = new Set([33, 41, 58, 59, 63])
-const variableStart = (code: Code): boolean =>
-  code !== null &&
-  (code === 95 || code === 123 || (code >= 65 && code <= 90) || (code >= 97 && code <= 122))
 
 type ExhaustedSearch = { from: number; to: number; last: Map<number, number> }
 
 function construct(flow: boolean): Construct {
   const searches = new WeakMap<TokenizeContext, Map<string, ExhaustedSearch>>()
   const tokenize: Tokenizer = function (effects, ok, nok) {
+    const afterWhitespace = () => whitespace(this.previous)
     const knowledge = flow ? undefined : (searches.get(this) ?? new Map<string, ExhaustedSearch>())
     if (knowledge) {
       searches.set(this, knowledge)
@@ -52,6 +50,7 @@ function construct(flow: boolean): Construct {
     let escaped = false
     let candidate: Token
     let closeSize = 0
+    let closeAfterWhitespace = false
     const continuation: Construct = {
       partial: true,
       tokenize(e, yes, no) {
@@ -155,7 +154,7 @@ function construct(flow: boolean): Construct {
         if (flow) {
           return effects.attempt(continuation, continued, finish)(code)
         }
-        if (opener === '$' || opener === '\\(') {
+        if (opener === '\\(') {
           return exhausted(code)
         }
         effects.enter('lineEnding')
@@ -165,6 +164,7 @@ function construct(flow: boolean): Construct {
         return between
       }
       if (code === 36 && opener.startsWith('$')) {
+        closeAfterWhitespace = afterWhitespace()
         candidate = effects.enter('chatMathMarker')
         closeSize = 0
         return dollarClose(code)
@@ -179,7 +179,7 @@ function construct(flow: boolean): Construct {
       return between(code)
     }
     function dollarClose(code: Code): State | undefined {
-      if (code === 36) {
+      if (code === 36 && (opener !== '$' || closeSize === 0)) {
         effects.consume(code)
         closeSize++
         return dollarClose
@@ -193,13 +193,7 @@ function construct(flow: boolean): Construct {
         body += '$'.repeat(closeSize)
         return between(code)
       }
-      if (
-        opener === '$' &&
-        (/\s/.test(body.at(-1) ?? '') ||
-          digit(code) ||
-          // A path separator can be followed by another shell expansion, not a math closer.
-          ((body.endsWith('/') || body.endsWith(':') || body.endsWith(';')) && variableStart(code)))
-      ) {
+      if (opener === '$' && (closeAfterWhitespace || digit(code))) {
         return nok(code)
       }
       effects.exit('chatMathMarker')

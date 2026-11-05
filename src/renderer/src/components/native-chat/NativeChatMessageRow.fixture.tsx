@@ -64,7 +64,7 @@ export const dollars = defineFixture({
           role: 'user',
           timestamp: 0,
           source: 'transcript',
-          blocks: [{ type: 'text', text: 'Can I use $HOME/bin:$PATH? It costs $5 or $10.' }]
+          blocks: [{ type: 'text', text: 'Can I use `$HOME/bin:$PATH`? It costs $5 or $10.' }]
         }}
         expandSignal={false}
         onScrollMessageToTop={() => {}}
@@ -79,7 +79,7 @@ export const dollars = defineFixture({
             {
               type: 'text',
               text: [
-                'Set $ORCA_HOME then run echo $PATH. Use $HOME/bin:$PATH or $HOME/${PATH}. In PowerShell, use $env:PATH;$env:TEMP.',
+                'Set $ORCA_HOME then run echo $PATH. Use `$HOME/bin:$PATH` or `$HOME/${PATH}`. In PowerShell, use `$env:PATH;$env:TEMP`.',
                 'Prices: $5 + tax$ stays as written. Inline code stays literal: `echo $HOME`.',
                 String.raw`Real math: the $n$th term, $x^2$, $5+2$, and \(5 + 2\).`,
                 '$$5 + 2$$'
