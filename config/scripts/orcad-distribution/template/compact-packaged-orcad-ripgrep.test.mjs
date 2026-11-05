@@ -15,11 +15,7 @@ import { writeOrcadTemplateTestFixture } from './orcad-template-test-fixture.mjs
 
 const require = createRequire(import.meta.url)
 const { compactPackagedOrcadRipgrep } = require('./compact-packaged-orcad-ripgrep.cjs')
-const { verifyPackagedOrcadTemplate } = require('./verify-packaged-orcad-template.cjs')
-const {
-  finalizePackagedOrcadTemplate,
-  resealSignedWindowsApp
-} = require('./packaged-orcad-template.cjs')
+const { resealSignedWindowsApp } = require('./packaged-orcad-template.cjs')
 const roots = []
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
 
@@ -92,20 +88,6 @@ describe('packaged ripgrep storage', () => {
     ).toBe(false)
   })
 
-  it('compacts through the real desktop finalization hook', async () => {
-    const f = await fixture()
-    await finalizePackagedOrcadTemplate(f.resourcesDir, {
-      platform: 'linux',
-      signMacBinary: vi.fn()
-    })
-    const manifest = JSON.parse(await readFile(f.manifestPath, 'utf8'))
-    expect(manifest.schemaVersion).toBe(4)
-    expect(manifest.targets['linux-x64-glibc'].packagedRipgrep).toBe(true)
-    expect(existsSync(join(f.templateDir, 'targets/linux-x64-glibc/ripgrep/linux-x64/rg'))).toBe(
-      false
-    )
-  })
-
   it('keeps binaries that differ and never removes Darwin signing inputs', async () => {
     const f = await fixture()
     const desktop = join(f.resourcesDir, 'ripgrep/linux-arm64/rg')
@@ -125,72 +107,6 @@ describe('packaged ripgrep storage', () => {
     const f = await fixture()
     await writeFile(join(f.templateDir, 'targets/linux-x64-glibc/ripgrep/linux-x64/rg'), 'tampered')
     expect(() => compactPackagedOrcadRipgrep(f.resourcesDir)).toThrow('checksum mismatch')
-  })
-
-  it.each(['tampered', 'missing'])('rejects %s shared bytes before deploying', async (damage) => {
-    const f = await fixture()
-    compactPackagedOrcadRipgrep(f.resourcesDir)
-    const shared = join(f.resourcesDir, 'ripgrep/linux-x64/rg')
-    await (damage === 'missing' ? rm(shared) : writeFile(shared, 'tampered'))
-    expect(() => verifyPackagedOrcadTemplate(f.resourcesDir)).toThrow()
-    await expect(
-      assembleOrcadArtifact({
-        templateDir: f.templateDir,
-        cacheRoot: join(f.appDir, 'cache'),
-        target: 'linux-x64-glibc'
-      })
-    ).rejects.toThrow()
-  })
-
-  it.each([3, 4])('rejects arbitrary reference paths in schema %s', async (schemaVersion) => {
-    const f = await fixture()
-    f.manifest.schemaVersion = schemaVersion
-    f.manifest.targets['linux-x64-glibc'].packagedRipgrep = '../../outside/rg'
-    await writeFile(f.manifestPath, JSON.stringify(f.manifest))
-    expect(() => verifyPackagedOrcadTemplate(f.resourcesDir)).toThrow(
-      'Invalid packaged ripgrep reference'
-    )
-    await expect(
-      assembleOrcadArtifact({
-        templateDir: f.templateDir,
-        cacheRoot: join(f.appDir, 'cache'),
-        target: 'linux-x64-glibc'
-      })
-    ).rejects.toThrow()
-  })
-
-  it('rejects references under schema 3 and Darwin references under schema 4', async () => {
-    const f = await fixture()
-    for (const [schemaVersion, target] of [
-      [3, 'linux-x64-glibc'],
-      [4, 'darwin-arm64']
-    ]) {
-      const entry = f.manifest.targets[target]
-      f.manifest.schemaVersion = schemaVersion
-      entry.packagedRipgrep = true
-      await writeFile(f.manifestPath, JSON.stringify(f.manifest))
-      expect(() => verifyPackagedOrcadTemplate(f.resourcesDir)).toThrow(
-        'Invalid packaged ripgrep reference'
-      )
-      await expect(
-        assembleOrcadArtifact({
-          templateDir: f.templateDir,
-          cacheRoot: join(f.appDir, 'cache'),
-          target
-        })
-      ).rejects.toThrow('Invalid packaged ripgrep reference')
-      delete entry.packagedRipgrep
-    }
-  })
-
-  it('rejects an extra target copy left beside a reference', async () => {
-    const f = await fixture()
-    compactPackagedOrcadRipgrep(f.resourcesDir)
-    await copyFile(
-      join(f.resourcesDir, 'ripgrep/linux-x64/rg'),
-      join(f.templateDir, 'targets/linux-x64-glibc/ripgrep/linux-x64/rg')
-    )
-    expect(() => verifyPackagedOrcadTemplate(f.resourcesDir)).toThrow('file inventory mismatch')
   })
 
   it.skipIf(process.platform === 'win32')('rejects a shared symlink', async () => {

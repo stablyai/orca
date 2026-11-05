@@ -4,7 +4,7 @@ import {
   setupPtyIpcSuite,
   type PtyIpcSuiteFixtures
 } from '../../src/main/ipc/pty/pty-ipc-test-harness'
-import { TerminalKilledError } from '../../src/main/daemon/daemon-pty-lifecycle-errors'
+import { TerminalKilledError } from '../../src/main/daemon/providers/adapter/daemon-pty-lifecycle-errors'
 import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { registerPtyHandlers } from '../../src/main/ipc/pty/register-handlers'
 import { setLocalPtyProvider } from '../../src/main/ipc/pty/provider/registry'
@@ -239,7 +239,7 @@ import type * as React from 'react'
 import type { PtyTransport } from '../../src/renderer/src/components/terminal-pane/pty-transport-types'
 
 let rendererState: StoreState
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: Object.assign(
     (selector: (state: StoreState) => unknown) => selector(rendererState),
     {

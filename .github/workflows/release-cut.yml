@@ -297,7 +297,7 @@ jobs:
         if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node config/scripts/publish-complete-draft-releases.mjs
+        run: node config/scripts/release/publication/publish-complete-draft-releases.mjs
 
       - name: Compute next version
         id: version
@@ -315,7 +315,7 @@ jobs:
           # Builder flipped v1.3.22-rc.2’s prerelease flag on 2026-04-27; that flag cannot authorize stable math.
           # 2026-05-04/run25304336767: mobile-v0.0.1 collapsed through NaN to 0.0.1 without the desktop prefix.
           # 2026-06-04: release-list order put v1.4.42 before v1.4.44 and reopened 1.4.43 as rc.0.
-          latest_stable="$(node config/scripts/latest-stable-release.mjs)"
+          latest_stable="$(node config/scripts/release/versioning/latest-stable-release.mjs)"
           latest_stable="${latest_stable#v}"
           echo "Latest stable: ${latest_stable:-<none>}"
 
@@ -348,7 +348,7 @@ jobs:
           }
 
           highest_rc_for_base() {
-            node config/scripts/release-rc-history.mjs "$1"
+            node config/scripts/release/versioning/release-rc-history.mjs "$1"
           }
 
           require_valid_version_suffix() {
@@ -584,7 +584,7 @@ jobs:
           # Control commit message/tag ourselves via npm version --no-git-tag-version, avoiding npm’s prefix/lifecycle assumptions.
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           # Tags must describe their bundled skill bytes; verify freshness with Node built-ins before install.
-          if ! node config/scripts/generate-skill-bundle-manifest.mjs; then
+          if ! node config/scripts/skills/bundle-generation/generate-skill-bundle-manifest.mjs; then
             echo "::error::Refusing to tag v$VERSION: the committed skill manifest does not match skills/. Land a regeneration on main, then re-run the cut." >&2
             exit 1
           fi
@@ -681,14 +681,14 @@ jobs:
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- \
-            config/scripts/create-draft-release.mjs \
-            config/scripts/assert-github-release-is-draft.mjs
+            config/scripts/release/publication/create-draft-release.mjs \
+            config/scripts/release/publication/assert-github-release-is-draft.mjs
 
       - name: Create draft release with bounded generated notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: node config/scripts/create-draft-release.mjs "$TAG"
+        run: node config/scripts/release/publication/create-draft-release.mjs "$TAG"
 
   dependency-security:
     needs: cut
@@ -734,7 +734,8 @@ jobs:
           git checkout "$WORKFLOW_SHA" -- \
             tests/e2e/golden-source-control-open-diff.spec.ts \
             tests/e2e/golden-terminal-file-link.spec.ts \
-            tests/e2e/golden-worktree-create-switch.spec.ts
+            tests/e2e/golden-worktree-create-switch.spec.ts \
+            tests/e2e/helpers/e2e-completed-onboarding-profile.ts
 
       - name: Install native build tools
         if: runner.os == 'Linux'
@@ -850,6 +851,8 @@ jobs:
           native-runtime: node
 
       - name: Install Electron package binary for tests
+        # Why: the Windows leg would otherwise run this POSIX fallback in PowerShell.
+        shell: bash
         run: |
           ELECTRON_INSTALL_SCRIPT=config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
           if [ ! -f "$ELECTRON_INSTALL_SCRIPT" ]; then
@@ -1145,7 +1148,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs config/scripts/run-release-mac-build-workflow.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/release/publication/assert-github-release-is-draft.mjs config/scripts/release/operations/run-release-mac-build-workflow.mjs
 
       - name: Restore composite actions from the workflow ref
         shell: bash
@@ -1312,8 +1315,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           # #8212: require Node and the exact Electron runtime to survive native SIGSEGV before packaging.
-          node config/scripts/runtime-file-watcher-fault-harness.mjs
-          ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
+          node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs
+          ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs
 
       # Publish hidden main sourcemaps separately because app.asar drops maps; one platform suffices for platform-independent main bundle.
       - name: Bundle main-process source maps
@@ -1369,7 +1372,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: >-
-            node config/scripts/run-linux-packaged-node-pty-floor-smoke.mjs
+            node config/scripts/desktop-distribution/runtime-verification/run-linux-packaged-node-pty-floor-smoke.mjs
             --app-dir ${{ matrix.unpacked_dir }}
 
       # Why: SignPath signs GitHub workflow artifacts, so Windows builds must
@@ -1482,7 +1485,7 @@ jobs:
         id: mac-signing-gate
         if: matrix.platform == 'win' && github.run_attempt == 1
         shell: bash
-        run: node config/scripts/run-release-mac-build-workflow.mjs wait
+        run: node config/scripts/release/operations/run-release-mac-build-workflow.mjs wait
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
@@ -1672,7 +1675,7 @@ jobs:
           if ($signature.Status -ne 'Valid' -or $subject -notlike '*CN=SignPath Foundation*') {
             throw "win-unpacked elevate.exe is not SignPath-signed ($($signature.Status), $subject)."
           }
-          node config/scripts/replace-cached-nsis-elevate.mjs $signed
+          node config/scripts/desktop-distribution/nsis/replace-cached-nsis-elevate.mjs $signed
           if ($LASTEXITCODE -ne 0) {
             $message = 'Cached elevate.exe swap found nothing to replace; the rebuilt installer ships an unsigned UAC elevation helper (issue #7785).'
             if ($env:GITHUB_STEP_SUMMARY) {
@@ -1816,7 +1819,7 @@ jobs:
           }
 
           Copy-Item -Path $signedInstaller.FullName -Destination 'dist/orca-windows-setup.exe' -Force
-          node config/scripts/generate-windows-blockmap.mjs 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
+          node config/scripts/desktop-distribution/windows/generate-windows-blockmap.mjs 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
           if ($LASTEXITCODE -ne 0) { throw "blockmap generation failed with exit code $LASTEXITCODE" }
 
           $installer = Get-Item 'dist/orca-windows-setup.exe'
@@ -1911,7 +1914,7 @@ jobs:
 
             # Verify shipped NSIS payload bytes via 7z, not the build tree. Resolve 7za through app-builder-lib:
             # builder 26.9+ dropped bundled 7zip-bin (#6487).
-            $7zaOutput = node config/scripts/resolve-7za-path.mjs
+            $7zaOutput = node config/scripts/archives/seven-zip/resolve-7za-path.mjs
             $7zaExitCode = $LASTEXITCODE
             if ($7zaExitCode -ne 0) {
               throw "The 7za resolver exited with code $7zaExitCode for the inner-binary evidence gate."
@@ -2063,11 +2066,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: node config/scripts/assert-github-release-is-draft.mjs "${{ needs.cut.outputs.tag }}"
+        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "${{ needs.cut.outputs.tag }}"
 
       # Check Linux telemetry after inseparable pack/upload, then block final undraft. Reject null identity/key transport from missing configuration (#1385); prior step re-drafts premature publication.
       - name: Verify telemetry constants present in app.asar
-        run: node config/scripts/verify-telemetry-constants.mjs
+        run: node config/scripts/desktop-build/telemetry-contracts/verify-telemetry-constants.mjs
 
   build-mac:
     needs:
@@ -2108,7 +2111,7 @@ jobs:
 
       - name: Run isolated macOS release build
         id: dispatch
-        run: node config/scripts/run-release-mac-build-workflow.mjs dispatch
+        run: node config/scripts/release/operations/run-release-mac-build-workflow.mjs dispatch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
@@ -2144,7 +2147,7 @@ jobs:
           check-latest: true
 
       - name: Require the exact isolated macOS release build to succeed
-        run: node config/scripts/run-release-mac-build-workflow.mjs wait
+        run: node config/scripts/release/operations/run-release-mac-build-workflow.mjs wait
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
@@ -2213,7 +2216,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: node config/scripts/verify-release-required-assets.mjs "$TAG"
+        run: node config/scripts/release/publication/verify-release-required-assets.mjs "$TAG"
 
       - name: Publish release
         # Reassert prerelease from tag: on 2026-04-27 builder flipped RC to false/latest and broke release math; builder output is not authoritative.

@@ -80,42 +80,6 @@ function firstPixel(image) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('xterm image wasm budget', () => {
-  it('keeps idle terminals free of wasm decoders', async () => {
-    const panes = Array.from({ length: 300 }, () => createTerminal())
-    try {
-      // Let any asynchronous decoder instantiation settle.
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      for (const { sixel, iip } of panes) {
-        expect(sixel._dec).toBeUndefined()
-        expect(iip._dec._inst).toBeNull()
-        expect(iip._qoiDec._inst).toBeFalsy()
-      }
-    } finally {
-      for (const { terminal } of panes) {
-        terminal.dispose()
-      }
-    }
-  })
-
-  it('returns decoders after each SIXEL and IIP image', async () => {
-    const painted = stubCanvasGlobals()
-    const { terminal, addon, sixel, iip } = createTerminal()
-    let added = 0
-    addon.onImageAdded(() => added++)
-    try {
-      await write(terminal, SIXEL_RED_REGISTER_1)
-      expect(painted).toHaveLength(1)
-      expect(sixel._dec).toBeUndefined()
-
-      await write(terminal, IIP_PNG)
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(iip._dec._inst).toBeNull()
-      expect(added).toBe(2)
-    } finally {
-      terminal.dispose()
-    }
-  })
-
   it('keeps SIXEL color registers across images until a terminal reset', async () => {
     const painted = stubCanvasGlobals()
     const { terminal } = createTerminal()

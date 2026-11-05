@@ -175,7 +175,7 @@ function assertDaemonExternalsAreMirrored(
   }
 }
 
-// Owned by the argv parser in src/main/daemon/daemon-entry.ts — keep in sync.
+// Owned by the argv parser in src/main/daemon/launch/daemon-command-arguments.ts — keep in sync.
 const DAEMON_USAGE_PREFIX = 'Usage: daemon-entry'
 
 export type SmokeTimings = {

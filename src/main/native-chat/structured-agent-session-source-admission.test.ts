@@ -2,6 +2,10 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+// Adoption forks the AI Vault service for the chat's title; naming is covered elsewhere.
+vi.mock('../ai-vault/session-titles/session-title-resolver', () => ({
+  resolveLocalAiVaultSessionTitles: async () => ({ titles: [] })
+}))
 import { CLAUDE_CLI_CONVERSATIONS } from '../claude/claude-cli-conversations'
 import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/agent-session/structured-agent-session-create-adoption'
 import {

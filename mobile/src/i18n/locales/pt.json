@@ -193,6 +193,11 @@
       "sendQueueHint": "Executa depois do turno atual",
       "sendSteerHint": "Entra no que o agente está fazendo agora"
     },
+    "contextUsage": {
+      "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
+      "title": "Contexto",
+      "estimated": "Estimado a partir da última resposta."
+    },
     "composerAttachments": {
       "attachedImage": "Imagem anexada",
       "file": "Arquivo",
@@ -227,7 +232,18 @@
       "selectText": "Selecionar texto"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Fechar imagem"
+      "closeImage": "Fechar imagem",
+      "imageActions": "Ações da imagem",
+      "copyImage": "Copiar imagem",
+      "saveImage": "Salvar imagem",
+      "share": "Compartilhar…",
+      "imageCopied": "Imagem copiada",
+      "imageSaved": "Imagem salva",
+      "copyFailed": "Não foi possível copiar a imagem",
+      "saveFailed": "Não foi possível salvar a imagem",
+      "shareFailed": "Não foi possível compartilhar a imagem",
+      "photosAccessDenied": "Permita que o Orca adicione fotos em Ajustes",
+      "imageTooLarge": "Esta imagem é grande demais"
     },
     "nativeChatProse": {
       "attachedImage": "Imagem anexada",
@@ -286,7 +302,9 @@
       "permissionDenied": "{{agent}} negou a permissão. Ver detalhes.",
       "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
       "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
-      "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}."
+      "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}.",
+      "signIn": "Entrar",
+      "signInHint": "Abre um terminal no computador que executa este chat"
     },
     "orcaStop": {
       "canContinue": "Você pode continuar nesta conversa.",
@@ -295,6 +313,13 @@
       "remote": "O Orca ({{machine}}) parou enquanto esta resposta estava em andamento.",
       "unnamedServer": "o servidor remoto",
       "update": "O Orca ({{machine}}) reiniciou para uma atualização enquanto esta resposta estava em andamento."
+    },
+    "interruptedContinue": {
+      "failed": "Não foi possível continuar este chat. Tente novamente ou envie uma mensagem.",
+      "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída."
+    },
+    "sendError": {
+      "dismiss": "Descartar"
     },
     "permission": {
       "needsAccessTo": "Precisa de acesso a: ",
@@ -379,7 +404,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Padrão",
-      "notReportedMarker": "Não informado"
+      "notReportedMarker": "Não informado",
+      "moreModels": "Mais modelos",
+      "fewerModels": "Menos modelos"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Enviado ao agente — não confirmado"
@@ -584,6 +611,28 @@
       "byteSize": "{{size}} bytes",
       "saveUpdate": "Salvar estará disponível em uma atualização do celular.",
       "fullCopySaveUpdate": "Copiar tudo e Salvar para este anexo estarão disponíveis em uma atualização do celular."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} está reconectando…",
+      "stopped": "{{hostName}} está parado. Inicie-o no seu computador.",
+      "server": "O servidor",
+      "unavailable": "{{hostName}} não está disponível no seu telefone. Abra um dos projetos dele no seu computador."
+    },
+    "goal": {
+      "chip": "Objetivo",
+      "exitMode": "Sair do modo de objetivo",
+      "placeholder": "Descreva seu objetivo e defina resultados mensuráveis para obter os melhores resultados",
+      "pursuing": "Buscando o objetivo",
+      "set": "Objetivo definido",
+      "paused": "Objetivo pausado",
+      "blocked": "Objetivo bloqueado",
+      "limited": "Objetivo limitado",
+      "clear": "Limpar objetivo",
+      "expand": "Mostrar objetivo completo",
+      "collapse": "Ocultar objetivo completo",
+      "attachmentsUnsupported": "Remova os anexos antes de definir um objetivo.",
+      "pause": "Pausar",
+      "resume": "Retomar"
     }
   },
   "common": {
@@ -816,7 +865,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
-      "openImage": "Abrir imagem"
+      "openImage": "Abrir imagem",
+      "wrapLines": "Quebrar linhas",
+      "disableLineWrap": "Desativar quebra de linha"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fechar painel inferior"
@@ -1246,6 +1297,10 @@
       "previewFile": "Pré-visualizar arquivo {{name}}",
       "retryLoading": "Tentar carregar {{path}} novamente",
       "unavailable": "Indisponível no celular"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "Copiar Nome",
+      "copyRelativePath": "Copiar Caminho Relativo"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código-fonte Markdown carregado",
@@ -1822,13 +1877,8 @@
       "noUpdate": "Sem atualização há {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "De {{sender}}",
-      "fromMore": "De {{sender}} +{{count}}",
-      "fromUnnamed": "De um agente",
-      "messageFrom": "Mensagem de {{sender}}",
-      "messageFromMore": "Mensagem de {{sender}} +{{count}}",
-      "messageFromUnnamed": "Mensagem de um agente",
-      "unnamedSender": "um agente"
+      "unnamedSender": "um agente",
+      "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Falha ao criar terminal",
@@ -1858,6 +1908,7 @@
       "countWorkflows_one": "{{count}} fluxo de trabalho",
       "countWorkflows_other": "{{count}} fluxos de trabalho",
       "detailsUnavailable": "Os detalhes da tarefa não estão disponíveis para esta sessão.",
+      "outputFile": "Saída: {{value0}}",
       "groupAgents": "Agentes",
       "groupMonitors": "Monitores",
       "groupShell": "Shell",
@@ -2211,8 +2262,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Comandos não podem ser salvos em uma mensagem na fila.",
-      "editing": "Editando mensagem",
-      "editingAttributed": "Editando mensagem · {{attribution}}"
+      "editing": "Editando mensagem"
     },
     "quickCommandEditorForm": {
       "action": "Ação",

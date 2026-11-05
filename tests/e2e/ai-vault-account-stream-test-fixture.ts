@@ -6,7 +6,7 @@ import { installFakeAppEnvironment } from '../../config/scripts/test-runtime/env
 import {
   RuntimeAccountController,
   type RuntimeAccountServices
-} from '../../src/main/runtime/runtime-account-controller'
+} from '../../src/main/runtime/agent-session/environment/runtime-account-controller'
 import { RuntimeSubscriptionRegistry } from '../../src/main/runtime/runtime-subscription-registry'
 import { RateLimitService } from '../../src/main/rate-limits/service'
 import { getManagedDataAccountService } from '../../src/main/managed-data-accounts/service'

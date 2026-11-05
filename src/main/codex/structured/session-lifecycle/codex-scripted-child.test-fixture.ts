@@ -2,7 +2,7 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { ScriptedAgentChild } from '../../../runtime/structured-agent-scripted-child.test-fixture'
+import type { ScriptedAgentChild } from '../../../runtime/agent-session/installation/structured-agent-scripted-child.test-fixture'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'

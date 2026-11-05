@@ -1,16 +1,17 @@
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import {
-  OrcaRuntimeService,
-  addWorktree,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
-  getBranchConflictKind,
   getHostedReviewForBranchMock,
-  getPRForBranchMock,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
+  getPRForBranchMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { getBranchConflictKind } from '../../git/repo-branch-conflict'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { TEST_REPO_PATH, store } from './orca-runtime-test-fixtures.spec'
 import { getLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 describe('OrcaRuntimeService', () => {

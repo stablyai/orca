@@ -254,7 +254,7 @@
 1 src/renderer/src/runtime/web-runtime-session-tab-lifecycle.ts
 1 src/renderer/src/runtime/web-runtime-session-tab-move.ts
 1 src/renderer/src/runtime/web-runtime-terminal-create-operation.ts
-3 src/renderer/src/runtime/web-runtime-terminal-creation.ts
+1 src/renderer/src/runtime/web-runtime-terminal-creation.ts
 1 src/renderer/src/runtime/web-runtime-worktree-activation.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/active-session-subscription.ts
 2 src/renderer/src/runtime/web-session-tabs-sync/global-session-subscription.ts

@@ -4,7 +4,7 @@ const { join, resolve } = require('node:path')
 const {
   MACOS_FOLDER_USAGE_DESCRIPTIONS,
   applyMacHelperFolderUsageDescriptions
-} = require('./scripts/macos-folder-usage-descriptions.cjs')
+} = require('./scripts/desktop-distribution/macos/macos-folder-usage-descriptions.cjs')
 const electronBuilderNativeRebuild = require('./scripts/desktop-distribution/runtime-verification/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
@@ -70,14 +70,20 @@ const {
   verifySkillsCliRuntime
 } = require('./scripts/runtime-verification/skills-cli/verify-skills-cli-runtime.cjs')
 const { assertNotDarkBuild } = require('./dark-build-switches.cjs')
-const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
+const {
+  verifyStaticAppImagePackage
+} = require('./scripts/desktop-distribution/appimage/static-appimage-package-contract.cjs')
 const {
   appImageNodeRuntimeFpmArgs,
   placeAppImageNodeRuntime,
   verifyAppImageNodeRuntimeServesPty
 } = require('./scripts/desktop-distribution/linux/appimage-node-runtime.cjs')
-const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
-const { buildMacShipItScheduling } = require('./scripts/macos-shipit-scheduling.cjs')
+const {
+  signWindowsUninstallerViaSignPath
+} = require('./scripts/desktop-distribution/windows/windows-uninstaller-signing.cjs')
+const {
+  buildMacShipItScheduling
+} = require('./scripts/desktop-distribution/macos/macos-shipit-scheduling.cjs')
 
 // Dev channels need release bundle ID/signature/notarization so Squirrel.Mac accepts updates and macOS retains app identity.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'

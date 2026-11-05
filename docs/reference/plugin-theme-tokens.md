@@ -56,7 +56,7 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--split-divider` | Divider between split tab groups | no | Orca's built-in color |
 | `--split-divider-hover` | Split divider while hovered or dragged | no | Orca's built-in color |
 | `--chat-user-message` | Your messages in chat; may be translucent, it paints over the chat | no | `--foreground` mixed lightly into the chat background |
-| `--text-link` | Links in Markdown previews and editors | no | Orca's built-in color |
+| `--text-link` | Links in Markdown previews, editors and agent chat | no | Orca's built-in color |
 | `--diff-added` | Added-line hue: Monaco overview ruler and chat diff text | no | same as `--git-decoration-added` |
 | `--diff-added-background` | Added lines in diffs | no | light: `--diff-added` at 13% opacity; dark: `--diff-added` at 16% opacity |
 | `--diff-added-emphasis` | Added characters within a changed line | no | light: `--diff-added` at 15% opacity; dark: `--diff-added` at 20% opacity |

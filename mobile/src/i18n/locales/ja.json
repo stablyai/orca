@@ -189,6 +189,11 @@
       "sendQueueHint": "現在のターンの後に実行します",
       "sendSteerHint": "Agent が今行っている作業に加えます"
     },
+    "contextUsage": {
+      "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
+      "title": "コンテキスト",
+      "estimated": "最後の応答から推定。"
+    },
     "composerAttachments": {
       "attachedImage": "添付画像",
       "file": "ファイル",
@@ -223,7 +228,18 @@
       "selectText": "テキストを選択"
     },
     "nativeChatImageViewer": {
-      "closeImage": "画像を閉じる"
+      "closeImage": "画像を閉じる",
+      "imageActions": "画像の操作",
+      "copyImage": "画像をコピー",
+      "saveImage": "画像を保存",
+      "share": "共有…",
+      "imageCopied": "画像をコピーしました",
+      "imageSaved": "画像を保存しました",
+      "copyFailed": "画像をコピーできませんでした",
+      "saveFailed": "画像を保存できませんでした",
+      "shareFailed": "画像を共有できませんでした",
+      "photosAccessDenied": "設定で Orca に写真の追加を許可してください",
+      "imageTooLarge": "この画像は大きすぎます"
     },
     "nativeChatProse": {
       "attachedImage": "添付画像",
@@ -282,7 +298,9 @@
       "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
       "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
       "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
-      "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。"
+      "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。",
+      "signIn": "サインイン",
+      "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます"
     },
     "orcaStop": {
       "canContinue": "この会話で続行できます。",
@@ -291,6 +309,13 @@
       "remote": "この応答の途中で、{{machine}} の Orca が停止しました。",
       "unnamedServer": "リモートサーバー",
       "update": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。"
+    },
+    "interruptedContinue": {
+      "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
+      "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。"
+    },
+    "sendError": {
+      "dismiss": "閉じる"
     },
     "permission": {
       "needsAccessTo": "アクセスが必要なパス: ",
@@ -375,7 +400,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "既定",
-      "notReportedMarker": "未報告"
+      "notReportedMarker": "未報告",
+      "moreModels": "その他のモデル",
+      "fewerModels": "表示を減らす"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Agent に送信済み — 未確認"
@@ -545,6 +572,28 @@
       "byteSize": "{{size}} バイト",
       "saveUpdate": "保存はスマートフォンのアップデートで利用可能になります。",
       "fullCopySaveUpdate": "この添付ファイルの全内容のコピーと保存は、スマートフォンのアップデートで利用可能になります。"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} に再接続しています…",
+      "stopped": "{{hostName}} は停止しています。コンピューターで起動してください。",
+      "server": "サーバー",
+      "unavailable": "{{hostName}} はスマートフォンから利用できません。コンピューターでそのプロジェクトのいずれかを開いてください。"
+    },
+    "goal": {
+      "chip": "ゴール",
+      "exitMode": "ゴールモードを終了する",
+      "placeholder": "目標を説明し、最良の結果を得るために測定可能な結果を定義する",
+      "pursuing": "目標を追求中",
+      "set": "目標を設定済み",
+      "paused": "一時停止されたゴール",
+      "blocked": "ゴール阻止",
+      "limited": "目標が限定されている",
+      "clear": "目標を削除",
+      "expand": "完全な目標を表示",
+      "collapse": "完全な目標を非表示にする",
+      "attachmentsUnsupported": "目標を設定する前に添付ファイルを削除してください。",
+      "pause": "一時停止",
+      "resume": "再開"
     }
   },
   "common": {
@@ -774,7 +823,9 @@
     },
     "markdownBlocks": {
       "copyCode": "コードをコピーする",
-      "openImage": "画像を開く"
+      "openImage": "画像を開く",
+      "wrapLines": "行を折り返す",
+      "disableLineWrap": "行の折り返しを無効にする"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "ドロワーを閉じる"
@@ -1203,6 +1254,10 @@
       "previewFile": "ファイル「{{name}}」をプレビュー",
       "retryLoading": "{{path}} の読み込みを再試行",
       "unavailable": "モバイルでは利用不可"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "名前をコピー",
+      "copyRelativePath": "相対パスをコピー"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",
@@ -1765,13 +1820,8 @@
       "noUpdate": "{{value0}}更新なし"
     },
     "agentMessageAttribution": {
-      "from": "{{sender}} から",
-      "fromMore": "{{sender}} ほか {{count}} 名から",
-      "fromUnnamed": "Agent から",
-      "messageFrom": "{{sender}} からのメッセージ",
-      "messageFromMore": "{{sender}} ほか {{count}} 名からのメッセージ",
-      "messageFromUnnamed": "Agent からのメッセージ",
-      "unnamedSender": "Agent"
+      "unnamedSender": "Agent",
+      "fromSender": "送信元:"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "ターミナルの作成に失敗しました。",
@@ -1796,6 +1846,7 @@
       "countWorkflows_one": "{{count}} ワークフロー",
       "countWorkflows_other": "{{count}} ワークフロー",
       "detailsUnavailable": "このセッションではタスクの詳細は利用できません。",
+      "outputFile": "出力: {{value0}}",
       "groupAgents": "Agent",
       "groupMonitors": "モニター",
       "groupShell": "シェル",
@@ -2139,8 +2190,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "キュー内のメッセージにコマンドは保存できません。",
-      "editing": "メッセージを編集中",
-      "editingAttributed": "メッセージを編集中 · {{attribution}}"
+      "editing": "メッセージを編集中"
     },
     "quickCommandEditorForm": {
       "action": "操作",

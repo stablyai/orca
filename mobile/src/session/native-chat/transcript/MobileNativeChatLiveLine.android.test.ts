@@ -27,8 +27,12 @@ vi.mock('./MobileNativeChatReasoningRow', () => ({
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
+vi.mock('../../MobileLinkActionSheet', () => ({ MobileLinkActionSheet: 'LinkActionSheet' }))
 vi.mock('../visual/MobileNativeChatImageViewer', () => ({
   MobileNativeChatImageViewer: 'ImageViewer'
+}))
+vi.mock('../visual/MobileImageViewerActions', () => ({
+  MobileImageViewerActions: 'ImageViewerActions'
 }))
 
 import { MobileNativeChatLiveLine } from './MobileNativeChatLiveLine'

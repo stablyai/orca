@@ -202,7 +202,9 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
           ]),
           ...(antiSlop.length > 0
             ? [
-                step(node, ['config/scripts/sync-anti-slop-plugin.mjs']),
+                step(node, [
+                  'config/scripts/static-analysis/oxlint-contracts/sync-anti-slop-plugin.mjs'
+                ]),
                 step(bun(), [
                   '--smol',
                   ...oxlint.prefixArgs,

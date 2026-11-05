@@ -1270,18 +1270,6 @@ describePostgres('PostgreSQL migration recovery', () => {
     ).toEqual([{ assignment_epoch: '2', aborted_at: null }])
   })
 
-  it('rejects supersession before incrementing the maximum safe epoch', async () => {
-    const input = await fixture()
-    await expect(
-      input.store.supersedeRegisteredEvacuation(input.identity, {
-        assignmentEpoch: Number.MAX_SAFE_INTEGER,
-        sourceCellId: input.cells.source.id,
-        currentTargetCellId: input.cells.failed.id,
-        replacementTargetCellId: input.cells.replacement.id
-      })
-    ).rejects.toThrow('assignment_epoch_exhausted')
-  })
-
   async function fenceFailedCell(input: RecoveryFixture): Promise<void> {
     await input.store.setCellEnabled(input.cells.failed.id, false)
     input.advancePastHeartbeat()

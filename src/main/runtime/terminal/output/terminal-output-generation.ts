@@ -1,9 +1,9 @@
 import { OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector } from './terminal-derived-agent-facts'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
-import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
-import { findLastCompleteOscTitleRange } from '../../orca-runtime-core'
+import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import { findLastCompleteOscTitleRange } from './terminal-osc-title-range'
 import { extractLastOscTitle } from '../../../../shared/agent-status/title/osc-title-extraction'
-import type { RuntimeTerminalDataMeta } from '../../runtime-terminal-stream-consumers'
+import type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()

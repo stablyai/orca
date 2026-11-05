@@ -1,17 +1,17 @@
+import { composeAgentLaunchProfile } from '../../../src/shared/agent-launch/choices/tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from '../../../src/shared/agent-launch/startup/tui-agent-startup-shell'
 import * as startupInputs from '../../../src/shared/agent-launch/startup/agent-startup-plan-inputs'
 import { resolveBaselineAgentStartupPlanInputs } from '../../../src/shared/agent-launch/startup/agent-startup-plan-inputs-baseline-test-fixture'
-import {
-  OrcaRuntimeService,
-  getDefaultWorkspaceSession
-} from '../../../src/main/runtime/orca-runtime-test-mocks.spec'
-import '../../../src/main/runtime/orca-runtime-test-lifecycle.spec'
+import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
+import '../../../src/main/runtime/orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession
-} from '../../../src/main/runtime/orca-runtime-test-fixtures.spec'
-import { committingSpawn } from '../../../src/main/runtime/bind-first-pane.test-fixture'
+} from '../../../src/main/runtime/orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import { committingSpawn } from '../../../src/main/runtime/orca-runtime-tests/bind-first-pane.test-fixture'
 import type { RuntimePtyController } from '../../../src/main/runtime/runtime-pty-controller-contract'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'
@@ -127,6 +127,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     { agent: 'goose', mode: 'own', hostMode: 'full-access', authority: true, fail: true }
   ] as const)('preserves a complete launch at the pinned old spawn boundary: %j', async (test) => {
     const settings = {
+      agentCmdOverrides: { [test.agent]: '/host/agent-cli' },
       agentPermissionDefault: test.hostMode,
       agentDefaultEnv:
         test.mode === 'own' && !('userMode' in test)
@@ -159,9 +160,6 @@ describe('createWebRuntimeSessionTerminal', () => {
     if (!plan) {
       throw new Error('Missing startup plan')
     }
-    vi.spyOn(startupInputs, 'resolveAgentStartupPlanInputs').mockImplementation(
-      resolveBaselineAgentStartupPlanInputs
-    )
     const spawn = vi.fn(
       async (_args: Parameters<NonNullable<RuntimePtyController['spawn']>>[0]) => ({
         id: 'baseline-pty'
@@ -187,7 +185,13 @@ describe('createWebRuntimeSessionTerminal', () => {
     mocks.getState.mockReturnValue({
       ...state,
       setActiveTabType: vi.fn(),
-      activeTabTypeByWorktree: {}
+      activeTabTypeByWorktree: {},
+      settings: {
+        ...state.settings,
+        agentCmdOverrides: { [test.agent]: '/desktop/agent-cli' },
+        agentDefaultArgs: { [test.agent]: '--model desktop-only-qa' },
+        agentDefaultEnv: { [test.agent]: { DESKTOP_ENV: 'desktop' } }
+      }
     })
     const creates: string[] = []
     const runtimeCall = vi.fn(async (request: { method: string; params?: unknown }) => {
@@ -201,6 +205,18 @@ describe('createWebRuntimeSessionTerminal', () => {
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
             capabilities: test.authority ? ['agent-session.host-authority.v1'] : []
+          }
+        }
+      }
+      if (request.method === 'settings.get') {
+        return {
+          id: 'settings',
+          ok: true,
+          result: {
+            settings: {
+              agentCmdOverrides: settings.agentCmdOverrides,
+              ...composeAgentLaunchProfile(settings, 'linux')
+            }
           }
         }
       }
@@ -227,6 +243,9 @@ describe('createWebRuntimeSessionTerminal', () => {
               })
         })
       }
+      vi.spyOn(startupInputs, 'resolveAgentStartupPlanInputs').mockImplementation(
+        resolveBaselineAgentStartupPlanInputs
+      )
       const response = await dispatcher.dispatch(
         { id: 'create', authToken: 'test', method: request.method, params: request.params },
         { clientKind: 'runtime', clientId: 'paired-client' }
@@ -257,6 +276,9 @@ describe('createWebRuntimeSessionTerminal', () => {
         agent: test.agent,
         worktreeId: TEST_WORKTREE_ID,
         environmentId: ENVIRONMENT_ID,
+        agentArgs:
+          'loose' in test ? '--dangerously-skip-permissions --verbose' : '--profile "with spaces"',
+        sessionOptions: options,
         buildStartup: () => ({
           startupPlan: plan,
           pasteDraftAfterLaunch: null,
@@ -272,11 +294,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       expect(result.outcome.status).toBe('fail' in test ? 'failed' : 'created')
     }
     expect(creates).toEqual([
-      test.agent === 'goose'
-        ? 'background' in test
-          ? 'terminal.create'
-          : 'session.tabs.createTerminal'
-        : 'terminal.createAgentSession'
+      'background' in test ? 'terminal.create' : 'session.tabs.createTerminal'
     ])
     expect(spawn).toHaveBeenCalledTimes(1)
     const final = spawn.mock.calls[0][0]
