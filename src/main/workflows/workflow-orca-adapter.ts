@@ -224,8 +224,8 @@ export function createWorkflowOrcaAdapter(runtime: OrcaRuntimeService): Workflow
     readWorkerAnswer({ orcaDispatchId, terminalHandle, startedAtMs }) {
       return captureWorkflowWorkerAnswer({
         runtime,
-        readTerminal: (dispatch, limit) =>
-          call('orchestration.workerRead', { dispatch, source: 'terminal', limit }),
+        readWorkerOutput: (dispatch) =>
+          call('orchestration.workerRead', { dispatch, source: 'auto' }),
         orcaDispatchId,
         terminalHandle,
         startedAtMs

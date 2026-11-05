@@ -1,23 +1,29 @@
-import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import type { WorkflowWorkerAnswer } from '../../shared/workflow/workflow-run-types'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { replaceDispatchCapabilities } from '../runtime/orchestration/worker-terminal-redaction'
 import { MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT } from '../runtime/orchestration/worker-transcript-payload'
 import { readWorkerTranscript } from '../runtime/orchestration/worker-transcript-read'
+import { readStructuredWorkerJournalMessages } from '../runtime/rpc/methods/orchestration-structured-worker-journal-messages'
 import { record } from './workflow-orca-receipts'
 
 const MAX_ANSWER_CHARS = 64_000
-const TERMINAL_ANSWER_LINES = 400
 
 export type CapturedWorkflowAnswer = Omit<WorkflowWorkerAnswer, 'capturedAt'>
 
-function assistantText(messages: readonly NativeChatMessage[]): string {
+/** Assistant prose only; read defensively because worker-read results arrive untyped. */
+function assistantText(messages: readonly unknown[]): string {
   return messages
-    .filter((message) => message.role === 'assistant')
-    .flatMap((message) =>
-      message.blocks.flatMap((block) => (block.type === 'text' ? [block.text.trim()] : []))
-    )
+    .flatMap((value) => {
+      const message = record(value)
+      if (message.role !== 'assistant' || !Array.isArray(message.blocks)) {
+        return []
+      }
+      return message.blocks.flatMap((value: unknown) => {
+        const block = record(value)
+        return block.type === 'text' && typeof block.text === 'string' ? [block.text.trim()] : []
+      })
+    })
     .filter(Boolean)
     .join('\n\n')
 }
@@ -68,14 +74,22 @@ async function readTranscriptAnswer(
     : null
 }
 
-/** What a workflow worker wrote, from its transcript when readable, else its terminal screen. */
+/** What a workflow worker wrote: its chat journal or session log when readable, else its terminal screen. */
 export async function captureWorkflowWorkerAnswer(args: {
   runtime: OrcaRuntimeService
-  readTerminal: (dispatchId: string, lines: number) => Promise<unknown>
+  readWorkerOutput: (dispatchId: string) => Promise<unknown>
   orcaDispatchId: string
   terminalHandle: string | null
   startedAtMs: number
 }): Promise<CapturedWorkflowAnswer | null> {
+  const journal = await readStructuredWorkerJournalMessages(
+    args.runtime.getOrchestrationDb(),
+    args.orcaDispatchId
+  ).catch(() => null)
+  const fromJournal = journal ? bounded('transcript', assistantText(journal), false) : null
+  if (fromJournal) {
+    return fromJournal
+  }
   if (args.terminalHandle) {
     const fromTranscript = await readTranscriptAnswer(
       args.runtime,
@@ -86,10 +100,13 @@ export async function captureWorkflowWorkerAnswer(args: {
       return fromTranscript
     }
   }
-  // worker-read redacts, and still answers from the archive once the terminal is released.
-  const terminal = record(
-    record(await args.readTerminal(args.orcaDispatchId, TERMINAL_ANSWER_LINES)).terminal
-  )
+  // worker-read redacts, and still answers from its archive once the worker is released.
+  const read = record(await args.readWorkerOutput(args.orcaDispatchId))
+  const transcript = record(read.transcript)
+  if (Array.isArray(transcript.messages)) {
+    return bounded('transcript', assistantText(transcript.messages), transcript.limited === true)
+  }
+  const terminal = record(read.terminal)
   const tail = Array.isArray(terminal.tail)
     ? terminal.tail.filter((line): line is string => typeof line === 'string')
     : []

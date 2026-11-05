@@ -74,6 +74,8 @@ function controls(
   const reachable = routes.filter((route) => route.address)
   return joinBlocks([
     `You are the "${node.label}" step of an Orca workflow${iteration > 0 ? ` (revision ${iteration + 1})` : ''}.`,
+    // Orca captures this reply as the step's answer; worker_done carries only a short summary.
+    'Write your complete answer or result as a normal reply before you send worker_done. The workflow shows that reply to the user as your answer.',
     skills.length > 0 ? `Use these installed skills where they apply: ${skills.join(', ')}.` : '',
     expected.length > 0 ? `Expected tools: ${expected.join(', ')}.` : '',
     avoid.length > 0 ? `Do not use: ${avoid.join(', ')}.` : '',
