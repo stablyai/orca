@@ -152,10 +152,11 @@ export function refuseFinishedRemoteWorker(
     return
   }
   const paneKey = sender.paneKey ?? undefined
-  const local = [
-    db.getActiveDispatchForIdentity(sender.address, paneKey),
-    db.getLatestDispatchForTerminal(sender.address, paneKey)
-  ].find((dispatch) => dispatch && speaksAs(db, sender, dispatch))
+  const speaks = (dispatch: DispatchContextRow | undefined) =>
+    dispatch && speaksAs(db, sender, dispatch) ? dispatch : undefined
+  const local =
+    speaks(db.getActiveDispatchForIdentity(sender.address, paneKey)) ??
+    speaks(db.getLatestDispatchForTerminal(sender.address, paneKey))
   if (local) {
     const working = local.status === 'pending' || local.status === 'dispatched'
     const recipient = working ? dispatchReportMailbox(db, local) : `dispatch:${local.id}`

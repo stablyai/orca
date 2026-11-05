@@ -282,18 +282,43 @@ describe('a worker after its worker_done', () => {
     runs.mockReturnValue('runtime_test:term_worker:1')
     const local = await localWorker(db, ctx, 'runtime_test:term_worker:1')
     finishRemoteWorker(db, 'runtime_test:term_worker:1')
-    await expect(send()).rejects.toMatchObject({ code: 'recipient_ambiguous' })
-    await expect(ask()).rejects.toMatchObject({ code: 'recipient_ambiguous' })
+    const ambiguous = (recipient: string) => ({
+      code: 'recipient_ambiguous',
+      message: expect.stringContaining(`use --to ${recipient}.`)
+    })
+    await expect(send()).rejects.toMatchObject(ambiguous(`dispatch:${local.dispatchId}`))
+    await expect(ask()).rejects.toMatchObject(ambiguous(`dispatch:${local.dispatchId}`))
     await expect(send({ to: `dispatch:${local.dispatchId}` })).resolves.toMatchObject({
       message: { to_handle: `run:${local.runId}` }
     })
+    const asked = harness.call(
+      'orchestration.ask',
+      {
+        from: 'term_worker',
+        question: 'Finished?',
+        to: `dispatch:${local.dispatchId}`,
+        timeoutMs: 1
+      },
+      ctx
+    )
+    await expect(asked).resolves.toMatchObject({ timedOut: true })
+    expect(db.getUnreadMessages(`run:${local.runId}`).at(-1)?.type).toBe('question')
 
     // A local worker working there names its coordinator the same way.
     const working = await localWorker(db, ctx, 'runtime_test:term_worker:1', false)
-    const refused = send().catch((error: unknown) => error)
-    await expect(refused).resolves.toMatchObject({ code: 'recipient_ambiguous' })
-    const named = String(((await refused) as Error).message).match(/--to (\S+)\.$/)?.[1]
-    await expect(send({ to: named })).resolves.toMatchObject({ message: { run_id: working.runId } })
+    const coordinator = `run:${working.runId}`
+    await expect(send()).rejects.toMatchObject(ambiguous(coordinator))
+    await expect(send({ to: coordinator })).resolves.toMatchObject({
+      message: { to_handle: coordinator }
+    })
+    await expect(
+      harness.call(
+        'orchestration.ask',
+        { from: 'term_worker', question: 'Working?', to: coordinator, wait: false },
+        ctx
+      )
+    ).resolves.toMatchObject({ messageId: expect.any(String) })
+    expect(db.getUnreadMessages(coordinator).at(-1)?.type).toBe('question')
   })
 
   it('finds the remote worker by the process it ran in, not the newest remote row', async () => {
