@@ -14,8 +14,7 @@ vi.mock('../activation/orcad-activation-record-store', () => ({
   readOrcadActivationRecord: vi.fn(async () => ({ active: 'orcad-1.2.3' }))
 }))
 vi.mock('../../ssh/orcad-recovery-slot', () => ({
-  orcadSlotDir: (_slot: unknown, version: string) => `/home/u/.orca-remote/${version}`,
-  slotLiveness: vi.fn(async () => 'DEAD')
+  orcadSlotDir: (_slot: unknown, version: string) => `/home/u/.orca-remote/${version}`
 }))
 vi.mock('../install/orcad-remote-record-file', () => ({
   // The latched run's lock: left behind when it died, removed when it stopped cleanly.
@@ -30,7 +29,6 @@ vi.mock('../install/orcad-remote-log-tail', () => ({
 
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
-import { slotLiveness } from '../../ssh/orcad-recovery-slot'
 import { OrcadLaunchReadinessError } from '../../ssh/orcad-active-readiness'
 import {
   OrcadWindowsLaunchFailedError,
@@ -60,9 +58,23 @@ function input(): OrcadManagedServingInput {
   }
 }
 
+type Wake = Awaited<ReturnType<typeof wakeStoppedManagedOrcad>>
+
+/** A stopped slot: the wake consults the launch gate, then launches as `launch` does. */
+let launches = 0
+function stoppedSlotLaunches(launch: (onStarting?: () => void) => Promise<Wake>): void {
+  vi.mocked(wakeStoppedManagedOrcad).mockImplementation(async (_slot, onStarting, mayLaunch) => {
+    if (mayLaunch && !mayLaunch()) {
+      return { outcome: 'launch-refused' }
+    }
+    launches += 1
+    return launch(onStarting)
+  })
+}
+
 /** Each restarted orcad reports how the run before it ended. */
 function startsReporting(previousUnexpectedExit: unknown): void {
-  vi.mocked(wakeStoppedManagedOrcad).mockImplementation(async (_slot, onStarting) => {
+  stoppedSlotLaunches(async (onStarting) => {
     onStarting?.()
     const health = { previousIdleStop: null, previousUnexpectedExit }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only health is read.
@@ -80,6 +92,7 @@ const CRASHED = { pid: 4242, version: '1.2.3', acquiredAt: '2026-11-04T10:00:00.
 
 beforeEach(() => {
   vi.clearAllMocks()
+  launches = 0
   getManagedOrcadCrashLoopBrake().forget('env-1')
   setManagedOrcadStartListener(listener)
   vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -95,7 +108,7 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
 
     const serving = await findStopped()
 
-    expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(3)
+    expect(launches).toBe(3)
     expect(serving).toEqual({
       state: 'unverifiable',
       detail: expect.stringContaining(
@@ -110,11 +123,11 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
       startsReporting(report)
       expect(await findStopped()).toMatchObject({ state: 'started' })
     }
-    expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(4)
+    expect(launches).toBe(4)
   })
 
   it('also stops after starts that die before becoming ready, counting each run once', async () => {
-    vi.mocked(wakeStoppedManagedOrcad).mockImplementation(async (_slot, onStarting) => {
+    stoppedSlotLaunches(async (onStarting) => {
       onStarting?.()
       throw new OrcadLaunchReadinessError('rejected', 'orcad did not become ready')
     })
@@ -126,13 +139,13 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     expect(await findStopped()).toMatchObject({ state: 'started' })
 
     expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
-    expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(4)
+    expect(launches).toBe(4)
   })
 
   it('also stops after the Windows launcher reports failing to start it, and says how', async () => {
-    vi.mocked(wakeStoppedManagedOrcad).mockRejectedValue(
-      new OrcadWindowsLaunchFailedError('CreateProcess failed (code 5)')
-    )
+    stoppedSlotLaunches(async () => {
+      throw new OrcadWindowsLaunchFailedError('CreateProcess failed (code 5)')
+    })
     for (let i = 0; i < 3; i++) {
       await findStopped()
     }
@@ -143,13 +156,15 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
         "Last failed start: orcad's Windows launcher did not start the candidate: CreateProcess failed (code 5)."
       )
     })
-    expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(3)
+    expect(launches).toBe(3)
   })
 
   // Nothing ran, and the refusal's own message says what to change on the host.
   it('keeps showing a Windows host-policy refusal instead of braking on it', async () => {
     const refusal = new OrcadWindowsLaunchRefusedError('breakaway-denied')
-    vi.mocked(wakeStoppedManagedOrcad).mockRejectedValue(refusal)
+    stoppedSlotLaunches(async () => {
+      throw refusal
+    })
     for (let i = 0; i < 4; i++) {
       expect(await findStopped()).toEqual({ state: 'unverifiable', detail: refusal.message })
     }
@@ -160,7 +175,7 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     for (let i = 0; i < 3; i++) {
       await findStopped()
     }
-    vi.mocked(slotLiveness).mockResolvedValueOnce('LIVE')
+    // A live slot never reaches the launch decision.
     vi.mocked(wakeStoppedManagedOrcad).mockResolvedValueOnce({ outcome: 'serving' })
 
     expect(await findStopped()).toEqual({
@@ -190,7 +205,7 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     const second = ensureManagedOrcadServing(input())
     await Promise.all([first, second])
 
-    expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(3)
+    expect(launches).toBe(3)
   })
 
   it('does not let a start begun before a reconnect count against it', async () => {

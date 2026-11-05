@@ -2,8 +2,7 @@
 import { OrcadUnexpectedExitSchema } from '../../../shared/orcad-unexpected-exit'
 import type { OrcadHealth } from '../../orcad/orcad-health'
 import { OrcadLaunchReadinessError } from '../../ssh/orcad-active-readiness'
-import { orcadSlotDir, slotLiveness, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
-import { orcadLivenessProvenExited } from '../install/orcad-remote-launch'
+import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
 import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
@@ -114,7 +113,7 @@ export function getManagedOrcadCrashLoopBrake(): ManagedOrcadCrashLoopBrake {
 type ManagedOrcadSlot = OrcadSlotOptions
 
 type BrakedWake =
-  | Awaited<ReturnType<typeof wakeStoppedManagedOrcad>>
+  | Exclude<Awaited<ReturnType<typeof wakeStoppedManagedOrcad>>, { outcome: 'launch-refused' }>
   | { outcome: 'crash-loop'; detail: string }
 
 const wakes = new Map<string, Promise<unknown>>()
@@ -156,12 +155,19 @@ async function wakeUnlessEngaged(
     // This wake starts the fresh budget, so it must count.
     epoch = brake.resetEpoch(environmentId)
   }
-  // The brake refuses only a new launch; a live server is still reported as it is.
-  if (brake.engaged(environmentId) && (await activeSlotProvenExited(slot))) {
-    return { outcome: 'crash-loop', detail: await crashLoopDetail(environmentId, hostLabel, slot) }
-  }
   try {
-    const wake = await wakeStoppedManagedOrcad(slot, onStarting)
+    // The brake refuses only a new launch, at the decision itself; live servers are reported as they are.
+    const wake = await wakeStoppedManagedOrcad(
+      slot,
+      onStarting,
+      () => !brake.engaged(environmentId)
+    )
+    if (wake.outcome === 'launch-refused') {
+      return {
+        outcome: 'crash-loop',
+        detail: await crashLoopDetail(environmentId, hostLabel, slot)
+      }
+    }
     if (wake.outcome === 'started') {
       brake.noteStarted(environmentId, epoch, wake.readiness.health)
     }
@@ -176,19 +182,6 @@ async function wakeUnlessEngaged(
       brake.noteFailedStart(environmentId, epoch, error.message)
     }
     throw error
-  }
-}
-
-async function activeSlotProvenExited(slot: ManagedOrcadSlot): Promise<boolean> {
-  try {
-    const active = (await readOrcadActivationRecord(slot)).active
-    return (
-      active !== null &&
-      orcadLivenessProvenExited(await slotLiveness(slot, orcadSlotDir(slot, active)))
-    )
-  } catch {
-    // Unproven: stay braked rather than risk another launch.
-    return true
   }
 }
 

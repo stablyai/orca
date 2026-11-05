@@ -31,13 +31,17 @@ type OrcadManagedWake =
   | { outcome: 'fenced' }
   | { outcome: 'started'; readiness: ServeReadiness }
   | { outcome: 'recovery-refused'; reason: string }
+  /** Proven stopped, but the caller's gate refused a new launch. */
+  | { outcome: 'launch-refused' }
 
 /** Start only proven-stopped active slots; leave live or unverifiable processes alone. */
 export function wakeStoppedManagedOrcad(
   options: OrcadSlotOptions,
-  onStarting: () => void = () => {}
+  onStarting: () => void = () => {},
+  /** Checked under the fence, at the launch decision itself. */
+  mayLaunch: () => boolean = () => true
 ): Promise<OrcadManagedWake> {
-  return serializedWake(options, (host) => wakeAfterPrior(options, host, onStarting))
+  return serializedWake(options, (host) => wakeAfterPrior(options, host, onStarting, mayLaunch))
 }
 
 /**
@@ -105,7 +109,8 @@ function serializedWake<T>(
 async function wakeAfterPrior(
   options: OrcadSlotOptions,
   host: string,
-  onStarting: () => void
+  onStarting: () => void,
+  mayLaunch: () => boolean
 ): Promise<OrcadManagedWake> {
   const before = await readOrcadActivationRecord(options)
   if (!before.active) {
@@ -134,6 +139,9 @@ async function wakeAfterPrior(
       const active = (await readOrcadActivationRecord(options)).active
       if (!active) {
         return { outcome: 'not-activated' }
+      }
+      if (!mayLaunch()) {
+        return { outcome: 'launch-refused' }
       }
       const identity = await resolveOrcadSlotIdentity(options, active)
       onStarting()
