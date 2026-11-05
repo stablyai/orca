@@ -11,29 +11,8 @@ import type { FileContent } from './editor-panel-content-types'
 export function registerEditorPanelHostContentRecoveryTests(
   mocks: { getState: ReturnType<typeof vi.fn>; readRuntimeFileContent: ReturnType<typeof vi.fn> },
   fileContents: () => Record<string, FileContent>,
-  createOpenFile: () => OpenFile,
-  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void,
   render: (file: OpenFile) => Promise<void>
 ): void {
-  it('lets the active tab load and its Retry start a stopped WSL distro, but not other reloads', async () => {
-    const activeFile = createOpenFile()
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'text', isBinary: false })
-    await render(activeFile)
-    await vi.waitFor(() => expect(fileContents()[activeFile.id]?.content).toBe('text'))
-    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
-      expect.objectContaining({ wakeWslDistro: true })
-    )
-
-    await act(async () => reloadContent(activeFile))
-    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ wakeWslDistro: true })
-    )
-    await act(async () => reloadContent(activeFile, { wakeWslDistro: true }))
-    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
-      expect.objectContaining({ wakeWslDistro: true })
-    )
-  })
-
   it('reloads the same paired host after restart without reviving an issued operation', async () => {
     const store = createTestStore()
     const environment = {

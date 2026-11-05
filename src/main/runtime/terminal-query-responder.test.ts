@@ -1,7 +1,7 @@
 /** Verify emulator reply parity, per-chunk ownership, replay silence and capture races. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   markHiddenRendererPty,

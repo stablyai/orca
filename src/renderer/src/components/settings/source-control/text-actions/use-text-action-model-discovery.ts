@@ -9,6 +9,7 @@ import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../../../shared/source-c
 import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   getDiscoveredModels,
+  savedDiscoveredModels,
   withDiscoveredModels
 } from '../../../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
 import type { SourceControlAiSettingsPatch } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
@@ -47,7 +48,7 @@ function listTextModels(
         hostKey,
         agent
       )
-      if (JSON.stringify(saved) === JSON.stringify(result.models)) {
+      if (JSON.stringify(saved) === JSON.stringify(savedDiscoveredModels(result.models))) {
         return
       }
       return writeSourceControlAiSettings((current) =>

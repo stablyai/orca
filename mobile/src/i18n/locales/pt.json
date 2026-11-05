@@ -5,10 +5,13 @@
       "connecting": "Conectando ao host…",
       "connectingTo": "Conectando a {{name}}…",
       "default": "Padrão do sistema",
+      "fableWindow": "Fable",
       "hostNotFound": "Host não encontrado",
       "invalidSnapshot": "Snapshot de contas inválido recebido do host",
       "loadingAccounts": "Carregando contas…",
       "manageAccountsHint": "Adicione contas ou autentique-as novamente em Configurações → Contas no desktop.",
+      "mcpWindow": "MCP",
+      "otherAgents": "Outros agentes",
       "refreshAccounts": "Atualizar contas",
       "sessionWindow": "5h",
       "switchFailed": "Não foi possível trocar de conta",
@@ -376,7 +379,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Padrão",
-      "notReportedMarker": "Não informado"
+      "notReportedMarker": "Não informado",
+      "moreModels": "Mais modelos",
+      "fewerModels": "Menos modelos"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Enviado ao agente — não confirmado"
@@ -777,6 +782,9 @@
     },
     "hostCard": {
       "hostActions": "Ações para {{title}}",
+      "needsYou_many": "{{count}} precisam de você",
+      "needsYou_one": "{{count}} precisa de você",
+      "needsYou_other": "{{count}} precisam de você",
       "openHost": "Abrir {{title}}",
       "pairingInvalid": "Pareamento inválido",
       "pairingTemporarilyUnavailable": "Pareamento temporariamente indisponível",
@@ -1311,10 +1319,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "{{count}} em atividade",
+      "heading": "Agentes",
+      "showAll": "Mostrar todos ({{count}})",
+      "showFewer": "Mostrar menos"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar atualização do Orca {{version}}",
       "title": "Orca {{version}} está disponível",
       "updateAccessibilityLabel": "Orca {{version}} está disponível, toque para atualizar"
+    },
+    "automationsTab": {
+      "connectDesktop": "Conecte {{desktop}} para ver e executar automações.",
+      "createHint": "Toque em + para agendar um agente.",
+      "emptyTitle": "Agende o trabalho dos agentes",
+      "lastStatus": "Última: {{status}}",
+      "newAutomation": "Nova automação",
+      "noAutomations": "Ainda não há automações",
+      "pairDesktop": "Pareie um desktop para ver e executar automações.",
+      "paused": "Pausada",
+      "scheduled": "Agendadas",
+      "showFor": "Mostrar automações de",
+      "toggleFailed": "Não foi possível atualizar {{name}}",
+      "updateDesktop": "Atualize o Orca em {{desktop}} para usar automações."
     },
     "emptyState": {
       "connectedDescription": "Seu desktop aparecerá aqui. Tudo é criptografado de ponta a ponta.",
@@ -1326,9 +1354,7 @@
       "title": "Conecte seu desktop"
     },
     "listFooter": {
-      "hostPickerTitle": "Abrir tarefas em",
-      "automationsHeading": "Automações",
-      "automationsHostPickerTitle": "Abrir automações em"
+      "hostPickerTitle": "Abrir tarefas em"
     },
     "listHeader": {
       "desktopsHeading": "Desktops"
@@ -1339,6 +1365,33 @@
       "removeHostMessage": "Remover \"{{name}}\"? Você pode parear novamente mais tarde.",
       "removeHostTitle": "Remover host",
       "tryAgain": "Tente novamente."
+    },
+    "stats": {
+      "agentTime": "Tempo de agente",
+      "agentsSpawned": "Agentes iniciados",
+      "days": "{{days}}d",
+      "heading": "Suas estatísticas",
+      "hours": "{{hours}}h",
+      "minutes": "{{minutes}}min",
+      "prsCreated": "PRs criados"
+    },
+    "tabs": {
+      "automations": "Automações",
+      "chooseDesktop": "{{desktop}}, escolher outro desktop",
+      "feed": "Atividade",
+      "usage": "Uso"
+    },
+    "usage": {
+      "active": "Ativa",
+      "addAccounts": "Adicione contas em Configurações → Contas no desktop.",
+      "connectDesktop": "Conecte {{desktop}} para ver o uso das contas de agentes.",
+      "emptyTitle": "Ainda não há dados de uso",
+      "openAccountsHint": "Abre as contas deste desktop",
+      "pairDesktop": "Pareie um desktop para ver o uso das contas de agentes.",
+      "refresh": "Atualizar uso",
+      "showUsageFor": "Mostrar uso de",
+      "updatedAgo": "Atualizado há {{time}}",
+      "updatedJustNow": "Atualizado agora mesmo"
     }
   },
   "hooks": {
@@ -1539,7 +1592,7 @@
       "notificationsTitle": "Saiba quando um agente precisar de você",
       "openInChatUi": "Abrir sessões na interface de chat",
       "openInTerminal": "Abrir sessões no terminal",
-      "sessionViewDescription": "Escolha se as sessões de agentes compatíveis devem abrir no terminal ou na interface de chat neste dispositivo. Toque e segure uma aba de sessão para alternar a visualização ou altere o padrão depois em Configurações.",
+      "sessionViewDescription": "Escolha se as sessões de agentes compatíveis devem abrir no terminal ou na interface de chat neste dispositivo. Toque e segure uma aba de sessão para alternar a visualização ou altere o padrão a qualquer momento em Configurações → Interface de Chat.",
       "sessionViewTitle": "Como as sessões devem ser abertas?",
       "skipNotifications": "Pular notificações por enquanto",
       "useChatUi": "Usar interface de chat"
@@ -3983,7 +4036,6 @@
       "unknownResult": "Resultado desconhecido",
       "notReported": "Não informado",
       "searchOptions": "Buscar opções",
-      "scheduleAgentWorkAndViewRuns": "Agende o trabalho dos agentes e veja as execuções",
       "task": "Tarefa",
       "review": "Revisar"
     },

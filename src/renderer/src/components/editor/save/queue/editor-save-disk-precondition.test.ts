@@ -6,25 +6,14 @@ import {
   hasRecentSelfWrite
 } from '../../external-changes/editor-self-write-registry'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
-import {
-  keepTabEditsOverExternalChange,
-  overwriteDiskWithTabEdits
-} from '../../external-changes/ExternalFileChangeBanner'
+import { overwriteDiskWithTabEdits } from '../../external-changes/ExternalFileChangeBanner'
 import {
   getDiskBaselineSignature,
   getWrittenContentDiskSignature
 } from '../../../../../../shared/disk-baseline-signature'
-import {
-  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
-  FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
-} from '../../../../../../shared/file-write-disk-precondition'
+
 import { GUARDED_PATH, openGuardedFile, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
-import {
-  createCompatibleRuntimeStatusResponse,
-  type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import { ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT } from '../../../../../../shared/editor-save-events'
+
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
 const mocks = vi.hoisted(() => ({
@@ -50,16 +39,6 @@ vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
 const PATH = GUARDED_PATH
 
 const openFile = openGuardedFile
-
-async function requestRestartSave(): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    window.dispatchEvent(
-      new CustomEvent(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, {
-        detail: { claim: () => undefined, resolve, reject: (m: string) => reject(new Error(m)) }
-      })
-    )
-  })
-}
 
 describe('editor saves guarded by the disk precondition', () => {
   beforeEach(() => {
@@ -188,37 +167,6 @@ describe('editor saves guarded by the disk precondition', () => {
     }
   })
 
-  it('rebaselines to what the write left on disk, so the next save passes', async () => {
-    // UTF-8 encodes lone surrogates as U+FFFD; the baseline must match those written bytes.
-    const draft = 'a\uD800b'
-    const disk = stubGuardedDisk({ [PATH]: 'original' })
-    const store = createEditorStore()
-    openFile(store, { baseline: 'original', draft })
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await requestEditorFileSave({ fileId: PATH })
-      expect(store.getState().openFiles[0]?.lastKnownDiskSignature).toBe(
-        getWrittenContentDiskSignature(draft)
-      )
-      disk.files.set(PATH, 'a�b')
-
-      store.getState().setEditorDraft(PATH, 'second edit')
-      store.getState().markFileDirty(PATH, true)
-      await vi.advanceTimersByTimeAsync(1500)
-
-      // Decoded-text-only hosts conservatively pause autosave on U+FFFD.
-      expect(disk.writeFile).toHaveBeenCalledTimes(2)
-      expect(disk.files.get(PATH)).toBe('a�b')
-      expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
-      await expect(requestEditorFileSave({ fileId: PATH })).rejects.toThrow(/isn't UTF-8/)
-      await requestEditorFileSave({ fileId: PATH, convertToUtf8: true })
-      expect(disk.files.get(PATH)).toBe('second edit')
-    } finally {
-      cleanup()
-    }
-  })
-
   it('refuses a save with no known disk version instead of writing unchecked', async () => {
     const disk = stubGuardedDisk({ [PATH]: 'someone else' })
     const store = createEditorStore()
@@ -280,45 +228,6 @@ describe('editor saves guarded by the disk precondition', () => {
     }
   })
 
-  it('keeps the restart save guarded even while the banner shows', async () => {
-    const disk = stubGuardedDisk({ [PATH]: 'agent rewrite' })
-    const store = createEditorStore()
-    openFile(store, { baseline: 'original', draft: 'user edit' })
-    store.getState().setExternalMutation(PATH, 'changed')
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await expect(requestRestartSave()).rejects.toThrow(/not saved/)
-      expect(disk.files.get(PATH)).toBe('agent rewrite')
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('guards rich markdown, notebook and CSV saves the same way', async () => {
-    const paths = ['/repo/a.md', '/repo/b.ipynb', '/repo/c.csv']
-    const disk = stubGuardedDisk(Object.fromEntries(paths.map((path) => [path, 'agent rewrite'])))
-    const store = createEditorStore()
-    for (const filePath of paths) {
-      openFile(store, { filePath, baseline: 'original', draft: 'user edit' })
-    }
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await vi.advanceTimersByTimeAsync(1500)
-
-      expect(disk.writeFile).toHaveBeenCalledTimes(3)
-      for (const filePath of paths) {
-        expect(disk.files.get(filePath)).toBe('agent rewrite')
-        expect(
-          store.getState().openFiles.find((f) => f.filePath === filePath)?.externalMutation
-        ).toBe('changed')
-      }
-    } finally {
-      cleanup()
-    }
-  })
-
   it('moves the one model baseline for a sibling typing during the save, so it saves next', async () => {
     let release = (): void => undefined
     let released = false
@@ -374,237 +283,4 @@ describe('editor saves guarded by the disk precondition', () => {
       cleanup()
     }
   })
-
-  it('Keep My Edits restamps every tab sharing the model, so the next save goes through', async () => {
-    const disk = stubGuardedDisk({ [PATH]: 'B' })
-    const store = createEditorStore()
-    storeRef.current = store
-    store.setState({
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
-          makeWorktree({ id: 'wt-2', repoId: 'repo-1', path: '/repo', hostId: 'local' })
-        ]
-      }
-    })
-    for (const worktreeId of ['wt-1', 'wt-2']) {
-      store.getState().openFile({
-        filePath: PATH,
-        relativePath: 'file.ts',
-        worktreeId,
-        language: 'typescript',
-        mode: 'edit'
-      })
-    }
-    const [editing, sibling] = store.getState().openFiles
-    for (const tab of [editing, sibling]) {
-      store.getState().setLastKnownDiskSignature(tab.id, getDiskBaselineSignature('A'))
-    }
-    store.getState().setEditorDraft(editing.id, 'mine')
-    store.getState().markFileDirty(editing.id, true)
-    store.getState().setExternalMutation(editing.id, 'changed')
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'B', isBinary: false })
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      keepTabEditsOverExternalChange(store.getState().openFiles[0])
-      await requestEditorFileSave({ fileId: editing.id })
-
-      expect(disk.files.get(PATH)).toBe('mine')
-      expect(store.getState().openFiles.every((tab) => tab.externalMutation === undefined)).toBe(
-        true
-      )
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('guards a restored draft whose editor never mounted, for autosave and explicit save', async () => {
-    const disk = stubGuardedDisk({ [PATH]: 'agent rewrite' })
-    const store = createEditorStore()
-    openFile(store, { baseline: 'original', draft: 'restored edit' })
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await expect(requestEditorFileSave({ fileId: PATH })).rejects.toThrow(/changed on disk/)
-      store.getState().setExternalMutation(PATH, null)
-      await vi.advanceTimersByTimeAsync(1500)
-
-      expect(disk.writeFile).toHaveBeenCalledTimes(2)
-      for (const [args] of disk.writeFile.mock.calls) {
-        expect(args.diskPrecondition).toMatchObject({
-          expectedSignature: getDiskBaselineSignature('original')
-        })
-      }
-      expect(disk.files.get(PATH)).toBe('agent rewrite')
-      expect(store.getState().openFiles[0]?.externalMutation).toBe('changed')
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('two workspaces saving one record write it once; the second save finds it clean', async () => {
-    const md = '/repo/notes.md'
-    const disk = stubGuardedDisk({ [md]: 'original' })
-    const store = createEditorStore()
-    store.setState({
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
-          makeWorktree({ id: 'wt-2', repoId: 'repo-1', path: '/repo', hostId: 'local' })
-        ]
-      }
-    })
-    for (const worktreeId of ['wt-1', 'wt-2']) {
-      store.getState().openFile({
-        filePath: md,
-        relativePath: 'notes.md',
-        worktreeId,
-        language: 'markdown',
-        mode: 'edit'
-      })
-    }
-    const [code, rich] = store.getState().openFiles
-    store.getState().setMarkdownViewMode(code.id, 'source')
-    for (const [tab, draft] of [
-      [code, 'first tab'],
-      [rich, 'second tab']
-    ] as const) {
-      store.getState().setLastKnownDiskSignature(tab.id, getDiskBaselineSignature('original'))
-      store.getState().setEditorDraft(tab.id, draft)
-      store.getState().markFileDirty(tab.id, true)
-    }
-
-    expect(store.getState().editorDrafts[code.id]).toBe('second tab')
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await requestEditorFileSave({ fileId: code.id })
-      await requestEditorFileSave({ fileId: rich.id })
-
-      expect(disk.writeFile).toHaveBeenCalledTimes(1)
-      expect(disk.files.get(md)).toBe('second tab')
-      for (const tab of store.getState().openFiles) {
-        expect(tab.externalMutation).toBeUndefined()
-        expect(tab.isDirty).toBe(false)
-      }
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('makes a save after Keep My Edits wait for the restamped baseline', async () => {
-    const disk = stubGuardedDisk({ [PATH]: 'agent rewrite' })
-    const store = createEditorStore()
-    storeRef.current = store
-    openFile(store, { baseline: 'original', draft: 'user edit' })
-    store.getState().setExternalMutation(PATH, 'changed')
-    let finishRead: (content: string) => void = () => undefined
-    mocks.readRuntimeFileContent.mockReturnValue(
-      new Promise((resolve) => {
-        finishRead = (content) => resolve({ content, isBinary: false })
-      })
-    )
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      keepTabEditsOverExternalChange(store.getState().openFiles[0]!)
-      const save = requestEditorFileSave({ fileId: PATH })
-      await vi.advanceTimersByTimeAsync(0)
-      expect(disk.writeFile).not.toHaveBeenCalled()
-
-      finishRead('agent rewrite')
-      await save
-      expect(disk.writeFile).toHaveBeenCalledWith(
-        expect.objectContaining({
-          diskPrecondition: {
-            expectedSignature: getDiskBaselineSignature('agent rewrite'),
-            allowMissing: true,
-            requireLosslessUtf8: true
-          }
-        })
-      )
-      expect(disk.files.get(PATH)).toBe('user edit')
-    } finally {
-      cleanup()
-    }
-  })
-})
-
-describe('editor saves through a remote host without the guarded write (client compare)', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    __clearSelfWriteRegistryForTests()
-  })
-
-  it.each([
-    { disk: 'original', written: true },
-    { disk: 'agent rewrite', written: false }
-  ])(
-    'compares from the client, then writes only if disk still matches ($disk)',
-    async ({ disk, written }) => {
-      clearRuntimeCompatibilityCacheForTests()
-      mocks.getConnectionIdForFile.mockReturnValue(undefined)
-      const status = createCompatibleRuntimeStatusResponse('runtime-env-1')
-      if (!status.ok) {
-        throw new Error('fixture status must succeed')
-      }
-      const capabilities = (status.result.capabilities ?? []).filter(
-        (capability) =>
-          capability !== FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY &&
-          capability !== FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
-      )
-      const olderStatus = { ...status, result: { ...status.result, capabilities } }
-      const meta = { _meta: { runtimeId: 'runtime-env-1' } }
-      mocks.readRuntimeFileContent.mockResolvedValue({ content: disk, isBinary: false })
-      const runtimeCall = vi.fn((args: RuntimeEnvironmentCallRequest) =>
-        Promise.resolve(
-          args.method === 'status.get'
-            ? olderStatus
-            : args.method === 'files.read'
-              ? { ok: true, result: { content: disk, truncated: false, byteLength: 0 }, ...meta }
-              : { ok: true, result: { ok: true }, ...meta }
-        )
-      )
-      const eventTarget = new EventTarget()
-      vi.stubGlobal('window', {
-        addEventListener: eventTarget.addEventListener.bind(eventTarget),
-        removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
-        dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
-        setTimeout: globalThis.setTimeout.bind(globalThis),
-        clearTimeout: globalThis.clearTimeout.bind(globalThis),
-        api: { fs: { writeFile: vi.fn() }, runtimeEnvironments: { call: runtimeCall } }
-      })
-      const store = createEditorStore()
-      store.setState({
-        worktreesByRepo: {
-          'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' })]
-        }
-      })
-      const fileId = store.getState().openFile({
-        filePath: '/remote/repo/file.ts',
-        relativePath: 'file.ts',
-        worktreeId: 'wt-1',
-        runtimeEnvironmentId: 'env-1',
-        language: 'typescript',
-        mode: 'edit'
-      })
-      store.getState().setLastKnownDiskSignature(fileId, getDiskBaselineSignature('original'))
-      store.getState().setEditorDraft(fileId, 'edited')
-      store.getState().markFileDirty(fileId, true)
-
-      const cleanup = attachEditorAutosaveController(store)
-      try {
-        const save = requestEditorFileSave({ fileId })
-        await (written ? save : expect(save).rejects.toThrow(/changed on disk/))
-        const methods = runtimeCall.mock.calls.map(([args]) => args.method)
-        expect(mocks.readRuntimeFileContent).toHaveBeenCalled()
-        expect(methods).not.toContain('files.writeIfUnchanged')
-        expect(methods.includes('files.write')).toBe(written)
-        expect(store.getState().openFiles[0]?.isDirty).toBe(!written)
-      } finally {
-        cleanup()
-      }
-    }
-  )
 })

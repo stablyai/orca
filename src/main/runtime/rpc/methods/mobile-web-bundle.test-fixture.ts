@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { installFakeAppEnvironment } from '../../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { MOBILE_WEB_BUNDLE_METHODS } from './mobile-web-bundle'

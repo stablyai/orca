@@ -2,7 +2,10 @@ import type {
   AutomationCreateInput,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
-import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import {
+  AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY,
+  AUTOMATION_SURFACE_RUNTIME_CAPABILITY
+} from '../../../../shared/automation-runtime-capabilities'
 import { getRuntimeEnvironmentStatus } from '@/runtime/runtime-rpc-client'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import {
@@ -215,6 +218,20 @@ export async function prepareAutomationLaunchSetup<
     return input
   }
   const status = await sharedCapabilityProbe(authority, capabilityProbeKey(authority))
+  const modern =
+    launchSetupPatch.sources !== undefined ||
+    launchSetupPatch.choices !== undefined ||
+    launchSetupPatch.copy !== undefined ||
+    (launchSetupPatch.arguments !== undefined &&
+      launchSetupPatch.arguments.kind !== 'legacy-extras')
+  if (modern) {
+    if (!status.capabilities?.includes(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY)) {
+      throw new AutomationHostScopeUnsupportedError(
+        'Update Orca on the destination host to keep these agent launch settings, or choose another agent.'
+      )
+    }
+    return input
+  }
   if (status.capabilities?.includes(AUTOMATION_SURFACE_RUNTIME_CAPABILITY)) {
     return input
   }
@@ -223,7 +240,10 @@ export async function prepareAutomationLaunchSetup<
       'Update Orca on this host to run automations in Chat.'
     )
   }
-  const extraAgentArgs = launchSetupPatch.arguments?.value
+  const extraAgentArgs =
+    launchSetupPatch.arguments?.kind === 'legacy-extras'
+      ? launchSetupPatch.arguments.value
+      : undefined
   await assertExtraAgentArgsSupported(authority, extraAgentArgs)
   return { ...legacy, ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}) }
 }

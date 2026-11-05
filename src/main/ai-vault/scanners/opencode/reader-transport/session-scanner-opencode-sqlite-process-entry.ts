@@ -1,4 +1,5 @@
-import { isMainThread, parentPort, Worker } from 'node:worker_threads'
+import { isMainThread, parentPort } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
 import { handleOpenCodeSqliteRequest } from './session-scanner-opencode-sqlite-dispatch'
 import type { OpenCodeSqliteWorkerRequest } from './session-scanner-opencode-sqlite-worker-protocol'
 import {
@@ -98,7 +99,7 @@ if (!isMainThread) {
   })
 } else {
   // Keep stdin and the hard deadline responsive while SQLite blocks its worker.
-  const worker = new Worker(__filename)
+  const worker = spawnWorkerThread(__filename)
   let activeId: number | null = null
   let deadline: ReturnType<typeof setTimeout> | undefined
   const stop = (code: number): never => process.exit(code)
