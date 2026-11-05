@@ -25,7 +25,13 @@ vi.mock('../../../i18n/use-mobile-translation', () => ({
   }
 }))
 
-const message = { id: 'item-1', role: 'assistant' } as NativeChatMessage
+const message: NativeChatMessage = {
+  id: 'item-1',
+  role: 'assistant',
+  blocks: [{ type: 'text', text: 'ok' }],
+  timestamp: null,
+  source: 'transcript'
+}
 let renderer: ReactTestRenderer | null = null
 
 afterEach(() => {
@@ -60,7 +66,7 @@ function render(offer: MobileNativeChatForkOffer, copyText = 'ok') {
       state.offer = next
       listeners.forEach((listener) => listener())
     })
-  const find = (type: string) => renderer!.root.findAllByType(type as never)
+  const find = (type: string) => renderer!.root.findAll((node) => node.type === type)
   return { fork, publish, find }
 }
 
