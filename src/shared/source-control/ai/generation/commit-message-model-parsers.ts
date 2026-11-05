@@ -90,7 +90,8 @@ export function parseClaudeModels(stdout: string): CommitMessageModel[] {
         ...(model.supportsFastMode ? { supportsFastMode: true } : {}),
         ...(model.supportsAutoMode !== undefined
           ? { supportsAutoMode: model.supportsAutoMode }
-          : {})
+          : {}),
+        ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {})
       }
     })
   )

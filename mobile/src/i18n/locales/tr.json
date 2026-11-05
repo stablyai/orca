@@ -375,7 +375,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Varsayılan",
-      "notReportedMarker": "Bildirilmedi"
+      "notReportedMarker": "Bildirilmedi",
+      "moreModels": "Daha fazla model",
+      "fewerModels": "Daha az model"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Ajana gönderildi, onaylanmadı"
