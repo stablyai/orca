@@ -12,7 +12,7 @@ import { agentModelCatalogReleasedOwner } from '../../../src/main/native-chat/ag
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { structuredAgentSessionLiveFence } from '../../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-current-work'
 import { upgradeStoredStructuredAgentSessionOwnerExitEvidence } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-lease-release'
 import { turnVerdictFromDeathEvidence } from '../../../src/main/native-chat/agent-session-wire/termination/structured-agent-session-stale-turn-verdict'

@@ -29,7 +29,7 @@ import { structuredClaudeLifecycleEvent } from '../../../../runtime/agent-sessio
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS } from '../../termination/structured-agent-session-idle-sweep'
 import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router-test-support'

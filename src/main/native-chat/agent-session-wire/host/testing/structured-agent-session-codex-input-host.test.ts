@@ -21,8 +21,8 @@ import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../../../shared/a
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
-import { journalDatabasePath } from '../../../agent-session-journal/journal-host-database'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { journalDatabasePath } from '../../../agent-session-journal/database/journal-host-database'
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'

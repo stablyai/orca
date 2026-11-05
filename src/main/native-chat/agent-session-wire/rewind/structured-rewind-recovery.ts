@@ -1,8 +1,8 @@
 import { persistRewindRecord, settleUnsupportedClaudeRewind } from './structured-rewind-record'
 
 import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { renderJournalStatus } from '../../agent-session-journal/journal-public-read'
-import { journalInputOrder } from '../../agent-session-journal/journal-input-order'
+import { renderJournalStatus } from '../../agent-session-journal/projection/journal-public-read'
+import { journalInputOrder } from '../../agent-session-journal/input-order/journal-input-order'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import type {
   StructuredAgentSessionHostDeps,
@@ -24,7 +24,7 @@ import type { AgentSessionRecordStore } from '../../../runtime/agent-session/rec
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
-import type { JournalOperationReceipt } from '../../agent-session-journal/journal-row-writer'
+import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 
 export type RewindRecoveryDeps = {

@@ -15,13 +15,13 @@ import type {
 import {
   QueuedMessageNotConsumableError,
   QueuedMessageNotOwedError
-} from '../../agent-session-journal/queued-message-consume-error'
-import { refusingNewerOrcaJournal } from '../../agent-session-journal/journal-open-failure'
+} from '../../agent-session-journal/queued-messages/queued-message-consume-error'
+import { refusingNewerOrcaJournal } from '../../agent-session-journal/replay/journal-open-failure'
 import {
   journalRowReceiptResult,
   type MutationPlan
 } from '../operations/structured-agent-session-mutation-plans'
-import type { CommandReceiptResult } from '../../agent-session-journal/command-receipt-schema'
+import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
 import { structuredQueueHold } from './structured-agent-session-queued-gate'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { queuedMessageOwed } from './structured-agent-session-queued-mail'

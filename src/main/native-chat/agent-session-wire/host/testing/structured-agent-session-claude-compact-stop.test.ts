@@ -29,7 +29,7 @@ import {
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
 

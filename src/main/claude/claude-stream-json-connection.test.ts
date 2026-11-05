@@ -20,7 +20,7 @@ import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './structured/launch/claude-struc
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'

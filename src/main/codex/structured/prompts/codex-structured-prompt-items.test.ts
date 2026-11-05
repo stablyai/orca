@@ -11,7 +11,7 @@ import {
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
   CODEX_MCP_ELICITATION_METHOD
 } from './codex-prompt-registry'
-import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../../../native-chat/agent-session-journal/journal-row-schema'
+import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 
 const THREAD_ID = 'thread-abc'
 const CODEX_ITEM_ID = 'item-4'

@@ -8,7 +8,7 @@ import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-ses
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { compareAgentJournalItems } from '../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { journalRenderItem } from '../../../agent-session-journal/journal-render-item'
+import { journalRenderItem } from '../../../agent-session-journal/projection/journal-render-item'
 import {
   agentSessionPublishedWorkFields,
   type AgentSessionPublishedWork

@@ -10,7 +10,7 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { createTrackedJournalOpener } from '../../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
 import { readAgentSessionHistory } from '../agent-session-history-page'
 import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'

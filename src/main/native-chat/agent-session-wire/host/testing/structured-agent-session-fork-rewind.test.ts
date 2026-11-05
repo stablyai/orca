@@ -14,8 +14,8 @@ import {
   closeTestJournalHostDatabases,
   loadTestJournal,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
-import { renderJournalState } from '../../../agent-session-journal/journal-reducer'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { renderJournalState } from '../../../agent-session-journal/projection/journal-reducer'
 import { latestUsageLimitContinueIdentity } from '../../../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router-test-support'

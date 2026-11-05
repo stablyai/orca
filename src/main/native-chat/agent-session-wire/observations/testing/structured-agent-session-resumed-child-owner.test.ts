@@ -13,7 +13,7 @@ import {
   ClaudeBackgroundTaskIdentityResolver,
   writeClaudeBackgroundTaskRow
 } from '../../../../claude/claude-background-task-row-journal'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionCurrentWork } from '../structured-agent-session-current-work'
 import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'

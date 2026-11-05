@@ -3,7 +3,7 @@ import {
   type AgentJournalItemBody
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
-import type { JournalLifecycleMutationInput } from '../../native-chat/agent-session-journal/journal-row-builders'
+import type { JournalLifecycleMutationInput } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,7 +12,7 @@ import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-sess
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
-import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionConversations } from '../../native-chat/agent-session-wire/host/structured-agent-session-conversations'
 import { StructuredAgentSessionRequestFailures } from '../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 import type { StructuredAgentSessionHostSession } from '../../native-chat/agent-session-wire/host/structured-agent-session-host-types'

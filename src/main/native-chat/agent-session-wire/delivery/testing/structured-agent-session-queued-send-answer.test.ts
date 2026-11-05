@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   applyJournalRow,
   createJournalReducerState
-} from '../../../agent-session-journal/journal-reducer'
-import type { JournalReducerState } from '../../../agent-session-journal/journal-reducer'
-import { journalInputOrder } from '../../../agent-session-journal/journal-input-order'
-import type { CommandReceiptRead } from '../../../agent-session-journal/command-receipt-table'
-import { commandReceiptSchema } from '../../../agent-session-journal/command-receipt-schema'
-import { parseJournalRow } from '../../../agent-session-journal/journal-row-schema'
+} from '../../../agent-session-journal/projection/journal-reducer'
+import type { JournalReducerState } from '../../../agent-session-journal/projection/journal-reducer'
+import { journalInputOrder } from '../../../agent-session-journal/input-order/journal-input-order'
+import type { CommandReceiptRead } from '../../../agent-session-journal/writing/command-receipt-table'
+import { commandReceiptSchema } from '../../../agent-session-journal/writing/command-receipt-schema'
+import { parseJournalRow } from '../../../agent-session-journal/durable-rows/journal-row-schema'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   structuredSendAnswer,

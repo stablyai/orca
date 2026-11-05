@@ -1,7 +1,7 @@
 import {
   readTestQueueChanges,
   appendTestJournalQueueRow
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

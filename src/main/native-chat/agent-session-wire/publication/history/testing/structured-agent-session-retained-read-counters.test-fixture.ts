@@ -1,11 +1,11 @@
 import { vi } from 'vitest'
 import { createRetainedMaterializerCounters } from './structured-agent-session-retained-materializer-counters.test-fixture'
-import * as reducer from '../../../../agent-session-journal/journal-reducer'
-import * as transitions from '../../../../agent-session-journal/journal-reducer-transition'
-import { JournalInputOrder } from '../../../../agent-session-journal/journal-input-order'
-import { JournalQueuedMessages } from '../../../../agent-session-journal/journal-queued-messages'
-import { JournalInputCardIndex } from '../../../../agent-session-journal/journal-input-card-index'
-import { JournalInputPlaceIndex } from '../../../../agent-session-journal/journal-input-place-index'
+import * as reducer from '../../../../agent-session-journal/projection/journal-reducer'
+import * as transitions from '../../../../agent-session-journal/projection/journal-reducer-transition'
+import { JournalInputOrder } from '../../../../agent-session-journal/input-order/journal-input-order'
+import { JournalQueuedMessages } from '../../../../agent-session-journal/queued-messages/journal-queued-messages'
+import { JournalInputCardIndex } from '../../../../agent-session-journal/input-order/journal-input-card-index'
+import { JournalInputPlaceIndex } from '../../../../agent-session-journal/input-order/journal-input-place-index'
 
 function counterProperty<T extends object>(target: T, key: PropertyKey) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Proxy keys forward unchanged; absent properties read as undefined.

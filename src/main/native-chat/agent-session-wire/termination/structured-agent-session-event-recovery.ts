@@ -1,6 +1,6 @@
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionLifecycleEvent } from '../providers/structured-agent-session-adapter'
-import { holdUnsentSends } from '../../agent-session-journal/journal-unsent-send-hold'
+import { holdUnsentSends } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import type {
   StructuredAgentSessionHostDeps,

@@ -9,8 +9,8 @@ import {
   applyJournalRow,
   createJournalReducerState,
   renderJournalState
-} from '../../../native-chat/agent-session-journal/journal-reducer'
-import { journalItemRowBuilder } from '../../../native-chat/agent-session-journal/journal-row-builders'
+} from '../../../native-chat/agent-session-journal/projection/journal-reducer'
+import { journalItemRowBuilder } from '../../../native-chat/agent-session-journal/writing/journal-row-builders'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession

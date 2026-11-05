@@ -10,17 +10,17 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { journalPendingSubmissionResolutions } from '../../agent-session-journal/journal-pending-submission-recovery'
-import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../../agent-session-journal/journal-dispatch-doubt-reasons'
-import type { JournalLifecycleMutationInput } from '../../agent-session-journal/journal-lifecycle-mutation'
+import { journalPendingSubmissionResolutions } from '../../agent-session-journal/submissions/journal-pending-submission-recovery'
+import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
+import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { ResolveDispatchInput } from '../../agent-session-journal/journal-store-contracts'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { lostLiveWorkJournalBody } from '../../agent-session-journal/journal-subagent-liveness'
+import { lostLiveWorkJournalBody } from '../../agent-session-journal/item-lifecycle/journal-subagent-liveness'
 import {
   endedUnseenMessageBody,
   runningCallEnd,
   terminalAgentJournalBody
-} from '../../agent-session-journal/journal-terminal-settlement'
+} from '../../agent-session-journal/item-lifecycle/journal-terminal-settlement'
 import {
   endedByPersonsStop,
   provenUnverifiableTurnRevisions,

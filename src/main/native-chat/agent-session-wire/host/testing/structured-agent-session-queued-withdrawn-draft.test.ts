@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { JournalStopAcceptor } from '../../../agent-session-journal/journal-stop-acceptance'
+import { JournalStopAcceptor } from '../../../agent-session-journal/context-epochs/journal-stop-acceptance'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'

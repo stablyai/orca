@@ -6,7 +6,7 @@ import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecy
 import {
   readTestJournalOutcomes,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { StructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-current-work'
 import { hostStructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-host-current-work'
 import {

@@ -13,7 +13,7 @@ import {
 } from '../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
 import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch'
 import { STATUS_METHODS } from '../../src/main/runtime/rpc/methods/status'
-import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const TARGETS = [
   { kind: 'existing', worktree: 'id:wt-7' },

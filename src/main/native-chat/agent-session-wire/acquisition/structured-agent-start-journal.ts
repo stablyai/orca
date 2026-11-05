@@ -4,7 +4,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-journal-creation-facts'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readJournalSessionEpoch } from '../../agent-session-journal/journal-row-table'
+import { readJournalSessionEpoch } from '../../agent-session-journal/durable-rows/journal-row-table'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession

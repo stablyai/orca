@@ -12,7 +12,7 @@ import {
   type StructuredAgentSessionState
 } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
 
 const SESSION = 'roster-session'

@@ -1,4 +1,4 @@
-import { journalItemEchoFields } from '../../agent-session-journal/journal-item-echo'
+import { journalItemEchoFields } from '../../agent-session-journal/projection/journal-item-echo'
 // Centralize admitted single-item options; lifecycle batches carry producers per mutation.
 // Child-bound sink fences identify the execution that produced each row.
 

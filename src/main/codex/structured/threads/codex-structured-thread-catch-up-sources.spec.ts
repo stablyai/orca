@@ -6,7 +6,7 @@ import {
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { expect, it, vi } from 'vitest'
 import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
-import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   chat as catchUpChat,

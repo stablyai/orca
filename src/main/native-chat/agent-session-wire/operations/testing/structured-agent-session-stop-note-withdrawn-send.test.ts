@@ -9,7 +9,7 @@ import { agentSessionFailureWords } from '../../../../../shared/agent-session/fa
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'
 import '../structured-agent-session-turns'
 import { performCancel } from '../structured-agent-session-turns-cancel'

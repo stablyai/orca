@@ -32,7 +32,7 @@ import {
   agentJournalTurnBody,
   readAgentJournalTurn
 } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { JournalLifecycleMutationInput } from '../../agent-session-journal/journal-lifecycle-mutation'
+import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type {
   AgentSessionCommandAdmission,

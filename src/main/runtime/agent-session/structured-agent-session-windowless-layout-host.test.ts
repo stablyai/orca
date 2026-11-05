@@ -10,7 +10,7 @@ import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
-import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { seedTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
 import {

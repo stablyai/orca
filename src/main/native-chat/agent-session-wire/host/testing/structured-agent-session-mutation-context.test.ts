@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import * as reducer from '../../../agent-session-journal/journal-reducer'
+import * as reducer from '../../../agent-session-journal/projection/journal-reducer'
 import { sendStructuredAgentSessionTurn } from '../../operations/structured-agent-session-host-mutations'
 import { mutateStructuredAgentSession } from '../../operations/structured-agent-session-mutation-context'
 import { sendPlan } from '../../operations/structured-agent-session-mutation-plans'

@@ -1477,15 +1477,15 @@
       "oracle": "Name a future-schema row read past a gap, name the first damage, fail a damaged load with every row kept, and name a missing epoch before a later gap. Existing journal and subscriber tests cover replayed content.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/publication/history/testing/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/publication/history/testing/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/publication/subscribers/testing/structured-agent-session-subscribers.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-damage.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/replay/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/replay/journal-damage.test.ts"
       ],
       "testFiles": [
-        "src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts",
-        "src/main/native-chat/agent-session-journal/journal-damage.test.ts"
+        "src/main/native-chat/agent-session-journal/replay/journal-streaming-replay.test.ts",
+        "src/main/native-chat/agent-session-journal/replay/journal-damage.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts",
+          "file": "src/main/native-chat/agent-session-journal/replay/journal-streaming-replay.test.ts",
           "assertions": [
             "reads past a gap to a future row, which names the newer row and no damage",
             "names the first damage when a later row is malformed too",
@@ -1493,7 +1493,7 @@
           ]
         },
         {
-          "file": "src/main/native-chat/agent-session-journal/journal-damage.test.ts",
+          "file": "src/main/native-chat/agent-session-journal/replay/journal-damage.test.ts",
           "assertions": [
             "fails to load and keeps every row: %s",
             "reads past damage to a newer build's row, which fails the load as a newer Orca's instead",
@@ -1508,7 +1508,7 @@
           "runner": "local",
           "platform": "linux",
           "command": "pnpm --config.verifyDepsBeforeRun=false test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-damage.test.ts --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-damage.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/replay/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/replay/journal-damage.test.ts",
           "result": "passed",
           "durationSeconds": 3.12,
           "summary": "Test Files  2 passed (2); Tests  15 passed (15). Source head 9b07e8f1bea37bba70c78df2f9a238ea31d1be7e. Current retained unit selection only. No removed-case replacement, live provider, native input, rendered Electron E2E, performance threshold or soak claim. Node24.22.0 with ORCA_BACKGROUND_LAUNCH=1 and an isolated Xvfb display. currentCommand retains the same selectors; execution adds a worker limit and disables dependency preflight."

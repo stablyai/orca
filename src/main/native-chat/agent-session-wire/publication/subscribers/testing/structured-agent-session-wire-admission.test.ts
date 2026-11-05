@@ -12,13 +12,13 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalRow } from '../../../../agent-session-journal/journal-row-schema'
+import type { JournalRow } from '../../../../agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
   insertTestJournalRow
-} from '../../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../../history/agent-session-history-page'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
 import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'

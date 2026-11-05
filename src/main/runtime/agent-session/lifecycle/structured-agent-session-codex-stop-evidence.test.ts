@@ -13,7 +13,7 @@ import {
   hostTestAttachParams,
   hostTestMessage
 } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
+import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import {

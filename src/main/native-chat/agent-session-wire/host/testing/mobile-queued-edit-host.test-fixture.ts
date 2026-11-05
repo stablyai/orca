@@ -82,7 +82,7 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
     const { openTestAgentSessionRecordStore } =
       await import('../../../../runtime/agent-session/records/agent-session-record-store-test-harness')
     const { openTestJournalHostDatabase, closeTestJournalHostDatabase } =
-      await import('../../../agent-session-journal/journal-host-database-test-support')
+      await import('../../../agent-session-journal/store-lifecycle/journal-host-database-test-support')
     const { bindAtRestCommandContexts, retireAtRestCommandSettings, retireAtRestCommandContext } =
       await import('../../options/at-rest-command-context')
     const { recordingStructuredAgentSessionLogger } =

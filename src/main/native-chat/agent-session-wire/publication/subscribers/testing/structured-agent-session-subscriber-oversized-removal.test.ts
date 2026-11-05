@@ -6,11 +6,11 @@ import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   serializeRemoteRuntimePayload
 } from '../../../../../../shared/remote-runtime/remote-runtime-memory-limits'
-import type { JournalRow } from '../../../../agent-session-journal/journal-row-schema'
+import type { JournalRow } from '../../../../agent-session-journal/durable-rows/journal-row-schema'
 import {
   openTestJournalHostDatabase,
   insertTestJournalRow
-} from '../../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
 import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 

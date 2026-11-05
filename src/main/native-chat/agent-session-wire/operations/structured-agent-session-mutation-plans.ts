@@ -23,7 +23,7 @@ import {
   agentSessionConversationCommandFields,
   type AgentSessionConversationCommandResult
 } from '../../../../shared/agent-session/agent-session-conversation-command'
-import '../../agent-session-journal/journal-dispatch-doubt-reasons'
+import '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING as DISPATCH_DOUBT_SUBMISSION_MISSING } from '../../../../shared/agent-session/requests/structured-agent-session-send-evidence'
 import type { StructuredAgentSessionBackgroundStopInput } from '../termination/structured-agent-session-background-stop'
 import {
@@ -53,10 +53,10 @@ import type {
 import { queuedSendAnswer } from '../delivery/structured-agent-session-queued-send-answer'
 import { STOP_COMMAND_RECEIPT } from './structured-agent-session-stop-acceptance'
 import { runTargetedCancel } from './structured-agent-session-targeted-cancel'
-import type { JournalOperationReceipt } from '../../agent-session-journal/journal-row-writer'
-import type { CommandReceiptResult } from '../../agent-session-journal/command-receipt-schema'
-import type { JournalRow } from '../../agent-session-journal/journal-row-schema'
-import { refusingNewerOrcaJournal } from '../../agent-session-journal/journal-open-failure'
+import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
+import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
+import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
+import { refusingNewerOrcaJournal } from '../../agent-session-journal/replay/journal-open-failure'
 
 export type MutationPlan<TValue> = {
   method: string

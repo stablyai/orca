@@ -29,7 +29,7 @@ import { AgentSessionJournal } from '../../src/main/native-chat/agent-session-jo
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabases
-} from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'

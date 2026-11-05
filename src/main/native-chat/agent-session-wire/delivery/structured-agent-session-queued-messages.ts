@@ -16,9 +16,9 @@ import {
 import {
   QueuedMessageNotConsumableError,
   QueuedMessageNotOwedError
-} from '../../agent-session-journal/queued-message-consume-error'
+} from '../../agent-session-journal/queued-messages/queued-message-consume-error'
 import { queuedMessageOwed } from './structured-agent-session-queued-mail'
-import type { QueuedMessageRow } from '../../agent-session-journal/queued-message-table'
+import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -30,7 +30,7 @@ import {
 } from '../operations/structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
-import type { JournalOperationReceipt } from '../../agent-session-journal/journal-row-writer'
+import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import {
   nextStructuredQueuedMessage,
   shouldQueueStructuredAgentSessionSend

@@ -34,7 +34,7 @@ import {
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const unused = (): never => {
   throw new Error('declaration fixture must not start or mutate an agent')

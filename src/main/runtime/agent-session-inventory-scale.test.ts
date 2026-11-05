@@ -7,7 +7,7 @@ import { hostTestState } from '../native-chat/agent-session-wire/host/testing/st
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   countRecordQueries,
   countStoreWork,

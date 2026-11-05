@@ -22,7 +22,7 @@ import {
   type StructuredAgentSessionState
 } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
 import { selectStructuredAgentTurnBars } from '../../../../../../shared/agent-session/view/structured-agent-session-turn-timing'
-import { createTrackedJournalOpener } from '../../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
 import {
   readAgentSessionHistory,

@@ -25,7 +25,7 @@ import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/ag
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { isUnansweredStructuredAgentSessionDispatch } from '../../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../../agent-session-journal/journal-dispatch-doubt-reasons'
+import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput,

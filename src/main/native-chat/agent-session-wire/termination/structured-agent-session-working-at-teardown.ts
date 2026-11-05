@@ -37,7 +37,7 @@ import {
   newestStructuredAgentSessionTurn
 } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { isUnansweredHandedOverSubmission } from '../../agent-session-journal/journal-unsent-send-hold'
+import { isUnansweredHandedOverSubmission } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import { structuredAgentSessionShownStatus } from '../observations/structured-agent-session-shown-work'
 import { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'

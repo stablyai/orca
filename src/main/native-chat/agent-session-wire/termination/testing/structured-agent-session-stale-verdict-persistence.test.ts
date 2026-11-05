@@ -7,7 +7,7 @@ import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecy
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import '../structured-agent-session-dead-generation-settlement'
 import { settleStaleStructuredAgentSessionState } from '../structured-agent-session-stale-state-settlement'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'

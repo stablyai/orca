@@ -1,8 +1,8 @@
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalLifecycleMutationInput } from '../../agent-session-journal/journal-lifecycle-mutation'
+import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { JournalStep } from '../../agent-session-journal/journal-step-writer'
+import type { JournalStep } from '../../agent-session-journal/writing/journal-step-writer'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionItemAppendOptions,

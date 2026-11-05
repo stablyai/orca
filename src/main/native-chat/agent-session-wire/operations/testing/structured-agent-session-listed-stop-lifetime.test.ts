@@ -10,7 +10,7 @@ import type { AgentChildWorkEvidence } from '../../../../../shared/agent-status/
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import { AgentHookServer } from '../../../../agent-hooks/server'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { AgentSessionTurnContext } from '../structured-agent-session-turns'
 import { runTargetedCancel } from '../structured-agent-session-targeted-cancel'

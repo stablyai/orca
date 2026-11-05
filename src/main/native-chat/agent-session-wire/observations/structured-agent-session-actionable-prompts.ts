@@ -4,7 +4,7 @@ import type {
   JournalItemRow,
   JournalTombstoneRow,
   JournalLifecycleMutation
-} from '../../agent-session-journal/journal-row-schema'
+} from '../../agent-session-journal/durable-rows/journal-row-schema'
 
 export type PromptProjection = {
   epoch: string

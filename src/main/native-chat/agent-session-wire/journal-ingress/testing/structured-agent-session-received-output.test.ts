@@ -8,7 +8,7 @@ import { openAgentSessionJournal } from '../../../agent-session-journal/journal-
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'
 

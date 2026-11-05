@@ -3,7 +3,7 @@ import { agentSessionFailureWords } from '../../../../shared/agent-session/failu
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
-import { latestJournalDispatchObservation } from '../../agent-session-journal/journal-dispatch-observation'
+import { latestJournalDispatchObservation } from '../../agent-session-journal/projection/journal-dispatch-observation'
 import type {
   AgentSessionStopOutcome,
   AgentSessionCancelOutcome
@@ -27,7 +27,7 @@ import {
 } from '../termination/structured-agent-session-turn-stop-notes'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { StructuredAgentSessionStopWindDown } from '../termination/structured-agent-session-stop-wind-down'
-import type { JournalStopFailedOn } from '../../agent-session-journal/queued-message-pause'
+import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
 import { structuredAgentSessionFailedStopMark } from '../termination/structured-agent-session-stopping'
 import { settleTakenStop } from '../termination/structured-agent-session-taken-stop-settle'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'

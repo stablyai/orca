@@ -3,7 +3,7 @@ import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../../../agent-session-journal/journal-dispatch-doubt-reasons'
+import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import {
   accepted,
   attach,

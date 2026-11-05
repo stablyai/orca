@@ -23,7 +23,7 @@ import { openAgentSessionJournal } from '../../../agent-session-journal/journal-
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createCodexJournalTranslator } from '../../../../codex/structured/journal/codex-structured-journal-translation'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'
 import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'

@@ -3,8 +3,8 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
-import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
+import { cancelledJournalPromptBody } from '../agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
+import { requiresTerminalSettlement } from '../agent-session-journal/item-lifecycle/journal-terminal-settlement'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { unhandledProviderFrameJournalItem } from '../agent-session-wire/providers/unhandled-provider-frame'

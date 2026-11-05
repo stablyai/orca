@@ -17,19 +17,19 @@ import type { AgentSessionRefusalReason } from '../../../../shared/agent-session
 import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { JournalOperationReceipt } from '../../agent-session-journal/journal-row-writer'
+import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import {
   classifyJournalOpenFailure,
   isJournalWrittenByNewerOrca,
   journalOpenRefusal
-} from '../../agent-session-journal/journal-open-failure'
+} from '../../agent-session-journal/replay/journal-open-failure'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import {
   isAgentSessionAttachmentExpiredError,
   type AgentSessionAttachmentExpiredError
 } from '../../agent-session-attachments/agent-session-attachment-claims'
-import { CommandReceiptExistsError } from '../../agent-session-journal/command-receipt-transaction'
+import { CommandReceiptExistsError } from '../../agent-session-journal/writing/command-receipt-transaction'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import './structured-agent-session-turns-prompt'
 import './structured-agent-session-turns-cancel'

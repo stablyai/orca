@@ -11,7 +11,7 @@ import { agentSessionSendBodyFingerprint } from '../../../../../shared/agent-ses
 import {
   openTestJournalHostDatabase,
   readTestQueueChanges
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import {

@@ -16,7 +16,7 @@ import {
   beginAgentSessionRuntimeIncarnationForTest
 } from '../../../../runtime/agent-session/agent-session-runtime-attribution'
 import { recordAgentSessionRuntimeEnd } from '../../../../runtime/agent-session/records/agent-session-runtime-end-record'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   adapter,

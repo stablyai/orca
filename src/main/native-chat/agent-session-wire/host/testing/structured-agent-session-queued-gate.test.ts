@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredQueueHold } from '../../delivery/structured-agent-session-queued-gate'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER as CALLER

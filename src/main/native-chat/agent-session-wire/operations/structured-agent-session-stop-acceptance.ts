@@ -10,13 +10,13 @@ import type { AgentSessionCancelResult } from '../../../../shared/agent-session/
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { CommandReceiptExistsError } from '../../agent-session-journal/command-receipt-transaction'
+import { CommandReceiptExistsError } from '../../agent-session-journal/writing/command-receipt-transaction'
 import {
   classifyJournalOpenFailure,
   isJournalWrittenByNewerOrca,
   journalOpenRefusal
-} from '../../agent-session-journal/journal-open-failure'
-import type { JournalStopAcceptanceInput } from '../../agent-session-journal/journal-stop-acceptance'
+} from '../../agent-session-journal/replay/journal-open-failure'
+import type { JournalStopAcceptanceInput } from '../../agent-session-journal/context-epochs/journal-stop-acceptance'
 import type { ChatStopTarget } from './structured-agent-session-chat-stop-target'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import {

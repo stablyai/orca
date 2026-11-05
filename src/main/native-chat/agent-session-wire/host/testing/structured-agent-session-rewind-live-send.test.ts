@@ -31,7 +31,7 @@ import {
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 

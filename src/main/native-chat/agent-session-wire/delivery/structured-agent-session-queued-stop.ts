@@ -5,7 +5,7 @@ import type { AgentSessionJournal } from '../../agent-session-journal/journal-st
 import {
   isUnsettledQueuedMessage,
   type QueuedMessageRow
-} from '../../agent-session-journal/queued-message-table'
+} from '../../agent-session-journal/queued-messages/queued-message-table'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import {

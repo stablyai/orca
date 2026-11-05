@@ -5,7 +5,7 @@ import {
 import { providerTimelineExecutionItems } from '../../agent-session-timeline/provider-timeline-history'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { requiresTerminalSettlement } from '../../agent-session-journal/journal-terminal-settlement'
+import { requiresTerminalSettlement } from '../../agent-session-journal/item-lifecycle/journal-terminal-settlement'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import {
   watchedExitRevisions,

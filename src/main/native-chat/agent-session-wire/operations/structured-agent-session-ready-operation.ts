@@ -19,7 +19,7 @@ import {
 } from './structured-agent-session-mutation-admission'
 import type { ReadyOperationPlan } from './structured-agent-session-ready-operation-plan'
 import { mutationReplayContext } from './structured-agent-session-mutation-turn-context'
-import { commandReceiptScope } from '../../agent-session-journal/command-receipt-schema'
+import { commandReceiptScope } from '../../agent-session-journal/writing/command-receipt-schema'
 import { parseAgentSessionOperationTimestamp } from '../../../../shared/agent-session/agent-session-host-authority'
 import { waitForStructuredAgentSessionStart } from '../startup/structured-agent-session-start-readiness'
 import type { StructuredAgentSessionDeliveryPlace } from '../delivery/structured-agent-session-delivery-order'

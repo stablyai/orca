@@ -10,17 +10,17 @@ import {
   type AgentJournalItemBody,
   type AgentJournalRenderItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { journalPendingSubmissionResolutions } from '../../agent-session-journal/journal-pending-submission-recovery'
-import '../../agent-session-journal/journal-row-builders'
-import { journalLifecycleMutationItemId } from '../../agent-session-journal/journal-lifecycle-mutation'
-import type { JournalLifecycleMutationInput } from '../../agent-session-journal/journal-lifecycle-mutation'
+import { journalPendingSubmissionResolutions } from '../../agent-session-journal/submissions/journal-pending-submission-recovery'
+import '../../agent-session-journal/writing/journal-row-builders'
+import { journalLifecycleMutationItemId } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
+import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import {
   endedUnseenMessageBody,
   runningCallEnd,
   terminalAgentJournalBody
-} from '../../agent-session-journal/journal-terminal-settlement'
+} from '../../agent-session-journal/item-lifecycle/journal-terminal-settlement'
 import type { ResolveDispatchInput } from '../../agent-session-journal/journal-store-contracts'
-import { lostLiveWorkJournalBody } from '../../agent-session-journal/journal-subagent-liveness'
+import { lostLiveWorkJournalBody } from '../../agent-session-journal/item-lifecycle/journal-subagent-liveness'
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext

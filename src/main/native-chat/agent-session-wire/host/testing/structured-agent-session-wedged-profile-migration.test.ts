@@ -31,7 +31,7 @@ import {
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { JournalLifecycleBatchAppender } from '../../../agent-session-journal/journal-lifecycle-batch-appender'
+import { JournalLifecycleBatchAppender } from '../../../agent-session-journal/writing/journal-lifecycle-batch-appender'
 import * as recoveryResolution from '../../recovery/structured-agent-session-recovery-resolution'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from '../structured-agent-session-host-types'
@@ -46,7 +46,7 @@ import {
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import {
   claudeProviderHandle,

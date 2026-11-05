@@ -1,7 +1,7 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
-import type { QueuedMessageOwed } from '../../agent-session-journal/queued-message-consume-error'
-import type { QueuedMessageRow } from '../../agent-session-journal/queued-message-table'
+import type { QueuedMessageOwed } from '../../agent-session-journal/queued-messages/queued-message-consume-error'
+import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 
 type OwedDeps = Pick<StructuredAgentSessionHostDeps, 'queuedAgentMessageOwed'>

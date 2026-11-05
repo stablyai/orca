@@ -10,9 +10,9 @@ import { agentSessionSendBodyFingerprint } from '../../../../../shared/agent-ses
 import {
   openTestJournalHostDatabase,
   seedLegacyTestJournal
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
-import { pinTestJournalInputMode } from '../../../agent-session-journal/journal-historical-inputs.test-support'
+import { pinTestJournalInputMode } from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import {

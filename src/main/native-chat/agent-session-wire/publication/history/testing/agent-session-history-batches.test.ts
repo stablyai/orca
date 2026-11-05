@@ -12,7 +12,7 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../../../../shar
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener
-} from '../../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { projectJournalBatch } from '../agent-session-journal-batch'
 import { readAgentSessionHistory } from '../agent-session-history-page'
 

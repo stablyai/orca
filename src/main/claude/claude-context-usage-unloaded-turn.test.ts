@@ -20,7 +20,7 @@ import {
   type StructuredAgentSessionState
 } from '../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/publication/history/agent-session-history-page'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionMutationContext } from '../native-chat/agent-session-wire/operations/structured-agent-session-mutation-context'

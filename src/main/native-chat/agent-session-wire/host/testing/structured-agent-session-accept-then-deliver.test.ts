@@ -50,7 +50,7 @@ import { agentSessionFailureWords } from '../../../../../shared/agent-session/fa
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { StructuredAgentArgumentsError } from '../../../structured-agent-arguments-error'

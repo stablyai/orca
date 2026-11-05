@@ -36,7 +36,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { AdoptedTranscriptSource } from '../../agent-session-journal/adopted-transcript-source'
+import type { AdoptedTranscriptSource } from '../../agent-session-journal/history-import/adopted-transcript-source'
 import { structuredAgentSessionRefusalMessage } from '../operations/structured-agent-session-refusal-message'
 
 /** Clients cannot assert spawn tokens, claim keys or owner death; only host observations grant authority. */

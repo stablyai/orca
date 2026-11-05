@@ -7,7 +7,7 @@ import type { AgentSessionRecord } from '../../../../../shared/agent-session/lif
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionReserveRequest } from '../../../../runtime/agent-session/ownership/agent-session-reservation-admission'
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { closeTestJournalHostDatabases } from '../../../agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createRestartReconciler } from '../structured-agent-session-restart-reconcile'
 
 const NOW = 1_800_000_000_000

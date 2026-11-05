@@ -1,6 +1,6 @@
 // Commit pending/settlement around an external provider call so concurrent sends remain acceptable.
 
-import type { UnsentSendHold } from '../../agent-session-journal/journal-unsent-send-hold'
+import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem,

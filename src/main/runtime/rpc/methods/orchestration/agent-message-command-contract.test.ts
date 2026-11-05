@@ -55,7 +55,7 @@ import {
   agentMessageHeading,
   agentMessageSenderCanOpen
 } from '../../../../../shared/agent-session/agent-message-presentation'
-import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const h = createOrchestrationRpcHarness()
 let rig: QueuedMessageTestRig | undefined

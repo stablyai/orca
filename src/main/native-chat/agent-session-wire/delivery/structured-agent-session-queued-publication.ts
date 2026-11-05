@@ -9,7 +9,7 @@ import type { AgentSessionJournal } from '../../agent-session-journal/journal-st
 import {
   queuePauseLiftOnItsWay,
   resumableQueuePause
-} from '../../agent-session-journal/queued-message-pause'
+} from '../../agent-session-journal/queued-messages/queued-message-pause'
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
   nextStructuredQueuedMessage,

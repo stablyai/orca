@@ -11,7 +11,7 @@ import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'

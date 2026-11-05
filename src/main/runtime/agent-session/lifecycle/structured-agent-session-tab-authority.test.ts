@@ -31,7 +31,7 @@ import { chatTabCommandsSettled } from '../../orca-runtime-tests/session-layout-
 import * as journalFactory from '../../../native-chat/agent-session-journal/journal-store-factory'
 import { discardStructuredWorkerSession } from '../../rpc/methods/orchestration-structured-worker-session'
 import { closeStructuredAgentSessionChild } from '../structured-agent-session-close'
-import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 // CLI capability probing is outside tab authority and must not start a real CLI in this fixture.

@@ -10,7 +10,7 @@ import {
   boundToolInput,
   JOURNAL_RUNNING_PREVIEW_LIMITS,
   utf8Head
-} from '../../../agent-session-journal/journal-payload-bounds'
+} from '../../../agent-session-journal/item-lifecycle/journal-payload-bounds'
 import {
   HISTORY_PAGE_CONTENT_BUDGET_BYTES,
   type HistoryItemForm,

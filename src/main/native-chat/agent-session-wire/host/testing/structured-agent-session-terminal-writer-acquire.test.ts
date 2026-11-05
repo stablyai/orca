@@ -11,7 +11,7 @@ import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-sessi
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import {
   NO_STRUCTURED_AGENTS,

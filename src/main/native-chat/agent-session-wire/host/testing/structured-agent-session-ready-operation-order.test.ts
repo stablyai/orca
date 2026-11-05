@@ -3,7 +3,7 @@ import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-sessi
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
 import { expect, it, vi } from 'vitest'

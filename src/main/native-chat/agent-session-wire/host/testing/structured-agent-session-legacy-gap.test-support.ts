@@ -1,13 +1,13 @@
 import { agentSessionJournalProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { insertCommandReceiptIfAbsent } from '../../../agent-session-journal/command-receipt-table'
-import { writeCommandReceiptTestRecord } from '../../../agent-session-journal/command-receipt-test-support'
+import { insertCommandReceiptIfAbsent } from '../../../agent-session-journal/writing/command-receipt-table'
+import { writeCommandReceiptTestRecord } from '../../../agent-session-journal/writing/command-receipt-test-support'
 import {
   insertTestJournalRow,
   writeTestLegacyTerminalGaps,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import type { JournalSubmissionRow } from '../../../agent-session-journal/journal-row-schema'
+import type { JournalSubmissionRow } from '../../../agent-session-journal/durable-rows/journal-row-schema'
 import { hostTestMessage } from './structured-agent-session-host-test-data'
 
 /** Actual unannotated initial-source writer shape, including terminal direct inputs between consumers. */

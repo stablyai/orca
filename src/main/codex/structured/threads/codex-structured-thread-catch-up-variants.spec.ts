@@ -3,7 +3,7 @@ import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-
 import { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
 import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   chat as catchUpChat,

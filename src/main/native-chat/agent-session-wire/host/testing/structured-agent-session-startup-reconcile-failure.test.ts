@@ -5,8 +5,8 @@ import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { journalDatabasePath } from '../../../agent-session-journal/journal-host-database'
-import { JOURNAL_NEWER_SCHEMA_MESSAGE } from '../../../agent-session-journal/journal-open-failure'
+import { journalDatabasePath } from '../../../agent-session-journal/database/journal-host-database'
+import { JOURNAL_NEWER_SCHEMA_MESSAGE } from '../../../agent-session-journal/replay/journal-open-failure'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 
 import type { StructuredAgentSessionHostDeps } from '../structured-agent-session-host-types'
@@ -26,7 +26,7 @@ import {
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
 
 const writes = vi.hoisted(() => ({ failing: false }))

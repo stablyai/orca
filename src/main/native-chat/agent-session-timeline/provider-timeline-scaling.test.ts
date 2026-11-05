@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { journalPayload } from '../agent-session-journal/journal-payload-bounds'
+import { journalPayload } from '../agent-session-journal/item-lifecycle/journal-payload-bounds'
 import {
   closeProviderTimelineRigs,
   messageText,

@@ -14,7 +14,7 @@ import type { AgentSessionJournal } from '../../../agent-session-journal/journal
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionAcquireAborts } from '../../startup/structured-agent-session-acquire-aborts'
 import { attachStructuredAgentSession } from '../../acquisition/structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachContext } from '../../acquisition/structured-agent-session-attach-context'

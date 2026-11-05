@@ -4,7 +4,7 @@ import {
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
 } from '../../../../../shared/agent-session/agent-session-wire'
-import { sameJournalCursor } from '../../../agent-session-journal/journal-cursor'
+import { sameJournalCursor } from '../../../agent-session-journal/replay/journal-cursor'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import { journalDatabasePath } from '../../../agent-session-journal/journal-host-database'
+import { journalDatabasePath } from '../../../agent-session-journal/database/journal-host-database'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalAnsweredTurnIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { projectStructuredAgentSessionMessages } from '../../../../../shared/agent-session/view/structured-agent-session-message-projection'

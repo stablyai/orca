@@ -1,7 +1,7 @@
 import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { CommandReceiptRead } from '../../agent-session-journal/command-receipt-table'
+import type { CommandReceiptRead } from '../../agent-session-journal/writing/command-receipt-table'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 

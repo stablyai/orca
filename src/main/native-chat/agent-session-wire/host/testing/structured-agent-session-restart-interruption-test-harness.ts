@@ -18,7 +18,7 @@ import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-sessi
 import { parseAgentSessionResumeMarker } from '../../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import * as reducer from '../../../agent-session-journal/journal-reducer'
+import * as reducer from '../../../agent-session-journal/projection/journal-reducer'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from '../structured-agent-session-host-types'
 import { StructuredAgentSessionResumeAdmission } from '../../recovery/structured-agent-session-restart-resume-runner'
@@ -39,7 +39,7 @@ import {
   hostTestAttachParams,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentRegistry } from '../../providers/structured-agent-registry'

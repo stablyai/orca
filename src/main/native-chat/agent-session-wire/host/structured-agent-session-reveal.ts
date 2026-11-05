@@ -1,7 +1,7 @@
 // Open a chat on demand without starting a child; failed journal opens retain a Retry tab.
 
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { journalOpenRefusal } from '../../agent-session-journal/journal-open-failure'
+import { journalOpenRefusal } from '../../agent-session-journal/replay/journal-open-failure'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionReveal

@@ -6,7 +6,7 @@ import { createAgentSessionDeltaCoalescer } from '../../../native-chat/agent-ses
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from '../journal/codex-structured-journal-sink'
 import { codexJournalItem, codexStreamingJournalItem } from './codex-structured-item-translation'
-import { withJournalReasoningLifecycle } from '../../../native-chat/agent-session-journal/journal-reasoning-row'
+import { withJournalReasoningLifecycle } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 import {
   codexStructuredItemKey,
   MAX_CODEX_ITEM_STREAM_PENDING_PATCHES,

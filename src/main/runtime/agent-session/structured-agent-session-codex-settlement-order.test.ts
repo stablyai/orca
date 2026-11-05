@@ -25,8 +25,8 @@ import {
   closeTestJournalHostDatabases,
   readTestJournalOutcomes,
   openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { fields } from '../../native-chat/agent-session-journal/journal-state-schema'
+} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { fields } from '../../native-chat/agent-session-journal/outcomes/journal-state-schema'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import {
   ensureStructuredAgentSessionHost,

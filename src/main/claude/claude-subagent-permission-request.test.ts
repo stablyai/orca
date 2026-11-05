@@ -16,7 +16,7 @@ import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-wor
 import type { AgentStatusStructuredSessionSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from '../agent-hooks/server'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { settleObservedExitForTest } from '../native-chat/agent-session-wire/termination/testing/structured-agent-session-observed-exit.test-fixture'
 import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/observations/structured-agent-session-current-work'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'

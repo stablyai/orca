@@ -2,8 +2,8 @@ import { afterEach, expect, it } from 'vitest'
 import {
   openTestJournalHostDatabase,
   readTestJournalOutcomes
-} from '../../../agent-session-journal/journal-host-database-test-support'
-import { outcomeFormat1StoredScalars } from '../../../agent-session-journal/journal-outcome-format-1'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { outcomeFormat1StoredScalars } from '../../../agent-session-journal/outcomes/journal-outcome-format-1'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,

@@ -15,7 +15,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
 import { AgentHookServer, _internals } from '../../../agent-hooks/server'
-import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from '../../../native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-test-session'

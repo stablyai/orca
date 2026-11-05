@@ -12,7 +12,7 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
-import type { JournalLifecycleMutationInput } from '../../agent-session-journal/journal-lifecycle-mutation'
+import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'

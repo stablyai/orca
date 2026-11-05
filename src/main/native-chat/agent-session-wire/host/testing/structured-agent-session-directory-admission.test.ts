@@ -20,7 +20,7 @@ import { StructuredAgentSessionTaskQueue } from '../structured-agent-session-tas
 import {
   adoptedDirectoryProbes,
   ADOPTED_DIRECTORY_PROBE_SOURCE
-} from '../../../agent-session-journal/adopted-directory-probe'
+} from '../../../agent-session-journal/history-import/adopted-directory-probe'
 
 const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }))
 vi.mock('node:child_process', async (original) => ({

@@ -8,7 +8,7 @@ import { StructuredAgentSessionJournalProjections } from '../../../observations/
 import { MAX_RETAINED_SESSION_ACTIVITIES } from '../structured-agent-session-activity-retention'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
 import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import * as journalReducer from '../../../../agent-session-journal/journal-reducer'
+import * as journalReducer from '../../../../agent-session-journal/projection/journal-reducer'
 
 import {
   fixture,

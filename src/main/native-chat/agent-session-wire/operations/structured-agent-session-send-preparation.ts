@@ -6,7 +6,7 @@ import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/f
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { journalOpenRefusal } from '../../agent-session-journal/journal-open-failure'
+import { journalOpenRefusal } from '../../agent-session-journal/replay/journal-open-failure'
 import {
   structuredAgentSessionAwaitedCommand,
   type StructuredAgentSessionAwaitedCommandJournal

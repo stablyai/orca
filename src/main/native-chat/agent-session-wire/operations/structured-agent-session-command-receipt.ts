@@ -5,16 +5,16 @@ import {
   commandReceiptScope,
   type CommandReceipt,
   type CommandReceiptResult
-} from '../../agent-session-journal/command-receipt-schema'
+} from '../../agent-session-journal/writing/command-receipt-schema'
 import {
   buildCommandReceiptTransaction,
   CommandReceiptExistsError
-} from '../../agent-session-journal/command-receipt-transaction'
+} from '../../agent-session-journal/writing/command-receipt-transaction'
 import {
   composeJournalOperationReceipts,
   type JournalOperationReceipt
-} from '../../agent-session-journal/journal-row-writer'
-import type { JournalRow } from '../../agent-session-journal/journal-row-schema'
+} from '../../agent-session-journal/writing/journal-row-writer'
+import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
 import type {
   MutationCommandReceipt,
   MutationPlan

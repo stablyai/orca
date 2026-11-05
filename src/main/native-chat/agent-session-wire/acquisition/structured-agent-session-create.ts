@@ -12,7 +12,7 @@ import type {
   AgentSessionMutationResult
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
-import { journalOpenRefusalError } from '../../agent-session-journal/journal-open-failure'
+import { journalOpenRefusalError } from '../../agent-session-journal/replay/journal-open-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { reserveRequestFor, type AgentSessionAttachParams } from './structured-agent-session-attach'
 import { openStructuredAgentSessionConversationJournal } from '../host/structured-agent-session-conversation-open'

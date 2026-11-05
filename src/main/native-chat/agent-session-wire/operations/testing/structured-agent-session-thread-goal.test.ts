@@ -22,7 +22,7 @@ import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { agentSessionAttachmentStoreRoot } from '../../../agent-session-attachments/agent-session-attachment-references'
 import { markUnclaimedUploadForSweep } from '../../../agent-session-attachments/agent-session-attachment-claims'
 import { formatNativeChatFileReference } from '../../../../../shared/agent-image-paste'

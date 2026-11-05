@@ -13,7 +13,7 @@ import type {
   AgentSessionHistoryRequest
 } from '../../../../../../shared/agent-session/agent-session-wire'
 import { serializeRemoteRuntimePayload } from '../../../../../../shared/remote-runtime/remote-runtime-memory-limits'
-import { createTrackedJournalOpener } from '../../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
 import {
   readAgentSessionHistory,
@@ -24,7 +24,7 @@ import { foldSubagentItems } from '../../../../../../shared/native-chat/transcri
 import {
   subagentJournalBody,
   subagentJournalItemIdentity
-} from '../../../../agent-session-journal/journal-subagent-item'
+} from '../../../../agent-session-journal/item-lifecycle/journal-subagent-item'
 
 // Window on session-owned rows; include subagent rows without letting bursts crowd out conversation.
 

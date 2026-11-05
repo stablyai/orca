@@ -22,8 +22,8 @@ import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
 } from '../providers/structured-agent-session-adapter-errors'
-import type { CommandReceiptResult } from '../../agent-session-journal/command-receipt-schema'
-import type { JournalRow } from '../../agent-session-journal/journal-row-schema'
+import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
+import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
 import { settledPrompt, validatePendingPrompt } from './structured-agent-session-prompt-state'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'

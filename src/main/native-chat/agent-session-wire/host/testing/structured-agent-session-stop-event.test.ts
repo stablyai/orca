@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { JournalStopEvent } from '../../../agent-session-journal/journal-row-schema'
+import type { JournalStopEvent } from '../../../agent-session-journal/durable-rows/journal-row-schema'
 import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
 import {
   createQueuedMessageTestRig,

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
+import { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import type * as ModelCatalogWiring from './model-catalog/structured-agent-model-catalog-wiring'
 import {
   ensureStructuredAgentSessionHost,

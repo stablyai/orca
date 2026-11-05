@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/agent-session/structured-agent-session-command-entry'
 import { classifyDispatchRejection } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { JournalRow } from '../../agent-session-journal/journal-row-schema'
+import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'

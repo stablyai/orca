@@ -5,7 +5,7 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import {
   endedJournalReasoning,
   journalReasoningBody
-} from '../native-chat/agent-session-journal/journal-reasoning-row'
+} from '../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'

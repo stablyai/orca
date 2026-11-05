@@ -27,7 +27,7 @@ import { structuredClaudeLifecycleEvent } from '../../../../runtime/agent-sessio
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {

@@ -19,7 +19,7 @@ import {
   claudeDispatchMessageContent,
   claudeDispatchRejection
 } from './claude-structured-dispatch-content'
-import { dispatchWriteOutcomeUnknownReason } from '../../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import { dispatchWriteOutcomeUnknownReason } from '../../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import { DISPATCH_REJECTED_QUEUE_FULL } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   agentSessionFailureFact,

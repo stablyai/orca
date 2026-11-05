@@ -6,7 +6,7 @@ import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-
 import type { AgentSessionStatusEvent } from '../../../../../shared/agent-session/agent-session-wire'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'

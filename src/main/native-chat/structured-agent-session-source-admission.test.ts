@@ -17,11 +17,11 @@ import {
 import { prepareAdoptedTranscript } from './agent-session-wire/acquisition/structured-agent-session-adopted-import'
 import type { AgentSessionAttachParams } from './agent-session-wire/acquisition/structured-agent-session-attach'
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
+import { prepareLegacyTranscriptImport } from './agent-session-journal/history-import/journal-legacy-import'
 import { prepareCodexAdoption } from './codex-adoption-preparation'
 import { codexAiVaultSessionResumePreparation } from '../codex/history/resume/codex-ai-vault-session-resume'
 import * as codexHomes from '../codex/configuration/homes/codex-home-paths'
-import { adoptedDirectoryProbes } from './agent-session-journal/adopted-directory-probe'
+import { adoptedDirectoryProbes } from './agent-session-journal/history-import/adopted-directory-probe'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 let root: string

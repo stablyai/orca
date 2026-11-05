@@ -30,12 +30,12 @@ vi.mock('node:fs', async (original) => {
   }
 })
 import type Database from '../../sqlite/sync-database'
-import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
+import type { JournalHostDatabase } from '../agent-session-journal/database/journal-host-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../agent-session-journal/journal-host-database-test-support'
+} from '../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   claimAgentSessionAttachmentsInTransaction,
   isAgentSessionAttachmentExpiredError,

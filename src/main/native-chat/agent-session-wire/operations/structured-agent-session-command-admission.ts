@@ -12,9 +12,9 @@ import type { AgentSessionMutationResult } from '../../../../shared/agent-sessio
 import {
   commandReceiptScope,
   type CommandReceipt
-} from '../../agent-session-journal/command-receipt-schema'
-import type { ExistingCommandReceipt } from '../../agent-session-journal/command-receipt-table'
-import { CommandReceiptExistsError } from '../../agent-session-journal/command-receipt-transaction'
+} from '../../agent-session-journal/writing/command-receipt-schema'
+import type { ExistingCommandReceipt } from '../../agent-session-journal/writing/command-receipt-table'
+import { CommandReceiptExistsError } from '../../agent-session-journal/writing/command-receipt-transaction'
 import {
   AGENT_SESSION_NOT_ATTACHED,
   refuseAgentSessionMutation

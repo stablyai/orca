@@ -27,7 +27,7 @@ import {
 
 import { editPersistedTestAgentSessionStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcResponse } from '../core'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 import {
   CLIENT,

@@ -2,10 +2,10 @@ import type { StructuredAgentSessionProviderChild } from '../host/structured-age
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import { structuredAgentSessionChildAcceptsInput } from './structured-agent-session-input-readiness'
 import { codexTurnOptionsDiffer } from '../options/structured-agent-session-message-options'
-import { journalInputOrder } from '../../agent-session-journal/journal-input-order'
+import { journalInputOrder } from '../../agent-session-journal/input-order/journal-input-order'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { QueuedMessageRow } from '../../agent-session-journal/queued-message-table'
+import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import { structuredAgentSessionSendBlock } from '../operations/structured-agent-session-send-preparation'
 import {

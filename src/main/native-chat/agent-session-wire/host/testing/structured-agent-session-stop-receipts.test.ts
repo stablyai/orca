@@ -3,10 +3,10 @@ import { agentSessionFailureFact } from '../../../../../shared/agent-session/fai
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { isQueuedAgentJournalSubmission } from '../../../../../shared/agent-session/requests/agent-session-queued-submission'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/journal-host-database-test-support'
-import type { JournalStopEvent } from '../../../agent-session-journal/journal-row-schema'
+import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import type { JournalStopEvent } from '../../../agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { JournalStopAcceptor } from '../../../agent-session-journal/journal-stop-acceptance'
+import { JournalStopAcceptor } from '../../../agent-session-journal/context-epochs/journal-stop-acceptance'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import {
   HOST_TEST_NOW as NOW,

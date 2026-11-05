@@ -1,5 +1,5 @@
-import { codexLegacyMirrorRecords } from './agent-session-journal/codex-history-test-fixture'
-import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
+import { codexLegacyMirrorRecords } from './agent-session-journal/history-import/codex-history-test-fixture'
+import { prepareLegacyTranscriptImport } from './agent-session-journal/history-import/journal-legacy-import'
 import { createNativeChatMerger, replaceList } from '../../shared/native-chat/native-chat-merge'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

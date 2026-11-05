@@ -28,7 +28,7 @@ import type { AgentSessionRecordStore } from '../../../runtime/agent-session/rec
 import {
   classifyJournalOpenFailure,
   journalOpenRefusal
-} from '../../agent-session-journal/journal-open-failure'
+} from '../../agent-session-journal/replay/journal-open-failure'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'

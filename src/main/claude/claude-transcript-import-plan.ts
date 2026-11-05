@@ -9,7 +9,8 @@ import {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
+import '../native-chat/agent-session-journal/writing/journal-row-builders'
+import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import {
   continuedOutsideNotice,
   continuedOutsideRecordId,
@@ -20,7 +21,7 @@ import {
 import {
   legacyItemBody,
   LEGACY_IMPORT_BLOCK_LIMITS
-} from '../native-chat/agent-session-journal/journal-legacy-import'
+} from '../native-chat/agent-session-journal/history-import/journal-legacy-import'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemAppendOptions

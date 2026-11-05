@@ -1,4 +1,4 @@
-import { journalToolPayload } from '../../../agent-session-journal/journal-payload-bounds'
+import { journalToolPayload } from '../../../agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'

@@ -2,7 +2,7 @@
 
 import type { AgentJournalItemBody } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalStep } from '../../../agent-session-journal/journal-step-writer'
+import type { JournalStep } from '../../../agent-session-journal/writing/journal-step-writer'
 import type {
   JournalItemAppendOptions,
   JournalLifecycleBatchInput

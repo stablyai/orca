@@ -1,7 +1,7 @@
 // Count pending handovers and late-settlement writes as held until child/journal state catches up.
 // Nested late-settlement windows share the count without replacing the input that owns its result.
 
-import type { UnsentSendHold } from '../../agent-session-journal/journal-unsent-send-hold'
+import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { UnopenedSendJournal } from './structured-agent-session-unopened-send-withdrawal'
 

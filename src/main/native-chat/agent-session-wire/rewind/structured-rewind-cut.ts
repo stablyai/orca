@@ -7,7 +7,7 @@ import { agentJournalLinkageFields } from '../../../../shared/agent-session/jour
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { JournalReplacementItem } from '../../agent-session-journal/journal-epoch-replacement'
+import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
 // Derive cuts from the journal’s retained old epoch so admission and recovery agree without copying history.
 
 export type StructuredRewindCut = {

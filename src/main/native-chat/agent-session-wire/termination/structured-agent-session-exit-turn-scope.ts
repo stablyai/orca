@@ -5,9 +5,9 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import '../../agent-session-journal/journal-row-builders'
-import { journalLifecycleMutationItemId } from '../../agent-session-journal/journal-lifecycle-mutation'
-import type { JournalLifecycleMutationInput } from '../../agent-session-journal/journal-lifecycle-mutation'
+import '../../agent-session-journal/writing/journal-row-builders'
+import { journalLifecycleMutationItemId } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
+import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
 
 /** Match the running turn or the translator’s turn ended at this exit instant. */

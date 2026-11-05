@@ -17,13 +17,13 @@ import {
   type AttachFlowInput
 } from '../../acquisition/structured-agent-session-attach-flow'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import * as legacyImport from '../../../agent-session-journal/journal-legacy-import'
-import { writeCodexHistoryFixture } from '../../../agent-session-journal/codex-history-test-fixture'
+import * as legacyImport from '../../../agent-session-journal/history-import/journal-legacy-import'
+import { writeCodexHistoryFixture } from '../../../agent-session-journal/history-import/codex-history-test-fixture'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {

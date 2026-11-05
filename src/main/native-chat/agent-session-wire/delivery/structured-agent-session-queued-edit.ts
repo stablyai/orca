@@ -11,7 +11,7 @@ import { queuedMessageEditableText } from '../../../../shared/queued-message-edi
 import {
   queuedMessageUpdateDecision,
   type QueuedMessageUpdate
-} from '../../agent-session-journal/queued-message-update'
+} from '../../agent-session-journal/queued-messages/queued-message-update'
 import { isAgentSessionAttachmentExpiredError } from '../../agent-session-attachments/agent-session-attachment-claims'
 import { agentSessionAttachmentExpiredRefusal } from '../operations/structured-agent-session-turns'
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'

@@ -16,7 +16,7 @@ import {
   journaledSubagent,
   subagentJournalBody,
   subagentJournalItemIdentity
-} from '../../agent-session-journal/journal-subagent-item'
+} from '../../agent-session-journal/item-lifecycle/journal-subagent-item'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type {
   StructuredAgentSessionEventSink,

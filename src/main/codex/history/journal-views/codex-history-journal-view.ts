@@ -1,5 +1,5 @@
-import type { JournalInputKeys } from '../../../native-chat/agent-session-journal/journal-input-observations'
-import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/journal-history-origin'
+import type { JournalInputKeys } from '../../../native-chat/agent-session-journal/input-order/journal-input-observations'
+import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey

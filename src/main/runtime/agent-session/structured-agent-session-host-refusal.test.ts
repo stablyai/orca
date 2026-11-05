@@ -10,11 +10,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { JOURNAL_DB_SCHEMA_VERSION } from '../../native-chat/agent-session-journal/journal-database-schema'
+import { JOURNAL_DB_SCHEMA_VERSION } from '../../native-chat/agent-session-journal/database/journal-database-schema'
 import {
   JournalHostDatabase,
   journalDatabasePath
-} from '../../native-chat/agent-session-journal/journal-host-database'
+} from '../../native-chat/agent-session-journal/database/journal-host-database'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import Database from '../../sqlite/sync-database'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
@@ -28,7 +28,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
-import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 let root: string
 let log = recordingStructuredAgentSessionLogger()

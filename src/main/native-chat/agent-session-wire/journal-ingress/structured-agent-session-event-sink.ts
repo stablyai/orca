@@ -1,4 +1,4 @@
-import type { JournalItemEcho } from '../../agent-session-journal/journal-item-echo'
+import type { JournalItemEcho } from '../../agent-session-journal/projection/journal-item-echo'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
@@ -8,7 +8,7 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionTurnActivity } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/journal-lifecycle-mutation'
+import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'

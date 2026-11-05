@@ -16,12 +16,12 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
   insertTestJournalRow
-} from '../../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type {
   JournalItemRow,
   JournalRow,
   JournalTombstoneRow
-} from '../../../../agent-session-journal/journal-row-schema'
+} from '../../../../agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
 import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 

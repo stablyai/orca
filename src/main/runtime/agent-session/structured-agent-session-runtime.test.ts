@@ -14,7 +14,7 @@ import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/ag
 import {
   JournalHostDatabase,
   journalDatabasePath
-} from '../../native-chat/agent-session-journal/journal-host-database'
+} from '../../native-chat/agent-session-journal/database/journal-host-database'
 import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
@@ -30,7 +30,7 @@ import { foundAgentSessionRecord } from './records/agent-session-record-founding
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { onStructuredAgentSessionsHeldChanged } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'

@@ -4,8 +4,8 @@ import type {
   AgentJournalQuestionItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { boundInlineText } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
-import { boundJournalPromptText } from '../../../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { boundInlineText } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import { boundJournalPromptText } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import {
   CODEX_APPROVAL_DECISIONS,
   type CodexApprovalDecision

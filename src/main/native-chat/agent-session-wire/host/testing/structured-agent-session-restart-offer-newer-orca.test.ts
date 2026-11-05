@@ -9,9 +9,9 @@ import {
   liveTestJournalRows,
   openTestJournalHostDatabase,
   updateTestJournalRowJson
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { AgentSessionJournalError } from '../../../agent-session-journal/journal-write-guards'
+import { AgentSessionJournalError } from '../../../agent-session-journal/writing/journal-write-guards'
 import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
 import { attachParams, CALLER, hostTestState } from './structured-agent-session-host-test-harness'
 import {

@@ -23,7 +23,7 @@ import { structuredClaudeLifecycleEvent } from '../../../../runtime/agent-sessio
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -36,7 +36,7 @@ import {
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
-import { DISPATCH_DOUBT_PROVIDER_IDLE } from '../../../agent-session-journal/journal-dispatch-doubt-reasons'
+import { DISPATCH_DOUBT_PROVIDER_IDLE } from '../../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem

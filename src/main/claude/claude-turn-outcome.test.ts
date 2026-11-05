@@ -12,12 +12,12 @@ import {
 import { describeNativeChatTurnStatus } from '../../shared/native-chat/transcript/native-chat-turn-status'
 import { selectStructuredAgentSettledTurns } from '../../shared/agent-session/view/structured-agent-session-turn-timing'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { JournalStopEvent } from '../native-chat/agent-session-journal/journal-row-schema'
+import type { JournalStopEvent } from '../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import {
   personStopDecidesTurn,
   type JournalLatestStop
-} from '../native-chat/agent-session-journal/journal-stop-turn-end'
-import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
+} from '../native-chat/agent-session-journal/context-epochs/journal-stop-turn-end'
+import { createJournalReducerState } from '../native-chat/agent-session-journal/projection/journal-reducer'
 import { claudeResultOutcome } from './claude-result-outcome'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { claudeResultFailure } from './structured/launch/claude-structured-provider-fallback'

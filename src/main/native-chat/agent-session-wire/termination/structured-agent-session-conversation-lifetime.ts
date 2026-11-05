@@ -11,7 +11,7 @@ import {
   AgentSessionRefusalError,
   agentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { createJournalOpenReadRefusals } from '../../agent-session-journal/journal-open-failure'
+import { createJournalOpenReadRefusals } from '../../agent-session-journal/replay/journal-open-failure'
 import { releaseLeaseOfEndedStructuredAgentSessionChild } from './structured-agent-session-child-close'
 import {
   beginFinalizedStructuredAgentSessionClose,

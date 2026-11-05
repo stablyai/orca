@@ -1,6 +1,6 @@
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { DerivedQueuePause } from '../../agent-session-journal/queued-message-pause'
-import type { JournalOperationReceipt } from '../../agent-session-journal/journal-row-writer'
+import type { DerivedQueuePause } from '../../agent-session-journal/queued-messages/queued-message-pause'
+import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
 type PauseJournal = Pick<AgentSessionJournal, 'queuedMessages'>

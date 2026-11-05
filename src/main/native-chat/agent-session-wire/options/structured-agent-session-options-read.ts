@@ -18,7 +18,7 @@ import type {
   AgentSessionOptionsResult,
   AgentSessionAcceptedInputSources
 } from '../../../../shared/agent-session/options/agent-session-options-result'
-import { journalOpenReadRefusal } from '../../agent-session-journal/journal-open-failure'
+import { journalOpenReadRefusal } from '../../agent-session-journal/replay/journal-open-failure'
 import {
   confirmedCurrentOptions,
   structuredAgentSessionCapabilityView,

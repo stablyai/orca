@@ -1,12 +1,12 @@
-import { createJournalReducerState } from '../../../agent-session-journal/journal-reducer'
-import { journalInputOrder } from '../../../agent-session-journal/journal-input-order'
+import { createJournalReducerState } from '../../../agent-session-journal/projection/journal-reducer'
+import { journalInputOrder } from '../../../agent-session-journal/input-order/journal-input-order'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   type StructuredAgentSessionEventSink,
   createDeferredStructuredAgentSessionEventSink

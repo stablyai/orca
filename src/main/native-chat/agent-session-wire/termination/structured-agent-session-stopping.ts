@@ -10,8 +10,8 @@ import { activeStructuredAgentSessionTurnId } from '../../../../shared/agent-ses
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { stopIsAPersons } from '../../agent-session-journal/journal-stop-turn-end'
-import type { JournalStopFailedOn } from '../../agent-session-journal/queued-message-pause'
+import { stopIsAPersons } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
+import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
 
 export function structuredAgentSessionStopping(
   journal: Pick<AgentSessionJournal, 'stopMarks'>,

@@ -4,7 +4,7 @@ import { HOST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session
 import { CLAUDE_READER_DRAIN_AFTER_EXIT_MS } from '../../../claude/claude-stream-json-connection'
 import { SUPERVISED_GRACEFUL_EXIT_MS } from '../../../claude/claude-child-exit-proof-ladder'
 import { AgentSessionRecordStore } from '../records/agent-session-record-store'
-import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
+import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { AgentSessionAcquisitionRootExitObservedError } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 

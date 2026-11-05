@@ -12,7 +12,7 @@ import type { AgentSessionJournal } from '../../../agent-session-journal/journal
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../structured-agent-session-event-sink'
 

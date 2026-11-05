@@ -19,7 +19,7 @@ import {
   testState
 } from '../../../persistence/persistence-test-harness'
 import { initOrcaProfilePaths } from '../../../orca-profiles/profile-storage-paths'
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createTestParams,

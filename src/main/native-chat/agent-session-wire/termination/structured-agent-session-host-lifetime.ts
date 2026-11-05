@@ -11,7 +11,7 @@ import type { AgentJournalSubmission } from '../../../../shared/agent-session/jo
 import {
   holdUnsentSends,
   type UnsentSendHold
-} from '../../agent-session-journal/journal-unsent-send-hold'
+} from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import {
   snapshotBeforeStructuredAgentSessionStop,
   StructuredAgentSessionEvictionError

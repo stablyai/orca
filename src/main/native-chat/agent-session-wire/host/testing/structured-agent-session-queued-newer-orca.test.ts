@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
-} from '../../../agent-session-journal/journal-host-database-test-support'
-import { JOURNAL_NEWER_SCHEMA_MESSAGE } from '../../../agent-session-journal/journal-open-failure'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { JOURNAL_NEWER_SCHEMA_MESSAGE } from '../../../agent-session-journal/replay/journal-open-failure'
 import { HOST_TEST_SESSION } from './structured-agent-session-host-test-data'
 import {
   createQueuedMessageTestRig,

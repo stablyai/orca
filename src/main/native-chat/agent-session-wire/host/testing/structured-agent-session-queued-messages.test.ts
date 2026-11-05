@@ -7,8 +7,8 @@ import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-ses
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 import { agentSessionSendBodyFingerprint } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { JournalStopAcceptor } from '../../../agent-session-journal/journal-stop-acceptance'
-import { JournalQueuedMessages } from '../../../agent-session-journal/journal-queued-messages'
+import { JournalStopAcceptor } from '../../../agent-session-journal/context-epochs/journal-stop-acceptance'
+import { JournalQueuedMessages } from '../../../agent-session-journal/queued-messages/journal-queued-messages'
 import { structuredQueuePauses } from '../../delivery/structured-agent-session-queued-pause'
 import {
   createQueuedMessageTestRig,

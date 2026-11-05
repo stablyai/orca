@@ -20,7 +20,7 @@ import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-sessi
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput,

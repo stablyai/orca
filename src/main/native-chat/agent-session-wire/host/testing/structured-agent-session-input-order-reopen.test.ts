@@ -1,4 +1,4 @@
-import { journalInputOrder } from '../../../agent-session-journal/journal-input-order'
+import { journalInputOrder } from '../../../agent-session-journal/input-order/journal-input-order'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { expect, it, vi } from 'vitest'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
@@ -10,8 +10,8 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-import { loadTestJournal } from '../../../agent-session-journal/journal-host-database-test-support'
-import { queuePauseHolding } from '../../../agent-session-journal/queued-message-pause'
+import { loadTestJournal } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { queuePauseHolding } from '../../../agent-session-journal/queued-messages/queued-message-pause'
 
 it.each([false, true])(
   'failed reopen=%s: unentered M retains ordinary head recovery through graceful restart',

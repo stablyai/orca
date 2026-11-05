@@ -22,7 +22,7 @@ import {
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
 import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { adoptedDirectoryProbes } from '../../../agent-session-journal/adopted-directory-probe'
+import { adoptedDirectoryProbes } from '../../../agent-session-journal/history-import/adopted-directory-probe'
 import { resolveAgentSessionLaunchDirectory } from '../../../../runtime/agent-session/agent-session-launch-directory'
 import { createClaudeStructuredLaunchResolver } from '../../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 

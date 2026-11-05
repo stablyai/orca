@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
 import { TERMINAL_QUERY_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-query-methods'
-import { JournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database'
+import { JournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/database/journal-host-database'
 import { AgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store'
 import {
   peekOpenedAgentSessionRecordStore,

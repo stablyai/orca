@@ -10,7 +10,7 @@ import * as attachmentSweeps from '../../native-chat/agent-session-attachments/a
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import {

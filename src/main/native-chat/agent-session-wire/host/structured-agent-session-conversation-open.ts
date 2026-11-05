@@ -3,10 +3,10 @@
 // other unhanded sends are rejected (journal-unsent-send-hold.ts / queued-message-pause.ts).
 // Settlement needs no lease and starts no provider child.
 
-import type { JournalHostDatabase } from '../../agent-session-journal/journal-host-database'
+import type { JournalHostDatabase } from '../../agent-session-journal/database/journal-host-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../../agent-session-journal/journal-store-factory'
-import { holdUnsentSends } from '../../agent-session-journal/journal-unsent-send-hold'
+import { holdUnsentSends } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'

@@ -25,7 +25,7 @@ import {
 } from '../../delivery/structured-agent-session-queued-publication'
 import { shouldQueueStructuredAgentSessionSend } from '../../delivery/structured-agent-session-queued-gate'
 import { QUEUED_MESSAGES_PUBLISHED_MAX_BYTES } from '../../delivery/structured-agent-session-queued-published-bytes'
-import { QUEUED_MESSAGE_EDIT_LEASE_MS } from '../../../agent-session-journal/queued-message-edit-leases'
+import { QUEUED_MESSAGE_EDIT_LEASE_MS } from '../../../agent-session-journal/queued-messages/queued-message-edit-leases'
 import { agentSessionAttachmentStoreRoot } from '../../../agent-session-attachments/agent-session-attachment-references'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { QueuedMessageImageBlock } from '../../../../../shared/queued-message-edit'

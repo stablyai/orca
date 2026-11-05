@@ -7,9 +7,9 @@ import type {
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalBatch } from '../../../../../shared/agent-session/agent-session-wire'
 import { isStructuredAgentSessionStopNote } from '../../operations/structured-agent-session-command-turn'
-import { findSequenceGap } from '../../../agent-session-journal/journal-cursor'
-import type { JournalReadRow } from '../../../agent-session-journal/journal-read-row'
-import { isJournalStopOrResumeRow } from '../../../agent-session-journal/journal-row-schema'
+import { findSequenceGap } from '../../../agent-session-journal/replay/journal-cursor'
+import type { JournalReadRow } from '../../../agent-session-journal/replay/journal-read-row'
+import { isJournalStopOrResumeRow } from '../../../agent-session-journal/durable-rows/journal-row-schema'
 // Project touched items at current reduced state for idempotent delivery; adopted echoes retain submission keys.
 
 export type JournalBatchProjection =

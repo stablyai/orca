@@ -6,11 +6,11 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
-import type { JournalReplacementItem } from '../../agent-session-journal/journal-epoch-replacement'
+import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
 import {
   importLegacyTranscriptIntoJournal,
   prepareLegacyTranscriptImport
-} from '../../agent-session-journal/journal-legacy-import'
+} from '../../agent-session-journal/history-import/journal-legacy-import'
 import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 

@@ -10,7 +10,7 @@ import {
   queuedImageReaderEvent
 } from '../../../native-chat/agent-session-wire/publication/history/agent-session-queued-image-reader'
 import { CLIENT_HISTORY_READER } from '../../../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
-import { utf8Head } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+import { utf8Head } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 // Older readers retain the ordinary image source and their supported controls.
 
 type QueuedImageReader = Pick<RpcContext, 'clientKind' | 'clientCapabilities'>

@@ -10,11 +10,11 @@ import { projectStructuredAgentSessionStatusSummary } from '../../../../../share
 import { AgentHookServer, _internals } from '../../../../agent-hooks/server'
 import { createClaudeJournalTranslator } from '../../../../claude/structured/journal/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../../../codex/structured/journal/codex-structured-journal-translation'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   subagentJournalBody,
   subagentJournalItemIdentity
-} from '../../../agent-session-journal/journal-subagent-item'
+} from '../../../agent-session-journal/item-lifecycle/journal-subagent-item'
 import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
 import { StructuredAgentSessionStatusFeed } from '../structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'

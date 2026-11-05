@@ -9,8 +9,8 @@ import {
   C,
   root
 } from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
-import { closeTestJournalHostDatabases } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { journalDatabasePath } from '../../src/main/native-chat/agent-session-journal/journal-host-database'
+import { closeTestJournalHostDatabases } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { journalDatabasePath } from '../../src/main/native-chat/agent-session-journal/database/journal-host-database'
 import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentSessionHostRefusal } from '../../src/main/runtime/agent-session/structured-agent-session-host-refusal'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'

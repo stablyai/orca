@@ -22,7 +22,7 @@ import {
 } from '../../../../../../shared/agent-session/agent-session-wire'
 import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../../../../shared/mobile-bridge-frame-bytes'
-import { createTrackedJournalOpener } from '../../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
 import { BOUNDED_FRAME_ROW_BYTES, boundedFrameItem } from '../agent-session-bounded-frame-item'
 import {

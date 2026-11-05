@@ -1,5 +1,5 @@
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import type { JournalOperationReceipt } from '../../agent-session-journal/journal-row-writer'
+import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type {
   AgentSessionRewindParams,
   AgentSessionRewindRecord,

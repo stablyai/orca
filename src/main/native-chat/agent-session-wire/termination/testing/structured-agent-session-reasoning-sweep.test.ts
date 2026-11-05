@@ -12,7 +12,7 @@ import type { AgentSessionJournal } from '../../../agent-session-journal/journal
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import '../structured-agent-session-dead-generation-settlement'
 import { settleStaleStructuredAgentSessionState } from '../structured-agent-session-stale-state-settlement'
 import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'

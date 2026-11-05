@@ -3,7 +3,7 @@ import { agentSessionFailureWords } from '../../../../../shared/agent-session/fa
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../../../shared/agent-session/agent-session-host-authority'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER as CALLER

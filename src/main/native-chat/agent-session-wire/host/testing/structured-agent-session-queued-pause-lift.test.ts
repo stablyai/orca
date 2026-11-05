@@ -10,13 +10,13 @@ import {
 import { piOptionRefreshHost } from './structured-agent-session-option-refresh.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { JournalStopAcceptor } from '../../../agent-session-journal/journal-stop-acceptance'
+import { JournalStopAcceptor } from '../../../agent-session-journal/context-epochs/journal-stop-acceptance'
 import {
   appendTestJournalQueueRow,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
-import { finishTestJournalHistoricalInputs } from '../../../agent-session-journal/journal-historical-inputs.test-support'
+import { finishTestJournalHistoricalInputs } from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_SESSION,

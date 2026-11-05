@@ -5,13 +5,13 @@ import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agen
 import { structuredAttentionOrigin } from '../../../../../shared/agent-session/agent-session-attention'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { createAnnouncedNotificationRegistry } from '../../../../notifications/announced-notification-registry'
-import * as journalRestore from '../../../agent-session-journal/journal-open'
+import * as journalRestore from '../../../agent-session-journal/replay/journal-open'
 import * as journalFactory from '../../../agent-session-journal/journal-store-factory'
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   loadTestJournal,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_SESSION as SESSION,

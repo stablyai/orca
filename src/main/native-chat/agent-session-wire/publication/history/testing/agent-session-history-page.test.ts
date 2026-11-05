@@ -14,7 +14,7 @@ import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../../../../shared/agent-
 import {
   openTestJournalHostDatabase,
   insertTestJournalRow
-} from '../../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
@@ -25,7 +25,7 @@ import type {
   JournalItemRow,
   JournalRow,
   JournalTombstoneRow
-} from '../../../../agent-session-journal/journal-row-schema'
+} from '../../../../agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
 import { projectJournalBatch } from '../agent-session-journal-batch'
 import { readAgentSessionHistory } from '../agent-session-history-page'

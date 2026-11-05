@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { recoverStructuredRewind } from '../../rewind/structured-rewind-recovery'
 import {
   createQueuedMessageTestRig,
@@ -21,7 +21,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { structuredQueuePauses } from '../../delivery/structured-agent-session-queued-pause'
-import { queuePauseHolding } from '../../../agent-session-journal/queued-message-pause'
+import { queuePauseHolding } from '../../../agent-session-journal/queued-messages/queued-message-pause'
 
 let rig: QueuedMessageTestRig
 const rewind = vi.fn<NonNullable<StructuredAgentSessionAdapter['rewind']>>()

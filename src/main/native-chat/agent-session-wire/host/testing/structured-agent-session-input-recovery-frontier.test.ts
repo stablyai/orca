@@ -1,12 +1,12 @@
-import { journalInputOrder } from '../../../agent-session-journal/journal-input-order'
+import { journalInputOrder } from '../../../agent-session-journal/input-order/journal-input-order'
 import { writeLegacyGapFixture } from './structured-agent-session-legacy-gap.test-support'
-import type { JournalReducerState } from '../../../agent-session-journal/journal-reducer'
+import type { JournalReducerState } from '../../../agent-session-journal/projection/journal-reducer'
 import { expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import {
   loadTestJournal,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { selectStructuredAgentSessionInput } from '../../delivery/structured-agent-session-input-selection'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 

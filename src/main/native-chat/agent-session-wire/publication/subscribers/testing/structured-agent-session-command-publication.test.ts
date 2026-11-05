@@ -13,7 +13,7 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
 } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
-import { createTrackedJournalOpener } from '../../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
 import { identityFor } from '../../../../../claude/structured/claude-structured-session-test-support'
 

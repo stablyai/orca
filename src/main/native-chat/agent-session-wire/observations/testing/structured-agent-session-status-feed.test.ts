@@ -14,7 +14,7 @@ import type { AgentChildWorkView } from '../../../../../shared/agent-status/chil
 import { createClaudeJournalTranslator } from '../../../../claude/structured/journal/claude-structured-journal-translation'
 import { publishCodexTurnLifecycle } from '../../../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   indexedStatusFeedSession as indexed,
   statusFeedChildView

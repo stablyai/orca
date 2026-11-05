@@ -10,9 +10,9 @@ import { agentSessionFailureWords } from '../../../../../shared/agent-session/fa
 import '../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import '../../../../../shared/agent-session/structured-agent-session-command-entry'
 import { createCodexJournalTranslator } from '../../../../codex/structured/journal/codex-structured-journal-translation'
-import '../../../agent-session-journal/journal-reducer'
-import '../../../agent-session-journal/journal-public-read'
-import '../../../agent-session-journal/journal-stopped-usage-limit-cut'
+import '../../../agent-session-journal/projection/journal-reducer'
+import '../../../agent-session-journal/projection/journal-public-read'
+import '../../../agent-session-journal/context-epochs/journal-stopped-usage-limit-cut'
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   agentSessionLeaseFixture,
@@ -21,7 +21,7 @@ import {
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import {
   HOST_TEST_NOW as NOW,

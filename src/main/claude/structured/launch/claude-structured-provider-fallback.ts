@@ -10,7 +10,7 @@ import type {
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionFailureRowWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { PROVIDER_FRAME_PAYLOAD_LIMITS } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+import { PROVIDER_FRAME_PAYLOAD_LIMITS } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../../../native-chat/agent-session-wire/providers/claude-stream-json-frame-schema'
 import {
   type UnhandledProviderFrameJournalItemOptions,

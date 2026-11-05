@@ -27,9 +27,9 @@ import {
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
-import { JournalLifecycleBatchAppender } from '../../../agent-session-journal/journal-lifecycle-batch-appender'
+import { JournalLifecycleBatchAppender } from '../../../agent-session-journal/writing/journal-lifecycle-batch-appender'
 import { STALE_SESSION_ROW_PREFIX } from '../../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import '../../providers/structured-agent-session-adapter'
 import { AgentSessionAcquisitionExitUnprovenError } from '../../acquisition/structured-agent-session-acquisition-errors'

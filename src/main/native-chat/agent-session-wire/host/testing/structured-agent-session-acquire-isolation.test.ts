@@ -11,8 +11,8 @@ import {
 } from './structured-agent-session-host-test-data'
 import { journalIdentityFor } from '../../acquisition/structured-agent-session-attach'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/journal-host-database-test-support'
-import { digestPayload } from '../../../agent-session-journal/journal-payload-bounds'
+import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { digestPayload } from '../../../agent-session-journal/item-lifecycle/journal-payload-bounds'
 import {
   CALLER,
   attach,

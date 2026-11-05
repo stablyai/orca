@@ -19,7 +19,7 @@ import {
 } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime

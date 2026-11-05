@@ -11,7 +11,7 @@ import type {
 import type { AgentChildWorkEvidence } from '../../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { acpChildWorkStatusSink } from '../../../../acp/acp-structured-child-work.test-support'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionStatusFeed } from '../structured-agent-session-status-feed'
 
 import type { StructuredAgentSessionStatusSink } from '../structured-agent-session-status-ownership'

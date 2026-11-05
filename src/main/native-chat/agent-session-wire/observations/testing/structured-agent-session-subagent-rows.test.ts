@@ -7,7 +7,7 @@ import { agentJournalTurnBody } from '../../../../../shared/agent-session/lifecy
 import { isSubagentBlock } from '../../../../../shared/native-chat/native-chat-types'
 import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   StructuredAgentSessionSubagentRows,
   type AgentChildWorkRowView

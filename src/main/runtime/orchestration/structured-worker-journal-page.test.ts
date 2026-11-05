@@ -9,7 +9,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionHistoryRequest } from '../../../shared/agent-session/agent-session-wire'
-import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import type { AgentSessionHistoryScope } from '../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
 import { readStructuredAgentSessionHistoryResult } from '../../native-chat/agent-session-wire/publication/history/structured-agent-session-history-result'

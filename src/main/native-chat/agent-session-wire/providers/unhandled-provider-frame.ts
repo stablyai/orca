@@ -6,7 +6,7 @@ import {
   boundPayload,
   PROVIDER_FRAME_PAYLOAD_LIMITS,
   type JournalPayloadLimits
-} from '../../agent-session-journal/journal-payload-bounds'
+} from '../../agent-session-journal/item-lifecycle/journal-payload-bounds'
 import {
   codexGoalRowText,
   codexThreadGoalState

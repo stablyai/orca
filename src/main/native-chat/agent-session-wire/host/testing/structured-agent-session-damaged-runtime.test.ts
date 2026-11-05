@@ -5,7 +5,7 @@ import {
 import { CODEX_STRUCTURED_AGENT } from '../../../../codex/structured/launch/codex-structured-agent-definition'
 import { afterEach, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { admitAndRunAgentSessionMutation } from '../../operations/structured-agent-session-mutation-admission'
 import { setOptionPlan } from '../../operations/structured-agent-session-mutation-plans'

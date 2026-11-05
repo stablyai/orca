@@ -10,7 +10,7 @@ import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/
 import {
   openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
-} from '../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {

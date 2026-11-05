@@ -35,11 +35,11 @@ import {
   type StructuredAgentSessionState
 } from '../../src/shared/agent-session/structured-agent-session-reducer'
 import { selectStructuredAgentSettledTurns } from '../../src/shared/agent-session/view/structured-agent-session-turn-timing'
-import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { restoreJournal } from '../../src/main/native-chat/agent-session-journal/journal-open'
-import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/journal-outcome-format'
-import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
-import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/journal-row-schema'
+import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { restoreJournal } from '../../src/main/native-chat/agent-session-journal/replay/journal-open'
+import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format'
+import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-write'
+import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import {
   hostTestAttachParams,
   HOST_TEST_SESSION as SESSION

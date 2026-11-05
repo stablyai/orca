@@ -11,11 +11,11 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { nativeChatRowRendersContent } from '../../../shared/native-chat/transcript/native-chat-row-content'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
-import { usableJournalHistoryOrigin } from '../../native-chat/agent-session-journal/journal-history-origin'
+import { usableJournalHistoryOrigin } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import {
   journalLifecycleItemMutation,
   type JournalLifecycleIdentityMutationInput
-} from '../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+} from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
 import { isProviderTimelineTurnInNamespace } from '../../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'

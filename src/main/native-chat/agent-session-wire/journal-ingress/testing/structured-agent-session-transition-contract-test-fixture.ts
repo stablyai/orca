@@ -7,8 +7,8 @@ import {
   type AgentJournalToolCallItem
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/journal-host-database-test-support'
-import type { JournalLifecycleMutationInput } from '../../../agent-session-journal/journal-lifecycle-mutation'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import type { JournalLifecycleMutationInput } from '../../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { createDeferredStructuredAgentSessionEventSink } from '../structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'

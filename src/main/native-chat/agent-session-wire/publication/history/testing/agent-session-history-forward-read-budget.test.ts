@@ -11,7 +11,7 @@ import {
   publishTestJournalEpoch,
   deleteTestJournalRow,
   updateTestJournalRowJson
-} from '../../../../agent-session-journal/journal-host-database-test-support'
+} from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../agent-session-history-page'
 import {
   agentSessionJournalProviderHandle,

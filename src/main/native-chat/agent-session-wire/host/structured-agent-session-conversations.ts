@@ -1,5 +1,5 @@
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalRow } from '../../agent-session-journal/journal-row-schema'
+import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'

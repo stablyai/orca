@@ -9,7 +9,7 @@ import type {
   StructuredAgentSessionConversationOpenOptions
 } from './structured-agent-session-conversation-open'
 import type { createStructuredAgentSessionConversationLifetime } from '../termination/structured-agent-session-conversation-lifetime'
-import type { UnsentSendHold } from '../../agent-session-journal/journal-unsent-send-hold'
+import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import type { AgentSessionStopOutcome } from '../providers/structured-agent-session-adapter-stop'
 import type { StructuredAgentSessionRequestFailure } from '../observations/structured-agent-session-request-failures'
 import type { StructuredAgentSessionCommandHandoverContext } from '../operations/structured-agent-session-command-turn'
@@ -35,11 +35,11 @@ import type { AgentSessionRecordStore } from '../../../runtime/agent-session/rec
 import type { AgentSessionUserNameWrite } from '../../../runtime/agent-session/records/agent-session-record-conversation-name'
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../../runtime/agent-session/ownership/agent-session-spawn-token-process-scan'
-import type { JournalHostDatabase } from '../../agent-session-journal/journal-host-database'
+import type { JournalHostDatabase } from '../../agent-session-journal/database/journal-host-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
-import type { JournalStopSettle } from '../../agent-session-journal/queued-message-pause'
-import type { QueuedMessageOwed } from '../../agent-session-journal/queued-message-consume-error'
+import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause'
+import type { QueuedMessageOwed } from '../../agent-session-journal/queued-messages/queued-message-consume-error'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import type {
   StructuredAgentSessionAdapter,
