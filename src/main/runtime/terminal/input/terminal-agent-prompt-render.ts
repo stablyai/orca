@@ -10,7 +10,8 @@ import type {
   RuntimeTerminalWaitCondition
 } from '../../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { isHeldAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import { isCompleteAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 
 export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
   protected createAgentPromptRenderGate(
@@ -64,6 +65,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         return
       }
       settled = true
+      composerProof = false
       clearGateTimers()
       resolveRender()
     }
@@ -86,17 +88,22 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS + Math.max(0, ingestDeadlineAt - Date.now())
       )
     }
-    // Child work can repaint forever; a composer that keeps showing the whole paste proves it landed.
+    // Child work can repaint forever; a composer that keeps showing exactly this paste proves it
+    // landed. Only from an empty composer: text already there cannot be told from the new paste.
+    let composerProof = false
     let draftRead: Promise<void> | null = null
     let draftMatchedAt: number | null = null
     let draftSettleTimer: NodeJS.Timeout | null = null
     const checkComposerDraft = (): void => {
-      if (prompt === undefined || !observedMarker || !ingested || settled || draftRead) {
+      if (!composerProof || prompt === undefined || !observedMarker || !ingested || draftRead) {
         return
       }
       draftRead = this.readCurrentTerminalWaitScreen(ptyId)
         .then((screen) => {
-          if (!isHeldAgentPromptDraft(screen?.draft, prompt, 0)) {
+          if (!composerProof) {
+            return
+          }
+          if (!isCompleteAgentPromptDraft(screen?.draft, prompt)) {
             draftMatchedAt = null
             return
           }
@@ -151,6 +158,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
     return {
       arm: () => {
         armed = true
+        composerProof = prompt !== undefined && this.readCaughtUpComposerTypedText(ptyId) === ''
         markerCarry = ''
         armIngestTimer()
         armHardTimer()
@@ -162,10 +170,19 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         await rendered
       },
       dispose: () => {
+        composerProof = false
         unsubscribe()
         clearGateTimers()
       }
     }
+  }
+
+  /** The user's text in a composer the screen model has fully caught up on; null when unknown. */
+  private readCaughtUpComposerTypedText(ptyId: string): string | null {
+    const state = this.readWholeScreenModel(ptyId)
+    return state && state.outputSequence === this.getPtyOutputSequence(ptyId)
+      ? readTerminalComposerTypedText(state.emulator.getCursorLineContext())
+      : null
   }
 
   waitForTerminal(

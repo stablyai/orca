@@ -400,27 +400,46 @@ describe('agent prompt render gate on a ConPTY host', () => {
     await stalled
   })
 
-  it('submits once the composer keeps showing the paste, though child work never goes quiet', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
+  describe('with child work repainting forever', () => {
     const prompt = 'review the background agent output and report'
     const rule = '\u2500'.repeat(40)
-    const { runtime, handle, submitTimes } = await createSettlementRuntime({
-      noiseUntilMs: 20_000,
-      // A progress row repainting elsewhere leaves the composer and its cursor as they were.
-      noise: '\x1b7\x1b[5;1Hworking\x1b8',
-      // Claude parks the cursor at the end of its composer line.
-      composer: `${rule}\r\n\u276f ${prompt}\r\n${rule}\x1b[2;${prompt.length + 3}H`
-    })
-    const submission = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+    // Claude parks the cursor at the end of its composer line.
+    const composer = (text: string): string =>
+      `\x1b[H\x1b[2J${rule}\r\n\u276f ${text}\r\n${rule}\x1b[2;${text.length + 3}H`
 
-    await vi.runAllTimersAsync()
-    expect(submitTimes).toHaveLength(1)
-    // Marker at 100ms plus the settle window, well before the 1.5s quiet window or 8s cap.
-    expect(submitTimes[0]).toBeGreaterThanOrEqual(400)
-    expect(submitTimes[0]).toBeLessThan(1_500)
-    await stalled
+    async function submitTime(shown: { before: string; after: string }): Promise<number> {
+      const { runtime, handle, submitTimes } = await createSettlementRuntime({
+        noiseUntilMs: 20_000,
+        // A progress row repainting elsewhere leaves the composer and its cursor as they were.
+        noise: '\x1b7\x1b[5;1Hworking\x1b8',
+        composer: composer(shown.after).slice('\x1b[H\x1b[2J'.length)
+      })
+      runtime.onPtyData(PTY_ID, composer(shown.before), Date.now())
+      const submission = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
+      const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+      await vi.runAllTimersAsync()
+      await stalled
+      expect(submitTimes).toHaveLength(1)
+      return submitTimes[0]
+    }
+
+    it('submits once an empty composer keeps showing the whole paste', async () => {
+      useHostPlatform('win32')
+      vi.useFakeTimers()
+      // Marker at 100ms plus the settle window, well before the 1.5s quiet window or 8s cap.
+      const at = await submitTime({ before: '', after: prompt })
+      expect(at).toBeGreaterThanOrEqual(400)
+      expect(at).toBeLessThan(1_500)
+    })
+
+    it.each([
+      ['only the end of the paste is shown', { before: '', after: prompt.slice(8) }],
+      ['the composer already held the prompt', { before: prompt, after: prompt }]
+    ])('waits for the cap when %s', async (_case, shown) => {
+      useHostPlatform('win32')
+      vi.useFakeTimers()
+      expect(await submitTime(shown)).toBeGreaterThanOrEqual(8_000)
+    })
   })
 
   it('still settles a normal prompt on the marker plus one quiet window', async () => {

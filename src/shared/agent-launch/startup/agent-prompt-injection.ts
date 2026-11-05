@@ -101,6 +101,18 @@ const HELD_PROMPT_EXTRA_CHARS_PER_LINE_FEED = 2
 const HELD_PROMPT_COUNT_SLACK_CHARS = 8
 const HELD_PROMPT_TEXT_MIN_CHARS = 32
 
+const collapseComposerWhitespace = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
+/** Whether the composer shows all of `prompt` and nothing else: proof its paste landed. Stricter
+ *  than the held-draft match, whose suffix and placeholder-count slack also fit a partial paste. */
+export function isCompleteAgentPromptDraft(draft: string | undefined, prompt: string): boolean {
+  return (
+    !!draft &&
+    collapseComposerWhitespace(draft) ===
+      collapseComposerWhitespace(sanitizeAgentPromptText(prompt))
+  )
+}
+
 /** Whether a composer draft is `prompt` still held, as Codex's paste placeholders or as text;
  *  `absorbedEnters` is how many Enters may have joined the paste as newlines. */
 export function isHeldAgentPromptDraft(
@@ -134,9 +146,8 @@ export function isHeldAgentPromptDraft(
           HELD_PROMPT_COUNT_SLACK_CHARS
     )
   }
-  const collapse = (text: string): string => text.replace(/\s+/g, ' ').trim()
-  const shown = collapse(draft)
-  const wanted = collapse(expected)
+  const shown = collapseComposerWhitespace(draft)
+  const wanted = collapseComposerWhitespace(expected)
   // Why a long tail only: a scrolled composer shows the paste's end; a short or inner fragment
   // could be the user's own text that recurs in the prompt.
   return shown === wanted || (shown.length >= HELD_PROMPT_TEXT_MIN_CHARS && wanted.endsWith(shown))
