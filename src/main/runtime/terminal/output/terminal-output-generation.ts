@@ -214,6 +214,10 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
   }
 
   readRecentTerminalOutput(ptyId: string): string | undefined {
-    return this.recentPtyOutputById.get(ptyId)?.read()
+    const pty = this.ptysById.get(ptyId)
+    return (
+      this.recentPtyOutputById.get(ptyId)?.read() ??
+      (pty?.connected === false ? pty.lastExitOutput : undefined)
+    )
   }
 }

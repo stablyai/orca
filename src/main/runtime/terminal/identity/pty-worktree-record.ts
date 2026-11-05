@@ -182,6 +182,10 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
       pty.lastExitCode = null
       pty.lastExitCause = null
     }
+    // Exit tail is read on every build; a null prior is still a different process.
+    if (state.incarnationId && state.incarnationId !== pty.incarnationId) {
+      pty.lastExitOutput = undefined
+    }
     if (state.incarnationId !== undefined) {
       if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
         this.invalidatePtyIncarnationHandle(ptyId)

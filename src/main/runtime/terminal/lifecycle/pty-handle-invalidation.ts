@@ -13,6 +13,7 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
   protected retirePredecessorPtyExitEvidence(pty: RuntimePtyWorktreeRecord): void {
     pty.lastExitCode = null
     pty.lastExitCause = null
+    pty.lastExitOutput = undefined
     for (const leaf of this.getLeavesForPty(pty.ptyId)) {
       leaf.lastExitCode = null
       leaf.lastExitCause = null
@@ -148,6 +149,10 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
   ): void {
     this.invalidatePtyControllerInventoryForLifecycle(ptyId)
     const existingPty = this.ptysById.get(ptyId)
+    // Spawn stamps the new id before registerPty, so a null prior must drop its tail here.
+    if (existingPty && incarnationId && existingPty.incarnationId !== incarnationId) {
+      existingPty.lastExitOutput = undefined
+    }
     if (
       existingPty &&
       incarnationId !== undefined &&
