@@ -29,6 +29,12 @@ import type { AgentLaunchRuntime } from '../../../shared/agent-launch/startup/ag
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { loadChatTabLayout } from '../agent-session/agent-session-tab-layout'
+import {
+  projectSessionTabs,
+  type ProjectedSessionTabs
+} from '../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
+import { agentSessionRowId } from '../../../shared/workspace-layout/old-client/old-client-session-row-ids'
 
 export type AgentLaunchScope = Parameters<
   OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce['getAgentLaunchPlatformForWorkspace']
@@ -73,7 +79,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       (id) => this.hasCurrentLocalStructuredSessionTab(id)
     )
     for (const [worktreeId, worktreeChanges] of changes) {
-      this.changeWindowlessChatTabs(worktreeId, worktreeChanges, (change) =>
+      await this.changeWindowlessChatTabs(worktreeId, worktreeChanges, (change) =>
         this.passiveStructuredSessionTabChangeEligible(change)
       )
     }
@@ -104,16 +110,32 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     if (!eligible()) {
       throw new Error('Chat tab publication was superseded')
     }
+    let savedOrder: ProjectedSessionTabs | undefined
     // Window creates retain the window's own placement decision.
-    if (!(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)) {
+    if (
+      (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
+      !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
+    ) {
       const saving = this.saveWindowlessAgentSessionTab(input.workspaceId, {
         ...input,
         eligible,
         ...(tabId ? { tabId } : {})
       })
       input.workspaceAuthority?.saving(saving)
+      await saving
+      savedOrder = this.savedStructuredSessionTabOrder(input.workspaceId)
+      if (
+        !savedOrder?.tabs.some(
+          (tab) =>
+            tab.type === 'agent-session' && tab.id === agentSessionRowId(input.sessionId, tabId)
+        )
+      ) {
+        throw new Error('Chat tab publication was superseded')
+      }
     }
-    this.projectStructuredAgentSessionTab({ ...input, tabId, eligible })
+    projectStructuredSessionTab(this, { ...input, tabId, eligible, savedOrder }, (snapshot) =>
+      this.emitMobileSessionTabsSnapshot(snapshot)
+    )
     input.workspaceAuthority?.committed()
     if (!eligible()) {
       throw new Error('Chat tab publication was superseded')
@@ -132,9 +154,29 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
 
   /** The caller owns the store write; this publishes only its current raw surface. */
   projectStructuredAgentSessionTab(input: StructuredSessionRawPublicationInput): void {
-    projectStructuredSessionTab(this, input, (snapshot) =>
+    const savedOrder =
+      (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
+      !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
+        ? this.savedStructuredSessionTabOrder(input.workspaceId)
+        : undefined
+    projectStructuredSessionTab(this, { ...input, savedOrder }, (snapshot) =>
       this.emitMobileSessionTabsSnapshot(snapshot)
     )
+  }
+
+  private savedStructuredSessionTabOrder(workspaceId: string): ProjectedSessionTabs | undefined {
+    const session = this.getWorkspaceSessionForWorktree(workspaceId)
+    const loaded = session
+      ? loadChatTabLayout(
+          this.getWorkspaceSessionHostIdForWorktree(workspaceId),
+          session,
+          workspaceId
+        ).loaded
+      : null
+    const workspace = loaded?.layout.workspaces[workspaceId]
+    return loaded && workspace
+      ? projectSessionTabs(workspaceId, workspace, loaded.desktopView, loaded.facts, false)
+      : undefined
   }
 
   async inspectTerminalProcess(
