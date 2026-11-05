@@ -72,12 +72,20 @@ test('annotates an element on a client-hosted page of a paired host', async ({
             const browserPage = Object.values(state.browserPagesByWorkspace)
               .flat()
               .find((candidate) => candidate.url === targetUrl)
-            const handle = browserPage && state.remoteBrowserPageHandlesByPageId[browserPage.id]
+            if (!browserPage) {
+              return null
+            }
+            const handle = state.remoteBrowserPageHandlesByPageId[browserPage.id]
             return handle?.placement?.kind === 'client' ? browserPage.id : null
           }, url)),
         { timeout: 60_000 }
       )
       .not.toBeNull()
+    // The poll assigns pageId inside a callback, which control-flow narrowing cannot see.
+    const clientPageId = pageId as string | null
+    if (!clientPageId) {
+      throw new Error('The client-hosted page never registered')
+    }
 
     const annotate = page.getByRole('button', { name: 'Annotate page element', exact: true })
     await expect(page.getByRole('button', { name: 'Grab page element', exact: true })).toBeEnabled()
@@ -119,7 +127,7 @@ test('annotates an element on a client-hosted page of a paired host', async ({
             window
               .__store!.getState()
               .browserAnnotationsByPageId[id]?.map((note) => note.payload.target.selector) ?? [],
-          pageId
+          clientPageId
         )
       )
       .toEqual([expect.stringContaining('target')])
