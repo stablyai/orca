@@ -5,6 +5,7 @@ import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/us
 import { agentSessionCreateCapabilities } from '@/runtime/agent-session-create-request'
 import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
+import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { pairedAgentLaunchInputs } from './paired-agent-launch-inputs'
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
 import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
@@ -63,12 +64,16 @@ export async function launchAgentInWebHostTab(args: {
     { value0: structuredAgentLabel(agent) }
   )
   const hasPrompt = prompt.length > 0
+  const pairingRevision = environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
   let startup: LaunchAgentStartupPromptPlan
   let launch: CreateWebRuntimeSessionTerminalArgs
   try {
     const { capable, complete } = environmentId
       ? await agentSessionCreateCapabilities(environmentId).catch((error: unknown) => {
-          if (isRuntimeCompatBlockError(error)) {
+          if (
+            isRuntimeCompatBlockError(error) ||
+            (error instanceof Error && error.name === 'AbortError')
+          ) {
             throw error
           }
           return { capable: false, complete: false }
@@ -77,6 +82,10 @@ export async function launchAgentInWebHostTab(args: {
     const inputs = environmentId
       ? await pairedAgentLaunchInputs({ ...args, environmentId, complete, capable })
       : { preparedAgentCommand: true }
+    // Why: negotiation must not retarget this launch to a replacement pairing.
+    if (environmentId && getRuntimeEnvironmentRevision(environmentId) !== pairingRevision) {
+      throw new DOMException('Agent launch cancelled', 'AbortError')
+    }
     // Why: only prompt delivery is client-owned; desktop launch settings belong to legacy preparation.
     startup = planLaunchAgentStartupPrompt({
       base: {

@@ -257,6 +257,9 @@ describe('createWebRuntimeSessionTerminal', () => {
         agent: test.agent,
         worktreeId: TEST_WORKTREE_ID,
         environmentId: ENVIRONMENT_ID,
+        agentArgs:
+          'loose' in test ? '--dangerously-skip-permissions --verbose' : '--profile "with spaces"',
+        sessionOptions: options,
         buildStartup: () => ({
           startupPlan: plan,
           pasteDraftAfterLaunch: null,
@@ -272,11 +275,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       expect(result.outcome.status).toBe('fail' in test ? 'failed' : 'created')
     }
     expect(creates).toEqual([
-      test.agent === 'goose'
-        ? 'background' in test
-          ? 'terminal.create'
-          : 'session.tabs.createTerminal'
-        : 'terminal.createAgentSession'
+      'background' in test ? 'terminal.create' : 'session.tabs.createTerminal'
     ])
     expect(spawn).toHaveBeenCalledTimes(1)
     const final = spawn.mock.calls[0][0]

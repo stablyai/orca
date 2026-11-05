@@ -402,13 +402,17 @@ it.each([
     const dispatch = vi.spyOn(launcher, 'launchAgentInNewTab').mockImplementation((args) =>
       actualLaunch({
         ...args,
-        ...(failure === 'paste' ? { promptDelivery: 'submit-after-ready' } : {})
+        ...(failure === 'preferences'
+          ? { promptDelivery: 'draft' }
+          : failure === 'paste'
+            ? { promptDelivery: 'submit-after-ready' }
+            : {})
       })
     )
     const preferences = Promise.withResolvers<AgentLaunchPreferences>()
-    vi.spyOn(hostPreferences, 'ensureAgentLaunchPreferences').mockImplementation(
-      () => preferences.promise
-    )
+    const ensurePreferences = vi
+      .spyOn(hostPreferences, 'ensureAgentLaunchPreferences')
+      .mockImplementation(() => preferences.promise)
     const created =
       Promise.withResolvers<
         Awaited<ReturnType<typeof terminalCreate.createWebRuntimeSessionTerminalResult>>
@@ -423,7 +427,14 @@ it.each([
     )
     vi.spyOn(webEnvironment, 'captureRuntimeEnvironmentCall').mockReturnValue(call)
     vi.spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapability').mockResolvedValue(true)
-    if (failure === 'create' || failure === 'unknown') {
+    if (failure === 'preferences') {
+      vi.spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapabilities').mockResolvedValue([
+        false,
+        false
+      ])
+      vi.mocked(runtimeRpc.runtimeEnvironmentSupportsCapability).mockResolvedValue(false)
+    }
+    if (failure === 'preferences' || failure === 'create' || failure === 'unknown') {
       create.mockImplementationOnce(actualCreate)
     }
     liveStore().setState({ setActiveWorktree: vi.fn() })
@@ -439,8 +450,10 @@ it.each([
     expect(readNativeChatComposerDraft(scope).text).toBe('')
     view.unmount()
     if (failure === 'preferences') {
+      await waitFor(() => expect(ensurePreferences).toHaveBeenCalledOnce())
+      expect(call).not.toHaveBeenCalled()
       await act(async () => preferences.reject(new DOMException('Pairing changed', 'AbortError')))
-      expect(create).not.toHaveBeenCalled()
+      expect(call).not.toHaveBeenCalled()
     } else {
       await act(async () =>
         preferences.resolve({ defaultTuiAgent: undefined, disabledTuiAgents: undefined })
@@ -493,7 +506,7 @@ it.each([
       delivered: true
     })
     await waitFor(() => expect(readNativeChatComposerDraft(scope).text).toBe(''))
-    expect(create).toHaveBeenCalledTimes(failure === 'preferences' ? 1 : 2)
+    expect(create).toHaveBeenCalledTimes(2)
   }
 )
 

@@ -51,10 +51,13 @@ export async function deliverCreatedWebRuntimeAgentSessionPrompt(
     launchDraft?: string
   }
 ): Promise<boolean> {
-  if (created.outcome.status === 'failed' || !created.hostTabId) {
+  if (created.outcome.status === 'failed') {
     return false
   }
   if (args.promptAfterReady !== undefined) {
+    if (!created.hostTabId) {
+      return false
+    }
     return await deliverLaunchPromptToAgentTab({
       tabId: toWebTerminalSurfaceTabId(created.hostTabId),
       content: args.promptAfterReady,
@@ -63,7 +66,7 @@ export async function deliverCreatedWebRuntimeAgentSessionPrompt(
       forcePaste: args.forcePromptPaste === true
     }).catch(() => false)
   }
-  if (args.launchDraft !== undefined) {
+  if (args.launchDraft !== undefined && created.hostTabId) {
     seedNativeChatLaunchDraftForAgentTab({
       tabId: toWebTerminalSurfaceTabId(created.hostTabId),
       agent: args.agent,

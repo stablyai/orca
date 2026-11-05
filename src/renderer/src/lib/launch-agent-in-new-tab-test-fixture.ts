@@ -149,9 +149,15 @@ export const mockIsWebRuntimeSessionActive = vi.fn<typeof isWebRuntimeSessionAct
 vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
   createWebRuntimeSessionTerminalResult: async (
     args: Parameters<typeof createWebRuntimeSessionTerminal>[0]
-  ) => ({
-    outcome: await mockCreateWebRuntimeSessionTerminal(args)
-  })
+  ) => {
+    const { legacyAgentLaunch, ...request } = args
+    return {
+      outcome: await mockCreateWebRuntimeSessionTerminal({
+        ...request,
+        ...(await legacyAgentLaunch?.())
+      })
+    }
+  }
 }))
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,

@@ -1,5 +1,6 @@
 import { beforeEach, type Mock, vi } from 'vitest'
 import type { Project } from '../../../shared/project-types'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 const mockCreateTab: Mock = vi.fn()
@@ -133,9 +134,17 @@ const mockCreateWebRuntimeSessionTerminal: Mock = vi.fn()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
 vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
-  createWebRuntimeSessionTerminalResult: async (args: unknown) => ({
-    outcome: await mockCreateWebRuntimeSessionTerminal(args)
-  })
+  createWebRuntimeSessionTerminalResult: async (
+    args: Parameters<typeof createWebRuntimeSessionTerminal>[0]
+  ) => {
+    const { legacyAgentLaunch, ...request } = args
+    return {
+      outcome: await mockCreateWebRuntimeSessionTerminal({
+        ...request,
+        ...(await legacyAgentLaunch?.())
+      })
+    }
+  }
 }))
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,

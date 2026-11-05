@@ -86,6 +86,8 @@ import { projectSourceControlActionLaunch } from '../../../shared/source-control
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
 import * as preferences from './agent-launch-settings/use-host-agent-launch-preferences'
 import * as settingsTransport from './agent-launch-settings/agent-launch-settings-transport'
+import * as sessionRequests from './agent-session-create-request'
+import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 
 let capabilities: string[]
 let refusal: string | undefined
@@ -180,6 +182,55 @@ function params(method: string) {
   expect(request).toBeDefined()
   return request!.params!
 }
+
+it.each(['capabilities', 'snapshot', 'cancelled probe'])(
+  'cancels a launch whose pairing changes during %s without dispatching creation',
+  async (phase) => {
+    const negotiated = Promise.withResolvers<{ capable: boolean; complete: boolean }>()
+    const snapshot =
+      Promise.withResolvers<
+        Awaited<ReturnType<typeof settingsTransport.readHostAgentLaunchSettings>>
+      >()
+    replaceRuntimeEnvironmentRevisions([{ id: ENVIRONMENT_ID, createdAt: 1 }])
+    if (phase === 'snapshot') {
+      capabilities = ['agent-session.host-authority.v1']
+      vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockReturnValue(snapshot.promise)
+    } else {
+      vi.spyOn(sessionRequests, 'agentSessionCreateCapabilities').mockReturnValue(
+        negotiated.promise
+      )
+    }
+    try {
+      const launched = launch({ sessionOptions: { effort: 'high' }, prompt: 'Keep this prompt' })
+      if (phase === 'snapshot') {
+        await vi.waitFor(() =>
+          expect(settingsTransport.readHostAgentLaunchSettings).toHaveBeenCalledOnce()
+        )
+      }
+      if (phase === 'cancelled probe') {
+        negotiated.reject(new DOMException('Pairing changed', 'AbortError'))
+      } else {
+        replaceRuntimeEnvironmentRevisions([{ id: ENVIRONMENT_ID, createdAt: 2 }])
+        negotiated.resolve({ capable: true, complete: true })
+        snapshot.resolve(null)
+      }
+      await expect(launched).resolves.toMatchObject({
+        delivered: false,
+        failureNotified: true,
+        outcome: { status: 'failed' }
+      })
+      expect(call.mock.calls.map(([request]) => request.method)).not.toContain(
+        'terminal.createAgentSession'
+      )
+      expect(call.mock.calls.map(([request]) => request.method)).not.toContain(
+        'session.tabs.createTerminal'
+      )
+      expect(mocks.toastError).not.toHaveBeenCalled()
+    } finally {
+      replaceRuntimeEnvironmentRevisions([])
+    }
+  }
+)
 
 it('keeps paired + defaults host-owned and sends complete picks and action Arguments separately', async () => {
   const plainOutcome = await launch({
