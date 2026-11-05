@@ -130,6 +130,7 @@ function terminalTabsEqual(current: AppState, previous: AppState): boolean {
       if (
         left.id !== right.id ||
         left.worktreeId !== right.worktreeId ||
+        left.sessionTitleFromHost !== right.sessionTitleFromHost ||
         !titleEqual(left.aiVaultTitle, right.aiVaultTitle)
       ) {
         return false
