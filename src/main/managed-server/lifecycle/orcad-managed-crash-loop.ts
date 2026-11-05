@@ -7,6 +7,10 @@ import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
+import {
+  OrcadWindowsLaunchFailedError,
+  OrcadWindowsLaunchRefusedError
+} from '../install/orcad-remote-launch-windows'
 import { ManagedOrcadEventWindow } from './orcad-managed-event-window'
 import type { managedOrcadSlot } from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
@@ -124,8 +128,12 @@ async function wakeUnlessEngaged(
     }
     return wake
   } catch (error) {
-    // A launch that never became ready also ends a run.
-    if (error instanceof OrcadActiveReadinessError) {
+    // A launch that never became ready, or that the host reported failing, also ends a run.
+    if (
+      error instanceof OrcadActiveReadinessError ||
+      error instanceof OrcadWindowsLaunchRefusedError ||
+      error instanceof OrcadWindowsLaunchFailedError
+    ) {
       brake.noteFailedStart(environmentId)
     }
     throw error

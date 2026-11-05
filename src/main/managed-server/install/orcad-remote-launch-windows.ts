@@ -39,6 +39,14 @@ export class OrcadWindowsLaunchRefusedError extends Error {
   }
 }
 
+/** The launcher reported that it could not start orcad. */
+export class OrcadWindowsLaunchFailedError extends Error {
+  constructor(detail: string) {
+    super(`orcad's Windows launcher did not start the candidate: ${detail}.`)
+    this.name = 'OrcadWindowsLaunchFailedError'
+  }
+}
+
 /** Resolve pinned slot runtime and remove stale instance-stop intent before launch. */
 export function windowsOrcadLaunchRuntimeCommand(
   host: RemoteHostPlatform,
@@ -114,9 +122,10 @@ export function readWindowsOrcadLaunchReport(output: string): number {
       report.step ? `${report.reason} at ${report.step}` : report.reason
     )
   }
-  const detail =
-    report?.method === 'failed'
-      ? `${report.reason}${report.step ? ` at ${report.step}` : ''} (code ${String(report.code ?? 0)})`
-      : 'no launch report'
-  throw new Error(`orcad's Windows launcher did not start the candidate: ${detail}.`)
+  if (report?.method === 'failed') {
+    throw new OrcadWindowsLaunchFailedError(
+      `${report.reason}${report.step ? ` at ${report.step}` : ''} (code ${String(report.code ?? 0)})`
+    )
+  }
+  throw new Error("orcad's Windows launcher did not start the candidate: no launch report.")
 }

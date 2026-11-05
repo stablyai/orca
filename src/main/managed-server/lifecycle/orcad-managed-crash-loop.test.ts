@@ -25,6 +25,7 @@ vi.mock('../install/orcad-remote-log-tail', () => ({
 
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { OrcadActiveReadinessError } from '../../ssh/orcad-active-readiness'
+import { OrcadWindowsLaunchFailedError } from '../install/orcad-remote-launch-windows'
 import {
   ensureManagedOrcadServing,
   setManagedOrcadStartListener,
@@ -116,6 +117,18 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
 
     expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
     expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(4)
+  })
+
+  it('also stops after the Windows launcher reports failing to start it', async () => {
+    vi.mocked(wakeStoppedManagedOrcad).mockRejectedValue(
+      new OrcadWindowsLaunchFailedError('CreateProcess failed (code 5)')
+    )
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+
+    expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+    expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(3)
   })
 
   it('does not let overlapping checks launch past the cap', async () => {
