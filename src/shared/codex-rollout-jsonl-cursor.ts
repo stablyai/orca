@@ -25,7 +25,10 @@ export function record(value: unknown): JsonRecord | undefined {
   return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
 }
 
-export function readJsonlFirstRecord(filePath: string): JsonRecord | undefined {
+/** 'pending' while the first line is unwritten; 'unreadable' on an I/O failure; undefined once the line is final. */
+export function readJsonlFirstRecord(
+  filePath: string
+): JsonRecord | 'pending' | 'unreadable' | undefined {
   let fd: number | undefined
   try {
     // Nonblocking open prevents a FIFO from stalling hook handling before the descriptor check.
@@ -36,15 +39,15 @@ export function readJsonlFirstRecord(filePath: string): JsonRecord | undefined {
     if (!fstatSync(fd).isFile()) {
       return undefined
     }
-    const buffer = Buffer.allocUnsafe(64 * 1024)
+    const buffer = Buffer.allocUnsafe(TRANSCRIPT_LINE_MAX_BYTES)
     const bytesRead = readSync(fd, buffer, 0, buffer.length, 0)
     const newline = buffer.subarray(0, bytesRead).indexOf(0x0a)
     if (newline === -1) {
-      return undefined
+      return bytesRead < buffer.length ? 'pending' : undefined
     }
     return record(JSON.parse(buffer.toString('utf8', 0, newline)))
-  } catch {
-    return undefined
+  } catch (error) {
+    return error instanceof SyntaxError ? undefined : 'unreadable'
   } finally {
     if (fd !== undefined) {
       closeSync(fd)

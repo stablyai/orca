@@ -15,12 +15,13 @@ export type AgentChildRowCopy = {
   sayBackgroundTask: BackgroundTaskSay
 }
 
-/** The row's name, or its state's words when the child reported none. */
+/** The row's name, or its state's words when the child reported none, with an anonymous agent's id tail. */
 export function agentChildRowName(
-  row: Pick<AgentChildRowModel, 'name' | 'displayState'>,
+  row: Pick<AgentChildRowModel, 'name' | 'displayState' | 'idSuffix'>,
   stateLabel: (state: AgentChildDisplayState) => string
 ): string {
-  return row.name.trim() || stateLabel(row.displayState)
+  const name = row.name.trim() || stateLabel(row.displayState)
+  return row.idSuffix ? `${name} (${row.idSuffix})` : name
 }
 
 export function agentChildRowLeadTrail(

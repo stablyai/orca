@@ -15,6 +15,7 @@ import {
 } from '../contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../contracts/agent-status-types'
 import type { AgentSubagentSnapshot } from '../contracts/agent-status-subagent-snapshot'
+import { childName, usableAgentChildLabel } from './agent-child-row-name'
 
 /** What a child row says beside its name. Surfaces format it; they never decide it. */
 export type AgentChildRowDetail =
@@ -42,6 +43,8 @@ export type AgentChildRowModel = {
   displayState: AgentChildDisplayState
   /** '' when the child reported no label; a surface then names the row by its state. */
   name: string
+  /** Set when the agent named itself only by role or not at all, so same-role siblings stay distinct. */
+  idSuffix?: string
   agentType?: string
   model?: string
   detail: AgentChildRowDetail | null
@@ -85,15 +88,6 @@ export function agentChildRowContextForParent(
     parentObservedAt,
     hostClockOffsetMs: parentObservedAt - agentStatusAuthorityObservedAt(parent)
   }
-}
-
-/** Provider strings that carry no identity; the next label wins. */
-const PLACEHOLDER_LABELS = new Set(['unknown', 'untitled', 'task', 'subagent'])
-
-/** A provider label that names the child, or undefined for an empty or placeholder one. */
-export function usableAgentChildLabel(value: string | undefined): string | undefined {
-  const trimmed = value?.trim()
-  return trimmed && !PLACEHOLDER_LABELS.has(trimmed.toLowerCase()) ? trimmed : undefined
 }
 
 // A live claim beneath a parent Orca no longer hears from asserts nothing; settled history stands.
@@ -182,15 +176,6 @@ function agentChildRowDetail(
   }
 }
 
-function viewName(view: AgentChildWorkView): string {
-  return (
-    usableAgentChildLabel(view.description) ??
-    usableAgentChildLabel(view.name) ??
-    usableAgentChildLabel(view.agentType) ??
-    ''
-  )
-}
-
 function rowFromView(
   view: AgentChildWorkView,
   views: readonly AgentChildWorkView[],
@@ -203,21 +188,26 @@ function rowFromView(
     context
   )
   const settled = view.membership === 'settled'
-  const name = viewName(view)
+  const named = childName(
+    usableAgentChildLabel(view.description) ?? usableAgentChildLabel(view.name),
+    view.agentType,
+    view.kind,
+    view.providerId ?? view.id
+  )
   const nextPath = new Set(path).add(view.id)
   return {
     id: view.id,
     ...(view.providerId !== undefined ? { providerId: view.providerId } : {}),
     kind: view.kind,
     displayState,
-    name,
+    ...named,
     ...(view.agentType !== undefined ? { agentType: view.agentType } : {}),
     ...(view.model !== undefined ? { model: view.model } : {}),
     detail: agentChildRowDetail(
       {
         evidence: 'child',
         kind: view.kind,
-        name,
+        name: named.name,
         agentType: view.agentType,
         operation: view.operation,
         lastMessage: view.lastMessage,
@@ -267,14 +257,19 @@ export function buildLegacyAgentChildRowModels(
       deriveAgentChildDisplayState({ state: subagent.state, membership: 'live' }, null),
       context
     )
-    const name =
-      usableAgentChildLabel(subagent.description) ?? usableAgentChildLabel(subagent.agentType) ?? ''
+    const named = childName(
+      usableAgentChildLabel(subagent.description),
+      subagent.agentType,
+      'agent',
+      subagent.id
+    )
+    const name = named.name
     return {
       id: subagent.id,
       providerId: subagent.id,
       kind: 'agent',
       displayState,
-      name,
+      ...named,
       ...(subagent.agentType !== undefined ? { agentType: subagent.agentType } : {}),
       ...(subagent.model !== undefined ? { model: subagent.model } : {}),
       detail: agentChildRowDetail(

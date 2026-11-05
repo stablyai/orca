@@ -74,6 +74,6 @@ describe('Codex child names from provider metadata', () => {
       })
     ])
     writeMeta({ agent_path: '/root/review/mobile' })
-    expect(post('PostToolUse')?.[0]?.description).toBe('mobile')
+    expect(post('PostToolUse')?.[0]?.description).toBe('review/mobile')
   })
 })

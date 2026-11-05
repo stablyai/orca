@@ -22,7 +22,11 @@ import {
   hasTrackedCodexTranscriptSubagents,
   reconcileCodexSubagentTranscript
 } from './codex-subagent-transcript'
-import { codexRosterToSnapshots, type CodexSubagentRoster } from './codex-subagent-roster'
+import {
+  codexRosterToSnapshots,
+  upsertCodexSubagent,
+  type CodexSubagentRoster
+} from './codex-subagent-roster'
 
 const CHILD_ID = '019fa65f-3144-7151-9c02-cff7a28f316f'
 
@@ -76,7 +80,7 @@ describe('Codex subagent transcript reconciliation', () => {
     expect(codexRosterToSnapshots(roster)).toEqual([
       {
         id: CHILD_ID,
-        description: '/root/sidebar_repro',
+        description: 'sidebar_repro',
         state: 'working',
         startedAt: 1234,
         agentType: undefined,
@@ -152,6 +156,40 @@ describe('Codex subagent transcript reconciliation', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('names a hook-only worker child from its own rollout once the hook read missed it', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
+    writeFileSync(parentPath, '')
+    const state = createCodexSubagentTranscriptState()
+    const roster: CodexSubagentRoster = new Map()
+    // SubagentStart carries only the role; a session_meta past 64 KiB (large tool lists) used to stay unread.
+    upsertCodexSubagent(roster, CHILD_ID, { agentType: 'worker', state: 'working' }, 1234)
+    writeFileSync(
+      childPath,
+      jsonl([
+        {
+          type: 'session_meta',
+          payload: {
+            id: CHILD_ID,
+            base_instructions: { text: 'x'.repeat(100 * 1024) },
+            source: {
+              subagent: {
+                thread_spawn: { agent_path: null, agent_nickname: 'Planck', agent_role: 'worker' }
+              }
+            }
+          }
+        }
+      ])
+    )
+
+    expect(reconcileCodexSubagentTranscript(state, roster, parentPath)).toBe(true)
+    expect(codexRosterToSnapshots(roster)).toEqual([
+      expect.objectContaining({ id: CHILD_ID, agentType: 'worker', description: 'Planck' })
+    ])
   })
 
   it('removes a child when Codex reports it interrupted', () => {
@@ -249,7 +287,7 @@ describe('Codex subagent transcript reconciliation', () => {
       expect(codexRosterToSnapshots(roster)).toEqual([
         {
           id: CHILD_ID,
-          description: '/root/sidebar_repro',
+          description: 'sidebar_repro',
           state: 'working',
           startedAt: 1234,
           agentType: undefined,

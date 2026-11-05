@@ -1,3 +1,5 @@
+import { statSync } from 'node:fs'
+
 import {
   AGENT_MODEL_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
@@ -23,6 +25,8 @@ type TrackedCodexSubagent = {
   state: 'working' | 'waiting'
   startedAt: number
   identityTranscriptPath?: string
+  /** The path whose first line holds no identity, or `path:size` while that line is unwritten; retried only on change. */
+  identityMissKey?: string
   /** Relay session whose own roster listed this child; only that session may retire it by omission. */
   reportedBy?: string
 }
@@ -66,23 +70,44 @@ export function finishCodexSubagent(roster: CodexSubagentRoster, id: string): vo
   roster.delete(id.trim())
 }
 
+/** Returns whether the child's name changed, so a poll that only recovered identity still publishes. */
 export function enrichCodexSubagentIdentity(
   roster: CodexSubagentRoster,
   id: string,
   transcriptPath: string | undefined
-): void {
+): boolean {
   const child = roster.get(id.trim())
   if (!child || !transcriptPath || child.identityTranscriptPath === transcriptPath) {
-    return
+    return false
+  }
+  const missKey = `${transcriptPath}:${transcriptFileSize(transcriptPath)}`
+  if (child.identityMissKey === missKey || child.identityMissKey === transcriptPath) {
+    return false
   }
   const identity = readCodexSubagentIdentity(transcriptPath, id.trim())
-  if (!identity) {
-    return
+  if (identity === 'unreadable') {
+    return false
+  }
+  if (!identity || identity === 'pending') {
+    // A complete first line without this child's metadata never changes; an unwritten one is retried as it grows.
+    child.identityMissKey = identity ? missKey : transcriptPath
+    return false
   }
   child.identityTranscriptPath = transcriptPath
+  child.identityMissKey = undefined
+  const previous = child.description
   child.description =
     normalizeOptionalField(identity.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ??
     child.description
+  return child.description !== previous
+}
+
+function transcriptFileSize(transcriptPath: string): number | null {
+  try {
+    return statSync(transcriptPath).size
+  } catch {
+    return null
+  }
 }
 
 /** Update only an existing child’s model, preserving lifecycle so late discovery cannot resurrect finished children. */
