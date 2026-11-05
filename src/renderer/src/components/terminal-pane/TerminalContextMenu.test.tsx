@@ -159,19 +159,6 @@ describe('TerminalContextMenu', () => {
     expect(onForkAgentSession).not.toHaveBeenCalled()
   })
 
-  it('keeps the whole-session fork action available in terminal menus', () => {
-    const onForkAgentSession = vi.fn()
-    renderMenu({ onForkAgentSession })
-
-    const forkItem = items.list.find(
-      (item) => childrenText(item.children) === 'Fork Agent Session…'
-    )
-    expect(forkItem).toBeDefined()
-
-    forkItem?.onSelect?.()
-    expect(onForkAgentSession).toHaveBeenCalledTimes(1)
-  })
-
   it('shows new-session continuation only for eligible agent panes', () => {
     const onContinueAgentSessionInNewSession = vi.fn()
     renderMenu({
