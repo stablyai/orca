@@ -175,6 +175,7 @@ describe('a send into a published session whose child ended before startup', () 
     await exitBeforeProof()
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     expect(acquire).toHaveBeenCalledOnce()
+    await eventually(async () => expect(await journalStatuses()).toHaveLength(1))
   })
 
   it('restarts the child and holds the message for it until it proves its start', async () => {

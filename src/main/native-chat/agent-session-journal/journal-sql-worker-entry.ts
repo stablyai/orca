@@ -156,12 +156,15 @@ port.on('message', async ({ id, command }: JournalSqlRequest) => {
     db.exec('BEGIN IMMEDIATE')
     outcome = 'not-committed'
     let values: JournalEffectResult[] = []
-    let maintained = { more: false, valid: true }
+    let maintained = { more: false, valid: true, steps: 0 }
     let resultPackets: JournalResultPacket[][] = []
     try {
       const database = db
       if (command.type === 'maintenance') {
-        maintained = applyJournalMaintenance(database, command.unit)
+        maintained = applyJournalMaintenance(database, command.unit, {
+          started,
+          now: () => performance.now()
+        })
       } else {
         values = effects.map((effect) => applyJournalPersistenceEffect(database, effect))
       }

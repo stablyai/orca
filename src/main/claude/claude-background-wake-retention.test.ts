@@ -31,6 +31,8 @@ async function wiredSession() {
       const item = run.journalItems.get(itemId)
       return item ? { ...item, revision: 1, observedAt: run.now() } : null
     },
+    visitItems: (visit: Parameters<Journal['visitItems']>[0]) =>
+      run.journalItems.forEach((item, id) => visit(id, item.sequence, item.body)),
     statusRead(): ReturnType<Journal['statusRead']> {
       return this.snapshot()
     },

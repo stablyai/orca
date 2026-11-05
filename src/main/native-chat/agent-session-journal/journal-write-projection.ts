@@ -1,4 +1,8 @@
-import type { JournalFinishFold } from './journal-row-writer'
+import {
+  type JournalFinishFold,
+  settleJournalCommitAsync,
+  type JournalOperationReceipt
+} from './journal-row-writer'
 import { isDeepStrictEqual } from 'node:util'
 import type { JournalPersistencePlan } from './journal-persistence-plan'
 import type { JournalHostDatabase } from './journal-host-database'
@@ -6,8 +10,7 @@ import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { prepareJournalOutcomeWriteAsync } from './journal-outcome-write'
 import { encodeJournalState } from './journal-state-codec'
-import { restoreJournalAsync } from './journal-open'
-import { settleJournalCommitAsync, type JournalOperationReceipt } from './journal-row-writer'
+import { restoreJournalAsync } from './journal-async-open'
 import { journalStoppedUsageLimitCut } from './journal-stopped-usage-limit-cut'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 

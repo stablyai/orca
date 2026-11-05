@@ -188,12 +188,12 @@ export function throwAfterContinuationAccepted(): void {
 
 /** Fail the continuation's fold; its row and receipt roll back before any dispatch. */
 export function continuationCannotFold(): void {
-  const fold = reducer.applyJournalRow
-  vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row) => {
+  const fold = reducer.applyJournalRowSteps
+  vi.spyOn(reducer, 'applyJournalRowSteps').mockImplementation(function* (state, row) {
     if (row.kind === 'submission') {
       throw new Error('the continuation could not fold')
     }
-    fold(state, row)
+    yield* fold(state, row)
   })
 }
 

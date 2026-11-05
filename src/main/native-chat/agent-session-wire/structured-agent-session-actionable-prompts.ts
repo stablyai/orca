@@ -5,14 +5,14 @@ import type {
   StructuredAgentSessionCurrentWorkJournal,
   StructuredAgentSessionCurrentWork
 } from './structured-agent-session-current-work'
-import type { JournalRow } from '../agent-session-journal/journal-row-schema'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
+  JournalRow,
   JournalItemRow,
   JournalTombstoneRow,
   JournalLifecycleMutation
 } from '../agent-session-journal/journal-row-schema'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export type PromptProjection = {
   epoch: string

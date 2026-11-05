@@ -153,6 +153,7 @@ describe('delivery iteration settlement and ownership', () => {
       const flight: StructuredAgentSessionStartFlight = {
         attemptId: 'F',
         outcome: done.promise,
+        drained: done.promise,
         abort() {}
       }
       flights.register(SESSION, flight)

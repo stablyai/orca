@@ -6,7 +6,7 @@ import {
   journalInputPresentationMember
 } from './journal-input-obligations'
 import { resolveJournalItemId } from './journal-item-echo'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalHistoryOrigin } from './journal-history-origin'
 import { journalBatchMutationProducer, journalRenderItem } from './journal-render-item'

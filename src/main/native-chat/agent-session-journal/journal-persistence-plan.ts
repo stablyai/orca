@@ -5,7 +5,7 @@ import type { JournalOutcome } from './journal-outcome-codec'
 import type { JournalReadConnection } from './journal-sql-owner'
 import type { CommandReceiptRead } from './command-receipt-table'
 import type { JournalReducerState } from './journal-reducer'
-import { finishJournalStepsAsync } from './journal-reconstruction-steps'
+import { yieldJournalHost, finishJournalStepsAsync } from './journal-reconstruction-steps'
 import { settleJournalCommitAsync } from './journal-row-writer'
 
 export type JournalEncodedOutcome = Omit<JournalOutcome, 'ordinal'> & {
@@ -100,7 +100,7 @@ export class JournalPersistencePlan {
     for (const effect of this.effects) {
       if (++work === 128) {
         work = 0
-        await new Promise<void>((resolve) => setImmediate(resolve))
+        await yieldJournalHost()
       }
       if (effect.kind !== 'receipt' || !values.has(effect.receipt.operationId)) {
         continue

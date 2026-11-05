@@ -234,7 +234,8 @@ export async function foundRestTestChat(rig: RestTestRig): Promise<void> {
   if (!sent.ok) {
     throw new Error(`send refused: ${sent.refusal.code}`)
   }
-  await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalled())
+  await rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
+  expect(rig.adapter.dispatch).toHaveBeenCalled()
 }
 
 export function sweepOnce(host: StructuredAgentSessionHost): Promise<void> {

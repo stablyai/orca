@@ -595,7 +595,7 @@ it.each([
       const saved = (await current.host.journalSnapshot(COORD)).items
       await current.quitRestartHostProcess()
       await closeTestJournalHostDatabase(current.root)
-      current.crashRestartHostProcess()
+      await current.crashRestartHostProcess()
       const reopened = (await current.host.journalSnapshot(COORD)).items
       expect(
         reopened.filter(
@@ -755,7 +755,7 @@ it.each([
       )
       await current.quitRestartHostProcess()
       await closeTestJournalHostDatabase(current.root)
-      current.crashRestartHostProcess()
+      await current.crashRestartHostProcess()
       expect(
         (await current.host.journalSnapshot(WORKER)).items.filter(
           ({ body }) => body.kind === 'message' && body.from

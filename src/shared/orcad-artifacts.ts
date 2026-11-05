@@ -226,6 +226,7 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   // Forked so PTYs outlive the runtime process; its absence makes every restart destructive.
   { filename: 'daemon-entry.js' },
   { filename: 'profile-state-writer-worker-entry.js' },
+  { filename: 'journal-sql-worker-entry.js' },
   { filename: 'profile-state-backup-worker-entry.js' },
   { filename: 'command-path-directory-worker-entry.js' },
   // Worker thread that reads other apps' SQLite (the OpenCode binder and history) off the event loop.

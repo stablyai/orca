@@ -1,9 +1,12 @@
-import type { AgentSessionHistoryRequest } from '../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionHistoryRequest,
+  AgentSessionHistoryResult,
+  AgentSessionHistoryPage
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionHistoryScope } from './agent-session-history-page'
 import { resolveHistoryLimit } from './agent-session-history-limit'
 import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session/agent-session-wire'
 import {
   boundHistoryItemsByBytesSteps,
@@ -19,7 +22,6 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../../shared/agent-session/agent-session-wire'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { snapshotLatestTurnSteps } from './agent-session-history-latest-turn'
 export function buildPage(input: HistoryPageInput): AgentSessionHistoryPage {

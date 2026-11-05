@@ -45,7 +45,9 @@ export function createStructuredAgentSessionPublicationWiring(input: {
       input.client().subscribers.deliverFrames(id, journal)
 
       input.client().publishJournal(id, journal, true, inputChanged, replacement)
-      input.delivery().afterCommit(id, journal)
+      if (inputChanged !== false) {
+        input.delivery().afterCommit(id, journal)
+      }
       return undefined
     },
     afterReplacementProjection: (...args) => input.client().afterReplacementProjection(...args),

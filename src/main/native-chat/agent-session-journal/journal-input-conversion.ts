@@ -7,7 +7,7 @@ import {
   initializeJournalInputOrder,
   initializeJournalInputOrderSteps,
   journalInputOrder
-} from './journal-input-order'
+} from './journal-input-order-owner'
 import type { JournalOutcomeFold } from './journal-outcome-codec'
 import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import type Database from '../../sqlite/sync-database'

@@ -1,4 +1,8 @@
-import { readLegacyRowsAsync } from './journal-queue-legacy-change'
+import {
+  readLegacyRowsAsync,
+  legacyQueuedChange,
+  legacyQueuedChangeSteps
+} from './journal-queue-legacy-change'
 export {
   readJournalLegacyCards,
   readJournalLegacyCardsAsync,
@@ -7,8 +11,7 @@ export {
 import { JournalDraftMap, JournalDraftSet } from './journal-transition-collections'
 import { journalDispatchRowApplies, queuedHandOffInDoubt } from './journal-dispatch-settlement'
 import { finishJournalSteps, finishJournalStepsAsync } from './journal-reconstruction-steps'
-import { journalInputOrder } from './journal-input-order'
-import { legacyQueuedChange, legacyQueuedChangeSteps } from './journal-queue-legacy-change'
+import { journalInputOrder } from './journal-input-order-owner'
 export { legacyQueuedChange } from './journal-queue-legacy-change'
 // Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
 // Retry failed bulk import on next open; do not loop while the host is running.

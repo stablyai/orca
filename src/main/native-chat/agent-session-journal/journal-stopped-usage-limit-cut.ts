@@ -9,7 +9,7 @@ import { newestStructuredAgentSessionTurnBySequence } from '../../../shared/agen
 import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { JournalReducerState } from './journal-reducer'
 import { renderJournalStatus } from './journal-public-read'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import type { JournalRow } from './journal-row-schema'
 
 function mayEndWork(body: AgentJournalItemBody): boolean {

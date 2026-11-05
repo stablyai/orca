@@ -1,4 +1,4 @@
-import { journalInputOrder } from '../agent-session-journal/journal-input-order'
+import { journalInputOrder } from '../agent-session-journal/journal-input-order-owner'
 import { writeLegacyGapFixture } from './structured-agent-session-legacy-gap.test-support'
 import type { JournalReducerState } from '../agent-session-journal/journal-reducer'
 import { expect, it, vi } from 'vitest'

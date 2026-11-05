@@ -219,6 +219,9 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
   getSessionTabId = (sessionId: string): string | null =>
     this.transactions.state.sessionTabs?.tabIdFor(sessionId) ?? null
 
+  getSessionTabIdSettled = (sessionId: string): Promise<string | null> =>
+    this.transactions.readInOrder(() => this.getSessionTabId(sessionId))
+
   /** Persist chat-tab identity separately from rollback-sensitive profile tabs; explicit tabId restores hidden tabs under their old ids. */
   setSessionTabVisibility(
     sessionId: string,

@@ -1,8 +1,8 @@
 import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
 import { isNativeOutcomeField } from './journal-outcome-format-2'
-import { finishJournalStepsAsync } from './journal-reconstruction-steps'
+import { yieldJournalHost, finishJournalStepsAsync } from './journal-reconstruction-steps'
 import type { JournalReadConnection } from './journal-sql-owner'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import {
   detachJournalNativePrefix,
   detachJournalNativePrefixSteps,
@@ -230,7 +230,7 @@ export async function readJournalOutcomesAsync(
       recoveries.push({ id: card.messageId, recovers: card.recovers })
     }
     if (recoveries.length % 128 === 0) {
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await yieldJournalHost()
     }
   }
   const prefix = await finishJournalStepsAsync(detachJournalNativePrefixSteps(baseline))
@@ -255,6 +255,6 @@ export async function readJournalOutcomesAsync(
       const value = fold.add(row)
       after = { field: value.field, key: value.key }
     }
-    await new Promise<void>((resolve) => setImmediate(resolve))
+    await yieldJournalHost()
   }
 }

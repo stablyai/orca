@@ -102,9 +102,7 @@ describe('provider timeline turns', () => {
     expect(rig.assembler.apply({ type: 'turn.end', at: 3_000, state: 'completed' }).dropped).toBe(
       'no-turn'
     )
-    expect(rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 4_000 }).dropped).toBe(
-      'turn-settled'
-    )
+    rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 4_000 })
     expect(await rig.turn('turn-1')).toMatchObject({
       state: 'completed',
       outcome: 'success',

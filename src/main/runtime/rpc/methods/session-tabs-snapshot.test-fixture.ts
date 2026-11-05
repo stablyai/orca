@@ -1,3 +1,5 @@
+import type { OrcaRuntimeService } from '../../orca-runtime'
+
 export function visibleSnapshot() {
   return {
     worktree: 'wt-1',
@@ -19,5 +21,15 @@ export function visibleSnapshot() {
         isActive: true
       }
     ]
+  }
+}
+
+/** These stream fixtures start before their first separately numbered change. */
+export const sessionTabsSequencedReadFixture = {
+  async listMobileSessionTabsWithChangeSequence(
+    this: Pick<OrcaRuntimeService, 'listMobileSessionTabs'>,
+    ...args: Parameters<OrcaRuntimeService['listMobileSessionTabs']>
+  ) {
+    return { snapshot: await this.listMobileSessionTabs(...args), changeSequence: 0 }
   }
 }

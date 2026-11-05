@@ -1,3 +1,4 @@
+import { yieldJournalHost } from './journal-reconstruction-steps'
 import type Database from '../../sqlite/sync-database'
 import type { SQLInputValue } from 'node:sqlite'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
@@ -36,7 +37,7 @@ export async function finishJournalInputReadAsync<T>(steps: JournalInputReadStep
     rows = (await next.value) ?? []
     if (++work === 128) {
       work = 0
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await yieldJournalHost()
     }
   }
 }

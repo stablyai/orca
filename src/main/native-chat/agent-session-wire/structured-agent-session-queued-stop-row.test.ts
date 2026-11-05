@@ -240,7 +240,7 @@ describe("Stop's event", () => {
     await rig.stop()
     // Drain this process's in-flight writes before replacing its in-process fixture owner.
     await rig.host.flushAllStreamedEvents()
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     expect((await rig.handoff(sentId))?.dispatchState).toBe('unknown')
     // The ordinary original never becomes queued work or resends automatically.
     await expectHeld(null, waiting)
@@ -267,7 +267,7 @@ describe("a restart's hold over a card queued after a Stop", () => {
     const mail = await mailTurn()
     const typed = await queuedDraft('typed during the mail turn')
     // The process dies with no close: a quit writes no Stop event, so only a turn ends the pauses.
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     await rig.settleAccepted(mail, 'mail')
     // The new host opens the conversation for its first reader. The card came after the Stop, so
     // only the restart holds it, and a restart's hold is never published.
@@ -286,7 +286,7 @@ describe("a restart's hold over a card queued after a Stop", () => {
       expect((await rig.submission(correction.id))?.handedOverAt).toBeDefined()
     )
     const typed = await queuedDraft('typed during that send')
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     await rig.settleAccepted(correction.id, 'correction')
     await rig.queuePause()
     expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual(['restarted'])

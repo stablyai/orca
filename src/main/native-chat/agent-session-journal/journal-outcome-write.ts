@@ -1,9 +1,13 @@
 import type { JournalFinishFold } from './journal-row-writer'
 import type Database from '../../sqlite/sync-database'
-import { finishJournalSteps, finishJournalStepsAsync } from './journal-reconstruction-steps'
+import {
+  yieldJournalHost,
+  finishJournalSteps,
+  finishJournalStepsAsync
+} from './journal-reconstruction-steps'
 import { journalInputAcceptance, prepareJournalAcceptance } from './journal-input-provenance'
 import { copyJournalNativeStateSteps } from './journal-input-conversion'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import {
@@ -136,7 +140,7 @@ export async function publishJournalOutcomeEpochAsync(
   for (const id of await finishJournalStepsAsync(journalInputOrder(initial).acceptanceIdsSteps())) {
     ids.push(id)
     if (ids.length % 128 === 0) {
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await yieldJournalHost()
     }
   }
   const acceptance = await prepareJournalAcceptance(plan, sessionId, ids)

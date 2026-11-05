@@ -1,3 +1,4 @@
+import { sessionTabsSequencedReadFixture } from './session-tabs-snapshot.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -92,6 +93,7 @@ describe('session.tabs.subscribe retirement proof payload', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getClientSettings: () => ({}),
+      ...sessionTabsSequencedReadFixture,
       listMobileSessionTabs: vi.fn().mockResolvedValue(frame(1, proofs)),
       registerSubscriptionCleanup: vi.fn(),
       onMobileSessionTabsChanged: vi.fn(

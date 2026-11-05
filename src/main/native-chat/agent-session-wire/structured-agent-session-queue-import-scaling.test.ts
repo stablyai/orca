@@ -42,13 +42,16 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       'cancelled',
       0,
       async () => {
-        for (let ordinal = 0; ordinal < size; ordinal++) {
-          await earlier.appendItem(
-            { provider: 'codex', threadId: 'history', turnId: 't', ordinal },
-            { ...message('old answer'), role: 'assistant' },
-            { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-          )
-        }
+        await earlier.appendLifecycleBatch({
+          settlementId: 'seed-history',
+          fence: 0,
+          mutations: Array.from({ length: size }, (_, ordinal) => ({
+            kind: 'item' as const,
+            identity: { provider: 'codex' as const, threadId: 'history', turnId: 't', ordinal },
+            body: { ...message('old answer'), role: 'assistant' as const },
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE
+          }))
+        })
       },
       { turn: { provider: 'codex', threadId: 'history', turnId: 't', ordinal: -1 }, via: 'steer' }
     )
@@ -156,7 +159,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
         return projectionIterator(mapKeys.call(this))
       }),
       vi.spyOn(Map.prototype, 'entries').mockImplementation(function (this: Map<unknown, unknown>) {
-        return projectionIterator(mapEntries.call(this))
+        return counted(mapEntries.call(this))
       }),
       vi.spyOn(JournalDraftMap.prototype, 'keys').mockImplementation(function (
         this: JournalDraftMap<unknown, unknown>
@@ -237,21 +240,17 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       [...gets.mock.contexts, ...draftGets.mock.contexts].filter(
         (m) => m === currentDisplay.items || m === currentDisplay.submissions
       )
-    const sorts = vi.spyOn(Array.prototype, 'sort')
     const json = vi.spyOn(JSON, 'stringify')
+    // The cached correction and its current-read identity each serialize once, independent of history.
     const work = () => [
       keyVisits,
-      sorts.mock.contexts.filter((v) => Array.isArray(v) && v[0] === 'u-0').length,
-      json.mock.calls.filter(
-        ([v]) => Array.isArray(v) && Array.isArray(v[1]) && v[1][0]?.[0] === 'u-0'
-      ).length
+      json.mock.calls.filter(([v]) => Array.isArray(v) && v[0] === 'u-0').length
     ]
     const reset = () => {
       keyVisits = 0
       projectionVisits = projectionReads = recordWrites = 0
       gets.mockClear()
       draftGets.mockClear()
-      sorts.mockClear()
       json.mockClear()
     }
     try {
@@ -272,10 +271,12 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
         })
         await settleTestSubscriberDeliveries(feed)
       }
-      expect(work()).toEqual([0, 1, 1])
-      // Adopted display shares the raw map used by the keyed inverse lookup.
-      expect(sourceGets()).toHaveLength((adopt ? 3 : 2) * corrections)
-      expect(visits).toBeGreaterThanOrEqual(size)
+      expect(work()).toEqual([0, 2])
+      // Cold hydration indexes adopted items twice and resolves each correction per reader.
+      expect(sourceGets()).toHaveLength(adopt ? 2 * size + 6 * corrections : 3 * corrections)
+      // Successful adoption hydrates once; failed import reuses the fallback prepared during open.
+      expect(visits).toBeGreaterThanOrEqual(adopt ? size : 0)
+      expect(visits).toBeLessThanOrEqual(adopt ? size + 12 : 12)
       const key = journal.publicRead().normalizationKey
       const coldPublication = { visits, corrections: work() }
       reset()
@@ -283,11 +284,10 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       for (let publication = 0; publication < 5; publication++) {
         feed.publish(SESSION, journal)
         await settleTestSubscriberDeliveries(feed)
-        await settleTestSubscriberDeliveries(feed)
       }
       // Only subscriber visits; history copies/materialization would add N visits.
       expect(visits).toBe(15)
-      expect(work()).toEqual([0, 0, 0])
+      expect(work()).toEqual([0, 0])
       expect(sourceGets()).toHaveLength(0)
       const cursor = journal.cursor()
       const snapshot = journal.snapshot()
@@ -297,8 +297,8 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(journal.snapshot()).not.toBe(snapshot)
       feed.publish(SESSION, journal)
       await settleTestSubscriberDeliveries(feed)
-      // Count canonical normalization reads, not the draft’s changed-key metadata.
-      expect(work()).toEqual([0, 1, 1])
+      // Reopen reuses the prepared correction; only its current-read identity serializes.
+      expect(work()).toEqual([0, 1])
       reset()
       const hotWork: { visits: number; reads: number; recordWrites: number }[] = []
       for (let publication = 0; publication < 10; publication++) {
@@ -328,7 +328,8 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
         expect(projectionVisits).toBe(0)
         expect(projectionReads).toBeLessThanOrEqual(8 * corrections)
         expect(recordWrites).toBe(adopt ? 0 : 3 * corrections)
-        expect(work()).toEqual([0, 1, 1])
+        // Output rows reuse the correction; the new current-read identity serializes it once.
+        expect(work()).toEqual([0, 1])
         expect(journal.publicRead().normalizationKey).toBe(key)
         // Plain point reads prove unchanged presentation without a full snapshot in the hot phase.
         const current = journal.queuedMessages.displayState()
@@ -358,7 +359,6 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
         sets,
         gets,
         draftGets,
-        sorts,
         json,
         entriesRead,
         valuesRead

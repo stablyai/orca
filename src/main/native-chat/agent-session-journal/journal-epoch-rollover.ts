@@ -1,5 +1,5 @@
-import { finishJournalStepsAsync } from './journal-reconstruction-steps'
-import { journalInputOrder } from './journal-input-order'
+import { yieldJournalHost, finishJournalStepsAsync } from './journal-reconstruction-steps'
+import { journalInputOrder } from './journal-input-order-owner'
 // Delete and replace epochs atomically; retaining superseded rows would grow history without bound.
 
 import { publishJournalOutcomeEpochAsync } from './journal-outcome-write'
@@ -57,7 +57,7 @@ export function publishNewEpoch(
         for (const { messageId, change } of input.queue.cards) {
           if (++work === 128) {
             work = 0
-            await new Promise<void>((resolve) => setImmediate(resolve))
+            await yieldJournalHost()
           }
           await finishJournalStepsAsync(journalInputOrder(state).cards.ensureSteps(state))
           if (change) {

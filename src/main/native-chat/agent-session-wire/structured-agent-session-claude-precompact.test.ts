@@ -120,10 +120,12 @@ it.each([
       userItemId: agentJournalSubmissionKey(run.clientMessageId),
       requestedAt: expect.any(Number)
     })
-    expect(run.activity.seen).toContainEqual({
-      turnId: 'pre-echo-compaction',
-      text: 'Compacting the conversation'
-    })
+    await eventually(() =>
+      expect(run.activity.seen).toContainEqual({
+        turnId: 'pre-echo-compaction',
+        text: 'Compacting the conversation'
+      })
+    )
     if (!zeroLength) {
       await fixture.host.flushStreamedEvents(SESSION)
       expect(run.activity.current()).toMatchObject({ text: 'Compacting the conversation' })

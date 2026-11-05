@@ -1,4 +1,4 @@
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import { journalItemEchoFields } from './journal-item-echo'
 import { isDeepStrictEqual } from 'node:util'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'

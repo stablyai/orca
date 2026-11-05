@@ -1,6 +1,6 @@
 import type { JournalPersistencePlan } from './journal-persistence-plan'
 import './journal-input-order-recovery.spec'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import { readCommandReceipt } from './command-receipt-table'
 import { writeCommandReceiptTestRecord } from './command-receipt-test-support'
 import type { JournalRow } from './journal-row-schema'

@@ -1,3 +1,4 @@
+import { finishJournalStepsAsync } from '../agent-session-journal/journal-reconstruction-steps'
 import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent,
@@ -33,4 +34,14 @@ export type SubscriberDeliveryPort = {
   close?: (subscriber: Subscriber) => void
   isActive: (subscriber: Subscriber) => boolean
   activity: (sessionId: string) => AgentSessionTurnActivity | null
+}
+
+export async function emitSubscriberDelivery(
+  port: SubscriberDeliveryPort,
+  ...args: Parameters<SubscriberDeliveryPort['emit']>
+): Promise<boolean | void> {
+  if (port.emitSteps) {
+    return finishJournalStepsAsync(port.emitSteps(...args))
+  }
+  port.emit(...args)
 }

@@ -39,7 +39,7 @@ import {
   seedOutcomeRows
 } from './journal-projection-test-support'
 import { prepareJournalOutcomeWrite } from './journal-outcome-write'
-import { restoreJournalAsync } from './journal-open'
+import { restoreJournalAsync } from './journal-async-open'
 import { encodeJournalState } from './journal-state-codec'
 import { JournalSqlOwner } from './journal-sql-owner'
 import { countReconstructionWork } from './journal-reconstruction-work-test-support'

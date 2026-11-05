@@ -1,3 +1,4 @@
+import { sessionTabsSequencedReadFixture } from './rpc/methods/session-tabs-snapshot.test-fixture'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -581,6 +582,12 @@ describe('remote runtime request connection integration', () => {
           notificationListeners.add(listener)
           return () => notificationListeners.delete(listener)
         },
+        ...sessionTabsSequencedReadFixture,
+        supportsAuthoritativeSessionTabsInventory: () => false,
+        listAllMobileSessionTabsWithChangeSequence: async () => ({
+          snapshots: [sessionTabSnapshot],
+          changeSequence: 0
+        }),
         listMobileSessionTabs: () => sessionTabSnapshot,
         listAllMobileSessionTabs: () => [sessionTabSnapshot],
         onMobileSessionTabsChanged: (listener: (snapshot: unknown) => void) => {

@@ -1,4 +1,5 @@
 import {
+  yieldJournalHost,
   finishJournalSteps,
   finishJournalStepsAsync
 } from '../agent-session-journal/journal-reconstruction-steps'
@@ -82,7 +83,7 @@ export class StructuredAgentSessionRequestFailures {
         this.generationEnded(sessionId)
         return
       }
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await yieldJournalHost()
     }
   };
 

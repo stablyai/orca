@@ -79,6 +79,7 @@ export function hostStub(): StructuredAgentSessionHost {
       }
     })),
     waitForSendSettlement: vi.fn(),
+    flushStreamedEvents: vi.fn(async () => {}),
     queuedMessageMove: vi.fn(async () => ({
       ok: true,
       value: { messageId: 'queued-1', status: 'moved' }

@@ -184,7 +184,7 @@ export class JournalHostDatabase {
 
   maintenance(
     unit: JournalMaintenanceUnit
-  ): Promise<{ more: boolean; valid: boolean; elapsed: number }> {
+  ): Promise<{ more: boolean; valid: boolean; steps: number; elapsed: number }> {
     if (this.isClosed) {
       return Promise.reject(this.closedError())
     }

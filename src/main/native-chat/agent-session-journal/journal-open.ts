@@ -2,7 +2,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { restoreRetainedJournalInputs } from './journal-retained-inputs'
 import { finishJournalSteps } from './journal-reconstruction-steps'
 import { readJournalLegacyCards } from './journal-queue-import'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { readJournalOutcomes } from './journal-outcome-table'
 import { JournalOutcomeDecodeError } from './journal-outcome-codec'
@@ -244,4 +244,3 @@ export function startJournalRowFold(
 }
 
 export { journalRowsAfterReader, readJournalRowsAfterCursor } from './journal-read-row'
-export { restoreJournalAsync, readJournalRowsAfterCursorAsync } from './journal-async-open'

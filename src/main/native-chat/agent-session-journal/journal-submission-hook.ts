@@ -1,4 +1,4 @@
-import { finishJournalSteps } from './journal-reconstruction-steps'
+import { yieldJournalHost, finishJournalSteps } from './journal-reconstruction-steps'
 import type { JournalPersistencePlan } from './journal-persistence-plan'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalRow } from './journal-row-schema'
@@ -35,7 +35,7 @@ export function journalAttachmentClaimsReceipt(
         }
         if (++work === 128) {
           work = 0
-          await new Promise<void>((resolve) => setImmediate(resolve))
+          await yieldJournalHost()
         }
       }
     },

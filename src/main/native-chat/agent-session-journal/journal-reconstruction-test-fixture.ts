@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import {
   openTestJournalHostDatabase,
   insertTestJournalRow,
@@ -15,7 +15,8 @@ import {
   projectionEpochRow,
   projectionSessionId
 } from './journal-projection-test-support'
-import { restoreJournal, restoreJournalAsync } from './journal-open'
+import { restoreJournal } from './journal-open'
+import { restoreJournalAsync } from './journal-async-open'
 import { encodeJournalState } from './journal-state-codec'
 import type { JournalRow } from './journal-row-schema'
 

@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -33,6 +34,7 @@ import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-le
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   createQueuedRigProvider,
+  waitForQueuedRigHandoff,
   eventually,
   type RigSendOptions,
   type QueuedRigProviderOptions
@@ -188,18 +190,20 @@ export async function createQueuedMessageTestRig(
     return sent.clientMessageId
   }
 
+  async function historyPage(sessionId = SESSION) {
+    const result = await host.history({ sessionId, direction: 'tail' })
+    if (!result.ok) {
+      throw new Error('history refused')
+    }
+    return result.page
+  }
+
   async function drafts(
     sessionId = SESSION
   ): Promise<{ messageId: string; state: string; paused?: true }[]> {
-    const page = await host.history({ sessionId, direction: 'tail' })
-    if (!page.ok) {
-      throw new Error('history refused')
-    }
-    return (page.page.queuedMessages ?? []).map(({ messageId, state, paused }) => ({
-      messageId,
-      state,
-      ...(paused ? { paused } : {})
-    }))
+    return ((await historyPage(sessionId)).queuedMessages ?? []).map(
+      ({ messageId, state, paused }) => ({ messageId, state, ...(paused ? { paused } : {}) })
+    )
   }
 
   /** Wait for startup proof before the first send can hold work. */
@@ -208,7 +212,8 @@ export async function createQueuedMessageTestRig(
     await result
     await eventually(async () => {
       if (host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase === 'starting') {
-        await proveProviderOpen()
+        provider.proveOpen()
+        await Promise.resolve()
       }
       expect((await submission(id))?.handedOverAt).toBeDefined()
     })
@@ -216,7 +221,7 @@ export async function createQueuedMessageTestRig(
   }
 
   async function settleAccepted(id: string, itemId: string): Promise<void> {
-    await host.history({ sessionId: SESSION, direction: 'tail' })
+    await waitForQueuedRigHandoff(() => submission(id))
     await host.settleLateDispatch({
       sessionId: SESSION,
       clientMessageId: id,
@@ -227,6 +232,7 @@ export async function createQueuedMessageTestRig(
         ordinal: 0
       }
     })
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
   }
 
   async function settleRejected(id: string, providerText: string): Promise<void> {
@@ -243,6 +249,9 @@ export async function createQueuedMessageTestRig(
 
   /** Replace the host without graceful close, reusing persisted state. */
   async function crashRestartHostProcess(): Promise<void> {
+    host.stopDelivery()
+    const journals = host.collaboratorsForTests().sessions.values()
+    await Promise.all(Array.from(journals, ({ journal }) => journal.close()))
     host = await makeHost()
   }
 
@@ -252,11 +261,7 @@ export async function createQueuedMessageTestRig(
   }
 
   async function queuePause(sessionId = SESSION): Promise<AgentSessionQueuePause | null> {
-    const page = await host.history({ sessionId, direction: 'tail' })
-    if (!page.ok) {
-      throw new Error('history refused')
-    }
-    return page.page.queuePause ?? null
+    return (await historyPage(sessionId)).queuePause ?? null
   }
 
   async function restartOffers() {
@@ -273,10 +278,6 @@ export async function createQueuedMessageTestRig(
     await eventually(() =>
       expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
     )
-    await proveProviderOpen()
-  }
-
-  async function proveProviderOpen(): Promise<void> {
     provider.proveOpen()
     await Promise.resolve()
   }

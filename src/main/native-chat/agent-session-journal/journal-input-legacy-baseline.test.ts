@@ -1,4 +1,4 @@
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import {
   journalInputIndexProbe,
   journalInputHistoryProbe
@@ -331,7 +331,7 @@ it.each(['waiting', 'returned'] as const)(
         legacyState,
         legacyState === 'returned' ? 'refused before start' : null
       )
-      db.exec(`CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages
+      db.exec(`CREATE TRIGGER fail_import BEFORE DELETE ON queued_messages
         BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
       journal = await journals.open({ identity, stateDirectory: root })
       expect(warned).toHaveBeenCalled()

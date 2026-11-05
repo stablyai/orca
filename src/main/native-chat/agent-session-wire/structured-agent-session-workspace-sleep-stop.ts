@@ -118,7 +118,7 @@ export function workspaceSleepStartAborts(
     abort: (): void => {
       const flight = runtimeState().startFlights.get(sessionId)
       if (flight) {
-        aborted.push(flight.outcome)
+        aborted.push(flight.drained)
       }
       runtimeState().acquireAborts.abort(sessionId, 'closed while starting')
     },

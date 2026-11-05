@@ -151,6 +151,7 @@ async function liveOwner(
     })
     frame({ type: 'system', subtype: 'stop_hook_summary', uuid: `${assistantUuid}-hook` })
     frame({ type: 'result', subtype: 'success', uuid: `${assistantUuid}-result` })
+    await deferred.drained()
     await tick()
   }
   return {

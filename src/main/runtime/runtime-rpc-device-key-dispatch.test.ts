@@ -9,7 +9,10 @@ import { DeviceRegistry } from './device-registry'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import type { AuthenticatedMobileSocket } from './rpc/mobile-socket-wiring'
-import { visibleSnapshot } from './rpc/methods/session-tabs-snapshot.test-fixture'
+import {
+  visibleSnapshot,
+  sessionTabsSequencedReadFixture
+} from './rpc/methods/session-tabs-snapshot.test-fixture'
 import {
   authenticateMobileWsSession,
   createEncryptedWsResponseReader,
@@ -167,6 +170,7 @@ describe('streams on an authenticated phone socket', () => {
       getStatus: () => ({ graphStatus: 'unavailable' }),
       onClientDisconnected: () => {},
       cleanupSubscriptionsForConnection: () => {},
+      ...sessionTabsSequencedReadFixture,
       listMobileSessionTabs: async () => snapshot,
       registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup),
       cleanupSubscription: (id: string) => cleanups.get(id)?.(),

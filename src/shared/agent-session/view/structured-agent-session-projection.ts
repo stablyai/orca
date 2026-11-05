@@ -1,10 +1,12 @@
 import { nativeChatStatusTurnOutcomeSteps } from '../../native-chat/native-chat-orca-stop-cut'
 import { structuredAgentSessionStatusStartedAtSteps } from './structured-agent-session-status-started-at'
-import { latestStructuredAgentSessionRequestSteps } from '../requests/structured-agent-session-latest-request'
-import { latestStructuredAgentSessionAssistantMessageSteps } from '../requests/structured-agent-session-latest-request'
+import {
+  latestStructuredAgentSessionRequestSteps,
+  latestStructuredAgentSessionAssistantMessageSteps,
+  hasStructuredAgentSessionRequestSteps,
+  latestStructuredAgentSessionPromptSteps
+} from '../requests/structured-agent-session-latest-request'
 import { statusStructuredAgentSessionToolCallSteps } from './structured-agent-session-live-turn'
-import { hasStructuredAgentSessionRequestSteps } from '../requests/structured-agent-session-latest-request'
-import { latestStructuredAgentSessionPromptSteps } from '../requests/structured-agent-session-latest-request'
 import { owesStructuredAgentSessionWorkSteps } from './structured-agent-session-owed-work'
 import { agentSessionCurrentContextRowsSteps } from '../agent-session-context-clear'
 import { finishAgentSessionSteps } from '../agent-session-projection-steps'

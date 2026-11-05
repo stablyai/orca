@@ -158,6 +158,7 @@ describe('permission changes with already admitted ACP input', () => {
       expect(framesOf(original, 'session/prompt')).toHaveLength(2)
       if (outcome === 'drained') {
         await waitFor(() => expect(original.exited).toBe(true))
+        await waitFor(() => expect(rig.child()).not.toBe(original))
         const promptC = await rig.frame('session/prompt')
         expect(promptIdOf(promptC)).toBe(`prompt:${c}`)
         rig.child().agent.notify('session/update', replyChunk(promptIdOf(promptC), 'answered C'))

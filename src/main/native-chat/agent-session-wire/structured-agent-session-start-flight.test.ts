@@ -7,7 +7,8 @@ describe('start flight child retention', () => {
     const flight = {
       attemptId: 'start',
       abort: () => {},
-      outcome: Promise.resolve({ ok: true as const })
+      outcome: Promise.resolve({ ok: true as const }),
+      drained: Promise.resolve()
     }
     flights.register('chat', flight)
     const child = { generation: 'child', fence: 1 }

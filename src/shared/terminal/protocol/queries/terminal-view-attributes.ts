@@ -47,7 +47,7 @@ export function parseXColorSpec(spec: string): TerminalViewRgb | null {
   }
   if (low.startsWith('#')) {
     low = low.slice(1)
-    if (X_HASH_SPEC_RE.exec(low) && [3, 6, 9, 12].includes(low.length)) {
+    if (X_HASH_SPEC_RE.test(low) && [3, 6, 9, 12].includes(low.length)) {
       const adv = low.length / 3
       const result: TerminalViewRgb = [0, 0, 0]
       for (let i = 0; i < 3; ++i) {

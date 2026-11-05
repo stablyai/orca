@@ -222,6 +222,10 @@ export function structuredAgentSessionConversationClosable(
 export async function closeStructuredAgentSessionConversationUnderSerialize(
   context: Pick<StructuredAgentSessionLifetimeContext, 'sessions'> & {
     closeStatus: (sessionId: string) => void
+    flushDelivery: (
+      sessionId: string,
+      journal: StructuredAgentSessionHostSession['journal']
+    ) => Promise<void>
   },
   sessionId: string,
   atRest = false
@@ -230,6 +234,7 @@ export async function closeStructuredAgentSessionConversationUnderSerialize(
   if (!session || !structuredAgentSessionConversationClosable(session, atRest)) {
     return false
   }
+  await context.flushDelivery(sessionId, session.journal)
   context.sessions.delete(sessionId)
   context.closeStatus(sessionId)
   await session.journal.close()

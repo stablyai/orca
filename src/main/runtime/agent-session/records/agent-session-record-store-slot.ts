@@ -3,9 +3,11 @@ import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 // Quit-only edge: failed host teardown can leave its connection open after releasing the slot; a post-stop open lasts until exit.
 
 import { existsSync } from 'node:fs'
-import { journalDatabasePath } from '../../../native-chat/agent-session-journal/journal-host-database'
+import {
+  journalDatabasePath,
+  JournalHostDatabase
+} from '../../../native-chat/agent-session-journal/journal-host-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
-import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
 import { openStructuredAgentSessionJournalDatabase } from '../structured-agent-session-journal-open'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 

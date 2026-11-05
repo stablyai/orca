@@ -1,11 +1,15 @@
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import type { JournalReducerState } from './journal-reducer'
 import type { LegacyQueuedCards } from './journal-queue-import'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalQueueRestatement } from './journal-queued-messages'
 import type { QueuedMessageRow } from './queued-message-table'
 import { retainedQueueFactSteps } from './journal-queue-retention'
-import { finishJournalStepsAsync, sortJournalSteps } from './journal-reconstruction-steps'
+import {
+  yieldJournalHost,
+  finishJournalStepsAsync,
+  sortJournalSteps
+} from './journal-reconstruction-steps'
 import { settleJournalCommitAsync } from './journal-row-writer'
 import { deriveQueuePauseSteps, type DerivedQueuePause } from './queued-message-pause'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -67,7 +71,7 @@ export async function prepareJournalQueueRestatement(
           }
           if (++work === 128) {
             work = 0
-            await new Promise<void>((resolve) => setImmediate(resolve))
+            await yieldJournalHost()
           }
         }
         await deletion.write(db)

@@ -1,3 +1,7 @@
+import { scheduler } from 'node:timers/promises'
+
+export const yieldJournalHost = (): Promise<void> => scheduler.yield()
+
 /** Private reconstruction may pause; a published model is adopted only after it is complete. */
 export function finishJournalSteps<T>(steps: Generator<void, T>): T {
   for (;;) {
@@ -20,7 +24,7 @@ export async function finishJournalStepsAsync<T>(
     }
     if (++work === 256) {
       work = 0
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await yieldJournalHost()
     }
   }
 }

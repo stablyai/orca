@@ -1,8 +1,11 @@
 import {
-  readJournalDerived,
+  readJournalDerivedInOrder,
   journalDerivedRefreshPending
 } from '../agent-session-journal/journal-derived-read'
-import { finishJournalStepsAsync } from '../agent-session-journal/journal-reconstruction-steps'
+import {
+  yieldJournalHost,
+  finishJournalStepsAsync
+} from '../agent-session-journal/journal-reconstruction-steps'
 import { structuredAgentSessionOwnerStatus } from './structured-agent-session-owner-status'
 import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import {
@@ -51,7 +54,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   /** Full reduction: absence from a bounded page cannot prove a revised/tombstoned item is absent. */
   journalSnapshot = async (sessionId: string) => {
     const journal = (await this.conversation(sessionId)).journal
-    return readJournalDerived(
+    return readJournalDerivedInOrder(
       journal,
       function* (finite) {
         if (finite) {
@@ -71,6 +74,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
     const finite = journalDerivedRefreshPending(journal)
+    await journal.readInOrder(() => {})
     const current = () => {
       if (this.sessions.get(request.sessionId)?.journal !== journal) {
         throw new Error('History unavailable')
@@ -91,6 +95,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       scope,
       reader,
       replaceNormalizedHistory,
+      ...(finite ? { finite: true } : {}),
       get work() {
         return current() ?? undefined
       }
@@ -124,7 +129,9 @@ export class StructuredAgentSessionBackgroundTaskChannel {
 
   async currentRequests(request: AgentSessionCurrentRequestsRead) {
     const session = await this.conversation(request.sessionId)
-    if (journalDerivedRefreshPending(session.journal)) {
+    const finite = journalDerivedRefreshPending(session.journal)
+    await session.journal.readInOrder(() => {})
+    if (finite || journalDerivedRefreshPending(session.journal)) {
       return session.journal.readInOrder(async () => {
         for (;;) {
           const work = hostStructuredAgentSessionCurrentWork(
@@ -155,7 +162,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
               return readCurrentRequestsPiece(projection, request)
             }
           }
-          await new Promise<void>((resolve) => setImmediate(resolve))
+          await yieldJournalHost()
         }
       })
     }

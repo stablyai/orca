@@ -1,6 +1,9 @@
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { vi, type Mock } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { expect, vi, type Mock } from 'vitest'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalSubmission
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
 import {
   claudeProviderHandle,
@@ -194,4 +197,16 @@ export type RigSendOptions = {
   internal?: true
   from?: AgentMessageSource
   carried?: Readonly<Record<string, string>>
+}
+
+/** Positive provider proof follows handoff; refused starts may still receive unrelated late proof. */
+export async function waitForQueuedRigHandoff(
+  read: () => Promise<AgentJournalSubmission | undefined>
+): Promise<void> {
+  if ((await read())?.dispatchState === 'pending') {
+    await eventually(async () => {
+      const submission = await read()
+      expect(submission?.handedOverAt, JSON.stringify(submission)).toBeDefined()
+    })
+  }
 }

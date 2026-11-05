@@ -9,7 +9,7 @@ export function registerSessionTabsEmptyWorktreePublicationTests(): void {
     getMobileSessionTabsForWorktree: (
       worktreeId: string,
       clientNavigationId?: string
-    ) => RuntimeMobileSessionTabsResult
+    ) => Promise<RuntimeMobileSessionTabsResult>
   }
 
   function createHeadedRuntime(): OrcaRuntimeService {
@@ -43,26 +43,26 @@ export function registerSessionTabsEmptyWorktreePublicationTests(): void {
   }
 
   describe('answering for a worktree the host has no tabs for', () => {
-    it('answers "ask me later" only until the renderer graph publishes', () => {
+    it('answers "ask me later" only until the renderer graph publishes', async () => {
       const runtime = createHeadedRuntime()
-      expect(answerFor(runtime)).toMatchObject({ publicationEpoch: 'none', tabs: [] })
-      expect(answerFor(runtime, 'device-1')).toMatchObject({
+      expect(await answerFor(runtime)).toMatchObject({ publicationEpoch: 'none', tabs: [] })
+      expect(await answerFor(runtime, 'device-1')).toMatchObject({
         publicationEpoch: 'none:client-navigation',
         tabs: []
       })
 
       publishGraphWithoutWorktree(runtime)
 
-      const published = answerFor(runtime, 'device-1')
+      const published = await answerFor(runtime, 'device-1')
       expect(published.publicationEpoch).not.toMatch(/^none/)
       expect(published.tabs).toEqual([])
     })
 
-    it('tells a client that asked during startup once the graph publishes', () => {
+    it('tells a client that asked during startup once the graph publishes', async () => {
       const runtime = createHeadedRuntime()
       const answers = recordAnswers(runtime)
-      answerFor(runtime, 'device-1')
-      answerFor(runtime, 'device-1')
+      await answerFor(runtime, 'device-1')
+      await answerFor(runtime, 'device-1')
 
       publishGraphWithoutWorktree(runtime)
 

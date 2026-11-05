@@ -6,7 +6,7 @@ import type { JournalReducerState } from './journal-reducer'
 import { journalContextCursor, projectJournalRows } from './journal-context-cursor'
 import type { readJournalPublicView } from './journal-public-read'
 import { readJournalSinceAsync } from './journal-cursor'
-import { readJournalRowsAfterCursorAsync } from './journal-open'
+import { readJournalRowsAfterCursorAsync } from './journal-async-open'
 import { captureJournalReadView } from './journal-read-view'
 import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 

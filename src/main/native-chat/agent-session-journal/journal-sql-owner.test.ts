@@ -1,3 +1,6 @@
+import { applyJournalMaintenance } from './journal-persistence-unit'
+import { JournalNativeService } from './journal-native-service'
+import { createJournalPace } from './journal-outcome-cleanup'
 import './journal-host-database-test-support'
 import { build } from 'esbuild'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -21,7 +24,7 @@ import {
   publishJournalOutcomeEpochAsync,
   prepareJournalOutcomeWriteAsync
 } from './journal-outcome-write'
-import { restoreJournalAsync } from './journal-open'
+import { restoreJournalAsync } from './journal-async-open'
 import { encodeJournalState } from './journal-state-codec'
 import { JournalOutcomeCompaction } from './journal-outcome-compaction'
 import { vacuumJournalPage } from './journal-incremental-vacuum'
@@ -67,6 +70,7 @@ async function host() {
 }
 
 it('round trips canonical outcomes through the native owner and compacts without changing saved state', async () => {
+  vi.mocked(entries.resolveWorkerThreadEntryPath).mockRestore()
   const database = await host()
   let live = createJournalReducerState('chat', 'epoch')
   await database.transaction(
@@ -449,4 +453,134 @@ it('preserves data on failed native open with no synchronous fallback and joins 
   await expect(saved(owner)).rejects.toThrow()
   await owner.close()
   await expect(owner.close()).resolves.toBeUndefined()
+})
+
+it('bounds vacuum by completed steps, remaining allowance and elapsed native work', () => {
+  const db = new NativeDatabase(':memory:')
+  try {
+    db.pragma('auto_vacuum = INCREMENTAL')
+    db.exec(`CREATE TABLE vacuum_fixture (body BLOB);
+      WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x + 1 FROM n WHERE x < 128)
+      INSERT INTO vacuum_fixture SELECT zeroblob(4096) FROM n;
+      DELETE FROM vacuum_fixture;`)
+    const free = () => Number(db.pragma('freelist_count', { simple: true }))
+    const before = free()
+    expect(before).toBeGreaterThan(64)
+    db.exec('BEGIN IMMEDIATE')
+    expect(
+      applyJournalMaintenance(db, { kind: 'vacuum', pages: 100 }, { started: 0, now: () => 0 })
+    ).toEqual({ more: true, valid: true, steps: 32 })
+    expect(free()).toBe(before - 32)
+    expect(
+      applyJournalMaintenance(db, { kind: 'vacuum', pages: 3 }, { started: 0, now: () => 0 })
+    ).toEqual({ more: true, valid: true, steps: 3 })
+    let elapsed = 0
+    expect(
+      applyJournalMaintenance(
+        db,
+        { kind: 'vacuum', pages: 100 },
+        {
+          started: 0,
+          now: () => (elapsed += 4)
+        }
+      )
+    ).toEqual({ more: true, valid: true, steps: 2 })
+    db.exec('ROLLBACK')
+    expect(free()).toBe(before)
+    const pragma = db.pragma.bind(db)
+    const noProgress = vi
+      .spyOn(db, 'pragma')
+      .mockImplementation((name, options) =>
+        name === 'incremental_vacuum(1)' ? [] : pragma(name, options)
+      )
+    expect(applyJournalMaintenance(db, { kind: 'vacuum', pages: 100 })).toEqual({
+      more: false,
+      valid: true,
+      steps: 1
+    })
+    noProgress.mockRestore()
+    db.exec('VACUUM')
+    expect(applyJournalMaintenance(db, { kind: 'vacuum', pages: 100 })).toEqual({
+      more: false,
+      valid: true,
+      steps: 0
+    })
+  } finally {
+    db.close()
+  }
+})
+
+it('returns every finite vacuum batch to admission and does not renew a pass from concurrent frees', async () => {
+  const database = await host()
+  const db = new NativeDatabase(join(root, 'agent-session-journal.db'))
+  try {
+    const freePages = () => Number(db.pragma('freelist_count', { simple: true }))
+    const freeMore = () =>
+      db.exec(`CREATE TABLE vacuum_fixture (body BLOB);
+      WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x + 1 FROM n WHERE x < 96)
+      INSERT INTO vacuum_fixture SELECT zeroblob(4096) FROM n;
+      DROP TABLE vacuum_fixture;`)
+    freeMore()
+    const allowance = freePages()
+    const pages = Number(db.pragma('page_count', { simple: true }))
+    let steps = 0
+    let batches = 0
+    const maintain = database.maintenance.bind(database)
+    vi.spyOn(database, 'maintenance').mockImplementation(async (unit) => {
+      const result = await maintain(unit)
+      if (unit.kind === 'vacuum') {
+        expect(unit.pages).toBe(allowance - steps)
+        expect(result.steps).toBeLessThanOrEqual(32)
+        expect(result.steps).toBeLessThanOrEqual(unit.pages)
+        steps += result.steps
+        if (++batches === 1) {
+          expect(Number(db.pragma('page_count', { simple: true }))).toBeLessThan(pages)
+          freeMore()
+        }
+      }
+      return result
+    })
+    while (await vacuumJournalPage(database)) {
+      expect(batches).toBeLessThanOrEqual(allowance)
+    }
+    expect(steps).toBe(allowance)
+    expect(batches).toBeGreaterThan(1)
+    expect(freePages()).toBeGreaterThan(0)
+    expect(
+      await database.read(async (read) => read.prepare('PRAGMA synchronous').get())
+    ).toMatchObject({ synchronous: 2 })
+  } finally {
+    db.close()
+  }
+})
+
+it('considers foreground queued inside vacuum on the next scheduler turn and settles phase charges', async () => {
+  const service = new JournalNativeService()
+  const order: string[] = []
+  const release = Promise.withResolvers<void>()
+  const entered = Promise.withResolvers<void>()
+  const first = service.admit(async () => {
+    order.push('vacuum-1')
+    entered.resolve()
+    await release.promise
+  }, true)
+  await entered.promise
+  const next = service.admit(async () => {
+    order.push('vacuum-2')
+  }, true)
+  const foreground = service.admit(async () => {
+    order.push('accepted')
+  })
+  const closing = service.close()
+  release.resolve()
+  await Promise.all([first, next, foreground, closing])
+  expect(order).toEqual(['vacuum-1', 'accepted', 'vacuum-2'])
+  await expect(service.admit(async () => {})).rejects.toThrow('closing')
+  const delay = vi.fn(async (_ms: number) => {})
+  const pace = createJournalPace(() => 0, delay)
+  pace.charge(7)
+  await pace.rest()
+  await pace.rest(true)
+  await pace.rest(true)
+  expect(delay.mock.calls).toEqual([[0], [63], [0]])
 })

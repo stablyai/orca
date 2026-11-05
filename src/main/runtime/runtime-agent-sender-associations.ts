@@ -3,7 +3,6 @@ import type {
   AgentSenderPublication,
   AgentSenderRevision
 } from '../../shared/agent-sender-associations'
-
 import {
   readAgentSenderPrincipals,
   readAgentSenderSessions,
@@ -89,8 +88,9 @@ export class RuntimeAgentSenderAssociations {
   }
 
   /** A window graph reply carries the rows only when the window's applied base is stale. */
-  async buildForGraph(base: AgentSenderRevision | undefined) {
-    return this.publisher.forGraph(base, await this.build())
+  buildForGraph(base: AgentSenderRevision | undefined) {
+    this.immediateFramePass()
+    return this.publisher.forGraph(base)
   }
 
   /** The scope a client frame carries; remembered so a refresh republishes only changed worktrees. */
@@ -151,12 +151,8 @@ export class RuntimeAgentSenderAssociations {
     return this.publisher.changedScopes(worktreeIds)
   }
 
-  private capture() {
-    return captureAgentSenderInput(this.deps, this.panes, this.database)
-  }
-
   private refresh(): Promise<SenderPass> {
-    const input = this.capture()
+    const input = captureAgentSenderInput(this.deps, this.panes, this.database)
     const beforeTerminal = this.publisher.current()
     this.refreshTerminals(input)
     const terminalChanged = beforeTerminal !== this.publisher.current()
@@ -210,7 +206,7 @@ export class RuntimeAgentSenderAssociations {
     return result
   }
 
-  private refreshTerminals(input: ReturnType<RuntimeAgentSenderAssociations['capture']>): void {
+  private refreshTerminals(input: ReturnType<typeof captureAgentSenderInput>): void {
     const { db, install, generation, panes, peerFingerprint, terminalKey } = input
     if (install) {
       this.database = db
@@ -231,9 +227,7 @@ export class RuntimeAgentSenderAssociations {
     }
   }
 
-  private async runRefresh(
-    input: ReturnType<RuntimeAgentSenderAssociations['capture']>
-  ): Promise<boolean> {
+  private async runRefresh(input: ReturnType<typeof captureAgentSenderInput>): Promise<boolean> {
     const { db, records } = input
     let { chatKey } = input
     if (same(chatKey, this.chatKey.slice(0, 2))) {

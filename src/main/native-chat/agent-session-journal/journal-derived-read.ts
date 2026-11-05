@@ -30,15 +30,28 @@ export function readJournalDerived<T>(
   current: () => boolean = () => true
 ): T | Promise<T> {
   return refreshing.has(journal)
-    ? journal.readInOrder(async () => {
-        if (!current()) {
-          throw new Error('Journal read superseded')
-        }
-        const result = await finishJournalStepsAsync(read(true))
-        if (!current()) {
-          throw new Error('Journal read superseded')
-        }
-        return result
-      })
+    ? readJournalDerivedInOrder(journal, read, current)
     : finishJournalSteps(read(false))
+}
+
+/** Request reads include earlier admitted writes; committed notification paths remain immediate. */
+export function readJournalDerivedInOrder<T>(
+  journal: AgentSessionJournal,
+  read: (finite: boolean) => Generator<void, T>,
+  current: () => boolean = () => true
+): Promise<T> {
+  const finite = refreshing.has(journal)
+  return journal.readInOrder(async () => {
+    if (!current()) {
+      throw new Error('Journal read superseded')
+    }
+    const prepare = finite || refreshing.has(journal)
+    const result = prepare
+      ? await finishJournalStepsAsync(read(true))
+      : finishJournalSteps(read(false))
+    if (!current()) {
+      throw new Error('Journal read superseded')
+    }
+    return result
+  })
 }

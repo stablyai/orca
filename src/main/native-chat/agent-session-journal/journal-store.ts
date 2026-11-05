@@ -4,7 +4,7 @@ import { journalInputSourceBody } from './journal-input-source'
 import { JournalHistoryReader } from './journal-history-read'
 
 import { withJournalInputOrder } from './journal-input-provenance'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 

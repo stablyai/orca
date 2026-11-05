@@ -47,6 +47,7 @@ export function registerStructuredAgentSessionStart(
     flights.register(sessionId, {
       attemptId,
       outcome,
+      drained,
       abort: acquire.abort,
       signal: acquire.signal,
       children
@@ -148,7 +149,8 @@ export function registerStructuredAgentSessionStart(
       attempts.abandon(sessionId, attemptId)
       context.publishStatus(sessionId)
     })
-  context.tasks.trackAttach(outcome.then(() => Promise.all([attempting, recorded])))
+  const drained = outcome.then(() => Promise.all([attempting, recorded]))
+  context.tasks.trackAttach(drained)
   register()
   return outcome
 }

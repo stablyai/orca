@@ -256,10 +256,12 @@ it.each([1, 10, 100])(
       await waitFor(() =>
         expect(descriptions()).toEqual(Array(count * 2).fill("Agent's own settings"))
       )
+      await host.drainStatusWrites()
       sink.publish.mockClear()
       onStatusChanged.mockClear()
       const unchanged = host.readStatusSummary(sessionId)!
       const saved = structuredClone(store.getRecord(sessionId))
+      expect(saved?.lastTurn).toMatchObject({ state: 'settled', outcome: 'success' })
       const publications: unknown[] = []
       subscriptions.push(
         host.subscribeStatus({
@@ -602,6 +604,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
     })
     await waitFor(() => expect(descriptions()).toEqual(['Ask for approval', 'Ask for approval']))
     expect((await readCurrentOptions()).current.reportedPermissionMode).toBe('ask')
+    await host.flushStreamedEvents(sessionId)
     await host.drainStatusWrites()
     const updated = store.getRecord(sessionId)
     expect(updated).toEqual({ ...saved, lastTurn: updated?.lastTurn })

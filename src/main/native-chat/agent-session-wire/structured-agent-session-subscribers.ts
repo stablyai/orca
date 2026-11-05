@@ -1,8 +1,17 @@
 import { journalDerivedRefreshPending } from '../agent-session-journal/journal-derived-read'
 import { deliverReplacement } from './agent-session-replacement-delivery'
 import { hydrateSubscriber } from './agent-session-subscriber-hydration'
-import { safeSubscriberFrameSteps } from './agent-session-subscriber-frame-fields'
-import { queueSubscriberDelivery } from './agent-session-subscriber-delivery'
+import {
+  safeSubscriberFrameSteps,
+  emitSubscriberFrame,
+  subscriberCommandsChanged,
+  type SubscriberFieldHooks,
+  type SubscriberFieldState
+} from './agent-session-subscriber-frame-fields'
+import {
+  queueSubscriberDelivery,
+  flushSubscriberDeliveries
+} from './agent-session-subscriber-delivery'
 import type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 import type { CurrentRequestsSubscriber } from './agent-session-current-requests'
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
@@ -11,12 +20,6 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from '../../../shared/agent-session/agent-session-wire'
-import {
-  emitSubscriberFrame,
-  subscriberCommandsChanged,
-  type SubscriberFieldHooks,
-  type SubscriberFieldState
-} from './agent-session-subscriber-frame-fields'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
 import type {
   deliverToSubscriber,
@@ -160,6 +163,11 @@ export class AgentSessionSubscribers {
     for (const subscriber of this.subscribers(sessionId)) {
       this.deliver(subscriber, journal, hostNow, false, activity)
     }
+  }
+
+  async flush(sessionId: string, journal: AgentSessionJournal): Promise<void> {
+    await journal.readInOrder(() => this.deliverFrames(sessionId, journal))
+    await flushSubscriberDeliveries(() => this.subscribers(sessionId))
   }
 
   deliverReplacement(sessionId: string, journal: AgentSessionJournal): Promise<void> {

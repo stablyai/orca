@@ -131,12 +131,14 @@ function createPairedRuntime() {
   runtime.onMobileSessionTabsChanged((snapshot) => caller.push(snapshot), 'device-caller')
   runtime.onMobileSessionTabsChanged((snapshot) => bystander.push(snapshot), 'device-bystander')
   // Shared host selection and the bystander's private projection can be stolen independently.
-  const sharedActiveTabId = (): string | null | undefined =>
+  const sharedActiveTabId = async (): Promise<string | null | undefined> =>
     (
-      runtime as unknown as {
-        getMobileSessionTabsForWorktree: (id: string) => RuntimeMobileSessionTabsResult
-      }
-    ).getMobileSessionTabsForWorktree(WT).activeTabId
+      await (
+        runtime as unknown as {
+          getMobileSessionTabsForWorktree: (id: string) => Promise<RuntimeMobileSessionTabsResult>
+        }
+      ).getMobileSessionTabsForWorktree(WT)
+    ).activeTabId
   return { runtime, caller, bystander, sharedActiveTabId }
 }
 
@@ -193,13 +195,13 @@ describe('browser.tabCreate caller navigation', () => {
       const expected = CREATE_NAVIGATION_OUTCOMES[navigation]
       const { runtime, caller, bystander, sharedActiveTabId } = createPairedRuntime()
       await seedSelections(runtime)
-      expect(sharedActiveTabId()).toBe('page-old')
+      expect(await sharedActiveTabId()).toBe('page-old')
       expect(bystander.at(-1)?.activeTabId).toBe('page-alt')
 
       await createBrowserTab(runtime, { navigation })
-      vi.advanceTimersByTime(300)
+      await vi.advanceTimersByTimeAsync(300)
 
-      expect(sharedActiveTabId()).toBe(expected.shared)
+      expect(await sharedActiveTabId()).toBe(expected.shared)
       expect(caller.at(-1)?.activeTabId).toBe(expected.caller)
       expect(bystander.at(-1)?.activeTabId).toBe(expected.bystander)
     }
@@ -211,9 +213,9 @@ describe('browser.tabCreate caller navigation', () => {
 
     // An older client cannot send `navigation`; clientKind is what keeps its create local.
     await createBrowserTab(runtime)
-    vi.advanceTimersByTime(300)
+    await vi.advanceTimersByTimeAsync(300)
 
-    expect(sharedActiveTabId()).toBe('page-old')
+    expect(await sharedActiveTabId()).toBe('page-old')
     expect(bystander.at(-1)?.activeTabId).toBe('page-alt')
     expect(caller.at(-1)?.activeTabId).toBe('page-new')
   })
@@ -229,9 +231,9 @@ describe('browser.tabCreate caller navigation', () => {
       url: 'about:blank',
       activate: true
     })
-    vi.advanceTimersByTime(300)
+    await vi.advanceTimersByTimeAsync(300)
 
-    expect(sharedActiveTabId()).toBe('page-new')
+    expect(await sharedActiveTabId()).toBe('page-new')
     expect(bystander.at(-1)?.activeTabId).toBe('page-alt')
   })
 
@@ -243,10 +245,10 @@ describe('browser.tabCreate caller navigation', () => {
       { worktree: `id:${WT}`, page: 'page-new', url: 'about:blank', navigation: 'caller' },
       { pairedDeviceId: 'device-caller', clientKind: 'runtime' }
     )
-    vi.advanceTimersByTime(300)
+    await vi.advanceTimersByTimeAsync(300)
 
     expect(caller.at(-1)?.activeTabId).not.toBe('page-new')
     expect(bystander.at(-1)?.activeTabId).toBe('page-alt')
-    expect(sharedActiveTabId()).toBe('page-old')
+    expect(await sharedActiveTabId()).toBe('page-old')
   })
 })

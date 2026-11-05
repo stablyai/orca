@@ -1,4 +1,4 @@
-import { emitSubscriberDelivery } from './agent-session-subscriber-delivery'
+import { emitSubscriberDelivery } from './agent-session-subscriber-delivery-port'
 import { finishJournalStepsAsync } from '../agent-session-journal/journal-reconstruction-steps'
 import { emitCaughtUpSteps } from './agent-session-subscriber-checkpoint'
 import { journalDerivedRefreshPending } from '../agent-session-journal/journal-derived-read'

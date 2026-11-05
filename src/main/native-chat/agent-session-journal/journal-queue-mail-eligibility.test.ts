@@ -317,6 +317,14 @@ describe("the queue's one rule for the next card", () => {
           { kind: 'status', text: `status-${write}` },
           { fence: 0, turnScope: { kind: 'thread' } }
         )
+        await vi.waitFor(() =>
+          expect(
+            emit.mock.calls.filter(
+              ([event]) =>
+                event.type === 'batch' && event.batch.cursor.sequence === journal.cursor().sequence
+            )
+          ).toHaveLength(2)
+        )
       }
       // Desktop and phone both hear ten writes that change nothing queued: no queue frame, no walk.
       expect(emit.mock.calls.some(([event]) => event.queuedMessages !== undefined)).toBe(false)

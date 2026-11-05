@@ -1,3 +1,4 @@
+import { yieldJournalHost } from './journal-reconstruction-steps'
 import { performance } from 'node:perf_hooks'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
@@ -143,7 +144,7 @@ export function createPiTranscriptCollector<T>(
         currentId = typeof row.parent_id === 'string' && row.parent_id ? row.parent_id : null
         depth += 1
         if (depth % 1024 === 0) {
-          await new Promise<void>((resolve) => setImmediate(resolve))
+          await yieldJournalHost()
         }
       }
       db.exec('COMMIT')
@@ -173,7 +174,7 @@ export function createPiTranscriptCollector<T>(
             performance.now() - sliceStartedAt >= 8 ||
             processedRows >= 256
           ) {
-            await new Promise<void>((resolve) => setImmediate(resolve))
+            await yieldJournalHost()
             processedRows = 0
             processedBytes = 0
             sliceStartedAt = performance.now()

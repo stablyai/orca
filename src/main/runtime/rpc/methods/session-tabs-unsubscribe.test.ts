@@ -1,3 +1,4 @@
+import { sessionTabsSequencedReadFixture } from './session-tabs-snapshot.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -65,6 +66,7 @@ async function subscribeTwiceToOneWorktree(selector = 'id:wt-1', resolvedWorktre
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Partial runtime backed by the real subscription registry; it supplies every member session.tabs subscribe/unsubscribe call.
   const runtime = {
     ...runtimeWithCleanup(registry.cleanup.bind(registry), registry.cleanupByPrefix.bind(registry)),
+    ...sessionTabsSequencedReadFixture,
     listMobileSessionTabs: async () => ({
       worktree: resolvedWorktree,
       publicationEpoch: 'test',
@@ -101,6 +103,7 @@ function runtimeWithCleanup(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the unsubscribe methods reach only these members; a missing one throws and fails the test.
   return {
     getRuntimeId: () => 'test-runtime',
+    ...sessionTabsSequencedReadFixture,
     listMobileSessionTabs: vi.fn().mockResolvedValue({
       worktree: 'wt-1',
       publicationEpoch: 'test',

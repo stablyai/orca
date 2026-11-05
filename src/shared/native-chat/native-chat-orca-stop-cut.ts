@@ -1,4 +1,7 @@
-import { structuredAgentSessionCommandTurnItemIdsSteps } from '../agent-session/structured-agent-session-command-entry'
+import {
+  structuredAgentSessionCommandTurnItemIdsSteps,
+  isStructuredAgentSessionCommandTurn
+} from '../agent-session/structured-agent-session-command-entry'
 import { finishAgentSessionSteps } from '../agent-session/agent-session-projection-steps'
 // Derive Orca-stop cuts from the journal for Continue; never store them. Host rechecks under the session lock before sending.
 
@@ -21,7 +24,6 @@ import {
   agentTurnVerdict,
   type AgentTurnOutcome
 } from '../agent-status/lifecycle/agent-turn-outcome'
-import { isStructuredAgentSessionCommandTurn } from '../agent-session/structured-agent-session-command-entry'
 import {
   isStructuredAgentSessionNonRequestRow,
   type StructuredAgentSessionLatestRequest

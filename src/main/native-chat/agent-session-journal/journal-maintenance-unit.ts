@@ -20,7 +20,7 @@ export type JournalCompactionCandidate = JournalCompactionPosition & {
 export type JournalMaintenanceUnit =
   | { kind: 'compact'; active: JournalCompactionSource; rows: JournalCompactionCandidate[] }
   | { kind: 'retired'; generation: number; rows: { rowid: number; bytes: number }[] }
-  | { kind: 'vacuum' }
+  | { kind: 'vacuum'; pages: number }
 
 export const JOURNAL_MAINTENANCE_BYTES = 256 * 1024
 const fields = new Set<string>(OUTCOME_FORMAT_1_COLLECTIONS)

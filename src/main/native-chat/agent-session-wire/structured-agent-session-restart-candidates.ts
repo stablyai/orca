@@ -1,11 +1,13 @@
-import { readJournalDerived } from '../agent-session-journal/journal-derived-read'
-import { latestStructuredAgentSessionPromptSteps } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
+import { readJournalDerivedInOrder } from '../agent-session-journal/journal-derived-read'
+import {
+  latestStructuredAgentSessionPromptSteps,
+  latestStructuredAgentSessionPrompt
+} from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 // Recheck stored offers against live journals and the same launch support used by startup.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import { latestStructuredAgentSessionPrompt } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { hostCanStartRecord } from './structured-agent-session-provider-support'
@@ -75,7 +77,7 @@ export function createStructuredAgentSessionRestartCandidateReaders(
         const session = deps.sessions.get(marker.sessionId)
         if (session) {
           const journal = session.journal
-          const prompt = await readJournalDerived(journal, function* (finite) {
+          const prompt = await readJournalDerivedInOrder(journal, function* (finite) {
             if (finite) {
               yield* journal.preparePublicReadSteps()
             }

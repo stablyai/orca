@@ -334,13 +334,13 @@ function countCommitWork() {
     counts.renders += inside === 'hook' ? 1 : 0
     return status(state, owner)
   })
-  const read = usageLimitCut.latestNativeChatUsageLimitCut
-  vi.spyOn(usageLimitCut, 'latestNativeChatUsageLimitCut').mockImplementation(
-    (items, submissions, bodyOf) => {
+  const read = usageLimitCut.latestNativeChatUsageLimitCutSteps
+  vi.spyOn(usageLimitCut, 'latestNativeChatUsageLimitCutSteps').mockImplementation(
+    function* (items, submissions, bodyOf) {
       counts.cutReads++
       inside = 'cut'
       try {
-        return read(items, submissions, bodyOf)
+        return yield* read(items, submissions, bodyOf)
       } finally {
         inside = null
       }

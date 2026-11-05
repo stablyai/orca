@@ -4,7 +4,7 @@ import { startJournalRowFold, type JournalLoad } from './journal-open'
 import type { JournalReadConnection } from './journal-sql-owner'
 import { journalOutcomeAcceptanceIds } from './journal-outcome-write'
 import { readJournalLegacyCardsAsync } from './journal-queue-import'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 // Replay live epochs without rewriting history; damage/newer rows fail load and remain on disk.
 
 import { readJournalOutcomesAsync } from './journal-outcome-table'
@@ -20,7 +20,7 @@ import { prepareJournalAcceptance } from './journal-input-provenance'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import { iterateJournalEpochRowsAsync } from './journal-row-table'
 import { parseJournalRow } from './journal-row-schema'
-import { finishJournalStepsAsync } from './journal-reconstruction-steps'
+import { yieldJournalHost, finishJournalStepsAsync } from './journal-reconstruction-steps'
 
 export async function restoreJournalAsync(
   read: JournalReadConnection,
@@ -62,7 +62,7 @@ export async function restoreJournalAsync(
           baseline.items.get(key)?.revision ?? baseline.tombstones.get(key) ?? 0
         )
         if (prefixRevisions.size % 128 === 0) {
-          await new Promise<void>((resolve) => setImmediate(resolve))
+          await yieldJournalHost()
         }
       }
     }
@@ -139,7 +139,7 @@ async function foldJournalFromStateAsync(
     if (!more) {
       break
     }
-    await new Promise<void>((resolve) => setImmediate(resolve))
+    await yieldJournalHost()
   }
   if (!deferNativeCleanup) {
     const ids = await finishJournalStepsAsync(owner.acceptanceIdsSteps())

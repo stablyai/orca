@@ -63,6 +63,9 @@ beforeEach(async () => {
     now: () => NOW
   })
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  await vi.waitFor(() =>
+    expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
+  )
 })
 
 afterEach(async () => {
@@ -74,16 +77,22 @@ afterEach(async () => {
 it('isolates legacy acquired history from live matching and saves exact proof before optional overflow', async () => {
   const journal = () => host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const body = hostTestMessage('same input')
-  for (const id of ['U', 'K', 'V']) {
-    await journal().appendSubmission({
-      clientMessageId: id,
-      body,
-      payloadFingerprint: id,
-      fence: 1,
-      origin: 'client',
-      handoverRecorded: true
-    })
-    await journal().resolveDispatch({ clientMessageId: id, state: 'unknown', fence: 1 })
+  // Seed acquired-history evidence without handing its temporary pending rows to the live child.
+  const seed = host.collaboratorsForTests().runtimeState.deliveryOrder.reserve(SESSION)
+  try {
+    for (const id of ['U', 'K', 'V']) {
+      await journal().appendSubmission({
+        clientMessageId: id,
+        body,
+        payloadFingerprint: id,
+        fence: 1,
+        origin: 'client',
+        handoverRecorded: true
+      })
+      await journal().resolveDispatch({ clientMessageId: id, state: 'unknown', fence: 1 })
+    }
+  } finally {
+    seed.release()
   }
   await journal().replaceEpochItems('handle_forked', store.getRecord(SESSION)!.lease.runtimeFence, [
     { identity: { provider: 'orca', clientMessageId: 'U' }, body, ownerFence: 1 }
@@ -102,6 +111,7 @@ it('isolates legacy acquired history from live matching and saves exact proof be
   codex.routes['thread/turns/list'] = pages
   const reopen = async (returned: unknown[]) => {
     await host.close(SESSION, 'evict')
+    await vi.waitFor(() => expect(host.collaboratorsForTests().sessions.has(SESSION)).toBe(false))
     launch.resumeThreadId = THREAD
     codex.routes['thread/resume'] = () => ({ thread: { id: THREAD, turns: returned } })
     await host.journalSnapshot(SESSION)
@@ -126,17 +136,23 @@ it('isolates legacy acquired history from live matching and saves exact proof be
       deferred.close()
       await resumed.closeAll()
     }
+    await host.journalSnapshot(SESSION)
+    expect(
+      journal().submission('V')?.dispatchState,
+      JSON.stringify(journal().submission('V'))
+    ).toBe('unknown')
   }
   await reopen([
     oldTurn([user(null), { type: 'agentMessage', id: 'old-answer', text: 'historical answer' }])
   ])
   expect(journal().submission('U')?.dispatchState).toBe('unknown')
   expect(journal().receiptFor('U')).toBeNull()
-  const before = journal().cursor()
+  const before = journal().snapshot()
   await reopen([
     oldTurn([user(null), { type: 'agentMessage', id: 'old-answer', text: 'historical answer' }])
   ])
-  expect(journal().cursor()).toEqual(before)
+  expect(journal().snapshot().items).toEqual(before.items)
+  expect(journal().snapshot().submissions).toEqual(before.submissions)
   await journal().replaceEpochItems(
     'handle_forked',
     store.getRecord(SESSION)!.lease.runtimeFence,
@@ -166,9 +182,13 @@ it('isolates legacy acquired history from live matching and saves exact proof be
   ])
   expect(journal().submission('K')?.dispatchState).toBe('accepted')
   expect(journal().snapshot().items).toEqual([])
-  expect(journal().submission('V')?.dispatchState).toBe('unknown')
+  expect(journal().submission('V')?.dispatchState, JSON.stringify(journal().submission('V'))).toBe(
+    'unknown'
+  )
   expect(pages).not.toHaveBeenCalled()
   await reopen([])
   expect(journal().receiptFor('K')).not.toBeNull()
-  expect(journal().submission('V')?.dispatchState).toBe('unknown')
+  expect(journal().submission('V')?.dispatchState, JSON.stringify(journal().submission('V'))).toBe(
+    'unknown'
+  )
 })

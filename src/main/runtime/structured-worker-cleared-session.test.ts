@@ -185,6 +185,7 @@ function installUnclearedWorker(): void {
 
 function installHost(): void {
   hostRef.current = {
+    flushStreamedEvents: async () => {},
     deps: {
       store: {
         getRecord: (id: string) => records.get(id) ?? null,

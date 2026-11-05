@@ -270,14 +270,16 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
   }
   await rig.stop()
   await rig.host.flushStreamedEvents(SESSION)
+  await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
   const j = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const saved = `recovery:${id}`
+  const queuedAt = j.cursor()
   appendTestJournalQueueRow((await openTestJournalHostDatabase(rig.root)).db, j, saved, {
     op: 'queued',
     body,
     recovers: id,
     position: -1,
-    queuedAt: j.cursor(),
+    queuedAt,
     options: { model: 'default' },
     returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
   })
@@ -287,6 +289,8 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
     SESSION,
     () => rig!.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   )
+  wire.useOrderedAssertions()
+  expect(j.queuedMessages.get(saved)?.queuedAt).toEqual(queuedAt)
   async function published() {
     const rpc = await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, OLD)
     if (!rpc.ok) {

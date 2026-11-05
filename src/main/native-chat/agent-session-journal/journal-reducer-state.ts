@@ -1,5 +1,6 @@
 import { createJournalInputObligations } from './journal-input-obligations'
-import { initializeJournalInputOrder, type JournalInputOrder } from './journal-input-order'
+import type { JournalInputOrder } from './journal-input-order'
+import { initializeJournalInputOrder } from './journal-input-order-owner'
 import type { JournalInputEntry, JournalInputCard } from './journal-input-lineage'
 import type {
   AgentJournalAcceptanceReceipt,

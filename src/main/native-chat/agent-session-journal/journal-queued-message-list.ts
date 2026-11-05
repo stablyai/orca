@@ -1,5 +1,5 @@
 import { finishJournalStepsAsync, sortJournalSteps } from './journal-reconstruction-steps'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import type { JournalReducerState } from './journal-reducer'
 import type { LegacyQueuedCards } from './journal-queue-import'
 import type { QueuedMessageRow } from './queued-message-table'

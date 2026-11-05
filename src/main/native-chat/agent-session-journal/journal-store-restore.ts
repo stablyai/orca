@@ -1,6 +1,6 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalEpochController } from './journal-epoch-controller'
-import { restoreJournalAsync } from './journal-open'
+import { restoreJournalAsync } from './journal-async-open'
 import { journalOpenRefusalError } from './journal-open-failure'
 import type { JournalStoreHost } from './journal-store-collaborators'
 import { openJournalStoreState } from './journal-store-open'

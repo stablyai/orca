@@ -1,6 +1,6 @@
-import { restoreJournalAsync } from '../agent-session-journal/journal-open'
+import { restoreJournalAsync } from '../agent-session-journal/journal-async-open'
 import { renderJournalStatus } from '../agent-session-journal/journal-public-read'
-import { journalInputOrder } from '../agent-session-journal/journal-input-order'
+import { journalInputOrder } from '../agent-session-journal/journal-input-order-owner'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import {
   latestNativeChatUsageLimitCut,

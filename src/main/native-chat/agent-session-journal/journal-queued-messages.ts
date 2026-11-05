@@ -5,7 +5,7 @@ import {
   journalQueuePausesAsync,
   prepareJournalQueueRestatement
 } from './journal-queue-restatement'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import {
   assertQueuedCardConsumable,
   nextEligibleQueuedCard

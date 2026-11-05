@@ -150,7 +150,10 @@ export function decideRequest(
         }
       }
     ],
-    commit: (next) => next.items.set(key, opened)
+    commit: (next) => {
+      next.closedItems.delete(key)
+      next.items.set(key, opened)
+    }
   }
 }
 
@@ -160,6 +163,9 @@ export function decideWithdrawal(
 ): ProviderTimelineDecision {
   const { state, journal, context } = input
   const key = requestKey(event.request)
+  if (state.closedItems.has(key)) {
+    return {}
+  }
   const entry = state.items.get(key)
   const opened = entry?.kind === 'request' ? entry : null
   // Released requests may still have their newest incarnation in the journal.
@@ -188,7 +194,7 @@ export function decideWithdrawal(
         ]
       }
     },
-    commit: (next) => next.items.delete(key)
+    commit: (next) => next.close(key, opened?.turnItemId ?? null)
   }
 }
 

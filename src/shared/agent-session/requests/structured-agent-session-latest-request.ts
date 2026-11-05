@@ -1,4 +1,8 @@
-import { structuredAgentSessionCommandTurnItemIdsSteps } from '../structured-agent-session-command-entry'
+import {
+  structuredAgentSessionCommandTurnItemIdsSteps,
+  isStructuredAgentSessionCommandEntry,
+  isStructuredAgentSessionCommandRow
+} from '../structured-agent-session-command-entry'
 import { finishAgentSessionSteps } from '../agent-session-projection-steps'
 // Sidebar request/verdict/preview share this read: a turn or refused send is a request; steers belong to their turn, and commands are not requests.
 
@@ -18,10 +22,6 @@ import {
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
-import {
-  isStructuredAgentSessionCommandEntry,
-  isStructuredAgentSessionCommandRow
-} from '../structured-agent-session-command-entry'
 import type { NativeChatBlock } from '../../native-chat/native-chat-types'
 
 export type StructuredAgentSessionLatestRequest = {

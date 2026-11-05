@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import { JournalInputCardIndex } from '../../native-chat/agent-session-journal/journal-input-card-index'
+import * as changes from '../../native-chat/agent-session-journal/journal-queue-legacy-change'
 import * as legacy from '../../native-chat/agent-session-journal/journal-queue-import'
 import * as fold from '../../native-chat/agent-session-journal/journal-queue-fold'
 import * as stored from '../../native-chat/agent-session-journal/queued-message-stored-row'
@@ -77,13 +78,10 @@ function countMap<T>(array: readonly T[], visit: () => void) {
   const map = array.map.bind(array)
   Object.defineProperty(array, 'map', {
     configurable: true,
-    value: <U>(
-      callback: (value: T, index: number, array: readonly T[]) => U,
-      thisArg?: unknown
-    ): U[] =>
+    value: <U>(callback: (value: T, index: number, array: readonly T[]) => U): U[] =>
       map((value, index, source) => {
         visit()
-        return callback.call(thisArg, value, index, source)
+        return callback(value, index, source)
       })
   })
 }
@@ -131,6 +129,11 @@ export function countLegacyFailureDisplay() {
   let ensuring = false
   const overlays = new WeakSet<readonly unknown[]>()
   const handoffs = new WeakSet<readonly unknown[]>()
+  const change = changes.legacyQueuedChangeSteps
+  vi.spyOn(changes, 'legacyQueuedChangeSteps').mockImplementation((...args) => {
+    counts[phase].sourceVisits++
+    return change(...args)
+  })
   const decode = stored.readStoredQueuedMessageRow
   vi.spyOn(stored, 'readStoredQueuedMessageRow').mockImplementation((row) => {
     counts[phase].decodedRows++
@@ -162,9 +165,8 @@ export function countLegacyFailureDisplay() {
       })
     }
   }
-  const index = JournalInputCardIndex.prototype
-  const overlay = index.overlaySteps
-  vi.spyOn(index, 'overlaySteps').mockImplementation(function* (
+  const overlay = JournalInputCardIndex.prototype.overlaySteps
+  vi.spyOn(JournalInputCardIndex.prototype, 'overlaySteps').mockImplementation(function* (
     this: JournalInputCardIndex,
     state,
     rows
@@ -186,8 +188,8 @@ export function countLegacyFailureDisplay() {
       }
     })
   })
-  const update = index.indexCardSteps
-  vi.spyOn(index, 'indexCardSteps').mockImplementation(function* (
+  const update = JournalInputCardIndex.prototype.indexCardSteps
+  vi.spyOn(JournalInputCardIndex.prototype, 'indexCardSteps').mockImplementation(function* (
     this: JournalInputCardIndex,
     state,
     card
@@ -202,8 +204,8 @@ export function countLegacyFailureDisplay() {
     }
     return yield* update.call(this, state, card)
   })
-  const ensure = index.ensureSteps
-  vi.spyOn(index, 'ensureSteps').mockImplementation(function* (
+  const ensure = JournalInputCardIndex.prototype.ensureSteps
+  vi.spyOn(JournalInputCardIndex.prototype, 'ensureSteps').mockImplementation(function* (
     this: JournalInputCardIndex,
     state,
     floor

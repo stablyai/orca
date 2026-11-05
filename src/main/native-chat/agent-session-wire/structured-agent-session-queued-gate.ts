@@ -2,7 +2,7 @@ import type { StructuredAgentSessionProviderChild } from './structured-agent-ses
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { structuredAgentSessionChildAcceptsInput } from './structured-agent-session-input-readiness'
 import { codexTurnOptionsDiffer } from './structured-agent-session-message-options'
-import { journalInputOrder } from '../agent-session-journal/journal-input-order'
+import { journalInputOrder } from '../agent-session-journal/journal-input-order-owner'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'

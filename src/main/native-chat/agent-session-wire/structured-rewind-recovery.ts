@@ -2,7 +2,7 @@ import { persistRewindRecord, settleUnsupportedClaudeRewind } from './structured
 export { persistRewindRecord } from './structured-rewind-record'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { renderJournalStatus } from '../agent-session-journal/journal-public-read'
-import { journalInputOrder } from '../agent-session-journal/journal-input-order'
+import { journalInputOrder } from '../agent-session-journal/journal-input-order-owner'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type {
   StructuredAgentSessionHostDeps,

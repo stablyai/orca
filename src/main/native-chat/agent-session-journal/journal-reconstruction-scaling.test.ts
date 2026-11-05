@@ -30,7 +30,8 @@ import {
   projectionSessionId,
   seedOutcomeRows
 } from './journal-projection-test-support'
-import { restoreJournal, restoreJournalAsync } from './journal-open'
+import { restoreJournal } from './journal-open'
+import { restoreJournalAsync } from './journal-async-open'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { encodeJournalState } from './journal-state-codec'
 import { renderJournalState } from './journal-reducer'
@@ -41,7 +42,7 @@ import { JournalNewestTurn } from './journal-newest-turn'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { JournalInputPlaceIndex } from './journal-input-place-index'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import { JournalPersistencePlan } from './journal-persistence-plan'
 import {
   countReconstructionWork,

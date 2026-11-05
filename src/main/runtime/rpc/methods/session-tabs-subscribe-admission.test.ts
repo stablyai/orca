@@ -8,7 +8,10 @@ import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { SESSION_TAB_METHODS } from './session-tabs'
-import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
+import {
+  visibleSnapshot,
+  sessionTabsSequencedReadFixture
+} from './session-tabs-snapshot.test-fixture'
 
 const CONNECTION = 'conn-1'
 const KEY = (requestId: string): string => `session.tabs:${CONNECTION}:wt-1:${requestId}`
@@ -41,6 +44,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
       nativeChatProviders: options.structuredChat === true ? EVERY_AGENT_CHAT : {}
     }),
     restoreStructuredAgentSessionTabs: restore,
+    ...sessionTabsSequencedReadFixture,
     listMobileSessionTabs,
     supportsAuthoritativeSessionTabsInventory: () => false,
     listAllMobileSessionTabsWithChangeSequence: async () => ({
@@ -127,7 +131,12 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
       await settle()
 
       expect(host.isRegistered(KEY('sub-1'))).toBe(false)
-      expect(host.runtime.onMobileSessionTabsChanged).not.toHaveBeenCalled()
+      if (stage === 'list') {
+        expect(host.runtime.onMobileSessionTabsChanged).toHaveBeenCalledOnce()
+        expect(host.stopListening).toHaveBeenCalledOnce()
+      } else {
+        expect(host.runtime.onMobileSessionTabsChanged).not.toHaveBeenCalled()
+      }
       expect(frames(messages)).toEqual(['end'])
     }
   )
@@ -367,6 +376,6 @@ it.each(['abort', 'failure'] as const)(
     listing.reject(new Error('identity resolution failed'))
     await pending
     expect(stop).toHaveBeenCalledOnce()
-    expect(host.runtime.onMobileSessionTabsChanged).not.toHaveBeenCalled()
+    expect(host.stopListening).toHaveBeenCalledOnce()
   }
 )

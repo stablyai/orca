@@ -1,4 +1,4 @@
-import { journalInputOrder } from '../agent-session-journal/journal-input-order'
+import { journalInputOrder } from '../agent-session-journal/journal-input-order-owner'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { expect, it, vi } from 'vitest'
 import {

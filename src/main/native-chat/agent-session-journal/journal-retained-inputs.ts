@@ -2,7 +2,7 @@ import {
   firstJournalInputEvidence,
   JOURNAL_INPUT_EVIDENCE_PAGE
 } from './journal-input-evidence-read'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   historicalAdmissionSourceSteps,

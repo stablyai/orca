@@ -10,7 +10,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { readQueuePublication } from '../agent-session-wire/structured-agent-session-queued-publication'
 import { StructuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import { JournalInputCardIndex } from './journal-input-card-index'
 import { JournalInputPlaceIndex } from './journal-input-place-index'
 import {

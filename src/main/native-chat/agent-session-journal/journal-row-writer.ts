@@ -1,4 +1,4 @@
-import { finishJournalStepsAsync } from './journal-reconstruction-steps'
+import { yieldJournalHost, finishJournalStepsAsync } from './journal-reconstruction-steps'
 import type { JournalPersistencePlan } from './journal-persistence-plan'
 import { journalRowReadBack } from './journal-row-table'
 import type { JournalHostDatabase } from './journal-host-database'
@@ -298,7 +298,7 @@ export async function settleJournalCommitAsync(
     }
     if (++work === 128) {
       work = 0
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await yieldJournalHost()
     }
   }
   if (failures.length === 1) {

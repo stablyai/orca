@@ -19,7 +19,7 @@ import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-h
 import { JournalOutcomeCompaction } from './journal-outcome-compaction'
 import { JOURNAL_OUTCOME_FORMAT } from './journal-outcome-format'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import {
   expectProjectionMatches,
   projectionBase as base,

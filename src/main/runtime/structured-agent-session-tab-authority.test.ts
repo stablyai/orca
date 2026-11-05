@@ -1,4 +1,7 @@
-import { testJournalNativeDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  testJournalNativeDatabase,
+  createTrackedJournalOpener
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -32,7 +35,6 @@ import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
 import { discardStructuredWorkerSession } from './rpc/methods/orchestration-structured-worker-session'
 import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 // CLI capability probing is outside tab authority and must not start a real CLI in this fixture.

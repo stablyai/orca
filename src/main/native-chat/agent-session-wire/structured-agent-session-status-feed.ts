@@ -27,10 +27,7 @@ import {
   retainedStructuredStatusSummaries,
   structuredAgentSessionStatusSummary
 } from './structured-agent-session-status-summary'
-import {
-  publishOrderedStructuredChildWork,
-  structuredStatusChildWorkFields
-} from './structured-agent-session-status-child-work'
+import { structuredStatusChildWorkFields } from './structured-agent-session-status-child-work'
 import { StructuredAgentSessionStatusJournal } from './structured-agent-session-status-journal'
 import {
   permissionReportOnly,
@@ -188,7 +185,7 @@ export class StructuredAgentSessionStatusFeed {
       return
     }
     const record = this.deps.getConversation(sessionId)
-    const projection = this.projections.read(sessionId, source)
+    const projection = this.projections.read(sessionId, source, record)
     if (!projection) {
       return
     }
@@ -267,19 +264,12 @@ export class StructuredAgentSessionStatusFeed {
       return
     }
     this.ownership.observeChildWork(sessionId, evidence)
-    publishOrderedStructuredChildWork(
-      session.journal,
-      () => {
-        if (!this.published.get(sessionId)?.summary.status) {
-          this.publish(sessionId)
-        }
-        if (this.admitChildWork(sessionId, session, evidence, producer)) {
-          this.publish(sessionId)
-        }
-      },
-      (error) =>
-        this.logFailure('child-work-publication', 'child work publication failed', sessionId, error)
-    )
+    if (!this.published.get(sessionId)?.summary.status) {
+      this.publish(sessionId)
+    }
+    if (this.admitChildWork(sessionId, session, evidence, producer)) {
+      this.publish(sessionId)
+    }
   }
 
   private readChildWorkSafely<T>(sessionId: string, read: () => T, fallback: T): T {

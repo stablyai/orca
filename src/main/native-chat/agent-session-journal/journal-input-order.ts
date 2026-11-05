@@ -12,13 +12,6 @@ import type { JournalRow } from './journal-row-schema'
 import type { QueuedMessageRow } from './queued-message-table'
 import { JournalInputPlaces } from './journal-input-places'
 
-export {
-  initializeJournalInputOrder,
-  initializeJournalInputOrderSteps,
-  journalInputOrder,
-  setJournalInputOrder
-} from './journal-input-order-owner'
-
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
 export class JournalInputOrder extends JournalInputPlaces {
   private reconstructing = false
@@ -186,11 +179,15 @@ export class JournalInputOrder extends JournalInputPlaces {
   enteredSubmissions(): Iterable<AgentJournalSubmission> {
     return this.entered.values()
   }
-  unsettledSubmissionCount = (): number => this.unsettled.size
+  unsettledSubmissionCount(): number {
+    return this.unsettled.size
+  }
   unsettledSubmissions(): readonly AgentJournalSubmission[] {
     return this.unsettled.list()
   }
-  sendingSubmissionValues = this.sending.values.bind(this.sending)
+  sendingSubmissionValues(): Iterable<AgentJournalSubmission> {
+    return this.sending.values()
+  }
   sendingSubmissions(): readonly AgentJournalSubmission[] {
     return this.sending.list()
   }

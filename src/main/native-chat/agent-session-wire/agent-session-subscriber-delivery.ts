@@ -1,4 +1,6 @@
-import { finishJournalStepsAsync } from '../agent-session-journal/journal-reconstruction-steps'
+import { emitCaughtUp } from './agent-session-subscriber-checkpoint'
+import { sameJournalCursor } from '../agent-session-journal/journal-cursor'
+import { journalDerivedRefreshPending } from '../agent-session-journal/journal-derived-read'
 import {
   deliverToSubscriber,
   type SubscriberDeliveryPort
@@ -14,6 +16,30 @@ export function queueSubscriberDelivery(
   input: Delivery,
   initialDelivery: (delivery: Delivery) => void | Promise<void>
 ): void {
+  if (
+    !subscriber.delivery &&
+    !journalDerivedRefreshPending(input.journal) &&
+    sameJournalCursor(subscriber.cursor, input.journal.cursor()) &&
+    (subscriber.snapshotCatchUp === false ||
+      !subscriber.readsCurrentRequests ||
+      input.journal.publicRead().normalizationKey === '' ||
+      subscriber.historyView === input.journal.publicRead().normalizationKey)
+  ) {
+    emitCaughtUp(
+      port,
+      subscriber,
+      input.emitCheckpoint,
+      {
+        hostNow: input.hostNow,
+        ...(input.activity !== undefined ? { activity: input.activity } : {})
+      },
+      {
+        journal: input.journal,
+        work: port.hooks.readCurrentWork?.(subscriber.sessionId, input.journal)
+      }
+    )
+    return
+  }
   subscriber.pendingDelivery = {
     ...input,
     activity: input.activity !== undefined ? input.activity : subscriber.pendingDelivery?.activity,
@@ -48,12 +74,15 @@ export function queueSubscriberDelivery(
     })
 }
 
-export async function emitSubscriberDelivery(
-  port: SubscriberDeliveryPort,
-  ...args: Parameters<SubscriberDeliveryPort['emit']>
-): Promise<boolean | void> {
-  if (port.emitSteps) {
-    return finishJournalStepsAsync(port.emitSteps(...args))
+/** Retire a journal only after its final queued frames have reached current subscribers. */
+export async function flushSubscriberDeliveries(read: () => readonly Subscriber[]): Promise<void> {
+  for (;;) {
+    const pending = read().flatMap((subscriber) =>
+      subscriber.delivery ? [subscriber.delivery] : []
+    )
+    if (!pending.length) {
+      return
+    }
+    await Promise.all(pending)
   }
-  port.emit(...args)
 }

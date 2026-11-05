@@ -19,6 +19,7 @@ import {
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_SESSION,
+  HOST_TEST_NOW as NOW,
   HOST_TEST_THREAD as THREAD,
   hostTestMessage,
   hostTestOperationId
@@ -316,6 +317,13 @@ describe("a Stop's queue pause", () => {
 
   it('outlives a user send the provider accepts and then refuses; a later send that starts lifts it', async () => {
     const draftId = await stoppedDraft()
+    const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    await journal.replaceEpochItems(
+      'handle_forked',
+      rig.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+      []
+    )
+    await expectPaused(draftId)
     const refused = await handedOverUserSend('the start fails')
     // Hide pause during the lifting send, restoring it if refused.
     expect(await rig.queuePause()).toBeNull()
@@ -346,8 +354,15 @@ describe("a Stop's queue pause", () => {
     await eventually(async () => expect(derivedPauses()).toEqual(['restarted']))
     expect(await rig.queuePause()).toBeNull()
     expect(await rig.handoff(draftId)).toBeUndefined()
+    // The simulated child died with the host; starting again requires the same first-hand exit proof.
+    await rig.store.evictProvenDeadOwner({
+      sessionId: HOST_TEST_SESSION,
+      expectedFence: rig.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+      probe: { outcome: 'pid-absent' },
+      now: NOW
+    })
     const next = rig.send('sent after the restart')
-    await next.result
+    expect(await next.result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
     await rig.settleAccepted(next.id, 'next')
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })

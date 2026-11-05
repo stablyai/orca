@@ -1,3 +1,4 @@
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   journalDerivedRefreshPending,
   refreshJournalDerivedRead
@@ -17,7 +18,7 @@ export class StructuredAgentSessionStatusJournal {
 
   advance = this.projections.advance.bind(this.projections)
 
-  read(id: string, journal?: AgentSessionJournal) {
+  read(id: string, journal?: AgentSessionJournal, record?: AgentSessionConversationView | null) {
     const deps = this.deps()
     const session = deps.sessions.get(id)
     const source = journal ?? session?.journal
@@ -25,7 +26,11 @@ export class StructuredAgentSessionStatusJournal {
       ? null
       : journalDerivedRefreshPending(source)
         ? this.projections.installed(source)
-        : this.projections.read(source, deps.getConversation(id), session)
+        : this.projections.read(
+            source,
+            record === undefined ? deps.getConversation(id) : record,
+            session
+          )
   }
 
   readStopping(id: string): boolean {

@@ -18,9 +18,9 @@ import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
-  publishTestJournalEpoch
+  publishTestJournalEpoch,
+  type TestJournalHostDatabase as JournalHostDatabase
 } from './journal-host-database-test-support'
-import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS, type JournalRow } from './journal-row-schema'
 import { journalOutcomeSource } from './journal-outcome-format'
@@ -43,9 +43,6 @@ import type * as Strict from './journal-storage-strict'
 import type * as OutcomeFormat1 from './journal-outcome-format-1'
 import type * as OutcomeFormat2 from './journal-outcome-format-2'
 import type * as Transition from './journal-reducer-transition'
-
-// N/10N contracts: each counts statements (prepare and exec), rows read and rows and bytes
-// written, never time, and requires the same work for a chat ten times larger.
 
 // Admission's own work: strict walks of input rows and of outcome records, counted at the calls,
 // and every strict walk at all, counted at each strict schema storage builds.
@@ -120,16 +117,17 @@ vi.mock('./journal-reducer-transition', async (original) => {
     ...actual,
     isolateJournalTransition: (...input: Parameters<typeof actual.isolateJournalTransition>) => {
       const transition = actual.isolateJournalTransition(...input)
+      const track = (state: ReturnType<typeof transition.adopt>) => {
+        transitions.push({
+          tracked: transition.tracked(),
+          trackedDerived: transition.trackedDerived()
+        })
+        return state
+      }
       return {
         ...transition,
-        adopt: () => {
-          const state = transition.adopt()
-          transitions.push({
-            tracked: transition.tracked(),
-            trackedDerived: transition.trackedDerived()
-          })
-          return state
-        }
+        materializeReplacement: () => transition.materializeReplacement().then(track),
+        adopt: () => track(transition.adopt())
       }
     }
   }
@@ -264,9 +262,8 @@ function historyOf(size: number, everyCard = false): JournalRow[] {
   return rows
 }
 
-async function databaseFor(label: string): Promise<JournalHostDatabase> {
-  return await openTestJournalHostDatabase(join(root, label))
-}
+const databaseFor = (label: string): Promise<JournalHostDatabase> =>
+  openTestJournalHostDatabase(join(root, label))
 
 async function outcomeChat(size: number, label: string) {
   const database = await databaseFor(label)
@@ -584,17 +581,18 @@ it('opens a new chat with one newest record per key plus indexed admission and f
   expect(large.records - small.records).toBe(9 * N)
   expect(large.keys).toBe(small.keys)
   expectSameWork(small.work, large.work)
-  // Newest keys plus four indexed admission reads/send and two first-card reads/card.
+  // Newest keys, three admission records/send and one birth record/card; decisions are inline.
   expect(small.work.read).toStrictEqual({
     journal_outcome_epochs: 1,
-    journal_outcomes: small.keys + 4 * (N + 1) + 2 * N,
+    journal_outcomes: small.keys + 3 * (N + 1) + N,
     journal_rows: 1,
     journal_sessions: 2,
     other: 0
   })
   // Empty legacy ownership still costs one session-scoped, position-ordered lookup per restore.
   for (const { work } of [small, large]) {
-    expect(work.statements.filter((sql) => !/\bFROM\s+journal_\w+/.test(sql))).toStrictEqual([
+    const legacy = work.statements.filter((sql) => !/\b(?:FROM|JOIN)\s+journal_\w+/.test(sql))
+    expect(legacy).toStrictEqual([
       'SELECT message_id, position, body_json, fingerprint, state, hold_reason, returned_reason, returned_rejection, consumed_as, queued_epoch, queued_sequence, options_json FROM queued_messages WHERE session_id = ? ORDER BY position ASC'
     ])
   }

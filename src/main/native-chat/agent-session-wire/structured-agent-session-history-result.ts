@@ -32,6 +32,7 @@ export function readStructuredAgentSessionHistoryResult(input: {
   scope?: AgentSessionHistoryScope
   reader?: HistoryReader
   replaceNormalizedHistory?: boolean
+  finite?: true
   /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
 }): AgentSessionHistoryResult | Promise<AgentSessionHistoryResult> {
@@ -39,6 +40,7 @@ export function readStructuredAgentSessionHistoryResult(input: {
     scope: input.scope,
     reader: input.reader,
     rowReplay: input.replaceNormalizedHistory === false,
+    finite: input.finite,
     captureResult: (snapshot) => decorate(capturePublishedWork(snapshot, input.work)),
     captureResultSteps: function* (snapshot) {
       for (;;) {

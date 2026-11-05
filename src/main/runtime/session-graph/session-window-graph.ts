@@ -38,7 +38,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     windowId: number,
     graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph,
     options?: { includeAgentSenders?: boolean }
-  ): RuntimeSyncWindowGraphResult | Promise<RuntimeSyncWindowGraphResult> {
+  ): RuntimeSyncWindowGraphResult {
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
     if (
@@ -311,25 +311,16 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       this.getNativeChatLaunchDraftResolutionClientEventSnapshot().map(
         ({ tabId, text, createdAt }) => ({ tabId, text, createdAt })
       )
-    const result: RuntimeSyncWindowGraphResult = {
+    return {
       ...this.getStatus(),
+      ...(options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
+        ? {}
+        : this.agentSenderGraphReply(graph.agentSenderBase)),
       ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
       ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {}),
       ...(mobileSessionResyncWorktrees.size > 0
         ? { mobileSessionResyncWorktrees: [...mobileSessionResyncWorktrees] }
         : {})
     }
-    const publicationEpoch = this.rendererGraphEpoch
-    return options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
-      ? result
-      : this.agentSenderGraphReply(graph.agentSenderBase).then((senders) => {
-          if (
-            this.authoritativeWindowId !== windowId ||
-            this.rendererGraphEpoch !== publicationEpoch
-          ) {
-            throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
-          }
-          return { ...result, ...senders }
-        })
   }
 }

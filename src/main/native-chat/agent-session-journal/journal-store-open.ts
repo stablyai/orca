@@ -3,7 +3,7 @@ import type { AgentJournalItemIdentity } from '../../../shared/agent-session/jou
 import type { JournalLoad } from './journal-open'
 import { failLoadOnUnloadableJournal } from './journal-open-failure'
 import { staleSubagentRosterRevisionSteps } from './journal-subagent-liveness'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 import type { JournalReducerState } from './journal-reducer'
 

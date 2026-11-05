@@ -47,21 +47,24 @@ describe('settling a send the provider proves it received after the ack window',
         clientMessageId: params.envelope.clientOperationId,
         providerIdentity: { provider: 'claude', sessionId: THREAD, uuid: 'early-echo' }
       })
-      const accepted = events.findLast(
-        (event) =>
-          event.type === 'batch' &&
-          event.batch.submissions.some(
-            (entry) => entry.clientMessageId === params.envelope.clientOperationId
-          )
+      const accepted = () =>
+        events.findLast(
+          (event) =>
+            event.type === 'batch' &&
+            event.batch.submissions.some(
+              (entry) => entry.clientMessageId === params.envelope.clientOperationId
+            )
+        )
+      await vi.waitFor(() =>
+        expect(accepted()).toMatchObject({
+          type: 'batch',
+          batch: {
+            submissions: [
+              { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
+            ]
+          }
+        })
       )
-      expect(accepted).toMatchObject({
-        type: 'batch',
-        batch: {
-          submissions: [
-            { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
-          ]
-        }
-      })
     } finally {
       finishDispatch({ state: 'unknown', reason: 'ack timeout' })
       unsubscribe()

@@ -113,15 +113,17 @@ it.each([100, 300])('bounds the added failure display with %i readable legacy ca
   const cold = structuredClone(ops.counts)
   // Two decoded populations: restore and cached source reused by the failed import. It builds
   // N queue rows on an isolated draft before its DELETE fails; none of that work is free.
-  // Cached classification is one fused pass; two overlays each build a map and index its rows.
+  // Classification and failed import visit each source; restore is counted by decoded/restored rows.
   expect(cold).toEqual({
     upstream: {
       ...emptyLegacyCounts(),
       decodedRows: 2 * n,
       restoredRows: n,
       ownerClassifications: n,
+      handoffVisits: n,
+      identityEntries: n,
       cardConstructions: 5 * n,
-      sourceVisits: 3 * n,
+      sourceVisits: 2 * n,
       overlayVisits: 4 * n,
       priorOverlayVisits: n,
       indexUpdates: 4 * n,

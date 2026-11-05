@@ -12,7 +12,7 @@ import {
   stageTestJournalRowReceipt,
   writeCommandReceiptTestRecord
 } from './command-receipt-test-support'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import { encodeJournalState } from './journal-state-codec'
 import { restoreJournal } from './journal-open'
 import { renderJournalState } from './journal-reducer'

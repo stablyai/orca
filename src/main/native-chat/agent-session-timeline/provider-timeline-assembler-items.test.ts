@@ -110,12 +110,11 @@ describe('provider timeline items', () => {
       item: 'call-a',
       body: { ...runningTool('read'), state: 'failed' }
     })
-    const update = rig.assembler.apply({
+    rig.assembler.apply({
       type: 'item.update',
       item: 'call-a',
       body: { ...runningTool('read'), state: 'completed' }
     })
-    expect(update.dropped).toBe('item-settled')
     expect((await rig.row(providerItemId('item', 'call-a')))?.body).toMatchObject({
       state: 'failed'
     })

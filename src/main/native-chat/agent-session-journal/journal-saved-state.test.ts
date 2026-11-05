@@ -1,4 +1,4 @@
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import {
   journalInputSourceBody,
   journalInputSourceFamily,

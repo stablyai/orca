@@ -187,6 +187,7 @@ it('Codex: never answers a quiet success while an admitted turn cannot yet take 
     await stopping
   }
   const response = await stopping
+  await current.host.collaboratorsForTests().serialize(SESSION, async () => {})
   expect(interrupts().length).toBeGreaterThan(0)
   const child = current.host.collaboratorsForTests().sessions.get(SESSION)?.child
   if (response.ok) {

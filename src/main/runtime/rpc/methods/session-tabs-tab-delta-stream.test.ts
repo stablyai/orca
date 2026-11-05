@@ -1,6 +1,9 @@
 import { RuntimeClientCapabilities } from '../runtime-client-capabilities'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from './runtime-client-capabilities'
-import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
+import {
+  visibleSnapshot,
+  sessionTabsSequencedReadFixture
+} from './session-tabs-snapshot.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -96,6 +99,7 @@ async function runStream(
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     getClientSettings: () => ({}),
+    ...sessionTabsSequencedReadFixture,
     listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot(1)),
     supportsAuthoritativeSessionTabsInventory: () => false,
     listAllMobileSessionTabsWithChangeSequence: vi
@@ -220,6 +224,7 @@ describe.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'] as const)(
         const runtime = {
           getRuntimeId: () => 'runtime',
           getClientSettings: () => ({}),
+          ...sessionTabsSequencedReadFixture,
           listMobileSessionTabs: async () => initial,
           supportsAuthoritativeSessionTabsInventory: () => false,
           listAllMobileSessionTabsWithChangeSequence: async () => ({

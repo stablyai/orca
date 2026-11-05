@@ -18,6 +18,10 @@ export type StructuredAgentSessionConversationLifetimeHost = {
   deliveryActive: (sessionId: string) => boolean
   /** Retain status rows while a tab still lists the chat. */
   closeStatus: (sessionId: string, options: { listed: boolean }) => void
+  flushDelivery: (
+    sessionId: string,
+    journal: StructuredAgentSessionHostSession['journal']
+  ) => Promise<void>
   childWorkOpen: (sessionId: string) => boolean
 }
 

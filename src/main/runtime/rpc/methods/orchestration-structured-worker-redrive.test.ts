@@ -363,7 +363,7 @@ describe('the structured redrive publication edge', () => {
           read: 0,
           delivered_at: expect.any(String)
         })
-        expect(dispatch).toHaveBeenCalledTimes(1)
+        await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
         expect(dispatch.mock.calls[0]![0].body).toMatchObject({
           kind: 'message',
           role: 'user',

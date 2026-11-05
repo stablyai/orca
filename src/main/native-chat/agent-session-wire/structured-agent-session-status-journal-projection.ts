@@ -4,6 +4,7 @@ import { newestAcceptedSendKeySteps } from './structured-agent-session-status-ch
 import { projectStructuredAgentSessionStatusStateSteps } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { latestNativeChatUsageLimitCutSteps } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import {
+  yieldJournalHost,
   finishJournalSteps,
   finishJournalStepsAsync,
   sortJournalSteps
@@ -142,7 +143,7 @@ export class StructuredAgentSessionJournalProjections {
       if (installed) {
         return
       }
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await yieldJournalHost()
     }
   }
   private *readSteps(

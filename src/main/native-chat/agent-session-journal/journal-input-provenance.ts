@@ -6,7 +6,7 @@ export {
 } from './journal-queue-rebase'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { readCommandReceipt } from './command-receipt-table'

@@ -1,4 +1,4 @@
-import { readJournalDerived } from '../agent-session-journal/journal-derived-read'
+import { readJournalDerivedInOrder } from '../agent-session-journal/journal-derived-read'
 import {
   createStructuredAgentSessionCatalogReads,
   structuredAgentSessionCatalogScopeOwned
@@ -58,7 +58,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
   return {
     journalCurrentRead: async (sessionId: string, inputIds?: readonly string[]) => {
       const journal = await journalOf(sessionId)
-      return readJournalDerived(
+      return readJournalDerivedInOrder(
         journal,
         function* (finite) {
           return finite
@@ -99,13 +99,17 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     },
     queuedSendAnswer: async (id: string, messageId: string) =>
       queuedSendAnswer(await journalOf(id), messageId),
-    sendAnswer: async (id: string, messageId: string) =>
-      structuredSendAnswer(
-        await journalOf(id),
-        (operationId) => context().deps.store.readCommandReceipt({ kind: 'global' }, operationId),
-        id,
-        messageId
-      ),
+    sendAnswer: async (id: string, messageId: string) => {
+      const journal = await journalOf(id)
+      return journal.readInOrder(() =>
+        structuredSendAnswer(
+          journal,
+          (operationId) => context().deps.store.readCommandReceipt({ kind: 'global' }, operationId),
+          id,
+          messageId
+        )
+      )
+    },
     readCommands: (id: string, commandsOnRequest = false) =>
       context().readCommands(id, commandsOnRequest),
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>

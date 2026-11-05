@@ -64,11 +64,13 @@ async function rig() {
     readChildWork: () => children,
     onWriteFailed: failed
   })
-  const report = async (next: AgentChildWorkRowView[]) => {
+  const report = async (next: AgentChildWorkRowView[], wait = true) => {
     children = next
     rows.changed('session-1')
-    // Let the queued writer land its writes.
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    if (wait) {
+      await vi.waitFor(() => expect(rows['writing'].has('session-1')).toBe(false))
+      await journal.readInOrder(() => {})
+    }
   }
   const saved = () =>
     journal
@@ -231,11 +233,11 @@ describe("each subagent's saved row", () => {
       await held
       return append(...args)
     })
-    await r.report([child()])
+    await r.report([child()], false)
     await r.openTurn('turn-2')
-    await r.report([child({ totalTokens: 40 })])
+    await r.report([child({ totalTokens: 40 })], false)
     release()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.waitFor(() => expect(r.saved()[0]?.block.tokens).toBe(40))
 
     const [row] = r.saved()
     expect(row?.block.tokens).toBe(40)

@@ -15,6 +15,8 @@ export type StructuredAgentSessionStartFlight = {
   children?: StructuredAgentSessionProviderChildIdentity[]
   /** Settles once the logical start is ready, refused, or aborted. */
   readonly outcome: Promise<StructuredAgentSessionResumeOutcome>
+  /** Joins persistence and acquisition cleanup after logical cancellation. */
+  readonly drained: Promise<unknown>
 }
 
 export class StructuredAgentSessionStartFlights {

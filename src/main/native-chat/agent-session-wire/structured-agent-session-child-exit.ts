@@ -151,6 +151,9 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   // Host phase classifies startup failure even if adapters omit the flag. A starting child's
   // exit cancels nothing: the start's owner gives its outcome from the adapter's answer.
   const exitedDuringStartup = child.phase === 'starting'
+  const startupOwned =
+    context.startFlights?.ownsChild(sessionId, child) ||
+    context.startupAttempts?.ownsOpen(sessionId, child)
   if (!exitedDuringStartup && !expected) {
     context.abortBound?.(sessionId)
   }
@@ -263,9 +266,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         ? {
             exitedDuringStartup: {
               generation: child.generation,
-              owned:
-                context.startFlights?.ownsChild(sessionId, child) ||
-                context.startupAttempts?.ownsOpen(sessionId, child)
+              owned: startupOwned
             }
           }
         : {}),

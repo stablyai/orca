@@ -173,6 +173,8 @@ export function hostTestRestingOptionsJournal(
   wroteBeforeOpen = false
 ) {
   return {
+    statusRead: () => ({ items: [], submissions: [] }),
+    readInOrder: async <T>(read: () => T | Promise<T>): Promise<T> => read(),
     threadGoal: () => null,
     threadGoalSourceSteps: function* () {
       yield* []

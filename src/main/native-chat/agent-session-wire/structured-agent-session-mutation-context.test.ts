@@ -86,7 +86,13 @@ it('wakes once after a direct send commits even when publication fails', async (
   expect(ctx.wakeDelivery).toHaveBeenCalledExactlyOnceWith(SESSION)
   expect(warn).toHaveBeenCalledWith(
     expect.any(String),
-    expect.objectContaining({ scope: 'send-journal-write', error })
+    expect.objectContaining({
+      scope: 'send-journal-write',
+      error: expect.objectContaining({
+        outcome: 'committed',
+        cause: expect.objectContaining({ errors: [error] })
+      })
+    })
   )
   expect(warn).toHaveBeenCalledWith(
     expect.any(String),
@@ -124,12 +130,12 @@ it('replays a queued draft after publication fails without waking delivery', asy
 it('refuses the first reply and resend when the submission cannot fold', async () => {
   const ctx = context()
   const request = params()
-  const fold = reducer.applyJournalRow
-  vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row) => {
+  const fold = reducer.applyJournalRowSteps
+  vi.spyOn(reducer, 'applyJournalRowSteps').mockImplementation(function* (state, row) {
     if (row.kind === 'submission') {
       throw new Error('submission fold failed')
     }
-    fold(state, row)
+    yield* fold(state, row)
   })
   const journal = rig.host['sessions'].get(SESSION)!.journal
   const append = vi.spyOn(journal, 'appendSubmission')

@@ -414,7 +414,7 @@ describe('agentSession.send reply timing', () => {
       const closed = rig.host.close(HOST_SESSION, 'user-close')
       release()
       await closed
-      rig.crashRestartHostProcess()
+      await rig.crashRestartHostProcess()
       expect(await rig.drafts()).toEqual([{ messageId: interrupted.id, state: 'waiting' }])
       expect(await rig.submission(interrupted.id)).toMatchObject({
         source: { kind: 'user' },

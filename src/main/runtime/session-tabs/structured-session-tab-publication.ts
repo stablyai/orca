@@ -61,9 +61,6 @@ export async function admitStructuredSessionTabPublication(
     })
     committed = true
     input.workspaceAuthority?.committed()
-    if (!tabId || host.getSessionTabId(input.sessionId) !== tabId) {
-      throw new Error('Chat tab publication was superseded')
-    }
   } else if (typeof host?.setSessionTabVisibility === 'function') {
     // Restore-index failures (newer records/disk errors) are reported without preventing tab open.
     const openingHost = host
@@ -89,7 +86,9 @@ export async function admitStructuredSessionTabPublication(
         })
       })
   }
-  const current = host?.getSessionTabId(input.sessionId)
+  const current = host?.getSessionTabIdSettled
+    ? await host.getSessionTabIdSettled(input.sessionId)
+    : host?.getSessionTabId(input.sessionId)
   if (isReopenedChatTabId(tabId) ? current !== tabId : current && isReopenedChatTabId(current)) {
     throw new Error('Chat tab publication was superseded')
   }

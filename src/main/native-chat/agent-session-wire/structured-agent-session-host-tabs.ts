@@ -63,6 +63,7 @@ export function createStructuredAgentSessionTabSurface(
         AgentSessionRecordStore,
         | 'getVisibleSessionTabIndex'
         | 'getSessionTabId'
+        | 'getSessionTabIdSettled'
         | 'showSessionTabs'
         | 'getConversation'
         | 'listConversations'
@@ -102,6 +103,8 @@ export function createStructuredAgentSessionTabSurface(
     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
     getSessionTabId: (sessionId: string): string | null =>
       host.deps.store.getSessionTabId(sessionId),
+    getSessionTabIdSettled: (sessionId: string): Promise<string | null> =>
+      host.deps.store.getSessionTabIdSettled(sessionId),
     showSessionTabs: async (sessionIds: readonly string[]) => {
       const result = await host.deps.store.showSessionTabs(sessionIds)
       sessionIds.forEach(delivery.publishStatus)

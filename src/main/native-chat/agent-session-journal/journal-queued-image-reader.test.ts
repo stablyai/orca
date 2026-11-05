@@ -107,8 +107,10 @@ async function receipt(id: string) {
 it('delivers newly loaded saved image choices in bounded semantic batches without resetting expanded history', async () => {
   const { AgentSessionSubscribers } =
     await import('../agent-session-wire/structured-agent-session-subscribers')
-  const { queuedImageReaderSnapshot, queuedImageReaderEvent, queuedImageSourceIds } =
+  const { queuedImageReaderSnapshot, queuedImageSourceIds } =
     await import('../agent-session-wire/agent-session-queued-image-reader')
+  const { queuedImageReaderEvent } =
+    await import('../agent-session-wire/agent-session-queued-image-events')
   const { projectQueuedImageCardPublication } =
     await import('../../runtime/rpc/methods/structured-agent-session-queued-image-capability')
   const { MOBILE_BRIDGE_MAX_FRAME_BYTES } =
@@ -375,8 +377,10 @@ it.each([100, 1000].flatMap((n) => ['none', 'visible', 'cut'].map((source) => ({
   async ({ n, source }) => {
     const { AgentSessionSubscribers } =
       await import('../agent-session-wire/structured-agent-session-subscribers')
-    const { queuedImageReaderSnapshot, queuedImageReaderEvent, queuedImageSourceIds } =
+    const { queuedImageReaderSnapshot, queuedImageSourceIds } =
       await import('../agent-session-wire/agent-session-queued-image-reader')
+    const { queuedImageReaderEvent } =
+      await import('../agent-session-wire/agent-session-queued-image-events')
     const idleWork = structuredAgentSessionCurrentWork(journal, {
       record: agentSessionConversationView(
         agentSessionRecordFixture(

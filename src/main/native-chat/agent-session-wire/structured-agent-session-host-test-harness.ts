@@ -140,18 +140,20 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wire-host-'))
   resetHostTestOperationIds()
   ordinal = 0
-  acquire = vi.fn(async ({ fence }) => ({
+  acquire = vi.fn(async ({ identity, fence, spawnToken }) => ({
     acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: {
       hostId: 'local',
       pid: 4242,
       processStartTimeMs: 1_700_000_000_000,
-      spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
+      spawnToken
     },
     link: {
       linkId: `link-${fence}`,
       handle: codexProviderHandle(THREAD),
-      origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
+      origin: store.getRecord(identity.sessionId)?.providerHandleChain.length
+        ? 'resumed'
+        : 'created',
       mintedAtFence: fence,
       observedAt: NOW
     }

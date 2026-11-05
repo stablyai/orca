@@ -36,6 +36,11 @@ export const statusFeed = () =>
             stopMarks: { latest: () => null, revision: () => 0 },
             snapshot: () => ({ items: STATUS_ITEMS, submissions: [] }),
             statusRead: () => ({ items: STATUS_ITEMS, submissions: [] }),
+            visitItems: (visit: Parameters<AgentSessionJournal['visitItems']>[0]) => {
+              for (const item of STATUS_ITEMS) {
+                visit(item.itemId, item.sequence, item.body)
+              }
+            },
             inputOrder: {
               inputCount: () => 0,
               inputOrdinal: () => Infinity,

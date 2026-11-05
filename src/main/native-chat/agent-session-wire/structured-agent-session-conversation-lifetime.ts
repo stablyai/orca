@@ -64,6 +64,7 @@ export function createStructuredAgentSessionConversationLifetime(
     return closeStructuredAgentSessionConversationUnderSerialize(
       {
         sessions,
+        flushDelivery: host.flushDelivery,
         closeStatus: (id) => {
           const tabs = deps().store.getVisibleSessionTabIndex()
           // Legacy stores cannot enumerate tabs; retain the row until restart.

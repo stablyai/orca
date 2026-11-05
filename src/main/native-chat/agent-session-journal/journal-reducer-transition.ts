@@ -1,5 +1,5 @@
 import { finishJournalStepsAsync } from './journal-reconstruction-steps'
-import { journalInputOrder, setJournalInputOrder } from './journal-input-order'
+import { journalInputOrder, setJournalInputOrder } from './journal-input-order-owner'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalEntryChange } from './journal-transition-collections'
 import { JournalDraft } from './journal-reducer-draft'

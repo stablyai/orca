@@ -1,3 +1,5 @@
+import { scheduler } from 'node:timers/promises'
+
 type AdmittedUnit = { run: () => Promise<void> }
 
 /** Capped foreground cohorts alternate with one ready maintenance unit; no pass owns the writer. */
@@ -53,7 +55,7 @@ export class JournalNativeService {
         }
       }
       await this.maintenance.shift()?.run()
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await scheduler.yield()
     }
   }
 }

@@ -112,8 +112,11 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
     expect(await sendUserMessage(COORDINATOR, 'again')).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1), WAIT)
+    await vi.waitFor(() => {
+      expect(connectionFor(COORDINATOR)).not.toBe(chat)
+      expect(connectionFor(COORDINATOR).turns).toHaveLength(1)
+    }, WAIT)
     const revived = connectionFor(COORDINATOR)
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
     expect(revived.turns[0]!.text).toContain('again')
     await settleTurn(COORDINATOR, 0)
     await edgesAnswered()
@@ -292,8 +295,11 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       providerFaults.refuseStart = null
       expect(await sendUserMessage(COORDINATOR, 'again')).toMatchObject({ ok: true })
       await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
+      await vi.waitFor(
+        () => expect(connectionFor(COORDINATOR).turns.length).toBeGreaterThanOrEqual(1),
+        WAIT
+      )
       const revived = connectionFor(COORDINATOR)
-      await vi.waitFor(() => expect(revived.turns.length).toBeGreaterThanOrEqual(1), WAIT)
       expect(revived.turns[0]!.text).toContain('again')
       await settleTurn(COORDINATOR, 0)
       await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
@@ -366,8 +372,8 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
     // Nothing holds or wakes the session first: the report's accepted send starts its agent.
     await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1), WAIT)
+    await vi.waitFor(() => expect(connectionFor(COORDINATOR).turns).toHaveLength(1), WAIT)
     const revived = connectionFor(COORDINATOR)
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
     expect(isWholeMail(turnText(revived.turns[0]!))).toBe(true)
     await settleTurn(COORDINATOR, 0)
     expect((await userTexts(COORDINATOR)).filter(isWholeMail)).toHaveLength(1)

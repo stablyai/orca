@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import { Worker } from 'node:worker_threads'
+import { scheduler } from 'node:timers/promises'
 type ReconstructionOwner =
   | typeof Map.prototype
   | typeof Set.prototype
@@ -132,6 +133,11 @@ export async function countReconstructionWork<T>(
       callback(...args)
     })
   )
+  const yieldHost = scheduler.yield.bind(scheduler)
+  const scheduled = vi.spyOn(scheduler, 'yield').mockImplementation(async () => {
+    await yieldHost()
+    finishPiece()
+  })
   try {
     const result = await run()
     maximum = Math.max(maximum, current)
@@ -139,6 +145,7 @@ export async function countReconstructionWork<T>(
   } finally {
     reconstructionWork.visit = () => {}
     spy.mockRestore()
+    scheduled.mockRestore()
     native.mockRestore()
     upload.mockRestore()
     for (const undo of restore.toReversed()) {

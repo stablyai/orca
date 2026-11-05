@@ -1,5 +1,5 @@
 import type { JournalReducerState } from './journal-reducer'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import {
   journalQueueStopHolds,
   failedQueueTurnSequence,

@@ -68,9 +68,9 @@ export abstract class OrcaRuntimeWithSessionTabSenders extends OrcaRuntimeWithSt
     }
   }
 
-  protected async agentSenderGraphReply(base: AgentSenderRevision | undefined) {
+  protected agentSenderGraphReply(base: AgentSenderRevision | undefined) {
     try {
-      return await this.agentProjections.senders.buildForGraph(base)
+      return this.agentProjections.senders.buildForGraph(base)
     } finally {
       this.releaseAgentSenderHistoryIfUnobserved()
     }
@@ -111,11 +111,11 @@ export abstract class OrcaRuntimeWithSessionTabSenders extends OrcaRuntimeWithSt
     try {
       const scope = await this.agentProjections.senders.buildForFramePass()
       if (
-        captured.some(
-          (snapshot) =>
-            this.mobileSessionTabsByWorktree.get(snapshot.worktree)?.publicationEpoch !==
-            snapshot.publicationEpoch
-        )
+        captured.some((snapshot) => {
+          const current = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
+          // A captured inventory retains removed rows; its watermark delivers their removals.
+          return current !== undefined && current.publicationEpoch !== snapshot.publicationEpoch
+        })
       ) {
         throw new Error('session_tabs_inventory_unstable')
       }

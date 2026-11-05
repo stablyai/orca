@@ -1,12 +1,21 @@
+import { journalInputSourceBody } from '../../../native-chat/agent-session-journal/journal-input-source'
+import type { JournalInputSource } from '../../../native-chat/agent-session-journal/journal-input-source-schema'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalSubmission,
+  AgentJournalMessageItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import {
   reduceStructuredAgentSession,
   EMPTY_STRUCTURED_AGENT_SESSION
 } from '../../../../shared/agent-session/structured-agent-session-reducer'
-import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionHistoryPage,
+  AgentSessionSubscribeEvent
+} from '../../../../shared/agent-session/agent-session-wire'
 import type { openStream } from './structured-agent-session-rpc.test-fixture'
 import { createHash } from 'node:crypto'
 import { expect } from 'vitest'
@@ -24,6 +33,7 @@ export function createQueuedImageWireRecord(
   const attempts = new Map<string, string>()
   const records: unknown[] = []
   const witnesses: unknown[] = []
+  let historicalThrough: number | undefined
   function paths(value: unknown): unknown {
     if (typeof value === 'string') {
       return value.replaceAll(root, '<host-root>')
@@ -127,18 +137,28 @@ export function createQueuedImageWireRecord(
     normalize,
     records,
     witnesses,
+    // Later phases assert actual operation boundaries; the archive froze synchronous scheduling.
+    useOrderedAssertions() {
+      historicalThrough ??= records.length
+    },
     verify() {
       const tuples = new Map(Object.entries(recorded.tuples))
       const expected = new Map(Object.entries(recorded.tests)).get(
         expect.getState().currentTestName ?? ''
       )
       expect(expected, 'missing deliberately recorded released-reader class').toBeDefined()
+      expect(records).toHaveLength(expected?.length ?? 0)
+      const through = historicalThrough ?? records.length
       expect(
-        records.map((value) => createHash('sha256').update(JSON.stringify(value)).digest('hex'))
-      ).toStrictEqual(expected?.map((row) => tuples.get(row)?.inputSha256))
+        records
+          .slice(0, through)
+          .map((value) => createHash('sha256').update(JSON.stringify(value)).digest('hex'))
+      ).toStrictEqual(expected?.slice(0, through).map((row) => tuples.get(row)?.inputSha256))
       expect(
-        witnesses.map((value) => createHash('sha256').update(JSON.stringify(value)).digest('hex'))
-      ).toStrictEqual(expected?.map((row) => tuples.get(row)?.canonicalSha256))
+        witnesses
+          .slice(0, through)
+          .map((value) => createHash('sha256').update(JSON.stringify(value)).digest('hex'))
+      ).toStrictEqual(expected?.slice(0, through).map((row) => tuples.get(row)?.canonicalSha256))
     }
   }
 }
@@ -173,4 +193,40 @@ export async function queuedImageTestBody(
       { type: 'image-ref', path }
     ]
   }
+}
+
+export function expectColdEditedHandoff(
+  journal: AgentSessionJournal,
+  page: AgentSessionHistoryPage,
+  attempt: AgentJournalSubmission,
+  body: AgentJournalMessageItem | null,
+  cardId: string
+): void {
+  expect(page.queuedMessages).toEqual([])
+  expect(
+    page.submissions.find((entry) => entry.clientMessageId === attempt.clientMessageId)
+  ).toMatchObject({ dispatchState: 'unknown', handedOverAt: attempt.handedOverAt })
+  expect(
+    page.items.find((item) => item.itemId === agentJournalSubmissionKey(attempt.clientMessageId))
+      ?.body
+  ).toEqual(body)
+  expect(journal.submission(attempt.clientMessageId)?.options).toEqual(attempt.options)
+  expect(journal.submissionBody(attempt.clientMessageId)).toEqual(body)
+  expect(journal.queuedMessages.get(cardId)?.body).toEqual(body)
+  expect(journal.queuedMessages.get(cardId)).toMatchObject({
+    state: 'dispatched',
+    consumedAs: attempt.clientMessageId
+  })
+}
+
+export function expectOriginalInputOwnership(
+  input: JournalInputSource | undefined,
+  body: AgentJournalMessageItem,
+  original: AgentJournalSubmission
+): void {
+  expect(journalInputSourceBody(input)).toEqual(body)
+  expect(input?.kind === 'submission' ? input.options : input?.submission.options).toEqual(
+    original.options
+  )
+  expect(input?.fence).toBe(original.fence)
 }

@@ -60,6 +60,7 @@ export type JournalSqlResponse =
       id: number
       more: boolean
       valid: boolean
+      steps: number
       elapsed: number
       postcommit?: JournalSqlFailure
     }

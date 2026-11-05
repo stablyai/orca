@@ -1,12 +1,11 @@
 import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
-import { snapshotLatestTurnSteps } from './agent-session-history-latest-turn'
+import { snapshotLatestTurnSteps, snapshotLatestTurn } from './agent-session-history-latest-turn'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult
 } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { snapshotLatestTurn } from './agent-session-history-latest-turn'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 /** Absent projection preserves legacy raw-turn behavior without current prompt IDs. */

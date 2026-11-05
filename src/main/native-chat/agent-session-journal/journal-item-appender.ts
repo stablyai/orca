@@ -1,4 +1,8 @@
-import type { JournalTombstoneInput } from './journal-store-contracts'
+import type {
+  JournalTombstoneInput,
+  JournalAppendResult,
+  JournalItemAppendOptions
+} from './journal-store-contracts'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
@@ -7,7 +11,6 @@ import type {
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalTombstoneRowBuilder, journalItemRowBuilder } from './journal-row-builders'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalAppendResult, JournalItemAppendOptions } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
 import type { JournalAttachmentClaim, journalInputClaimsReceipt } from './journal-submission-hook'

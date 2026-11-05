@@ -1,4 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
+import { settleTestSubscriberDeliveries } from '../../../native-chat/agent-session-wire/agent-session-subscriber-test-support'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -77,6 +78,7 @@ it.each(['snapshot', 'reset', 'batch'] as const)(
       { ...STRUCTURED_MOBILE_CLIENT, clientId: 'reader-phone' },
       { readMachineName: () => '界'.repeat(255) }
     )
+    await settleTestSubscriberDeliveries(subscribers)
     expect(base[0]?.type).toBe(type)
     expect(Buffer.byteLength(JSON.stringify(base[0]), 'utf8')).toBeGreaterThan(540 * 1024)
     expect(responses).toHaveLength(base.length)

@@ -1,4 +1,4 @@
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import type { JournalInputContext } from './journal-input-lineage'
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {

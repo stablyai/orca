@@ -19,6 +19,7 @@ it.each([
 })
 
 it.each([
+  'src/main/runtime/structured-chat-tab-compatibility.test.ts',
   'src/main/runtime/editor-view-layout-apply.test.ts',
   'src/main/runtime/restored-editor-move-restart.test.ts',
   'src/main/runtime/workspaces/persisted-surfaces/sweep-terminal-placement.test.ts'

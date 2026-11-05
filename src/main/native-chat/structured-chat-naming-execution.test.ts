@@ -25,23 +25,30 @@ import {
 async function send(text: string, sessionId = HOST_TEST_SESSION) {
   const body = hostTestMessage(text)
   const mutation = { method: 'agentSession.send', sessionId, fields: { body } }
-  expect(
-    await hostTestState().host.send(CALLER, {
-      body,
-      envelope: envelope(mutation.method, mutation.fields, {
-        sessionId,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint(mutation)
-      })
+  const sent = await hostTestState().host.send(CALLER, {
+    body,
+    envelope: envelope(mutation.method, mutation.fields, {
+      sessionId,
+      payloadFingerprint: computeAgentSessionPayloadFingerprint(mutation)
     })
-  ).toMatchObject({ ok: true })
+  })
+  expect(sent).toMatchObject({ ok: true })
+  if (sent.ok) {
+    await vi.waitFor(async () =>
+      expect(
+        (await hostTestState().host.journalSnapshot(sessionId)).submissions.find(
+          (entry) => entry.clientMessageId === sent.value.clientMessageId
+        )
+      ).toMatchObject({ dispatchState: 'accepted' })
+    )
+  }
 }
 async function clearContext() {
-  expect(
-    await hostTestState().host.conversationCommand(CALLER, {
-      envelope: envelope('agentSession.conversationCommand', { command: 'clear' }),
-      command: 'clear'
-    })
-  ).toMatchObject({ ok: true })
+  const result = await hostTestState().host.conversationCommand(CALLER, {
+    envelope: envelope('agentSession.conversationCommand', { command: 'clear' }),
+    command: 'clear'
+  })
+  expect(result, JSON.stringify(result)).toMatchObject({ ok: true })
 }
 
 function titleChild(title: string) {
@@ -161,7 +168,7 @@ it.each([
   expect(order).toEqual(mode === 'off' ? ['U'] : mode === 'manual' ? ['U', 'B'] : ['U', 'B', 'A'])
   expect(admissions).toHaveBeenCalledTimes(mode === 'manual' || mode === 'off' ? 4 : 5)
   expect(spawn).toHaveBeenCalledTimes(mode === 'off' ? 0 : mode === 'manual' ? 1 : 2)
-  expect(naming.activeSessionIds()).toEqual([])
+  await vi.waitFor(() => expect(naming.activeSessionIds()).toEqual([]))
 })
 
 it.each([10, 100])(
@@ -171,9 +178,7 @@ it.each([10, 100])(
     await attach()
     const sendAndWait = async (text: string) => {
       await send(text)
-      await vi.waitFor(() =>
-        expect(host.readStatusSummary(HOST_TEST_SESSION)?.status).toBe('working')
-      )
+      // The adapter accepts without emitting a running turn; send joins that durable acceptance.
     }
     const clear = async () => {
       await host.cancel(CALLER, {

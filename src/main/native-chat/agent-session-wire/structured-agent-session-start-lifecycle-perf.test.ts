@@ -298,6 +298,8 @@ async function runStarts(count: number) {
       })
       expect(codex.connections).toHaveLength(spawned + (cycle === 'retried' ? 2 : 1))
       await host.flushStreamedEvents(SESSION)
+      await host['tasks'].drainAttaches()
+      await host.collaboratorsForTests().serialize(SESSION, async () => {})
       await vi.advanceTimersByTimeAsync(2_000)
       after[cycle].push(held())
     }

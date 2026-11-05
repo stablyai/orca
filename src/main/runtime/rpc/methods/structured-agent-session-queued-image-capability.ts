@@ -8,10 +8,12 @@ import {
   queuedCardHoldsImage,
   queuedImageSourceIds,
   queuedImageReaderSnapshot,
-  queuedImageReaderSnapshotSteps,
+  queuedImageReaderSnapshotSteps
+} from '../../../native-chat/agent-session-wire/agent-session-queued-image-reader'
+import {
   queuedImageReaderEvent,
   queuedImageReaderEventSteps
-} from '../../../native-chat/agent-session-wire/agent-session-queued-image-reader'
+} from '../../../native-chat/agent-session-wire/agent-session-queued-image-events'
 import { CLIENT_HISTORY_READER } from '../../../native-chat/agent-session-wire/agent-session-item-wire-form'
 import { utf8Head } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
 // Older readers retain the ordinary image source and their supported controls.

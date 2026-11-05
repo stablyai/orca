@@ -22,17 +22,12 @@ import { journalNativeTestInstrumentation } from './journal-native-test-instrume
 
 // Share one connection per test profile to match production host ownership.
 
-import { join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { build } from 'esbuild'
+import { resolve } from 'node:path'
 import { afterAll, beforeEach, vi } from 'vitest'
-import * as workerEntries from '../../worker-threads/worker-thread-entry-path'
+import * as workerThreads from '../../worker-threads/worker-thread-spawn'
 import NativeDatabase from '../../sqlite/sync-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, JournalHostDatabase } from './journal-host-database'
 import { runJournalTransaction } from './journal-database'
-
-import { JournalHostDatabase } from './journal-host-database'
 
 import { restoreJournal, type JournalLoad } from './journal-open'
 
@@ -69,41 +64,22 @@ export function testJournalNativeDatabase(database: JournalHostDatabase): Databa
 
 const opened = new Map<string, TestJournalHostDatabase>()
 const opening = new Map<string, Promise<TestJournalHostDatabase>>()
-let workerBundle: Promise<string> | undefined
-let bundleRoot: string | undefined
-const resolveWorkerEntry = workerEntries.resolveWorkerThreadEntryPath
+const spawnWorker = workerThreads.spawnWorkerThread
 
-async function prepareTestWorker(): Promise<void> {
-  workerBundle ??= (async () => {
-    bundleRoot = await mkdtemp(join(tmpdir(), 'orca-journal-fixture-worker-'))
-    const path = join(bundleRoot, 'journal-sql-worker-entry.cjs')
-    await build({
-      entryPoints: [
-        resolve('src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts')
-      ],
-      outfile: path,
-      bundle: true,
-      platform: 'node',
-      format: 'cjs',
-      logLevel: 'silent',
-      banner: { js: journalNativeTestInstrumentation }
+function prepareTestWorker(): void {
+  const instrumentation = `import { createRequire } from 'node:module';
+    const require = createRequire(process.cwd() + '/journal-fixture.cjs');
+    ${journalNativeTestInstrumentation}`
+  vi.spyOn(workerThreads, 'spawnWorkerThread').mockImplementation((entry, options) =>
+    spawnWorker(entry, {
+      ...options,
+      execArgv: ['--import', `data:text/javascript,${encodeURIComponent(instrumentation)}`]
     })
-    return path
-  })()
-  const path = await workerBundle
-  vi.spyOn(workerEntries, 'resolveWorkerThreadEntryPath').mockImplementation((layout, entry) =>
-    entry === 'journal-sql-worker-entry.js' ? path : resolveWorkerEntry(layout, entry)
   )
 }
 
 beforeEach(prepareTestWorker)
-
-afterAll(async () => {
-  await closeTestJournalHostDatabases()
-  if (bundleRoot) {
-    await rm(bundleRoot, { recursive: true, force: true })
-  }
-})
+afterAll(closeTestJournalHostDatabases)
 
 export async function openTestJournalHostDatabase(
   stateDirectory: string
@@ -118,7 +94,7 @@ export async function openTestJournalHostDatabase(
     return pending
   }
   const task = (async () => {
-    await prepareTestWorker()
+    prepareTestWorker()
     const database = await JournalHostDatabase.open(directory)
     const db = testJournalNativeDatabase(database)
     const fixture = Object.assign(database, {

@@ -122,26 +122,33 @@ export function applyJournalPersistenceEffect(
 /** Guard every candidate against current metadata; scans never authorize deletion by themselves. */
 export function applyJournalMaintenance(
   db: Database.Database,
-  unit: JournalMaintenanceUnit
-): { more: boolean; valid: boolean } {
+  unit: JournalMaintenanceUnit,
+  timing = { started: performance.now(), now: () => performance.now() }
+): { more: boolean; valid: boolean; steps: number } {
   if (unit.kind === 'vacuum') {
-    if (
-      journalPragmaNumber(db, 'auto_vacuum') !== 2 ||
-      journalPragmaNumber(db, 'freelist_count') === 0
-    ) {
-      return { more: false, valid: true }
+    let before = journalPragmaNumber(db, 'freelist_count')
+    if (journalPragmaNumber(db, 'auto_vacuum') !== 2 || before === 0) {
+      return { more: false, valid: true, steps: 0 }
     }
-    const before = journalPragmaNumber(db, 'freelist_count')
-    db.pragma('incremental_vacuum(1)')
-    const after = journalPragmaNumber(db, 'freelist_count')
-    return { more: after > 0 && after < before, valid: true }
+    let steps = 0
+    const limit = Math.min(32, unit.pages)
+    while (steps < limit && (steps === 0 || timing.now() - timing.started < 8)) {
+      db.pragma('incremental_vacuum(1)')
+      steps++
+      const after = journalPragmaNumber(db, 'freelist_count')
+      if (after === 0 || after >= before) {
+        return { more: false, valid: true, steps }
+      }
+      before = after
+    }
+    return { more: before > 0, valid: true, steps }
   }
   if (unit.kind === 'retired') {
     const identity = db
       .prepare('SELECT session_id, epoch FROM journal_outcome_generations WHERE generation = ?')
       .get(unit.generation)
     if (typeof identity?.session_id !== 'string' || typeof identity.epoch !== 'string') {
-      return { more: false, valid: false }
+      return { more: false, valid: false, steps: 0 }
     }
     const current = db
       .prepare('SELECT epoch, generation FROM journal_outcome_epochs WHERE session_id = ?')
@@ -153,7 +160,7 @@ export function applyJournalMaintenance(
         current.epoch === identity.epoch ||
         current.generation === unit.generation)
     ) {
-      return { more: false, valid: false }
+      return { more: false, valid: false, steps: 0 }
     }
     const remove = db.prepare('DELETE FROM journal_outcomes WHERE generation = ? AND rowid = ?')
     for (const row of unit.rows) {
@@ -168,7 +175,7 @@ export function applyJournalMaintenance(
         unit.generation
       )
     }
-    return { more, valid: true }
+    return { more, valid: true, steps: 0 }
   }
   const { active } = unit
   let source
@@ -180,7 +187,7 @@ export function applyJournalMaintenance(
       (error instanceof AgentSessionJournalError &&
         (error.code === 'journal_read_only' || error.code === 'journal_row_rejected'))
     ) {
-      return { more: false, valid: false }
+      return { more: false, valid: false, steps: 0 }
     }
     throw error
   }
@@ -190,7 +197,7 @@ export function applyJournalMaintenance(
     source.prefix !== active.prefix ||
     source.through < active.through
   ) {
-    return { more: false, valid: false }
+    return { more: false, valid: false, steps: 0 }
   }
   const first = db.prepare(
     'SELECT seq FROM journal_outcomes WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq LIMIT 1'
@@ -203,7 +210,7 @@ export function applyJournalMaintenance(
   )
   for (const row of unit.rows) {
     if (!admitsJournalOutcome(row.format, row.field, row.key)) {
-      return { more: false, valid: false }
+      return { more: false, valid: false, steps: 0 }
     }
     if (row.deleted !== 0 || row.field === 'tombstones' || row.field === 'removedTurnIds') {
       continue
@@ -214,5 +221,5 @@ export function applyJournalMaintenance(
       remove.run(active.generation, row.seq, row.field, row.key, row.format)
     }
   }
-  return { more: true, valid: true }
+  return { more: true, valid: true, steps: 0 }
 }

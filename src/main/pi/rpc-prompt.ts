@@ -64,9 +64,7 @@ function imageMime(bytes: Uint8Array): string | null {
   }
   if (
     bytes.length >= 6 &&
-    Buffer.from(bytes.subarray(0, 6))
-      .toString('ascii')
-      .match(/^GIF8[79]a$/)
+    /^GIF8[79]a$/.test(Buffer.from(bytes.subarray(0, 6)).toString('ascii'))
   ) {
     return 'image/gif'
   }

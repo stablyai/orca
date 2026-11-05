@@ -25,11 +25,11 @@ export async function vacuumJournalPage(
     remainingPages.delete(database)
     return false
   }
-  const result = await database.maintenance({ kind: 'vacuum' })
+  const result = await database.maintenance({ kind: 'vacuum', pages: remaining })
   charge(result.elapsed)
-  const more = result.valid && result.more && remaining > 1
+  const more = result.valid && result.more && remaining > result.steps
   if (more) {
-    remainingPages.set(database, remaining - 1)
+    remainingPages.set(database, remaining - result.steps)
   } else {
     remainingPages.delete(database)
   }

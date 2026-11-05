@@ -59,11 +59,11 @@ export async function countChatFailureOperations(
   const store = await openTestAgentSessionRecordStore(stateDirectory)
   const counts = emptyCounts()
   const runningTurns: (string | null)[] = []
-  const runningTurn = liveTurn.runningStructuredAgentSessionTurnItemBySequence
-  vi.spyOn(liveTurn, 'runningStructuredAgentSessionTurnItemBySequence').mockImplementation(
-    (items) => {
+  const runningTurn = liveTurn.runningStructuredAgentSessionTurnItemBySequenceSteps
+  vi.spyOn(liveTurn, 'runningStructuredAgentSessionTurnItemBySequenceSteps').mockImplementation(
+    function* (items) {
       counts.runningTurnScans++
-      const result = runningTurn({
+      const result = yield* runningTurn({
         *[Symbol.iterator]() {
           for (const item of items) {
             counts.runningTurnItems++
@@ -90,8 +90,8 @@ export async function countChatFailureOperations(
   vi.spyOn(lineage, 'readAgentSessionRecordStore').mockReturnValue(
     lineage.conversationRecordReader(store)
   )
-  const visit = journal.visitItems.bind(journal)
-  vi.spyOn(journal, 'visitItems').mockImplementation((callback) =>
+  const visit = journal.visitItemSteps.bind(journal)
+  vi.spyOn(journal, 'visitItemSteps').mockImplementation((callback) =>
     visit((...args) => {
       counts.baselineItems++
       callback(...args)

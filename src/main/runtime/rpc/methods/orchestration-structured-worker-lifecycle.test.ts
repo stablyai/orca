@@ -68,6 +68,7 @@ function installHost(options: {
         )
   let closed = false
   hostRef.current = {
+    flushStreamedEvents: async () => {},
     deps: {
       logger: { warn: vi.fn() },
       store: { getConversation: () => (record ? agentSessionConversationView(record) : null) }

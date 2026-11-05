@@ -203,6 +203,13 @@ export class AgentSessionStoreTransactions {
     }
   }
 
+  /** Inspect committed state after earlier admitted mutations, without admitting a native write. */
+  readInOrder<T>(read: () => T): Promise<T> {
+    const result = this.queue.then(read)
+    this.queue = result.catch(() => {})
+    return result
+  }
+
   /** Commit a receipt separately when its command made no journal write. */
   commitReceipt(receipt: JournalOperationReceipt): Promise<void> {
     const run = this.queue.then(() =>

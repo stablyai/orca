@@ -6,11 +6,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  CodexAppServerConnection,
-  CodexAppServerConnectionHandlers
-} from '../../codex/app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from '../../codex/app-server/codex-app-server-connection'
+import {
+  fakeCodex,
+  type CodexScript
+} from './structured-agent-session-integration-codex.test-fixture'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../ipc/desktop-renderer-runtime-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-create-capabilities'
@@ -61,101 +60,6 @@ const CLIENT = {
   clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES.filter(
     (capability) => capability !== AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
   )
-}
-
-type CodexScript = {
-  connections: FakeConnection[]
-  openConnection: typeof openCodexAppServerConnection
-  live: () => FakeConnection
-  notify: (method: string, params: unknown) => void
-  ask: (id: number, method: string, params: unknown) => void
-}
-
-// `closed` is readonly on the real connection; the fake flips it so the test can
-// see the takeover reap the previous child.
-type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
-  closed: boolean
-  handlers: CodexAppServerConnectionHandlers
-  calls: { method: string; params?: Record<string, unknown> }[]
-  replies: { id: number | string; result?: unknown; code?: number }[]
-  resumedThreadId: string | null
-  launch: Parameters<typeof openCodexAppServerConnection>[0]
-}
-
-function fakeCodex(): CodexScript {
-  const connections: FakeConnection[] = []
-  const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
-    const connection: FakeConnection = {
-      launch,
-      handlers,
-      calls: [],
-      replies: [],
-      resumedThreadId: null,
-      pid: 4321,
-      closed: false,
-      get closeResult(): CodexAppServerConnection['closeResult'] {
-        return connection.closed ? { root: 'exited', tree: 'exited' } : null
-      },
-      request: async (method, params) => {
-        connection.calls.push({ method, params })
-        if (method === 'thread/goal/get') {
-          return { goal: null }
-        }
-        if (method === 'thread/start') {
-          return { thread: { id: THREAD, path: '/rollouts/integration.jsonl' } }
-        }
-        if (method === 'thread/resume') {
-          connection.resumedThreadId = (params as { threadId: string }).threadId
-          return { thread: { id: connection.resumedThreadId } }
-        }
-        if (method === 'turn/start') {
-          return { turn: { id: TURN } }
-        }
-        if (method === 'model/list') {
-          return {
-            data: [
-              {
-                model: 'gpt-live',
-                displayName: 'GPT Live',
-                hidden: false,
-                supportedReasoningEfforts: [
-                  { reasoningEffort: 'medium', description: 'Balanced' },
-                  { reasoningEffort: 'high', description: 'Deep reasoning' }
-                ],
-                defaultReasoningEffort: 'medium',
-                isDefault: true
-              }
-            ],
-            nextCursor: null
-          }
-        }
-        return {}
-      },
-      notify: () => {},
-      respond: (id, result) => connection.replies.push({ id, result }),
-      respondWithError: (id, code) => connection.replies.push({ id, code }),
-      close: async () => {
-        connection.closed = true
-        return true
-      }
-    }
-    connections.push(connection)
-    return connection
-  }
-  const live = (): FakeConnection => {
-    const connection = connections.at(-1)
-    if (!connection) {
-      throw new Error('no codex app-server has been opened')
-    }
-    return connection
-  }
-  return {
-    connections,
-    openConnection,
-    live,
-    notify: (method, params) => live().handlers.onNotification?.(method, params),
-    ask: (id, method, params) => live().handlers.onServerRequest?.({ id, method, params })
-  }
 }
 
 let operations = 0
@@ -312,7 +216,7 @@ async function readKnownOptions(): Promise<RpcResponse> {
 beforeEach(async () => {
   operations = 0
   root = await mkdtemp(join(tmpdir(), 'orca-structured-integration-'))
-  codex = fakeCodex()
+  codex = fakeCodex(THREAD, TURN)
   bootEnvironmentReads = 0
   codexOverrideReads = 0
   configuredCodexProfile = 'configured'
@@ -595,6 +499,9 @@ describe('a structured codex session over agentSession.*', () => {
       availableDecisions: ['accept', 'decline']
     })
     await drainStreamedEvents()
+    await vi.waitFor(() =>
+      expect(itemsOf(stream).find((item) => item.body?.kind === 'approval')).toBeDefined()
+    )
     const approval = itemsOf(stream).find((item) => item.body?.kind === 'approval')
     expect(approval?.body).toMatchObject({ title: 'Run a command?', detail: 'ls -la' })
 
@@ -639,7 +546,7 @@ describe('a structured codex session over agentSession.*', () => {
     await drainStreamedEvents()
 
     const missed = await subscribe('sub-2', lastCursor)
-    expect(missed[0]?.type).toBe('batch')
+    await vi.waitFor(() => expect(missed[0]?.type).toBe('batch'))
     expect(
       itemsOf(missed).some(
         (item) => item.body?.kind === 'tool-call' && item.body.state === 'failed'
@@ -752,12 +659,6 @@ describe('a structured codex session over agentSession.*', () => {
     })
     await drainStreamedEvents()
 
-    codex.notify('item/agentMessage/delta', {
-      threadId: THREAD,
-      turnId: TURN,
-      itemId: 'item-final',
-      delta: 'Final text before shutdown.'
-    })
     const host = getStructuredAgentSessionHost()
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
@@ -769,6 +670,13 @@ describe('a structured codex session over agentSession.*', () => {
       appendEntered.resolve()
       await appendGate.promise
       return originalAppend(...args)
+    })
+
+    codex.notify('item/agentMessage/delta', {
+      threadId: THREAD,
+      turnId: TURN,
+      itemId: 'item-final',
+      delta: 'Final text before shutdown.'
     })
 
     let stopped = false
@@ -819,6 +727,9 @@ describe('a structured codex session over agentSession.*', () => {
     const item = snapshot?.items.find((candidate) => candidate.body?.kind === 'tool-call')
     const bounded = item?.body?.kind === 'tool-call' ? item.body.output : undefined
     expect(bounded).toMatchObject({ head: output, truncated: false, byteLength: output.length })
+    await vi.waitFor(() =>
+      expect(itemsOf(stream).find((candidate) => candidate.itemId === item?.itemId)).toBeDefined()
+    )
     const published = itemsOf(stream).find((candidate) => candidate.itemId === item?.itemId)
     expect(published?.shortened).toBe(true)
     expect(published?.body).toMatchObject({

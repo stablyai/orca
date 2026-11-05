@@ -13,10 +13,6 @@ import { compareAgentJournalItems } from '../../../shared/agent-session/journal/
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { journalRenderItem } from '../agent-session-journal/journal-render-item'
 import { readPublishedQueuedMessageSteps } from './structured-agent-session-queued-publication'
-export {
-  queuedImageReaderEvent,
-  queuedImageReaderEventSteps
-} from './agent-session-queued-image-events'
 
 export const queuedCardHoldsImage = (card: Pick<AgentSessionQueuedMessage, 'body'>): boolean =>
   card.body.blocks.some((block) => block.type === 'image-ref')

@@ -108,7 +108,7 @@ export async function sweepJournalOutcomePage(
 export type JournalPace = {
   charge: (ms: number) => void
   work: <T>(unit: () => T) => T
-  rest: () => Promise<void>
+  rest: (settle?: boolean) => Promise<void>
 }
 
 /** A 10% duty cycle for background deletion only: a chat open or a send is never charged. */
@@ -129,8 +129,8 @@ export function createJournalPace(
         worked += now() - start
       }
     },
-    async rest(): Promise<void> {
-      const ms = worked >= 25 ? worked * 9 : 0
+    async rest(settle = false): Promise<void> {
+      const ms = settle || worked >= 25 ? worked * 9 : 0
       if (ms > 0) {
         worked = 0
       }
@@ -179,8 +179,7 @@ export class JournalOutcomeSweeper {
   private async run(): Promise<void> {
     for (const page of [
       (database: SweptDatabase) => sweepJournalOutcomePage(database, this.pace.charge),
-      (database: SweptDatabase) => this.compaction.page(database, this.pace.charge),
-      (database: SweptDatabase) => vacuumJournalPage(database, this.pace.charge)
+      (database: SweptDatabase) => this.compaction.page(database, this.pace.charge)
     ]) {
       for (;;) {
         const database = this.current()
@@ -193,7 +192,18 @@ export class JournalOutcomeSweeper {
           break
         }
       }
-      await this.pace.rest()
+      await this.pace.rest(true)
+    }
+    for (;;) {
+      const database = this.current()
+      if (!database) {
+        return
+      }
+      const more = await vacuumJournalPage(database)
+      await (this.deps.delay ?? delay)(0)
+      if (!more) {
+        break
+      }
     }
   }
 

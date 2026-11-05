@@ -1,19 +1,23 @@
 import type Database from '../../sqlite/sync-database'
 import type { JournalReadConnection } from './journal-sql-owner'
-import { finishJournalStepsAsync } from './journal-reconstruction-steps'
+import {
+  yieldJournalHost,
+  finishJournalStepsAsync,
+  finishJournalSteps,
+  sortJournalSteps
+} from './journal-reconstruction-steps'
 import {
   LEGACY_QUEUED_MESSAGE_COLUMNS,
   readStoredQueuedMessageRow
 } from './queued-message-stored-row'
 import { dispatchWasWithdrawn } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { finishJournalSteps, sortJournalSteps } from './journal-reconstruction-steps'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDispatchRowApplies, queuedHandOffInDoubt } from './journal-dispatch-settlement'
 import type { JournalQueuedChange } from './journal-queue-events'
 import { queuedCardFromChange } from './journal-queue-fold'
 import { queuedChangeOf } from './journal-queue-retention'
 import type { JournalReducerState } from './journal-reducer'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './journal-input-order-owner'
 import {
   QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED,
   type QueuedMessageRow
@@ -141,7 +145,7 @@ export async function readLegacyRowsAsync(
         rows.push(stored)
       }
     }
-    await new Promise<void>((resolve) => setImmediate(resolve))
+    await yieldJournalHost()
   }
   return rows
 }
