@@ -534,6 +534,7 @@ function normalized(value: string): string {
     .split(process.cwd())
     .join('<repo>')
     .replace(/(acp-temp[\\/]\w+[\\/]run-)\w+/, '$1<random>')
+    .replace(/(probes[\\/])\d+-[\w-]+/, '$1<pid>-<random>')
 }
 
 /** Keys whose value is the installed SDK's own, which a dependency bump changes. */
