@@ -22,8 +22,8 @@ import { buildClaudeUsageProjectionIntegrity } from './transcript-projection-int
 import { addLongContext } from './claude-billable-tokens'
 import { longContextTurnTokens } from './claude-model-pricing'
 
-/** Bump when a change to projected rows needs saved files reparsed (v2: long-context subsets). */
-export const CLAUDE_USAGE_PROJECTION_VERSION = 2
+/** Bump when projected semantics change (v3: cross-file category maxima). */
+export const CLAUDE_USAGE_PROJECTION_VERSION = 3
 
 function maximaTotals(row: Readonly<ClaudeUsageTokenMaxima>): ClaudeUsageTokenTotals {
   return {
@@ -114,11 +114,13 @@ function restoreEncounterOrder(
   return ordered
 }
 
+/** Projects one transcript; onProjected exposes its reconciler and whether prior maxima survived. */
 export async function projectClaudeUsageScanFile(
   read: ClaudeUsageScanFile,
   worktreeLookup: Map<string, ClaudeUsageWorktreeRef>,
   claimKey: (key: string) => boolean,
-  previous?: ClaudeUsagePersistedFile
+  previous?: ClaudeUsagePersistedFile,
+  onProjected?: (reconcile: ClaudeUsageTokenReconciler, retainsPreviousMaxima: boolean) => void
 ): Promise<ClaudeUsagePersistedFile> {
   const retained = read.resumed ? previous : undefined
   const sessions = new Map<string, ClaudeUsageSession>()
@@ -181,6 +183,8 @@ export async function projectClaudeUsageScanFile(
     ),
     ownedDedupeKeys: owned.ownedDedupeKeys,
     hasDeferredClaims,
+    hasCrossFileCorrections: retained?.hasCrossFileCorrections ?? false,
+    ownedTokenDigest: owned.digest()!,
     projectionVersion: CLAUDE_USAGE_PROJECTION_VERSION,
     parseResumeState: read.checkpoint
       ? {
@@ -194,5 +198,45 @@ export async function projectClaudeUsageScanFile(
   if (projected.parseResumeState) {
     projected.parseResumeState.projectionIntegrity = buildClaudeUsageProjectionIntegrity(projected)
   }
+  onProjected?.(
+    createClaudeUsageTokenReconciler(projected, owned),
+    read.resumed ||
+      Boolean(
+        previous?.ownedTokenDigest &&
+        owned.digest(previous.ownedDedupeKeys) === previous.ownedTokenDigest
+      )
+  )
   return projected
+}
+
+export type ClaudeUsageTokenReconciler = (turns: ClaudeUsageParsedSourceTurn[]) => void
+
+/** Raises an owner's maxima from another file's copies of its turns and re-totals the projection. */
+export function createClaudeUsageTokenReconciler(
+  file: ClaudeUsagePersistedFile,
+  owned = createClaudeUsageTokenCheckpoint(file)
+): ClaudeUsageTokenReconciler {
+  return (turns) => {
+    const sessions = new Map<string, ClaudeUsageSession>()
+    const daily = new Map<string, ClaudeUsageDailyAggregate>()
+    mergeClaudeSessions(sessions, file.sessions)
+    mergeClaudeDailyAggregates(daily, file.dailyAggregates)
+    for (const turn of turns) {
+      if (!turn.dedupeKey || !owned.find(turn.dedupeKey)) {
+        continue
+      }
+      const correction = owned.increase(turn.dedupeKey, turn)
+      if (correction) {
+        applyTokenCorrection(correction, sessions, daily)
+        file.hasCrossFileCorrections = true
+      }
+    }
+    file.sessions = finalizeClaudeSessions(sessions)
+    file.dailyAggregates = [...daily.values()]
+    file.ownedTokenDigest = owned.digest()!
+    if (file.parseResumeState) {
+      file.parseResumeState = { ...file.parseResumeState, ...owned.finish() }
+      file.parseResumeState.projectionIntegrity = buildClaudeUsageProjectionIntegrity(file)
+    }
+  }
 }

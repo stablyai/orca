@@ -4,6 +4,7 @@ import type { ClaudeUsagePersistedFile } from './types'
 const HASH_CHUNK_CHARACTERS = 16_384
 export const CLAUDE_USAGE_VALIDATION_BATCH_ROWS = 1024
 
+/** Yields between batches while hashing a projection so tampered or stale caches reparse. */
 export function* iterateClaudeUsageProjectionIntegrity(
   file: ClaudeUsagePersistedFile
 ): Generator<void, string> {
@@ -51,6 +52,12 @@ export function* iterateClaudeUsageProjectionIntegrity(
     file.ownedDedupeKeys.length,
     state.ownedTokenMaxima.length
   ])
+  if (file.hasCrossFileCorrections) {
+    append(['cross-file-corrections', true])
+  }
+  if (file.ownedTokenDigest !== undefined) {
+    append(['owned-token-digest', file.ownedTokenDigest])
+  }
   for (let index = 0; index < file.ownedDedupeKeys.length; index++) {
     append([file.ownedDedupeKeys[index], state.ownedTokenMaxima[index]])
     if ((index + 1) % CLAUDE_USAGE_VALIDATION_BATCH_ROWS === 0) {

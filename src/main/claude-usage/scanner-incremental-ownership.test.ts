@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedFile } from './types'
+import { readClaudeUsageSourceCache, writeClaudeUsageSourceCache } from './persisted-source-cache'
 import type { ClaudeUsageWorktreeRef } from './worktree-attribution'
 
 const { homedirMock, streamReads } = vi.hoisted(() => {
@@ -696,4 +697,144 @@ describe('Claude usage append ownership', () => {
       ])
     }
   )
+
+  it.each(['small', 'resumable'])('retains fuller fork maxima with a %s owner', async (size) => {
+    const ownerPath = join(projectDir, 'aaaa-owner.jsonl')
+    const forkPath = join(projectDir, 'zzzz-fork.jsonl')
+    const partial = {
+      inputTokens: 2,
+      outputTokens: 10,
+      cacheReadTokens: 81_365,
+      cacheWriteTokens: 1_336
+    }
+    const prefix = size === 'resumable' ? largePrefix() : ''
+    await writeFile(ownerPath, prefix + assistantRow('shared', partial))
+    await writeFile(forkPath, prefix + assistantRow('shared', partial))
+    const scan = await scanner()
+    const first = await scan()
+    const snapshot = structuredClone(first)
+    await appendFile(forkPath, assistantRow('shared', { ...partial, outputTokens: 3_080 }))
+    const appended = await scan(first.processedFiles)
+    expect(first).toEqual(snapshot)
+    const cold = await scan()
+    const ref = {
+      path: join(root, 'isolated-sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: '[]',
+      reuse: true
+    }
+    await writeClaudeUsageSourceCache(ref, appended.processedFiles)
+    const persisted = await readClaudeUsageSourceCache(ref)
+    const restarted = await scan(persisted.sources)
+    for (const result of [appended, cold, await scan(appended.processedFiles), restarted]) {
+      expect.soft(result.sessions).toHaveLength(1)
+      expect.soft(result.sessions[0]).toMatchObject({
+        sessionId: 'owner-session',
+        turnCount: 1,
+        totalInputTokens: 2,
+        totalOutputTokens: 3_080,
+        totalCacheReadTokens: 81_365,
+        totalCacheWriteTokens: 1_336
+      })
+    }
+  })
+
+  it.each(['small', 'resumable'])(
+    'retains independent categories and owner attribution after rebuilding a corrected %s owner',
+    async (size) => {
+      const ownerPath = join(projectDir, 'aaaa-owner.jsonl')
+      const forkPath = join(projectDir, 'zzzz-fork.jsonl')
+      const prefix = size === 'resumable' ? largePrefix() : ''
+      const owner = assistantRow('shared', {
+        model: 'claude-sonnet-4-5',
+        inputTokens: 100,
+        cacheWriteTokens: 20
+      })
+      await writeFile(ownerPath, prefix + owner)
+      await writeFile(
+        forkPath,
+        prefix +
+          assistantRow('shared', {
+            sessionId: 'fork-session',
+            cwd: worktrees[1].path,
+            timestamp: '2026-10-10T12:00:00.000Z',
+            inputTokens: 2,
+            outputTokens: 7,
+            cacheReadTokens: 200_000,
+            cacheWriteTokens: 10,
+            cacheWrite1hTokens: 10
+          })
+      )
+      const scan = await scanner()
+      const first = await scan()
+      await writeFile(
+        ownerPath,
+        prefix + owner + assistantRow('new', { model: 'claude-sonnet-4-5', inputTokens: 3 })
+      )
+      const rebuilt = await scan(first.processedFiles)
+      expect(rebuilt.sessions[0]).toMatchObject({
+        sessionId: 'owner-session',
+        turnCount: 2,
+        totalInputTokens: 103,
+        totalOutputTokens: 7,
+        totalCacheReadTokens: 200_000,
+        totalCacheWriteTokens: 20,
+        totalCacheWrite1hTokens: 10,
+        primaryWorktreeId: 'worktree-a'
+      })
+      expect(rebuilt.dailyAggregates[0]).toMatchObject({
+        day: '2026-10-09',
+        turnCount: 2,
+        zeroCacheReadTurnCount: 1,
+        longContext: {
+          inputTokens: 100,
+          outputTokens: 7,
+          cacheReadTokens: 200_000,
+          cacheWriteTokens: 20,
+          cacheWrite1hTokens: 10
+        }
+      })
+      streamReads.length = 0
+      const noop = await scan(rebuilt.processedFiles)
+      expect(streamReads).toEqual([])
+      await rm(ownerPath)
+      const reclaimed = await scan(noop.processedFiles)
+      expect(reclaimed.sessions).toEqual((await scan()).sessions)
+      expect(reclaimed.sessions[0]).toMatchObject({
+        sessionId: 'fork-session',
+        turnCount: 1,
+        totalInputTokens: 2,
+        totalOutputTokens: 7,
+        totalCacheWriteTokens: 10
+      })
+    }
+  )
+
+  it('reparses a persisted v2 rejected-claim projection on supported refresh', async () => {
+    const ownerPath = join(projectDir, 'aaaa-owner.jsonl')
+    const forkPath = join(projectDir, 'zzzz-fork.jsonl')
+    await writeFile(ownerPath, largePrefix() + assistantRow('shared', { outputTokens: 10 }))
+    await writeFile(forkPath, largePrefix() + assistantRow('shared', { outputTokens: 3080 }))
+    const { readClaudeUsageScanFile } = await import('./transcript-record-parser')
+    const { projectClaudeUsageScanFile } = await import('./transcript-usage-projection')
+    const old: ClaudeUsagePersistedFile[] = []
+    for (const path of [ownerPath, forkPath]) {
+      const file = await projectClaudeUsageScanFile(
+        await readClaudeUsageScanFile(path),
+        new Map(),
+        () => path === ownerPath
+      )
+      old.push({ ...file, projectionVersion: 2 })
+    }
+    const ref = {
+      path: join(root, 'v2-sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: '[]',
+      reuse: true
+    }
+    await writeClaudeUsageSourceCache(ref, old)
+    const scan = await scanner()
+    const recovered = await scan((await readClaudeUsageSourceCache(ref)).sources)
+    expect(recovered.sessions[0]).toMatchObject({ turnCount: 1, totalOutputTokens: 3080 })
+  })
 })
