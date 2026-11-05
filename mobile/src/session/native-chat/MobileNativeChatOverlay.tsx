@@ -133,10 +133,14 @@ export function MobileNativeChatOverlay({
     [itemSource, fullContent.detail, load]
   )
   const setComposerText = controller.setChatComposerText
+  const composerInputRef = composerTray.composerInputRef
   const quoteInComposer = useCallback(
-    (text: string) =>
-      setComposerText((draft) => appendReturnedDraftText(draft, formatNativeChatQuote(text))),
-    [setComposerText]
+    (text: string) => {
+      setComposerText((draft) => appendReturnedDraftText(draft, formatNativeChatQuote(text)))
+      // Next frame, so the quote is in the field and typing lands below it.
+      requestAnimationFrame(() => composerInputRef?.current?.focus())
+    },
+    [setComposerText, composerInputRef]
   )
   const queuedComposerContext = useMemo(
     () => ({
