@@ -123,20 +123,6 @@ export function getWorkerTerminalResourceByHandle(
     .get(terminalHandle) as WorkerTerminalResourceRow | undefined
 }
 
-/** The pane's newest custody row; its owner is the worker the pane holds now. */
-export function getWorkerTerminalResourceByPane(
-  this: OrchestrationDb,
-  paneKey: string
-): WorkerTerminalResourceRow | undefined {
-  const row = this.db
-    .prepare(
-      'SELECT * FROM worker_terminal_resources WHERE pane_key = ? ORDER BY rowid DESC LIMIT 1'
-    )
-    .get(paneKey)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
-  return row as WorkerTerminalResourceRow | undefined
-}
-
 export function getWorkerTerminalResourceByProcessIncarnation(
   this: OrchestrationDb,
   processIncarnation: string
@@ -289,7 +275,6 @@ export type WorkerTerminalResourceStoreMethods = {
   createWorkerTerminalResourceStatement: typeof createWorkerTerminalResourceStatement
   getWorkerTerminalResource: typeof getWorkerTerminalResource
   getWorkerTerminalResourceByHandle: typeof getWorkerTerminalResourceByHandle
-  getWorkerTerminalResourceByPane: typeof getWorkerTerminalResourceByPane
   getWorkerTerminalResourceByProcessIncarnation: typeof getWorkerTerminalResourceByProcessIncarnation
   getWorkerTerminalResourceByOwner: typeof getWorkerTerminalResourceByOwner
   getWorkerTerminalResourceFormerlyOwnedBy: typeof getWorkerTerminalResourceFormerlyOwnedBy
@@ -305,7 +290,6 @@ export function attachWorkerTerminalResourceStore(ctor: { prototype: object }): 
     createWorkerTerminalResourceStatement,
     getWorkerTerminalResource,
     getWorkerTerminalResourceByHandle,
-    getWorkerTerminalResourceByPane,
     getWorkerTerminalResourceByProcessIncarnation,
     getWorkerTerminalResourceByOwner,
     getWorkerTerminalResourceFormerlyOwnedBy,

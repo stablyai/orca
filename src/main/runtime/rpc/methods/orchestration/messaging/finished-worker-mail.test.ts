@@ -171,9 +171,10 @@ describe('a worker after its worker_done', () => {
   })
 
   const PANE = 'tab_worker:leaf_worker'
+  const SECOND = '2026-11-05 07:00:00'
 
-  // A remote worker this host ran in the pane, settled, holding the pane's custody from now.
-  function finishRemoteWorker(db: OrchestrationDb): string {
+  // A remote worker this host ran in the pane's process, settled, started in SECOND.
+  function finishRemoteWorker(db: OrchestrationDb, processIncarnation: string): void {
     db.createRemoteDispatchAttachment({
       dispatchId: 'ctx_remote',
       runId: 'run_home',
@@ -191,22 +192,22 @@ describe('a worker after its worker_done', () => {
     db.prepareRemoteAttachmentAuthority({
       dispatchId: 'ctx_remote',
       paneKey: PANE,
-      processIncarnation: 'runtime_test:term_worker:1',
+      processIncarnation,
       worktreeId: 'folder_workspace',
       terminalHandle: 'term_worker',
       setupState: 'not_applicable',
       effects: []
     })
-    holdPane(db, 'ctx_remote')
     db.markRemoteAttachmentReady('ctx_remote')
     db.settleRemoteAttachmentInRelayTransaction('ctx_remote', 'succeeded')
-    return db.getRemoteDispatchAttachment('ctx_remote')?.created_at ?? ''
+    db.db.prepare('UPDATE remote_dispatch_attachments SET created_at = ?').run(SECOND)
   }
 
-  // A local worker this host ran in the pane, finished, created in the given second.
+  // A local worker this host ran in the pane's process, finished, started at createdAt.
   async function finishLocalWorker(
     db: OrchestrationDb,
     ctx: RpcContext,
+    processIncarnation: string,
     createdAt: string
   ): Promise<string> {
     const run = db.createRun({
@@ -215,8 +216,14 @@ describe('a worker after its worker_done', () => {
       coordinatorPaneKey: null
     })
     const task = db.createTask({ spec: 'local work', runId: run.id })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker', PANE)
-    holdPane(db, dispatch.id)
+    const dispatch = createRootDispatch(
+      db,
+      task.id,
+      'term_worker',
+      PANE,
+      undefined,
+      processIncarnation
+    )
     await harness.call(
       'orchestration.send',
       {
@@ -233,23 +240,13 @@ describe('a worker after its worker_done', () => {
     return run.id
   }
 
-  function holdPane(db: OrchestrationDb, dispatchId: string): void {
-    db.createWorkerTerminalResourceStatement({
-      dispatchId,
-      worktreeId: 'folder_workspace',
-      terminalHandle: 'term_worker',
-      paneKey: PANE,
-      processIncarnation: null,
-      ownership: 'external'
-    })
-  }
-
   it('tells a finished worker on a paired host that its coordinator is out of reach', async () => {
     const { db, runtime, ctx } = harness.setup(false)
-    finishRemoteWorker(db)
+    finishRemoteWorker(db, 'runtime_test:term_worker:1')
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
       handle === 'term_worker' ? PANE : null
     )
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:1')
 
     for (const [method, params] of [
       ['orchestration.send', { subject: 'Later' }],
@@ -262,23 +259,41 @@ describe('a worker after its worker_done', () => {
     }
   })
 
-  // Both started in the same second, so only the pane's custody can tell which came last.
-  it('lets whichever worker the pane holds now speak for it, local or remote', async () => {
+  it('speaks for the worker whose process the pane runs, then the one that started last', async () => {
     const { db, runtime, ctx } = harness.setup(false)
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
       handle === 'term_worker' ? PANE : null
     )
+    const runs = vi.mocked(runtime.getTerminalProcessIncarnation)
     const send = () =>
       harness.call('orchestration.send', { from: 'term_worker', subject: 'Later' }, ctx)
+    const ask = () =>
+      harness.call(
+        'orchestration.ask',
+        { from: 'term_worker', question: 'More?', wait: false },
+        ctx
+      )
 
-    const localRun = await finishLocalWorker(db, ctx, '2026-11-05 07:00:00')
-    finishRemoteWorker(db)
-    db.db.prepare("UPDATE remote_dispatch_attachments SET created_at = '2026-11-05 07:00:00'").run()
+    // A remote worker that took over a local worker's process in the same second is the one speaking.
+    runs.mockReturnValue('runtime_test:term_worker:1')
+    await finishLocalWorker(db, ctx, 'runtime_test:term_worker:1', SECOND)
+    finishRemoteWorker(db, 'runtime_test:term_worker:1')
     await expect(send()).rejects.toMatchObject({ code: 'run_home_unreachable' })
+    await expect(ask()).rejects.toMatchObject({ code: 'run_home_unreachable' })
 
-    const laterRun = await finishLocalWorker(db, ctx, '2026-11-05 07:00:00')
-    expect(laterRun).not.toBe(localRun)
-    await expect(send()).resolves.toMatchObject({ message: { to_handle: `run:${laterRun}` } })
+    // A local worker given that process later speaks for it.
+    const later = await finishLocalWorker(
+      db,
+      ctx,
+      'runtime_test:term_worker:1',
+      '2026-11-05 07:00:01'
+    )
+    await expect(send()).resolves.toMatchObject({ message: { to_handle: `run:${later}` } })
+
+    // A new process is not the remote worker, whatever the start times say.
+    runs.mockReturnValue('runtime_test:term_worker:2')
+    const fresh = await finishLocalWorker(db, ctx, 'runtime_test:term_worker:2', SECOND)
+    await expect(send()).resolves.toMatchObject({ message: { to_handle: `run:${fresh}` } })
   })
 
   it('takes only the chat session that finished for the finished worker', async () => {

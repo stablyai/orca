@@ -124,7 +124,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         })
       }
 
-      refuseFinishedRemoteWorker(db, { address: from, paneKey: senderPaneKey }, params.to)
+      refuseFinishedRemoteWorker(db, { ...sender, processIncarnation }, params.to)
       const runGroup =
         params.to && isGroupAddress(params.to) && !params.to.toLowerCase().startsWith('@worktree:')
       // Run groups validate their own audience; message scope cannot select a parent Dispatch.

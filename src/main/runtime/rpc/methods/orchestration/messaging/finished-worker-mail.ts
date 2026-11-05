@@ -1,6 +1,9 @@
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
-import type { DispatchContextRow } from '../../../../orchestration/types'
+import type {
+  DispatchContextRow,
+  RemoteDispatchAttachmentRow
+} from '../../../../orchestration/types'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 import { reportCorrectsUnobservedPrompt } from '../../../../orchestration/worker-report-admission'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
@@ -10,8 +13,32 @@ import type { MessageRouting } from '../routing'
 
 /** A chat worker is matched by its session, and a terminal worker by its process, so neither another chat
  *  in the pane nor a new process in it is taken for the worker that finished. */
-type FinishedSender = Pick<OrchestrationCallerIdentity, 'address' | 'paneKey' | 'orcaSessionId'> & {
+export type FinishedSender = Pick<
+  OrchestrationCallerIdentity,
+  'address' | 'paneKey' | 'orcaSessionId'
+> & {
   processIncarnation: () => string | undefined
+}
+
+function speaksAs(
+  db: OrchestrationDb,
+  sender: FinishedSender,
+  dispatch: DispatchContextRow
+): boolean {
+  if (!isDispatchAssignee(dispatch, sender.address, sender.paneKey)) {
+    return false
+  }
+  if (dispatch.assignee_orca_session_id) {
+    return dispatch.assignee_orca_session_id === sender.orcaSessionId
+  }
+  return (
+    !dispatch.process_incarnation ||
+    db.isDispatchProcessCurrent({
+      dispatchId: dispatch.id,
+      paneKey: sender.paneKey,
+      processIncarnation: sender.processIncarnation() ?? null
+    })
+  )
 }
 
 /** The Dispatch a worker finished and is still talking about: the one its message names, or, naming none
@@ -33,15 +60,7 @@ export function finishedWorkerDispatch(
     !dispatch ||
     dispatch.status === 'pending' ||
     dispatch.status === 'dispatched' ||
-    !isDispatchAssignee(dispatch, sender.address, sender.paneKey) ||
-    (dispatch.assignee_orca_session_id
-      ? dispatch.assignee_orca_session_id !== sender.orcaSessionId
-      : dispatch.process_incarnation &&
-        !db.isDispatchProcessCurrent({
-          dispatchId: dispatch.id,
-          paneKey: sender.paneKey,
-          processIncarnation: sender.processIncarnation() ?? null
-        })) ||
+    !speaksAs(db, sender, dispatch) ||
     db.getFederatedDispatch(dispatch.id)
   ) {
     return undefined
@@ -107,39 +126,41 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
   }
 }
 
-/** Whether the pane now holds a local worker rather than the remote one: by its custody, which every worker
- *  start records, else by a local Dispatch created strictly later; a tie stays remote. */
-function holdsLocalWorker(
+/** The finished remote worker a caller still is: its pane's newest remote Dispatch while the pane runs that
+ *  worker's process, unless a local Dispatch the caller also speaks as came strictly later. A same-second tie
+ *  stays remote, so it is refused rather than sent to the wrong coordinator. */
+function finishedRemoteSender(
   db: OrchestrationDb,
-  address: string,
-  paneKey: string,
-  attachment: { dispatch_id: string; created_at: string }
-): boolean {
-  const custodian = db.getWorkerTerminalResourceByPane(paneKey)?.owner_dispatch_id
-  if (custodian) {
-    return custodian !== attachment.dispatch_id && Boolean(db.getDispatchContextById(custodian))
-  }
-  return (
-    (db.getLatestDispatchForTerminal(address, paneKey)?.created_at ?? '') > attachment.created_at
-  )
-}
-
-/** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal.
- *  A local worker the pane holds now speaks for it instead. */
-export function refuseFinishedRemoteWorker(
-  db: OrchestrationDb,
-  sender: { address: string; paneKey: string | undefined },
-  to: string | undefined
-): void {
+  sender: FinishedSender
+): RemoteDispatchAttachmentRow | undefined {
   const attachment = sender.paneKey
     ? db.findLatestRemoteAttachmentForPane(sender.paneKey)
     : undefined
   if (
-    sender.paneKey &&
-    attachment &&
-    !holdsLocalWorker(db, sender.address, sender.paneKey, attachment) &&
-    (!to || to === `dispatch:${attachment.dispatch_id}`)
+    !attachment ||
+    (attachment.process_incarnation &&
+      !db.isRemoteAttachmentProcessCurrent({
+        dispatchId: attachment.dispatch_id,
+        paneKey: sender.paneKey,
+        processIncarnation: sender.processIncarnation() ?? null
+      }))
   ) {
+    return undefined
+  }
+  const local = db.getLatestDispatchForTerminal(sender.address, sender.paneKey ?? undefined)
+  return local && local.created_at > attachment.created_at && speaksAs(db, sender, local)
+    ? undefined
+    : attachment
+}
+
+/** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal. */
+export function refuseFinishedRemoteWorker(
+  db: OrchestrationDb,
+  sender: FinishedSender,
+  to: string | undefined
+): void {
+  const attachment = finishedRemoteSender(db, sender)
+  if (attachment && (!to || to === `dispatch:${attachment.dispatch_id}`)) {
     throw new OrchestrationError(
       'run_home_unreachable',
       `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that a finished worker cannot reach yet. Nothing was sent; give the message to the user instead.`

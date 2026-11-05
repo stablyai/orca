@@ -16,7 +16,8 @@ import { assertWorkerCanReport } from '../../../../orchestration/worker-report-a
 import {
   continuesDispatch,
   finishedWorkerDispatch,
-  refuseFinishedRemoteWorker
+  refuseFinishedRemoteWorker,
+  type FinishedSender
 } from './finished-worker-mail'
 import {
   askedQuestionReceipt,
@@ -73,23 +74,25 @@ export const ORCHESTRATION_ASK_METHODS = [
           workerState: remoteAttachment.state
         })
       }
+      const asker: FinishedSender = {
+        address: from,
+        paneKey: paneKey ?? null,
+        orcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
+        processIncarnation: () => runtime.getTerminalProcessIncarnation(from) ?? undefined
+      }
+      // A pane still running a finished remote worker asks as it, as send does, so no older local Dispatch takes the question.
+      refuseFinishedRemoteWorker(db, asker, undefined)
       const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
       // A finished worker still asks its coordinator; the question changes nothing about its Task.
       const askingDispatch =
         workingDispatch ??
         finishedWorkerDispatch(
           db,
-          {
-            address: from,
-            paneKey: paneKey ?? null,
-            orcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
-            processIncarnation: () => runtime.getTerminalProcessIncarnation(from) ?? undefined
-          },
+          asker,
           { run: undefined, dispatchId: undefined, dispatch: undefined },
           'question'
         )
       if (!askingDispatch) {
-        refuseFinishedRemoteWorker(db, { address: from, paneKey }, undefined)
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'
