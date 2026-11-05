@@ -221,11 +221,8 @@ export function MobileNativeChatNoticeRow({
     case 'forked-from': {
       const { sourceName, sourceSessionId } = look
       return (
-        <View
-          style={styles.divider}
-          accessibilityRole="text"
-          accessibilityLabel={`${copy.forkedFrom} ${sourceName}`}
-        >
+        // No label on the row: it would replace the text and hide the source link from screen readers.
+        <View style={styles.divider}>
           <View style={styles.rule} />
           <Text style={styles.dividerLabel}>
             {copy.forkedFrom}{' '}

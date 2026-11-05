@@ -87,12 +87,9 @@ export function NativeChatNoticeRow({
       NATIVE_CHAT_NOTICE_COPY.forkedFrom
     )
     return (
-      <div
-        role="separator"
-        aria-label={`${label} ${look.sourceName}`}
-        className="flex items-center gap-3 py-2 text-xs text-chat-foreground-faint"
-      >
-        <span className="h-px flex-1 bg-border" />
+      // Plain text with decorative rules: a separator role would hide the source button from screen readers.
+      <div className="flex items-center gap-3 py-2 text-xs text-chat-foreground-faint">
+        <span aria-hidden className="h-px flex-1 bg-border" />
         <span>
           {label}{' '}
           {openForkSource ? (
@@ -107,7 +104,7 @@ export function NativeChatNoticeRow({
             look.sourceName
           )}
         </span>
-        <span className="h-px flex-1 bg-border" />
+        <span aria-hidden className="h-px flex-1 bg-border" />
       </div>
     )
   }
