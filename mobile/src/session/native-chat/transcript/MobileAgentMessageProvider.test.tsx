@@ -76,18 +76,18 @@ describe('phone sender provider', () => {
         for (const savedName of [null, 'Setup']) {
           const endpoint: AgentMessageSource = {
             ...from,
+            orchestration: {
+              message: 'mail-notice',
+              mailbox: 'run:r',
+              dispatchId: null,
+              messages: [{ messageId: 'mail', runId: 'r', from: 'term_plain' }]
+            },
             senders: [
               {
                 name: savedName,
                 party: { address: 'term_plain', terminalHandle: 'term_plain', orcaSessionId: null }
               }
             ]
-          }
-          if (endpoint.orchestration?.message === 'mail-notice') {
-            endpoint.orchestration = {
-              ...endpoint.orchestration,
-              messages: [{ messageId: 'mail', runId: 'r', from: 'term_plain' }]
-            }
           }
           act(() => renderer!.update(wrap(card(endpoint))))
           const label = savedName ?? 'Terminal'
