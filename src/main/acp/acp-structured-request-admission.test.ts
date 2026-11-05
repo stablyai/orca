@@ -176,4 +176,21 @@ describe('Grok requests and the turn they belong to', () => {
       ])
     )
   })
+
+  it('refuses further questions from a turn Grok began itself once its card was cancelled', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    const { agent } = rig.child()
+    agent.notify('session/update', replyChunk('task-completed-background-1', 'Build finished; now'))
+    await rig.settle()
+    const first = agent.request(12, 'x.ai/ask_user_question', question('call-12'))
+    await waitFor(async () =>
+      expect((await rig.rig.rows()).some((row) => row.body.kind === 'question')).toBe(true)
+    )
+    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
+    expect(await first).toMatchObject({ result: { outcome: 'cancelled' } })
+    expect(await agent.request(13, 'x.ai/ask_user_question', question('call-13'))).toMatchObject({
+      result: { outcome: 'cancelled' }
+    })
+  })
 })

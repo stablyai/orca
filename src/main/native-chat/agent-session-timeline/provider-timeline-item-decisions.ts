@@ -123,16 +123,7 @@ export function decideRequest(
   if (state.items.has(key) && !(journal && state.settledInJournal(key, journal))) {
     return { dropped: 'request-duplicate' }
   }
-  const placed = providerTimelinePlacement(context, state, event.join)
-  const placedTurn = turnOf(placed)
-  // A live request outliving its already-settled turn still needs a card.
-  const scope =
-    event.outlivesTurn &&
-    placedTurn !== null &&
-    journal &&
-    providerTimelineTurnRowState(journal, placedTurn) === 'settled'
-      ? AGENT_JOURNAL_THREAD_SCOPE
-      : placed
+  const scope = providerTimelinePlacement(context, state, event.join)
   const turn = turnOf(scope)
   const opened: ProviderTimelineOpenItem = {
     kind: 'request',
@@ -153,7 +144,12 @@ export function decideRequest(
           // Reused request IDs need new incarnations; never overwrite existing rows.
           const row = context.rows.nextRequest(event.request, at)
           opened.row = row
-          if (turn !== null && providerTimelineTurnRowState(at, turn) === 'settled') {
+          // A live request outliving its turn still needs its card.
+          if (
+            turn !== null &&
+            !event.outlivesTurn &&
+            providerTimelineTurnRowState(at, turn) === 'settled'
+          ) {
             return null
           }
           return { identity: row.identity, body: event.body }

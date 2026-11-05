@@ -115,6 +115,8 @@ export class AcpStructuredPrompts {
       throw error
     }
     entry.settle(reply)
+    // Release the timeline's hold; withdrawal keeps the committed answer.
+    this.lane()?.apply([{ type: 'request.withdrawn', request: entry.key }])
     if (entry.permission && entry.signal.aborted) {
       // Protocol cancellation already replied while the permission answer was being saved.
       throw new Error(`the agent stopped waiting for the answer to ${input.itemId}`)

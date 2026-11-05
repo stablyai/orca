@@ -86,10 +86,18 @@ export class AcpStructuredTurns {
     return this.stopAt
   }
 
-  /** A Stop covers only Orca's running prompt; the agent's own later work may ask again. */
+  /** A Stop covers the running prompt or the agent's own open turn; later work may ask again. */
   stop(at: number): boolean {
-    if (this.active) {
-      this.stopAt ??= at
+    const agentTurn = this.active ? null : this.deps.lane.openTurnId
+    if ((this.active || agentTurn !== null) && this.stopAt === null) {
+      this.stopAt = at
+      if (agentTurn !== null) {
+        void this.deps.lane.whenTurnLeaves(agentTurn).then(() => {
+          if (!this.active && this.stopAt === at) {
+            this.stopAt = null
+          }
+        })
+      }
     }
     return this.withdrawSteers()
   }
