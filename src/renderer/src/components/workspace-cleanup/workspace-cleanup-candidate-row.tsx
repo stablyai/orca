@@ -131,7 +131,8 @@ export const CandidateRow = React.memo(function CandidateRow({
   const facts = getCandidateFactStatuses(candidate)
   const gitStatuses = facts.filter((fact) => fact.git)
   const flags = facts.filter((fact) => !fact.git).map((fact) => fact.label)
-  // Main/folder/disconnected rows are never queued and git is not read for them; "unknown" would be a false alarm.
+  // Clean is the default, so only non-clean git states get a chip. Main/folder/disconnected
+  // rows are never queued and git is not read for them; "unknown" would be a false alarm.
   const showGitChip = queueable && gitStatuses.length === 0
   const dirtyLabel = getDirtyGitLabel(candidate)
   const gitState = getWorkspaceCleanupGitState(candidate)
@@ -269,12 +270,12 @@ export const CandidateRow = React.memo(function CandidateRow({
                 value={dirtyLabel}
                 tone="destructive"
               />
-            ) : (
+            ) : gitState === 'clean' ? null : (
               <WorkspaceCleanupMetadataChip
                 icon={GitBranch}
                 label={formatGitStatus(candidate)}
                 value={getWorkspaceCleanupGitChipLabel(gitState)}
-                tone={gitState === 'clean' ? 'neutral' : 'review'}
+                tone="review"
               />
             )}
             {!deletionPhase && visibleFlags.length > 0 ? (
