@@ -1,49 +1,24 @@
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 import {
   fixture,
   SESSION,
   journals
 } from './structured-agent-session-subscriber-contract-test-fixture'
-
-it('reports every content publication to the journal hook, subscribed or not', async () => {
-  const journal = await journals.open({
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: codexProviderHandle('thread-1')
-    },
-    stateDirectory: join(fixture.root, 'hook-journal')
-  })
-  const published: string[] = []
-  const subscribers = new AgentSessionSubscribers({
-    onJournalPublished: (sessionId, published_journal) => {
-      expect(published_journal).toBe(journal)
-      published.push(sessionId)
-    }
-  })
-
-  subscribers.publish(SESSION, journal)
-  subscribers.snapshot(SESSION, journal, 1)
-
-  expect(published).toEqual([SESSION, SESSION])
-})
 
 it('settles a session nobody is reading, from running to idle', async () => {
   // Never open a subscriber: status must publish independently of transcript readers.

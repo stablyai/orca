@@ -1,7 +1,7 @@
 // Scan executables to cover pre-lease builds and exec-to-lease races without costly process maps.
 import { readdirSync, readlinkSync, realpathSync, statSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
-import type { ProcessLivenessVerdict } from '../daemon/daemon-incarnation-evidence-types'
+import type { ProcessLivenessVerdict } from '../daemon/endpoint/identity/daemon-incarnation-evidence-types'
 
 export type ProcReader = {
   listPids(): string[]

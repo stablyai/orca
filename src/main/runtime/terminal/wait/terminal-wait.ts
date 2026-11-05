@@ -7,19 +7,19 @@ import {
   buildPtyTerminalWaitExitError,
   buildPtyTerminalWaitResult,
   getPtyTerminalState
-} from '../../terminal-wait-results'
+} from './terminal-wait-results'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { showsScreenProbeBanner } from '../../agent-state-rules/agent-state-text-anchors'
-import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
-import { evaluateTuiIdle, type TuiIdleVerdict } from '../../tui-idle-evidence'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
   outputClockOf,
   ptyTuiIdleEvidence,
   type TuiIdleEvidenceSource
-} from '../../tui-idle-evidence-source'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from './tui-idle-evidence-source'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalWaiter } from '../../runtime-terminal-contracts'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { RuntimeTerminalIdlePolls } from './terminal-idle-polls'
 import type { RuntimeTerminalWaiterRegistry } from './terminal-waiter-registry'
 
@@ -39,8 +39,11 @@ function shouldProbeVisibleScreen(
 
 type RuntimeTerminalWaitDependencies = TuiIdleEvidenceSource & {
   defaultTimeoutMs: number
-  /** The terminal a handle names; throws `terminal_handle_stale` when it names none. */
-  getTerminalPty(handle: string): { pty: RuntimePtyWorktreeRecord }
+  /** The terminal a handle names for this wait; throws `terminal_handle_stale` when it names none. */
+  getTerminalPty(
+    handle: string,
+    condition: RuntimeTerminalWaitCondition
+  ): { pty: RuntimePtyWorktreeRecord }
   /** A disconnected terminal that may still run, so an exit wait keeps waiting for its end. */
   exitUnsettled(pty: RuntimePtyWorktreeRecord): boolean
   startVisibleReadProbe(
@@ -73,7 +76,7 @@ export class RuntimeTerminalWait {
     }
   ): Promise<RuntimeTerminalWaitResult> {
     const condition = options?.condition ?? 'exit'
-    const { pty } = this.deps.getTerminalPty(handle)
+    const { pty } = this.deps.getTerminalPty(handle, condition)
     if (condition === 'exit' && !pty.connected && !this.deps.exitUnsettled(pty)) {
       return buildPtyTerminalWaitResult(handle, condition, pty)
     }

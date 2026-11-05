@@ -17,10 +17,13 @@ node_modules/
 node_modules
 
 dist/
+# The declarative sample ships its prebuilt bundle so it installs without a build step.
+!examples/plugins/hello-components/dist/
 dist-electron/
 out/
 /build/
 release/
+!config/scripts/release/
 native/**/.build/
 native/windows-cli-launcher/target/
 native/windows-agent-hook/target/

@@ -44,7 +44,7 @@ vi.mock('../../shared/layout-owner-switch', () => ({
 }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 // Isolate reconciliation from the developer’s real global agent configs.
-vi.mock('../codex/codex-hook-reconcile', async (importOriginal) => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   startCodexHooks: vi.fn()
 }))
@@ -59,7 +59,7 @@ vi.mock('../agent-hooks/local-agent-cli-presence', async (importOriginal) => ({
 vi.mock('../agent-hooks/agent-home-login-shell', () => ({
   adoptLoginShellAgentHomes: async () => {}
 }))
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
 vi.mock('../opencode/opencode-status-plugin-startup-refresh', () => ({
@@ -96,7 +96,9 @@ vi.mock('./orcad-automations', () => ({
 vi.mock('../runtime/agent-state-rules/agent-state-rules-live-update', () => ({
   startAgentStateRulesLiveUpdates: () => {}
 }))
-vi.mock('../daemon/daemon-provider-state', () => ({ daemonOwnsFreshPersistentPtys: () => false }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-state', () => ({
+  daemonOwnsFreshPersistentPtys: () => false
+}))
 vi.mock('../ipc/pty/register-headless-runtime', () => ({
   registerHeadlessPtyRuntime: async () => {}
 }))
@@ -164,6 +166,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     }
     async closeNotificationDismissals() {}
     syncWindowGraph() {}
+    setAgentSenderPeerKey() {}
   }
 }))
 vi.mock('../runtime/runtime-rpc', () => ({

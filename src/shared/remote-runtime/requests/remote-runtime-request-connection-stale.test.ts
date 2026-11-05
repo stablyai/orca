@@ -1,9 +1,9 @@
-import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../pairing/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
-import type { PairingOffer } from '../../pairing'
-import { decrypt, encrypt } from '../../e2ee-crypto'
-import { createFixedKeyLegacyHandshakeForTest } from '../../paired-e2ee-fixed-key-test-fixture'
+import type { PairingOffer } from '../pairing/mobile-relay-pairing-offer'
+import { decrypt, encrypt } from '../e2ee/node/e2ee-crypto'
+import { createFixedKeyLegacyHandshakeForTest } from '../e2ee/paired-e2ee-fixed-key-test-fixture'
 import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepared-request-admission'
 import type { RemoteRuntimeWebSocketCallbacks } from './remote-runtime-request-websocket'
 

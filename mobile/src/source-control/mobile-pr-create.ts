@@ -1,5 +1,5 @@
 import { translate } from '../i18n/mobile-i18n'
-import { isHostedReviewCreateEligibilityConfirmable } from '../../../src/shared/hosted-review-create-confirmation'
+import { isHostedReviewCreateEligibilityConfirmable } from '../../../src/shared/source-control/hosted-review/hosted-review-create-confirmation'
 import { hostedReviewCopy } from './hosted-review-copy'
 import {
   buildMobileHostedReviewCreateParams,

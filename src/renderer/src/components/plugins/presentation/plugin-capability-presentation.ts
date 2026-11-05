@@ -29,6 +29,21 @@ export function pluginCapabilityDescription(kind: string, fallback: string): str
         'auto.components.settings.PluginConsentDialog.capability.terminalRun',
         'Run commands in your terminals, including SSH'
       )
+    case 'terminal:read':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.terminalRead',
+        'Read the output of your terminals, including SSH'
+      )
+    case 'workspace:write':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.workspaceWrite',
+        'Open your workspaces and files, and run built-in commands'
+      )
+    case 'agent:launch':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.agentLaunch',
+        'Start agents in your workspaces, including SSH'
+      )
     case 'notifications:show':
       return translate(
         'auto.components.settings.PluginConsentDialog.capability.notificationsShow',

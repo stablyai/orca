@@ -17,7 +17,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     preflightStatusCurrent,
     linearStatusReady,
     jiraStatusReady,
-    tasksLoading,
+    githubListPending,
     tasksRefreshing,
     tasksFiltering,
     dialogWorkItem,
@@ -27,7 +27,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newLinearIssueOpen,
     newJiraIssueOpen
   } = model
-  const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
+  const githubTasksBusy = githubListPending || tasksRefreshing || tasksFiltering
   useTaskPageEscapeToClose(
     Boolean(
       dialogWorkItem ||

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   __resetHostedReviewBranchCacheForTests,
   invalidateHostedReviewBranchCache,

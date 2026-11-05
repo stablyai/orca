@@ -18,7 +18,7 @@ import { wireWslRelayLink } from './wsl-hook-relay-link'
 import type { WslRelayRecovery } from './wsl-hook-relay-recovery'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
-import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
+import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_FS_METHODS,
@@ -27,7 +27,7 @@ import {
 import {
   recordManagedWslCodexHome,
   wslRuntimeHomePathsEqual
-} from '../codex/managed-wsl-codex-home-registry'
+} from '../codex/configuration/homes/managed-wsl-codex-home-registry'
 import {
   createWslRelayRecoveryForManager,
   markWslRelayFailed,
@@ -233,7 +233,7 @@ export class WslHookRelayManager {
     const mux = new SshChannelMultiplexer(transport)
     state.mux = mux
     wireWslRelayLink({
-      bindInterruptReconciliation: this.deps.bindInterruptReconciliation,
+      requestHandlers: this.deps,
       mux,
       child,
       distro: state.distro,
@@ -297,7 +297,8 @@ export class WslHookRelayManager {
     markWslRelayFailed(state, message, options, this.deps, this.recovery)
   }
   private async resolveDefaultDistro(): Promise<string | null> {
-    const distro = await resolveWslDefaultDistro(this.defaultDistro, this.deps.listDistros)
+    // Fresh each ensure (the source is cached): a user act's pinned default must win over an older one.
+    const distro = await resolveWslDefaultDistro(null, this.deps.listDistros)
     this.defaultDistro = distro
     return distro
   }

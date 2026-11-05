@@ -11,6 +11,7 @@ import {
   PLUGIN_TASK_SOURCE_LIMIT,
   PLUGIN_TASK_SOURCE_OPERATIONS
 } from '../tasks/plugin-task-source'
+import { pluginWorkerPanelPostSchema } from './plugin-panel-bridge-protocol'
 
 /**
  * The worker fork channel, on the shared envelope (plugin-protocol.ts). Validate both sides:
@@ -25,14 +26,22 @@ export const WORKER_EVENTS = {
   ready: 'ready',
   log: 'log',
   fatal: 'fatal',
-  shutdown: 'shutdown'
+  shutdown: 'shutdown',
+  /** worker → host, {@link PluginWorkerPanelPost}: `orca.panels.post`. */
+  panelPost: 'panel.post',
+  /** host → worker, {@link PluginDataChanged}: a panel or the person changed storage or settings. */
+  dataChanged: 'data.changed'
 } as const
 
 /** host → worker requests; the worker answers each with a `res`. */
 export const WORKER_METHODS = {
   invokeCommand: 'command.invoke',
   invokeTaskSource: 'taskSource.invoke',
-  deliverEvent: 'event.deliver'
+  deliverEvent: 'event.deliver',
+  /** A panel's `plugin.request`, answered by the handler from `orca.panels.handle`. */
+  panelRequest: 'panel.request',
+  /** One hook, answered with a decision (plugin-worker-hooks.ts). */
+  runHook: 'hook.run'
 } as const
 
 export const pluginWorkerInitSchema = z.object({
@@ -76,11 +85,13 @@ export const pluginWorkerLogSchema = z.object({
 export const pluginWorkerFatalSchema = z.object({ error: z.string().max(8192) })
 
 export type PluginWorkerInit = z.infer<typeof pluginWorkerInitSchema>
+export type PluginWorkerReady = z.infer<typeof pluginWorkerReadySchema>
 
 const pluginWorkerChildEventSchema = z.discriminatedUnion('event', [
   z.object({ event: z.literal(WORKER_EVENTS.ready), payload: pluginWorkerReadySchema }),
   z.object({ event: z.literal(WORKER_EVENTS.log), payload: pluginWorkerLogSchema }),
-  z.object({ event: z.literal(WORKER_EVENTS.fatal), payload: pluginWorkerFatalSchema })
+  z.object({ event: z.literal(WORKER_EVENTS.fatal), payload: pluginWorkerFatalSchema }),
+  z.object({ event: z.literal(WORKER_EVENTS.panelPost), payload: pluginWorkerPanelPostSchema })
 ])
 
 /** A worker → host lifecycle event, or null for anything else. */
@@ -105,3 +116,5 @@ export const PLUGIN_WORKER_INVOKE_TIMEOUT_MS = 30_000
 export const PLUGIN_WORKER_IDLE_REAP_MS = 5 * 60_000
 /** Default cap on concurrently-active workers; excess activations queue. */
 export const PLUGIN_WORKER_MAX_ACTIVE_DEFAULT = 5
+/** Soft cap on always-running hook workers, which hold no slot of the cap above. */
+export const PLUGIN_WORKER_MAX_KEEP_WARM_DEFAULT = 16

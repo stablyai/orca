@@ -1,11 +1,11 @@
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { getDefaultRepoHookSettings } from '../../shared/constants'
 import type { Repo } from '../../shared/repo-types'
-import { parsePairingCode } from '../../shared/pairing'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
@@ -562,6 +562,7 @@ describe('remote runtime request connection integration', () => {
         },
         getAccountsSnapshot: () => ({ claude: null, codex: null }),
         getAccountsStreamSnapshot: () => ({ claude: null, codex: null }),
+        getUsageRateLimits: () => null,
         refreshAccountsForMobile: async () => {
           for (const listener of accountsListeners) {
             listener({ claude: null, codex: null })

@@ -9,12 +9,12 @@ import {
   startDesktopMultiplexSubscribe,
   sendDesktopMultiplexSubscribe
 } from './rpc/terminal-multiplex-test-harness'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamText
-} from '../../shared/terminal-stream-protocol'
+} from '../../shared/terminal/stream/terminal-stream-protocol'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => ({ isDestroyed: () => false })) },
@@ -403,7 +403,7 @@ it.each(['unchanged', 'hook', 'config', 'incarnation', 'handle'] as const)(
       sendDesktopMultiplexSubscribe(harness.handlers)
       await vi.waitFor(() => expect(snapshotStarted).toBe(true))
       if (change === 'hook') {
-        runtime.recordCliWriterConversation({
+        runtime.clearSavedTerminalLaunchOnAgentHook({
           paneKey: 'saved-tab:11111111-1111-4111-8111-111111111111',
           connectionId: null,
           receivedAt: 1,

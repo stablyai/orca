@@ -1,6 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { CombinedDiffFileTreeMode } from './combined-diff-section-identity'
 
 /** Filter legacy tabs lacking snapshots; snapshot callers use their captured list after excluding unresolved conflicts. */

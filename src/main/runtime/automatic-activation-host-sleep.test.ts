@@ -4,15 +4,16 @@ import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identi
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   deferred,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('./orca-runtime-test-fixtures.spec')
+} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 function makeRuntime(listProcesses: () => Promise<never[]> = async () => []) {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(

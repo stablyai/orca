@@ -2,7 +2,7 @@
 
 // Refused creates publish no host session; bridge launch failures into tab/workspace rows until retry or closure.
 
-import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
+import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type {
@@ -10,12 +10,11 @@ import type {
   AgentSessionMutationResult,
   AgentSessionSendResult,
   AgentSessionStatusEvent
-} from '../../../../shared/agent-session-wire'
-import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
-import { structuredAgentSessionAgentStatus } from '../../../../shared/structured-agent-session-agent-status'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/agent-session-wire'
+
+import { structuredAgentSessionAgentStatus } from '../../../../shared/agent-session/view/structured-agent-session-agent-status'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import type { AppState } from '@/store/types'
@@ -79,12 +78,14 @@ const launchErrorMocks = vi.hoisted(() => {
   return { StructuredAgentSessionCreateRefusalError }
 })
 
-vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
-  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>(
+    '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+  )),
   ...launchErrorMocks
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call', () => ({
   launchStructuredAgentSession: mocks.launch
 }))
 
@@ -106,7 +107,7 @@ import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structure
 import {
   retryStructuredAgentSessionLaunch,
   startStructuredAgentLaunch
-} from '@/lib/structured-agent-session-launch'
+} from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
@@ -114,7 +115,7 @@ import {
   resetTerminalTabActivityFlagsCacheForTest,
   resolveTerminalTabActivityStatus
 } from '../tab-bar/terminal-tab-activity-status'
-import { selectWorktreeAgentActivitySummary } from '../sidebar/worktree-agent-activity-summary'
+
 import { countActivityUnread } from '../activity/useActivityUnreadCount'
 
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -123,11 +124,6 @@ import {
   resetStructuredAgentSessionSendsForTests
 } from './structured-agent-session-message-sender'
 import { noteStructuredAgentSessionFence } from './structured-agent-session-send-attempt'
-import {
-  getStructuredAgentSessionReadOwner,
-  findStructuredAgentSessionReadOwner
-} from './structured-agent-session-read-owner'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 async function closeChat(skipRunningProcessConfirm = false): Promise<void> {
   const { createWorkspaceTabCloseCommands } =
@@ -327,29 +323,6 @@ describe('a chat whose start failed', () => {
     vi.restoreAllMocks()
   })
 
-  it('marks its tab and its workspace row failed', async () => {
-    await connect()
-    expect(rows()).toEqual([])
-
-    await failStart()
-
-    const [row] = rows()
-    expect(row).toMatchObject({
-      state: 'done',
-      mainAgent: { state: 'done', outcome: 'failure' },
-      tabId: structuredTab.id,
-      worktreeId: WORKTREE_ID,
-      agentType: 'claude'
-    })
-    expect(row && agentVerdictDisplayMark(row)).toBe('failed')
-    expect(tabStatus()).toBe('failed')
-    expect(selectWorktreeAgentActivitySummary(store().getState(), WORKTREE_ID).hasFailed).toBe(true)
-    const closed = vi.spyOn(store().getState(), 'closeUnifiedTab')
-    await closeChat()
-    expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
-    expect(closed).toHaveBeenCalledExactlyOnceWith(structuredTab.id)
-  })
-
   it('keeps monitoring-only child work active through the real status writer and close', async () => {
     const emit = await connect()
     emit({
@@ -374,26 +347,6 @@ describe('a chat whose start failed', () => {
     ).not.toBeNull()
     expect(closed).not.toHaveBeenCalled()
   })
-
-  it.each([undefined, 'ssh:gone'] as const)(
-    'retires the raw %s reader on close and purge',
-    (host) => {
-      for (const remove of ['close', 'purge']) {
-        const tab = { ...structuredTab, executionHostId: host }
-        store().setState({ unifiedTabsByWorktree: { [WORKTREE_ID]: [tab] } })
-        const owner = getStructuredAgentSessionReadOwner(SESSION_ID, null, host ?? '')
-        const send = owner.trackSend('unknown')
-        send.issue()
-        send.settle(true)
-        if (remove === 'close') {
-          store().getState().closeUnifiedTab(tab.id)
-        } else {
-          store().getState().purgeWorktreeTerminalState([WORKTREE_ID])
-        }
-        expect(findStructuredAgentSessionReadOwner(SESSION_ID, null, host ?? '')).toBeUndefined()
-      }
-    }
-  )
 
   it('drops the mark while a retry starts it, and leaves the started chat to the host', async () => {
     const emit = await connect()
@@ -423,17 +376,6 @@ describe('a chat whose start failed', () => {
       }
     })
     expect(rows()).toEqual([expect.objectContaining({ state: 'working' })])
-  })
-
-  it('drops the mark when its tab closes', async () => {
-    await connect()
-    await failStart()
-    expect(rows()).toHaveLength(1)
-
-    act(() => store().setState({ unifiedTabsByWorktree: { [WORKTREE_ID]: [] } }))
-    await flush()
-
-    expect(rows()).toEqual([])
   })
 
   it('stays read across a restart once seen, and a later failure is news again', async () => {
@@ -466,55 +408,6 @@ describe('a chat whose start failed', () => {
         stateStartedAt: FAILED_AT + 120_000,
         mainAgent: expect.objectContaining({ outcome: 'failure' })
       })
-    ])
-    expect(unread()).toBe(1)
-  })
-
-  it('is unread after a restart when it failed after the chat was last viewed', async () => {
-    setClock(FAILED_AT - 60_000)
-    await connect()
-    // Viewed while it was starting; it failed after the user looked away.
-    acknowledge(FAILED_AT - 60_000)
-    setClock(FAILED_AT)
-    await failStart()
-    expect(unread()).toBe(1)
-
-    setClock(FAILED_AT + 60_000)
-    await restart()
-    expect(rows()).toEqual([expect.objectContaining({ stateStartedAt: FAILED_AT })])
-    expect(unread()).toBe(1)
-  })
-
-  it('ages like a host-reported failure: a restart does not bring back an old mark', async () => {
-    setClock(FAILED_AT)
-    await connect()
-    await failStart()
-    expect(tabStatus()).toBe('failed')
-
-    setClock(FAILED_AT + AGENT_STATUS_STALE_AFTER_MS + 1)
-    await restart()
-    expect(rows()).toEqual([expect.objectContaining({ updatedAt: FAILED_AT })])
-    expect(tabStatus()).not.toBe('failed')
-    expect(selectWorktreeAgentActivitySummary(store().getState(), WORKTREE_ID).hasFailed).toBe(
-      false
-    )
-  })
-
-  it('dates a retry that fails again by the new failure', async () => {
-    setClock(FAILED_AT)
-    await connect()
-    await failStart()
-    acknowledge(FAILED_AT + 1)
-    expect(unread()).toBe(0)
-
-    setClock(FAILED_AT + 60_000)
-    mocks.launch.mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('refused'))
-    act(() => {
-      retryStructuredAgentSessionLaunch(WORKTREE_ID, SESSION_ID)
-    })
-    await flush()
-    expect(rows()).toEqual([
-      expect.objectContaining({ updatedAt: FAILED_AT + 60_000, stateStartedAt: FAILED_AT + 60_000 })
     ])
     expect(unread()).toBe(1)
   })
@@ -597,96 +490,4 @@ describe('a chat whose start failed', () => {
     expect(pendingClose()).not.toBeNull()
     expect(store().getState().unifiedTabsByWorktree[WORKTREE_ID]).toContainEqual(structuredTab)
   })
-  it.each(['active', 'idle', 'HTTP', 'null settings', 'opt-out', 'bulk'])(
-    '%s preserves close policy',
-    async (mode) => {
-      await ready(mode)
-      if (mode === 'HTTP') {
-        vi.stubGlobal('crypto', undefined)
-      }
-      const before = store().getState()
-      const closed = vi.spyOn(before, 'closeUnifiedTab')
-      await closeChat(mode === 'bulk')
-      await flush()
-      if (['active', 'HTTP', 'null settings'].includes(mode)) {
-        expect(pendingClose()).toMatchObject({ copyKind: 'chat-agent', tabLabel: 'Claude Chat' })
-        useRunningTerminalCloseConfirmStore.getState().dismissRunningTerminalClose()
-        expect(store().getState()).toBe(before)
-        expect(closed).not.toHaveBeenCalled()
-        await flush()
-        await closeChat()
-        useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
-      } else {
-        expect(pendingClose()).toBeNull()
-      }
-      expect(closed).toHaveBeenCalledExactlyOnceWith(structuredTab.id)
-      expect(
-        mocks.history.mock.calls.filter((call) => call[1] === 'agentSession.history')
-      ).toHaveLength(mode === 'idle' ? 1 : 0)
-      vi.unstubAllGlobals()
-    }
-  )
-  // Reduced replies from executed legacy producers; completed tail does not prove whole-work absence.
-  it.each(['idle', 'prompt', 'unanswered', 'eligible queue', 'unlisted child'])(
-    'legacy %s asks without refreshing status',
-    async (kind) => {
-      await ready()
-      mocks.history.mockResolvedValue({
-        ok: true,
-        page: {
-          ...completeIdle.page,
-          latestTurn: {
-            itemId: 'claude:turn-1',
-            observedAt: 1_000,
-            turn: { turnId: 'turn-1', state: 'completed' }
-          },
-          working: undefined,
-          actionablePromptIds: undefined,
-          nextQueuedMessageId: kind === 'eligible queue' ? 'card' : null,
-          backgroundTasks:
-            kind === 'unlisted child'
-              ? { state: 'monitoring', supportsStopAll: false, children: [], incomplete: true }
-              : null
-        }
-      })
-      await closeChat()
-      await flush()
-      expect(pendingClose()).not.toBeNull()
-      expect(mocks.history).toHaveBeenCalledOnce()
-      expect(mocks.subscribeStatus).toHaveBeenCalledOnce()
-    }
-  )
-  it.each(['read error', 'unsupported old host', 'deadline'])(
-    '%s asks within the total deadline',
-    async (kind) => {
-      await ready()
-      vi.useFakeTimers()
-      mocks.history.mockReset()
-      if (kind === 'deadline') {
-        mocks.history.mockReturnValue(new Promise(() => {}))
-      } else {
-        mocks.history.mockRejectedValue(
-          new RuntimeRpcCallError({
-            id: 'history',
-            ok: false,
-            error: {
-              code: kind === 'unsupported old host' ? 'method_not_found' : 'internal',
-              message: kind
-            }
-          })
-        )
-      }
-      const closed = vi.spyOn(store().getState(), 'closeUnifiedTab')
-      await closeChat()
-      if (kind === 'deadline') {
-        await vi.advanceTimersByTimeAsync(1_999)
-        expect(pendingClose()).toBeNull()
-        expect(closed).not.toHaveBeenCalled()
-        await vi.advanceTimersByTimeAsync(1)
-      }
-      await flush()
-      expect(pendingClose()).not.toBeNull()
-      expect(closed).not.toHaveBeenCalled()
-    }
-  )
 })

@@ -1,0 +1,186 @@
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import {
+  providerExitObserved,
+  providerStartupFailureFact,
+  startupAcquisitionRefusal
+} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { providerSpawnAbsent } from '../../provider-process/provider-executable-missing'
+import {
+  claudeSessionHasTurnWork,
+  settledClaudeTurnEndLeaf
+} from './claude-structured-resume-point'
+import { claudeHeldSends } from '../claude-command-lifecycle'
+import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { claudeExitEnding } from './claude-structured-start-ending'
+import { claudeCloseReport, settleClaudeExitedSession } from './claude-structured-session-close'
+import {
+  AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError
+} from '../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
+import type {
+  ClaudeAcquisitionAttempt,
+  ClaudeSession,
+  ClaudeSessionExit,
+  ClaudeStructuredSessionAdapterDeps,
+  ClaudeStructuredSessionEvent
+} from './claude-structured-session-state'
+
+export type ClaudeExitLifecycle = {
+  sessions: Map<string, ClaudeSession>
+  exits: Map<string, ClaudeSessionExit>
+  /** Preserve diagnostics for sends admitted before the host learns of the exit. */
+  settledExitErrors: Map<string, Error>
+  /** Taken when the exit is first seen, so a start settling meanwhile cannot miss it. */
+  endings: AgentSessionStartEndings
+  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistHandle' | 'now'>
+  emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
+}
+
+export function observeClaudeSessionExit(
+  lifecycle: ClaudeExitLifecycle,
+  sessionId: string,
+  attempt: ClaudeAcquisitionAttempt,
+  error: Error
+): void {
+  const session = lifecycle.sessions.get(sessionId)
+  if (!session || session.connection !== attempt.connection) {
+    return
+  }
+  const observedAt = lifecycle.deps.now?.() ?? Date.now()
+  session.events?.observeExit?.(claudeHeldSends(session), observedAt)
+  lifecycle.endings.record(sessionId, session.acquisitionGeneration, claudeExitEnding(error))
+  lifecycle.sessions.delete(sessionId)
+  // Run tree cleanup before recovery; an exit callback proves only root exit.
+  const cleanup = session.connection.close().catch(() => false)
+  const closePromise =
+    claudeStartDied(session) && providerExitObserved(error)
+      ? withTimeout(cleanup, 2_000, false)
+      : cleanup
+  const exit: ClaudeSessionExit = {
+    connection: session.connection,
+    session,
+    error,
+    observedAt,
+    closePromise
+  }
+  lifecycle.exits.set(sessionId, exit)
+  exit.publication = closePromise
+    .then((proven) => {
+      // Observed root exit releases the lease even if tree cleanup remains unverified.
+      if (
+        claudeCloseReport(session.connection, proven, error) instanceof
+        AgentSessionAcquisitionExitUnprovenError
+      ) {
+        return undefined
+      }
+      return settleClaudeUnexpectedExit(lifecycle, sessionId, exit)
+    })
+    .catch(() => undefined)
+}
+
+/** Exited before the host-awaited open returned and before any turn; turns can settle without an Orca dispatch. */
+function claudeStartDied(session: ClaudeSession): boolean {
+  // Initialize can answer while a resume open still waits on transcript catch-up.
+  return !session.initialization.startup.opened() && !claudeSessionHasTurnWork(session)
+}
+
+export function settleClaudeUnexpectedExit(
+  lifecycle: ClaudeExitLifecycle,
+  sessionId: string,
+  exit: ClaudeSessionExit
+): Promise<void> {
+  const { exits, deps } = lifecycle
+  exit.settlementPromise ??= (async () => {
+    exit.session.unbindReadingControl?.()
+    if (exits.get(sessionId) !== exit) {
+      settleClaudeExitedSession(exit.session)
+      return
+    }
+    // A dead start's host open is still waiting on this exit, and nothing advanced acquisition's cursor.
+    if (!claudeStartDied(exit.session)) {
+      await persistClaudeSessionHandle(sessionId, exit.session, deps).catch((error: unknown) => {
+        console.warn('[claude-resume-point] exit cursor was not persisted:', { sessionId, error })
+      })
+    }
+    if (exits.get(sessionId) !== exit) {
+      settleClaudeExitedSession(exit.session)
+      return
+    }
+    exits.delete(sessionId)
+    const report = claudeCloseReport(exit.connection, true, exit.error)
+    lifecycle.settledExitErrors.set(sessionId, report ?? exit.error)
+    const startupFailure = claudeSessionHasTurnWork(exit.session)
+      ? undefined
+      : exit.connection.startupFailure?.()
+    const ended: ClaudeStructuredSessionEvent = {
+      type: 'ended',
+      sessionId,
+      reason: exit.error.message,
+      // A typed startup refusal or a spawn ENOENT keeps its next step; else provider exit vs host fault.
+      failure:
+        startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
+          ? providerStartupFailureFact(exit.error)
+          : startupFailure
+            ? providerStartupFailureFact(startupFailure)
+            : providerExitObserved(exit.error)
+              ? agentSessionFailureFact('providerExited', {
+                  detail: providerDiagnosticOf(exit.error)
+                })
+              : agentSessionFailureFact('hostFault'),
+      cause: 'unexpected-exit',
+      ...(report instanceof AgentSessionAcquisitionRootExitObservedError &&
+      report.deathEvidenceKind === 'kill-delivered'
+        ? { deathEvidenceKind: 'kill-delivered' as const }
+        : {}),
+      fence: exit.session.fence,
+      acquisitionGeneration: exit.session.acquisitionGeneration,
+      observedAt: exit.observedAt
+    }
+    try {
+      lifecycle.emit(exit.session, ended)
+    } finally {
+      settleClaudeExitedSession(exit.session)
+    }
+  })()
+  return exit.settlementPromise
+}
+
+/** Include exits observed while waiting for earlier publications. */
+export async function drainClaudeObservedExits(
+  exits: Map<string, ClaudeSessionExit>
+): Promise<void> {
+  const awaited = new Set<Promise<void>>()
+  for (;;) {
+    const pending = [...exits.values()]
+      .map((exit) => exit.publication)
+      .filter(
+        (publication): publication is Promise<void> =>
+          publication !== undefined && !awaited.has(publication)
+      )
+    if (pending.length === 0) {
+      return
+    }
+    for (const publication of pending) {
+      awaited.add(publication)
+    }
+    await Promise.all(pending)
+  }
+}
+
+export async function persistClaudeSessionHandle(
+  sessionId: string,
+  session: ClaudeSession,
+  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistHandle'>
+): Promise<void> {
+  const leafUuid = await settledClaudeTurnEndLeaf(session)
+  await deps.persistHandle?.({
+    sessionId,
+    providerSessionId: session.providerSessionId,
+    leafUuid,
+    fence: session.fence
+  })
+}

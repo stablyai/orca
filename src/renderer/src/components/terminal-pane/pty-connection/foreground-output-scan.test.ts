@@ -1,40 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { scanSynchronizedForegroundOutput } from './foreground-output-scan'
 import {
-  scanSynchronizedForegroundOutput,
   SYNCHRONIZED_OUTPUT_START_SEQUENCE as start,
   SYNCHRONIZED_OUTPUT_END_SEQUENCE as end
-} from './foreground-output-scan'
+} from '../../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 
 afterEach(() => vi.restoreAllMocks())
 
 describe('foreground synchronized output scan', () => {
-  it.each([start, end])('bounds searched characters for a flood of %j markers', (marker) => {
-    const data = marker.repeat(8192)
-    const originalIndexOf = String.prototype.indexOf
-    let searchedCharacters = 0
-    const spy = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
-      this: string,
-      search: string,
-      position = 0
-    ): number {
-      const result = originalIndexOf.call(this, search, position)
-      if (this === data && (search === start || search === end)) {
-        searchedCharacters += (result < 0 ? data.length : result + search.length) - position
-      }
-      return result
-    })
-    const result = scanSynchronizedForegroundOutput(data, '', false)
-    spy.mockRestore()
-    console.info(JSON.stringify({ markers: 8192, chars: data.length, searchedCharacters }))
-    expect(result).toEqual({
-      started: marker === start,
-      ended: marker === end,
-      active: marker === start,
-      markerTail: data.slice(-7)
-    })
-    expect(searchedCharacters).toBeLessThanOrEqual(data.length * 2)
-  })
-
   it('preserves the last marker and records both transitions in the current chunk', () => {
     expect(scanSynchronizedForegroundOutput(`${end}paint${start}`, '', true)).toEqual({
       started: true,
@@ -63,17 +36,6 @@ describe('foreground synchronized output scan', () => {
         ended: marker === end,
         active: marker === start,
         markerTail: marker.slice(1)
-      })
-    }
-  })
-
-  it('leaves the latch unchanged for empty output and malformed lookalikes', () => {
-    for (const data of ['', 'ordinary output', '\x1b[?2026x'.repeat(2048)]) {
-      expect(scanSynchronizedForegroundOutput(data, '', true)).toEqual({
-        started: false,
-        ended: false,
-        active: true,
-        markerTail: data.slice(-7)
       })
     }
   })

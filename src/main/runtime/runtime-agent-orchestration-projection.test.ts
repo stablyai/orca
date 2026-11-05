@@ -1,17 +1,17 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   openAgentSessionRecordStoreOnce,
   releaseAgentSessionRecordStore
-} from './agent-session-record-store-slot'
+} from './agent-session/records/agent-session-record-store-slot'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { OrcaRuntimeService } from './orca-runtime'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   createSessionCallerHarness,
   orchestrationRequest,
@@ -32,7 +32,7 @@ import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixtur
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestration-projection'
 import {
   installSqlVisitCounters,
@@ -43,13 +43,13 @@ import {
 } from './dispatch-predicate-visits.test-fixture'
 import { benchmarkPresentationCorpus } from './runtime-agent-orchestration-benchmark.test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
-import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from './terminal/records/runtime-terminal-state-records'
 import { OrchestrationDb } from './orchestration/db'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
-} from './structured-worker-identity'
+} from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 const COORDINATOR_CHAT = testOrcaSessionId('1b6f0c3a-7d2e-4a91-8c55-2e9d4b7a0f13')
 const WORKER_CHAT = testOrcaSessionId('9c3e5a17-4b2d-4f60-8e91-0d7a6c2b5e48')

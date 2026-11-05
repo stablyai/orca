@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GlUtils from './gl-utils'
 import { derivePipelineStatus, mapMRInfo } from './mappers'
-import { gitlabMrCheckCases } from '../../shared/gitlab-mr-checks.test-fixture'
+import { gitlabMrCheckCases } from '../../shared/source-control/checks/gitlab/gitlab-mr-checks.test-fixture'
 import { mapGitLabReview } from '../source-control/forge-review-mappers'
 import {
   __resetHostedReviewBranchCacheForTests,
@@ -30,7 +30,8 @@ const {
 
 // Why: the #9171 default-branch guard resolves the repo default branch via
 // git; keep those probes hermetic instead of spawning real git processes.
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 

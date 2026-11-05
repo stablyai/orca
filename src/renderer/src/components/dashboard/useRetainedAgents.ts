@@ -1,22 +1,20 @@
-import { agentEntrySessionStartedAt } from '../../../../shared/agent-session-start-time'
+import { agentEntrySessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { useEffect, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { DashboardAgentRow } from './useDashboardData'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-verdict'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { agentTurnEndedOnPurpose } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 
 import {
   createWorktreeTabBucketProjection,

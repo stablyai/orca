@@ -1,0 +1,219 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.pr-mutations",
+  "family": "github.pr-comment-mutation",
+  "namedDeltas": [],
+  "values": {
+    "00e36cc2e1a3": {
+      "file-viewed": {
+        "ok": true
+      },
+      "line-comment": {
+        "ok": true
+      }
+    },
+    "0632a06c33cb": {
+      "name": "github.addPRReviewComment#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addPRReviewComment\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"commitId\":\"head-sha-1\",\"path\":\"src/app.ts\",\"line\":5,\"body\":\"recorded line comment\",\"startLine\":3}}"
+    },
+    "1da2b9026f18": {
+      "name": "github.setPRFileViewed#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.setPRFileViewed"
+        },
+        {
+          "name": "params",
+          "value": {
+            "path": "src/app.ts",
+            "pullRequestId": "PR_kwDO",
+            "repo": "id:repo-9",
+            "viewed": true
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": false
+        }
+      }
+    },
+    "29a4002b51d7": {
+      "file-viewed": {
+        "error": "Failed to update viewed state.",
+        "ok": false
+      },
+      "line-comment": {
+        "ok": true
+      }
+    },
+    "5af21c5f4fe0": {
+      "name": "github.setPRFileViewed#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.setPRFileViewed"
+        },
+        {
+          "name": "params",
+          "value": {
+            "path": "src/app.ts",
+            "pullRequestId": "PR_kwDO",
+            "repo": "id:repo-9",
+            "viewed": true
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": true
+        }
+      }
+    },
+    "65a217bed712": {
+      "line-comment": {
+        "ok": true
+      }
+    },
+    "94ed6c684a96": {
+      "name": "github.setPRFileViewed#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRFileViewed\",\"params\":{\"repo\":\"id:repo-9\",\"pullRequestId\":\"PR_kwDO\",\"path\":\"src/app.ts\",\"viewed\":true}}"
+    },
+    "afe0045df4a7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Failed to update viewed state.",
+        "ok": false
+      }
+    },
+    "c655a2fc8c3a": {
+      "name": "github.addPRReviewComment#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.addPRReviewComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "recorded line comment",
+            "commitId": "head-sha-1",
+            "line": 5,
+            "path": "src/app.ts",
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "startLine": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "comment": {
+              "id": 57
+            },
+            "ok": true
+          }
+        }
+      }
+    },
+    "de607d31ed8c": {
+      "name": "github.setPRFileViewed#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRFileViewed\",\"params\":{\"repo\":\"id:repo-9\",\"pullRequestId\":\"PR_kwDO\",\"path\":\"src/app.ts\",\"viewed\":true}}"
+    },
+    "fbc958e4d46e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true
+      }
+    }
+  },
+  "recording": {
+    "scenario": "pr-line-comment-and-file-viewed",
+    "checkpoints": [
+      {
+        "id": "line-comment",
+        "observation": {
+          "sender": ["c655a2fc8c3a"],
+          "payloads": ["0632a06c33cb"],
+          "settlements": {
+            "line-comment": "fbc958e4d46e"
+          },
+          "state": "65a217bed712",
+          "effects": []
+        }
+      },
+      {
+        "id": "viewed",
+        "observation": {
+          "sender": ["c655a2fc8c3a", "5af21c5f4fe0"],
+          "payloads": ["0632a06c33cb", "94ed6c684a96"],
+          "settlements": {
+            "line-comment": "fbc958e4d46e",
+            "viewed": "fbc958e4d46e"
+          },
+          "state": "00e36cc2e1a3",
+          "effects": []
+        }
+      },
+      {
+        "id": "refused",
+        "observation": {
+          "sender": ["c655a2fc8c3a", "5af21c5f4fe0", "1da2b9026f18"],
+          "payloads": ["0632a06c33cb", "94ed6c684a96", "de607d31ed8c"],
+          "settlements": {
+            "line-comment": "fbc958e4d46e",
+            "viewed": "fbc958e4d46e",
+            "refused": "afe0045df4a7"
+          },
+          "state": "29a4002b51d7",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

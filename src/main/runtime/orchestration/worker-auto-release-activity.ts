@@ -1,7 +1,7 @@
 import type { AgentPaneChange } from '../../agent-hooks/agent-transition-detector'
-import type { AgentPhase } from '../../../shared/agent-transitions'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import { resolveStructuredWorkerIdentityForSession } from '../structured-worker-authority'
+import type { AgentPhase } from '../../../shared/agent-status/lifecycle/agent-transitions'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import { resolveStructuredWorkerIdentityForSession } from './terminal-authority/structured-sessions/structured-worker-authority'
 import type { OrchestrationDb } from './db'
 
 // A turn waiting on the user (approval or question) has not finished, so it holds the countdown like working.

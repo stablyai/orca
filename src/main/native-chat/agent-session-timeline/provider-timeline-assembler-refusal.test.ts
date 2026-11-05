@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { MAX_PROVIDER_TIMELINE_OPEN_ENTRIES } from './provider-timeline-budget'
 import {
   closeProviderTimelineRigs,
   messageText,
@@ -131,11 +130,11 @@ describe('a refused event changes nothing and its retry lands it once', () => {
   })
 })
 
-describe('what the assembler holds open is bounded', () => {
-  it('refuses, as failed, work past its open budget instead of forgetting it', async () => {
-    const rig = await openProviderTimelineRig()
+describe('healthy long turns are independent of timeline retention', () => {
+  it('keeps live tools, requests and text until their actual turn ends', async () => {
+    const rig = await openProviderTimelineRig({ schedule: () => () => {} })
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
-    for (let index = 0; index < MAX_PROVIDER_TIMELINE_OPEN_ENTRIES / 2; index += 1) {
+    for (let index = 0; index < 160; index += 1) {
       expect(
         rig.assembler.apply({ type: 'item.open', item: `item-${index}`, body: runningTool('read') })
           .admission
@@ -147,47 +146,31 @@ describe('what the assembler holds open is bounded', () => {
           body: pendingApproval
         }).admission
       ).toEqual({ accepted: true })
+      expect(
+        rig.assembler.apply({
+          type: 'text.delta',
+          item: { id: `m${index}` },
+          channel: 'assistant',
+          text: 'A'
+        }).admission
+      ).toEqual({ accepted: true })
     }
-    const refused = { accepted: false, reason: 'failed' }
+    rig.assembler.apply({ type: 'text.delta', item: { id: 'm0' }, channel: 'assistant', text: 'B' })
+    rig.assembler.apply({
+      type: 'item.close',
+      item: 'item-0',
+      body: { ...runningTool('read'), state: 'completed' }
+    })
     expect(
-      rig.assembler.apply({ type: 'item.open', item: 'one-more', body: runningTool('read') })
-        .admission
-    ).toEqual(refused)
-    expect(
-      rig.assembler.apply({ type: 'request.open', request: 'one-more', body: pendingApproval })
-        .admission
-    ).toEqual(refused)
-    expect(
-      rig.assembler.apply({
-        type: 'text.delta',
-        item: { stream: 'more' },
-        channel: 'assistant',
-        text: 'x'
-      }).admission
-    ).toEqual(refused)
-    expect(await rig.row(providerItemId('item', 'one-more'))).toBeUndefined()
-
-    rig.assembler.apply({ type: 'turn.end', at: 2_000, state: 'completed' })
-    rig.assembler.apply({ type: 'turn.open', turn: 't2', at: 3_000 })
-    expect(
-      rig.assembler.apply({ type: 'item.open', item: 'one-more', body: runningTool('read') })
-        .admission
+      rig.assembler.apply({ type: 'turn.end', turn: 't1', at: 2_000, state: 'completed' }).admission
     ).toEqual({ accepted: true })
-  })
-
-  it('refuses a stream past the budget, even though the coalescer would hold it', async () => {
-    const rig = await openProviderTimelineRig({ schedule: () => () => {} })
-    rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
-    let admitted = 0
-    for (let index = 0; index < 1_100; index += 1) {
-      const { admission } = rig.assembler.apply({
-        type: 'text.delta',
-        item: { id: `m${index}` },
-        channel: 'assistant',
-        text: 'x'
-      })
-      admitted += admission.accepted ? 1 : 0
-    }
-    expect(admitted).toBe(MAX_PROVIDER_TIMELINE_OPEN_ENTRIES)
+    expect(messageText((await rig.row(providerItemId('item', 'm0')))?.body)).toBe('AB')
+    expect((await rig.row(providerItemId('item', 'item-0')))?.body).toMatchObject({
+      state: 'completed'
+    })
+    expect((await rig.row(providerItemId('request', 'request-159')))?.body).toMatchObject({
+      resolution: { state: 'cancelled' }
+    })
+    expect(await rig.turn('t1')).toMatchObject({ state: 'completed' })
   })
 })

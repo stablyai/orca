@@ -1,6 +1,7 @@
+import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
-import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
-import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
+import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
+import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { publishNativeChatFollowUpChanges } from './runtime-native-chat-follow-up-events'
 import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
 import {
@@ -14,16 +15,16 @@ import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
+} from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type {
   AgentLaunchPaneAddress,
   AgentLaunchPaneVerdict
-} from '../../shared/agent-launch-pane-verdict'
-import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
+} from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+import { registerWorktreeChangeInvalidator } from '../ipc/worktrees/listing/worktree-change-invalidators'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
+import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
-import { WorkspaceLayoutStream, type WorkspaceLayoutReads } from './workspace-layout-stream'
+import * as WorkspaceLayouts from './terminal/surface/workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 import {
@@ -37,12 +38,12 @@ import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
-import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
+import * as Layout from './terminal/layout/runtime-layout-apply'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import {
-  installStructuredAgentAvailability,
-  type StructuredAgentAvailabilityReader
-} from './structured-agent-availability'
+  installStructuredAgentAvailability as installAvailability,
+  type StructuredAgentAvailabilityReader as AvailabilityReader
+} from './agent-session/launch/structured-agent-availability'
 import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
 import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
 import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
@@ -173,11 +174,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     publishNativeChatFollowUpChanges(this.store, (event) => this.emitClientEvent(event))
   }
 
-  private structuredAgentAvailability?: ReturnType<typeof installStructuredAgentAvailability>
+  private structuredAgentAvailability?: ReturnType<typeof installAvailability>
 
   /** Subscribe from first use; returns the release function. */
-  subscribeStructuredAgentAvailability(read: StructuredAgentAvailabilityReader): () => void {
-    this.structuredAgentAvailability ??= installStructuredAgentAvailability(this.store, this)
+  subscribeStructuredAgentAvailability(read: AvailabilityReader): () => void {
+    this.structuredAgentAvailability ??= installAvailability(this.store, this)
     return this.structuredAgentAvailability.subscribe(read)
   }
 
@@ -222,13 +223,14 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Plan a pane spawn through the host launch planner, including runtime attribution. */
   async planAgentPaneLaunch(
     worktreeId: string,
-    opts: TerminalCreateOptions
+    opts: TerminalCreateOptions,
+    sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   ): Promise<TerminalCreateOptions> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-    return this.resolveAgentTerminalCreateOptions(workspace, opts)
+    return this.resolveAgentTerminalCreateOptions(workspace, opts, sessionOptions)
   }
 
-  private readonly workspaceLayoutStream = new WorkspaceLayoutStream({
+  private readonly workspaceLayoutStream = new WorkspaceLayouts.WorkspaceLayoutStream({
     store: () => this.store,
     homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
     liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null,
@@ -245,22 +247,25 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   /** Read-only layout stream; layout.subscribe is not advertised yet. */
   subscribeWorkspaceLayouts(
-    listener: Parameters<WorkspaceLayoutStream['subscribe']>[0]
-  ): ReturnType<WorkspaceLayoutStream['subscribe']> {
+    listener: Parameters<WorkspaceLayouts.WorkspaceLayoutStream['subscribe']>[0]
+  ): ReturnType<WorkspaceLayouts.WorkspaceLayoutStream['subscribe']> {
     return this.workspaceLayoutStream.subscribe(listener)
   }
 
   /** Current main-owned layout projection, independent of window availability. */
-  get workspaceLayoutReads(): WorkspaceLayoutReads {
+  get workspaceLayoutReads(): WorkspaceLayouts.WorkspaceLayoutReads {
     return this.workspaceLayoutStream
   }
 
   /** Apply a window command to the partitions that hold its tab. */
-  async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
+  async applyLayoutCommand(
+    command: Layout.WindowLayoutCommand,
+    run?: Pick<Layout.LayoutCommandRunOptions, 'admit'>
+  ): Promise<LayoutApplyReply> {
     // Wait for live terminal placement before creating the first workspace surface.
     const placing = this.livePlacementSettledFor(command)
     const apply = (): Promise<LayoutApplyReply> =>
-      applyWindowLayoutCommand(
+      Layout.applyWindowLayoutCommand(
         this.requireStore(),
         (worktreeId, tabId) =>
           tabId !== null
@@ -268,7 +273,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
             : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
         command,
         (move) => rekeyMovedPaneOwners(this, move),
-        this.layoutCommandRun(command)
+        { ...this.layoutCommandRun(command), ...run }
       )
     // Order sleep/wake after previously accepted hook statuses.
     const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
@@ -300,38 +305,32 @@ const OrcaRuntimeServiceExport: {
 export { OrcaRuntimeServiceExport as OrcaRuntimeService }
 installRuntimeLinearCommandSurface(OrcaRuntimeServiceExport.prototype)
 
-export type { LegacyWorkerTerminalRecoveryResult } from './runtime-legacy-worker-terminal-recovery-types'
 export type {
   RuntimeAutomationCreateInput,
   RuntimeAutomationUpdateInput
 } from './runtime-automation-controller'
 export type { SubscriptionRegistration } from './runtime-subscription-registry'
-export type {
-  OrchestrationCompatibilityCallerAuthority,
-  OrchestrationCompatibilityTerminalAuthority,
-  RuntimeTerminalAgentStatusEvent
-} from './runtime-terminal-contracts'
 export type { MessageWaitResult } from './runtime-message-waiters'
-export type { AccountsSnapshot, CodexRateLimitResetRpcResult } from './runtime-account-controller'
+export type { RuntimeTerminalDataMeta } from './terminal/output/runtime-terminal-stream-consumers'
 export type {
-  MobileNotificationDispatchEvent,
-  MobileNotificationDismissEvent,
-  MobileNotificationEvent
-} from './runtime-mobile-notification-controller'
-export type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
-export type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
+  RemoteFetchResult,
+  RemoteTrackingBase
+} from './repositories/runtime-remote-fetch-controller'
 export {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason,
   type TerminalTailWaitState
-} from './terminal-wait-tail-state'
-export { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
-export { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal-tail-redraw-buffer'
-export { buildPreview } from './terminal-tail-state'
-export { buildRestoredTerminalTailSeed } from './terminal-tail-restore-seed'
-export { projectTerminalTailLines } from './orca-runtime-terminal-projection'
-export { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
+} from './terminal/wait/terminal-wait-tail-state'
+export { appendNormalizedToTailBuffer } from './terminal/output/tail/terminal-tail-buffer'
+export { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal/output/tail/terminal-tail-redraw-buffer'
+export { buildPreview } from './terminal/output/tail/terminal-tail-state'
+export { buildRestoredTerminalTailSeed } from './terminal/output/tail/terminal-tail-restore-seed'
+export { projectTerminalTailLines } from './terminal/view/orca-runtime-terminal-projection'
+export { resolveWorktreeScanCacheTtlMs } from './workspaces/catalog/runtime-worktree-scan-cache'
 export type {
+  OrchestrationCompatibilityCallerAuthority,
+  OrchestrationCompatibilityTerminalAuthority,
+  RuntimeTerminalAgentStatusEvent,
   RuntimeWorktreeLifecycleEvent,
   DriverState,
   PtyLayoutTarget,

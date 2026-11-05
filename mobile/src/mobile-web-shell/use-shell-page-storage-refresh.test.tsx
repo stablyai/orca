@@ -10,7 +10,9 @@ import {
   retainMirroredStorage,
   writeMirroredStorage
 } from '../storage/mirrored-storage-keys'
+
 import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
+import { createFakeBridgePortPair } from './bridge/bridge-port-pair-test-harness'
 
 const store = vi.hoisted(() => ({
   values: new Map<string, string>(),
@@ -49,39 +51,6 @@ beforeEach(() => {
   app.remove.mockClear()
   store.values.clear()
   store.pending.length = 0
-})
-
-it('refreshes before publishing on native return and foreground, and drops a blurred completion', async () => {
-  let finish!: () => void
-  const refresh = vi.fn(
-    () =>
-      new Promise<void>((resolve) => {
-        finish = resolve
-      })
-  )
-  const publish = vi.fn()
-  function Harness() {
-    useShellPageStorageRefresh(refresh, publish)
-    return null
-  }
-  let renderer!: ReturnType<typeof create>
-  act(() => {
-    renderer = create(createElement(Harness))
-  })
-  expect(publish).not.toHaveBeenCalled()
-  focus.active = false
-  act(() => renderer.update(createElement(Harness)))
-  await act(async () => finish())
-  expect(publish).not.toHaveBeenCalled()
-  focus.active = true
-  act(() => renderer.update(createElement(Harness)))
-  await act(async () => finish())
-  expect(publish).toHaveBeenCalledTimes(1)
-  act(() => app.listener('active'))
-  await act(async () => finish())
-  expect(publish).toHaveBeenCalledTimes(2)
-  act(() => renderer.unmount())
-  expect(app.remove).toHaveBeenCalledTimes(2)
 })
 
 it.each(TERMINAL_SHORTCUT_STORAGE_KEYS)(
@@ -154,3 +123,59 @@ it.each(TERMINAL_SHORTCUT_STORAGE_KEYS)(
     releaseKeys()
   }
 )
+
+it('republishes an accepted page zoom after an older native snapshot crosses the pinch', async () => {
+  const key = 'orca:terminalTextScale'
+  store.values.set(key, '1')
+  const releaseKeys = retainMirroredStorage([key])
+  const storage = { [key]: '1' }
+  let hold = false
+  const held: string[] = []
+  const pair = createFakeBridgePortPair({
+    route: { pathname: '/h/host-a/session/wt-1' },
+    storage,
+    holdToPage: (json) => {
+      if (hold) {
+        held.push(json)
+      }
+      return hold
+    },
+    onStorageWrite: writeMirroredStorage
+  })
+  await pair.flush()
+  let displayedScale = 1
+  pair.client.onStorageUpdate(() => {
+    displayedScale = Number(pair.client.getShellSession()!.storage[key])
+  })
+  const refresh = () => hydrateMirroredStorage([key])
+  const publish = () => {
+    Object.assign(storage, readMirroredStorage([key]))
+    pair.host.publishStorage()
+  }
+  function Harness() {
+    useShellPageStorageRefresh(refresh, publish)
+    return null
+  }
+  let renderer!: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(createElement(Harness))
+    await pair.flush()
+  })
+  hold = true
+  pair.host.publishStorage()
+  displayedScale = 1.5
+  expect(pair.client.notifyStorageWrite(key, '1.5')).toBe(true)
+  await act(async () => pair.flush())
+  pair.deliverToPage(held.shift()!)
+  expect(displayedScale).toBe(1)
+  for (const frame of held) {
+    pair.deliverToPage(frame)
+  }
+  await act(async () => store.pending.shift()!())
+  expect(store.values.get(key)).toBe('1.5')
+  expect(displayedScale).toBe(1.5)
+  act(() => renderer.unmount())
+  pair.client.close()
+  pair.host.dispose()
+  releaseKeys()
+})

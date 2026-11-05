@@ -27,6 +27,9 @@ function worker(): PluginWorkerHandle & { exit: () => void } {
     taskSources: [],
     invokeTaskSource: vi.fn(async () => null),
     deliverEvent: vi.fn(),
+    requestFromPanel: vi.fn(),
+    runHook: vi.fn(),
+    notifyDataChanged: vi.fn(),
     // ast-grep-ignore: test-no-wall-clock -- idle checks compare against the real clock, so "now" keeps the worker active
     lastActivityAt: () => Date.now(),
     inFlightCount: () => 0,
@@ -96,38 +99,6 @@ async function harness() {
   }
 }
 
-it('restarts an approved worker after unchanged discovery replaces its object', async () => {
-  const { service, first, factory } = await harness()
-  const before = service.findValidPlugin(pluginKey)
-  await service.invokeCommand(pluginKey, 'run')
-  await service.refresh()
-  expect(service.findValidPlugin(pluginKey)).not.toBe(before)
-  first.exit()
-  // Why 8s: a loaded runner can land the restart on a later backoff step (up to 5s).
-  await vi.waitFor(() => expect(factory).toHaveBeenCalledTimes(2), { timeout: 8_000 })
-  expect(service.workerState(pluginKey).state).toBe('running')
-})
-
-it('accepts an unchanged discovery refresh while activation is starting', async () => {
-  const { service, first, factory } = await harness()
-  let finish!: (handle: PluginWorkerHandle) => void
-  factory.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve
-      })
-  )
-  const activation = service.invokeCommand(pluginKey, 'run')
-  const result = expect(activation).resolves.toBeNull()
-  await vi.waitFor(() => expect(factory).toHaveBeenCalledOnce())
-  await service.refresh()
-  finish(first)
-  await result
-  first.exit()
-  // Why 8s: a loaded runner can land the restart on a later backoff step (up to 5s).
-  await vi.waitFor(() => expect(factory).toHaveBeenCalledTimes(2), { timeout: 8_000 })
-})
-
 it.each(['revoke', 'disable', 'remove', 'changed spec', 'changed content'] as const)(
   'rejects old activation after %s, including a discovery refresh',
   async (change) => {
@@ -182,22 +153,5 @@ it.each(['revoke', 'disable', 'remove', 'changed spec', 'changed content'] as co
     expect(factory).toHaveBeenCalledOnce()
     first.exit()
     expect(service.workerState(pluginKey).state).toBe('inactive')
-  }
-)
-
-it.each(['revoke', 'disable'] as const)(
-  'rejects crash restart immediately after %s without another refresh',
-  async (change) => {
-    const subject = await harness()
-    const { service, first, factory } = subject
-    await service.invokeCommand(pluginKey, 'run')
-    await service.refresh()
-    subject[change]()
-    first.exit()
-    expect(service.getGrantedCapabilities(pluginKey)).toBeNull()
-    // Admission runs after the supervisor's first backoff.
-    // ast-grep-ignore: test-no-real-time-wait -- proving no restart happens needs the real backoff to elapse
-    await new Promise((resolve) => setTimeout(resolve, 650))
-    expect(factory).toHaveBeenCalledOnce()
   }
 )

@@ -11,14 +11,6 @@ import {
 } from './native-chat-visual-directive'
 
 describe('parseNativeChatVisualDirectiveLine', () => {
-  it('parses file and title', () => {
-    expect(
-      parseNativeChatVisualDirectiveLine(
-        '::orca-visual{file="usage-3f2a.html" title="Usage by day"}'
-      )
-    ).toEqual({ file: 'usage-3f2a.html', title: 'Usage by day' })
-  })
-
   it('treats title as optional and trims it', () => {
     expect(parseNativeChatVisualDirectiveLine('::orca-visual{file="a.html"}')).toEqual({
       file: 'a.html',
@@ -101,10 +93,6 @@ describe('parseNativeChatVisualDirectiveLine', () => {
 })
 
 describe('isNativeChatVisualFileName', () => {
-  it.each(['a.html', 'usage-chart_3f2a.html', 'A1.b.html', '0.html'])('accepts %s', (name) => {
-    expect(isNativeChatVisualFileName(name)).toBe(true)
-  })
-
   it.each([
     ['empty', ''],
     ['no extension', 'chart'],

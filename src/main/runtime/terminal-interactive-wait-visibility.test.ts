@@ -5,7 +5,7 @@ import type {
 } from '../../shared/runtime-terminal-contracts'
 import { RuntimeMachineName } from './runtime-machine-name'
 import { OrcaRuntimeService } from './orca-runtime'
-import { makeTuiIdlePty } from './tui-idle-wait-test-harness'
+import { makeTuiIdlePty } from './terminal/wait/tui-idle-wait-test-harness'
 import { readFileSync } from 'node:fs'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { join } from 'node:path'
@@ -16,7 +16,7 @@ import {
   type TranscriptPaneOptions,
   TRANSCRIPT_PANE_PTY_ID as PTY_ID,
   waitForTranscriptIdle
-} from './agent-transcript-pane-test-harness'
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
 import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 
@@ -571,12 +571,12 @@ describe('terminal wait ownership', () => {
     })
     const deliver = vi.fn()
     const runtime = withPendingDelivery(new OrcaRuntimeService())
-    runtime['ptysById'].set(pty.ptyId, pty)
+    const ownedPty = runtime['terminalIdentity'].createPty(pty)
     runtime['deliverPendingMessagesForPty'] = deliver
     expect(runtime['checkDeliverySettledAndArmRecheck'](pty.ptyId)).toBe(false)
     expect(runtime['checkDeliverySettledAndArmRecheck'](pty.ptyId)).toBe(false)
     expect(vi.getTimerCount()).toBe(1)
-    pty.lastOscTitle = null
+    ownedPty.lastOscTitle = null
     await vi.advanceTimersByTimeAsync(3050)
     expect(deliver).toHaveBeenCalledExactlyOnceWith(pty.ptyId)
     expect(vi.getTimerCount()).toBe(0)
@@ -590,8 +590,8 @@ describe('terminal wait ownership', () => {
     })
     const first = withPendingDelivery(new OrcaRuntimeService())
     const second = withPendingDelivery(new OrcaRuntimeService())
-    first['ptysById'].set(pty.ptyId, pty)
-    second['ptysById'].set(pty.ptyId, pty)
+    first['terminalIdentity'].createPty(pty)
+    second['terminalIdentity'].createPty(pty)
     first['checkDeliverySettledAndArmRecheck'](pty.ptyId)
     second['checkDeliverySettledAndArmRecheck'](pty.ptyId)
     expect(vi.getTimerCount()).toBe(2)

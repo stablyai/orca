@@ -6,10 +6,13 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() }
 }))
 import { OrcaRuntimeService } from './orca-runtime'
-import { partialRuntimeStore, storeWorktreeMeta } from './runtime-store-partial-fixture'
+import {
+  partialRuntimeStore,
+  storeWorktreeMeta
+} from './orca-runtime-tests/runtime-store-partial-fixture'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import type { ResolvedWorktree } from './workspaces/catalog/runtime-worktree-path-identity'
 
 class VisibilityRuntime extends OrcaRuntimeService {
   rows: ResolvedWorktree[] = []

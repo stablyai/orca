@@ -3,14 +3,16 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 
-const FileExplorer = lazy(() => import('./FileExplorer'))
-const SourceControl = lazy(() => import('./SourceControl'))
-const ChecksPanel = lazy(() => import('./ChecksPanel'))
+const FileExplorer = lazy(() => import('./file-explorer/panel/FileExplorer'))
+const SourceControl = lazy(() => import('./source-control/panel/SourceControl'))
+const ChecksPanel = lazy(() => import('./checks-panel/ChecksPanel'))
 const PortsPanel = lazy(() => import('./PortsPanel'))
-const AiVaultSidebarPanel = lazy(() => import('./AiVaultSidebarPanel'))
+const AiVaultSidebarPanel = lazy(() => import('./ai-vault/panel/AiVaultSidebarPanel'))
 const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
-const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
-const PluginPanel = lazy(() => import('./PluginPanel'))
+const FolderWorkspacePrChecksPanel = lazy(
+  () => import('./hosted-review/folder-checks/FolderWorkspacePrChecksPanel')
+)
+const PluginPanel = lazy(() => import('./plugin-panels/PluginPanel'))
 
 type RightSidebarPanelContentProps = {
   effectiveTab: ActiveRightSidebarTab
@@ -22,7 +24,11 @@ export function RightSidebarPanelContent({
   rightSidebarOpen
 }: RightSidebarPanelContentProps): React.JSX.Element {
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      // `orca plugin shot` captures exactly this rect.
+      data-plugin-panel-surface={isPluginPanelTabKey(effectiveTab) ? effectiveTab : undefined}
+    >
       <Suspense fallback={null}>
         {effectiveTab === 'explorer' && <FileExplorer />}
         {effectiveTab === 'source-control' && <SourceControl />}

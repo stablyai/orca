@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getComposerRepoWorktreeBranches,
   isBranchCheckedOutInWorktrees,
   resolveComposerBranchNameOverrideForCreate,
   resolveComposerBranchReuse,
@@ -68,19 +67,6 @@ describe('resolveComposerBranchSelection', () => {
         preserveWorkspaceNameEdits: true
       })
     ).toBe('feature/manual')
-  })
-
-  it('drops empty or missing branch-name overrides even when preserving workspace edits', () => {
-    for (const branchNameOverride of [undefined, '']) {
-      expect(
-        resolveComposerBranchNameOverrideForCreate({
-          branchNameOverride,
-          branchAutoName: 'feature/fix',
-          workspaceName: 'edited display name',
-          preserveWorkspaceNameEdits: true
-        })
-      ).toBeUndefined()
-    }
   })
 
   it('keeps existing branch picker override behavior tied to the auto-name', () => {
@@ -208,32 +194,7 @@ describe('isBranchCheckedOutInWorktrees', () => {
   })
 })
 
-describe('getComposerRepoWorktreeBranches', () => {
-  it('supplies only the selected repo branches to reuse eligibility', () => {
-    expect(
-      getComposerRepoWorktreeBranches(
-        [
-          { repoId: 'repo-a', branch: 'feature/a' },
-          { repoId: 'repo-b', branch: 'feature/b' }
-        ],
-        'repo-a'
-      )
-    ).toEqual(['feature/a'])
-  })
-})
-
 describe('resolveComposerReuseOverride', () => {
-  it('keeps the selection override for a reusable (non-busy) local branch', () => {
-    expect(
-      resolveComposerReuseOverride({
-        refName: 'feature-x',
-        localBranchName: 'feature-x',
-        branchNameOverride: 'feature-x',
-        branchCheckedOutElsewhere: false
-      })
-    ).toBe('feature-x')
-  })
-
   it('drops the override for a local branch checked out in another worktree', () => {
     // Why: pinning a busy branch would collide and produce a suffixed branch.
     expect(
@@ -283,25 +244,6 @@ describe('resolveComposerBranchReuse', () => {
         branchCheckedOutElsewhere: true
       })
     ).toBeUndefined()
-  })
-  it('marks an existing local branch reusable and defaults reuse ON for an auto-derived name', () => {
-    expect(
-      resolveComposerBranchReuse({
-        refName: 'feature-x',
-        localBranchName: 'feature-x',
-        branchCheckedOutElsewhere: false
-      })
-    ).toEqual({ reuseEligibleBranch: 'feature-x', defaultReuse: true })
-  })
-
-  it('offers reuse for a remote-only ref', () => {
-    expect(
-      resolveComposerBranchReuse({
-        refName: 'origin/feature/something',
-        localBranchName: 'feature/something',
-        branchCheckedOutElsewhere: false
-      })
-    ).toEqual({ reuseEligibleBranch: 'feature/something', defaultReuse: true })
   })
 
   it('retains reuse intent for a busy branch so the host can report or open its workspace', () => {

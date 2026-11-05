@@ -5,7 +5,7 @@
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent
-} from '../../../../../../shared/agent-session-resume'
+} from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
@@ -17,7 +17,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { DispatchContextRow } from '../../../../orchestration/types'
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { resolveStructuredWorkerIdentity } from '../../../../structured-worker-authority'
+import { resolveStructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { earlierWork, parseStartOptions } from './worker-earlier-work'
 import {
   reopenWorkerChat,
@@ -30,6 +30,9 @@ import { completeWorkerTerminalRelease } from './worker-release-completion'
 const RELEASE_SETTLE_WAIT_MS = 15_000
 
 export type WorkerFollowUpDelivery = 'follow_up' | 'reopened' | 'started_fresh'
+
+/** Around the durable close of a leftover shell: the start owner's last admission check, then word that the close was requested. */
+export type LeftoverShellRelease = { admit: () => void; requested: (dispatchId: string) => void }
 
 export type WorkerFollowUpPlacement = {
   delivery: WorkerFollowUpDelivery
@@ -47,7 +50,8 @@ export async function chooseWorkerFollowUpPlacement(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   latest: DispatchContextRow,
-  found: WorkerTerminalResourceRow | undefined
+  found: WorkerTerminalResourceRow | undefined,
+  release: LeftoverShellRelease
 ): Promise<WorkerFollowUpPlacement> {
   const worker = db.getWorkerDispatch(found?.origin_dispatch_id ?? latest.id)
   const worktreeId = found?.worktree_id ?? worker?.worktree_id
@@ -76,7 +80,9 @@ export async function chooseWorkerFollowUpPlacement(
         }
   }
   const open =
-    resource && !released(resource) ? await openWorkerTerminal(runtime, db, resource) : null
+    resource && !released(resource)
+      ? await openWorkerTerminal(runtime, db, resource, release)
+      : null
   if (open) {
     return { delivery: 'follow_up', worktreeId, terminal: open }
   }
@@ -111,7 +117,8 @@ export async function chooseWorkerFollowUpPlacement(
 async function openWorkerTerminal(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
-  resource: WorkerTerminalResourceRow
+  resource: WorkerTerminalResourceRow,
+  release: LeftoverShellRelease
 ): Promise<string | null> {
   const inspected = await inspectWorkerTerminal(runtime, db, resource.owner_dispatch_id)
   if (inspected.status === 'unverifiable') {
@@ -136,7 +143,7 @@ async function openWorkerTerminal(
     return live
   }
   if ((live || inspected.status === 'exited') && resource.ownership_state === 'owned') {
-    await releaseLeftoverShell(runtime, db, resource.owner_dispatch_id)
+    await releaseLeftoverShell(runtime, db, resource.owner_dispatch_id, release)
   }
   return null
 }
@@ -145,10 +152,13 @@ async function openWorkerTerminal(
 async function releaseLeftoverShell(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
-  dispatchId: string
+  dispatchId: string,
+  release: LeftoverShellRelease
 ): Promise<void> {
+  release.admit()
   const requested = db.requestWorkerTerminalRelease(dispatchId)
   if (requested.disposition === 'requested') {
+    release.requested(dispatchId)
     await completeWorkerTerminalRelease({ runtime, db, dispatchId, resource: requested.resource })
   }
 }
@@ -178,7 +188,7 @@ function chatTabOpen(db: OrchestrationDb, resource: WorkerTerminalResourceRow): 
 }
 
 /** The user resumed the conversation in a tab of their own: the follow-up goes there and the tab stays theirs. */
-async function userTabHoldingSession(
+export async function userTabHoldingSession(
   runtime: OrcaRuntimeService,
   session: WorkerResumeSession
 ): Promise<string | undefined> {

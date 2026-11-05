@@ -1,8 +1,21 @@
 import { ipcRenderer } from 'electron'
-import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
+import { subscribePluginPanelPush } from './plugin-panel-push-bridge'
+import type {
+  PluginFrameEntry,
+  PluginFrameTheme
+} from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
+import {
+  PLUGIN_STATUS_BAR_CHANGED_CHANNEL,
+  type PluginStatusBarOverrides
+} from '../../shared/plugins/contributions/plugin-status-bar-state'
+import {
+  PLUGIN_VIEW_REPLY_CHANNEL,
+  PLUGIN_VIEW_REQUEST_CHANNEL,
+  type PluginViewRequest
+} from '../../shared/plugins/view/plugin-view-protocol'
 import type {
   PluginAutoUpdateEvent,
   PluginHostInstallResult,
@@ -28,15 +41,21 @@ export const pluginsApi = {
   readPanelEntry: (args: {
     pluginKey: string
     panelId: string
+    theme?: PluginFrameTheme
   }): Promise<PluginFrameEntry | null> => ipcRenderer.invoke('plugins:readPanelEntry', args),
   readCustomEditorEntry: (args: {
     pluginKey: string
     editorId: string
+    theme?: PluginFrameTheme
   }): Promise<PluginFrameEntry | null> => ipcRenderer.invoke('plugins:readCustomEditorEntry', args),
   readNewFileTemplate: (args: { pluginKey: string; newFileId: string }): Promise<string | null> =>
     ipcRenderer.invoke('plugins:readNewFileTemplate', args),
-  invokeCommand: (args: { pluginKey: string; commandId: string; args?: unknown }) =>
-    ipcRenderer.invoke('plugins:invokeCommand', args),
+  invokeCommand: (args: {
+    pluginKey: string
+    commandId: string
+    args?: unknown
+    timeoutMs?: number
+  }) => ipcRenderer.invoke('plugins:invokeCommand', args),
   listTaskSourceItems: (args: { pluginKey: string; sourceId: string; params: unknown }) =>
     ipcRenderer.invoke('plugins:invokeTaskSource', {
       pluginKey: args.pluginKey,
@@ -44,9 +63,6 @@ export const pluginsApi = {
       operation: 'list',
       params: args.params
     }),
-  readSettings: (args: { pluginKey: string }) => ipcRenderer.invoke('plugins:readSettings', args),
-  writeSetting: (args: { pluginKey: string; key: string; value: string | boolean | null }) =>
-    ipcRenderer.invoke('plugins:writeSetting', args),
   getTaskSourceItem: (args: { pluginKey: string; sourceId: string; itemId: string }) =>
     ipcRenderer.invoke('plugins:invokeTaskSource', {
       pluginKey: args.pluginKey,
@@ -59,6 +75,11 @@ export const pluginsApi = {
     action: string
     params?: unknown
   }): Promise<PluginHostCallOutcome> => ipcRenderer.invoke('plugins:panelAction', args),
+  panelState: (args) => ipcRenderer.invoke('plugins:panelState', args),
+  subscribePanelPush: subscribePluginPanelPush,
+  getSettings: (args) => ipcRenderer.invoke('plugins:getSettings', args),
+  setSetting: (args) => ipcRenderer.invoke('plugins:setSetting', args),
+  panelImage: (args) => ipcRenderer.invoke('plugins:panelImage', args),
   resolveGitSource: (args) => ipcRenderer.invoke('plugins:resolveGitSource', args),
   install: (source: PluginHostInstallSource): Promise<PluginHostInstallResult> =>
     ipcRenderer.invoke('plugins:install', source),
@@ -90,6 +111,15 @@ export const pluginsApi = {
       ipcRenderer.removeListener('plugins:changed', listener)
     }
   },
+  onViewRequest: (callback): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: PluginViewRequest): void =>
+      callback(request)
+    ipcRenderer.on(PLUGIN_VIEW_REQUEST_CHANNEL, listener)
+    return () => {
+      ipcRenderer.removeListener(PLUGIN_VIEW_REQUEST_CHANNEL, listener)
+    }
+  },
+  answerViewRequest: (reply) => ipcRenderer.send(PLUGIN_VIEW_REPLY_CHANNEL, reply),
   getAutoUpdateState: () => ipcRenderer.invoke('plugins:getAutoUpdateState'),
   takeUpdateReviewNotices: () => ipcRenderer.invoke('plugins:takeUpdateReviewNotices'),
   getInstallCounts: () => ipcRenderer.invoke('plugins:getInstallCounts'),
@@ -98,6 +128,16 @@ export const pluginsApi = {
     ipcRenderer.on('plugins:installCountsChanged', listener)
     return () => {
       ipcRenderer.removeListener('plugins:installCountsChanged', listener)
+    }
+  },
+  statusBarState: () => ipcRenderer.invoke('plugins:statusBarState'),
+  editorSaveHook: (event) => ipcRenderer.invoke('plugins:editorSaveHook', event),
+  onStatusBarChanged: (callback): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, overrides: PluginStatusBarOverrides) =>
+      callback(overrides)
+    ipcRenderer.on(PLUGIN_STATUS_BAR_CHANGED_CHANNEL, listener)
+    return () => {
+      ipcRenderer.removeListener(PLUGIN_STATUS_BAR_CHANGED_CHANNEL, listener)
     }
   },
   onAutoUpdateChanged: (callback): (() => void) => {

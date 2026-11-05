@@ -1,4 +1,5 @@
 import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
+import type { EditorSaveHookDecision } from '../../shared/plugins/events/plugin-editor-save-hook'
 import type { PluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
 import type {
   PluginAutoUpdateState,
@@ -14,11 +15,22 @@ import type {
   PluginSyntaxPayload
 } from '../../shared/plugins/artifacts/plugin-syntax-artifact'
 import type { PluginTerminalThemeRegistration } from '../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
-import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
+import type {
+  PluginFrameEntry,
+  PluginFrameTheme
+} from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
+import type {
+  PluginPanelStateRequest,
+  PluginPanelStateResult
+} from '../../shared/plugins/declarative/plugin-declarative-panel-state'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
+import type {
+  PluginViewReply,
+  PluginViewRequest
+} from '../../shared/plugins/view/plugin-view-protocol'
 import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import type {
   PluginCatalogGitSource,
@@ -40,7 +52,9 @@ import type {
   PluginTaskListParamsInput,
   PluginTaskListResult
 } from '../../shared/plugins/tasks/plugin-task-source'
-import type { PluginSettingValue } from '../../shared/plugins/contributions/plugin-settings-contribution'
+import type { PluginStatusBarOverrides } from '../../shared/plugins/contributions/plugin-status-bar-state'
+import type { PluginDeclaredSettingsSnapshot } from '../../shared/plugins/contributions/plugin-settings-values'
+import type { PluginJsonValue } from '../../shared/plugins/workers/plugin-host-api'
 
 export type PluginHostLogLine = {
   ts: number
@@ -153,11 +167,17 @@ export type PluginsApi = {
   consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>
   setEnabled: (args: { pluginKey: string; enabled: boolean }) => Promise<PluginHostListEntry[]>
   /** CSP-wrapped HTML for a sandboxed iframe; null if missing or disabled. */
-  readPanelEntry: (args: { pluginKey: string; panelId: string }) => Promise<PluginFrameEntry | null>
+  /** `theme`: the host's current one, baked into an isolated guest's first paint. */
+  readPanelEntry: (args: {
+    pluginKey: string
+    panelId: string
+    theme?: PluginFrameTheme
+  }) => Promise<PluginFrameEntry | null>
   /** CSP-wrapped custom editor HTML and its host-call session; null if missing or disabled. */
   readCustomEditorEntry?: (args: {
     pluginKey: string
     editorId: string
+    theme?: PluginFrameTheme
   }) => Promise<PluginFrameEntry | null>
   /** A new file's starting text (its template, or empty); null if the plugin is off or lacks it. */
   readNewFileTemplate?: (args: { pluginKey: string; newFileId: string }) => Promise<string | null>
@@ -165,6 +185,8 @@ export type PluginsApi = {
     pluginKey: string
     commandId: string
     args?: unknown
+    /** Refused unless the worker can start it within this many ms; older hosts ignore it. */
+    timeoutMs?: number
   }) => Promise<unknown>
   /** Lists a plugin task source; main validates the worker's answer. */
   listTaskSourceItems: (args: {
@@ -177,20 +199,29 @@ export type PluginsApi = {
     sourceId: string
     itemId: string
   }) => Promise<PluginTaskDetail>
-  /** User-set values of a plugin's declared settings (defaults are not filled in). */
-  readSettings: (args: { pluginKey: string }) => Promise<Record<string, PluginSettingValue>>
-  /** Sets one declared setting; null resets it to the plugin's default. */
-  writeSetting: (args: {
-    pluginKey: string
-    key: string
-    value: PluginSettingValue | null
-  }) => Promise<Record<string, PluginSettingValue>>
   /** One frame host call; main enforces consented capabilities and the frame's surface. */
   panelAction: (args: {
     sessionToken: string
     action: string
     params?: unknown
   }) => Promise<PluginHostCallOutcome>
+  /** A components panel's persisted atoms (desktop only); see plugin-panel-state.ts. */
+  panelState?: (args: PluginPanelStateRequest) => Promise<PluginPanelStateResult>
+  /** One open panel's pushes (`PluginPanelPush`, unvalidated); desktop only. Returns unsubscribe. */
+  subscribePanelPush?: (sessionToken: string, listener: (push: unknown) => void) => () => void
+  /** The settings a plugin declares and their current values; null when it declares none. */
+  getSettings?: (args: { pluginKey: string }) => Promise<PluginDeclaredSettingsSnapshot | null>
+  /** The person's edit; `null` restores the default. */
+  setSetting?: (args: {
+    pluginKey: string
+    key: string
+    value: PluginJsonValue
+  }) => Promise<{ ok: true } | { ok: false; error: string }>
+  /** An image file inside a components panel's plugin, or null; see plugin-panel-image.ts. */
+  panelImage?: (args: {
+    sessionToken: string
+    path: string
+  }) => Promise<{ contentType: string; bytes: Uint8Array } | null>
   /** Pins a Git install input to an exact commit without downloading it. */
   resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
@@ -237,6 +268,9 @@ export type PluginsApi = {
   /** Re-discovers after settings edits (feature flag, dev paths). */
   refresh: () => Promise<PluginHostListEntry[]>
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
+  /** `orca plugin open` / `shot`: main asks this window to show a plugin view. Desktop only. */
+  onViewRequest?: (callback: (request: PluginViewRequest) => void) => () => void
+  answerViewRequest?: (reply: PluginViewReply) => void
   /** What automatic updates last did. Older hosts reject the call; treat that as nothing. */
   getAutoUpdateState: () => Promise<PluginAutoUpdateState>
   /** Held updates not yet told to the user, each returned once per version; never approves. */
@@ -246,6 +280,16 @@ export type PluginsApi = {
   onInstallCountsChanged: (callback: () => void) => () => void
   /** Fires after each automatic update pass, with the plugins it just updated. */
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
+  /** What workers set with `statusBar.update`. Desktop only; older hosts reject. */
+  statusBarState?: () => Promise<PluginStatusBarOverrides>
+  /** Runs plugins' `editor.save.before` on a buffer about to be saved. Older hosts lack it. */
+  editorSaveHook?: (event: {
+    workspaceId: string | null
+    path: string
+    languageId?: string
+    text: string
+  }) => Promise<EditorSaveHookDecision>
+  onStatusBarChanged?: (callback: (overrides: PluginStatusBarOverrides) => void) => () => void
 }
 
 export type PluginAutoUpdateEvent = {

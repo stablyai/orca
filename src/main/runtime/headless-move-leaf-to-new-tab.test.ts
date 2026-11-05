@@ -1,17 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from './orca-runtime-test-fixtures.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type { RuntimeStore } from './runtime-store-contract'
 import { planTerminalLeafMove } from '../persistence/terminal-topology/terminal-leaf-move'
-import type { TerminalLeafMoveRequest } from '../../shared/terminal-leaf-move'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { TerminalLeafMoveRequest } from '../../shared/workspace-layout/terminal-leaf-move'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { Tab } from '../../shared/tab-types'
-import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../shared/workspace-session/workspace-session-pane-ownership'
 
 const SIBLING_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 const OTHER_LEAF_ID = '44444444-4444-4444-8444-444444444444'

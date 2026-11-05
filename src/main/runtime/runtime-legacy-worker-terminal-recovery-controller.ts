@@ -1,12 +1,12 @@
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
-import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
+import { getPtyExecutionHost } from '../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import { runLegacyWorkerTerminalRecovery } from './runtime-legacy-worker-terminal-recovery-runner'
 import type {
   LegacyWorkerRecoveryOptions,
   LegacyWorkerRecoveryPorts,
   LegacyWorkerTerminalRecoveryResult
-} from './runtime-legacy-worker-terminal-recovery-types'
+} from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 type RecoveryRetry = {
   attempt: number

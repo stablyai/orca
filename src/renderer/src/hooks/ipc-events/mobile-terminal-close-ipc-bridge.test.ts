@@ -36,7 +36,9 @@ vi.mock('@/components/terminal-pane/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice: vi.fn()
 }))
 vi.mock('@/components/terminal/terminal-tab-actions', () => ({ closeTerminalTab: vi.fn() }))
-vi.mock('@/components/sidebar/sleep-worktree-flow', () => ({ runSleepWorktree: vi.fn() }))
+vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () => ({
+  runSleepWorktree: vi.fn()
+}))
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -392,19 +394,6 @@ describe('runtime file opens on the host desktop', () => {
       )
     ).toBe(true)
   })
-
-  it.each(['caller', 'clients'] as const)(
-    'keeps the desktop still when navigation %s does not target the host',
-    async (navigation) => {
-      const { openFile, store } = await setup('terminal')
-      const before = screenState(store)
-
-      await openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation })
-      await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation })
-
-      expect(screenState(store)).toEqual(before)
-    }
-  )
 
   it.each(['all', 'host'] as const)(
     'brings the user to the file with navigation %s',

@@ -1,38 +1,40 @@
 import {
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
+  AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY
-} from '../../../src/shared/structured-agent-session-surface-capabilities'
+} from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
-  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-session/lifecycle/agent-session-stop-capabilities'
+import {
+  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
-  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
-  AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+  AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-attention-capabilities'
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-session-create-capabilities'
+} from '../../../src/shared/agent-session/agent-session-create-capabilities'
 import {
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-session-permission-modes-capability'
-import {
-  AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
-  AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-session-runtime-capabilities'
+} from '../../../src/shared/agent-session/agent-session-permission-modes-capability'
 import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../src/shared/skill-install-capability'
 
 export type StructuredAgentSessionHostSupport = {
   commandsOnRequest?: boolean
   coherentModelCatalog?: boolean
+  modelEffortDiscovery?: boolean
   promptCancel: boolean
   questionAnswers: boolean
   // Older hosts send mid-turn messages immediately instead of queueing drafts.
@@ -70,6 +72,7 @@ export function structuredAgentSessionHostSupport(
   return {
     commandsOnRequest: capabilities.includes(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY),
     coherentModelCatalog: capabilities.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY),
+    modelEffortDiscovery: capabilities.includes(AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY),
     promptCancel: capabilities.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY),
     questionAnswers: capabilities.includes(AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY),
     queuedMessages: capabilities.includes(AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY),

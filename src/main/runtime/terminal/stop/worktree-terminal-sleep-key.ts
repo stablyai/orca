@@ -8,8 +8,11 @@ import {
   getWorktreeIdFromHostIdentity,
   type HostScopedWorktreeKey
 } from '../../../../shared/worktree/host-qualified-identity'
-import { resolveWorktreeLaunchHost, type LaunchHostRepo } from '../../worktree-launch-host-repo'
-import type { WorktreePtyHostFence } from '../../worktree-pty-host-fence'
+import {
+  resolveWorktreeLaunchHost,
+  type LaunchHostRepo
+} from '../../workspaces/catalog/worktree-launch-host-repo'
+import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty-host-fence'
 
 /** Host-scope sleep keys so same-id twins cannot wake or block one another's spawns. */
 export function hostSleepKey(hostId: ExecutionHostId, worktreeId: string): HostScopedWorktreeKey {

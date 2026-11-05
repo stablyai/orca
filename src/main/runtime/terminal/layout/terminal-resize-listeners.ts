@@ -1,13 +1,14 @@
-import { sessionIdFromStructuredWorkerIncarnation } from '../../structured-worker-identity'
+import { sessionIdFromStructuredWorkerIncarnation } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { observeStructuredWorker } from '../../rpc/methods/orchestration-structured-worker-lifecycle'
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
 import { addListenerToMap } from '../../orca-runtime-core'
 import { notifyRuntimeListeners, withTimeoutResult } from '../../runtime-async-boundaries'
-import type { TerminalExitCause } from '../../../../shared/terminal-exit-cause'
+
 import {
+  type TerminalExitCause,
   describeTerminalExitCause,
   isDeliberateTerminalExit
-} from '../../../../shared/terminal-exit-cause'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import {
   DEFAULT_TERMINAL_LIST_LIMIT,
   PTY_CONTROLLER_LIST_TIMEOUT_MS

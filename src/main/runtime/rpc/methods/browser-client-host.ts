@@ -2,18 +2,18 @@ import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { BrowserClientPageMetadataParams } from '../../../../shared/browser-client-page-metadata-protocol'
+import { BrowserClientPageMetadataParams } from '../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import {
   BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
   BrowserClientHostAttachParams,
   BrowserClientHostCommandResultParams
-} from '../../../../shared/browser-client-host-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { BrowserError } from '../../../browser/browser-error'
-import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
-import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
-import { adoptRuntimeBrowserClientPagesFromInventory } from '../../runtime-browser-client-page-adoption'
-import { recoverUnavailableRuntimeBrowserClientPages } from '../../runtime-browser-client-page-recovery'
-import { releaseRuntimeBrowserClientPageRecord } from '../../runtime-browser-client-page-release'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { adoptRuntimeBrowserClientPagesFromInventory } from '../../browser/client-pages/runtime-browser-client-page-adoption'
+import { recoverUnavailableRuntimeBrowserClientPages } from '../../browser/client-pages/runtime-browser-client-page-recovery'
+import { releaseRuntimeBrowserClientPageRecord } from '../../browser/client-pages/runtime-browser-client-page-release'
 import { defineMethod, defineStreamingMethod } from '../core'
 
 export const BROWSER_CLIENT_HOST_METHODS = [

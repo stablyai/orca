@@ -6,6 +6,7 @@ import {
   type PluginEventName
 } from '../contributions/plugin-event-contribution'
 import type { PluginFileMatch } from '../contributions/plugin-file-match'
+import { validatePluginStatusBarItems } from '../contributions/plugin-status-bar-item-contribution'
 
 type IdentifiedContribution = { id: string }
 type PathContribution = { path: string }
@@ -14,8 +15,13 @@ type ContributionValidationManifest = {
   main?: string
   contributes: {
     panels: IdentifiedContribution[]
-    commands: (IdentifiedContribution & { action?: string; when?: 'global' | 'workspace' })[]
+    commands: (IdentifiedContribution & {
+      action?: string
+      replaces?: string
+      when?: 'global' | 'workspace'
+    })[]
     events: { on: PluginEventName }[]
+    hooks: { event: string }[]
     languagePacks: { locale: string }[]
     keybindings: { command: string; key: string; when?: 'global' | 'workspace' }[]
     vmRecipes: PathContribution[]
@@ -25,8 +31,9 @@ type ContributionValidationManifest = {
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
     customEditors: (IdentifiedContribution & PluginFileMatch)[]
     newFiles: IdentifiedContribution[]
-    taskSources: IdentifiedContribution[]
     settings: { key: string }[]
+    statusBarItems: { id: string; command?: string }[]
+    taskSources: IdentifiedContribution[]
   }
   capabilities: { kind: string }[]
 }
@@ -113,6 +120,23 @@ export function validatePluginManifestContributions(
     ctx
   )
   rejectDuplicateValues(
+    manifest.contributes.settings.map((setting) => setting.key),
+    String,
+    'settings',
+    'setting key',
+    ctx
+  )
+  if (
+    manifest.contributes.settings.length > 0 &&
+    !manifest.capabilities.some((capability) => capability.kind === 'settings:own')
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contributes', 'settings'],
+      message: 'needs the "settings:own" capability, which is how the plugin reads them'
+    })
+  }
+  rejectDuplicateValues(
     manifest.contributes.vmRecipes,
     (entry) => (entry as PathContribution).path,
     'vmRecipes',
@@ -134,6 +158,7 @@ export function validatePluginManifestContributions(
     identities.forEach((identity) => keybindingIdentities.add(identity))
   }
 
+  validatePluginStatusBarItems(manifest.contributes, ctx)
   const commands = new Map(manifest.contributes.commands.map((command) => [command.id, command]))
   for (const [index, command] of manifest.contributes.commands.entries()) {
     if (command.action !== undefined && !isPluginCommandAliasActionId(command.action)) {
@@ -144,6 +169,7 @@ export function validatePluginManifestContributions(
       })
     }
   }
+  validateCommandReplacements(manifest.contributes.commands, ctx)
   for (const [index, keybinding] of manifest.contributes.keybindings.entries()) {
     const command = commands.get(keybinding.command)
     if (!command) {
@@ -174,6 +200,20 @@ export function validatePluginManifestContributions(
       message: 'required when contributes.commands contains a worker command'
     })
   }
+  rejectDuplicateValues(
+    manifest.contributes.hooks.map((hook) => hook.event),
+    String,
+    'hooks',
+    'hook',
+    ctx
+  )
+  if (!manifest.main && manifest.contributes.hooks.length > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['main'],
+      message: 'required when contributes.hooks is non-empty'
+    })
+  }
   if (!manifest.main && manifest.contributes.events.length > 0) {
     ctx.addIssue({
       code: 'custom',
@@ -190,27 +230,6 @@ export function validatePluginManifestContributions(
         message: `${subscription.on} requires the ${required} capability`
       })
     }
-  }
-  const settingKeys = new Set<string>()
-  for (const [index, setting] of manifest.contributes.settings.entries()) {
-    if (settingKeys.has(setting.key)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['contributes', 'settings', index],
-        message: `duplicate settings key: ${setting.key}`
-      })
-    }
-    settingKeys.add(setting.key)
-  }
-  if (
-    manifest.contributes.settings.length > 0 &&
-    !manifest.capabilities.some((capability) => capability.kind === 'settings:own')
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['capabilities'],
-      message: 'settings:own capability required when contributes.settings is non-empty'
-    })
   }
   if (manifest.contributes.taskSources.length > 0) {
     if (!manifest.main) {
@@ -229,5 +248,39 @@ export function validatePluginManifestContributions(
         message: 'tasks:provide capability required when contributes.taskSources is non-empty'
       })
     }
+  }
+}
+
+/** A replacement runs worker code in place of a built-in, so it cannot also be a built-in alias. */
+function validateCommandReplacements(
+  commands: readonly { replaces?: string; action?: string }[],
+  ctx: RefinementCtx
+): void {
+  const replaced = new Set<string>()
+  for (const [index, command] of commands.entries()) {
+    if (command.replaces === undefined) {
+      continue
+    }
+    const path = ['contributes', 'commands', index, 'replaces']
+    if (!isPluginCommandAliasActionId(command.replaces)) {
+      ctx.addIssue({
+        code: 'custom',
+        path,
+        message: `unknown built-in action: ${command.replaces}`
+      })
+    } else if (command.action !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path,
+        message: 'a replacing command runs the worker; drop action'
+      })
+    } else if (replaced.has(command.replaces)) {
+      ctx.addIssue({
+        code: 'custom',
+        path,
+        message: `another command already replaces ${command.replaces}`
+      })
+    }
+    replaced.add(command.replaces)
   }
 }

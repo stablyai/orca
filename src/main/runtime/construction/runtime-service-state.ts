@@ -1,3 +1,5 @@
+import { readAgentOrchestrationProjectionRecords } from '../orchestration-fleet-agent-status-snapshot'
+import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/structured-mailbox-pointer-delivery'
 
 import { createStructuredMailboxPointerHost } from '../orchestration/structured-mailbox-pointer-host'
@@ -5,31 +7,32 @@ import { localOrchestrationCliCommand } from '../orchestration/cli-command'
 import { RuntimeOrchestrationSenderNames } from '../runtime-orchestration-sender-names'
 import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
-import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
+import { resolveStructuredWorkerAuthority } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { OrcaRuntimeWithRuntimeId } from './runtime-identity-state'
-import { RuntimeTerminalAgentPresence } from '../runtime-terminal-agent-presence'
+import { RuntimeTerminalAgentPresence } from '../terminal/query/runtime-terminal-agent-presence'
 import type { RuntimeNotifier } from '../runtime-notifier-contract'
 import { RuntimeClientEventBus } from '../runtime-client-event-bus'
 import { RuntimeNativeChatDraftResolutions } from '../runtime-native-chat-draft-resolutions'
-import { RuntimeWorktreeLifecycleEvents } from '../runtime-worktree-lifecycle-events'
+import { RuntimeWorktreeLifecycleEvents } from '../workspaces/lifecycle/runtime-worktree-lifecycle-events'
 import type {
   RuntimeWorktreeLifecycleEvent,
   RuntimeWorktreeScanCache,
   RuntimeWorktreeScanInFlight
 } from '../orca-runtime-core'
-import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import type { BrowserBackend } from '../../browser/browser-backend'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
-import { RuntimeResolvedWorktreeCache } from '../runtime-resolved-worktree-cache'
-import { RuntimeWorktreeLineageController } from '../runtime-worktree-lineage-controller'
-import { RuntimeAgentOrchestrationProjection } from '../runtime-agent-orchestration-projection'
-import { RuntimeTerminalList } from '../runtime-terminal-list'
-import { RuntimeManagedWorktreeQueries } from '../runtime-managed-worktree-queries'
+import { RuntimeResolvedWorktreeCache } from '../workspaces/catalog/runtime-resolved-worktree-cache'
+import { RuntimeWorktreeLineageController } from '../workspaces/lineage/runtime-worktree-lineage-controller'
+import { createRuntimeAgentProjections } from './runtime-agent-projections'
+import type { RuntimeAgentOrchestrationDependencies } from '../runtime-agent-orchestration-projection'
+import { RuntimeTerminalList } from '../terminal/query/runtime-terminal-list'
+import { RuntimeManagedWorktreeQueries } from '../workspaces/catalog/runtime-managed-worktree-queries'
 import { RuntimePtyForegroundAgent } from '../runtime-pty-foreground-agent'
 import { OpenCodeRunLifetimeStatus } from '../opencode-run-lifetime-status'
 import { readLocalPtyForegroundCommandLine } from '../local-pty-foreground-command-line'
-import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-status-hooks-setting'
-import { RuntimeTerminalAgentStatusQuery } from '../runtime-terminal-agent-status-query'
+import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { RuntimeTerminalAgentStatusQuery } from '../terminal/query/runtime-terminal-agent-status-query'
 import type { OrchestrationDb } from '../orchestration/db'
 import { OrchestrationMailboxOwner } from '../orchestration/mailbox-owner'
 import { OrchestrationMailboxDeliveryTarget } from '../orchestration/mailbox-delivery-target'
@@ -38,16 +41,13 @@ import { OrchestrationMailboxNotificationCoordinator } from '../orchestration/ma
 import type { RuntimeMessageWaiter } from '../runtime-message-waiters'
 import { RuntimeMessageWaiters } from '../runtime-message-waiters'
 import type { WorkerTurnStopReportDeps } from '../orchestration/worker-turn-stop-report'
-import type { RuntimeSkillCommands } from '../runtime-skill-command-surface'
-import { RuntimeTerminalStreamConsumers } from '../runtime-terminal-stream-consumers'
+import type { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
+import { RuntimeTerminalStreamConsumers } from '../terminal/output/runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../orca-runtime-postlude'
-import { screenClearsBlockedTail } from '../blocked-tail-screen-clear'
-import { conversationRecordReader } from '../orchestration/structured-session-lineage'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { peekOpenedAgentSessionRecordStore } from '../agent-session-record-store-slot'
+import { readScreenClearingBlockedTail } from '../blocked-tail-screen-clear'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
   protected readonly stopRequestedPtyIds = new Set<string>()
@@ -116,25 +116,32 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     showTerminal: (handle) => this.showTerminal(handle)
   })
 
-  protected readonly agentOrchestrationProjection = new RuntimeAgentOrchestrationProjection({
-    getDb: () => this.getOrchestrationDbIfAvailable(),
-    getLeaves: () => this.leaves.values(),
-    getPtys: () => this.ptysById.values(),
-    paneOf: (pty) => this.paneOfPty(pty),
-    issueLeafHandle: (leaf) => this.issueHandle(leaf),
-    issuePtyHandle: (pty) => this.issuePtyHandle(pty),
-    makePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
-    getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle),
-    getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
-    getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
-    getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
-    getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
-    getSessionRecords: () => {
-      const store =
-        getStructuredAgentSessionHost()?.deps.store ?? peekOpenedAgentSessionRecordStore()
-      return store ? conversationRecordReader(store) : null
-    }
+  protected agentOrchestrationDependencies(bound?: Partial<RuntimeAgentOrchestrationDependencies>) {
+    return {
+      getDb: () => this.getOrchestrationDbIfAvailable(),
+      getLeaves: () => this.leaves.values(),
+      getPtys: () => this.ptysById.values(),
+      paneOf: (pty) => this.paneOfPty(pty),
+      issueLeafHandle: (leaf) => this.issueHandle(leaf),
+      issuePtyHandle: (pty) => this.issuePtyHandle(pty),
+      makePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
+      getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle),
+      getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+      getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
+      getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
+      getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+      getSessionRecords: () => readAgentOrchestrationProjectionRecords(),
+      ...bound
+    } satisfies RuntimeAgentOrchestrationDependencies
+  }
+
+  protected readonly agentProjections = createRuntimeAgentProjections(this, {
+    ...this.agentOrchestrationDependencies(),
+    hasPublishedScope: (id) => this.mobileSessionTabsByWorktree.has(id),
+    ...this.terminalHandleAccess()
   })
+
+  protected readonly agentOrchestrationProjection = this.agentProjections.orchestration
 
   protected readonly terminalList = new RuntimeTerminalList({
     getGraphEpoch: () => (this.graphStatus === 'ready' ? this.rendererGraphEpoch : null),
@@ -222,22 +229,17 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isRunning: (handle) => this.isTerminalRunningAgent(handle),
     getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
     flushPendingBlockedStamp: (ptyId) => this.flushPendingWaitBlockedCheck(ptyId),
-    readScreenClearingBlockedTail: (ptyId, lastOutputAt) => {
-      // Why quiet: a frame caught mid-paint can drop a dialog row the next chunk restores.
-      // No output timestamp counts as quiet; a clear can only remove a block.
-      if (lastOutputAt !== null && Date.now() - lastOutputAt < TUI_IDLE_QUIESCENCE_MS) {
-        return null
-      }
-      const screen = this.readCaughtUpRuledScreen(ptyId)
-      if (!screen || !screenClearsBlockedTail(this.getPaneAgentForTuiIdle(ptyId), screen.lines)) {
-        return null
-      }
-      // Why drop the stamp: our own paste echo ends the quiet, and the tail must not re-block on it.
-      this.clearWaitBlockedStamp(ptyId)
-      return screen.lines.join('\n')
-    }
+    readScreenClearingBlockedTail: (ptyId, lastOutputAt) =>
+      readScreenClearingBlockedTail({
+        lastOutputAt,
+        quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
+        agent: () => this.getPaneAgentForTuiIdle(ptyId),
+        readScreen: () => this.readCaughtUpRuledScreen(ptyId),
+        clearStamp: () => this.clearWaitBlockedStamp(ptyId)
+      })
   })
 
+  readonly crewChanges = new CrewChanges()
   protected _orchestrationDb: OrchestrationDb | null = null
 
   protected readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
@@ -282,11 +284,11 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     new OrchestrationStructuredMailboxPointerDelivery<RuntimeMessageWaiter>({
       getDb: () => this._orchestrationDb,
       getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
-      resolveStructuredTarget: (mailboxHandle) =>
-        this.resolveStructuredMailboxTarget(mailboxHandle),
+      resolveStructuredTarget: (handle) => this.resolveStructuredMailboxTarget(handle),
+      redeliver: (handle) => this.deliverPendingMessagesForHandle(handle),
       getCliCommand: localOrchestrationCliCommand,
-      senderName: (party, reportedDispatchId) =>
-        this.orchestrationSenderNames.nameOf(party, reportedDispatchId),
+      senderSnapshot: (party, reportedDispatchId) =>
+        this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId),
       host: createStructuredMailboxPointerHost()
     })
 
@@ -297,10 +299,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTerminalPaneKey: (handle) => this.getTerminalPaneKey(handle),
     getWorkspaceSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
     getGeneratedTitlesEnabled: () => this.store?.getSettings?.()?.tabAutoGenerateTitle === true,
-    getAgentStatusSnapshotForPane: (paneKey) =>
-      this.getAgentStatusSnapshotForPaneFn?.(paneKey) ??
-      this.getAgentStatusSnapshotFn?.().filter((row) => row.paneKey === paneKey) ??
-      [],
+    getAgentStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+    getAgentStatusSnapshotForPane: (paneKey) => this.getAgentStatusSnapshotForPaneFn?.(paneKey),
     getTrackedTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId)
   })
 

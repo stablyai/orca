@@ -1,13 +1,16 @@
 import { writeFile, rm } from 'node:fs/promises'
-vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (original) => {
-  const query = await import('../transcript-opencode-sqlite-query')
-  return {
-    ...(await original<object>()),
-    readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
-    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
-      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+vi.mock(
+  '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (original) => {
+    const query = await import('../transcript-opencode-sqlite-query')
+    return {
+      ...(await original<object>()),
+      readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
+      readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+        query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+    }
   }
-})
+)
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { restTestSend } from './structured-agent-session-rest-test-rig'
@@ -24,7 +27,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 import {
   fixture,

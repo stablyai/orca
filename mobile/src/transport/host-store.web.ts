@@ -1,7 +1,8 @@
 // Read the shell’s init.host instead of an absent web keychain; otherwise routes would show Host not found.
 import { readPageHostProfile } from '../mobile-web-shell/bridge/page-host-profile'
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { HostCatalogEntry, HostProfile } from './types'
+import type { ReportedHostDescriptor } from './host-name-identity'
 
 // The page gets no device credential or public key; RPC uses the shell’s paired client.
 function pageHosts(): HostProfile[] {
@@ -10,6 +11,7 @@ function pageHosts(): HostProfile[] {
 }
 
 export const loadHosts = (): Promise<HostProfile[]> => Promise.resolve(pageHosts())
+export const peekHosts = (): HostProfile[] | null => pageHosts()
 
 export const loadHostCatalog = (): Promise<HostCatalogEntry[]> =>
   Promise.resolve(
@@ -36,7 +38,7 @@ export function updateHostNameAndEndpoint(
 // Last-known descriptors belong to the native host list.
 export function updateHostDescriptor(
   _hostId: string,
-  _descriptor: { machineName: string | null; platform: NodeJS.Platform | null }
+  _descriptor: ReportedHostDescriptor
 ): Promise<void> {
   return Promise.resolve()
 }

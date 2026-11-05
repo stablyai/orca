@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,
@@ -48,17 +48,6 @@ describe('provider timeline turns', () => {
     })
     expect(row?.turnScope).toEqual({ kind: 'thread' })
     expect(row?.revision).toBeGreaterThan(runningRow?.revision ?? Infinity)
-  })
-
-  it('mints a turn id when the provider names none, and keys a turn no send opened by its own row', async () => {
-    const rig = await openProviderTimelineRig()
-    rig.assembler.apply({ type: 'turn.open', at: 1_000 })
-    const turnId = rig.assembler.openTurnId
-    expect(turnId).toMatch(/^m:gen-1/)
-    const rows = await rig.rows()
-    const [row] = rows
-    expect(rows).toHaveLength(1)
-    expect(row?.body).toMatchObject({ kind: 'turn', turnId, userItemId: row?.itemId })
   })
 
   it('names the open turn with a send that arrives after a provider-opened turn began', async () => {

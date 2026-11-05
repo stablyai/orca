@@ -1,20 +1,15 @@
-import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type {
   PaneManagerOptions,
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
-  DropZone
+  DropZone,
+  PaneActivationOptions
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import type { PaneManagerHost } from './pane-manager-host'
-import {
-  applyDividerStyles,
-  applyPaneOpacity,
-  applyRootBackground,
-  disposeDividersIn
-} from './pane-divider'
+import { disposeDividersIn } from './pane-divider'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { setLigaturesEnabled, disposePane } from './pane-lifecycle'
@@ -22,7 +17,7 @@ import { setInlineImagesEnabled } from './pane-inline-images'
 import { fitAllPanesInternal } from './pane-tree-ops'
 import { collectPublicPanes, toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
-import { rebuildAttachedWebgl } from './pane-webgl-reattach'
+import { detachPanesWebglForRebuild } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
   clearPaneWebglTextureAtlases,
@@ -32,7 +27,7 @@ import {
   setPaneGpuRenderingState,
   suspendPaneRendering
 } from './pane-rendering-control'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
 import { releaseHiddenWebglRetention } from './terminal-webgl-hidden-retention'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
@@ -46,6 +41,8 @@ import {
   splitPaneOnManager
 } from './pane-manager-tree-mutations'
 import {
+  activateManagedPane,
+  applyManagedPaneStyles,
   createInitialManagedPane,
   createManagedPaneInternal,
   publishManagedPaneCreated
@@ -57,7 +54,8 @@ import {
   refreshAllPaneTerminals
 } from './pane-manager-layout-sweeps'
 import { collectPaneRenderingDiagnostics } from './pane-rendering-diagnostics'
-import { applyPaneLayoutGeometry, type TerminalPaneLayoutNode } from './pane-layout-geometry-apply'
+import { applyPaneLayoutGeometry } from './pane-layout-geometry-apply'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 
 export type {
@@ -115,7 +113,7 @@ export class PaneManager {
       requestPaneReparentFrame: (callback) => this.reparentFrames.request(callback)
     }
     // Atlas recovery must reach every manager (resetAndRefreshAllTerminalWebglAtlases explains shared generations).
-    registerLivePaneManager(this)
+    registerLivePaneManager(this, () => detachPanesWebglForRebuild(this.panes.values()))
   }
 
   createInitialPane(opts?: { focus?: boolean; leafId?: string }): ManagedPane {
@@ -223,29 +221,17 @@ export class PaneManager {
     return this.identities.adoptPaneLeafId(numericPaneId, pane, leafId)
   }
 
-  setActivePane(paneId: number, opts?: { focus?: boolean }): void {
+  setActivePane(paneId: number, opts?: PaneActivationOptions): void {
     const pane = this.panes.get(paneId)
     if (!pane) {
       return
     }
-    const changed = this.activePaneId !== paneId
-    this.activePaneId = paneId
-    applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
-
-    if (opts?.focus !== false) {
-      focusPanePreservingOverlays(pane)
-    }
-
-    if (changed) {
-      this.options.onActivePaneChange?.(toPublicPane(pane))
-    }
+    activateManagedPane(this.host, pane, opts)
   }
 
   setPaneStyleOptions(opts: PaneStyleOptions): void {
     this.styleOptions = { ...opts }
-    applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
-    applyDividerStyles(this.root, this.styleOptions)
-    applyRootBackground(this.root, this.styleOptions)
+    applyManagedPaneStyles(this.host)
   }
 
   private withPane<T>(paneId: number, apply: (pane: ManagedPaneInternal) => T): T | undefined {
@@ -271,10 +257,6 @@ export class PaneManager {
 
   markPaneHasComplexScriptOutput(paneId: number): void {
     markPaneComplexScriptOutput(this.panes, paneId)
-  }
-
-  rebuildPaneWebgl(paneId: number): void {
-    this.withPane(paneId, rebuildAttachedWebgl)
   }
 
   resetWebglTextureAtlases(): void {

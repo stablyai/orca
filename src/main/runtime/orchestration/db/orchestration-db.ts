@@ -1,3 +1,4 @@
+import { CrewChanges } from '../crew/crew-changes'
 import Database from '../../../sqlite/sync-database'
 import { attachOrchestrationDbMethods } from './attach-orchestration-db-methods'
 import type { MailHandBack } from './messages/helper-mailbox-hand-back'
@@ -19,6 +20,7 @@ import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-work
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 
 class OrchestrationDbCore {
+  readonly crewChanges = new CrewChanges()
   db: Database.Database
 
   // Cache Dispatch emptiness to skip per-terminal queries on 16ms graph ticks for users without orchestration.
@@ -38,6 +40,8 @@ class OrchestrationDbCore {
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
+    // Savepoint journals otherwise need a temp file; a full or unwritable temp dir then aborts the whole transaction (#38123).
+    this.db.pragma('temp_store = MEMORY')
     createTables.call(this as unknown as OrchestrationDb)
     // Read before migrate, which drops the capture triggers it may need to rebuild around.
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)

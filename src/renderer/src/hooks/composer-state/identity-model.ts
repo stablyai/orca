@@ -1,5 +1,5 @@
 import type * as React from 'react'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'

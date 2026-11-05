@@ -1,49 +1,55 @@
-import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
-import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type {
   AgentSessionRewindFork,
   AgentSessionRewindReason,
   AgentSessionRewindSupport
-} from '../../../shared/agent-session-rewind'
+} from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 // The host owns journal/lease authority; adapters report delivery uncertainty without guessing.
 
 import type {
   AgentJournalAnsweredTurnIdentity,
-  AgentJournalItemIdentity,
   AgentJournalMessageItem,
-  AgentJournalTurnItem,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
+  AgentJournalTurnItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
-  AgentSessionAccountHome,
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type {
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity,
   AgentSessionRecord
-} from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
-import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
-import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
   StructuredAgentSessionAdapterStop
 } from './structured-agent-session-adapter-stop'
+/** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
+export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
+
 export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
 export type {
   StructuredAgentSessionChildEndCause,
   StructuredAgentSessionStopCause
 } from './structured-agent-session-stop-cause'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
 import type {
   StructuredAgentSessionStartupAttempt,
   StructuredAgentSessionAcquisitionReceipt
 } from './structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
+import type { AgentSessionStartFailure } from './structured-agent-session-start-failure'
 import type {
   StructuredAgentSessionProviderOpen,
   StructuredAgentSessionProviderOpenResult
@@ -89,6 +95,8 @@ export type StructuredAgentSessionCommandRun = {
   identity: AgentJournalItemIdentity
   resultIdentity: AgentJournalItemIdentity
   running: AgentJournalTurnItem
+  /** Only agents declaring `compactInstructions` receive this. */
+  instructions?: string
 }
 
 /** Commands may answer in place without echoing provider items. */
@@ -186,6 +194,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string,
     mode: AgentChatPermissionChoice
   ): boolean | undefined
+  /** Settle native work without withdrawing previously admitted input; false proves no permission transition. */
+  settlePermissionTransition?(input: {
+    sessionId: string
+    fence: number
+    mode: AgentChatPermissionChoice
+    signal?: AbortSignal
+  }): Promise<boolean>
   dispatch(input: {
     sessionId: string
     clientMessageId: string
@@ -247,6 +262,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
+  /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
+  confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */
@@ -266,6 +283,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */
   holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean
+  /** This exact acquisition's ending before the host committed it ready, as the adapter reads it. */
+  startupEnding?(
+    sessionId: string,
+    acquisitionGeneration: string
+  ): AgentSessionStartFailure | undefined
+  /** The start's owner finished: nothing reads this acquisition's ending any more. */
+  retireStartup?(sessionId: string, acquisitionGeneration: string): void
   /** Undefined preserves the client catalog when the provider reports none. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands

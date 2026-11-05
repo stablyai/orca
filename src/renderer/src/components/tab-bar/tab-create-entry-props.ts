@@ -1,4 +1,4 @@
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
@@ -12,7 +12,7 @@ export type TabBarCreateEntryProps = {
   onDidOpenEntry?: () => void
   /** Legacy agent-only callback for callers that do not project surfaces. */
   onLaunchAgent?: (agent: TabAgentLaunchOption['agent']) => void
-  onLaunchAgentOption?: (option: TabAgentLaunchOption) => void
+  onLaunchAgentOption?: (option: TabAgentLaunchOption) => boolean | void | Promise<boolean>
   onOpenDefaultTerminal?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   onQueryChange?: (query: string) => void

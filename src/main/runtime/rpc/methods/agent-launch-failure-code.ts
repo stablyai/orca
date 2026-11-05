@@ -1,6 +1,10 @@
-import { formatTerminalStartFailure } from '../../../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import {
+  RuntimeLineageError,
+  LINEAGE_PARENT_AMBIGUOUS
+} from '../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchTarget } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
@@ -8,14 +12,14 @@ import {
 import {
   AgentLaunchPaneAlreadyLiveError,
   AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE
-} from '../../../../shared/agent-launch-pane-already-live'
+} from '../../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import {
   AgentLaunchSessionAlreadyExistsError,
   AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
-} from '../../../../shared/agent-launch-session-already-exists'
+} from '../../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import { FolderWorkspaceCreateRefusedError } from '../../../project-groups/folder-workspace-create-refusal'
-import { WorktreeCreateSetupChoiceRefusedError } from '../../worktree-create-setup-choice-refusal'
+import { WorktreeCreateSetupChoiceRefusedError } from '../../workspaces/creation/worktree-create-setup-choice-refusal'
 import { AgentLaunchSurfaceUnavailableError } from '../../../agent-launch/agent-launch-surface-refusal'
 
 /** Long enough for every code this path raises, with room for one a later guard adds. */
@@ -32,10 +36,16 @@ export function agentLaunchFailureCode(error: unknown): string {
 }
 
 /** A coded refusal's own words, kept beside its code so a replay says the same; bounded likewise. */
-export function agentLaunchFailureMessage(error: unknown): string | undefined {
+export function agentLaunchFailureMessage(
+  error: unknown,
+  targetKind?: AgentLaunchTarget['kind']
+): string | undefined {
   return (
     formatTerminalStartFailure(error) ??
-    (error instanceof OrchestrationError
+    (error instanceof OrchestrationError ||
+    (error instanceof RuntimeLineageError &&
+      error.code === LINEAGE_PARENT_AMBIGUOUS &&
+      targetKind === 'create-worktree')
       ? error.message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
       : undefined)
   )
@@ -69,6 +79,14 @@ export function launchFailureWithoutEffectsCode(
   }
   if (error instanceof WorktreeCreateSetupChoiceRefusedError && targetKind === 'create-worktree') {
     return agentLaunchFailureCode(error)
+  }
+  // The unique producer refuses retained cwd lineage before any workspace or agent effects.
+  if (
+    error instanceof RuntimeLineageError &&
+    error.code === LINEAGE_PARENT_AMBIGUOUS &&
+    targetKind === 'create-worktree'
+  ) {
+    return LINEAGE_PARENT_AMBIGUOUS
   }
   if (error instanceof AgentLaunchPaneAlreadyLiveError && targetKind === 'existing') {
     return AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE

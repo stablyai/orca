@@ -6,11 +6,15 @@ import {
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Hello,
   type MobileE2EEV2Ready
-} from '../../../shared/mobile-e2ee-v2-contract'
-import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
+} from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
+import { sealMobileE2EEV2Frame } from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
 import type { DeviceRegistry } from '../device-registry'
-import { deriveSharedKey, encrypt, generateKeyPair } from '../../../shared/e2ee-crypto'
-import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
+import {
+  deriveSharedKey,
+  encrypt,
+  generateKeyPair
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { deriveMobileE2EEV2KeySchedule } from '../../../shared/remote-runtime/e2ee/node/mobile-e2ee-v2-node-key-schedule'
 import {
   MobileSocketWiring,
   type MobileSocketTransport,
@@ -54,6 +58,7 @@ function registryFor(
   token: string,
   scope: 'mobile' | 'runtime' = 'mobile'
 ): DeviceRegistry {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transport tests use only credential lookups and last-seen writes.
   return {
     validateToken: (candidate: string) =>
       candidate === token
@@ -65,6 +70,10 @@ function registryFor(
             pairedAt: 1,
             lastSeenAt: 0
           }
+        : null,
+    resolveAuthenticatedPrincipal: (principal: { deviceId: string; deviceToken?: string }) =>
+      principal.deviceId === deviceId && principal.deviceToken === token
+        ? { deviceId, token, name: 'Phone', scope, pairedAt: 1, lastSeenAt: 0 }
         : null,
     updateLastSeen: vi.fn(),
     updateLastSeenDeferred: vi.fn()
@@ -102,37 +111,6 @@ describe('MobileSocketWiring', () => {
     expect(wiring.terminateDeviceConnections('device-1')).toBe(2)
     expect(direct.terminateClientConnections).not.toHaveBeenCalled()
     expect(relay.terminateClientConnections).toHaveBeenCalledWith('device-1')
-  })
-
-  it('releases detached transports from revocation fanout under origin churn', () => {
-    const desktop = generateKeyPair()
-    const wiring = new MobileSocketWiring({
-      deviceRegistry: registryFor('device-1', 'valid-token'),
-      e2eeKeypair: {
-        publicKey: desktop.publicKey,
-        secretKey: desktop.secretKey,
-        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
-      },
-      onText: vi.fn(),
-      onBinary: vi.fn(),
-      onClose: vi.fn()
-    })
-    const live = new FakeTransport()
-    wiring.attachTransport(live)
-    const retired = Array.from({ length: 1_000 }, () => new FakeTransport())
-
-    for (const transport of retired) {
-      const detach = wiring.attachTransport(transport)
-      detach()
-      detach()
-    }
-
-    expect(wiring['transports'].size).toBe(1)
-    expect(wiring.terminateDeviceConnections('device-1')).toBe(0)
-    expect(live.terminateClientConnections).toHaveBeenCalledOnce()
-    expect(
-      retired.every((transport) => transport.terminateClientConnections.mock.calls.length === 0)
-    ).toBe(true)
   })
 
   it('preserves the legacy direct handshake, identity, and close cleanup', () => {

@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { OrcaRuntimeWithRestoredTerminalPlacement } from './restored-terminal-placement'
 import type {
   RuntimeTerminalOrphanAdoptionRequest,
@@ -7,18 +7,17 @@ import type {
 } from '../../../../shared/runtime-types'
 
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { resolveTerminalSessionWorktreeId } from '../catalog/runtime-worktree-path-identity'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { layoutContainsLeafId } from '../../../persistence/restoring-sessions/terminal-layout-normalization'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
-import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
+import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import type {
   LegacyWorkerRecoveryCandidate,
-  LegacyWorkerRecoveryInventory,
   TerminalWorkspaceLaunchScope
-} from '../../runtime-legacy-worker-terminal-recovery-types'
-import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
+} from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import { getLatestPtyTitle } from '../process-listing/runtime-worktree-status-projection'
 import type { AutomationService } from '../../../automations/service'
 import type { ArtifactCloudService } from '../../../artifacts/artifact-cloud-service'
 import type {
@@ -32,7 +31,7 @@ import type {
   ArtifactWriteRequest
 } from '../../../../shared/artifacts'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
-import { forgetPtySurface } from '../../pty-recorded-surface-topology'
+import { forgetPtySurface } from '../../terminal/surface/pty-recorded-surface-topology'
 
 export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends OrcaRuntimeWithRestoredTerminalPlacement {
   protected abstract getOwnWorkspaceSessionForWorktree(
@@ -96,6 +95,44 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     )
   }
 
+  protected hasExactTerminalSurfaceIdentity(expected: {
+    worktreeId: string
+    tabId: string
+    leafId: string
+    ptyId: string
+    terminalHandle: string
+    incarnationId: string
+  }): boolean {
+    if (this.graphStatus !== 'ready') {
+      return false
+    }
+    const pty = this.ptysById.get(expected.ptyId)
+    if (
+      !pty?.connected ||
+      pty.incarnationId !== expected.incarnationId ||
+      this.paneOfPty(pty).tabId !== expected.tabId ||
+      this.paneOfPty(pty).paneKey !== makePaneKey(expected.tabId, expected.leafId) ||
+      !worktreeIdsEqual(pty.worktreeId, expected.worktreeId) ||
+      this.handleByPtyId.get(expected.ptyId) !== expected.terminalHandle
+    ) {
+      return false
+    }
+    const tab = this.tabs.get(expected.tabId)
+    const leaf = this.leaves.get(this.getLeafKey(expected.tabId, expected.leafId))
+    const ptyLeaves = this.getLeavesForPty(expected.ptyId)
+    return (
+      Boolean(tab && worktreeIdsEqual(tab.worktreeId, expected.worktreeId)) &&
+      Boolean(
+        leaf &&
+        leaf.ptyId === expected.ptyId &&
+        worktreeIdsEqual(leaf.worktreeId, expected.worktreeId)
+      ) &&
+      ptyLeaves.length === 1 &&
+      ptyLeaves[0]?.tabId === expected.tabId &&
+      ptyLeaves[0]?.leafId === expected.leafId
+    )
+  }
+
   protected rollbackLegacyWorkerTerminalSurface(
     candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
   ): void {
@@ -120,9 +157,9 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
       leaf?.ptyId === candidate.ptyId &&
       worktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
     ) {
-      this.leaves.delete(leafKey)
+      this.terminalIdentity.removeLeaf(leafKey)
       const surfaceHandle = this.handleByLeafKey.get(leafKey)
-      this.handleByLeafKey.delete(leafKey)
+      this.terminalIdentity.unbindLeaf(leafKey)
       const handleRecord = surfaceHandle ? this.handles.get(surfaceHandle) : undefined
       if (
         surfaceHandle &&
@@ -130,15 +167,15 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
         handleRecord.leafId === candidate.leafId &&
         handleRecord.ptyId === candidate.ptyId
       ) {
-        this.handles.delete(surfaceHandle)
+        this.terminalIdentity.removeHandle(surfaceHandle)
       }
       this.rebuildLeafPtyIndex()
       if (![...this.leaves.values()].some((entry) => entry.tabId === candidate.tabId)) {
-        this.tabs.delete(candidate.tabId)
+        this.terminalIdentity.removeTab(candidate.tabId)
       }
     }
     if (pty && this.paneOfPty(pty).tabId === candidate.tabId) {
-      forgetPtySurface(pty)
+      forgetPtySurface(this.terminalIdentity, pty)
     }
     this.notifier?.resolveLegacyWorkerTerminalRecovery?.(
       candidate.paneKey,
@@ -168,7 +205,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
   protected async adoptLegacyWorkerTerminal(
     candidate: LegacyWorkerRecoveryCandidate,
     workspace: TerminalWorkspaceLaunchScope,
-    inventory: LegacyWorkerRecoveryInventory,
+    inventory: PtyControllerInventory,
     activation: { activeTabId?: string; activeGroupId?: string }
   ): Promise<void> {
     await this.adoptTerminalOrphansFromInventoryUnderMutation(

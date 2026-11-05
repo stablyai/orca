@@ -3,9 +3,10 @@ import {
   AGENT_SESSION_FAILURE_COPY as COPY,
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues
-} from '../../../../shared/agent-session-failure-copy'
+} from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 
 export const STOP_FAILURE_PIECES = {
+  unconfirmed: () => translate('components.native-chat.failureWords.unconfirmed', COPY.unconfirmed),
   cancelUnconfirmed: () =>
     translate('components.native-chat.failureWords.cancelUnconfirmed', COPY.cancelUnconfirmed),
   stopRefused: (values) =>

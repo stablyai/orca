@@ -1,4 +1,4 @@
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import { seedAccountList } from './agent-model-catalog-account-list'
 import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import type {
   AgentModelCatalogReadParams,
@@ -6,7 +6,7 @@ import type {
 } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
 import { agentModelCatalogReadRecords } from './agent-model-catalog-read-scope'
-import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
+import { recordCatalogKey } from './agent-model-catalog-fingerprint'
 import { scopedAgentModelCatalogLister } from './agent-model-catalog-lister'
 import { newChatCatalogKey } from './agent-model-catalog-prewarm'
 import {
@@ -15,9 +15,13 @@ import {
   projectAgentModelCatalogDefault
 } from './agent-model-catalog-workspace'
 import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   agentModelCatalogReleasedOwner,
+  bindAgentModelCatalogScope,
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
 import {
@@ -32,6 +36,7 @@ export type AgentModelCatalogClaim = Pick<
   controller: AbortController
   promise: Promise<void>
   ready: Promise<void>
+  demandModel: (model: string | undefined) => void
 }
 
 export function createAgentModelCatalogLookup(
@@ -42,7 +47,8 @@ export function createAgentModelCatalogLookup(
   claims: Map<string, AgentModelCatalogClaim>,
   requestKey: (params: AgentModelCatalogReadParams) => string,
   capture: (params: AgentModelCatalogReadParams) => string,
-  captureRead: (params: AgentModelCatalogReadParams) => AgentModelCatalogReadOperation
+  captureRead: (params: AgentModelCatalogReadParams) => AgentModelCatalogReadOperation,
+  tasks: Set<Promise<unknown>>
 ) {
   return (params: AgentModelCatalogReadParams): Promise<void> => {
     const operation = params.operation ?? captureRead(params)
@@ -58,11 +64,24 @@ export function createAgentModelCatalogLookup(
     let coldWorkspace = params.workspace !== undefined && workspaceIdentity === null
     const retirement = operation.retirement
     const previous = claims.get(key)
+    const selectedModel = usesModelSpecificAcpEfforts(params.agent)
+      ? (params.selectedModel ??
+        (params.sessionId ? deps.getConversation(params.sessionId)?.options?.model : undefined))
+      : undefined
     if (previous?.identity === identity) {
+      previous.demandModel(selectedModel)
       return previous.promise
     }
     previous?.controller.abort()
     const controller = operation.controller
+    let target = selectedModel
+    let targetFingerprint: string | undefined
+    const demandModel = (model: string | undefined) => {
+      target = model
+      if (targetFingerprint) {
+        deps.store.efforts.demand(targetFingerprint, model)
+      }
+    }
     const ready = Promise.withResolvers<void>()
     const valid = (): boolean =>
       Date.now() < deadline &&
@@ -127,37 +146,13 @@ export function createAgentModelCatalogLookup(
       if (!current()) {
         return
       }
-      let fingerprint: string
-      let probeHome: AgentSessionAccountHome | null
-      if (scoped) {
-        fingerprint = agentModelCatalogFingerprintForRecord(scoped, folder)
-        // Native probes cannot list a WSL-pinned account.
-        probeHome =
-          scoped.location.executionHostId === 'local' && scoped.location.wslDistro === null
-            ? scoped.accountHome
-            : null
-      } else {
-        const key = await newChatCatalogKey(deps, params.agent, folder)
-        if (!current() || !key) {
-          return
-        }
-        fingerprint = key.fingerprint
-        probeHome = key.accountHome
-      }
-      const scope = await resolveAgentModelCatalogScope(
-        deps,
-        { ...params, workspacePath, savedOnly },
-        scoped,
-        fingerprint,
-        probeHome,
-        current,
-        { deadline, current, signal: AbortSignal.any([controller.signal, operation.signal]) }
-      )
-      if (!current() || !scope) {
+      const account = scoped
+        ? recordCatalogKey(scoped, folder)
+        : await newChatCatalogKey(deps, params.agent, folder)
+      if (!current() || !account) {
         return
       }
-      const { base, exact, resolved, cwd } = scope
-      fingerprint = scope.fingerprint
+      const { fingerprint: base, accountHome: probeHome } = account
       let bindingCurrent = true
       const bound: AgentModelCatalogBinding = {
         identity,
@@ -171,23 +166,41 @@ export function createAgentModelCatalogLookup(
           bindingCurrent = false
           controller.abort()
         },
-        fingerprint,
+        fingerprint: base,
         base,
-        exact,
+        exact: false,
         folder,
-        cwd,
         workspacePath,
         keepDefault:
           workspacePath === undefined ||
           (workspacePath === null && independentAgentModelCatalog(params.agent))
       }
-      bindings.set(bindingKey, bound)
-      while (bindings.size > 256) {
-        const oldest = bindings.keys().next().value
-        if (oldest !== undefined) {
-          bindings.delete(oldest)
-        }
+      // Prewarm proves the selected account before command/folder resolution can finish.
+      if (
+        independentAgentModelCatalog(params.agent) &&
+        !scoped &&
+        workspacePath === undefined &&
+        !params.legacy &&
+        !savedOnly
+      ) {
+        bindAgentModelCatalogScope(bindings, bindingKey, bound, requestKey, true)
       }
+      const scope = await resolveAgentModelCatalogScope(
+        deps,
+        { ...params, workspacePath, savedOnly },
+        scoped,
+        base,
+        probeHome,
+        current,
+        { deadline, current, signal: AbortSignal.any([controller.signal, operation.signal]) }
+      )
+      if (!current() || !scope) {
+        return
+      }
+      const { fingerprint, exact, resolved, cwd } = scope
+      targetFingerprint = fingerprint
+      Object.assign(bound, { fingerprint, exact, cwd })
+      bindAgentModelCatalogScope(bindings, bindingKey, bound, requestKey)
       bound.projecting = projectAgentModelCatalogDefault(
         deps,
         params.agent,
@@ -215,14 +228,35 @@ export function createAgentModelCatalogLookup(
         probeHome,
         workspacePath: cwd ?? folder
       })
-      if (probe && probeHome && deps.store.probeDue(fingerprint)) {
-        void deps.store.refresh(fingerprint, params.agent, list, current, signal)
+      if (
+        probe &&
+        probeHome &&
+        (deps.store.probeDue(fingerprint) ||
+          deps.store.efforts.due(fingerprint, target) ||
+          deps.store.isListing(fingerprint))
+      ) {
+        void deps.store.refresh(
+          fingerprint,
+          params.agent,
+          (selected) => {
+            const task = list(selected)
+            tasks.add(task)
+            void task.finally(() => tasks.delete(task)).catch(() => {})
+            return task
+          },
+          current,
+          signal,
+          target
+        )
       }
       // Demand owns ingestion until settlement, even when its caller only needs the snapshot.
       ready.resolve()
       const pending = deps.store.pendingListing(fingerprint, true, true)
       if (pending) {
         await pending
+      }
+      if (current()) {
+        seedAccountList(deps, scope, params.agent)
       }
     }
     const promise = runAgentModelCatalogOperation(run, remaining, controller, () => {
@@ -231,7 +265,17 @@ export function createAgentModelCatalogLookup(
         claims.delete(key)
       }
     })
-    claims.set(key, { identity, controller, promise, ready: ready.promise, params, current })
+    tasks.add(promise)
+    void promise.finally(() => tasks.delete(promise)).catch(() => {})
+    claims.set(key, {
+      identity,
+      controller,
+      promise,
+      ready: ready.promise,
+      params,
+      current,
+      demandModel
+    })
     return promise
   }
 }

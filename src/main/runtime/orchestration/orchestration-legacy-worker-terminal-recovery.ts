@@ -1,6 +1,9 @@
-import { sessionIdFromStructuredWorkerIncarnation } from '../structured-worker-identity'
-import { isPtyIncarnationId, type PtyIncarnationId } from '../../../shared/pty-incarnation'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { sessionIdFromStructuredWorkerIncarnation } from './terminal-authority/structured-sessions/structured-worker-identity'
+import {
+  isPtyIncarnationId,
+  type PtyIncarnationId
+} from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { LegacyWorkerTerminalRecoveryRow } from './types'
 import { WORKER_SETTLED_STATES } from './worker-terminal-ownership'
 

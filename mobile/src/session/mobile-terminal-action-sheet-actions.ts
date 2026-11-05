@@ -2,7 +2,7 @@ import { Eraser, Monitor, Smartphone } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileNativeChatTab } from './native-chat/mobile-native-chat-eligibility'
-import { getMobileNativeChatToggleActions } from './mobile-native-chat-toggle-action'
+import { getMobileNativeChatToggleActions } from './native-chat/mobile-native-chat-toggle-action'
 
 type TerminalTab = MobileNativeChatTab & { id: string; terminal: string | null }
 

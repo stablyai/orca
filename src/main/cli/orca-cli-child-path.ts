@@ -2,7 +2,7 @@
 import { delimiter, dirname, join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { readInheritedPath } from '../ipc/pty/host-env/path'
-import { resolvePathEnvKey } from '../pty/windows-environment-path'
+import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 import { ensureLinuxTerminalOrcaCliShimDir } from './linux-terminal-orca-cli-shim'
 import { getBundledLauncherPath } from './bundled-cli-launcher-path'
 import { DEV_COMMAND_NAME } from './cli-install-constants'

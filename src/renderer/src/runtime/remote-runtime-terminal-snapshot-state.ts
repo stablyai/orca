@@ -1,6 +1,6 @@
-import { decodeTerminalStreamJson } from '../../../shared/terminal-stream-protocol'
-import { parseTerminalSnapshotUnavailableReason } from '../../../shared/terminal-snapshot-unavailability'
-import { parseTerminalKittyKeyboardFlags } from '../../../shared/terminal-kitty-keyboard-flags'
+import { decodeTerminalStreamJson } from '../../../shared/terminal/stream/terminal-stream-protocol'
+import { parseTerminalSnapshotUnavailableReason } from '../../../shared/terminal/replay/terminal-snapshot-unavailability'
+import { parseTerminalKittyKeyboardFlags } from '../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import type {
   RemoteRuntimeMultiplexedTerminalState,
   RemoteRuntimeSnapshotAvailability,

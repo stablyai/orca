@@ -10,7 +10,7 @@ import {
   realKimiPrOutput,
   sourceShapedKimiOutput
 } from '../../shared/__fixtures__/kimi-generation-source-shaped'
-import { cleanGeneratedCommitMessage } from '../../shared/commit-message-prompt'
+import { cleanGeneratedCommitMessage } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import { finalizeFromAgentOutput } from './source-control-agent-failure'
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcessModule>()

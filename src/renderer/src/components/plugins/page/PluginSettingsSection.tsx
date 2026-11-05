@@ -1,196 +1,170 @@
-import { useEffect, useId, useState } from 'react'
-import { Loader2 } from 'lucide-react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
-import type {
-  PluginSettingContribution,
-  PluginSettingValue
-} from '../../../../../shared/plugins/contributions/plugin-settings-contribution'
+import { useId, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
+import { Switch } from '../../ui/switch'
 import { Textarea } from '../../ui/textarea'
-import { SettingsSwitch } from '../../settings/SettingsFormControls'
+import type { PluginSettingContribution } from '../../../../../shared/plugins/contributions/plugin-settings-contribution'
+import type { PluginJsonValue } from '../../../../../shared/plugins/workers/plugin-host-api'
 import { DetailSection } from './PluginDetailSections'
+import { usePluginDeclaredSettings } from '../state/use-plugin-declared-settings'
 
-type Values = Record<string, PluginSettingValue>
-
-function errorText(cause: unknown): string {
-  const message = cause instanceof Error ? cause.message : String(cause)
-  return message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+type SettingControlProps = {
+  id: string
+  setting: PluginSettingContribution
+  value: PluginJsonValue | undefined
+  onCommit: (value: PluginJsonValue) => void
 }
 
-function PluginSettingField({
-  setting,
-  value,
-  onCommit
-}: {
-  setting: PluginSettingContribution
-  value: PluginSettingValue | undefined
-  onCommit: (value: PluginSettingValue | null) => void
-}): React.JSX.Element {
-  const id = useId()
-  const [draft, setDraft] = useState(typeof value === 'string' ? value : '')
-  const defaultText =
-    setting.default === undefined || setting.default === '' ? null : String(setting.default)
-  // Why: an empty text field means "use the plugin's default", so it resets instead of storing ''.
-  const commitText = (): void => {
-    if (draft !== (typeof value === 'string' ? value : '')) {
-      onCommit(draft === '' ? null : draft)
+/** Text and numbers commit on blur or Enter, so a half-typed value is never written. */
+function TextSetting({ id, setting, value, onCommit }: SettingControlProps): React.JSX.Element {
+  const shown = value === undefined || value === null ? '' : String(value)
+  const [draft, setDraft] = useState<string | null>(null)
+  const numeric = setting.type === 'number' || setting.type === 'integer'
+  const commit = (): void => {
+    if (draft === null || draft === shown) {
+      setDraft(null)
+      return
     }
+    // An emptied field goes back to the default.
+    onCommit(draft === '' ? null : numeric ? Number(draft) : draft)
+    setDraft(null)
   }
-  const checked = typeof value === 'boolean' ? value : setting.default === true
-  const control =
-    setting.type === 'boolean' ? (
-      <SettingsSwitch
-        checked={checked}
-        onChange={() => onCommit(!checked)}
-        ariaLabel={setting.title}
-      />
-    ) : setting.type === 'enum' ? (
+  const shared = {
+    id,
+    value: draft ?? shown,
+    placeholder: setting.placeholder,
+    onChange: (event: { target: { value: string } }) => setDraft(event.target.value),
+    onBlur: commit
+  }
+  return setting.multiline ? (
+    <Textarea {...shared} rows={3} />
+  ) : (
+    <Input
+      {...shared}
+      type={numeric ? 'number' : 'text'}
+      min={setting.minimum}
+      max={setting.maximum}
+      step={setting.type === 'integer' ? 1 : undefined}
+      maxLength={setting.maxLength}
+      density="compact"
+      className="w-56"
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          commit()
+        }
+      }}
+    />
+  )
+}
+
+function SettingControl(props: SettingControlProps): React.JSX.Element {
+  const { id, setting, value, onCommit } = props
+  if (setting.type === 'boolean') {
+    return (
+      <Switch id={id} checked={value === true} onCheckedChange={(checked) => onCommit(checked)} />
+    )
+  }
+  if (setting.enum) {
+    const options = setting.enum.map((option, index) => ({
+      value: String(option),
+      raw: option,
+      label: setting.enumLabels?.[index] ?? String(option)
+    }))
+    return (
       <Select
-        value={typeof value === 'string' ? value : String(setting.default ?? '')}
-        onValueChange={(next) => onCommit(next)}
+        value={value === undefined || value === null ? undefined : String(value)}
+        onValueChange={(next) => {
+          const option = options.find((entry) => entry.value === next)
+          if (option) {
+            onCommit(option.raw)
+          }
+        }}
       >
-        <SelectTrigger id={id} aria-label={setting.title}>
-          <SelectValue />
+        <SelectTrigger id={id} size="sm" className="w-56">
+          <SelectValue placeholder={setting.placeholder} />
         </SelectTrigger>
-        <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-          {(setting.options ?? []).map((option) => (
+        <SelectContent>
+          {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
-    ) : setting.multiline ? (
-      <Textarea
-        id={id}
-        value={draft}
-        placeholder={setting.placeholder ?? defaultText ?? undefined}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commitText}
-        rows={4}
-      />
-    ) : (
-      <Input
-        id={id}
-        value={draft}
-        placeholder={setting.placeholder ?? defaultText ?? undefined}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commitText}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-            event.preventDefault()
-            commitText()
-          }
-        }}
-        spellCheck={false}
-      />
-    )
-  const labelGroup = (
-    <div className="min-w-0 space-y-1">
-      <Label htmlFor={setting.type === 'boolean' ? undefined : id}>{setting.title}</Label>
-      {setting.description ? (
-        <p className="text-xs text-muted-foreground">{setting.description}</p>
-      ) : null}
-    </div>
-  )
-  if (setting.type === 'boolean') {
-    // Why: switches sit beside their label, matching SettingsSwitchRow elsewhere in Settings.
-    return (
-      <div className="flex items-start justify-between gap-4 border-t border-border px-3.5 py-3 first:border-t-0">
-        {labelGroup}
-        <div className="shrink-0 pt-0.5">{control}</div>
-      </div>
     )
   }
+  return <TextSetting {...props} />
+}
+
+function SettingRow({
+  setting,
+  value,
+  error,
+  onWrite
+}: {
+  setting: PluginSettingContribution
+  value: PluginJsonValue | undefined
+  error: string | undefined
+  onWrite: (value: PluginJsonValue) => void
+}): React.JSX.Element {
+  const id = useId()
+  const changed = value !== undefined && value !== (setting.default ?? undefined)
+  const stacked = setting.multiline === true
   return (
-    <div className="space-y-2 border-t border-border px-3.5 py-3 first:border-t-0">
-      {labelGroup}
-      {control}
-      {defaultText && setting.type === 'string' ? (
-        <p className="text-[11px] text-muted-foreground">
-          {translate(
-            'auto.components.settings.PluginSettingsSection.default',
-            'Default: {{value0}}',
-            {
-              value0: defaultText
-            }
-          )}
-        </p>
-      ) : null}
+    <div className="border-t border-border px-3.5 py-2.5 text-sm first:border-t-0">
+      <div
+        data-stacked={stacked}
+        className="flex items-center gap-3 data-[stacked=true]:flex-col data-[stacked=true]:items-stretch"
+      >
+        <div className="min-w-0 flex-1">
+          <Label htmlFor={id}>{setting.title}</Label>
+          {setting.description ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">{setting.description}</p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <SettingControl id={id} setting={setting} value={value} onCommit={onWrite} />
+          {changed && setting.default !== undefined ? (
+            <Button variant="ghost" size="xs" onClick={() => onWrite(null)}>
+              {translate('auto.components.settings.PluginSettingsSection.reset', 'Reset')}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
     </div>
   )
 }
 
-/** The plugin's declared settings on its page; each change saves on its own. */
+/** `contributes.settings`, edited here by the person; the plugin reads them with `settings.get`. */
 export function PluginSettingsSection({
-  plugin
+  pluginKey,
+  revision
 }: {
-  plugin: PluginHostListEntry
-}): React.JSX.Element {
-  const [values, setValues] = useState<Values | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const { pluginKey } = plugin
-
-  useEffect(() => {
-    let cancelled = false
-    setValues(null)
-    setError(null)
-    window.api.plugins
-      .readSettings({ pluginKey })
-      .then((next) => {
-        if (!cancelled) {
-          setValues(next)
-        }
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) {
-          setError(errorText(cause))
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [pluginKey])
-
-  const commit = (key: string, value: PluginSettingValue | null): void => {
-    setError(null)
-    window.api.plugins
-      .writeSetting({ pluginKey, key, value })
-      .then(setValues)
-      .catch((cause: unknown) => setError(errorText(cause)))
+  pluginKey: string
+  /** Re-reads when the installed plugin changes. */
+  revision: string
+}): React.JSX.Element | null {
+  const { snapshot, errors, write } = usePluginDeclaredSettings(pluginKey, revision)
+  if (!snapshot || snapshot.settings.length === 0) {
+    return null
   }
-
   return (
     <DetailSection
       title={translate('auto.components.settings.PluginSettingsSection.title', 'Settings')}
     >
-      {values === null && !error ? (
-        <p className="flex items-center gap-2 px-3.5 py-3 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" />
-          {translate('auto.components.settings.PluginSettingsSection.loading', 'Loading…')}
-        </p>
-      ) : null}
-      {values
-        ? (plugin.settings ?? []).map((setting) => (
-            <PluginSettingField
-              key={setting.key}
-              setting={setting}
-              value={values[setting.key]}
-              onCommit={(value) => commit(setting.key, value)}
-            />
-          ))
-        : null}
-      {error ? (
-        <p
-          role="alert"
-          className="border-t border-border px-3.5 py-3 text-xs text-destructive first:border-t-0"
-        >
-          {error}
-        </p>
-      ) : null}
+      {snapshot.settings.map((setting) => (
+        <SettingRow
+          key={setting.key}
+          setting={setting}
+          value={snapshot.values[setting.key]}
+          error={errors[setting.key]}
+          onWrite={(value) => write(setting.key, value)}
+        />
+      ))}
     </DetailSection>
   )
 }

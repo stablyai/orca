@@ -1,4 +1,5 @@
-import { isWindowsBatchScript, resolveWindowsCommand } from '../../win32-utils'
+import { isWindowsBatchScript } from '../../../shared/windows-batch-spawn'
+import { resolveWindowsCommand } from '../../windows/windows-command-paths'
 import { isMissingCommandBinaryError } from '../exec-error'
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import { execFileCapture } from './exec-file-capture'

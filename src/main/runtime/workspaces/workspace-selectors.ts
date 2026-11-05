@@ -1,8 +1,12 @@
 import { detectProjectLaunchContext } from '../../preflight/workspace-agent-detection'
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
-import { branchSelectorMatches, runtimePathsEqual } from '../runtime-worktree-path-identity'
+import {
+  type ResolvedWorktree,
+  branchSelectorMatches,
+  runtimePathsEqual
+} from './catalog/runtime-worktree-path-identity'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
@@ -12,21 +16,21 @@ import {
   runtimeRepoSelectorHostId,
   runtimeRepoSelectorText,
   type RuntimeRepoSelector
-} from '../runtime-repo-selector'
+} from './catalog/runtime-repo-selector'
 import type {
   WorktreeLineageInput,
   WorktreeLineageResolution
-} from '../runtime-worktree-lineage-resolution'
+} from './lineage/runtime-worktree-lineage-resolution'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../../shared/workspace-scope'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
-import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
+import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
-import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
+import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 

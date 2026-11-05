@@ -1,8 +1,8 @@
 import { createElement } from 'react'
 import TestRenderer from 'react-test-renderer'
 import { expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 
 it('retains a terminal blocking ask across a projected notice until its result', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createRuntime, syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import { createRuntime, syncSinglePty } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 
 describe('hidden-output recovery after provider reattach', () => {
   it('uses retained provider modes instead of the pre-attach redraw suffix', async () => {

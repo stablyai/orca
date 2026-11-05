@@ -1,27 +1,27 @@
 import { OrcaRuntimeWithResolveWorktreeRemovalTarget } from '../../workspaces/workspace-removal-target'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import type {
   AgentLaunchPreferences,
   RuntimeAgentSessionRpcCaller,
   RuntimeEnsureAgentSessionRequest,
   RuntimeEnsureAgentSessionResult
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import {
   canonicalizeAgentSessionIdentity,
   type ProviderExecutionNamespace
 } from '../../agent-session/ownership/agent-session-claim-identity'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { buildAgentResumeStartupPlan } from '../../../../shared/tui-agent-startup'
-import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { agentLaunchQuotingShell } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { withAgentSessionAccountEnv } from '../../agent-session-account-env'
-import { resolveWslHostAgentResumeInputs } from '../../wsl-host-agent-terminal-launch'
+import { withAgentSessionAccountEnv } from '../../agent-session/agent-session-account-env'
+import { resolveWslHostAgentResumeInputs } from '../../terminal/launch/wsl-host-agent-terminal-launch'
 import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
-} from '../../../../shared/tui-agent-launch-defaults'
+} from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 
 export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntimeWithResolveWorktreeRemovalTarget {
   protected getAgentSessionExecutionNamespace(

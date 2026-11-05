@@ -1,4 +1,4 @@
-import { selectFreshAgentRowForMobileTab } from '../../runtime-hook-agent-row-selection'
+import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-tabs/session-tabs-change-publication'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type {
@@ -9,19 +9,19 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
 import { mergeMobileSessionTabGroups } from '../../mobile-session-tab-merge'
-import { buildHeadlessMobileSessionTabGroups } from '../../mobile-session-layout-projection'
+import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
 import { projectRuntimeMobileSessionTabs } from '../../runtime-mobile-session-projection'
 import type { RuntimeMobileSessionProjectionHost } from '../../runtime-mobile-session-projection-contract'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import type { RuntimeAgentRowSnapshot } from '../../runtime-worktree-agent-rows'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
+import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import type {
   AgentStatusEntry,
-  AgentStatusIpcPayload,
   AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { buildRuntimeMobileAgentStatus } from '../../runtime-mobile-agent-status-builder'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredWorkerHandleAgentStatus } from '../../orchestration/structured-worker-group-addressing'
 import {
@@ -306,21 +306,5 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
 
   getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {
     return this.getTerminalHandleForPaneKey(paneKey) ?? undefined
-  }
-
-  getTerminalHandleForPaneKey(paneKey: string): string | null {
-    const parsed = parsePaneKey(paneKey)
-    const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : undefined
-    if (leaf?.ptyId && leaf.connected) {
-      return this.issueHandle(leaf)
-    }
-    const panePty = this.getPtyRecordForPaneKey(paneKey)
-    if (panePty?.connected) {
-      return this.issuePtyHandle(panePty)
-    }
-    if (leaf?.ptyId) {
-      return this.issueHandle(leaf)
-    }
-    return panePty ? this.issuePtyHandle(panePty) : null
   }
 }

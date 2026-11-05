@@ -4,6 +4,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { findAutomationRepoForWrite } from '../../../shared/automation-repo-target'
 import {
   applyAutomationLaunchSetupPatch,
+  automationCanonicalLaunchSetup,
   automationWithLaunchSetup
 } from '../../../shared/automation-launch-setup'
 import { randomUUID } from 'node:crypto'
@@ -28,9 +29,10 @@ import {
 import {
   assertAutomationDestination,
   assertAutomationOwnerFence,
+  assertAutomationWorkspaceModePrecondition,
   assertExecutionTargetMatchesDestination,
   type AutomationDestination,
-  type AutomationOwnerPrecondition
+  type AutomationUpdatePreconditions
 } from '../../../shared/automation-owner-precondition'
 import {
   getAutomationContextsForRepo,
@@ -111,6 +113,10 @@ export function createAutomation(
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
     ...(setup.surface ? { surface: setup.surface } : {}),
+    ...(setup.launchPreferences !== undefined
+      ? { launchPreferences: setup.launchPreferences }
+      : {}),
+    ...(setup.agentArgs !== undefined ? { agentArgs: setup.agentArgs } : {}),
     ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}),
     // Prefer authority-local contexts; client-assigned runtime IDs cannot identify this store's host.
     runContext: contexts.runContext ?? input.runContext ?? null,
@@ -147,11 +153,7 @@ export function updateAutomation(
   operations: AutomationDefinitionOperations,
   id: string,
   updates: AutomationUpdateInput,
-  options?: {
-    expectedOwner?: AutomationOwnerPrecondition
-    destination?: AutomationDestination
-    resolvedRepo?: Repo
-  }
+  options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo }
 ): Automation {
   const index = (operations.state.automations ?? []).findIndex((entry) => entry.id === id)
   if (index === -1) {
@@ -172,6 +174,7 @@ export function updateAutomation(
   if (options?.destination) {
     assertAutomationDestination(options.destination, projectionContext)
   }
+  assertAutomationWorkspaceModePrecondition(current, options?.expectedWorkspaceMode)
   const retainContexts = retainAutomationReselectionContexts(
     operations.state,
     current,
@@ -179,12 +182,11 @@ export function updateAutomation(
     options?.destination,
     projectionContext
   )
+  const launchSetupUpdate = applyAutomationLaunchSetupPatch(updates, current)
   // Ignore undefined values preserved by structuredClone; explicit clears use null.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: filtering removes only undefined entries from the validated patch and retains every remaining field's type.
   const definedUpdates = Object.fromEntries(
-    Object.entries(applyAutomationLaunchSetupPatch(updates)).filter(
-      ([, value]) => value !== undefined
-    )
+    Object.entries(launchSetupUpdate).filter(([, value]) => value !== undefined)
   ) as Omit<AutomationUpdateInput, 'launchSetupPatch'> & Pick<Automation, 'surface'>
   const repoId = updates.projectId ?? current.projectId
   const selectorMoveRequested =
@@ -203,10 +205,6 @@ export function updateAutomation(
   const dtstart = updates.dtstart ?? current.dtstart
   const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
   const workspaceMode = updates.workspaceMode ?? current.workspaceMode
-  // Omitted preserves; empty or whitespace clears.
-  const extraAgentArgs = Object.hasOwn(definedUpdates, 'extraAgentArgs')
-    ? storedExtraAgentArgs(definedUpdates.extraAgentArgs)
-    : storedExtraAgentArgs(current.extraAgentArgs)
   const merged: Automation = {
     ...current,
     ...definedUpdates,
@@ -271,11 +269,11 @@ export function updateAutomation(
   if (retainContexts && !Object.hasOwn(current, 'sourceContext')) {
     delete merged.sourceContext
   }
-  if (extraAgentArgs === undefined) {
-    delete merged.extraAgentArgs
-  } else {
-    merged.extraAgentArgs = extraAgentArgs
+  delete merged.launchSetup
+  for (const key of ['surface', 'launchPreferences', 'agentArgs', 'extraAgentArgs'] as const) {
+    delete merged[key]
   }
+  Object.assign(merged, automationCanonicalLaunchSetup(launchSetupUpdate))
   assertAutomationExtraAgentArgs(merged)
   const previousPin = automationWorkspaceSshPin(operations.state, current.workspaceId)
   const workspaceSshPin = automationWorkspaceSshPin(operations.state, merged.workspaceId)

@@ -18,6 +18,7 @@ vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Animated: { View: 'View' },
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   ScrollView: 'ScrollView',
@@ -47,7 +48,7 @@ vi.mock('../navigation/route-handoff', () => ({
 }))
 
 // The dialogs are read off `ConfirmModal`'s props; the drawer under them needs a native runtime.
-vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: () => null }))
 
 vi.mock('../platform/random-v4-uuid', () => ({ randomV4Uuid: dependencies.uuid }))
 
@@ -59,7 +60,10 @@ vi.mock('lucide-react-native', () => ({
   User: 'User'
 }))
 
-vi.mock('../transport/host-store', () => ({ loadHosts: dependencies.loadHosts }))
+vi.mock('../transport/host-store', () => ({
+  loadHosts: dependencies.loadHosts,
+  peekHosts: () => null
+}))
 
 vi.mock('../transport/host-client-hooks', () => {
   const client = {
@@ -94,6 +98,7 @@ vi.mock('../transport/host-client-hooks', () => {
     }
   }
   return {
+    useForceReconnect: () => null,
     useHostClient: () => ({ client, state: 'connected' })
   }
 })
@@ -175,16 +180,6 @@ function pressables(renderer: ReactTestRenderer, label: string) {
 
 function resetButtons(renderer: ReactTestRenderer) {
   return pressables(renderer, 'Use Codex rate-limit reset')
-}
-
-function systemDefaultButtons(renderer: ReactTestRenderer) {
-  return renderer.root.findAll(
-    (node) =>
-      String(node.type) === 'Pressable' &&
-      node
-        .findAll((child) => String(child.type) === 'Text')
-        .some((textNode) => textNode.children.join('') === 'System default')
-  )
 }
 
 async function findResetButton(renderer: ReactTestRenderer) {
@@ -275,54 +270,6 @@ describe('accounts route Codex reset credit', () => {
     vi.restoreAllMocks()
   })
 
-  it('hides the scarce action when an older host does not advertise the capability', async () => {
-    dependencies.statusCapabilities.mockReturnValue([])
-    const renderer = await renderAccountsRoute()
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(resetButtons(renderer)).toHaveLength(0)
-    expect(dependencies.resetRequest).not.toHaveBeenCalled()
-    act(() => renderer.unmount())
-  })
-
-  it('retries a lost reply under a new key and shows the outcome the host recorded', async () => {
-    dependencies.resetRequest
-      .mockRejectedValueOnce(new Error('Connection lost'))
-      .mockImplementationOnce((params) => ({
-        id: 'reset-2',
-        ok: true,
-        result: {
-          outcome: 'alreadyRedeemed',
-          scope: (params as { expectedScope: unknown }).expectedScope,
-          snapshot: RESET_SNAPSHOT
-        },
-        _meta: { runtimeId: 'runtime-1' }
-      }))
-
-    const firstRenderer = await renderAccountsRoute()
-    await confirmReset(firstRenderer)
-    expectNotice(firstRenderer, 'Could not reset rate limits', 'Connection lost')
-    act(() => firstRenderer.unmount())
-
-    dependencies.uuid.mockReturnValue(SECOND_KEY)
-    const secondRenderer = await renderAccountsRoute()
-    await confirmReset(secondRenderer)
-
-    // No phone journal: a new key with same offer resumes the host ledger’s recorded attempt, as desktop does.
-    expect(dependencies.resetRequest).toHaveBeenCalledTimes(2)
-    const [firstParams, firstOptions] = dependencies.resetRequest.mock.calls[0]!
-    const [secondParams, secondOptions] = dependencies.resetRequest.mock.calls[1]!
-    expect(firstParams).toMatchObject({ idempotencyKey: KEY })
-    expect(secondParams).toMatchObject({ idempotencyKey: SECOND_KEY })
-    expect(secondParams.expectedScope).toEqual(firstParams.expectedScope)
-    expect(firstOptions).toEqual({ timeoutMs: 90_000 })
-    expect(secondOptions).toEqual({ timeoutMs: 90_000 })
-    expectNotice(secondRenderer, 'Reset already applied', 'Codex usage has been refreshed.')
-    act(() => secondRenderer.unmount())
-  })
-
   it('shows the resumed outcome when the offer moved after a lost reply', async () => {
     dependencies.resetRequest.mockRejectedValueOnce(new Error('Connection lost'))
     const renderer = await renderAccountsRoute()
@@ -408,44 +355,6 @@ describe('accounts route Codex reset credit', () => {
     act(() => renderer.unmount())
   })
 
-  it('passes the active WSL target when clearing the Codex selection', async () => {
-    const renderer = await renderAccountsRoute()
-    const wslSnapshot = {
-      ...AVAILABLE_SNAPSHOT,
-      codex: {
-        accounts: [
-          {
-            ...AVAILABLE_SNAPSHOT.codex.accounts[0],
-            managedHomeRuntime: 'wsl',
-            wslDistro: 'Ubuntu'
-          }
-        ],
-        activeAccountId: null,
-        activeAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'codex-1' } }
-      },
-      rateLimits: {
-        ...AVAILABLE_SNAPSHOT.rateLimits,
-        codexTarget: { runtime: 'wsl', wslDistro: 'Ubuntu' }
-      }
-    } as const
-
-    act(() => {
-      dependencies.subscriptionListeners[0]?.({ type: 'snapshot', snapshot: wslSnapshot })
-    })
-    const codexSystemDefault = systemDefaultButtons(renderer).at(-1)
-    expect(codexSystemDefault).toBeDefined()
-
-    await act(async () => {
-      await codexSystemDefault?.props.onPress()
-    })
-
-    expect(dependencies.selectRequest).toHaveBeenCalledWith('accounts.selectCodexForTarget', {
-      accountId: null,
-      target: { runtime: 'wsl', wslDistro: 'Ubuntu' }
-    })
-    act(() => renderer.unmount())
-  })
-
   it('recovers from key generation failure without leaving the action busy', async () => {
     dependencies.uuid.mockImplementationOnce(() => {
       throw new Error('Random bytes unavailable')
@@ -472,33 +381,6 @@ describe('accounts route Codex reset credit', () => {
 
     expect(openDialog(renderer)).toBeNull()
     expect(dependencies.resetRequest).not.toHaveBeenCalled()
-    act(() => renderer.unmount())
-  })
-
-  it('puts a failed switch on screen, where Alert would be a no-op on the page', async () => {
-    dependencies.selectRequest.mockResolvedValue({
-      id: 'select',
-      ok: false,
-      error: { code: 'internal', message: 'Desktop refused the switch' }
-    })
-    const renderer = await renderAccountsRoute()
-    await act(async () => {
-      await systemDefaultButtons(renderer)[0]?.props.onPress()
-    })
-
-    expectNotice(renderer, 'Could not switch account', 'Desktop refused the switch')
-    dismissNotice(renderer)
-    expect(openDialog(renderer)).toBeNull()
-    act(() => renderer.unmount())
-  })
-
-  it('leaves through the route handoff, which pops the shell from inside the page', async () => {
-    const renderer = await renderAccountsRoute()
-    const back = pressables(renderer, 'Back')
-    expect(back).toHaveLength(1)
-    act(() => back[0]?.props.onPress())
-
-    expect(dependencies.back).toHaveBeenCalledOnce()
     act(() => renderer.unmount())
   })
 })

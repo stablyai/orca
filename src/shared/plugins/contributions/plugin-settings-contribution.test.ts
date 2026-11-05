@@ -1,86 +1,54 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
-import {
-  parsePluginSettingValue,
-  pluginSettingContributionSchema
-} from './plugin-settings-contribution'
+import { pluginSettingValueIssue } from './plugin-settings-contribution'
 
 function manifest(settings: unknown[], capabilities = [{ kind: 'settings:own' }]) {
-  return parsePluginManifest({
-    manifestVersion: 1,
-    id: 'roadmap',
-    publisher: 'orca-samples',
-    name: 'Roadmap',
+  return {
+    manifestVersion: 2,
+    execution: 'sandboxed-ui',
+    id: 'settings-demo',
+    name: 'Settings demo',
     version: '1.0.0',
-    engines: { orca: '>=1.0.0' },
-    pluginApi: 1,
-    contributes: { settings },
+    engines: { orca: '>=1.4.246' },
+    contributes: { panels: [{ id: 'p', title: 'P', entry: 'p.html' }], settings },
     capabilities
-  })
+  }
 }
 
-const SORT = {
-  key: 'sort',
-  title: 'Sort by',
-  type: 'enum',
-  default: 'updated',
-  options: [
-    { value: 'updated', label: 'Updated' },
-    { value: 'priority', label: 'Priority' }
-  ]
+const apiUrl = {
+  key: 'apiUrl',
+  title: 'Server URL',
+  type: 'string',
+  default: 'https://example.com'
 }
 
-describe('settings contributions', () => {
-  it('accepts string, boolean and enum settings with the settings:own capability', () => {
-    const result = manifest([
-      SORT,
-      { key: 'listName', title: 'List name', type: 'string', default: 'Backlog', multiline: false },
-      { key: 'showDone', title: 'Show done', type: 'boolean', default: false }
-    ])
+function issues(raw: unknown): string {
+  const parsed = parsePluginManifest(raw)
+  return parsed.ok ? '' : parsed.error
+}
 
-    expect(result).toMatchObject({ ok: true })
+describe('contributes.settings', () => {
+  it('needs settings:own, unique keys, and defaults that fit the setting', () => {
+    expect(issues(manifest([apiUrl], []))).toContain('settings:own')
+    expect(issues(manifest([apiUrl, apiUrl]))).toContain('duplicate setting key')
+    expect(issues(manifest([{ ...apiUrl, default: 3 }]))).toContain('must be a string')
+    expect(issues(manifest([{ key: 'n', title: 'N', type: 'integer', default: 1.5 }]))).toContain(
+      'integer'
+    )
+    expect(
+      issues(manifest([{ key: 'm', title: 'M', type: 'string', enum: ['a'], enumLabels: [] }]))
+    ).toContain('one label per enum value')
+    expect(issues(manifest([{ ...apiUrl, key: '1bad' }]))).toContain('starts with a letter')
   })
 
-  it('requires settings:own and unique keys', () => {
-    expect(manifest([SORT], [])).toEqual({
-      ok: false,
-      error: 'capabilities: settings:own capability required when contributes.settings is non-empty'
-    })
-    expect(manifest([SORT, SORT])).toEqual({
-      ok: false,
-      error: 'contributes.settings[1]: duplicate settings key: sort'
-    })
-  })
-
-  it('rejects declarations whose default, options or type disagree', () => {
-    const invalid = [
-      { ...SORT, options: undefined },
-      { ...SORT, default: 'nowhere' },
-      { key: 'flag', title: 'Flag', type: 'boolean', default: 'yes' },
-      { key: 'name', title: 'Name', type: 'string', options: SORT.options },
-      { key: 'flag', title: 'Flag', type: 'boolean', multiline: true },
-      { key: '1bad', title: 'Bad', type: 'string' },
-      { ...SORT, default: undefined, options: [{ value: '', label: 'None' }] }
-    ]
-
-    for (const setting of invalid) {
-      expect(pluginSettingContributionSchema.safeParse(setting).success).toBe(false)
-    }
-  })
-})
-
-describe('parsePluginSettingValue', () => {
-  it('keeps values that fit the declaration and rejects the rest', () => {
-    const sort = pluginSettingContributionSchema.parse(SORT)
-    const flag = pluginSettingContributionSchema.parse({
-      key: 'flag',
-      title: 'Flag',
-      type: 'boolean'
-    })
-
-    expect(parsePluginSettingValue(sort, 'priority')).toBe('priority')
-    expect(parsePluginSettingValue(sort, 'elsewhere')).toBeNull()
-    expect(parsePluginSettingValue(flag, true)).toBe(true)
-    expect(parsePluginSettingValue(flag, 'true')).toBeNull()
+  it('checks values the plugin or the person writes', () => {
+    const pageSize = { type: 'integer' as const, minimum: 1, maximum: 100 }
+    expect(pluginSettingValueIssue(pageSize, 50)).toBeNull()
+    expect(pluginSettingValueIssue(pageSize, 0)).toBe('must be at least 1')
+    expect(pluginSettingValueIssue(pageSize, '5')).toBe('must be an integer')
+    expect(pluginSettingValueIssue({ type: 'string', enum: ['a', 'b'] }, 'c')).toContain('one of')
+    expect(pluginSettingValueIssue({ type: 'string', maxLength: 3 }, 'abcd')).toContain(
+      '3 characters'
+    )
   })
 })

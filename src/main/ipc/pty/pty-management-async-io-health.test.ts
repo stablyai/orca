@@ -15,9 +15,15 @@ vi.mock('electron', () => ({
       handlers.set(name, handler)
   }
 }))
-vi.mock('../../daemon/daemon-provider-state', () => ({ getDaemonProvider: provider }))
-vi.mock('../../daemon/daemon-provider-routing', () => ({ getCurrentDaemonAdapter: () => adapter }))
-vi.mock('../../daemon/daemon-provider-restart', () => ({ restartDaemon: restart }))
+vi.mock('../../daemon/providers/lifecycle/daemon-provider-state', () => ({
+  getDaemonProvider: provider
+}))
+vi.mock('../../daemon/providers/lifecycle/daemon-provider-routing', () => ({
+  getCurrentDaemonAdapter: () => adapter
+}))
+vi.mock('../../daemon/providers/lifecycle/daemon-provider-restart', () => ({
+  restartDaemon: restart
+}))
 
 import { registerDaemonManagementHandlers } from './pty-management'
 

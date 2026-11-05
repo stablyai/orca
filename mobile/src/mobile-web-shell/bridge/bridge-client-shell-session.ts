@@ -1,4 +1,4 @@
-import { TERMINAL_SHORTCUT_STORAGE_KEYS } from '../page-storage-keys'
+import { TERMINAL_SETTINGS_STORAGE_KEYS } from '../page-storage-keys'
 import { readShellSession, type BridgeShellSession } from './bridge-client-session'
 import { bridgeRouteMoved } from './bridge-route-update'
 import {
@@ -110,20 +110,20 @@ export function createBridgeClientShellSession(args: {
       if (held !== null && update === null) {
         args.onReplaced()
       }
-      const refreshShortcuts = update !== null && message.refreshTerminalShortcuts === true
+      const refreshSettings = update !== null && message.refreshTerminalShortcuts === true
       const sentStorage = message.storage ?? {}
       const sentOversize = message.storageOversize ?? []
-      const storage = refreshShortcuts ? { ...update.storage } : undefined
-      const storageOversize = refreshShortcuts
+      const storage = refreshSettings ? { ...update.storage } : undefined
+      const storageOversize = refreshSettings
         ? [
             ...update.storageOversize.filter(
-              (key) => !TERMINAL_SHORTCUT_STORAGE_KEYS.some((item) => item === key)
+              (key) => !TERMINAL_SETTINGS_STORAGE_KEYS.some((item) => item === key)
             ),
-            ...TERMINAL_SHORTCUT_STORAGE_KEYS.filter((key) => sentOversize.includes(key))
+            ...TERMINAL_SETTINGS_STORAGE_KEYS.filter((key) => sentOversize.includes(key))
           ]
         : update?.storageOversize
-      if (refreshShortcuts && storage) {
-        for (const key of TERMINAL_SHORTCUT_STORAGE_KEYS) {
+      if (refreshSettings && storage) {
+        for (const key of TERMINAL_SETTINGS_STORAGE_KEYS) {
           if (sentStorage[key] === undefined) {
             delete storage[key]
           } else {
@@ -170,7 +170,8 @@ export function createBridgeClientShellSession(args: {
               foldDivision,
               terminalKeyRail,
               colorScheme,
-              uiLocale
+              uiLocale,
+              hostStatus: message.hostStatus ?? null
             }
       // Re-primed either way, because a second `init` is also how the page recovers a cache it has
       // refused a `state` frame into: the shell rebuilt under it publishes a generation the page's
@@ -181,7 +182,7 @@ export function createBridgeClientShellSession(args: {
         listener()
       }
       readyListeners.clear()
-      if (refreshShortcuts) {
+      if (refreshSettings) {
         for (const listener of storageListeners) {
           listener()
         }

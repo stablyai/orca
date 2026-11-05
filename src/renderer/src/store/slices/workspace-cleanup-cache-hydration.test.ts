@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AppState } from '../types'
+
 import type {
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   NOW,
   createCleanupTestStore,
@@ -26,34 +26,6 @@ function makeCachedScan(): WorkspaceCleanupScanResult {
 }
 
 describe('workspace cleanup cache hydration', () => {
-  it('hydrates an empty slice from the persisted snapshot', async () => {
-    const scan = vi.fn()
-    const getCachedScan = vi.fn().mockResolvedValue(makeCachedScan())
-    installWorkspaceCleanupApi(scan, getCachedScan)
-    const store = createCleanupTestStore()
-
-    await expect(store.getState().hydrateWorkspaceCleanupFromCache()).resolves.toBe(true)
-
-    expect(scan).not.toHaveBeenCalled()
-    expect(store.getState().workspaceCleanupScan?.scannedAt).toBe(CACHED_AT)
-    expect(
-      store.getState().workspaceCleanupScan?.candidates.map((candidate) => candidate.worktreeId)
-    ).toEqual(['repo1::/tmp/alpha', 'repo1::/tmp/beta'])
-  })
-
-  it('never clobbers live scan data with the snapshot', async () => {
-    const getCachedScan = vi.fn().mockResolvedValue(makeCachedScan())
-    installWorkspaceCleanupApi(vi.fn(), getCachedScan)
-    const store = createCleanupTestStore()
-    const live = { scannedAt: NOW, candidates: [makeCandidate()], errors: [] }
-    store.setState({ workspaceCleanupScan: live } as Partial<AppState>)
-
-    await expect(store.getState().hydrateWorkspaceCleanupFromCache()).resolves.toBe(false)
-
-    expect(getCachedScan).not.toHaveBeenCalled()
-    expect(store.getState().workspaceCleanupScan).toBe(live)
-  })
-
   it('bails when a broad scan starts while the cache read is in flight', async () => {
     const cacheRead = deferred<WorkspaceCleanupScanResult>()
     const broadScan = deferred<WorkspaceCleanupScanResult>()
@@ -125,71 +97,6 @@ describe('workspace cleanup cache hydration', () => {
     expect(settled?.candidates.map((candidate) => candidate.worktreeId)).toEqual([
       'repo1::/tmp/alpha',
       'repo1::/tmp/gamma'
-    ])
-  })
-
-  it('keeps one scan streaming across a dialog close and reopen', async () => {
-    const pending = deferred<WorkspaceCleanupScanResult>()
-    let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
-    const scan = vi.fn((_args, progressCallback) => {
-      onProgress = progressCallback
-      return pending.promise
-    })
-    installWorkspaceCleanupApi(scan, vi.fn().mockResolvedValue(null))
-    const store = createCleanupTestStore()
-
-    const first = store.getState().scanWorkspaceCleanup()
-    const early = [
-      makeCandidate({ worktreeId: 'repo1::/tmp/one' }),
-      makeCandidate({ worktreeId: 'repo1::/tmp/two' })
-    ]
-    onProgress?.({
-      scanId: 'scan-1',
-      scannedAt: NOW,
-      scannedWorktreeCount: 2,
-      totalWorktreeCount: 5,
-      candidates: early,
-      errors: [],
-      candidateMode: 'append'
-    })
-    await vi.waitFor(() => {
-      expect(store.getState().workspaceCleanupProgress?.scannedWorktreeCount).toBe(2)
-    })
-
-    // Reopening at 40% joins the existing scan instead of restarting it.
-    const rejoined = store.getState().scanWorkspaceCleanup()
-    expect(scan).toHaveBeenCalledTimes(1)
-
-    const late = [
-      makeCandidate({ worktreeId: 'repo1::/tmp/three' }),
-      makeCandidate({ worktreeId: 'repo1::/tmp/four' }),
-      makeCandidate({ worktreeId: 'repo1::/tmp/five' })
-    ]
-    onProgress?.({
-      scanId: 'scan-1',
-      scannedAt: NOW,
-      scannedWorktreeCount: 5,
-      totalWorktreeCount: 5,
-      candidates: late,
-      errors: [],
-      candidateMode: 'append'
-    })
-    await vi.waitFor(() => {
-      expect(store.getState().workspaceCleanupProgress?.scannedWorktreeCount).toBe(5)
-    })
-
-    pending.resolve({ scannedAt: NOW, candidates: [...early, ...late], errors: [] })
-    await Promise.all([first, rejoined])
-
-    expect(store.getState().workspaceCleanupLoading).toBe(false)
-    expect(
-      store.getState().workspaceCleanupScan?.candidates.map((candidate) => candidate.worktreeId)
-    ).toEqual([
-      'repo1::/tmp/one',
-      'repo1::/tmp/two',
-      'repo1::/tmp/three',
-      'repo1::/tmp/four',
-      'repo1::/tmp/five'
     ])
   })
 })

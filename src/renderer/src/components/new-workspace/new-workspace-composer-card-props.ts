@@ -1,3 +1,7 @@
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
@@ -19,7 +23,7 @@ import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
@@ -40,9 +44,13 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   agentSurfaceRows?: AgentComboboxSurfaceRows
+  agentPickerDraft?: AgentPickerDraft
+  agentSetupDisabled?: boolean
   onQuickAgentChange: (
     agent: TuiAgent | null,
-    surface?: AgentComboboxSurfaceRows['surface']
+    surface?: AgentComboboxSurfaceRows['surface'],
+    draft?: AgentPickerDraft,
+    entry?: AgentPickerEntry
   ) => void
   /** Where the quick agent would start; null keeps the picker's plain agent list. */
   agentRows?: ComposerAgentRows | null
@@ -52,9 +60,6 @@ export type NewWorkspaceComposerCardProps = {
   agentDraftUnavailableReason?: string | null
   /** Shown under the agent prompt when the opener pinned session options. */
   agentSessionNote?: string | null
-  /** Cleared picker: skip the agent and the extra shell when setup runs. */
-  quickSetupOnly?: boolean
-  onQuickSetupOnlySelect?: () => void
   eligibleRepos: readonly RepoOption[]
   selectedRepo?: RepoOption | null
   repoId: string
@@ -113,7 +118,7 @@ export type NewWorkspaceComposerCardProps = {
   smartNameJiraSourceContext?: TaskSourceContext | null
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
-  onOpenAgentSettings: () => void
+  onOpenAgentSettings: (invoker: HTMLButtonElement) => void
   advancedOpen: boolean
   onToggleAdvanced: () => void
   createDisabled: boolean

@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import '../unused-default-rpc-methods.test-fixture'
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
 
@@ -7,11 +7,11 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
 import { createAgentModelCatalogService } from '../../../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { createCodexModelCatalogProbe } from '../../../codex/codex-model-catalog-probe'
-import type { runCodexAppServerSession } from '../../../codex/codex-app-server-session'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
+import { createCodexModelCatalogProbe } from '../../../codex/structured/catalog/codex-model-catalog-probe'
+import type { runCodexAppServerSession } from '../../../codex/app-server/codex-app-server-session'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   agentModelCatalogFingerprintForRecord,
@@ -339,13 +339,14 @@ describe('agentSession.modelCatalog before anything built the host', () => {
   })
 
   // Session-less terminal-chat reads must use CLI listing without opening a structured journal.
-  it('does not build the host for a read that names no session', async () => {
+  it('reads without a host or journal for a read that names no session', async () => {
     const reply = await call('agentSession.modelCatalog', { agent: 'codex' }, STRUCTURED_CLIENT, {
-      ensureStructuredAgentSessionHost: installHost
+      ensureStructuredAgentSessionHost: installHost,
+      structuredAgentModelCatalog: async () => ({ read, demand: vi.fn(async () => {}) })
     })
     expect(installHost).not.toHaveBeenCalled()
-    expect(reply).toMatchObject({ ok: false })
-    expect(read).not.toHaveBeenCalled()
+    expect(reply).toMatchObject({ ok: true, result: { origin: 'probe' } })
+    expect(read).toHaveBeenCalledWith({ agent: 'codex' })
   })
 
   it('does not build the host for a client that cannot read structured sessions', async () => {

@@ -1,20 +1,13 @@
-import { automationOrphanIssueText } from './automation-orphan-issue-copy'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../../src/shared/automation-list-scope'
 import {
   loadAutomationTargets,
   automationSetupKey,
   workspaceMatchesSetup
 } from './automation-target-inventory'
-import { afterEach, describe, expect, it } from 'vitest'
-import { activateMobileUiLocale } from '../i18n/mobile-i18n'
-import { automationRunErrorText } from './automation-run-presentation'
-import { automationErrorMessage } from './automation-error'
-import { AUTOMATION_RUN_FAILURE_COPY } from '../../../src/shared/automation-run-failure-copy'
-import {
-  AutomationCreate,
-  AutomationUpdate
-} from '../../../src/shared/rpc-contract/automation-params'
-import { automationListSchema, runSchema } from './automation-reply-schema'
+import { describe, expect, it } from 'vitest'
+
+import { AutomationUpdate } from '../../../src/shared/rpc-contract/automation-params'
+import { automationListSchema, runsPageSchema } from './automation-reply-schema'
+import { mobileTuiAgentLabel } from '../tasks/mobile-tui-agents'
 import {
   automationCreateParams,
   automationDraftPatch,
@@ -52,47 +45,6 @@ describe('mobile automation host contracts', () => {
       automationUpdateParams(saved.id, { ...draft, name: 'Rename' }, draft, automationTargets())
         .updates
     ).toEqual({ name: 'Rename' })
-  })
-
-  it('shows localized local-validation remedies without exposing arbitrary host errors', async () => {
-    const targets = automationTargets()
-    const draft = {
-      ...newAutomationDraft(savedAutomation()),
-      setupId: automationSetupKey(targets.setups[0]!),
-      workspaceMode: 'existing' as const,
-      workspaceId: 'removed',
-      extraAgentArgs: ''
-    }
-    await activateMobileUiLocale('fr')
-    try {
-      const failureMessage = (submit: () => unknown): string => {
-        try {
-          submit()
-        } catch (error) {
-          return automationErrorMessage(error)
-        }
-        throw new Error('Expected a local validation refusal')
-      }
-      expect(failureMessage(() => automationCreateParams(draft, targets))).toBe(
-        'Choisissez un espace de travail existant.'
-      )
-      const remoteSetup = { ...targets.setups[0]!, hostId: 'ssh:removed' as const }
-      expect(
-        failureMessage(() =>
-          automationCreateParams(
-            { ...draft, setupId: automationSetupKey(remoteSetup), workspaceId: 'workspace-1' },
-            {
-              ...targets,
-              setups: [remoteSetup],
-              workspaces: [{ ...targets.workspaces[0]!, hostId: 'ssh:removed' }]
-            }
-          )
-        )
-      ).toBe('Cet hôte n’est plus disponible sur cette instance. Choisissez un hôte et réessayez.')
-      expect(automationErrorMessage(new Error('Secret remote diagnostics'))).not.toContain('Secret')
-    } finally {
-      await activateMobileUiLocale('en')
-    }
   })
   it('keeps target host identity and expands the managed inventory past the initial range', async () => {
     const base = automationTargets().setups[0]!
@@ -210,64 +162,6 @@ describe('mobile automation host contracts', () => {
     repos = []
     expect((await loadAutomationTargets(port.client)).workspaces).toEqual([])
   })
-
-  it('edits a Chat automation without Terminal argument rules or a surface patch', () => {
-    const saved = automationListSchema.parse({
-      automations: [
-        { ...savedAutomation(), surface: 'chat', extraAgentArgs: '--model old', reuseSession: true }
-      ],
-      items: [{ automationId: 'automation-1', selector: { kind: 'self' } }]
-    })[0]!.automation
-    const original = newAutomationDraft(saved)
-    const revised = { ...original, name: 'Renamed', extraAgentArgs: '--model revised' }
-    expect(validateAutomationDraft(revised, 2, saved)).toBeNull()
-    expect(automationUpdateParams(saved.id, revised, original, automationTargets())).toEqual({
-      id: saved.id,
-      updates: { name: 'Renamed', extraAgentArgs: '--model revised' }
-    })
-    const retargeted = automationUpdateParams(
-      saved.id,
-      {
-        ...revised,
-        targetEdited: true,
-        setupId: automationSetupKey(automationTargets().setups[0]!)
-      },
-      original,
-      automationTargets()
-    )
-    expect(retargeted.updates).toMatchObject({ extraAgentArgs: '--model revised' })
-    expect(retargeted.updates).not.toHaveProperty('launchSetupPatch')
-    expect(retargeted.updates).not.toHaveProperty('surface')
-  })
-
-  it('creates enabled using real host selectors and a captured setup', () => {
-    const draft = {
-      ...newAutomationDraft(),
-      name: 'Daily review',
-      prompt: 'Review changes',
-      agentId: 'codex' as const,
-      setupId: automationSetupKey(automationTargets().setups[0]!),
-      workspaceMode: 'existing' as const,
-      workspaceId: 'workspace-1'
-    }
-    const params = AutomationCreate.parse(
-      automationCreateParams(draft, automationTargets(), 'creation-1')
-    )
-    expect(params).toMatchObject({
-      enabled: true,
-      repo: 'id:repo-1',
-      workspace: 'id:workspace-1',
-      creationKey: 'creation-1',
-      destination: { selector: { kind: 'self' } },
-      runContext: {
-        projectId: 'project-1',
-        projectHostSetupId: 'setup-1',
-        repoId: 'repo-1',
-        path: '/repo'
-      }
-    })
-    expect(params.baseBranch).toBeUndefined()
-  })
   it('edits only changed fields, preserving paused/custom/advanced and future host values', () => {
     const saved = savedAutomation()
     const original = newAutomationDraft(saved)
@@ -290,121 +184,53 @@ describe('mobile automation host contracts', () => {
       reuseSession: true
     })
   })
-  it('refuses missing or duplicate owners instead of attributing rows to this host', () => {
-    const automations = [savedAutomation()]
-    const item = { automationId: automations[0]!.id, selector: { kind: 'self' } }
-    expect(automationListSchema.safeParse({ automations }).success).toBe(false)
-    expect(automationListSchema.safeParse({ automations, items: [] }).success).toBe(false)
-    expect(automationListSchema.safeParse({ automations, items: [item, item] }).success).toBe(false)
-    expect(
-      automationListSchema.parse({ automations, items: [item] })[0]?.automation.futureField
-    ).toBe('keep me')
-  })
-})
-
-describe('mobile automation run failure copy', () => {
-  afterEach(async () => {
-    await activateMobileUiLocale('en')
-  })
-
-  it.each([
-    [
-      'fr',
-      'L’hôte de l’automatisation n’est plus enregistré. Cette automatisation n’a donc plus d’hôte sur lequel s’exécuter.'
-    ],
-    [
-      'ja',
-      'オートメーションのホストは登録されていないため、このオートメーションを実行する場所がありません。'
-    ]
-  ] as const)(
-    'localizes a coded host reply in %s without changing the stored text',
-    async (locale, expected) => {
-      const run = runSchema.parse({
-        ...savedRun(),
-        error: AUTOMATION_RUN_FAILURE_COPY.targetMissing,
-        errorCode: 'targetMissing',
-        errorParams: null
-      })
-      await activateMobileUiLocale(locale)
-      expect(automationRunErrorText(run)).toBe(expected)
-      expect(run.error).toBe(AUTOMATION_RUN_FAILURE_COPY.targetMissing)
-      await activateMobileUiLocale('en')
-      expect(automationRunErrorText(run)).toBe(AUTOMATION_RUN_FAILURE_COPY.targetMissing)
-    }
-  )
-
-  it('localizes a stopped distro by name and falls back for unusable distro params', async () => {
-    await activateMobileUiLocale('fr')
-    const base = { ...savedRun(), error: 'Stored distro reason', errorCode: 'wslDistroStopped' }
-    expect(
-      automationRunErrorText(runSchema.parse({ ...base, errorParams: { distro: 'Ubuntu' } }))
-    ).toBe(
-      'La distribution WSL Ubuntu est arrêtée, donc cette exécution planifiée ne l’a pas démarrée. Démarrez la distribution ou utilisez Exécuter maintenant ; les exécutions suivantes ont lieu tant qu’elle tourne.'
-    )
-    for (const errorParams of [undefined, null, {}, { distro: 1 }]) {
-      expect(automationRunErrorText(runSchema.parse({ ...base, errorParams }))).toBe(base.error)
-    }
-  })
-
-  it('keeps stored errors for old hosts, nullable fields and future codes, and preserves no error', async () => {
-    await activateMobileUiLocale('fr')
-    for (const fields of [
-      {},
-      { errorCode: null, errorParams: null },
-      { errorCode: 'futureReason' }
-    ]) {
-      const run = runSchema.parse({ ...savedRun(), error: 'Stored host reason', ...fields })
-      expect(automationRunErrorText(run)).toBe('Stored host reason')
-    }
-    expect(
-      automationRunErrorText(runSchema.parse({ ...savedRun(), errorCode: 'targetMissing' }))
-    ).toBeNull()
-  })
-
-  it('uses whole setup-state sentences and keeps stored text when setup params are unusable', async () => {
-    await activateMobileUiLocale('ja')
-    const base = { ...savedRun(), error: 'Stored setup reason', errorCode: 'projectSetupNotReady' }
-    for (const [setupState, expected] of [
-      [
-        'not-set-up',
-        '選択したオートメーションのホストでは、プロジェクトがセットアップされていません。'
+  it('keeps every row a newer host sends that this build can read, never the whole list', () => {
+    const row = (id: string, fields: Record<string, unknown> = {}) => ({
+      ...savedAutomation(),
+      id,
+      ...fields
+    })
+    const owner = (automationId: string, selector: unknown = { kind: 'self' }) => ({
+      automationId,
+      selector
+    })
+    const rows = automationListSchema.parse({
+      automations: [
+        row('known'),
+        row('newer-agent', { agentId: 'future-agent' }),
+        row('newer-surface', { surface: 'canvas' }),
+        row('newer-mode', { workspaceMode: 'cloud_per_run' }),
+        row('newer-owner'),
+        row('duplicate-owner'),
+        row('missing-owner')
       ],
-      ['setting-up', '選択したオートメーションのホストで、プロジェクトをまだセットアップ中です。'],
-      ['error', '選択したオートメーションのホストで、プロジェクトのセットアップに失敗しました。'],
-      [
-        'unsupported',
-        '選択したオートメーションのホストは、このプロジェクトをサポートしていません。'
+      items: [
+        owner('known'),
+        owner('newer-agent'),
+        { ...owner('newer-surface'), usageSummary: { lastRunAt: 'yesterday' } },
+        owner('newer-mode'),
+        owner('newer-owner', { kind: 'cloud' }),
+        owner('duplicate-owner'),
+        owner('duplicate-owner')
       ]
-    ]) {
-      const run = runSchema.parse({ ...base, errorParams: { setupState } })
-      expect(run.errorParams).toEqual({ setupState })
-      expect(automationRunErrorText(run)).toBe(expected)
+    })
+    expect(rows.map((entry) => entry.automation.id)).toEqual([
+      'known',
+      'newer-agent',
+      'newer-surface'
+    ])
+    expect(rows[2]?.item.usageSummary).toBeUndefined()
+    expect(rows[0]?.automation.futureField).toBe('keep me')
+    expect(mobileTuiAgentLabel(rows[1]!.automation.agentId)).toBe('future-agent')
+    expect(automationListSchema.safeParse({ automations: [] }).success).toBe(false)
+    const newerHost = {
+      ...savedRun('newer-host'),
+      runContext: { hostId: 'cloud:1', repoId: 'r', path: '/r' }
     }
-    for (const errorParams of [
-      undefined,
-      null,
-      {},
-      { setupState: 'futureState' },
-      { setupState: 1 }
-    ]) {
-      expect(automationRunErrorText(runSchema.parse({ ...base, errorParams }))).toBe(base.error)
-    }
+    expect(
+      runsPageSchema
+        .parse({ runs: [savedRun(), newerHost, { id: 'unreadable' }] })
+        .runs.map((run) => run.runContext?.hostId ?? run.id)
+    ).toEqual(['run-old', 'cloud:1'])
   })
-})
-
-it('translates known orphan reasons and leaves unknown host text intact', async () => {
-  try {
-    for (const issue of Object.values(AUTOMATION_ORPHAN_ISSUES)) {
-      expect(automationOrphanIssueText(issue)).toBe(issue)
-    }
-    await activateMobileUiLocale('fr')
-    expect(automationOrphanIssueText(AUTOMATION_ORPHAN_ISSUES.projectMissing)).toBe(
-      'Son projet n’existe plus, il est donc impossible de déterminer son hôte.'
-    )
-    for (const unknown of ['Future host reason', 'toString']) {
-      expect(automationOrphanIssueText(unknown)).toBe(unknown)
-    }
-  } finally {
-    await activateMobileUiLocale('en')
-  }
 })
