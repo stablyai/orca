@@ -301,6 +301,7 @@ export type GitLabMRUpdate = {
   addLabels?: string[]
   removeLabels?: string[]
   readyForReview?: true
+  approval?: 'approve' | 'unapprove'
 }
 
 // Why: GitLab-native MR list filter replacing GitHub's search-DSL; 'all' maps to no state filter.

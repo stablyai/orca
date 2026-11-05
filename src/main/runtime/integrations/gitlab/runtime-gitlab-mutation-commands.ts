@@ -17,6 +17,9 @@ import { getJobTrace, retryJob } from '../../../gitlab/pipeline-job-mutations'
 import { updateIssue } from '../../../gitlab/issue-update'
 import { updateMR } from '../../../gitlab/merge-request-update'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { invalidateHostedReviewBranchCache } from '../../../source-control/hosted-review-branch-cache'
+import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
+import { refreshGitLabApprovals } from '../../../gitlab/mr-approval-batch'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 
@@ -207,15 +210,23 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
-    return updateMR(
-      repo.path,
-      iid,
-      updates,
-      repo.issueSourcePreference,
-      getRepoRoutingConnectionId(repo),
-      projectRef,
-      ...this.deps.getLocalGitArgs(repo)
-    )
+    try {
+      return await updateMR(
+        repo.path,
+        iid,
+        updates,
+        repo.issueSourcePreference,
+        getRepoRoutingConnectionId(repo),
+        projectRef,
+        ...this.deps.getLocalGitArgs(repo)
+      )
+    } finally {
+      if (updates.approval) {
+        await refreshGitLabApprovals(repo.path)
+      }
+      // Why: the sidebar refresh reads through this host's 60s review cache; drop it so approval merge status shows at once.
+      invalidateHostedReviewBranchCache(repo.path, getStoredRepoExecutionHostId(repo))
+    }
   }
 
   async updateGitLabRepoMRReviewers(
