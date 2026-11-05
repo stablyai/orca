@@ -20,9 +20,7 @@ export function DeliveryNoticesMock({
 
 export type StructuredSessionMessageListProps = {
   ref?: React.Ref<NativeChatMessageListHandle>
-  allowFileUriLinks?: boolean
   isVisible?: boolean
-  onLinkClick?: (...args: unknown[]) => void
   awaitingInput?: 'shown' | 'unshown' | null
   isWorking?: boolean
   stopping?: boolean

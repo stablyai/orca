@@ -12,6 +12,7 @@ import {
   type NativeChatReplyReveals
 } from './native-chat-reply-reveals'
 import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from '../../../../shared/native-chat/transcript/native-chat-text-reveal'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
 vi.mock('@/hooks/usePrefersReducedMotion', () => ({ usePrefersReducedMotion: () => false }))
 vi.mock('./native-chat-visual-markdown-extension', () => ({
@@ -45,17 +46,19 @@ it('asks the host about paths only once a paced reply has been fully revealed', 
       'performance'
     ]
   })
+  const onLinkClick = vi.fn()
   const reply = (streaming: boolean) => (
     <NativeChatFileLinkExistenceContext.Provider value={existence}>
       <NativeChatReplyRevealsContext.Provider value={reveals}>
-        <NativeChatPacedMarkdown
-          rowKey="reply"
-          content="Edited src/app.ts for you."
-          streaming={streaming}
-          variant="document"
-          onLinkClick={vi.fn()}
-          linkifyFilePaths
-        />
+        <NativeChatLinkClickContext value={onLinkClick}>
+          <NativeChatPacedMarkdown
+            rowKey="reply"
+            content="Edited src/app.ts for you."
+            streaming={streaming}
+            variant="document"
+            linkifyFilePaths
+          />
+        </NativeChatLinkClickContext>
       </NativeChatReplyRevealsContext.Provider>
     </NativeChatFileLinkExistenceContext.Provider>
   )
