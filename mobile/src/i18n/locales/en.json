@@ -3175,8 +3175,7 @@
       "taskFromCoordinator": "Task from coordinator",
       "messageFromCoordinator": "Message from coordinator",
       "updateFromWorker": "Update from worker",
-      "messageFrom": "Message from",
-      "showMore": "Show more"
+      "messageFrom": "Message from"
     },
     "fork": {
       "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",

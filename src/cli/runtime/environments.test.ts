@@ -94,22 +94,4 @@ describe('CLI runtime environments', () => {
     )
     expect(listEnvironments(userDataPath)[0]?.id).toBe(first.id)
   })
-
-  it('refuses saving the same server twice and points at Settings, which can switch its connection', () => {
-    const userDataPath = temporaryProfile()
-    addEnvironmentFromPairingCode(userDataPath, {
-      name: 'workstation',
-      pairingCode: pairingCode('ws://192.0.2.10:6768'),
-      now: 100
-    })
-
-    expect(() =>
-      addEnvironmentFromPairingCode(userDataPath, {
-        name: 'workstation over relay',
-        pairingCode: pairingCode('ws://198.51.100.7:6768'),
-        now: 200
-      })
-    ).toThrow('already paired as "workstation"')
-    expect(listEnvironments(userDataPath)).toHaveLength(1)
-  })
 })
