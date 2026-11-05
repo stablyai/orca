@@ -78,7 +78,7 @@ it('links only workspace paths the host confirms, asking once for the whole repl
   const onOpenFile = vi.fn()
 
   const tree = await renderChat(
-    'Edited src/app.ts:12 and src/gone.ts, plus `/work/src/app.ts`. Log at /tmp/run.log.',
+    'Edited src/app.ts:12 and src/gone.ts, plus `/work/src/app.ts`. Log at /tmp/run.json now, then call /api/users endpoint.',
     { fileLinks, githubRepo: null },
     onOpenFile
   )
@@ -89,9 +89,33 @@ it('links only workspace paths the host confirms, asking once for the whole repl
     worktree: 'id:repo-1::/work',
     relativePaths: ['src/app.ts', 'src/gone.ts']
   })
-  expect(linked(tree).map(label)).toEqual(['src/app.ts:12', '/work/src/app.ts', '/tmp/run.log'])
+  expect(linked(tree).map(label)).toEqual(['src/app.ts:12', '/work/src/app.ts', '/tmp/run.json'])
   act(() => linked(tree)[0]?.props.onPress())
   expect(onOpenFile).toHaveBeenCalledWith('src/app.ts:12')
+})
+
+it('links paths like before on a host too old to check them', async () => {
+  const sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
+    id: '1',
+    ok: false,
+    error: {
+      code: 'forbidden',
+      message: 'Method files.pathsExist is not available to mobile clients'
+    },
+    _meta: { runtimeId: 'runtime-1' }
+  }))
+  const fileLinks = createMobileNativeChatFileLinkExistence(
+    { sendRequest },
+    'repo-1::/work',
+    '/work'
+  )
+
+  const tree = await renderChat('Edited src/app.ts and the docs folder at src/notes today.', {
+    fileLinks,
+    githubRepo: null
+  })
+
+  expect(linked(tree).map(label)).toEqual(['src/app.ts'])
 })
 
 it('opens a bare #123 on the repo bare refs point to, leaving embedded ones alone', async () => {

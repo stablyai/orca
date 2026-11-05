@@ -22,6 +22,8 @@ import {
 } from '../../components/mobile-markdown-links-context'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
+import { isMobileMethodUnavailableError } from '../../transport/mobile-method-unavailable'
+import { isFilePathCodeSpan } from '../../components/markdown-file-path-detection'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc-operation-result-reader'
 import type { ConnectionState } from '../../transport/types'
@@ -46,13 +48,14 @@ export function createMobileNativeChatFileLinkExistence(
 ): NativeChatFileLinkExistence {
   const pathsExist = createPathExistenceBatch<string>({
     groupKey: (worktree) => worktree,
-    run: async (worktree, relativePaths) =>
-      requirePathExistenceResults(
-        chatPathsExistRead.interpret(
-          await chatPathsExistRead.request(client, { worktree, relativePaths })
-        ),
-        relativePaths.length
-      )
+    run: async (worktree, relativePaths) => {
+      const reply = await chatPathsExistRead.request(client, { worktree, relativePaths })
+      // Why: a host from before this check refuses it; its paths link as the old detector linked them.
+      if (!reply.ok && isMobileMethodUnavailableError(reply.error.code, reply.error.message)) {
+        return relativePaths.map((path) => ({ exists: isFilePathCodeSpan(path) }))
+      }
+      return requirePathExistenceResults(chatPathsExistRead.interpret(reply), relativePaths.length)
+    }
   })
   const worktree = `id:${worktreeId}`
   return createNativeChatFileLinkChecker<string>({
@@ -67,9 +70,9 @@ export function createMobileNativeChatFileLinkExistence(
       if (/[\\/]$/.test(link.pathText)) {
         return { kind: 'plain' }
       }
-      // Why: the host checks only its workspace in batches; outside paths keep opening on tap as before.
+      // Why: the host checks only its workspace; outside paths link as the old detector linked them.
       if (relativePath === null) {
-        return { kind: 'linked' }
+        return isFilePathCodeSpan(link.pathText) ? { kind: 'linked' } : { kind: 'plain' }
       }
       return { kind: 'ask', key: relativePath, target: relativePath }
     },
