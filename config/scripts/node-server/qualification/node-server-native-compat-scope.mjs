@@ -11,7 +11,7 @@ export const NATIVE_COMPAT_ENTRY_POINTS = [
 // These files configure or support tests; additions/deletions still require qualification.
 const MODIFIED_TEST_INPUTS = new Set([
   'config/reliability-gates.jsonc',
-  'src/main/daemon/serialize-grid-variant-scope.ts',
+  'src/main/daemon/emulation/testing/serialize-grid-variant-scope.ts',
   'config/scripts/vitest-sqlite-database-runtime-files.mjs',
   'src/main/native-chat/agent-session-journal/journal-host-database-test-support.ts'
 ])

@@ -11,6 +11,7 @@ import {
   parseDaemonProtocolFacts
 } from '../schema-facts/daemon-protocol-facts.mjs'
 import { selectLatestStableReleaseTag } from '../../release/versioning/stable-release-tags.mjs'
+import { readDaemonProtocolRevisionFacts } from '../schema-facts/daemon-protocol-revision-facts.mjs'
 
 // Same override the cross-version-wire harness honors, so both pair against one ref.
 const RELEASE_REF_ENV = 'ORCA_CROSS_VERSION_BASELINE_REF'
@@ -63,18 +64,14 @@ export function assessDaemonProtocolCrossing({ release, candidate, releaseRef })
 
 export function checkDaemonProtocolCrossing({ repoRoot, releaseRef: explicitRef, env }) {
   const releaseRef = resolveReleaseRef(repoRoot, explicitRef, env)
-  let releaseSource
+  let release
   try {
-    releaseSource = git(repoRoot, ['show', `${releaseRef}:${DAEMON_PROTOCOL_SOURCE_PATH}`])
+    release = readDaemonProtocolRevisionFacts(repoRoot, releaseRef)
   } catch (error) {
     throw new Error(
       `cannot read ${DAEMON_PROTOCOL_SOURCE_PATH} at ${releaseRef}: ${error.stderr?.trim() || String(error)}`
     )
   }
-  const release = parseDaemonProtocolFacts(
-    releaseSource,
-    `${releaseRef}:${DAEMON_PROTOCOL_SOURCE_PATH}`
-  )
   const candidate = parseDaemonProtocolFacts(
     readFileSync(join(repoRoot, DAEMON_PROTOCOL_SOURCE_PATH), 'utf8'),
     DAEMON_PROTOCOL_SOURCE_PATH

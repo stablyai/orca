@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAdapter } from '../daemon/daemon-pty-router-test-fixture'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
+import { createAdapter } from '../daemon/providers/routing/testing/daemon-pty-router-test-fixture'
+import { DaemonPtyRouter } from '../daemon/providers/routing/daemon-pty-router'
+import { DegradedDaemonPtyProvider } from '../daemon/providers/routing/degraded-daemon-pty-provider'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { registerPty, unregisterPty } from '../memory/pty-registry'
 

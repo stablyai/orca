@@ -41,14 +41,14 @@ import type { AgentModelCatalogReadParams } from '../../native-chat/agent-model-
 import type { RuntimeWorktreeScanCache, RuntimeWorktreeScanInFlight } from '../orca-runtime-core'
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import type { ResolvedWorktreeScanJoin } from '../workspaces/resolved-worktree-scan-join'
+import type { ResolvedWorktreeRowsJoin } from '../workspaces/resolved-worktree-scan-join'
 import type { OrcaRuntimeWithWorktreePsDependencies } from '../workspaces/workspace-process-listing-dependencies'
 
 type ScopeFixture = {
   store: RuntimeStore
   structuredAgentModelCatalog: OrcaRuntimeWithWorktreePsDependencies['structuredAgentModelCatalog']
   resolvedWorktrees: RuntimeResolvedWorktreeCache
-  projectCachedWorktrees: () => ResolvedWorktreeScanJoin
+  projectCachedWorktrees: () => ResolvedWorktreeRowsJoin
   worktreeScanCache: Map<string, RuntimeWorktreeScanCache>
   worktreeScanGenerations: Map<string, number>
   worktreeScanInFlight: Map<string, RuntimeWorktreeScanInFlight>
@@ -131,6 +131,8 @@ function rig(agent = 'opencode') {
     getWorktreeMeta: (id: string) => metadata[id],
     getAllWorktreeLineage: () => ({}),
     getAllWorkspaceLineage: () => ({}),
+    // Production stores report writes; this fixture's in-place edits are followed by invalidation.
+    onStateWritten: () => () => {},
     removeWorktreeLineage: vi.fn(),
     setWorktreeMeta: writes
   }

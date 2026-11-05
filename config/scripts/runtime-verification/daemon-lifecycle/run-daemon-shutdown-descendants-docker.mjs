@@ -1,5 +1,5 @@
-import { runProcessSync } from '@orca/process-host'
-import { execFileSync, spawnSync } from 'node:child_process'
+import { readGitBaselineSources } from './git-baseline-sources.mjs'
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
@@ -22,43 +22,129 @@ const dockerEnv = {
 }
 const dockerDir = join(repo, 'config/docker/daemon-shutdown-descendants')
 const targets = [
-  'src/main/daemon/terminal-host.ts',
-  'src/main/daemon/terminal-session-teardown.ts',
-  'src/main/daemon/terminal-host-session-shutdown.ts',
+  'src/main/daemon/terminal-host/terminal-host.ts',
+  'src/main/daemon/terminal-host/terminal-session-teardown.ts',
+  'src/main/daemon/terminal-host/terminal-host-session-shutdown.ts',
   'src/main/pty/process-retirement/pty-descendant-termination.ts',
   'src/main/pty/process-retirement/pty-descendant-exit-verification.ts'
 ]
 
-const relocatedBaselineSources = new Map([
-  [
-    'src/main/pty-descendant-termination.ts',
-    'src/main/pty/process-retirement/pty-descendant-termination.ts'
-  ],
-  [
-    'src/main/pty-shell-job-preservation.ts',
-    'src/main/pty/process-retirement/pty-shell-job-preservation.ts'
-  ],
-  [
-    'src/main/windows-process-tree-kill.ts',
-    'src/main/pty/process-retirement/windows-process-tree-kill.ts'
-  ],
-  [
-    'src/main/windows-pty-root-identity.ts',
-    'src/main/pty/process-retirement/windows-pty-root-identity.ts'
-  ],
-  [
-    'src/main/pty-process-table-parser.ts',
-    'src/main/pty/process-retirement/pty-process-table-parser.ts'
-  ],
-  [
-    'src/main/pty-descendant-fresh-table.ts',
-    'src/main/pty/process-retirement/pty-descendant-fresh-table.ts'
-  ],
-  [
-    'src/main/pty-descendant-exit-verification.ts',
-    'src/main/pty/process-retirement/pty-descendant-exit-verification.ts'
-  ]
-])
+function baselineSourceRelocations(ref) {
+  return new Map([
+    [`${ref}:src/main/daemon/daemon-errors.ts`, 'src/main/daemon/protocol/daemon-errors.ts'],
+    [
+      `${ref}:src/main/daemon/session-input-path.ts`,
+      'src/main/daemon/sessions/session-input-path.ts'
+    ],
+    [`${ref}:src/main/daemon/session.ts`, 'src/main/daemon/sessions/session.ts'],
+    [
+      `${ref}:src/main/daemon/terminal-creation-work.ts`,
+      'src/main/daemon/terminal-host/terminal-creation-work.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-descendant-shutdown.ts`,
+      'src/main/daemon/sessions/terminal-descendant-shutdown.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-agent-session-claim.ts`,
+      'src/main/daemon/terminal-host/terminal-host-agent-session-claim.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-agent-session-generations.ts`,
+      'src/main/daemon/terminal-host/terminal-host-agent-session-generations.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-create-contract.ts`,
+      'src/main/daemon/terminal-host/terminal-host-create-contract.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-disposal.ts`,
+      'src/main/daemon/terminal-host/terminal-host-disposal.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-fenced-termination.ts`,
+      'src/main/daemon/terminal-host/terminal-host-fenced-termination.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-options.ts`,
+      'src/main/daemon/terminal-host/terminal-host-options.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-process-inspection.ts`,
+      'src/main/daemon/terminal-host/terminal-host-process-inspection.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-returned-process.ts`,
+      'src/main/daemon/terminal-host/terminal-host-returned-process.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-session-access.ts`,
+      'src/main/daemon/terminal-host/terminal-host-session-access.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-session-create.ts`,
+      'src/main/daemon/terminal-host/terminal-host-session-create.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-session-cwd.ts`,
+      'src/main/daemon/terminal-host/terminal-host-session-cwd.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-session-exit.ts`,
+      'src/main/daemon/terminal-host/terminal-host-session-exit.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-session-inspection-operations.ts`,
+      'src/main/daemon/terminal-host/terminal-host-session-inspection-operations.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-session-listing.ts`,
+      'src/main/daemon/terminal-host/terminal-host-session-listing.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-session-shutdown.ts`,
+      'src/main/daemon/terminal-host/terminal-host-session-shutdown.ts'
+    ],
+    [
+      `${ref}:src/main/daemon/terminal-host-tombstones.ts`,
+      'src/main/daemon/terminal-host/terminal-host-tombstones.ts'
+    ],
+    [`${ref}:src/main/daemon/terminal-host.ts`, 'src/main/daemon/terminal-host/terminal-host.ts'],
+    [
+      `${ref}:src/main/daemon/terminal-session-teardown.ts`,
+      'src/main/daemon/terminal-host/terminal-session-teardown.ts'
+    ],
+    [`${ref}:src/main/daemon/types.ts`, 'src/main/daemon/protocol/daemon-rpc-contract.ts'],
+    [
+      `${ref}:src/main/pty-descendant-termination.ts`,
+      'src/main/pty/process-retirement/pty-descendant-termination.ts'
+    ],
+    [
+      `${ref}:src/main/pty-shell-job-preservation.ts`,
+      'src/main/pty/process-retirement/pty-shell-job-preservation.ts'
+    ],
+    [
+      `${ref}:src/main/windows-process-tree-kill.ts`,
+      'src/main/pty/process-retirement/windows-process-tree-kill.ts'
+    ],
+    [
+      `${ref}:src/main/windows-pty-root-identity.ts`,
+      'src/main/pty/process-retirement/windows-pty-root-identity.ts'
+    ],
+    [
+      `${ref}:src/main/pty-process-table-parser.ts`,
+      'src/main/pty/process-retirement/pty-process-table-parser.ts'
+    ],
+    [
+      `${ref}:src/main/pty-descendant-fresh-table.ts`,
+      'src/main/pty/process-retirement/pty-descendant-fresh-table.ts'
+    ],
+    [
+      `${ref}:src/main/pty-descendant-exit-verification.ts`,
+      'src/main/pty/process-retirement/pty-descendant-exit-verification.ts'
+    ]
+  ])
+}
 
 const args = process.argv.slice(2)
 const baselineIndex = args.indexOf('--baseline')
@@ -80,50 +166,19 @@ const image = `orca-daemon-shutdown-descendants:${process.pid}-${Date.now()}`
 const platform =
   process.env.ORCA_DOCKER_PLATFORM ?? (process.arch === 'arm64' ? 'linux/arm64' : 'linux/amd64')
 
-function gitSource(relativePath, ref) {
-  return execFileSync('git', ['show', `${ref}:${relativePath}`], {
-    cwd: repo,
-    encoding: 'utf8'
-  })
-}
-
 function baselinePlugin(ref) {
-  const historicalPaths = new Map(
+  const relocatedBaselineSources = baselineSourceRelocations(ref)
+  const historicalSources = new Map(
     [...relocatedBaselineSources].map(([before, after]) => [after, before])
   )
-  const candidates = targets.flatMap((file) => [file, historicalPaths.get(file)].filter(Boolean))
-  const listed = runProcessSync({
-    program: 'git',
-    args: ['ls-tree', '--name-only', ref, '--', ...candidates],
-    cwd: repo,
-    timeoutMs: 10_000,
-    maxOutputBytes: 64 * 1024,
-    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
-  })
-  if (listed.code !== 0 || listed.outputTruncated) {
-    throw new Error(`Cannot list pinned Docker baseline sources: ${listed.stderr}`)
-  }
-  const available = new Set(listed.stdout.trim().split('\n'))
-  const sourceByPath = new Map(
-    targets.map((file) => {
-      const historical = historicalPaths.get(file)
-      const source = available.has(file)
-        ? file
-        : historical && available.has(historical)
-          ? historical
-          : null
-      if (!source) {
-        throw new Error(`Pinned Docker baseline source is absent: ${ref}:${file}`)
-      }
-      return [
-        resolve(repo, file),
-        { contents: gitSource(source, ref), resolveDir: dirname(resolve(repo, source)) }
-      ]
-    })
+  const sourceByPath = readGitBaselineSources(
+    repo,
+    ref,
+    new Map(targets.map((file) => [file, historicalSources.get(file)]))
   )
   const relocatedImports = new Map(
     [...relocatedBaselineSources].map(([before, after]) => [
-      resolve(repo, before),
+      resolve(repo, before.slice(ref.length + 1)),
       resolve(repo, after)
     ])
   )

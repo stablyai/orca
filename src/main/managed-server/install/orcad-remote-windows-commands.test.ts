@@ -6,11 +6,12 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
+import { execCommand, sshCommandExitError } from '../../ssh/remote-exec/remote-exec-command'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { orcadLivenessProbeCommand, type OrcadLaunchSpec } from './orcad-remote-launch'
 import {
+  OrcadWindowsLaunchFailedError,
   OrcadWindowsLaunchRefusedError,
   readWindowsOrcadLaunchReport,
   readWindowsOrcadSlotEntry,
@@ -163,6 +164,28 @@ describe('Windows orcad commands run node.exe directly', () => {
       `${slot}/orcad-server.js --windows-breakaway-launch`
     )
     expect(sleep).not.toHaveBeenCalled()
+  })
+})
+
+describe('a Windows launch the launcher reports failing', () => {
+  // The launcher writes its report and then exits nonzero.
+  it('names the failure from the report instead of the bare command exit', async () => {
+    mockExec
+      .mockResolvedValueOnce(
+        encoded('__ORCAD_RUNTIME__', SLOT_NODE) +
+          encoded('__ORCAD_ENTRY__', `${slot}/orcad-server.js`)
+      )
+      .mockRejectedValueOnce(
+        sshCommandExitError(
+          'launch',
+          1,
+          'ORCA_ORCAD_LAUNCH {"method":"failed","reason":"failed","step":"create-process","code":5}\r\n'
+        )
+      )
+
+    await expect(
+      launchOrcadAndAwaitReadiness({ conn: Object.create(null), host }, spec)
+    ).rejects.toBeInstanceOf(OrcadWindowsLaunchFailedError)
   })
 })
 

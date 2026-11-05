@@ -22,7 +22,7 @@ vi.mock('../../linear/issue-context/current', async (importOriginal) => ({
 }))
 
 import { materializeWorktreePushTargetRemote } from '../../ipc/worktree-remote'
-import { RuntimeLinearTeamWriteCommands } from '../../runtime/runtime-linear-team-write-commands'
+import { RuntimeLinearTeamWriteCommands } from '../../runtime/integrations/linear/runtime-linear-team-write-commands'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const MOVING_WT = 'repo-1::/ws/repo-1/wt'

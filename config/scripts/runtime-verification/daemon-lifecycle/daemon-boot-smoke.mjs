@@ -20,7 +20,7 @@ function log(message) {
 
 // Read protocol from source; daemon rejects mismatched hello versions.
 function readProtocolVersion() {
-  const protocolSourcePath = 'src/main/daemon/daemon-protocol-version.ts'
+  const protocolSourcePath = 'src/main/daemon/protocol/daemon-protocol-version.ts'
   const source = readFileSync(join(projectDir, protocolSourcePath), 'utf8')
   const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
   if (!match) {

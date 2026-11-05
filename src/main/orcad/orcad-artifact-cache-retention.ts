@@ -6,7 +6,7 @@ import { nodeRuntimeAsset } from '../../shared/node-runtime-pin'
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
 import { orcadPeerPidIsJudgeableHere } from './orcad-lock-holder-locality'
 import { materializedOrcadArtifactVersions } from './orcad-artifact-materializer'
-import { isProcessAlive } from '../daemon/daemon-process-inspection'
+import { isProcessAlive } from '../daemon/endpoint/identity/daemon-process-inspection'
 import {
   defaultOrcadSlotPeerJudge,
   liveDaemonOrcadSlots,
