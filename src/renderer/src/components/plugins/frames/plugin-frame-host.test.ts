@@ -99,7 +99,7 @@ describe('createPluginFrameMessageHandler', () => {
         protocol: 1,
         surface: 'editor',
         // An iframe is offered no user-gesture methods, but 1.2 gave every frame storage.
-        api: { major: 1, minor: 2 },
+        api: { major: 1, minor: 5 },
         theme: { colorScheme: 'dark', tokens: '--orca-background:#000' }
       }
     })

@@ -12,6 +12,7 @@ import {
   type PluginWorkspaceTerminal
 } from './plugin-workspace-projection'
 import type { PluginHostCallScope } from './plugin-host-call-scope'
+import type { PluginFocusedSurface } from '../../../shared/plugins/events/plugin-focused-surface'
 import type { PluginDataArea } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import {
   PLUGIN_PANEL_BRIDGE_HANDLERS,
@@ -55,6 +56,8 @@ export type PluginHostServices = {
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
   listWorktreeTerminals(worktreeId: string): Promise<PluginWorkspaceTerminal[]>
   listAgentStatuses(): readonly PluginAgentStatusRow[]
+  /** Absent where nothing tracks the focused tab. */
+  readFocusedSurface?(): PluginFocusedSurface
   sendTerminalText(
     terminalId: string,
     action: { text: string; enter: boolean }
@@ -131,6 +134,9 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
       )
     }
   }),
+  'ui.readFocus': bind(api['ui.readFocus'], async (_params, { services }) => ({
+    focusedSurface: services.readFocusedSurface?.() ?? null
+  })),
   'terminal.sendText': bind(api['terminal.sendText'], async (params, { services, scope }) => {
     const context = await services.resolveActiveWorktreeContext()
     if (!context) {

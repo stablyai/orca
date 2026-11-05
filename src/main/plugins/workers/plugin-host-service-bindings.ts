@@ -14,6 +14,7 @@ import { PluginSecretsStore, pluginSecretsProtection } from '../plugin-secrets-s
 import { PluginKvStore } from '../plugin-storage-store'
 import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 import { pluginTerminalTitle, type PluginAgentStatusRow } from './plugin-workspace-projection'
+import type { PluginFocusedSurface } from '../../../shared/plugins/events/plugin-focused-surface'
 
 export type PluginRuntimeDelegate = {
   resolveActiveWorktreeContext(): Promise<{
@@ -49,6 +50,8 @@ export type PluginRuntimeDelegate = {
   listAgentStatuses?(): readonly PluginAgentStatusRow[]
   /** The runtime RPC the `orca` CLI calls, in process; absent where none is bound. */
   callRuntime?: PluginRuntimeRpc
+  /** The tab the person is looking at; absent where nothing tracks it. */
+  readFocusedSurface?(): PluginFocusedSurface
 }
 
 export function bindPluginHostServices(input: {
@@ -101,6 +104,7 @@ export function bindPluginHostServices(input: {
       }))
     },
     listAgentStatuses: () => delegate.listAgentStatuses?.() ?? [],
+    readFocusedSurface: () => delegate.readFocusedSurface?.() ?? null,
     sendTerminalText: async (terminalId, action) => {
       const result = await delegate.sendTerminal(terminalId, action, { inputKind: 'driving' })
       return { accepted: result.accepted }

@@ -1,5 +1,6 @@
 import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginAgentStatusChangedPayload } from '../../shared/plugins/events/plugin-events'
+import type { PluginFocusedSurface } from '../../shared/plugins/events/plugin-focused-surface'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/workers/plugin-host-api'
 import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
 import type { PluginService } from './plugin-service'
@@ -47,10 +48,14 @@ export function pluginRuntimeDelegate(
 export function bindPluginRuntime(
   service: PluginService,
   runtime: OrcaRuntimeService,
-  hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] }
+  hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] },
+  readFocusedSurface: () => PluginFocusedSurface
 ): PluginRuntimeDelegate {
   const statuses = () => hookServer.getStatusSnapshot()
-  const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime))
+  const delegate = {
+    ...pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime)),
+    readFocusedSurface
+  }
   service.setRuntimeDelegate(delegate)
   installPluginHookRunner(service, runtime)
   installPluginResidentWorkerWarmer(service)
@@ -141,6 +146,43 @@ export function watchPluginWorkspaceContext(input: {
   }
   const stop = input.onSessionWritten(() => {
     timer ??= setTimeout(() => void check(), input.delayMs ?? WORKSPACE_CHANGE_DEBOUNCE_MS)
+  })
+  return () => {
+    stop()
+    if (timer) {
+      clearTimeout(timer)
+    }
+  }
+}
+
+/**
+ * `ui.focus.changed`: after session writes settle or window focus moves, re-read the focused
+ * surface and emit when it differs from the last one sent.
+ */
+export function watchPluginUiFocus(input: {
+  events: PluginEvents
+  readFocusedSurface: () => PluginFocusedSurface
+  onFocusInputChanged: (listener: () => void) => () => void
+  delayMs?: number
+}): () => void {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let last: string | null = null
+  const check = (): void => {
+    timer = null
+    if (!input.events.wantsEvent('ui.focus.changed')) {
+      last = null
+      return
+    }
+    const focusedSurface = input.readFocusedSurface()
+    const signature = JSON.stringify(focusedSurface)
+    if (signature !== last) {
+      last = signature
+      input.events.emitEvent('ui.focus.changed', { focusedSurface, receivedAt: Date.now() })
+    }
+  }
+  const stop = input.onFocusInputChanged(() => {
+    // Why debounce: blur then focus fire back to back when moving between Orca's own windows.
+    timer ??= setTimeout(check, input.delayMs ?? WORKSPACE_CHANGE_DEBOUNCE_MS)
   })
   return () => {
     stop()

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createPluginAgentStatusForwarder,
   pluginRuntimeDelegate,
+  watchPluginUiFocus,
   watchPluginWorkspaceContext
 } from './plugin-runtime-binding'
 import { projectPluginWorkspaceAgents } from './workers/plugin-workspace-projection'
@@ -117,6 +118,46 @@ describe('workspace.changed', () => {
       await vi.advanceTimersByTimeAsync(20)
       expect(events.emitEvent).toHaveBeenLastCalledWith('workspace.changed', {
         context: { branch: 'main', displayName: 'w', terminals: [] }
+      })
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('ui.focus.changed', () => {
+  it('re-reads focus after its inputs settle and emits only real changes', async () => {
+    vi.useFakeTimers()
+    try {
+      const events = { wantsEvent: vi.fn(() => true), emitEvent: vi.fn() }
+      let surface: { kind: 'terminal'; title: string } | null = { kind: 'terminal', title: 'zsh' }
+      let changed: () => void = () => undefined
+      const stop = watchPluginUiFocus({
+        events,
+        readFocusedSurface: () => surface,
+        onFocusInputChanged: (listener) => {
+          changed = listener
+          return () => undefined
+        },
+        delayMs: 10
+      })
+      changed()
+      changed()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).toHaveBeenCalledWith('ui.focus.changed', {
+        focusedSurface: { kind: 'terminal', title: 'zsh' },
+        receivedAt: expect.any(Number)
+      })
+      changed()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).toHaveBeenCalledOnce()
+      surface = null
+      changed()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).toHaveBeenLastCalledWith('ui.focus.changed', {
+        focusedSurface: null,
+        receivedAt: expect.any(Number)
       })
       stop()
     } finally {
