@@ -559,6 +559,12 @@
       "includeHelp": "Compara rutas relativas a la raíz del espacio de trabajo. Si ningún patrón coincide, no se aplica formato. * y ** omiten los nombres que empiezan por punto; inclúyelos explícitamente, por ejemplo .github/**/*.yml. Activa Formatear al guardar en General > Editor para usar este comando.",
       "saving": "Guardando…",
       "save": "Guardar formateador"
+    },
+    "autoDownloadUpdates": {
+      "title": "Descargar actualizaciones automáticamente",
+      "description": "Orca descarga las nuevas versiones en segundo plano. Se instalan la próxima vez que cierres Orca, o reinicia para actualizar antes.",
+      "keywordAutomatic": "automático",
+      "keywordBackground": "segundo plano"
     }
   },
   "menu": {

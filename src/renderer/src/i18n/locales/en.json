@@ -1216,7 +1216,13 @@
       "save": "Save formatter",
       "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
     },
-    "experimental": {}
+    "experimental": {},
+    "autoDownloadUpdates": {
+      "title": "Download Updates Automatically",
+      "description": "Orca downloads new versions in the background. They install the next time you quit, or restart to update sooner.",
+      "keywordAutomatic": "automatic",
+      "keywordBackground": "background"
+    }
   },
   "menu": {
     "checkForUpdates": "Check for Updates...",

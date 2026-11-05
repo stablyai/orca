@@ -553,6 +553,12 @@
       "commandHelp": "在文件所在主机的工作区根目录中运行。从 stdin 读取缓冲区，并且只能向 stdout 输出格式化后的文本。使用 ${file} 或 ${relativeFile} 表示路径。参数直接传递，不经过 shell。请勿使用 --write。留空可在此项目中禁用。",
       "include": "包含的 glob（每行一个）",
       "includeHelp": "匹配相对于工作区根目录的路径。没有匹配的 glob 时不会格式化。* 和 ** 会跳过以点开头的名称；请明确列出，例如 .github/**/*.yml。要使用此命令，请在通用 > 编辑器中启用“保存时格式化”。"
+    },
+    "autoDownloadUpdates": {
+      "title": "自动下载更新",
+      "description": "Orca 会在后台下载新版本，并在你下次退出时安装；也可以重新启动以尽快更新。",
+      "keywordAutomatic": "自动",
+      "keywordBackground": "后台"
     }
   },
   "menu": {

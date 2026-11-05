@@ -958,6 +958,12 @@
       "commandHelp": "在檔案所在主機的工作區根目錄中執行。從 stdin 讀取緩衝區，且只能將格式化後的文字輸出到 stdout。使用 ${file} 或 ${relativeFile} 表示路徑。引數會直接傳遞，不經由 shell。請勿使用 --write。留空即可在此專案中停用。",
       "include": "包含的 glob（每行一個）",
       "includeHelp": "比對相對於工作區根目錄的路徑。沒有相符的 glob 時不會格式化。* 和 ** 會略過以點開頭的名稱；請明確列出，例如 .github/**/*.yml。若要使用此指令，請在一般 > 編輯器中啟用「儲存時格式化」。"
+    },
+    "autoDownloadUpdates": {
+      "title": "自動下載更新",
+      "description": "Orca 會在背景下載新版本，並在你下次結束時安裝；也可以重新啟動以盡快更新。",
+      "keywordAutomatic": "自動",
+      "keywordBackground": "背景"
     }
   },
   "menu": {

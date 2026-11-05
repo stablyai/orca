@@ -1007,6 +1007,12 @@
       "includeHelp": "Pfade relativ zum Stammverzeichnis des Arbeitsbereichs abgleichen. Ohne passendes Glob-Muster erfolgt keine Formatierung. * und ** überspringen Namen, die mit einem Punkt beginnen; führe diese explizit auf, z. B. .github/**/*.yml. Aktiviere „Beim Speichern formatieren“ unter Allgemein > Editor, um diesen Befehl zu verwenden.",
       "saving": "Wird gespeichert…",
       "save": "Formatierer speichern"
+    },
+    "autoDownloadUpdates": {
+      "title": "Updates automatisch herunterladen",
+      "description": "Orca lädt neue Versionen im Hintergrund herunter. Sie werden beim nächsten Beenden installiert, oder du startest neu, um früher zu aktualisieren.",
+      "keywordAutomatic": "automatisch",
+      "keywordBackground": "Hintergrund"
     }
   },
   "menu": {

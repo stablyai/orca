@@ -6,6 +6,10 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getUpdateDelayDescription, getUpdateDelayTitle } from '../updates/update-delay-copy'
+import {
+  getAutoDownloadUpdatesDescription,
+  getAutoDownloadUpdatesTitle
+} from '../updates/auto-download-updates-copy'
 
 export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
   {
@@ -253,6 +257,14 @@ export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
         'release notes'
       ),
       ...translateSearchKeyword('auto.components.settings.general.search.e49e739a59', 'download')
+    ]
+  },
+  {
+    title: getAutoDownloadUpdatesTitle(),
+    description: getAutoDownloadUpdatesDescription(),
+    keywords: [
+      ...translateSearchKeyword('settings.autoDownloadUpdates.keywordAutomatic', 'automatic'),
+      ...translateSearchKeyword('settings.autoDownloadUpdates.keywordBackground', 'background')
     ]
   },
   {

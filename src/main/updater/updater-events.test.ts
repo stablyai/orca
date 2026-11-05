@@ -111,6 +111,8 @@ function createContext(overrides?: Partial<HandlerContext>): HandlerContext {
     setAvailableReleaseUrl: vi.fn(),
     setAvailableVersion: vi.fn(),
     setUserInitiatedCheck: vi.fn(),
+    shouldDownloadAutomatically: () => false,
+    startAutomaticDownload: vi.fn(),
     ...overrides
   }
 }

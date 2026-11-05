@@ -400,14 +400,14 @@ describe('UpdateCard visibility gates', () => {
     ).toBe('visible')
   })
 
-  it('hides downloaded when version is dismissed (Settings-initiated, not card)', () => {
+  it('shows a finished download even when its offer was dismissed', () => {
     expect(
       computeVisibility({
         status: { state: 'downloaded', version: '1.2.0' },
         dismissedVersion: '1.2.0',
         cachedVersion: '1.2.0'
       })
-    ).toBe('hidden')
+    ).toBe('visible')
   })
 
   it('hides background errors silently', () => {

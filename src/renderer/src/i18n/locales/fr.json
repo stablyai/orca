@@ -779,6 +779,12 @@
       "includeHelp": "Compare les chemins relatifs à la racine de l’espace de travail. Sans motif correspondant, aucun formatage n’est effectué. * et ** ignorent les noms commençant par un point ; indiquez-les explicitement, par exemple .github/**/*.yml. Activez Formater à l’enregistrement dans Général > Éditeur pour utiliser cette commande.",
       "saving": "Enregistrement…",
       "save": "Enregistrer le formateur"
+    },
+    "autoDownloadUpdates": {
+      "title": "Télécharger les mises à jour automatiquement",
+      "description": "Orca télécharge les nouvelles versions en arrière-plan. Elles s’installent la prochaine fois que vous quittez Orca, ou redémarrez pour mettre à jour plus tôt.",
+      "keywordAutomatic": "automatique",
+      "keywordBackground": "arrière-plan"
     }
   },
   "menu": {

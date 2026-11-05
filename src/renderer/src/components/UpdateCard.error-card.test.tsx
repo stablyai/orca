@@ -633,3 +633,33 @@ describe('UpdateCard restart after download', () => {
     expect(quitAndInstall).toHaveBeenCalledOnce()
   })
 })
+
+describe('UpdateCard background downloads', () => {
+  it('stays out of the way until a background download is ready to install', () => {
+    renderWithInitialStatus({ state: 'idle' })
+    act(() => {
+      useAppStore.getState().setUpdateStatus({
+        state: 'available',
+        version: '1.4.200',
+        changelog: null,
+        background: true
+      })
+    })
+    expect(screen.queryByRole('complementary')).toBeNull()
+    act(() => {
+      useAppStore.getState().setUpdateStatus({
+        state: 'downloading',
+        percent: 40,
+        version: '1.4.200',
+        background: true
+      })
+    })
+    expect(screen.queryByRole('complementary')).toBeNull()
+
+    act(() => {
+      useAppStore.getState().setUpdateStatus({ state: 'downloaded', version: '1.4.200' })
+    })
+    expect(screen.getByText('Ready to Install')).toBeTruthy()
+    expect(quitAndInstall).not.toHaveBeenCalled()
+  })
+})

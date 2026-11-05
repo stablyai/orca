@@ -985,6 +985,12 @@
       "commandHelp": "Dosyanın ana bilgisayarında, çalışma alanının kökünde çalışır. Tamponu stdin üzerinden okur ve stdout üzerine yalnızca biçimlendirilmiş metin yazmalıdır. Yol için ${file} veya ${relativeFile} kullanın. Argümanlar kabuk kullanılmadan doğrudan iletilir. --write kullanmayın. Bu projede devre dışı bırakmak için boş bırakın.",
       "include": "Dahil edilecek glob'lar (her satıra bir tane)",
       "includeHelp": "Çalışma alanı köküne göre göreli yollarla eşleşir. Eşleşen glob yoksa biçimlendirme yapılmaz. * ve ** noktayla başlayan adları atlar; bunları açıkça belirtin, ör. .github/**/*.yml. Bu komutu kullanmak için Genel > Düzenleyici bölümünde Kaydederken biçimlendir seçeneğini etkinleştirin."
+    },
+    "autoDownloadUpdates": {
+      "title": "Güncellemeleri otomatik indir",
+      "description": "Orca yeni sürümleri arka planda indirir. Bir sonraki çıkışınızda yüklenirler; daha erken güncellemek için yeniden başlatın.",
+      "keywordAutomatic": "otomatik",
+      "keywordBackground": "arka plan"
     }
   },
   "menu": {

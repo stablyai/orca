@@ -1745,6 +1745,12 @@
       "includeHelp": "Corresponde aos caminhos relativos à raiz do espaço de trabalho. Sem um glob correspondente, não há formatação. * e ** ignoram nomes que começam com ponto; liste-os explicitamente, por exemplo .github/**/*.yml. Ative Formatar ao salvar em Geral > Editor para usar este comando.",
       "saving": "Salvando…",
       "save": "Salvar formatador"
+    },
+    "autoDownloadUpdates": {
+      "title": "Baixar atualizações automaticamente",
+      "description": "O Orca baixa novas versões em segundo plano. Elas são instaladas na próxima vez que você sair, ou reinicie para atualizar antes.",
+      "keywordAutomatic": "automático",
+      "keywordBackground": "segundo plano"
     }
   },
   "auto": {
