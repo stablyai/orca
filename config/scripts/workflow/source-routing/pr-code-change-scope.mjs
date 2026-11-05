@@ -203,7 +203,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // R3 runtime launcher protocol ratchet; a bump always routes here via the protocol file.
   'config/scripts/check-runtime-launcher-protocol-ratchet',
   'config/scripts/daemon-protocol/admission/check-runtime-launcher-protocol-ratchet',
-  'src/main/daemon/daemon-protocol-version.ts',
+  'src/main/daemon/protocol/daemon-protocol-version.ts',
   'src/shared/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
@@ -437,7 +437,8 @@ export function needsMobileDependencies(changedFiles) {
   return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
 }
 
-export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-mocks.ts'
+export const DAEMON_INIT_TEST_SUPPORT =
+  'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
 
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,

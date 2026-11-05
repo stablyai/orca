@@ -4,10 +4,13 @@ import { isLocalExecutionHost } from '../../shared/execution-host'
 import { classifyError } from '../telemetry/classify-error'
 import { track } from '../telemetry/client'
 import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
-import { getDaemonProvider, listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
-import { initDaemonPtyProvider } from '../daemon/daemon-provider-init'
+import {
+  getDaemonProvider,
+  listLiveDaemonPtyIds
+} from '../daemon/providers/lifecycle/daemon-provider-state'
+import { initDaemonPtyProvider } from '../daemon/providers/lifecycle/daemon-provider-init'
 import { restartLocalTerminalsAfterElevation } from '../windows/windows-administrator-restart'
-import { resolveTerminalSpawnAdmissionMode } from '../daemon/terminal-spawn-gate'
+import { resolveTerminalSpawnAdmissionMode } from '../daemon/admission/terminal-spawn-admission-mode'
 import {
   getCodexPaneAccount,
   hasAnyRecordedLegacyWslCodexPane,

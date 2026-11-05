@@ -22,14 +22,95 @@ const dockerEnv = {
 }
 const dockerDir = join(repo, 'config/docker/daemon-shutdown-descendants')
 const targets = [
-  'src/main/daemon/terminal-host.ts',
-  'src/main/daemon/terminal-session-teardown.ts',
-  'src/main/daemon/terminal-host-session-shutdown.ts',
+  'src/main/daemon/terminal-host/terminal-host.ts',
+  'src/main/daemon/terminal-host/terminal-session-teardown.ts',
+  'src/main/daemon/terminal-host/terminal-host-session-shutdown.ts',
   'src/main/pty/process-retirement/pty-descendant-termination.ts',
   'src/main/pty/process-retirement/pty-descendant-exit-verification.ts'
 ]
 
 const relocatedBaselineSources = new Map([
+  ['src/main/daemon/daemon-errors.ts', 'src/main/daemon/protocol/daemon-errors.ts'],
+  ['src/main/daemon/session-input-path.ts', 'src/main/daemon/sessions/session-input-path.ts'],
+  ['src/main/daemon/session.ts', 'src/main/daemon/sessions/session.ts'],
+  [
+    'src/main/daemon/terminal-creation-work.ts',
+    'src/main/daemon/terminal-host/terminal-creation-work.ts'
+  ],
+  [
+    'src/main/daemon/terminal-descendant-shutdown.ts',
+    'src/main/daemon/sessions/terminal-descendant-shutdown.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-agent-session-claim.ts',
+    'src/main/daemon/terminal-host/terminal-host-agent-session-claim.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-agent-session-generations.ts',
+    'src/main/daemon/terminal-host/terminal-host-agent-session-generations.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-create-contract.ts',
+    'src/main/daemon/terminal-host/terminal-host-create-contract.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-disposal.ts',
+    'src/main/daemon/terminal-host/terminal-host-disposal.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-fenced-termination.ts',
+    'src/main/daemon/terminal-host/terminal-host-fenced-termination.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-options.ts',
+    'src/main/daemon/terminal-host/terminal-host-options.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-process-inspection.ts',
+    'src/main/daemon/terminal-host/terminal-host-process-inspection.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-returned-process.ts',
+    'src/main/daemon/terminal-host/terminal-host-returned-process.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-session-access.ts',
+    'src/main/daemon/terminal-host/terminal-host-session-access.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-session-create.ts',
+    'src/main/daemon/terminal-host/terminal-host-session-create.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-session-cwd.ts',
+    'src/main/daemon/terminal-host/terminal-host-session-cwd.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-session-exit.ts',
+    'src/main/daemon/terminal-host/terminal-host-session-exit.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-session-inspection-operations.ts',
+    'src/main/daemon/terminal-host/terminal-host-session-inspection-operations.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-session-listing.ts',
+    'src/main/daemon/terminal-host/terminal-host-session-listing.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-session-shutdown.ts',
+    'src/main/daemon/terminal-host/terminal-host-session-shutdown.ts'
+  ],
+  [
+    'src/main/daemon/terminal-host-tombstones.ts',
+    'src/main/daemon/terminal-host/terminal-host-tombstones.ts'
+  ],
+  ['src/main/daemon/terminal-host.ts', 'src/main/daemon/terminal-host/terminal-host.ts'],
+  [
+    'src/main/daemon/terminal-session-teardown.ts',
+    'src/main/daemon/terminal-host/terminal-session-teardown.ts'
+  ],
+  ['src/main/daemon/types.ts', 'src/main/daemon/protocol/daemon-rpc-contract.ts'],
   [
     'src/main/pty-descendant-termination.ts',
     'src/main/pty/process-retirement/pty-descendant-termination.ts'

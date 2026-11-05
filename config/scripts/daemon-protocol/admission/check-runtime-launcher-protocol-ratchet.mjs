@@ -27,11 +27,11 @@ export const RUNTIME_LAUNCHER_PATHS = [
   // Remote slot runtime selection.
   'src/main/managed-server/install/orcad-remote-runtime.ts',
   // Terminal daemon host launch: which executable the daemon child is forked from.
-  'src/main/daemon/daemon-launched-child.ts',
-  'src/main/daemon/daemon-launched-child-spawn.ts',
-  'src/main/daemon/daemon-out-of-process-launcher.ts',
-  'src/main/daemon/daemon-host-relocation.ts',
-  'src/main/daemon/daemon-host-manifest.ts'
+  'src/main/daemon/launch/daemon-launched-child.ts',
+  'src/main/daemon/launch/daemon-launched-child-spawn.ts',
+  'src/main/daemon/launch/daemon-out-of-process-launcher.ts',
+  'src/main/daemon/executable-host/windows/daemon-host-relocation.ts',
+  'src/main/daemon/executable-host/windows/daemon-host-manifest.ts'
 ]
 
 export const RUNTIME_PROTOCOL_OVERRIDE_ENV = 'ORCA_ALLOW_RUNTIME_LAUNCHER_PROTOCOL_BUMP'

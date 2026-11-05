@@ -15,7 +15,7 @@ const { collect, listLiveDaemonPtyIds } = vi.hoisted(() => ({
   listLiveDaemonPtyIds: vi.fn<() => Promise<string[] | null>>()
 }))
 vi.mock('../orcad/orcad-terminal-census', () => ({ collectOrcadTerminalCensus: collect }))
-vi.mock('../daemon/daemon-provider-state', () => ({ listLiveDaemonPtyIds }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-state', () => ({ listLiveDaemonPtyIds }))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')

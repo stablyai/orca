@@ -16,12 +16,12 @@
 1 src/main/codex-accounts/runtime-home-service-wsl.ts
 1 src/main/codex-accounts/service.ts
 1 src/main/computer/macos-computer-use-permissions.ts
-2 src/main/daemon/daemon-cgroup-scope.ts
-1 src/main/daemon/daemon-process-identity-query.ts
-1 src/main/daemon/daemon-process-start-time.ts
-1 src/main/daemon/daemon-user-manager-lifetime.ts
+2 src/main/daemon/process-scopes/daemon-cgroup-scope.ts
+1 src/main/daemon/endpoint/identity/daemon-process-identity-query.ts
+1 src/main/daemon/endpoint/identity/daemon-process-start-time.ts
+1 src/main/daemon/process-scopes/daemon-user-manager-lifetime.ts
 1 src/main/daemon/pty-subprocess/shell-launch-plan.ts
-1 src/main/daemon/terminal-scopes.ts
+1 src/main/daemon/process-scopes/terminal-scopes.ts
 1 src/main/emulator/serve-sim-runtime-materializer.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
 1 src/main/git/repo-detection-command.ts

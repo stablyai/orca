@@ -100,9 +100,9 @@ it.each([
   ],
   [
     'a direct loader with a runtime serializer path',
-    'src/main/daemon/serialize-grid-roundtrip.ts',
+    'src/main/daemon/emulation/testing/serialize-grid-roundtrip.ts',
     "import { createRequire } from 'node:module'; export const loadOldSerializer = (path) => createRequire(import.meta.url)(path)",
-    'src/main/daemon/serialize-grid.differential.fuzz.test.ts',
+    'src/main/daemon/emulation/testing/serialize-grid.differential.fuzz.test.ts',
     "import { loadOldSerializer } from './serialize-grid-roundtrip'"
   ],
   [

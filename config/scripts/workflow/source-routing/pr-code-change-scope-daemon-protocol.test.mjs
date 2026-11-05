@@ -3,7 +3,7 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 describe('daemon protocol crossing gate routing', () => {
   it('runs the gate when the protocol constants change', () => {
-    expect(classifyPrJobs(['src/main/daemon/daemon-protocol-version.ts'])).toMatchObject({
+    expect(classifyPrJobs(['src/main/daemon/protocol/daemon-protocol-version.ts'])).toMatchObject({
       should_run: true,
       'cross-version-wire': true,
       package: true,
