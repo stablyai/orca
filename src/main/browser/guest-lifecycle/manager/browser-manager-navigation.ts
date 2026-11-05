@@ -1,3 +1,4 @@
+import { webContents } from 'electron'
 import {
   openPopupWithOriginBar,
   type PopupChildWindowOptions
@@ -24,16 +25,13 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   ): BrowserTabIdentity {
     const processIdentity = getBrowserProcessUserAgentIdentity()
     const googleAuth = googleAuthTabIdentity()
-    const pendingNavigation =
-      request.webContentsId === undefined
-        ? undefined
-        : this.pendingNavigationByGuestId.get(request.webContentsId)
     // Only a UA distinct from the process UA can mark a request as part of sign-in.
-    const authUaIsDistinct = googleAuth.userAgent !== processIdentity.userAgent
     if (
-      authUaIsDistinct &&
-      request.currentUserAgent === googleAuth.userAgent &&
-      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
+      googleAuth.userAgent !== processIdentity.userAgent &&
+      request.webContentsId !== undefined &&
+      (request.currentUserAgent === googleAuth.userAgent ||
+        request.effectiveUserAgent === googleAuth.userAgent) &&
+      this.tabIsOnGoogleAuthHost(request.webContentsId)
     ) {
       return googleAuth
     }
@@ -41,17 +39,6 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       request.webContentsId === undefined
         ? undefined
         : this.standingCdpUserAgentOverride(request.webContentsId)
-    if (
-      authUaIsDistinct &&
-      !standingOverride &&
-      request.effectiveUserAgent === googleAuth.userAgent &&
-      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
-    ) {
-      return googleAuth
-    }
-    if (authUaIsDistinct && standingOverride?.userAgent === googleAuth.userAgent) {
-      return googleAuth
-    }
     // Shared/service workers lack a guest ID and retain the process identity.
     // Derive mobile identity from the standing override, never an unapplied preset.
     return resolveBrowserTabIdentity({
@@ -59,6 +46,17 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       mobile: standingOverride?.userAgentMetadata?.mobile === true,
       processIdentity
     })
+  }
+
+  // A document reached by a redirect off sign-in keeps the auth WebContents UA until the next
+  // navigation; its requests must still present the profile identity.
+  private tabIsOnGoogleAuthHost(guestId: number): boolean {
+    const pendingUrl = this.pendingNavigationByGuestId.get(guestId)?.currentUrl
+    if (pendingUrl !== undefined) {
+      return isGoogleAuthUrl(pendingUrl)
+    }
+    const guest = webContents.fromId(guestId)
+    return guest !== undefined && !guest.isDestroyed() && isGoogleAuthUrl(guest.getURL())
   }
 
   // Popups have no device-metrics override; never inherit the opener tab's mobile identity.
@@ -80,20 +78,14 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       identity.kind === 'google-auth'
         ? identity.userAgent
         : getBrowserProcessUserAgentIdentity().userAgent
-    let presentedByWebContents = guest.getUserAgent()
-    if (!sameDocument && presentedByWebContents !== webContentsUserAgent) {
+    if (!sameDocument && guest.getUserAgent() !== webContentsUserAgent) {
       guest.setUserAgent(webContentsUserAgent)
-      presentedByWebContents = webContentsUserAgent
     }
-    return this.writeTabIdentityOverride(guest, identity, presentedByWebContents)
+    return this.writeTabIdentityOverride(guest, identity)
   }
 
   protected retargetTabIdentity(guest: Electron.WebContents, url: string): Promise<boolean> {
-    return this.writeTabIdentityOverride(
-      guest,
-      this.resolveGuestTabIdentity(guest, url),
-      guest.getUserAgent()
-    )
+    return this.writeTabIdentityOverride(guest, this.resolveGuestTabIdentity(guest, url))
   }
 
   private resolveGuestTabIdentity(guest: Electron.WebContents, url: string): BrowserTabIdentity {
@@ -104,19 +96,17 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     })
   }
 
-  // Clear redundant overrides to preserve client hints; UA-only CDP overrides suppress them.
+  // Desktop identities stay with the WebContents UA, which keeps Chromium's own client hints; a
+  // UA-only CDP override would blank them. After a redirect across sign-in hosts the document keeps
+  // the UA set at navigation start, and the request hook presents each request's identity.
   private writeTabIdentityOverride(
     guest: Electron.WebContents,
-    identity: BrowserTabIdentity,
-    presentedByWebContents: string
+    identity: BrowserTabIdentity
   ): Promise<boolean> {
     const override: CdpUserAgentOverride =
       identity.kind === 'mobile'
         ? { userAgent: identity.userAgent, userAgentMetadata: identity.userAgentMetadata }
-        : presentedByWebContents === identity.userAgent
-          ? { userAgent: '' }
-          : // Temporary override until cross-document navigation can update the WebContents UA.
-            { userAgent: identity.userAgent }
+        : { userAgent: '' }
     if (override.userAgent === '' && !this.standingCdpUserAgentOverride(guest.id)) {
       return Promise.resolve(true)
     }

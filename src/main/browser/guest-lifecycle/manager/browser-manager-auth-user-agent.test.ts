@@ -60,11 +60,6 @@ import {
   resetBrowserManagerMocks,
   resetBrowserManagerState
 } from './browser-manager-test-harness'
-import {
-  createViewportGuestFactory,
-  flushViewportOps,
-  GUEST_CLEAN_UA
-} from './browser-manager-viewport-test-fixtures'
 
 const {
   guestOffMock,
@@ -74,7 +69,6 @@ const {
   guestOpenDevToolsMock,
   webContentsFromIdMock
 } = browserMocks
-const makeViewportGuest = createViewportGuestFactory(browserMocks)
 
 describe('browserManager', () => {
   beforeEach(() => {
@@ -90,6 +84,7 @@ describe('browserManager', () => {
 
   it('presents the Electron UA on Google auth hosts and restores the base UA off them', async () => {
     let currentUa = guestBaseUserAgent
+    let committedUrl = 'https://accounts.google.com/'
     const sendCommand = vi.fn().mockResolvedValue(undefined)
     const setUserAgent = vi.fn((ua: string) => {
       currentUa = ua
@@ -105,7 +100,7 @@ describe('browserManager', () => {
       on: guestOnMock,
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock,
-      getURL: vi.fn(() => 'https://accounts.google.com/'),
+      getURL: vi.fn(() => committedUrl),
       getUserAgent: vi.fn(() => currentUa),
       setUserAgent,
       debugger: { isAttached: vi.fn(() => true), sendCommand },
@@ -130,26 +125,47 @@ describe('browserManager', () => {
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
     expect(setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
 
-    // The session UA remains authoritative while WebContents still presents the auth UA.
+    // A UA-only CDP override would blank client hints on the landing page; the document keeps the
+    // auth WebContents UA and the request hook presents the profile identity.
     sendCommand.mockClear()
     willRedirect(null, 'https://myaccount.google.com/', false, true)
-    const uaOverrideIndex = sendCommand.mock.calls.findIndex(
-      ([method]) => method === 'Emulation.setUserAgentOverride'
-    )
-    await expect(sendCommand.mock.results[uaOverrideIndex]?.value).resolves.toBeUndefined()
-    expect(sendCommand.mock.calls[uaOverrideIndex]).toEqual([
+    expect(sendCommand).not.toHaveBeenCalledWith(
       'Emulation.setUserAgentOverride',
-      { userAgent: guestBaseUserAgent }
-    ])
+      expect.anything()
+    )
+    expect(setUserAgent).toHaveBeenCalledOnce()
+    const landingRequest = {
+      session: {} as never,
+      webContentsId: guest.id,
+      currentUserAgent: googleAuthUserAgent(),
+      effectiveUserAgent: googleAuthUserAgent()
+    }
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        ...landingRequest,
+        url: 'https://myaccount.google.com/'
+      })
+    ).toEqual({ kind: 'process', userAgent: guestBaseUserAgent })
+    const didNavigate = guestOnMock.mock.calls.find(([event]) => event === 'did-navigate')?.[1] as (
+      event: unknown,
+      url: string
+    ) => void
+    committedUrl = 'https://myaccount.google.com/'
+    didNavigate(null, committedUrl)
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        ...landingRequest,
+        url: 'https://myaccount.google.com/_/data',
+        resourceType: 'xhr'
+      })
+    ).toEqual({ kind: 'process', userAgent: guestBaseUserAgent })
 
-    // Direct navigation can restore the WebContents UA and clear the temporary CDP override.
+    // The next navigation start restores the WebContents UA; nothing on CDP needs clearing.
     setUserAgent.mockClear()
-    sendCommand.mockClear()
     didStartNavigation(null, 'https://example.com/', false, true)
     expect(setUserAgent).toHaveBeenCalledOnce()
     expect(setUserAgent).toHaveBeenLastCalledWith(guestBaseUserAgent)
-    expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', { userAgent: '' })
-    await expect(sendCommand.mock.results.at(-1)?.value).resolves.toBeUndefined()
+    expect(sendCommand).not.toHaveBeenCalled()
 
     setUserAgent.mockClear()
     sendCommand.mockClear()
@@ -194,253 +210,55 @@ describe('browserManager', () => {
     expect(setUserAgent).not.toHaveBeenCalled()
   })
 
-  // setUserAgent during will-redirect can abort and replay the request, breaking sign-in POST flows.
-  it('retargets the auth-host UA over CDP during a redirect instead of cancelling it', async () => {
-    const debuggerHandlers = new Map<string, () => void>()
-    let holdNextUserAgentOverride = false
-    let releaseHeldUserAgentOverride = (): void => {}
-    let rejectNextUserAgentOverride = false
-    const sendCommand = vi.fn((method: string) => {
-      if (method === 'Emulation.setUserAgentOverride' && holdNextUserAgentOverride) {
-        holdNextUserAgentOverride = false
-        return new Promise<void>((resolve) => {
-          releaseHeldUserAgentOverride = resolve
-        })
+  // setUserAgent during will-redirect can abort and replay the request, breaking sign-in POST flows;
+  // a UA-only CDP override would blank client hints. The request hook presents the auth UA instead.
+  it.each([true, false])(
+    'leaves the tab UA alone on a redirect onto a Google auth host (debugger attached=%s)',
+    (debuggerAttached) => {
+      const guest = {
+        id: debuggerAttached ? 418 : 419,
+        isDestroyed: vi.fn(() => false),
+        isCurrentlyAudible: vi.fn(() => false),
+        send: vi.fn(),
+        getType: vi.fn(() => 'webview'),
+        setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+        setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+        on: guestOnMock,
+        off: guestOffMock,
+        openDevTools: guestOpenDevToolsMock,
+        getURL: vi.fn(() => 'https://mail.google.com/'),
+        getUserAgent: vi.fn(() => guestBaseUserAgent),
+        setUserAgent: vi.fn(),
+        debugger: {
+          isAttached: vi.fn(() => debuggerAttached),
+          sendCommand: vi.fn().mockResolvedValue(undefined)
+        },
+        session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
       }
-      if (method === 'Emulation.setUserAgentOverride' && rejectNextUserAgentOverride) {
-        rejectNextUserAgentOverride = false
-        return Promise.reject(new Error('debugger detached'))
-      }
-      return Promise.resolve(undefined)
-    })
-    const guest = {
-      id: 418,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      send: vi.fn(),
-      getType: vi.fn(() => 'webview'),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock,
-      getURL: vi.fn(() => 'https://mail.google.com/'),
-      getUserAgent: vi.fn(() => guestBaseUserAgent),
-      setUserAgent: vi.fn(),
-      debugger: {
-        isAttached: vi.fn(() => true),
-        sendCommand,
-        on: vi.fn((event: string, handler: () => void) => debuggerHandlers.set(event, handler)),
-        off: vi.fn((event: string) => debuggerHandlers.delete(event))
-      },
-      session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
+      webContentsFromIdMock.mockReturnValue(guest)
+
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: `browser-redirect-onto-auth-${debuggerAttached}`,
+        webContentsId: guest.id,
+        rendererWebContentsId
+      })
+      const willRedirect = guestOnMock.mock.calls.find(
+        ([event]) => event === 'will-redirect'
+      )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
+      willRedirect(
+        { preventDefault: vi.fn() },
+        'https://accounts.google.com/v3/signin/identifier',
+        false,
+        true
+      )
+
+      expect(guest.setUserAgent).not.toHaveBeenCalled()
+      expect(guest.debugger.sendCommand).not.toHaveBeenCalledWith(
+        'Emulation.setUserAgentOverride',
+        expect.anything()
+      )
     }
-    webContentsFromIdMock.mockReturnValue(guest)
-
-    browserManager.attachGuestPolicies(guest as never)
-    browserManager.registerGuest({
-      browserPageId: 'browser-redirect-ua',
-      webContentsId: guest.id,
-      rendererWebContentsId
-    })
-    const willRedirect = guestOnMock.mock.calls.find(
-      ([event]) => event === 'will-redirect'
-    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
-    sendCommand.mockClear()
-
-    rejectNextUserAgentOverride = true
-    willRedirect(
-      { preventDefault: vi.fn() },
-      'https://accounts.google.com/v3/signin/identifier',
-      false,
-      true
-    )
-    await expect(sendCommand.mock.results.at(-1)?.value).rejects.toThrow('debugger detached')
-
-    // Failed writes must remain retryable.
-    willRedirect(
-      { preventDefault: vi.fn() },
-      'https://accounts.google.com/v3/signin/identifier',
-      false,
-      true
-    )
-    await expect(sendCommand.mock.results.at(-1)?.value).resolves.toBeUndefined()
-
-    expect(guest.setUserAgent).not.toHaveBeenCalled()
-    expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: googleAuthUserAgent()
-    })
-
-    // Detaching clears Chromium's CDP overrides and invalidates the confirmed identity.
-    sendCommand.mockClear()
-    debuggerHandlers.get('detach')?.()
-    willRedirect(
-      { preventDefault: vi.fn() },
-      'https://accounts.google.com/v3/signin/identifier',
-      false,
-      true
-    )
-    expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: googleAuthUserAgent()
-    })
-
-    // getUserAgent omits the CDP override; clear it on exit to restore UA and client hints.
-    sendCommand.mockClear()
-    const didStartNavigation = guestOnMock.mock.calls.find(
-      ([event]) => event === 'did-start-navigation'
-    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
-    rejectNextUserAgentOverride = true
-    didStartNavigation(null, 'https://example.com/', false, true)
-    await expect(sendCommand.mock.results.at(-1)?.value).rejects.toThrow('debugger detached')
-    didStartNavigation(null, 'https://example.com/', false, true)
-
-    expect(guest.setUserAgent).not.toHaveBeenCalled()
-    expect(sendCommand.mock.calls).toEqual([
-      ['Emulation.setUserAgentOverride', { userAgent: '' }],
-      ['Emulation.setUserAgentOverride', { userAgent: '' }]
-    ])
-
-    // Newer confirmed writes outrank older pending writes.
-    debuggerHandlers.get('detach')?.()
-    holdNextUserAgentOverride = true
-    willRedirect(
-      { preventDefault: vi.fn() },
-      'https://accounts.google.com/v3/signin/identifier',
-      false,
-      true
-    )
-    const olderHeldWrite = sendCommand.mock.results.at(-1)?.value as Promise<void>
-    didStartNavigation(null, 'https://example.com/', false, true)
-    await expect(sendCommand.mock.results.at(-1)?.value).resolves.toBeUndefined()
-
-    sendCommand.mockClear()
-    willRedirect(
-      { preventDefault: vi.fn() },
-      'https://accounts.google.com/v3/signin/identifier',
-      false,
-      true
-    )
-    expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: googleAuthUserAgent()
-    })
-    releaseHeldUserAgentOverride()
-    await olderHeldWrite
-
-    // A newer failure must preserve older pending writes.
-    debuggerHandlers.get('detach')?.()
-    holdNextUserAgentOverride = true
-    willRedirect(
-      { preventDefault: vi.fn() },
-      'https://accounts.google.com/v3/signin/identifier',
-      false,
-      true
-    )
-    const heldWrite = sendCommand.mock.results.at(-1)?.value as Promise<void>
-    rejectNextUserAgentOverride = true
-    didStartNavigation(null, 'https://example.com/', false, true)
-    await expect(sendCommand.mock.results.at(-1)?.value).rejects.toThrow('debugger detached')
-    releaseHeldUserAgentOverride()
-    await heldWrite
-
-    sendCommand.mockClear()
-    didStartNavigation(null, 'https://example.com/', false, true)
-    expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', { userAgent: '' })
-    browserManager.unregisterGuest('browser-redirect-ua')
-  })
-
-  // Prefer a stale UA to aborting the redirect when CDP is unavailable.
-  it('leaves a redirect alone when no debugger is attached to write the UA', () => {
-    const guest = {
-      id: 419,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      send: vi.fn(),
-      getType: vi.fn(() => 'webview'),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock,
-      getURL: vi.fn(() => 'https://mail.google.com/'),
-      getUserAgent: vi.fn(() => guestBaseUserAgent),
-      setUserAgent: vi.fn(),
-      debugger: { isAttached: vi.fn(() => false), sendCommand: vi.fn() },
-      session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
-    }
-    webContentsFromIdMock.mockReturnValue(guest)
-
-    browserManager.attachGuestPolicies(guest as never)
-    browserManager.registerGuest({
-      browserPageId: 'browser-redirect-no-debugger',
-      webContentsId: guest.id,
-      rendererWebContentsId
-    })
-    const willRedirect = guestOnMock.mock.calls.find(
-      ([event]) => event === 'will-redirect'
-    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
-
-    willRedirect(
-      { preventDefault: vi.fn() },
-      'https://accounts.google.com/v3/signin/identifier',
-      false,
-      true
-    )
-
-    expect(guest.setUserAgent).not.toHaveBeenCalled()
-    expect(guest.debugger.sendCommand).not.toHaveBeenCalledWith(
-      'Emulation.setUserAgentOverride',
-      expect.anything()
-    )
-  })
-
-  // Direct navigation permits setUserAgent before request dispatch.
-
-  // Keep the process UA override until direct navigation can replace the stale auth base UA.
-  it('never clears the override onto a stale auth WebContents UA and heals it on the next navigation', async () => {
-    browserMocks.processUserAgent = GUEST_CLEAN_UA
-    const { guest, debuggerSendCommand, presentedUserAgent, standingUserAgentOverride } =
-      makeViewportGuest(9001)
-    webContentsFromIdMock.mockReturnValue(guest)
-    browserManager.attachGuestPolicies(guest as never)
-    browserManager.registerGuest({
-      browserPageId: 'tab-auth-then-preset',
-      webContentsId: guest.id as number,
-      rendererWebContentsId
-    })
-    await browserManager.setViewportOverride('tab-auth-then-preset', {
-      width: 1280,
-      height: 800,
-      deviceScaleFactor: 1,
-      mobile: false
-    })
-    await flushViewportOps()
-
-    const didStartNavigation = guestOnMock.mock.calls.find(
-      ([event]) => event === 'did-start-navigation'
-    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
-    const willRedirect = guestOnMock.mock.calls.find(
-      ([event]) => event === 'will-redirect'
-    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
-
-    didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
-    await flushViewportOps()
-    expect((guest.getUserAgent as () => string)()).toBe(googleAuthUserAgent())
-
-    debuggerSendCommand.mockClear()
-    willRedirect({ preventDefault: vi.fn() }, 'https://myaccount.google.com/', false, true)
-    await flushViewportOps()
-    expect(debuggerSendCommand).toHaveBeenLastCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: GUEST_CLEAN_UA
-    })
-    expect(presentedUserAgent()).toBe(GUEST_CLEAN_UA)
-
-    debuggerSendCommand.mockClear()
-    didStartNavigation(null, 'https://github.com/', false, true)
-    await flushViewportOps()
-    expect(debuggerSendCommand).toHaveBeenLastCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: ''
-    })
-    expect(standingUserAgentOverride()).toBeNull()
-    expect(presentedUserAgent()).toBe(GUEST_CLEAN_UA)
-  })
+  )
 })

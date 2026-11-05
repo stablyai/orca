@@ -164,9 +164,9 @@ describe('browserManager', () => {
       }
     )
 
-    // CDP overrides outrank the WebContents UA and must match the auth-host request identity.
+    // Sign-in outranks a preset; the request hook presents its UA, never a hint-blanking CDP override.
     it.each([false, true])(
-      'presents the auth UA for a preset applied on a Google auth host (mobile=%s)',
+      'writes no UA override for a preset applied on a Google auth host (mobile=%s)',
       async (mobile) => {
         const { guest, debuggerSendCommand } = makeGuest(
           mobile ? 4246 : 4245,
@@ -187,9 +187,7 @@ describe('browserManager', () => {
           mobile
         })
 
-        expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-          userAgent: googleAuthUserAgent()
-        })
+        expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
       }
     )
 
@@ -227,11 +225,12 @@ describe('browserManager', () => {
       await flushViewportOps()
       expect(presentedUserAgent()).toBe(googleAuthUserAgent())
 
-      // Retarget the redirect over CDP without rewriting the stale auth WebContents UA.
+      // The redirected document keeps the navigation-start UA; nothing rewrites it mid-redirect.
       willRedirect({ preventDefault: vi.fn() }, 'https://example.com/', false, true)
       await flushViewportOps()
       expect(guest.setUserAgent).toHaveBeenCalledTimes(1)
-      expect(presentedUserAgent()).toBe(GUEST_CLEAN_UA)
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
+      expect(presentedUserAgent()).toBe(googleAuthUserAgent())
     })
 
     function lastUserAgentOverride(
@@ -309,9 +308,7 @@ describe('browserManager', () => {
         mobile: false
       })
       await flushViewportOps()
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
-        userAgent: googleAuthUserAgent()
-      })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
 
       let releaseMetrics = (): void => {}
       const metricsGate = new Promise<void>((resolve) => {
@@ -334,7 +331,7 @@ describe('browserManager', () => {
       await flushViewportOps()
 
       expect(presentedUserAgent()).toBe(GUEST_CLEAN_UA)
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: '' })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
     })
 
     it('falls back to the committed URL once a navigation commits or fails', async () => {
@@ -379,7 +376,7 @@ describe('browserManager', () => {
       await flushViewportOps()
 
       expect(guest.setUserAgent).toHaveBeenCalledOnce()
-      expect(presentedUserAgent()).toBe(GUEST_CLEAN_UA)
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
 
       debuggerSendCommand.mockClear()
       await browserManager.setViewportOverride('tab-pending-cleared', MOBILE_VIEWPORT_OVERRIDE)
@@ -458,7 +455,7 @@ describe('browserManager', () => {
       expect(presentedUserAgent()).toBe(googleAuthUserAgent())
     })
 
-    it('switches identity for a server redirect and restores it if the redirect fails', async () => {
+    it('leaves a server redirect onto an auth host and its failure to the request hook', async () => {
       const { guest, debuggerSendCommand } = makeGuest(4256, 'https://example.com/')
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
@@ -505,17 +502,15 @@ describe('browserManager', () => {
 
       // Rewriting the WebContents UA during redirects can abort and replay sign-in requests.
       expect(guest.setUserAgent).not.toHaveBeenCalled()
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
-        userAgent: googleAuthUserAgent()
-      })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
 
       didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/redirected', true)
       await flushViewportOps()
       expect(guest.setUserAgent).not.toHaveBeenCalled()
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: '' })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
     })
 
-    it('preserves the auth identity when a viewport preset is cleared after a redirect', async () => {
+    it('drops the mobile identity on a redirect onto an auth host and keeps it dropped when the preset clears', async () => {
       const { guest, debuggerSendCommand } = makeGuest(4262, 'https://example.com/')
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
@@ -541,16 +536,13 @@ describe('browserManager', () => {
       willRedirect({ preventDefault: vi.fn() }, 'https://accounts.google.com/', false, true)
       await flushViewportOps()
 
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: '' })
+
       debuggerSendCommand.mockClear()
       await expect(browserManager.setViewportOverride('tab-clear-on-auth', null)).resolves.toBe(
         true
       )
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
-        userAgent: googleAuthUserAgent()
-      })
-      expect(debuggerSendCommand).not.toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-        userAgent: ''
-      })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
     })
 
     it('does not inherit a mobile owner UA in a desktop popup', async () => {

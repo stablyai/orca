@@ -158,10 +158,10 @@ async function presentWith(url: string, preset: Preset): Promise<Observed> {
   return observe(opened, url)
 }
 
-// UA overrides without metadata suppress client hints; only the Google sign-in identity omits them.
+// UA overrides without metadata suppress client hints.
 function expectClientHintsKept(observed: Observed): void {
   const override = observed.standingOverride
-  if (override && override.userAgent !== googleAuthUserAgent()) {
+  if (override) {
     expect(override.userAgentMetadata).toBeDefined()
   }
 }
@@ -362,24 +362,6 @@ describe('tab identity ownership', () => {
     expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
   })
 
-  it('heals a mid-redirect process override on the next navigation', async () => {
-    mocks.processUserAgentMode = 'clean'
-    mocks.processUserAgent = GUEST_CLEAN_UA
-    const opened = openTab(AUTH_URL)
-    await browserManager.setViewportOverride(opened.tab, PRESETS.desktop)
-    const willRedirect = mocks.guestOnMock.mock.calls.findLast(
-      ([event]) => event === 'will-redirect'
-    )?.[1]
-    willRedirect({ preventDefault: vi.fn() }, ORDINARY_URL, false, true)
-    // Clearing now would expose the stale auth WebContents UA.
-    expect((await observe(opened, ORDINARY_URL)).presented).toBe(GUEST_CLEAN_UA)
-
-    navigate('https://example.org/')
-    const healed = await observe(opened, 'https://example.org/')
-    expect(healed.presented).toBe(GUEST_CLEAN_UA)
-    expect(healed.standingOverride).toBeNull()
-  })
-
   it.each([
     ['a redirect', () => redirectTo(ORDINARY_URL)],
     ['a failed load', () => failLoad(ORDINARY_URL)],
@@ -419,7 +401,9 @@ describe('tab identity ownership', () => {
 
     navigate(`${ORDINARY_URL}callback`, { inPlace: true })
     expect(opened.handle.webContentsUserAgent()).toBe(googleAuthUserAgent())
-    expect((await observe(opened, ORDINARY_URL)).presented).toBe(GUEST_CLEAN_UA)
+    const observed = await observe(opened, ORDINARY_URL)
+    expect(observed.standingOverride).toBeNull()
+    expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
 
     navigate('https://example.org/')
     expect(opened.handle.webContentsUserAgent()).toBe(GUEST_CLEAN_UA)
@@ -444,7 +428,7 @@ describe('tab identity ownership', () => {
     didFailLoad(null, -102, 'ERR_CONNECTION_REFUSED', AUTH_URL, true)
     expect(opened.handle.webContentsUserAgent()).toBe(GUEST_CLEAN_UA)
     const observed = await observe(opened, AUTH_URL)
-    expect(observed.presented).toBe(googleAuthUserAgent())
+    expect(observed.standingOverride).toBeNull()
     expect(observed.requestIdentity.kind).toBe('google-auth')
   })
 
