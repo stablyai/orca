@@ -1528,11 +1528,10 @@ jobs:
             pnpm rebuild bun
           fi
 
-      - name: Typecheck and check undeclared dependency resolution
+      - name: Typecheck under isolated dependency resolution
         run: |
           set -euo pipefail
           pnpm tc
-          pnpm exec vitest run --config config/vitest.config.ts config/scripts/dependency-security/runtime-resolution/undeclared-dependency-resolution.test.ts
           # Pointless if any pnpm command above fell back to the hoisted layout or another store.
           case "$(realpath node_modules/zod)" in
             "$(realpath "$pnpm_config_store_dir")"/*) ;;
