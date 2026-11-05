@@ -94,7 +94,7 @@ export const WorktreeCreate = z
     crossStoreParent: CrossStoreParentRefSchema.optional(),
     // No parent flag: the caller's own workspace implied it.
     crossStoreParentInferredFrom: z
-      .enum(['env-workspace', 'terminal-context', 'cwd-context'])
+      .enum(['env-workspace', 'terminal-context', 'cwd-context', 'orchestration-context'])
       .optional(),
     cwdParentWorktree: OptionalString,
     // Absent on older clients: retain the existing cwd parent.

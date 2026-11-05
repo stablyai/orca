@@ -2,6 +2,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-work
 
 import type { Worktree } from '../../shared/worktree/types'
 import type {
+  CrossStoreInferredSource,
   CrossStoreParentRef,
   CrossStoreWorkspaceLineage,
   WorktreeLineage,
@@ -50,7 +51,7 @@ export type CrossStoreLineageResolution = {
 
 export function crossStoreCliLineage(
   parent: CrossStoreParentRef,
-  inferredFrom: 'env-workspace' | 'terminal-context' | 'cwd-context' | undefined
+  inferredFrom: CrossStoreInferredSource | undefined
 ): CrossStoreLineageResolution {
   return {
     kind: 'crossStore',

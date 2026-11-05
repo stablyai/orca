@@ -595,15 +595,15 @@ describe('orca cli worktree awareness', () => {
       if (method === 'status.get') {
         return okFixture('req_status', { capabilities })
       }
-      if (method === 'terminal.show') {
-        return okFixture('req_terminal', { terminal: { worktreeId: 'repo::/tmp/repo' } })
-      }
-      if (method === 'worktree.show') {
-        const parent = { ...buildWorktree('/tmp/repo', 'main'), instanceId: 'parent-instance' }
-        return okFixture('req_show', { worktree: parent })
-      }
-      if (method === 'worktree.lineageList') {
-        return okFixture('req_lineage', { lineage: {}, installationId: 'mac-install' })
+      if (method === 'worktree.resolveCallerParent') {
+        return okFixture('req_resolve', {
+          parent: {
+            installationId: 'mac-install',
+            workspaceKey: 'worktree:repo::/tmp/repo',
+            instanceId: 'parent-instance'
+          },
+          source: 'env-workspace'
+        })
       }
       return okFixture('req_create', {
         worktree: buildWorktree('/srv/child', 'child'),
@@ -637,24 +637,6 @@ describe('orca cli worktree awareness', () => {
       },
       crossStoreParentInferredFrom: 'env-workspace',
       noParent: false
-    })
-  })
-
-  it('nests a create on another machine under the caller terminal workspace alone', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_caller'
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    pairRuntimeEnvironment(listEnvironmentsMock, 'build-box')
-    mockServerCreate(['worktree.lineage.crossMachine'])
-
-    await main(
-      ['worktree', 'create', '--repo', 'id:srv', '--name', 'child', '--environment', 'build-box'],
-      '/elsewhere'
-    )
-
-    expect(createParams()).toMatchObject({
-      crossStoreParent: { workspaceKey: 'worktree:repo::/tmp/repo' },
-      crossStoreParentInferredFrom: 'terminal-context'
     })
   })
 
