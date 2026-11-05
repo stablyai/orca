@@ -27,24 +27,40 @@ export class ClaudePermissionHold {
     next: AgentHookEventPayload
   ): previous is EnrichedAgentHookEventPayload {
     if (!previous || !shouldKeepClaudePermissionVisible(previous, next)) {
-      this.forget(next.paneKey)
+      // Another request replacing the row must not drop the candidates still waiting for theirs.
+      if (next.hookEventName === 'PermissionRequest' && next.toolUseId) {
+        this.replaceCandidate(next.paneKey, next.toolUseId)
+      } else {
+        this.forget(next.paneKey)
+      }
       return false
     }
-    if (!next.toolUseId) {
-      return true
-    }
-    const held = (this.heldPreToolUsesByPaneKey.get(next.paneKey) ?? []).filter(
-      (candidate) => candidate.toolUseId !== next.toolUseId
-    )
-    if (next.hookEventName === 'PreToolUse') {
-      held.push(next)
-    }
-    if (held.length > 0) {
-      this.heldPreToolUsesByPaneKey.set(next.paneKey, held)
-    } else {
-      this.heldPreToolUsesByPaneKey.delete(next.paneKey)
+    if (next.toolUseId) {
+      this.replaceCandidate(
+        next.paneKey,
+        next.toolUseId,
+        next.hookEventName === 'PreToolUse' ? next : undefined
+      )
     }
     return true
+  }
+
+  private replaceCandidate(
+    paneKey: string,
+    toolUseId: string,
+    replacement?: AgentHookEventPayload
+  ): void {
+    const held = (this.heldPreToolUsesByPaneKey.get(paneKey) ?? []).filter(
+      (candidate) => candidate.toolUseId !== toolUseId
+    )
+    if (replacement) {
+      held.push(replacement)
+    }
+    if (held.length > 0) {
+      this.heldPreToolUsesByPaneKey.set(paneKey, held)
+    } else {
+      this.heldPreToolUsesByPaneKey.delete(paneKey)
+    }
   }
 
   forgetVacatedPane(

@@ -49,12 +49,23 @@ const UNRELATED_READ = {
   tool_input: { file_path: '/tmp/orca-unrelated' },
   tool_use_id: 'toolu-unrelated'
 }
+const PARALLEL = { command: 'rm -rf /tmp/orca-parallel-target' }
+const PARALLEL_REQUEST = [
+  {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    tool_input: PARALLEL,
+    tool_use_id: 'toolu-parallel'
+  },
+  { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: PARALLEL }
+]
 
 describe('Claude permission wait after a PermissionRequest hook denies', () => {
   // A PermissionRequest hook deny fires no PostToolUse, so the first wait is never settled.
   it.each([
     ['directly', []],
-    ['after an unrelated tool starts', [UNRELATED_READ]]
+    ['after an unrelated tool starts', [UNRELATED_READ]],
+    ['after a parallel request takes the row', PARALLEL_REQUEST]
   ])('clears the wait when the retried request is approved %s', async (_, between) => {
     await withClaudeHookServer(async (post, server) => {
       await post({
