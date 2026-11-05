@@ -28,6 +28,29 @@ export function remoteHelpers(
       warning: `${serverName} runs an older Orca that leaves helpers this worker started there running; update it to stop them with the worker.`
     }
   }
-  const helpers = HelperStopOutcome.array().safeParse(remote.helpers)
-  return helpers.success && helpers.data.length ? { helpers: helpers.data } : {}
+  const items = Array.isArray(remote.helpers) ? remote.helpers : []
+  return items.length ? { helpers: items.map(readRemoteHelper) } : {}
+}
+
+const RemoteHelper = HelperStopOutcome.extend({ outcome: z.string() })
+
+/** A host newer than this home may report an outcome it does not know; never claim that stopped. */
+function readRemoteHelper(item: unknown): HelperStopOutcome {
+  const helper = RemoteHelper.safeParse(item)
+  if (!helper.success) {
+    return {
+      dispatchId: 'unknown',
+      creatorDispatchId: 'unknown',
+      outcome: 'unconfirmed',
+      lastError: 'The host reported a helper this Orca cannot read.'
+    }
+  }
+  const outcome = HelperStopOutcome.shape.outcome.safeParse(helper.data.outcome)
+  return outcome.success
+    ? { ...helper.data, outcome: outcome.data }
+    : {
+        ...helper.data,
+        outcome: 'unconfirmed',
+        lastError: `The host reported ${helper.data.outcome}.`
+      }
 }

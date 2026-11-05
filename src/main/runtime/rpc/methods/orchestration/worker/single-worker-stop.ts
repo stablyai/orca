@@ -67,7 +67,7 @@ export async function stopSingleWorker(
         const reason = error instanceof Error ? error.message : String(error)
         return {
           ...settled,
-          warning: `Could not reach ${server.name} to stop helpers this worker started there: ${reason}`
+          helperStopError: `Could not reach ${server.name} to stop helpers this worker started there: ${reason}`
         }
       }
     }

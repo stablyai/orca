@@ -68,7 +68,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       result,
       json,
       (value) =>
-        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}${formatHelperStops(value.helpers)}`
+        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}${formatHelperStops(value.helpers)}${value.helperStopError ? `\n${value.helperStopError}` : ''}`
     )
   },
 

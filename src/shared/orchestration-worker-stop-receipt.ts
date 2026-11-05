@@ -4,14 +4,9 @@ import { z } from 'zod'
 export const HelperStopOutcome = z.object({
   dispatchId: z.string(),
   creatorDispatchId: z.string(),
-  outcome: z.enum([
-    'stopped',
-    'already_finished',
-    'kept_open',
-    'under_kept_open',
-    'starting',
-    'unconfirmed'
-  ]),
+  outcome: z.enum(['stopped', 'already_finished', 'kept_open', 'starting', 'unconfirmed']),
+  /** Set on a helper left running because the user kept this ancestor open. */
+  keptOpenBy: z.string().optional(),
   state: z.string().optional(),
   lastError: z.string().nullable().optional()
 })
@@ -26,4 +21,6 @@ export type WorkerStopReceipt = {
   lastError?: string | null
   warning?: string
   helpers?: HelperStopOutcome[]
+  /** Why helpers on the worker's host could not be stopped or listed. */
+  helperStopError?: string
 }

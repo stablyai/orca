@@ -299,6 +299,44 @@ describe('federated transport safety', () => {
   })
 })
 
+describe('worker-stop of a remote worker already settled at home', () => {
+  it('fails the stop when its host cannot be reached to stop its helpers', async () => {
+    const db = {
+      getFederatedDispatch: () => federatedDispatch(),
+      beginWorkerStop: () => ({ disposition: 'already_settled', worker: { state: 'succeeded' } }),
+      listHelperDispatchIds: () => []
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stop reads only these runtime members.
+    const runtime = {
+      getOrchestrationDb: () => db,
+      getRuntimeId: () => 'runtime-home',
+      resolveOrchestrationWorkerServer: () => server,
+      callOrchestrationWorkerServer: vi.fn(async (_selector, method: string) => {
+        if (method === 'status.get') {
+          return runtimeStatus(['orchestration.worker-stop-helpers.v1'])
+        }
+        if (method === 'orchestration.federationStop') {
+          throw new Error('timed out')
+        }
+        return { keptOpen: false }
+      })
+    } as unknown as OrcaRuntimeService
+    const method = ORCHESTRATION_WORKER_STOP_METHODS[0]!
+
+    const receipt = await method.handler(method.params!.parse({ dispatch: 'dispatch-worker' }), {
+      runtime,
+      orchestrationMutation: { requestId: 'request-stop' }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime and orchestrationMutation.
+    } as never)
+
+    expect(receipt).toMatchObject({
+      state: 'succeeded',
+      alreadySettled: true,
+      helperStopError: expect.stringContaining('timed out')
+    })
+  })
+})
+
 function federatedDispatch(): FederatedDispatchRow {
   return {
     dispatch_id: 'dispatch-worker',

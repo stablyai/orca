@@ -92,7 +92,10 @@ async function stopHelpers(
       } catch (error) {
         if (error instanceof OrchestrationError && error.code === 'terminal_kept_open') {
           // The user keeps this helper, so the helpers working for it keep running too.
-          return [{ ...helper, outcome: 'kept_open', state }, ...listUnderKeptOpen(db, dispatchId)]
+          return [
+            { ...helper, outcome: 'kept_open', state },
+            ...listUnderKeptOpen(db, dispatchId, dispatchId)
+          ]
         }
         const lastError = error instanceof Error ? error.message : String(error)
         return [
@@ -105,15 +108,20 @@ async function stopHelpers(
   return outcomes.flat()
 }
 
-function listUnderKeptOpen(db: OrchestrationDb, creatorDispatchId: string): HelperStopOutcome[] {
+function listUnderKeptOpen(
+  db: OrchestrationDb,
+  creatorDispatchId: string,
+  keptOpenBy: string
+): HelperStopOutcome[] {
   return db.listHelperDispatchIds(creatorDispatchId).flatMap((dispatchId) => [
     {
       dispatchId,
       creatorDispatchId,
-      outcome: 'under_kept_open' as const,
+      outcome: 'kept_open' as const,
+      keptOpenBy,
       state: db.getWorkerDispatch(dispatchId)?.state
     },
-    ...listUnderKeptOpen(db, dispatchId)
+    ...listUnderKeptOpen(db, dispatchId, keptOpenBy)
   ])
 }
 

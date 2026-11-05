@@ -26,7 +26,11 @@ describe('worker-stop through CLI argv, RPC and SQLite', () => {
         outcome: 'stopped'
       }),
       expect.objectContaining({ dispatchId: kept.dispatchId, outcome: 'kept_open' }),
-      expect.objectContaining({ dispatchId: keptChild.dispatchId, outcome: 'under_kept_open' }),
+      expect.objectContaining({
+        dispatchId: keptChild.dispatchId,
+        outcome: 'kept_open',
+        keptOpenBy: kept.dispatchId
+      }),
       expect.objectContaining({ dispatchId: finished.dispatchId, outcome: 'already_finished' })
     ])
     const closed = vi.mocked(h.runtime.closeTerminal).mock.calls.map(([handle]) => handle)
@@ -82,5 +86,22 @@ describe('worker-stop through CLI argv, RPC and SQLite', () => {
     const late = receipt.parse((await starting).result)
 
     expect(h.db.getWorkerDispatch(late.dispatchId)?.state).toBe('stopped')
+  })
+
+  it('still stops the helpers of a helper whose own stop cannot run', async () => {
+    const worker = await start('term_coord', 'term_worker')
+    const helper = await start('term_worker', 'term_helper')
+    const nested = await start('term_helper', 'term_nested')
+    h.db.beginWorkerStop(helper.dispatchId, h.runtime.getRuntimeId())
+    h.db.markWorkerStopUnknown(helper.dispatchId, 'close not proven')
+
+    const result = await cli('worker-stop', '--dispatch', worker.dispatchId)
+
+    expect(process.exitCode).toBe(1)
+    expect(h.db.getWorkerDispatch(nested.dispatchId)?.state).toBe('stopped')
+    expect(result.result).toHaveProperty('helpers', [
+      expect.objectContaining({ dispatchId: helper.dispatchId, outcome: 'unconfirmed' }),
+      expect.objectContaining({ dispatchId: nested.dispatchId, outcome: 'stopped' })
+    ])
   })
 })
