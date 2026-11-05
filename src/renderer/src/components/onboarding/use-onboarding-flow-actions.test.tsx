@@ -173,7 +173,7 @@ describe('onboarding completion destination', () => {
     async (hasSelectedWorkspace) => {
       const { result, openModal, update, onOnboardingChange, updateSettings } = renderActions(
         hasSelectedWorkspace,
-        0,
+        STEPS.findIndex((step) => step.id === 'agent'),
         'claude'
       )
       await act(() => result.current.setUpLater())
@@ -192,7 +192,10 @@ describe('onboarding completion destination', () => {
   )
 
   it('keeps onboarding open for retry when setting up later cannot save completion', async () => {
-    const { result, update, onOnboardingChange, openModal } = renderActions(true, 0)
+    const { result, update, onOnboardingChange, openModal } = renderActions(
+      true,
+      STEPS.findIndex((step) => step.id === 'agent')
+    )
     update.mockRejectedValueOnce(new Error('save failed'))
     await act(() => result.current.setUpLater())
     expect(onOnboardingChange).not.toHaveBeenCalled()
@@ -205,7 +208,10 @@ describe('onboarding completion destination', () => {
   })
 
   it('does not leave onboarding when the skipped agent preference cannot be saved', async () => {
-    const { result, updateSettings, update, onOnboardingChange, openModal } = renderActions(true, 0)
+    const { result, updateSettings, update, onOnboardingChange, openModal } = renderActions(
+      true,
+      STEPS.findIndex((step) => step.id === 'agent')
+    )
     updateSettings.mockRejectedValueOnce(new Error('settings save failed'))
     await act(() => result.current.setUpLater())
     expect(update).not.toHaveBeenCalled()
