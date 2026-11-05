@@ -25,13 +25,22 @@ export class ManagedOrcadCrashLoopBrake {
   private readonly engagedHosts = new Map<string, string | null>()
   /** A failed start already counted; the next orcad's report of it must not count twice. */
   private readonly countedFailedStarts = new Set<string>()
+  // Wakes begun before an explicit reconnect must not undo its reset.
+  private readonly resets = new Map<string, number>()
 
   constructor(now: () => number = Date.now) {
     this.failures = new ManagedOrcadEventWindow(FAILED_RUN_WINDOW_MS, now)
   }
 
   /** Older orcad builds omit the report, so they are never braked. */
-  noteStarted(environmentId: string, health: OrcadHealth | undefined): void {
+  resetEpoch(environmentId: string): number {
+    return this.resets.get(environmentId) ?? 0
+  }
+
+  noteStarted(environmentId: string, epoch: number, health: OrcadHealth | undefined): void {
+    if (epoch !== this.resetEpoch(environmentId)) {
+      return
+    }
     const alreadyCounted = this.countedFailedStarts.delete(environmentId)
     if (
       !alreadyCounted &&
@@ -41,7 +50,10 @@ export class ManagedOrcadCrashLoopBrake {
     }
   }
 
-  noteFailedStart(environmentId: string): void {
+  noteFailedStart(environmentId: string, epoch: number): void {
+    if (epoch !== this.resetEpoch(environmentId)) {
+      return
+    }
     this.countedFailedStarts.add(environmentId)
     this.record(environmentId)
   }
@@ -64,6 +76,7 @@ export class ManagedOrcadCrashLoopBrake {
     this.failures.forget(environmentId)
     this.engagedHosts.delete(environmentId)
     this.countedFailedStarts.delete(environmentId)
+    this.resets.set(environmentId, this.resetEpoch(environmentId) + 1)
   }
 
   private record(environmentId: string): void {
@@ -121,10 +134,11 @@ async function wakeUnlessEngaged(
   if (brake.engaged(environmentId)) {
     return { outcome: 'crash-loop', detail: await crashLoopDetail(environmentId, hostLabel, slot) }
   }
+  const epoch = brake.resetEpoch(environmentId)
   try {
     const wake = await wakeStoppedManagedOrcad(slot, onStarting)
     if (wake.outcome === 'started') {
-      brake.noteStarted(environmentId, wake.readiness.health)
+      brake.noteStarted(environmentId, epoch, wake.readiness.health)
     }
     return wake
   } catch (error) {
@@ -134,7 +148,7 @@ async function wakeUnlessEngaged(
       error instanceof OrcadWindowsLaunchRefusedError ||
       error instanceof OrcadWindowsLaunchFailedError
     ) {
-      brake.noteFailedStart(environmentId)
+      brake.noteFailedStart(environmentId, epoch)
     }
     throw error
   }

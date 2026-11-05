@@ -145,6 +145,28 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(3)
   })
 
+  it('does not let a start begun before a reconnect count against it', async () => {
+    let finish = (): void => {}
+    vi.mocked(wakeStoppedManagedOrcad).mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => (finish = resolve))
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only health is read.
+      return {
+        outcome: 'started',
+        readiness: { health: { previousUnexpectedExit: CRASHED } } as never
+      }
+    })
+    const pending = findStopped()
+    await vi.waitFor(() => expect(wakeStoppedManagedOrcad).toHaveBeenCalledOnce())
+    forgetManagedOrcadAutomaticFailures('/unused-user-data', 'env-1')
+    finish()
+    await pending
+
+    startsReporting(CRASHED)
+    await findStopped()
+    await findStopped()
+    expect(await findStopped()).toMatchObject({ state: 'started' })
+  })
+
   it('restarts it again once the user reconnects', async () => {
     startsReporting(CRASHED)
     for (let i = 0; i < 3; i++) {
