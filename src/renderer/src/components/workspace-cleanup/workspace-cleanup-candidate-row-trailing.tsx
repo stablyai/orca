@@ -56,7 +56,7 @@ export function CandidateRowTrailing({
   return (
     <div className="flex h-6 shrink-0 items-center gap-3">
       {/* Secondary actions surface on row hover or keyboard focus; touch screens always show them. */}
-      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 [@media(hover:none)]:opacity-100">
+      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 [[class~='group/row']:has(:focus-visible)_&]:opacity-100 [@media(hover:none)]:opacity-100">
         <RowIconAction
           icon={ExternalLink}
           tooltip={translate('components.workspace.cleanup.browse.openWorkspace', 'Open workspace')}
