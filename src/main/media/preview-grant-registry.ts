@@ -29,9 +29,14 @@ export type PreviewGrant = {
   senderId: number
   key: string
   // Why: a seek or prefetch burst opens several ranges at once; one stat answers all of them.
-  stat?: { at: number; snapshot: Promise<RemotePreviewFileSnapshot> }
+  stat?: { at: number; version: Promise<RemotePreviewVersion> }
   // Why: likewise one renewal answers a burst that found a granted file's grant lapsed.
   renewal?: Promise<RemoteFilePreviewAddress>
+}
+/** A remote file's version together with the address that saw it. */
+export type RemotePreviewVersion = {
+  remote: RemoteFilePreviewAddress
+  snapshot: RemotePreviewFileSnapshot
 }
 export type PreviewUrl = {
   content: string
@@ -85,9 +90,9 @@ export function mintPreviewUrl(
     grants.set(token, { target, store, preview, mimeType, senderId: sender.id, key })
   }
   const grant = grants.get(token)
-  if (grant && snapshot) {
+  if (grant && snapshot && 'remote' in target) {
     // A reload re-mints the same token; its fresh stat must replace a cached older size.
-    grant.stat = { at: Date.now(), snapshot: Promise.resolve(snapshot) }
+    grant.stat = { at: Date.now(), version: Promise.resolve({ remote: target.remote, snapshot }) }
   }
   const byteSize = snapshot?.size ?? size
   return {
@@ -121,21 +126,24 @@ export function revokeRemoteFilePreviewGrants(environmentId: string): void {
   }
 }
 
-export function remoteSnapshot(grant: PreviewGrant): Promise<RemotePreviewFileSnapshot> {
+export function remotePreviewVersion(grant: PreviewGrant): Promise<RemotePreviewVersion> {
   const now = Date.now()
   if (!grant.stat || now - grant.stat.at > REMOTE_STAT_REUSE_MS) {
     // Not tied to one request's abort: other ranges in the burst may be waiting on it.
     const signal = new AbortController().signal
-    const snapshot = callRemotePreview(grant, (remote) => statRemotePreviewFile(remote, signal))
-    const stat = { at: now, snapshot }
+    const version = callRemotePreview(grant, async (remote) => ({
+      remote,
+      snapshot: await statRemotePreviewFile(remote, signal)
+    }))
+    const stat = { at: now, version }
     grant.stat = stat
-    snapshot.catch(() => {
+    version.catch(() => {
       if (grant.stat === stat) {
         grant.stat = undefined
       }
     })
   }
-  return grant.stat.snapshot
+  return grant.stat.version
 }
 
 /** The grant behind an orca-media URL, only for the renderer that minted it. */
@@ -199,15 +207,15 @@ export type RemotePreviewReader = <T>(
 ) => Promise<T>
 
 /**
- * Host calls for one response that serves the file version `served`: they stay on the grant they
- * started with and move to a renewed one only while that grant still sees the same version, so a
- * rewritten file never splices into a response.
+ * Host calls for one response that serves `served`: they stay on the grant that saw that version
+ * and move to a renewed one only while it still sees the same version, so a rewritten file never
+ * splices into a response.
  */
 export function remotePreviewReader(
   grant: PreviewGrant,
-  served: RemotePreviewFileSnapshot
+  served: RemotePreviewVersion
 ): RemotePreviewReader {
-  let remote = currentRemote(grant)
+  let remote = served.remote
   return async (call) => {
     const pinned = remote
     try {
@@ -218,7 +226,8 @@ export function remotePreviewReader(
         throw error
       }
       const renewed = await renewedRemoteTarget(grant, lapsed)
-      if (!sameFileVersion(await remoteSnapshot(grant), served)) {
+      const renewedSnapshot = await statRemotePreviewFile(renewed, new AbortController().signal)
+      if (!sameFileVersion(renewedSnapshot, served.snapshot)) {
         throw new Error('The file changed on its host while it was being read.')
       }
       remote = renewed

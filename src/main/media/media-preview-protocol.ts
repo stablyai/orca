@@ -38,7 +38,7 @@ import {
   grants,
   mintPreviewUrl,
   remotePreviewReader,
-  remoteSnapshot,
+  remotePreviewVersion,
   revokeGrant,
   type LocalPreviewTarget,
   type PreviewGrant,
@@ -172,9 +172,9 @@ async function handleRemotePreviewRequest(
   }
   try {
     // Re-stat (at most once a second) like a local file re-opens per request, so a growing recording keeps playing.
-    const snapshot = await remoteSnapshot(grant)
-    const { size } = snapshot
-    const read = remotePreviewReader(grant, snapshot)
+    const version = await remotePreviewVersion(grant)
+    const { size } = version.snapshot
+    const read = remotePreviewReader(grant, version)
     // The file can change after mint; check the bytes this response serves.
     await read((remote) =>
       assertRemotePreviewRasterHeader(grant.preview, remote, size, controller.signal)
