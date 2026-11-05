@@ -195,7 +195,7 @@ function applyClaudeSettingsFacts(
   const effort = observeClaudeSettingsEffort(session, settings)
   const agrees = (key: string, reported: string): boolean =>
     !session.options.has(key) || session.options.get(key) === reported
-  if (effort && session.options.has('effort') && agrees('effort', effort)) {
+  if (effort && agrees('effort', effort)) {
     session.confirmedOptions.add('effort')
   }
   // A launch `--effort` shows only in `applied`, never in `effective` (measured on 2.1.280).
