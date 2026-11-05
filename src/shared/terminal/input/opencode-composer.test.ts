@@ -25,6 +25,14 @@ function box(
   }
 }
 
+// OpenCode paints the padding row across the box, so its width shows short text is not clipped.
+function wideBox(typed: string) {
+  return {
+    ...box([typed], 0, ''),
+    rows: ['   /update to install', `   ┃${' '.repeat(60)}`, `   ┃  ${typed}`]
+  }
+}
+
 describe('readOpenCodeComposerText', () => {
   it.each([
     ['the stock placeholder', box(['Ask anything… "Fix a TODO in the codebase"'], 0, '')],
@@ -41,13 +49,8 @@ describe('readOpenCodeComposerText', () => {
     ['at its end', box(['please refactor the auth'], 0, 'please refactor the auth')],
     ['with the cursor moved to its start', box(['please refactor the auth'], 0, '')],
     ['that starts like the placeholder', box(['Ask anything about the failure'], 0, '')],
-    [
-      'that is a short stock prefix in a wide box',
-      {
-        ...box(['Ask'], 0, ''),
-        rows: ['   /update to install', `   ┃${' '.repeat(60)}`, '   ┃  Ask']
-      }
-    ],
+    ['that is the short stock prefix "A", cursor at its start, in a wide box', wideBox('A')],
+    ['that is the short stock prefix "Ask", cursor at its start, in a wide box', wideBox('Ask')],
     ['in shell mode', box(['ls -la'], 0, 'ls -la', { metadata: 'Shell' })],
     ['under a model-only metadata row', box(['fix it'], 0, 'fix it', { metadata: 'Big Pickle' })],
     ['on a transparent theme', box(['fix it'], 0, 'fix it', { bottom: '' })]
