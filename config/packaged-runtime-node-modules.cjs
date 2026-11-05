@@ -8,7 +8,7 @@ const {
   rmSync
 } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
-const { builtinModules, createRequire } = require('node:module')
+const { createRequire, isBuiltin } = require('node:module')
 const {
   PE_MACHINE,
   readPeMachine
@@ -83,11 +83,6 @@ const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/
 const JS_SOURCE_MAP_ARTIFACT_RE = /\.(?:c|m)?js\.map$/
 const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
 
-const NODE_BUILTINS = new Set([
-  ...builtinModules,
-  ...builtinModules.map((moduleName) => `node:${moduleName}`)
-])
-
 function packageNameFromSpecifier(specifier) {
   if (specifier.startsWith('@')) {
     const [scope, name] = specifier.split('/')
@@ -101,7 +96,9 @@ function isPackagedExternalSpecifier(specifier) {
     !specifier.startsWith('.') &&
     !specifier.startsWith('/') &&
     specifier !== 'electron' &&
-    !NODE_BUILTINS.has(specifier)
+    // isBuiltin, unlike builtinModules before Node 23.5, also knows prefix-only
+    // modules such as node:sqlite.
+    !isBuiltin(specifier)
   )
 }
 
