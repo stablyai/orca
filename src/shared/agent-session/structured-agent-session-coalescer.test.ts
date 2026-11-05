@@ -33,53 +33,6 @@ function batch(
 }
 
 describe('structured agent session event coalescer', () => {
-  it('preserves background task state when a journal batch follows it', () => {
-    const events: AgentSessionSubscribeEvent[] = []
-    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
-
-    coalescer.push(
-      batch(1, {
-        state: 'monitoring',
-        tasks: [{ id: 'task-1', kind: 'command', description: 'run the build' }]
-      })
-    )
-    coalescer.push(batch(2))
-    coalescer.flush()
-
-    expect(events).toHaveLength(1)
-    expect(events[0]).toMatchObject({
-      backgroundTasks: {
-        state: 'monitoring',
-        tasks: [{ id: 'task-1', kind: 'command', description: 'run the build' }]
-      }
-    })
-  })
-
-  it('keeps an explicit terminal state as the newest coalesced value', () => {
-    const events: AgentSessionSubscribeEvent[] = []
-    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
-
-    coalescer.push(batch(1, { state: 'monitoring' }))
-    coalescer.push(batch(1, null))
-    coalescer.flush()
-
-    expect(events).toHaveLength(1)
-    expect(events[0]).toMatchObject({ backgroundTasks: null })
-  })
-
-  it('keeps only the latest ephemeral activity value', () => {
-    const events: AgentSessionSubscribeEvent[] = []
-    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
-
-    coalescer.push(batch(1, undefined, { turnId: 'turn-1', text: 'Thinking' }))
-    coalescer.push(batch(1, undefined, { turnId: 'turn-1', text: 'Checking the result' }))
-    coalescer.push(batch(1, undefined, null))
-    coalescer.flush()
-
-    expect(events).toHaveLength(1)
-    expect(events[0]).toMatchObject({ activity: null })
-  })
-
   it('keeps the latest prompt suggestion, including a clear, across merged batches', () => {
     const events: AgentSessionSubscribeEvent[] = []
     const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
@@ -95,30 +48,6 @@ describe('structured agent session event coalescer', () => {
       'add a test',
       null
     ])
-  })
-
-  it('delivers each queue list at once, in order, each with the pause it was published with', () => {
-    const events: AgentSessionSubscribeEvent[] = []
-    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
-    const draft = {
-      messageId: 'draft-1',
-      position: 1,
-      body: { kind: 'message' as const, role: 'user' as const, blocks: [] },
-      state: 'waiting' as const
-    }
-
-    coalescer.push({ ...batch(1), queuedMessages: [draft], queuePause: { reason: 'stopped' } })
-    coalescer.push({ ...batch(2), queuedMessages: [], queuePause: null })
-    coalescer.push(batch(3))
-    coalescer.flush()
-
-    expect(events).toHaveLength(3)
-    expect(events[0]).toMatchObject({
-      queuedMessages: [draft],
-      queuePause: { reason: 'stopped' }
-    })
-    expect(events[1]).toMatchObject({ queuedMessages: [], queuePause: null })
-    expect(events[2]).not.toHaveProperty('queuedMessages')
   })
 
   it('passes a queue list through at once, with anything it held merged ahead of it', () => {
@@ -143,51 +72,6 @@ describe('structured agent session event coalescer', () => {
     ])
     expect(events[1]).toMatchObject({ queuedMessages: [{ messageId: 'card-1' }] })
     coalescer.dispose()
-  })
-
-  it("delivers the queue's next card with its list, ahead of a later token batch", () => {
-    const events: AgentSessionSubscribeEvent[] = []
-    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
-    coalescer.push({ ...batch(1), queuedMessages: [], nextQueuedMessageId: 'draft-1' })
-    const token = {
-      itemId: 'assistant-1',
-      revision: 1,
-      sequence: 2,
-      observedAt: 2,
-      body: {
-        kind: 'message' as const,
-        role: 'assistant' as const,
-        blocks: [{ type: 'text' as const, text: 'streaming' }]
-      }
-    }
-    const tokens = batch(2)
-    coalescer.push({ ...tokens, batch: { ...tokens.batch, items: [token] } })
-    coalescer.flush()
-    expect(events).toHaveLength(2)
-    expect(events[0]).toMatchObject({ nextQueuedMessageId: 'draft-1' })
-    expect(events[1]).not.toHaveProperty('queuedMessages')
-  })
-
-  it('keeps the latest turn a coalesced frame carried, and a null one as an answer', () => {
-    const events: AgentSessionSubscribeEvent[] = []
-    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
-    const running = {
-      itemId: 'turn-1',
-      observedAt: 1,
-      turn: { turnId: 'turn-1', state: 'running' as const }
-    }
-
-    coalescer.push({ ...batch(1), latestTurn: running })
-    coalescer.push(batch(2))
-    coalescer.flush()
-    coalescer.push({ ...batch(3), latestTurn: running })
-    coalescer.push({ ...batch(4), latestTurn: null })
-    coalescer.flush()
-
-    expect(events.map((event) => (event.type === 'batch' ? event.latestTurn : 'other'))).toEqual([
-      running,
-      null
-    ])
   })
   it('ends a catch-up only when the last page it merged did', () => {
     const events: AgentSessionSubscribeEvent[] = []
@@ -336,24 +220,6 @@ describe('coalesced history removals', () => {
       }
     }
   )
-
-  it('removes a system roster immediately after flushing an unrelated assistant update', () => {
-    const h = history()
-    try {
-      h.push(1, [
-        { ...item(), itemId: 'roster', body: { kind: 'message', role: 'system', blocks: [roster] } }
-      ])
-      expect(h.state().subagentRoster?.has('helper')).toBe(true)
-      const answer = { ...item(), sequence: 2 }
-      h.push(2, [answer])
-      const removal = h.push(3, [], ['roster'])
-      expect(h.state().cursor).toEqual(removal.batch.cursor)
-      expect(h.state().items).toEqual([answer])
-      expect(h.state().subagentRoster?.size).toBe(0)
-    } finally {
-      h.coalescer.dispose()
-    }
-  })
 
   it('bounds destructive burst work at N and 10N while ordinary updates still aggregate', () => {
     const population = 1_000

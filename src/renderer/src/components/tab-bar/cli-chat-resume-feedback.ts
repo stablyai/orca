@@ -7,7 +7,7 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { agentSessionWriteFailureText } from '../native-chat/agent-session-write-notice-text'
-import { agentLabel } from '../../../../shared/ai-vault-session-filters'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
 import type { AgentSessionConversationOwner } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
@@ -90,7 +90,7 @@ export async function reportCliChatResumeFailure(
     refusal?.code === 'agent_session_conflict' ||
     refusal?.code === 'agent_session_ownership_unknown'
   ) {
-    const owner = refusal.owner
+    const owner = refusal.owner ?? undefined
     if (
       refusal.code === 'agent_session_conflict' &&
       refusal.details?.reason === 'conversationHeldElsewhere' &&

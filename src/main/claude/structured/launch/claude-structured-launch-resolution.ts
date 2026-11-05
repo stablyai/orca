@@ -11,7 +11,7 @@ import type {
 import type {
   AgentChatPermissionChoice,
   AgentChatPermissionMode
-} from '../../../../shared/agent-chat-permission-mode'
+} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,

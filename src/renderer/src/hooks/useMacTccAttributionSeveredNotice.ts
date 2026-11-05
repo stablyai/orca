@@ -11,7 +11,7 @@ import { usePluginLanguagePackStore, usePluginLanguagePacks } from '@/store/plug
 import { translate } from '@/i18n/i18n'
 import { track } from '@/lib/telemetry'
 import { resolveUiLocale } from '@/i18n/supported-languages'
-import { MANAGE_SESSIONS_SECTION_ID } from '@/components/settings/TerminalTccAttributionNotice'
+import { MANAGE_SESSIONS_SECTION_ID } from '@/components/settings/terminal/session-management/open-terminal-manage-sessions'
 import { macFolderAccessFolderName } from '@/components/shared/mac-folder-access-folder-name'
 import {
   FOLDER_ACCESS_MISMATCH_NOTICE_ID,

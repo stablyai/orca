@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import { encodePairingOffer } from '../../../shared/pairing'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
-  getEnvironmentStorePath,
   listEnvironments,
   removeEnvironment
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getEnvironmentStorePath } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Store } from '../../persistence/loading-store/store'
 import {

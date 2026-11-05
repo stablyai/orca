@@ -1,4 +1,4 @@
-import { pickTuiAgent } from '../../../shared/tui-agent-selection'
+import { pickTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import { newAgentLaunchesMayOpenChats } from '@/runtime/local-structured-chats'
 import { acquireAgentLaunchChoices } from './host-chat-program-acquisition'
 import { useAppStore } from '@/store'
@@ -17,10 +17,8 @@ import { chosenAgentChatUnlearned, agentChoiceOpensAsChat } from '@/lib/host-cha
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import {
-  readAgentLaunchPreferencesForWorktree,
-  type AgentLaunchPreferences
-} from '@/components/settings/use-host-agent-launch-preferences'
+import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 
 type DefaultChatHost = { target: AgentDetectionTarget; preferences: AgentLaunchPreferences }
 
@@ -69,7 +67,8 @@ export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string)
 /** Open the configured default chat for an empty workspace; null or host decline seeds a shell, never an unrequested agent TUI. */
 export function openDefaultAgentChatInEmptyWorkspace(
   worktreeId: string,
-  seedShell: () => boolean
+  seedShell: () => boolean,
+  initialCwd?: string
 ): { primaryTabId: string | null } | null {
   const state = useAppStore.getState()
   const host = defaultChatHost(state, worktreeId)
@@ -90,7 +89,8 @@ export function openDefaultAgentChatInEmptyWorkspace(
   const agentSessionLaunchPlan = planAgentSessionLaunch(state, {
     requestId: newAgentLaunchRequestId(),
     agent,
-    workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId }
+    workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
+    tuiCustomization: { cwd: initialCwd }
   })
   // Why: an agent that can only open as a TUI here would replace the shell with a process nobody asked for.
   if (agentSessionLaunchPlan.route === 'terminal-tui') {
@@ -99,6 +99,7 @@ export function openDefaultAgentChatInEmptyWorkspace(
   const result = launchAgentInNewTab({
     agent,
     worktreeId,
+    initialCwd,
     launchSource: 'unknown',
     agentSessionLaunchPlan,
     pendingActivationSpawn: true,

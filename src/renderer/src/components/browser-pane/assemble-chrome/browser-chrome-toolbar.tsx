@@ -5,7 +5,8 @@ import {
   MessageSquarePlus,
   PenTool,
   Share2,
-  SquareCode
+  SquareCode,
+  X
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ import {
   BrowserChromeElementToolButtons,
   type BrowserChromeElementTools
 } from './browser-chrome-element-tool-buttons'
+import { useFloatingSplitBrowserClose } from './use-floating-split-browser-close'
 
 export type { BrowserChromeElementTools } from './browser-chrome-element-tool-buttons'
 
@@ -89,6 +91,7 @@ export function BrowserChromeToolbar({
   viewSource,
   openExternal,
   overflowMenu,
+  closeTabOwner,
   showTourAnchors = false,
   pinnedStage
 }: {
@@ -109,11 +112,17 @@ export function BrowserChromeToolbar({
   viewSource: BrowserChromeToolAction | null
   openExternal: BrowserChromeToolAction | null
   overflowMenu: (props: BrowserChromeOverflowMenuProps) => React.ReactNode
+  /** The page whose tab the toolbar X closes in a floating split, where the panel's one tab row may be showing another split. */
+  closeTabOwner: { worktreeId: string; browserPageId: string }
   /** Only the browsing pane anchors the contextual tour; a second anchor would steal its steps. */
   showTourAnchors?: boolean
   /** Keeps the active contextual-tour control measurable while the remaining tools still fold. */
   pinnedStage?: BrowserChromeFoldStage
 }): React.JSX.Element {
+  const closeTab = useFloatingSplitBrowserClose(
+    closeTabOwner.worktreeId,
+    closeTabOwner.browserPageId
+  )
   const rowRef = useRef<HTMLDivElement>(null)
   const overflowTriggerRef = useRef<HTMLButtonElement>(null)
   const present: Record<BrowserChromeFoldStage, boolean> = {
@@ -262,6 +271,8 @@ export function BrowserChromeToolbar({
           <span className="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-background" />
         ) : null}
       </span>
+
+      {closeTab ? <BrowserChromeActionButton action={closeTab} icon={X} /> : null}
     </BrowserNavigationControlRow>
   )
 }

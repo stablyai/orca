@@ -102,11 +102,8 @@ export async function recordStructuredAgentSessionStartFailure(
   failure: StructuredAgentSessionStartFailure,
   clientMessageId: string | null
 ): Promise<void> {
-  const selected = session.journal
-    .submissions()
-    .find(
-      (entry) => entry.clientMessageId === clientMessageId && isQueuedAgentJournalSubmission(entry)
-    )
+  const entry = clientMessageId === null ? undefined : session.journal.submission(clientMessageId)
+  const selected = entry && isQueuedAgentJournalSubmission(entry) ? entry : undefined
   const startKey = failure.startKey ?? clientMessageId
   const rejection = { reason: failure.reason, rejection: failure.rejection }
   if (startKey === null || (clientMessageId !== null && !selected)) {
@@ -114,6 +111,7 @@ export async function recordStructuredAgentSessionStartFailure(
   }
   await session.journal.appendLifecycleBatch({
     settlementId: `start-failure:${startKey}`,
+    keepFailedStart: true,
     fence: session.fence,
     recovered: true,
     mutations: [structuredAgentSessionStartFailureRow(startKey, failure)],
@@ -160,4 +158,23 @@ export async function recordStructuredAgentSessionDeliveryFailure(
     { startKey: failure.startKey, ...structuredAgentSessionStartFailure(failure.cause, context) },
     clientMessageId
   )
+}
+
+export async function failedStructuredAgentSessionInputContinuation(
+  journal: StructuredAgentSessionHostSession['journal'],
+  context: AgentSessionFailureWordsContext,
+  cause: StructuredAgentSessionStartFailureCause,
+  fence: number,
+  startKey: string
+) {
+  const words = structuredAgentSessionStartFailure(cause, context)
+  if (!('failure' in cause && cause.failure.kind === 'cancelled')) {
+    await journal.appendLifecycleBatch({
+      settlementId: `start-failure:${startKey}`,
+      fence,
+      recovered: true,
+      mutations: [structuredAgentSessionStartFailureRow(startKey, words)]
+    })
+  }
+  return { kind: 'failed' as const, fence, outcome: { state: 'rejected' as const, ...words } }
 }

@@ -15,7 +15,7 @@ import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recov
 import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
 import { quarantineProfileStateDatabase } from './profile-state-database-quarantine'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
-import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../../filesystem/durable-file-write'
 import { assertProfileStateMaintenance, type ProfileStateMaintenance } from './profile-state-access'
 import {
   openProfileStateDatabaseReadOnly,

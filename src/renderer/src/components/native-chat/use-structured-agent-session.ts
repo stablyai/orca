@@ -84,6 +84,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   const journalItems = transportState.journalItems
   const {
     conversationCommands,
+    compactInstructions,
     optionSnapshot,
     optionSurface,
     setStructuredOption,
@@ -226,6 +227,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     readCurrent: transportEnabled && readCurrent,
     rewind,
     conversationCommands,
+    compactInstructions,
     ...structuredConversationCommandRunner({
       agentName,
       pending: commandPending,

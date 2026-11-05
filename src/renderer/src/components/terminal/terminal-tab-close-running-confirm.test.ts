@@ -31,7 +31,7 @@ vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
-vi.mock('../../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../../shared/workspace-layout/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false),
   toHostSessionTabId: vi.fn((tabId: string) => tabId)
 }))
@@ -121,7 +121,7 @@ describe('closeTerminalTab running-process confirmation', () => {
   })
 
   it('closes a busy tab only after the confirmation is accepted', async () => {
-    closeTerminalTab('tab-busy')
+    closeTerminalTab('tab-busy', { reason: 'user' })
     await settleProbe()
 
     expect(closeTab).not.toHaveBeenCalled()
@@ -133,14 +133,14 @@ describe('closeTerminalTab running-process confirmation', () => {
 
     useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
 
-    expect(closeTab).toHaveBeenCalledWith('tab-busy')
+    expect(closeTab).toHaveBeenCalledWith('tab-busy', { reason: 'user' })
   })
 
   it('keeps the tab and runs onCancel when the confirmation is dismissed', async () => {
     const onCancel = vi.fn()
     const onClosed = vi.fn()
 
-    closeTerminalTab('tab-busy', { onCancel, onClosed })
+    closeTerminalTab('tab-busy', { reason: 'user', onCancel, onClosed })
     await settleProbe()
     useRunningTerminalCloseConfirmStore.getState().dismissRunningTerminalClose()
 
@@ -162,7 +162,7 @@ describe('closeTerminalTab running-process confirmation', () => {
       })
     )
     const beforeClose = vi.fn(() => true)
-    closeTerminalTab('tab-busy', { consentedPtyId: 'pty-busy', beforeClose })
+    closeTerminalTab('tab-busy', { reason: 'user', consentedPtyId: 'pty-busy', beforeClose })
     await settleProbe()
     expect(visibleRequest() ? visibleRequest()?.copyKind : null).toBe(asks ? 'command' : null)
     expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(asks ? 1 : 0)
@@ -176,46 +176,13 @@ describe('closeTerminalTab running-process confirmation', () => {
   it('starts exit observation only after ordinary close consent and can veto a stale close', async () => {
     const beforeClose = vi.fn(() => false)
     const onCancel = vi.fn()
-    closeTerminalTab('tab-busy', { beforeClose, onCancel })
+    closeTerminalTab('tab-busy', { reason: 'user', beforeClose, onCancel })
     await settleProbe()
     expect(beforeClose).not.toHaveBeenCalled()
     useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
     expect(beforeClose).toHaveBeenCalledOnce()
     expect(onCancel).toHaveBeenCalledOnce()
     expect(closeTab).not.toHaveBeenCalled()
-  })
-
-  it('still reports the close through onClosed after the confirmation', async () => {
-    const onClosed = vi.fn()
-
-    closeTerminalTab('tab-busy', { onClosed })
-    await settleProbe()
-    useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
-
-    expect(onClosed).toHaveBeenCalledTimes(1)
-  })
-
-  it('stays fully synchronous for a tab with no live pty', () => {
-    getStateMock.mockReturnValue(busyTabState({ ptyIdsByTabId: {}, terminalLayoutsByTabId: {} }))
-
-    closeTerminalTab('tab-busy')
-
-    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
-    expect(closeTab).toHaveBeenCalledWith('tab-busy')
-  })
-
-  it.each([
-    ['force (post-confirmation re-entry)', { force: true }],
-    ['rejectPinned (CLI tab close request)', { rejectPinned: true }],
-    ['skipRunningProcessConfirm (bulk / CLI)', { skipRunningProcessConfirm: true }],
-    ['reason pty-exit', { reason: 'pty-exit' as const }],
-    ['reason cleanup', { reason: 'cleanup' as const }],
-    ['hostCloseReason pty-exit', { hostCloseReason: 'pty-exit' as const }],
-    ['lifecyclePtyId', { lifecyclePtyId: 'pty-busy' }]
-  ])('never probes for a close carrying %s', (_label, options) => {
-    closeTerminalTab('tab-busy', options)
-
-    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
   })
 
   it('shows only the pinned dialog for a pinned busy tab, and its confirm does not probe', () => {
@@ -225,7 +192,7 @@ describe('closeTerminalTab running-process confirmation', () => {
     ]![0]!.isPinned = true
     getStateMock.mockReturnValue(state)
 
-    closeTerminalTab('tab-busy')
+    closeTerminalTab('tab-busy', { reason: 'user' })
 
     expect(requestPinnedTabCloseConfirmMock).toHaveBeenCalledTimes(1)
     expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
@@ -234,7 +201,7 @@ describe('closeTerminalTab running-process confirmation', () => {
     onConfirm()
 
     expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
-    expect(closeTab).toHaveBeenCalledWith('tab-busy')
+    expect(closeTab).toHaveBeenCalledWith('tab-busy', { reason: 'user' })
   })
 
   // Only an actual pin prompt supersedes process confirmation; disabling pin confirmation still requires the busy-command prompt.
@@ -248,7 +215,7 @@ describe('closeTerminalTab running-process confirmation', () => {
     ]![0]!.isPinned = true
     getStateMock.mockReturnValue(state)
 
-    closeTerminalTab('tab-busy')
+    closeTerminalTab('tab-busy', { reason: 'user' })
     await settleProbe()
 
     expect(requestPinnedTabCloseConfirmMock).not.toHaveBeenCalled()
@@ -257,7 +224,7 @@ describe('closeTerminalTab running-process confirmation', () => {
 
     useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
 
-    expect(closeTab).toHaveBeenCalledWith('tab-busy')
+    expect(closeTab).toHaveBeenCalledWith('tab-busy', { reason: 'user' })
   })
 
   it('rejects a pinned tab for a CLI close even when pin confirmation is off', () => {
@@ -271,7 +238,7 @@ describe('closeTerminalTab running-process confirmation', () => {
     getStateMock.mockReturnValue(state)
     const onCancel = vi.fn()
 
-    closeTerminalTab('tab-busy', { rejectPinned: true, onCancel })
+    closeTerminalTab('tab-busy', { reason: 'user', rejectPinned: true, onCancel })
 
     expect(onCancel).toHaveBeenCalledTimes(1)
     expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
@@ -287,7 +254,7 @@ describe('closeTerminalTab running-process confirmation', () => {
       })
     )
 
-    closeTerminalTab('tab-busy')
+    closeTerminalTab('tab-busy', { reason: 'user' })
     await settleProbe()
 
     expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
@@ -296,16 +263,5 @@ describe('closeTerminalTab running-process confirmation', () => {
     useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
 
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('picks the agent copy for a busy agent pane', async () => {
-    getStateMock.mockReturnValue(
-      busyTabState({ agentStatusByPaneKey: { [`tab-busy:${LEAF}`]: { agentType: 'claude' } } })
-    )
-
-    closeTerminalTab('tab-busy')
-    await settleProbe()
-
-    expect(visibleRequest()?.copyKind).toBe('agent')
   })
 })

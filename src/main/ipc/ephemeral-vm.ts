@@ -14,11 +14,11 @@ import { getProvisionedRootRecipeRepoUrl } from '../../shared/ephemeral-vm-recip
 import { doctorEphemeralVmRecipe } from '../../shared/ephemeral-vm-recipe-doctor'
 import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { addEnvironmentFromPairingCode } from '../../shared/runtime-environment-store'
+import { addEnvironmentFromPairingCode } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   cleanupEphemeralVmRuntime,
   provisionEphemeralVmRuntime

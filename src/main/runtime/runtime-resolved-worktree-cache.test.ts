@@ -4,7 +4,7 @@ import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache
 import {
   getLocalWorktreeScanGeneration,
   getWorktreeScanMutationRevision
-} from '../local-worktree-scan-generation'
+} from '../workspaces/catalog/local-worktree-scan-generation'
 
 function snapshotOf(ids: string[]): ResolvedWorktreeSnapshot {
   return {

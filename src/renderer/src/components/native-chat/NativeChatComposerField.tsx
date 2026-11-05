@@ -7,7 +7,6 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
-import { useNotificationCardComposerClearance } from '@/lib/notification-card-composer-clearance'
 import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
@@ -275,16 +274,11 @@ export function NativeChatComposerField({
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
-  const paneRef = useRef<HTMLDivElement>(null)
-  const columnRef = useRef<HTMLDivElement>(null)
-  // A launch prompt's popover never covers notification cards, so it needs no clearance.
-  useNotificationCardComposerClearance(paneRef, columnRef, editSession === undefined && !launch)
 
   return (
-    <div ref={paneRef} className={launch ? undefined : 'shrink-0 bg-chat-pane'}>
+    <div className={launch ? undefined : 'shrink-0 bg-chat-pane'}>
       <div className={launch ? undefined : 'px-3 pt-2 pb-4 sm:px-4'}>
         <div
-          ref={columnRef}
           className={cn('relative w-full', !launch && 'mx-auto max-w-(--chat-content-max-width)')}
         >
           {autocomplete.mode === 'slash' ? (
@@ -382,11 +376,11 @@ export function NativeChatComposerField({
                           nativeChatComposerPlaceholder(hasPty, canSend, afterStop)))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines (a launch prompt: one line growing to six) without JavaScript measurement.
-              // An empty launch prompt also grows to fit a placeholder that wraps: its zero-width float keeps its height. So does a suggestion, wrapping at the editor's width.
+              // An empty launch prompt also grows to fit a wrapping placeholder: a paragraph-wide float that keeps its height, with a zero-width margin box so the caret line stays put. So does a suggestion.
               className={cn(
                 'w-full bg-transparent px-2 py-1 text-sm outline-none',
                 launch
-                  ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:first-child]:before:!h-auto [&_p.is-editor-empty:first-child]:before:mr-[-100%]'
+                  ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:first-child]:before:!h-auto [&_p.is-editor-empty:first-child]:before:w-full [&_p.is-editor-empty:first-child]:before:mr-[-100%]'
                   : `min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14 ${promptSuggestion ? '[&_p.is-editor-empty:first-child]:before:!h-auto [&_p.is-editor-empty:first-child]:before:w-full [&_p.is-editor-empty:first-child]:before:mr-[-100%]' : ''}`,
                 'overflow-y-auto scrollbar-sleek',
                 // Why: the editor is a contenteditable, which `:disabled` never matches.

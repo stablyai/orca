@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import type { NativeChatRewindHost } from './use-native-chat-rewind'

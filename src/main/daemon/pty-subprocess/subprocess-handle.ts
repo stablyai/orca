@@ -1,14 +1,14 @@
 import { createDaemonPtyPhysicalOwner } from './daemon-pty-physical-owner'
 import type { DisposableNativePty } from './native-pty-spawn'
 import type * as pty from 'node-pty'
-import type { RecognizedAgentProcess } from '../../../shared/agent-process-recognition'
-import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo'
-import { signalPosixPtyForegroundGroup } from '../../pty/posix-pty-foreground-group'
+import type { RecognizedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
+import { readPtySlavePath } from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
+import { signalPosixPtyForegroundGroup } from '../../pty/process-retirement/posix-pty-foreground-group'
 import {
   observePtyForeground,
   readPtyForegroundGroup
-} from '../../pty/pty-master-foreground-observation'
-import { readPtsName } from '../../pty/node-pty-pts-name'
+} from '../../pty/process-retirement/pty-master-foreground-observation'
+import { readPtsName } from '../../pty/process-retirement/node-pty-pts-name'
 import { terminatePtyJob } from '../../windows/windows-pty-job'
 import { isValidPtySize } from '../daemon-pty-size'
 import type { SubprocessHandle } from '../session-subprocess-handle'

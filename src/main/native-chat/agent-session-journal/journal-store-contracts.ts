@@ -24,6 +24,7 @@ import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-wr
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody } from './journal-write-queue'
+import type { QueuedMessageOwed } from './queued-message-consume-error'
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
@@ -97,12 +98,13 @@ export type JournalLifecycleBatchInput = {
   dispatches?: readonly ResolveDispatchInput[]
   /** Atomically reject queued sends before the batch; skip the batch when none remain. */
   rejectsQueued?: AgentJournalDispatchRejection
+  keepFailedStart?: boolean
 }
 
 /** Plan after preceding writes, including answers and Stops. */
 export type JournalPlannedLifecycleBatchInput = Pick<
   JournalLifecycleBatchInput,
-  'settlementId' | 'fence' | 'recovered'
+  'settlementId' | 'fence' | 'recovered' | 'keepFailedStart'
 > & {
   plan: () => {
     mutations: readonly JournalLifecycleMutationInput[]
@@ -139,6 +141,10 @@ export type JournalSubmissionConsume = {
   expect: 'waiting' | 'returned'
   /** Automatic drain honors pauses in the consume transaction; Send now omits this. */
   yieldsToPause?: true
+  /** Transient selection for mail joining active work; never persisted. */
+  steer?: boolean
+  /** Re-asked in the handover transaction: an agent's message can stop being owed while it waits. */
+  owed?: () => QueuedMessageOwed
 }
 
 export type JournalItemAppendInput = {

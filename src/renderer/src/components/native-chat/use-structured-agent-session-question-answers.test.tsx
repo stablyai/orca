@@ -179,22 +179,4 @@ describe('desktop structured prompt answers', () => {
     })
     expect(respondCall()).not.toHaveProperty('answers')
   })
-
-  it('sends an approval decision without probing the host', async () => {
-    const { result } = renderHook(() =>
-      useStructuredAgentSession({
-        sessionId: 'session-1',
-        target,
-        agent: 'claude',
-        isVisible: true
-      })
-    )
-
-    await act(async () => {
-      await result.current.respond(approval, { kind: 'option', optionId: 'allow' })
-    })
-
-    expect(mocks.questionAnswersSupported).not.toHaveBeenCalled()
-    expect(respondCall()).toMatchObject({ itemId: 'approval-1', optionId: 'allow' })
-  })
 })

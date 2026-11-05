@@ -44,7 +44,7 @@ export function refreshPublishedWork(
         ...fields,
         ...shared
       },
-      { currentWork: work }
+      { currentWork: work, journal }
     )
     pending = []
     bytes = 0

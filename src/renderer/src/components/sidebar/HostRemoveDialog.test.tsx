@@ -162,7 +162,7 @@ import {
   addNativeChatPendingAttachment,
   nativeChatPendingAttachmentSnapshot
 } from '../native-chat/native-chat-pending-attachment-cache'
-import { addAllSshConfigHostsToOrca } from './add-remote-host-ssh-actions'
+import { addAllSshConfigHostsToOrca } from './host-admission/ssh/add-remote-host-ssh-actions'
 
 it.each([false, true])(
   'kept SSH setup input follows actual import and accepted catalog in response-first=%s order',

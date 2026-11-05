@@ -1,5 +1,5 @@
 import { FreebuffScreenStatusTracker } from '../../shared/freebuff-screen-status'
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 
 const trackers = new WeakMap<HeadlessEmulator, FreebuffScreenStatusTracker>()

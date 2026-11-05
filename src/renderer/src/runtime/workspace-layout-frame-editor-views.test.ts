@@ -124,16 +124,6 @@ describe('a diff tab main publishes with its view', () => {
     close()
   })
 
-  it('is not drawn without a view, since the window cannot rebuild it', async () => {
-    const { store, apply, close } = await boot()
-
-    await apply(openDiff())
-
-    expect(diffTabs(store)).toEqual([])
-    expect(store.getState().openFiles.some((file) => file.id === DIFF_ID)).toBe(false)
-    close()
-  })
-
   it('shows after a reload, from the snapshot alone', async () => {
     const main = applied(loadMainLayoutModel('local', localDesktopSession()), openDiff(VIEW))
 

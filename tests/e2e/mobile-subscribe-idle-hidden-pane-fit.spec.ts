@@ -13,8 +13,8 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
-import { decodePairingOffer } from '../../src/shared/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../src/shared/paired-runtime-connection'
+import { decodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../src/shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   sendRemoteRuntimeRequest,
   subscribeRemoteRuntimeRequest
@@ -23,7 +23,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson
-} from '../../src/shared/terminal-stream-protocol'
+} from '../../src/shared/terminal/stream/terminal-stream-protocol'
 
 const PHONE = { cols: 47, rows: 40 }
 

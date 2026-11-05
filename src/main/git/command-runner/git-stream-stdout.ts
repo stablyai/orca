@@ -23,7 +23,10 @@ import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment
 import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-env'
 import { gitSpawn } from './git-spawn'
 import { acquireGitAdmission } from './git-subprocess-admission'
-import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
+import {
+  GitCommandTimeoutError,
+  gitCommandTimeoutMs
+} from '../../../shared/git/commands/git-command-timeout'
 import { routeLocalGitOptions, runAdmittedWslGit } from './local-git-runtime-route'
 import { gitRunsIn } from './git-runs-in'
 

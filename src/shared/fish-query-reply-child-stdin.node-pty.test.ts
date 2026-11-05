@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { fishRequirementViolation, resolveFishBinary } from './fish-binary-requirement'
-import { PtyStartupIngress } from './pty-startup-ingress'
+import { PtyStartupIngress } from './terminal/pty/ingress/pty-startup-ingress'
 
 // Why fish 4: the DA1-sentinel handoff this measures lives in the 4.0 Rust tty_handoff.
 const FISH = resolveFishBinary(4)

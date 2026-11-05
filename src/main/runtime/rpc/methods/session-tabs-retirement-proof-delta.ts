@@ -3,7 +3,7 @@ import {
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../../shared/runtime-types'
-import { retirementProofKey as proofKey } from '../../../../shared/terminal-retirement-proof-ledger'
+import { retirementProofKey as proofKey } from '../../../../shared/workspace-layout/terminal-retirement-proof-ledger'
 
 type ProofCarrier = {
   worktree: string

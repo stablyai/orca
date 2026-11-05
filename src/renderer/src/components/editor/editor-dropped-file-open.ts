@@ -1,6 +1,10 @@
+import type { EditorFileDropDestination } from './editor-file-drop-destination'
 import { toast } from 'sonner'
 import { detectLanguage } from '@/lib/language-detect'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../shared/terminal-links'
+import {
+  isPathInsideWorktree,
+  toWorktreeRelativePath
+} from '../../../../shared/terminal/links/terminal-links'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { basename, joinPath } from '@/lib/path'
@@ -25,7 +29,7 @@ import {
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
-} from '../right-sidebar/file-explorer-operation-owner'
+} from '../right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 
 export function shouldUploadRemoteEditorFileDrop(
   target: RuntimeClientTarget,
@@ -47,12 +51,6 @@ export function getEditorFileDropOperationContext(
     worktreePath,
     connectionId
   }
-}
-
-export type EditorFileDropDestination = {
-  worktreeId: string
-  /** When omitted, the store chooses this workspace's default editor destination. */
-  groupId?: string
 }
 
 type EditorFileDropContext = {

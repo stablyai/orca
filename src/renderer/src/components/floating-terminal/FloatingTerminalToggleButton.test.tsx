@@ -101,7 +101,6 @@ vi.mock('@/store', () => ({
   useAppStore: <T,>(selector: (state: typeof storeState) => T): T => selector(storeState)
 }))
 
-// Isolate dot visibility here; store/selectors.test.ts covers the real unread selector.
 vi.mock('@/store/selectors', () => ({
   selectFloatingWorkspaceHasUnread: (state: typeof storeState): boolean => state.hasFloatingUnread
 }))

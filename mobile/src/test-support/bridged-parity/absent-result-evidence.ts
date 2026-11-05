@@ -11,19 +11,15 @@ import {
 import type { Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
 import { captureError, captureValue } from '../rpc-recording/recording-values'
 import { ordinalField } from './divergence-classes'
-import {
-  isKeyedObject,
-  sameParams,
-  postedRequestParams,
-  withoutRpcMeta
-} from './divergence-evidence'
+import { isKeyedObject, sameParams } from './divergence-evidence'
 
 /** Only a matched injected request and its observed refusal can explain a recorded residual. */
 export function absentResultExplainsResiduals(
   expected: Recording,
   actual: Recording,
   scenarios: readonly RecordingScenario[],
-  pairs: readonly Pick<BridgePortPair<RpcClient>, 'toShell' | 'toPage' | 'diagnostics'>[]
+  pairs: readonly Pick<BridgePortPair<RpcClient>, 'toShell' | 'toPage' | 'diagnostics'>[],
+  raw: Recording
 ): boolean {
   const list = checkpointListDifference(expected, actual)
   if (
@@ -43,11 +39,17 @@ export function absentResultExplainsResiduals(
     residuals.length > 0 &&
     residuals.every((difference) => {
       const before = expected.checkpoints[keys.indexOf(difference.checkpoint)]!.observation
-      const after = actual.checkpoints[actualKeys.indexOf(difference.checkpoint)]!.observation
       return scenarios.some((scenario, scenarioIndex) => {
         const pair = pairs[scenarioIndex]
         const senders = before.sender
-        const bridgedSenders = after.sender
+        const rawCheckpoint = raw.checkpoints[actualKeys.indexOf(difference.checkpoint)]
+        if (
+          !rawCheckpoint ||
+          rawCheckpoint.id !== actual.checkpoints[actualKeys.indexOf(difference.checkpoint)]!.id
+        ) {
+          return false
+        }
+        const bridgedSenders = rawCheckpoint.observation.sender
         if (!pair || !Array.isArray(senders) || !Array.isArray(bridgedSenders)) {
           return false
         }
@@ -82,16 +84,36 @@ export function absentResultExplainsResiduals(
           ) {
             return false
           }
-          const name = aliases.get(step.complete) ?? step.complete
+          const executable = aliases.get(step.complete) ?? step.complete
+          const matches = bridgedSenders.flatMap((entry) => {
+            if (
+              !isKeyedObject(entry) ||
+              !isKeyedObject(entry.bridge) ||
+              !Array.isArray(entry.bridge.posts)
+            ) {
+              return []
+            }
+            return entry.bridge.posts.flatMap((post) => {
+              if (
+                !isKeyedObject(post) ||
+                post.parent !== entry.name ||
+                !Array.isArray(post.children)
+              ) {
+                return []
+              }
+              return post.children.flatMap((child) =>
+                isKeyedObject(child) && child.name === executable ? [{ entry, post, child }] : []
+              )
+            })
+          })
+          if (matches.length !== 1) {
+            return false
+          }
+          const { entry: bridged, post, child } = matches[0]!
+          const name = bridged.name
           const at = senders.findIndex((sender) => isKeyedObject(sender) && sender.name === name)
           const sender = senders[at]
-          const bridged = bridgedSenders[at]
-          if (
-            !isKeyedObject(sender) ||
-            !isKeyedObject(bridged) ||
-            !sameParams(sender.args, bridged.args) ||
-            bridged.name !== name
-          ) {
+          if (!isKeyedObject(sender) || !sameParams(sender.args, bridged.args)) {
             return false
           }
           const native = sender.settlement
@@ -113,19 +135,19 @@ export function absentResultExplainsResiduals(
           if (!sameParams(native.value, nativeReply)) {
             return false
           }
-          const method = name.slice(0, name.lastIndexOf('#'))
-          const occurrence = senders
-            .slice(0, at)
-            .filter(
-              (value) =>
-                isKeyedObject(value) &&
-                typeof value.name === 'string' &&
-                value.name.startsWith(`${method}#`)
-            ).length
-          const request = postedRequestParams(pair.toShell, method, occurrence)
+          const method = child.method
           if (
-            !request.found ||
-            typeof request.id !== 'string' ||
+            typeof method !== 'string' ||
+            typeof post.json !== 'string' ||
+            !isKeyedObject(child.frame)
+          ) {
+            return false
+          }
+          const request: unknown = JSON.parse(post.json)
+          if (
+            !isKeyedObject(request) ||
+            request.id !== post.id ||
+            request.method !== method ||
             physical.method !== method ||
             !sameParams(projectMobileRpcRequestParams(method, request.params), step.params)
           ) {
@@ -140,10 +162,7 @@ export function absentResultExplainsResiduals(
               frame.type !== 'reply' ||
               frame.id !== request.id ||
               !isKeyedObject(frame.payload) ||
-              !sameParams(
-                withoutRpcMeta(captureValue(frame.payload)),
-                withoutRpcMeta(nativeReply)
-              ) ||
+              !sameParams(captureValue({ ...frame.payload, id: physical.id }), nativeReply) ||
               !pair.diagnostics.some(
                 (diagnostic) => diagnostic.kind === 'refused' && diagnostic.refusal === read.refusal
               )

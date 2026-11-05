@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 
 export function getPtyIdForPaneKey(paneKey: string): string | null {

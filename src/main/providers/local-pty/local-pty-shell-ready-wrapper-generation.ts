@@ -1,5 +1,5 @@
-import { buildZshStartupHook } from '../../zsh-startup-wrapper-builder'
-import { writeShellWrapperFiles } from '../../shell-wrapper-file-writer'
+import { buildZshStartupHook } from '../../pty/shell-startup/zsh-startup-wrapper-builder'
+import { writeShellWrapperFiles } from '../../pty/shell-startup/shell-wrapper-file-writer'
 import {
   buildLocalShellReadyWrapperFiles,
   getLocalZshWrapperSpec
