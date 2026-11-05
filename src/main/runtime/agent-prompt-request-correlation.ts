@@ -1,4 +1,4 @@
-import type { AgentPromptTurnStartEvidence } from './agent-prompt-submission-verification'
+import type { AgentPromptTurnStartEvidence } from './terminal/input/agent-prompt-submission-verification'
 
 /** Attribute each PTY-wide turn to the oldest eligible queued prompt; one turn cannot settle multiple requests. */
 

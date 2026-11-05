@@ -7,7 +7,7 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import { OPENCODE_AGENT_ROW_GRACE_MS } from '../../shared/opencode-agent-row-scanner'
 import { readTimedRuntimeFixture, replayTranscript } from './agent-transcript-replay-test-harness'
-import { waitForLaunchedAgentComposer } from './launched-agent-composer-readiness'
+import { waitForLaunchedAgentComposer } from './terminal/wait/launched-agent-composer-readiness'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 
 vi.mock('electron', () => ({

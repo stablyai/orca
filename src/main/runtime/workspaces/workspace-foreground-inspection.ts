@@ -5,7 +5,7 @@ import {
   readLaunchedAgentForeground,
   type LaunchedAgentForeground,
   type LaunchedAgentHost
-} from '../launched-agent-foreground'
+} from '../terminal/wait/launched-agent-foreground'
 
 export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWithListManagedWorktrees {
   launchedAgentTerminalIdentity(ptyId: string): unknown {

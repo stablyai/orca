@@ -10,7 +10,10 @@ import {
   delegatedMobileSessionTabClose,
   refusedMobileSessionTabClose
 } from './mobile-session-tab-close-outcome'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import { worktreeIdsEqual } from '../../shared/worktree/id'
 
 export type MobileSessionLifecycleCloseHost = {

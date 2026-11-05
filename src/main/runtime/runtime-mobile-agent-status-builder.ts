@@ -16,7 +16,10 @@ import {
   resolveRuntimeHookLiveAgentRow,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import {
   classifyAgentTitle,
