@@ -138,7 +138,6 @@ function renderLocalRows(handlers: {
       sshConnectionStates={new Map()}
       runtimeStatusByEnvironmentId={new Map()}
       hostTargetFor={() => null}
-      automationSourceHostAvailabilityByRowKey={new Map()}
       hostLabelById={new Map()}
       onSelect={handlers.onSelect}
       onRunNow={vi.fn()}
