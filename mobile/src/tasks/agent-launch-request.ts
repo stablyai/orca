@@ -2,7 +2,7 @@
 // Build from existing create params and strip reserved agent fields so the legacy fallback stays equivalent.
 
 import {
-  isAgentLaunchResult,
+  isAgentLaunchModeReceipt,
   withoutReservedAgentCreateFields,
   type AgentLaunchPlacement,
   type AgentLaunchPrompt,
@@ -96,16 +96,22 @@ export function readAgentLaunchCreateOutcome(result: unknown): AgentLaunchCreate
   return { worktreeId, ...(warning ? { warning } : {}) }
 }
 
-/** The launch reply's warning plus, when a chat default fell back to a terminal, the host's reason. */
+/** The launch reply's warning plus, when a chat-capable agent fell back to a terminal, the host's reason. */
 export function readAgentLaunchNotice(source: unknown): string {
   if (!source || typeof source !== 'object') {
     return ''
   }
   const warning =
     'warning' in source && typeof source.warning === 'string' ? source.warning.trim() : ''
-  const receipt = isAgentLaunchResult(source) ? source.receipt : null
+  const receipt =
+    'receipt' in source && isAgentLaunchModeReceipt(source.receipt) ? source.receipt : null
+  // A Chat default doesn't apply to an agent that has no chat, so its terminal is not a fallback.
   const fallback =
-    receipt?.mode === 'terminal' && receipt.preferred === 'structured' ? receipt.detail.trim() : ''
+    receipt?.mode === 'terminal' &&
+    receipt.preferred === 'structured' &&
+    receipt.reason !== 'agent_without_structured_session'
+      ? receipt.detail.trim()
+      : ''
   return [warning, fallback].filter(Boolean).join(' ')
 }
 

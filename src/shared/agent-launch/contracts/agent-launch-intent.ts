@@ -224,7 +224,7 @@ function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
         (outcome.tabId === undefined || typeof outcome.tabId === 'string')
 }
 
-function isAgentLaunchModeReceipt(value: unknown): value is AgentLaunchModeReceipt {
+export function isAgentLaunchModeReceipt(value: unknown): value is AgentLaunchModeReceipt {
   if (typeof value !== 'object' || value === null) {
     return false
   }
