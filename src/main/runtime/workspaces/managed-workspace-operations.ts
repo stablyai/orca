@@ -13,7 +13,7 @@ import { stopMissingWorktreeTerminals } from './removal/missing-worktree-termina
 import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility-sources'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type {
   WorkspacePortHostKillRequest,
   WorkspacePortHostScanResult,

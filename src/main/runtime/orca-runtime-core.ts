@@ -1,5 +1,5 @@
 import type { RuntimeWorktreeScanResult } from './workspaces/catalog/repo-worktree-resolution-scan'
-import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { ResolvedWorktree } from './workspaces/catalog/runtime-worktree-path-identity'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
 import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/sessions/immediate-kill-reply-budget'

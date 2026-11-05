@@ -16,7 +16,7 @@ import {
 import type { ClaudeProfileSetupReport } from '../../claude-accounts/claude-profile-setup'
 import { prepareClaudeLaunchAccount } from '../../claude/claude-launch-account'
 import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
-import { resolveStructuredClaudeAccountHomePath } from '../../runtime/structured-agent-account-home'
+import { resolveStructuredClaudeAccountHomePath } from '../../runtime/agent-session/environment/structured-agent-account-home'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'

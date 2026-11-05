@@ -33,8 +33,8 @@ import {
   type StructuredAgentResumeInvocation,
   type StructuredAgentSessionHistory
 } from '../native-chat/structured-agent-cli-conversations'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/structured-agent-runtime-metadata'
-import type { StructuredAgentRuntimeMetadata } from '../runtime/structured-agent-runtime-registration-types'
+import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
+import type { StructuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import { commandName, commandProgramIndex, shellCommands } from './shell-command-words'
 
 /** Hide chat-owned rows from clients unable to open that agent’s chat. */

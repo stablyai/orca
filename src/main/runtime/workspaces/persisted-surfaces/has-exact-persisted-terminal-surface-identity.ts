@@ -15,9 +15,8 @@ import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orche
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import type {
   LegacyWorkerRecoveryCandidate,
-  LegacyWorkerRecoveryInventory,
   TerminalWorkspaceLaunchScope
-} from '../../runtime-legacy-worker-terminal-recovery-types'
+} from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { getLatestPtyTitle } from '../process-listing/runtime-worktree-status-projection'
 import type { AutomationService } from '../../../automations/service'
 import type { ArtifactCloudService } from '../../../artifacts/artifact-cloud-service'
@@ -206,7 +205,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
   protected async adoptLegacyWorkerTerminal(
     candidate: LegacyWorkerRecoveryCandidate,
     workspace: TerminalWorkspaceLaunchScope,
-    inventory: LegacyWorkerRecoveryInventory,
+    inventory: PtyControllerInventory,
     activation: { activeTabId?: string; activeGroupId?: string }
   ): Promise<void> {
     await this.adoptTerminalOrphansFromInventoryUnderMutation(

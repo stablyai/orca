@@ -3,7 +3,7 @@ import type { RuntimeConstructionBindings as HostBindings } from './runtime-cons
 
 import type { RuntimeRepositoryCommandSurface } from '../repositories/runtime-repository-command-surface'
 
-import type { LegacyWorkerRecoveryCandidate } from '../runtime-legacy-worker-terminal-recovery-types'
+import type { LegacyWorkerRecoveryCandidate } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/orchestration-legacy-worker-terminal-recovery'
 
@@ -22,7 +22,7 @@ import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../runtime-legac
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy-worker-terminal-recovery-controller'
 import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/worker-terminal-release-reconciliation'
 
-import { RuntimeAccountController } from '../runtime-account-controller'
+import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
 import { RuntimeMobileSpeechCatalog } from '../runtime-mobile-speech-catalog'
 import { RuntimeMobileDictationController } from '../runtime-mobile-dictation-controller'
 import { RuntimeProjectHostSetupController } from '../repositories/runtime-project-host-setup-controller'

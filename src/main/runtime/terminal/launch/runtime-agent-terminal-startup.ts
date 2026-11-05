@@ -1,4 +1,4 @@
-import type { RuntimeAccountController } from '../../runtime-account-controller'
+import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -9,7 +9,7 @@ import {
   type AgentLaunchRuntime
 } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
 import {

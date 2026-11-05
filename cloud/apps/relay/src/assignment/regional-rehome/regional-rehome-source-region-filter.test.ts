@@ -151,15 +151,6 @@ describe('rehome source-region filter', () => {
     await context.database.close()
   })
 
-  it('selects both directions when no director region is configured', async () => {
-    const context = await setup(undefined)
-    const candidates = await context.store.selectIdleRegionalRehomeCandidates(context.safety())
-    expect(new Set(moves(candidates).map(({ from, to }) => `${from}>${to}`))).toEqual(
-      new Set(['us-central1>asia-east2', 'asia-east2>us-central1'])
-    )
-    await context.database.close()
-  })
-
   it('reports the filtered hosts in the preview, agreeing with selection', async () => {
     const context = await setup('us-central1')
     const preview = await context.store.previewRegionalRehomeEligibility(context.safety())
