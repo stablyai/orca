@@ -229,7 +229,8 @@
       "clipboardRejected": "Le presse-papiers a refusé le texte.",
       "copyFailed": "Échec de la copie",
       "copyMessage": "Copier le message",
-      "selectText": "Sélectionner le texte"
+      "selectText": "Sélectionner le texte",
+      "rewind": "Revenir ici"
     },
     "nativeChatImageViewer": {
       "closeImage": "Fermer l'image",
@@ -633,6 +634,25 @@
       "attachmentsUnsupported": "Supprimez les pièces jointes avant de définir un objectif.",
       "pause": "Mettre en pause",
       "resume": "Reprendre"
+    },
+    "rewind": {
+      "title": "Revenir ici ?",
+      "confirmation": "Abandonner ce message et tout ce qui suit ? Le message revient dans le composer pour que vous puissiez le modifier et le renvoyer. Les modifications de fichiers sur le disque sont conservées.",
+      "confirm": "Revenir",
+      "unsupported": "Ce chat ne peut pas revenir à un message antérieur.",
+      "historyNotPaginated": "Ce chat Codex plus ancien ne peut pas revenir à un message antérieur. Démarrez un nouveau chat pour utiliser « Revenir ici ».",
+      "busy": "Disponible une fois que l'agent est inactif et que plus rien dans ce chat n'attend votre action.",
+      "staleEpoch": "La conversation a changé. Examinez les derniers messages et réessayez.",
+      "invalidTarget": "La conversation ne peut pas revenir à ce message. Rien n'a été modifié.",
+      "historyLimit": "Cette conversation est trop longue pour y revenir. Rien n'a été modifié.",
+      "providerRefused": "L'agent n'a pas pu revenir à ce message.",
+      "proofMismatch": "L'historique de l'agent ne correspondait pas à ce chat. Vérifiez la conversation avant de continuer.",
+      "outcomeUnknown": "Orca n'a pas pu confirmer si la conversation est revenue à un message antérieur. Orca vérifie la conversation avant l'envoi de votre prochain message.",
+      "refused": "Orca n'a pas pu revenir à ce message. Vérifiez la conversation avant de continuer.",
+      "unavailable": "Attendez que le chat finisse de se connecter.",
+      "outcomeUnknownReturned": "Orca n'a pas pu confirmer si la conversation est revenue à ce message. Votre message est de retour dans le composer, et Orca vérifie la conversation avant l'envoi de votre prochain message.",
+      "timeout": "Le chat ne s'est pas actualisé après le retour à ce message. Rouvrez-le pour voir les derniers échanges.",
+      "pending": "Attendez que la conversation revienne au message antérieur."
     }
   },
   "common": {

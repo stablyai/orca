@@ -229,7 +229,8 @@
       "clipboardRejected": "El portapapeles rechazó el texto.",
       "copyFailed": "No se pudo copiar",
       "copyMessage": "Copiar mensaje",
-      "selectText": "Seleccionar texto"
+      "selectText": "Seleccionar texto",
+      "rewind": "Rebobinar hasta aquí"
     },
     "nativeChatImageViewer": {
       "closeImage": "Cerrar imagen",
@@ -633,6 +634,25 @@
       "attachmentsUnsupported": "Elimina los adjuntos antes de establecer un objetivo.",
       "pause": "Pausar",
       "resume": "Reanudar"
+    },
+    "rewind": {
+      "title": "¿Rebobinar hasta aquí?",
+      "confirmation": "¿Descartar este mensaje y todo lo que viene después? El mensaje vuelve al compositor para que puedas editarlo y reenviarlo. Los cambios de archivos en disco se conservan.",
+      "confirm": "Rebobinar",
+      "unsupported": "Este chat no puede volver a un mensaje anterior.",
+      "historyNotPaginated": "Este chat de Codex más antiguo no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Rebobinar hasta aquí.",
+      "busy": "Disponible cuando el agente esté inactivo y nada en este chat esté esperándote.",
+      "staleEpoch": "La conversación cambió. Revisa los últimos mensajes e inténtalo de nuevo.",
+      "invalidTarget": "La conversación no puede volver a este mensaje. No se cambió nada.",
+      "historyLimit": "Esta conversación es demasiado larga para retroceder en ella. No se cambió nada.",
+      "providerRefused": "El agente no pudo volver a este mensaje.",
+      "proofMismatch": "El historial del agente no coincidía con este chat. Revisa la conversación antes de continuar.",
+      "outcomeUnknown": "Orca no pudo confirmar si la conversación volvió a un mensaje anterior. Lo comprobará antes de enviar tu próximo mensaje.",
+      "refused": "Orca no pudo volver a este mensaje. Revisa la conversación antes de continuar.",
+      "unavailable": "Espera a que el chat termine de conectarse.",
+      "outcomeUnknownReturned": "Orca no pudo confirmar si la conversación volvió a este mensaje. Tu mensaje está de nuevo en el compositor y Orca comprobará la conversación antes de enviar tu próximo mensaje.",
+      "timeout": "El chat no se actualizó después de volver a este mensaje. Vuelve a abrirlo para ver lo más reciente.",
+      "pending": "Espera a que la conversación vuelva al mensaje anterior."
     }
   },
   "common": {
