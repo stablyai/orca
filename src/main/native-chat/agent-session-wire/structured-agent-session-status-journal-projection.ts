@@ -89,6 +89,10 @@ export class StructuredAgentSessionJournalProjections {
     }
   }
 
+  installed(journal: AgentSessionJournal): StructuredAgentSessionJournalProjection | null {
+    return this.byJournal.get(journal)?.projection ?? null
+  }
+
   read(
     journal: AgentSessionJournal,
     record: AgentSessionConversationView | null,

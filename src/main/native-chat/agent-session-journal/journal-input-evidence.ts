@@ -56,6 +56,12 @@ export class JournalInputEvidence extends JournalInputObservations {
       (a, b) => this.inputOrdinal(a.clientMessageId) - this.inputOrdinal(b.clientMessageId)
     )
   }
+  *recoverableSubmissionSteps(): Generator<void, AgentJournalSubmission[]> {
+    return yield* sortJournalSteps(
+      this.recoverable.values(),
+      (a, b) => this.inputOrdinal(a.clientMessageId) - this.inputOrdinal(b.clientMessageId)
+    )
+  }
   sentAfter(sequence: number): boolean {
     return this.nonRefused.allPlaces().position > sequence
   }

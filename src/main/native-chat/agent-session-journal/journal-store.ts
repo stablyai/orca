@@ -289,7 +289,7 @@ export class AgentSessionJournal {
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
 
   /** Read after all preceding writes and before later ones. */
-  readInOrder<T>(read: () => T): Promise<T> {
+  readInOrder<T>(read: () => T | Promise<T>): Promise<T> {
     return this.queue.readInOrder(read)
   }
 

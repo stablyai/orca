@@ -1,3 +1,4 @@
+import { readJournalDerived } from '../agent-session-journal/journal-derived-read'
 import {
   createStructuredAgentSessionCatalogReads,
   structuredAgentSessionCatalogScopeOwned
@@ -55,8 +56,14 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
   }))
   const journalOf = async (id: string) => (await context().conversation(id)).journal
   return {
-    journalCurrentRead: async (sessionId: string, inputIds?: readonly string[]) =>
-      (await context().conversation(sessionId)).journal.currentRead(inputIds),
+    journalCurrentRead: async (sessionId: string, inputIds?: readonly string[]) => {
+      const journal = await journalOf(sessionId)
+      return readJournalDerived(journal, function* (finite) {
+        return finite
+          ? yield* journal.publicRead().currentSnapshotSteps(inputIds)
+          : journal.currentRead(inputIds)
+      })
+    },
 
     readModelCatalog,
     attentionReads: {

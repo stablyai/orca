@@ -31,7 +31,7 @@ import {
 import { performSend } from './structured-agent-session-turns'
 import { observedReceipt } from './structured-agent-session-operation-settlement'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
-import { readAgentSessionHydrationPage } from './agent-session-history-page'
+import { readAgentSessionHydration } from './agent-session-history-page'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { openingMessageOptions } from './structured-agent-session-execution-options'
 
@@ -266,7 +266,7 @@ async function foundConversation(
       value: {
         sessionId,
         fence,
-        page: readAgentSessionHydrationPage(session.journal, fence),
+        page: (await readAgentSessionHydration(session.journal, fence)).page,
         unconfirmedClientMessageIds: [],
         ...(firstMessage ? { firstMessage } : {}),
         ...(tabId ? { tabId } : {})

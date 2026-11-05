@@ -1,3 +1,6 @@
+import type { AgentSessionHistoryRequest } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionHistoryScope } from './agent-session-history-page'
+import { resolveHistoryLimit } from './agent-session-history-limit'
 import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
@@ -159,5 +162,57 @@ export function* historyResetSteps(
     ok: false,
     reset,
     page: yield* buildHydrationPageSteps(snapshot, undefined, reader)
+  }
+}
+
+export function* readHistoryMemorySteps(
+  request: AgentSessionHistoryRequest,
+  snapshot: AgentJournalSnapshot,
+  scope: AgentSessionHistoryScope,
+  reader: HistoryReader
+): Generator<void, AgentSessionHistoryResult> {
+  const limit = resolveHistoryLimit(request.limit)
+  const cursor = request.direction === 'before' ? request.cursor : undefined
+  if (cursor) {
+    if (cursor.epoch !== snapshot.cursor.epoch) {
+      return yield* historyResetSteps(snapshot, 'epoch_changed', reader)
+    }
+    if (cursor.sequence > snapshot.cursor.sequence) {
+      return yield* historyResetSteps(snapshot, 'cursor_ahead', reader)
+    }
+  }
+  const scoped: AgentJournalSnapshot['items'] = []
+  const older: AgentJournalSnapshot['items'] = []
+  for (const item of snapshot.items) {
+    if (scope !== 'own-agent' || isRootAgentJournalItem(item)) {
+      scoped.push(item)
+      if (!cursor || item.sequence < cursor.sequence) {
+        older.push(item)
+      }
+    }
+    yield
+  }
+  const windowed = yield* conversationWindowSteps(older, limit)
+  const { items, dropped } = yield* boundHistoryItemsByBytesSteps(
+    windowed,
+    'newest',
+    yield* submissionBytesByItemIdSteps(snapshot.submissions),
+    reader.budgetBytes,
+    reader.form
+  )
+  return {
+    ok: true,
+    page: yield* buildPageSteps({
+      snapshot,
+      direction: request.direction,
+      items,
+      hasOlder: older.length > windowed.length || dropped > 0,
+      hasNewer: older.length < scoped.length,
+      fallbackCursor: cursor ?? { epoch: snapshot.cursor.epoch, sequence: 0 },
+      nextCursor: items[0]
+        ? { epoch: snapshot.cursor.epoch, sequence: items[0].sequence }
+        : undefined,
+      subagentRoster: yield* offPageSubagentRosterSteps(scoped, items)
+    })
   }
 }

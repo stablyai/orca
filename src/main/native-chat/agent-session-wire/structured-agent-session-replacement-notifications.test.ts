@@ -228,3 +228,40 @@ it.each([false, true])(
     }
   }
 )
+
+it('keeps steering disabled while a Stop is settling through replacement refresh', async () => {
+  rig = await createQueuedMessageTestRig()
+  await rig.workingSend()
+  await leaveUnfinishedWork(rig)
+  const journal = rig.host.collaboratorsForTests().sessions.get(id)!.journal
+  await journal.appendStopEvent({ reason: 'user-stop' }, 1)
+  const settle = journal.stopMarks.beginSettle(true)
+  const card = await journal.queuedMessages.insert({
+    messageId: 'waiting-during-stop',
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Wait for Stop' }] }
+  })
+  const observed = Promise.withResolvers<boolean>()
+  const steps = journal.statusReadSteps.bind(journal)
+  vi.spyOn(journal, 'statusReadSteps').mockImplementationOnce(function* () {
+    setImmediate(() => observed.resolve(rig!.host['queued'].drain['deps'].canSteer!(id, card)))
+    return yield* steps()
+  })
+  try {
+    await journal.replaceEpochItems(
+      'handle_forked',
+      1,
+      Array.from({ length: 512 }, (_, index) => ({
+        identity: { provider: 'orca' as const, clientMessageId: `stop-replacement-${index}` },
+        body: {
+          kind: 'message' as const,
+          role: 'user' as const,
+          blocks: [{ type: 'text' as const, text: 'History' }]
+        },
+        ownerFence: 1
+      }))
+    )
+    expect(await observed.promise).toBe(false)
+  } finally {
+    journal.stopMarks.settled(settle)
+  }
+})

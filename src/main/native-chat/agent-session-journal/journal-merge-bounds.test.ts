@@ -205,6 +205,9 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
         }
       }
     })
+    const reconnects: Promise<() => void>[] = []
+    const concurrentReads: Promise<unknown>[] = []
+    const reconnected = [Promise.withResolvers<void>(), Promise.withResolvers<void>()]
     const statuses: AgentSessionStatusEvent[] = []
     let releaseStatus = () => {}
     let publicationCount = 0
@@ -247,6 +250,8 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
         replacing = true
         const result = await journal.replaceEpochItems('handle_forked', 1, items)
         await delivered.promise
+        await Promise.all(reconnected.map((entry) => entry.promise))
+        await Promise.all(concurrentReads)
         await journal.readInOrder(() => {})
         return result
       },
@@ -257,6 +262,40 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
         peerReads++
         if (projectingStatus && !changedEvidence) {
           changedEvidence = true
+          for (const [index, cursor] of [undefined, retainedSnapshot.cursor].entries()) {
+            reconnects.push(
+              rig.host.subscribe({
+                id: `during-refresh-${index}`,
+                sessionId: projectionSessionId,
+                ...(cursor ? { cursor } : {}),
+                readsCurrentRequests: true,
+                emit: (event) => {
+                  frames.push(event)
+                  if (
+                    (event.type === 'snapshot' || event.type === 'reset') &&
+                    event.page.epoch === journal.cursor().epoch
+                  ) {
+                    reconnected[index].resolve()
+                  }
+                }
+              })
+            )
+          }
+          concurrentReads.push(
+            rig.host.journalCurrentRead(projectionSessionId),
+            rig.host.journalSnapshot(projectionSessionId),
+            rig.host.readCurrentRequests({
+              sessionId: projectionSessionId,
+              version: 'before-refresh'
+            }),
+            rig.host.history({ sessionId: projectionSessionId, direction: 'tail' }),
+            rig.host.history({
+              sessionId: projectionSessionId,
+              direction: 'before',
+              cursor: retainedSnapshot.cursor
+            })
+          )
+          rig.host['clientDelivery'].readStopping(projectionSessionId)
           releaseStatus = rig.host.subscribeStatus({
             id: 'reconnecting-status',
             emit: (event) => statuses.push(event)
@@ -306,6 +345,9 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
     expect(journal.snapshot().items.map((item) => item.itemId)).toEqual(
       items.map((item) => agentJournalItemKey(item.identity))
     )
+    for (const release of await Promise.all(reconnects)) {
+      release()
+    }
     releaseStatus()
     releaseChat()
     releasePublication()

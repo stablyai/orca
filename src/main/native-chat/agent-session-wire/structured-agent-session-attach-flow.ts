@@ -35,7 +35,7 @@ import {
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
-import { readAgentSessionHydrationPage } from './agent-session-history-page'
+import { readAgentSessionHydration } from './agent-session-history-page'
 import { withPublishedWork } from './agent-session-published-work'
 import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { acquireOwner } from './structured-agent-session-acquisition'
@@ -286,9 +286,8 @@ export async function performAttach(
 
   const fence = record.lease.runtimeFence
   const tabId = store.getSessionTabId(sessionId)
-  const view = attached.journal.publicRead()
   const work = heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
-  let page: ReturnType<typeof readAgentSessionHydrationPage> | undefined
+  const { page } = await readAgentSessionHydration(attached.journal, fence)
   return {
     ok: true,
     replayed,
@@ -297,12 +296,7 @@ export async function performAttach(
     value: {
       sessionId,
       fence,
-      get page() {
-        return (page ??= withPublishedWork(
-          readAgentSessionHydrationPage(attached.journal, fence, undefined, view.currentSnapshot()),
-          work
-        ))
-      },
+      page: withPublishedWork(page, work),
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
       ...(tabId ? { tabId } : {})
     }

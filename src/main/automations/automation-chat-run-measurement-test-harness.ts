@@ -108,6 +108,7 @@ export function measureAutomationChatRun(
     const view = realPublicRead()
     return {
       prepareSteps: () => view.prepareSteps(),
+      currentSnapshotSteps: (ids) => view.currentSnapshotSteps(ids),
       currentSnapshot(ids) {
         const result = output(() => view.currentSnapshot(ids))
         if (!materialized.has(result)) {

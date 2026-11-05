@@ -169,6 +169,8 @@ export class StructuredAgentSessionStatusFeed {
   afterReplacementProjection = (...args: Parameters<typeof this.projections.afterRefresh>) =>
     this.projections.afterRefresh(...args)
 
+  readStopping = (id: string): boolean => this.projections.readStopping(id)
+
   journalProjection = (...args: Parameters<typeof this.projections.read>) =>
     this.projections.read(...args)
 

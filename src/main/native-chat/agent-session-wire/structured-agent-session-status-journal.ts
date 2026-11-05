@@ -1,3 +1,7 @@
+import {
+  journalDerivedRefreshPending,
+  refreshJournalDerivedRead
+} from '../agent-session-journal/journal-derived-read'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { finishJournalStepsAsync } from '../agent-session-journal/journal-reconstruction-steps'
 import type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-session-status-feed-deps'
@@ -5,7 +9,6 @@ import { StructuredAgentSessionJournalProjections } from './structured-agent-ses
 
 /** Replacement refresh owns cache misses; ordinary point publications remain immediate. */
 export class StructuredAgentSessionStatusJournal {
-  private readonly refreshing = new WeakSet<AgentSessionJournal>()
   private readonly projections = new StructuredAgentSessionJournalProjections((id) =>
     this.deps().replacedRuntime?.(id)
   )
@@ -18,9 +21,24 @@ export class StructuredAgentSessionStatusJournal {
     const deps = this.deps()
     const session = deps.sessions.get(id)
     const source = journal ?? session?.journal
-    return source && !this.refreshing.has(source)
-      ? this.projections.read(source, deps.getConversation(id), session)
-      : null
+    return !source
+      ? null
+      : journalDerivedRefreshPending(source)
+        ? this.projections.installed(source)
+        : this.projections.read(source, deps.getConversation(id), session)
+  }
+
+  readStopping(id: string): boolean {
+    const journal = this.deps().sessions.get(id)?.journal
+    if (
+      journal &&
+      journalDerivedRefreshPending(journal) &&
+      journal.stopMarks.latest()?.settle?.settling
+    ) {
+      return true
+    }
+    const projection = this.read(id)
+    return projection?.stopping === true && projection.state.summary.status === 'working'
   }
 
   async refresh(
@@ -28,22 +46,19 @@ export class StructuredAgentSessionStatusJournal {
     journal: AgentSessionJournal,
     observe: () => Promise<void>
   ): Promise<void> {
-    this.refreshing.add(journal)
-    try {
+    return refreshJournalDerivedRead(journal, async () => {
       try {
         await observe()
       } finally {
         await finishJournalStepsAsync(journal.preparePublicReadSteps())
         await this.projections.prepare(this.deps(), id, journal)
       }
-    } finally {
-      this.refreshing.delete(journal)
-    }
+    })
   }
 
   /** Only the invalid replacement view needs the ordered finite read path. */
   afterRefresh(id: string, journal: AgentSessionJournal, publish: () => void): boolean {
-    if (!this.refreshing.has(journal)) {
+    if (!journalDerivedRefreshPending(journal)) {
       return false
     }
     const deps = this.deps()

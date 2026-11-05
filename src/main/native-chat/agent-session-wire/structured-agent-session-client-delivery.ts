@@ -105,6 +105,7 @@ export class StructuredAgentSessionClientDelivery {
     )
     this.waitForSendSettlement = this.sendSettlement.wait
     this.subscribers = new AgentSessionSubscribers({
+      isCurrentJournal: (id, journal) => sessions.get(id)?.journal === journal,
       readCommands: (sessionId, commandsOnRequest) =>
         this.readCommands(sessionId, commandsOnRequest),
       readQueuePublication: (sessionId) =>
@@ -196,10 +197,7 @@ export class StructuredAgentSessionClientDelivery {
     producer?: StructuredAgentSessionChildWorkProducer
   ): void => this.statusFeed.publishChildWork(sessionId, evidence, producer)
 
-  readStopping = (sessionId: string): boolean => {
-    const projection = this.statusFeed.journalProjection(sessionId)
-    return projection?.stopping === true && projection.state.summary.status === 'working'
-  }
+  readStopping = (id: string): boolean => this.statusFeed.readStopping(id)
 
   readChildWork = (sessionId: string): AgentChildWorkView[] | undefined =>
     this.statusFeed.readChildWork(sessionId)

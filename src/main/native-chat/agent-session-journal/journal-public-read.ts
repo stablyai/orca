@@ -46,6 +46,7 @@ export function readJournalPublicView(
   snapshot: AgentJournalSnapshot
   snapshotForItems: (ids: ReadonlySet<string>) => AgentJournalSnapshot
   currentSnapshot: (inputIds?: readonly string[]) => AgentJournalSnapshot
+  currentSnapshotSteps: (inputIds?: readonly string[]) => Generator<void, AgentJournalSnapshot>
   normalizationKey: string
   prepareSteps: () => Generator<void>
 } {
@@ -90,6 +91,9 @@ export function readJournalPublicView(
     }
   }
   function* prepareSteps(): Generator<void> {
+    if (snapshot && current && normalization !== undefined) {
+      return
+    }
     const rendered = items ?? snapshot?.items ?? (yield* renderJournalItemSteps(state))
     const ids = new Set<string>()
     for (const item of rendered) {
@@ -98,12 +102,50 @@ export function readJournalPublicView(
     }
     const selected = yield* snapshotForItemsSteps(ids, rendered)
     const key = yield* journalNormalizationKeySteps(state, inputForItem)
+    const submissions = yield* sortJournalSteps(
+      state.submissions.values(),
+      (a, b) => a.submittedAt - b.submittedAt
+    )
     items = rendered
     current = selected
     normalization = key
+    snapshot = { ...selected, submissions }
+  }
+  function* currentSnapshotSteps(
+    inputIds: readonly string[] = []
+  ): Generator<void, AgentJournalSnapshot> {
+    yield* prepareSteps()
+    const base = current!
+    if (inputIds.length === 0) {
+      return base
+    }
+    const selected = new Map<string, AgentJournalSnapshot['submissions'][number]>()
+    for (const input of base.submissions) {
+      selected.set(input.clientMessageId, input)
+      yield
+    }
+    for (const id of inputIds) {
+      const input = inputForItem(agentJournalSubmissionKey(id))
+      if (input) {
+        selected.set(input.clientMessageId, input)
+      }
+      yield
+    }
+    return selected.size === base.submissions.length
+      ? base
+      : {
+          ...base,
+          submissions: yield* sortJournalSteps(
+            selected.values(),
+            (a, b) =>
+              a.submittedAt - b.submittedAt ||
+              owner.inputOrdinal(a.clientMessageId) - owner.inputOrdinal(b.clientMessageId)
+          )
+        }
   }
   return {
     prepareSteps,
+    currentSnapshotSteps,
     get snapshot() {
       return (snapshot ??= renderJournalState(state))
     },
