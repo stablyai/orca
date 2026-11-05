@@ -20,6 +20,12 @@ function chunkRangeOf(params: unknown): { offset: number; length: number } {
     : { offset: 0, length: 0 }
 }
 
+function grantIdOf(params: unknown): unknown {
+  return typeof params === 'object' && params !== null && 'grantId' in params
+    ? params.grantId
+    : undefined
+}
+
 describe('a granted host file outside every workspace', () => {
   // Why: one reply caps at 512 KiB, so a granted file pages through its grant like a workspace file.
   it('streams a granted video to its viewer and pages granted text past one reply', async () => {
@@ -32,9 +38,10 @@ describe('a granted host file outside every workspace', () => {
     }
     fsGrantRuntimeFilePreview.mockResolvedValue(mediaUrl)
 
-    await expect(readRuntimeFileContent({ ...video, pageOversizedBinary: true })).resolves.toEqual(
-      mediaUrl
-    )
+    await expect(readRuntimeFileContent({ ...video, pageOversizedBinary: true })).resolves.toEqual({
+      ...mediaUrl,
+      terminalArtifactGrantId: 'g-1'
+    })
     expect(fsGrantRuntimeFilePreview).toHaveBeenCalledWith(
       expect.objectContaining({
         environmentId: 'env-1',
@@ -87,5 +94,54 @@ describe('a granted host file outside every workspace', () => {
     const read = await readRuntimeFileContent(text)
     expect(read.content.length).toBe(bytes.length)
     expect(read.isBinary).toBe(false)
+  })
+
+  // Why: a bytes editor pages the file with the grant that served it, not the one that lapsed.
+  it('reports the grant it renewed to read a lapsed one', async () => {
+    const meta = { runtimeId: 'remote-runtime' }
+    runtimeEnvironmentCall.mockImplementation(
+      async (args: { method: string; params?: unknown }) => {
+        switch (args.method) {
+          case 'files.readTerminalArtifact':
+            return grantIdOf(args.params) === 'g-1'
+              ? {
+                  id: 'rpc',
+                  ok: false,
+                  error: { code: 'runtime_error', message: 'terminal_file_grant_expired' },
+                  _meta: meta
+                }
+              : { id: 'rpc', ok: true, result: { content: 'ok', isBinary: false }, _meta: meta }
+          case 'files.resolveTerminalPath':
+            return {
+              id: 'rpc',
+              ok: true,
+              result: {
+                worktree: 'wt-1',
+                relativePath: null,
+                absolutePath: '/tmp/notes.txt',
+                exists: true,
+                isDirectory: false,
+                openTarget: {
+                  kind: 'absolute-file',
+                  provider: 'local',
+                  absolutePath: '/tmp/notes.txt',
+                  grantId: 'g-2'
+                }
+              },
+              _meta: meta
+            }
+          default:
+            throw new Error(`unexpected ${args.method}`)
+        }
+      }
+    )
+
+    const read = await readRuntimeFileContent({
+      ...granted,
+      filePath: '/tmp/notes.txt',
+      relativePath: '/tmp/notes.txt'
+    })
+
+    expect(read).toMatchObject({ content: 'ok', terminalArtifactGrantId: 'g-2' })
   })
 })

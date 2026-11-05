@@ -79,11 +79,11 @@ export async function readRuntimeTerminalArtifactContent(
   return readThroughGrant({ ...args, grantId: renewed.grantId }, options)
 }
 
-function readThroughGrant(
+async function readThroughGrant(
   args: TerminalArtifactGrantTarget & { grantId: string },
   options: { pageOversizedBinary: boolean }
 ): Promise<RuntimeReadableFileContent> {
-  return readRemoteFileContent(
+  const content = await readRemoteFileContent(
     {
       target: args.target,
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
@@ -93,4 +93,5 @@ function readThroughGrant(
     },
     options
   )
+  return { ...content, terminalArtifactGrantId: args.grantId }
 }

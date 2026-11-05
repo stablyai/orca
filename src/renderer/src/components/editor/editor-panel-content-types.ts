@@ -32,6 +32,8 @@ export type FileContent = {
   isImage?: boolean
   mimeType?: string
   fileIdentity?: string
+  /** The grant that served a host file outside every workspace, renewed or minted by the read. */
+  terminalArtifactGrantId?: string
   loadError?: string
   /** Machine code from a runtime RPC failure; `loadError` alone may be prose (#21041). */
   loadErrorCode?: string

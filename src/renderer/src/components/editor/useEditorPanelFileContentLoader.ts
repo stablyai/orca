@@ -249,8 +249,24 @@ export function useEditorPanelFileContentLoader({
           useAppStore.getState().setCsvPreviewOnly(id, Boolean(result.csvPreview))
         }
         delete fileLoadRetryAttemptsRef.current[id]
-        // Why: a bytes custom editor pages a binary file on the same route, a granted one through its grant.
-        const byteSource = result.isBinary ? readArgs : null
+        const servedGrantId = result.terminalArtifactGrantId
+        const state = useAppStore.getState()
+        const tabGrantId = state.openFiles.find((file) => file.id === id)?.terminalArtifactGrantId
+        // Why: the read renews a lapsed grant; keep the tab on it, as a save that renews one does.
+        if (
+          servedGrantId &&
+          tabGrantId === readGrantId &&
+          tabGrantId &&
+          servedGrantId !== tabGrantId
+        ) {
+          state.setTerminalArtifactGrant(id, servedGrantId)
+        }
+        // Why: a bytes custom editor pages a binary file on the same route, a granted one through the grant that served it.
+        const byteSource = result.isBinary
+          ? servedGrantId
+            ? { ...readArgs, terminalArtifactGrantId: servedGrantId }
+            : readArgs
+          : null
         const loaded = byteSource ? { ...result, byteSource } : result
         setFileContents((prev) => (requestCurrent() ? { ...prev, [id]: loaded } : prev))
         stampCleanTabDiskBaseline(id, result)

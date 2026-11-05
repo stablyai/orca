@@ -10,6 +10,8 @@ export type RuntimeReadableFileContent = {
   isImage?: boolean
   mimeType?: string
   fileIdentity?: string
+  /** The grant that served a host file outside every workspace, renewed or minted by the read. */
+  terminalArtifactGrantId?: string
 }
 
 export type RuntimeFileReadArgs = {
