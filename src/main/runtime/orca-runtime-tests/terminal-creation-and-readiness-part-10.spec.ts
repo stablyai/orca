@@ -503,32 +503,6 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it("reports an OpenCode draft and leaves its box's gutter in the output", async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      hasRendererSerializer: () => false
-    })
-    syncSinglePty(runtime)
-    runtime.onPtyData(
-      'pty-1',
-      '\x1b[?1049h\x1b[1;3H┃\x1b[2;3H┃  refactor the auth\x1b[3;3H┃  module next\x1b[4;3H┃' +
-        '\x1b[5;3H┃  Build · gpt-6.1 · medium\x1b[6;3H╹▀▀▀▀▀▀▀▀\x1b[3;17H',
-      100
-    )
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    const read = await runtime.readTerminal(terminal.handle)
-
-    expect(read).toMatchObject({
-      source: 'screen',
-      tail: ['  ┃', '  ┃', '  ┃', '  ┃', '  ┃  Build · gpt-6.1 · medium', '  ╹▀▀▀▀▀▀▀▀'],
-      draft: 'refactor the auth\nmodule next'
-    })
-  })
-
   it('keeps renderer-fallback composer drafts separate from terminal output', async () => {
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: '\x1b[?1049hBuild passed\r\n────────\r\n❯ \x1b[2mproceed with the release\x1b[22m\x1b[3G',

@@ -1,7 +1,4 @@
-import {
-  detectTerminalComposerDraft,
-  type TerminalComposerDraft
-} from '../../shared/terminal/input/terminal-composer-draft'
+import { detectTerminalComposerDraft } from '../../shared/terminal/input/terminal-composer-draft'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { HeadlessTerminalRow } from '../daemon/headless-terminal-rows'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
@@ -44,25 +41,6 @@ function projectTerminalRows(
   }
 }
 
-/** Leave the composer's prompt glyph, or OpenCode's box gutter on every row, where the draft was. */
-function redactComposerDraft(
-  visible: ReturnType<TerminalProjectionEmulator['getVisibleRows']>,
-  draft: TerminalComposerDraft
-): void {
-  for (let row = draft.promptRow; row <= draft.endRow; row += 1) {
-    const text = visible[row]?.text ?? ''
-    const indent = text.length - text.trimStart().length
-    visible[row] = {
-      text: text.trimStart().startsWith(draft.promptGlyph)
-        ? text.slice(0, indent + 1)
-        : row === draft.promptRow
-          ? draft.promptGlyph
-          : '',
-      metadata: { wrapped: false, trailingSpaces: 0 }
-    }
-  }
-}
-
 export function projectTerminalTailLines(
   emulator: TerminalProjectionEmulator,
   limit: number
@@ -72,7 +50,13 @@ export function projectTerminalTailLines(
   const visibleRange = emulator.getVisibleBufferRange()
   const draft = detectTerminalComposerDraft(emulator.getCursorLineContext())
   if (draft && visibleRange.endExclusive === visibleRange.totalLength) {
-    redactComposerDraft(visible, draft)
+    visible[draft.promptRow] = {
+      text: draft.promptGlyph,
+      metadata: { wrapped: false, trailingSpaces: 0 }
+    }
+    for (let row = draft.promptRow + 1; row <= draft.endRow; row += 1) {
+      visible[row] = { text: '', metadata: { wrapped: false, trailingSpaces: 0 } }
+    }
     const scrollbackTail = tail.slice(0, Math.max(0, tail.length - visible.length))
     tail.splice(0, tail.length, ...scrollbackTail, ...visible)
   }
@@ -90,7 +74,13 @@ export function projectTerminalVisibleLines(emulator: TerminalProjectionEmulator
   const visible = emulator.getVisibleRows()
   const draft = detectTerminalComposerDraft(emulator.getCursorLineContext())
   if (draft) {
-    redactComposerDraft(visible, draft)
+    visible[draft.promptRow] = {
+      text: draft.promptGlyph,
+      metadata: { wrapped: false, trailingSpaces: 0 }
+    }
+    for (let row = draft.promptRow + 1; row <= draft.endRow; row += 1) {
+      visible[row] = { text: '', metadata: { wrapped: false, trailingSpaces: 0 } }
+    }
   }
   return {
     ...projectTerminalRows(visible),
