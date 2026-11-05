@@ -1289,7 +1289,6 @@
 43 test-no-wall-clock:src/main/rate-limits/service-account-target-selection.test.ts
 46 test-no-wall-clock:src/main/runtime/terminal-query-responder.test.ts
 5 test-no-in-test-import-actual:src/main/ssh/config/ssh-config-loader-regression.test.ts
-5 test-no-in-test-import-actual:src/renderer/src/components/right-sidebar/source-control/sync/useGitStatusPolling.test.ts
 5 test-no-polling-loop:tests/e2e/paced-terminal-typing.ts
 5 test-no-real-time-wait:src/main/daemon/providers/adapter/testing/daemon-pty-adapter-session-adoption.test.ts
 5 test-no-real-time-wait:src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts
