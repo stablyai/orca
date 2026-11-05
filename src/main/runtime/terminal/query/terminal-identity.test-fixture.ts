@@ -7,7 +7,7 @@ import type { CrewRuntimeReaders } from '../../orchestration/crew/crew-runtime-w
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type {
   OrchestrationCompatibilitySshTerminal,
   TerminalHandleRecord

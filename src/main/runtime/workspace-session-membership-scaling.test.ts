@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import type { TabGroup } from '../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
-import { rebaseWorkspaceSessionTerminalMembership } from './workspace-session-terminal-membership-authority'
+import { rebaseWorkspaceSessionTerminalMembership } from './terminal/surface/workspace-session-terminal-membership-authority'
 
 // An empty filtered recentTabIds must remain explicit or the group spread restores stale host-dropped ids.
 it('drops tab ids the host no longer has from group membership, failing closed', () => {

@@ -1,5 +1,8 @@
 import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
 
 /** A dropped relay loses contact with every host PTY at once; count unverifiable terminals so rows do not falsely report none (ssh-execution-boundary.md). */

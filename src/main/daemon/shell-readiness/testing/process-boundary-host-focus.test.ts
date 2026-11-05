@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PtyShellOwnershipMirror } from '../../../runtime/pty-shell-ownership-mirror'
+import { PtyShellOwnershipMirror } from '../../../runtime/terminal/query/pty-shell-ownership-mirror'
 import { HeadlessEmulator } from '../../emulation/headless-emulator'
 import { TerminalShellRecoveryBarrier } from '../terminal-shell-recovery-barrier'
 

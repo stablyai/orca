@@ -8,9 +8,9 @@ import { getSshConnectionManager } from '../../../ssh/targets/ssh-target-registr
 import {
   recordPtySurface,
   SURFACE_CLAIM_WITHOUT_STANDING
-} from '../../pty-recorded-surface-topology'
+} from '../../terminal/surface/pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
 import {
   placeUnshownLiveTerminals,
   placeUnshownLiveTerminalsBestEffort,

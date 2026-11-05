@@ -8,12 +8,19 @@ vi.mock('../../ssh/orcad-runtime-maintenance', () => ({
   recoverManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'refused' })),
   rollbackManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'refused' }))
 }))
+vi.mock('./runtime-environment-request-connections', () => ({
+  getRuntimeEnvironmentStatusOwner: () => ({ activate: vi.fn() })
+}))
 vi.mock('../../managed-server/lifecycle/orcad-managed-launch-session', () => ({
   restartManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'refused' }))
 }))
 
 import { getManagedOrcadCrashLoopBrake } from '../../managed-server/lifecycle/orcad-managed-crash-loop'
 import { createManagedOrcadActions, restartManagedOrcad } from './managed-orcad-actions'
+import {
+  isRuntimeEnvironmentManuallyDisconnected,
+  markRuntimeEnvironmentManuallyDisconnected
+} from './runtime-environment-manual-disconnect'
 
 const CRASHED = { pid: 4242, version: '1.2.3', acquiredAt: '2026-11-04T10:00:00.000Z' }
 const options = {
@@ -56,5 +63,16 @@ describe('explicit server actions on a host braked for crashing', () => {
     brakeHost()
     await run()
     expect(getManagedOrcadCrashLoopBrake().engaged('env-1')).toBe(false)
+  })
+})
+
+describe('explicit server actions on a disconnected server', () => {
+  it.each([
+    ['Update', () => createManagedOrcadActions(options).update('env-1', false)],
+    ['Restart', () => restartManagedOrcad(options, 'env-1')]
+  ])('%s connects it again, as Connect does', async (_action, run) => {
+    markRuntimeEnvironmentManuallyDisconnected('env-1')
+    await run()
+    expect(isRuntimeEnvironmentManuallyDisconnected('env-1')).toBe(false)
   })
 })
