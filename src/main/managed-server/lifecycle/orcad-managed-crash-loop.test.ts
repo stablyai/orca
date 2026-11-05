@@ -24,7 +24,7 @@ vi.mock('../install/orcad-remote-log-tail', () => ({
 }))
 
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
-import { OrcadActiveReadinessError } from '../../ssh/orcad-active-readiness'
+import { OrcadLaunchReadinessError } from '../../ssh/orcad-active-readiness'
 import { OrcadWindowsLaunchFailedError } from '../install/orcad-remote-launch-windows'
 import {
   ensureManagedOrcadServing,
@@ -106,7 +106,7 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
   it('also stops after starts that die before becoming ready, counting each run once', async () => {
     vi.mocked(wakeStoppedManagedOrcad).mockImplementation(async (_slot, onStarting) => {
       onStarting?.()
-      throw new OrcadActiveReadinessError('rejected', 'orcad did not become ready')
+      throw new OrcadLaunchReadinessError('rejected', 'orcad did not become ready')
     })
     await findStopped()
     // The next orcad reports the run that just failed to start; it is already counted.

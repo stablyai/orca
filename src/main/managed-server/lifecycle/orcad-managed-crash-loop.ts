@@ -1,7 +1,7 @@
 // Stop waking a managed orcad that keeps dying; an explicit Connect re-arms automatic starts.
 import { OrcadUnexpectedExitSchema } from '../../../shared/orcad-unexpected-exit'
 import type { OrcadHealth } from '../../orcad/orcad-health'
-import { OrcadActiveReadinessError } from '../../ssh/orcad-active-readiness'
+import { OrcadLaunchReadinessError } from '../../ssh/orcad-active-readiness'
 import { orcadSlotDir } from '../../ssh/orcad-recovery-slot'
 import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
@@ -144,7 +144,7 @@ async function wakeUnlessEngaged(
   } catch (error) {
     // A launch that never became ready, or that the host reported failing, also ends a run.
     if (
-      error instanceof OrcadActiveReadinessError ||
+      error instanceof OrcadLaunchReadinessError ||
       error instanceof OrcadWindowsLaunchRefusedError ||
       error instanceof OrcadWindowsLaunchFailedError
     ) {
