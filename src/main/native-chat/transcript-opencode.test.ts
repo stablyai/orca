@@ -52,7 +52,7 @@ describe('readOpenCodeNativeChatTranscriptFull', () => {
       resolveDbPath: async () => '/fake/opencode.db',
       readPage
     })
-    expect(result).toEqual({ messages: ids.map(message), sourceEmpty: false })
+    expect(result).toEqual({ messages: ids.map(message), sourceEmpty: false, forkTipItemIds: [] })
   })
 
   it('reports notFound when the first page misses', async () => {
@@ -74,7 +74,7 @@ describe('readOpenCodeNativeChatTranscriptFull', () => {
         resolveDbPath: async () => '/fake/opencode.db',
         readPage: async () => ({ items: [], hasMore: false, beforeMessageRowId: cursor })
       })
-      expect(result).toEqual({ messages: [], sourceEmpty })
+      expect(result).toEqual({ messages: [], sourceEmpty, forkTipItemIds: [] })
     }
   )
 
