@@ -51,7 +51,7 @@ describe('nested worker depth', () => {
     ).toThrow(/depth 2 \(max 1\)/)
   })
 
-  it('tells the refused worker to complete the task itself', () => {
+  it('tells the refused worker it looks like a runaway loop and to finish here', () => {
     coordinatorDispatchesWorker()
     const nested = db.createTask({ runId: 'run_legacy_local', spec: 'nested task' })
     expect(() =>
@@ -61,7 +61,7 @@ describe('nested worker depth', () => {
         creator: { kind: 'terminal', handle: 'term_worker', paneKey: 'tab_worker:leaf_worker' },
         maxDepth: 1
       })
-    ).toThrow(/Complete this task yourself/)
+    ).toThrow(/runaway loop of workers starting workers\. Finish this task here/)
   })
 
   it('permits one more generation when the cap is raised, and records depth 2', () => {
