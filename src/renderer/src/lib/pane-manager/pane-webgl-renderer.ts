@@ -177,6 +177,7 @@ export function markComplexScriptOutput(pane: ManagedPaneInternal): void {
   pane.hasComplexScriptOutput = true
 }
 
+/** Clear the pane's WebGL glyph atlas and shrink its GPU texture slots until the next repaint. */
 export function clearWebglTextureAtlas(pane: ManagedPaneInternal): void {
   if (pane.webglDisabledAfterContextLoss) {
     return
@@ -188,6 +189,7 @@ export function clearWebglTextureAtlas(pane: ManagedPaneInternal): void {
   } catch {}
 }
 
+/** Clear the pane's WebGL glyph atlas and immediately repaint the visible viewport. */
 export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
   clearWebglTextureAtlas(pane)
   presentPaneViewport(pane)
@@ -235,6 +237,7 @@ setPaneFitWebglAttachHook((pane) => {
   repairPaneWebglCanvasDprMismatch(pane)
 })
 
+/** Attach and bound a WebGL renderer addon for the pane when GPU rendering is eligible, or fall back to DOM. */
 export function attachWebgl(pane: ManagedPaneInternal): void {
   if (
     !ENABLE_WEBGL_RENDERER ||

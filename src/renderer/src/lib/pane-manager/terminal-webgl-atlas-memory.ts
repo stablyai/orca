@@ -44,6 +44,7 @@ type XtermGlyphRenderer = {
     texture: WebGLTexture
     version: number
   }[]
+  beginFrame?: () => boolean
   invalidateAtlasTextures?: () => void
 }
 
@@ -64,12 +65,14 @@ type XtermWebglAddonWithInternals = WebglAddon & {
 
 const patchedGlyphRenderers = new WeakSet<XtermGlyphRenderer>()
 
+/** Narrow a WebGL addon reference before reading private xterm renderer fields. */
 function hasAddonInternals(
   webglAddon: WebglAddon | null | undefined
 ): webglAddon is XtermWebglAddonWithInternals {
   return typeof webglAddon === 'object' && webglAddon !== null
 }
 
+/** Replace GPU texture allocations from `startIndex` upward with 1x1 pixels so unused slots release VRAM. */
 function shrinkWebglAtlasTexturesFrom(
   renderer: XtermWebglRendererInternals,
   startIndex: number
@@ -110,6 +113,7 @@ function shrinkWebglAtlasTexturesFrom(
   }
 }
 
+/** Clamp xterm's WebGL atlas page limit to 2048 and hook invalidation/frame layout changes to shrink idle texture slots. */
 function capXtermWebglAtlasRenderer(renderer: XtermWebglRendererInternals): void {
   if (
     typeof renderer._deviceMaxTextureSize === 'number' &&
@@ -146,9 +150,21 @@ function capXtermWebglAtlasRenderer(renderer: XtermWebglRendererInternals): void
       const activePages = (glyphRenderer._atlas ?? renderer._charAtlas)?.pages?.length ?? 0
       shrinkWebglAtlasTexturesFrom(renderer, activePages)
     }
+    if (typeof glyphRenderer.beginFrame === 'function') {
+      const originalBeginFrame = glyphRenderer.beginFrame.bind(glyphRenderer)
+      glyphRenderer.beginFrame = () => {
+        const layoutChanged = originalBeginFrame()
+        if (layoutChanged) {
+          // A sibling clear bumps pageLayoutVersion before this pane's retry loop runs.
+          glyphRenderer.invalidateAtlasTextures?.()
+        }
+        return layoutChanged
+      }
+    }
   }
 }
 
+/** Bound a WebGL addon's glyph atlas page dimensions and reclaim discarded canvas/texture backing stores. */
 export function boundXtermWebglAtlasMemory(webglAddon: WebglAddon): void {
   if (!hasAddonInternals(webglAddon)) {
     return
@@ -169,6 +185,7 @@ export function boundXtermWebglAtlasMemory(webglAddon: WebglAddon): void {
   } catch {}
 }
 
+/** Shrink all GPU atlas texture slots to 1x1 after clearing an addon's glyph atlas. */
 export function shrinkClearedWebglAtlasTextures(webglAddon: WebglAddon | null): void {
   if (!hasAddonInternals(webglAddon) || !webglAddon._renderer) {
     return

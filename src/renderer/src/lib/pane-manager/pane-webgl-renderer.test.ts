@@ -10,6 +10,7 @@ import {
 import { safeFit } from './pane-fit'
 import { disposePane } from './pane-lifecycle'
 
+/** Create a minimal managed pane stub for WebGL lifecycle tests. */
 function createPane(
   options: { loadAddon?: (addon: WebglAddon) => void } = {}
 ): ManagedPaneInternal {
