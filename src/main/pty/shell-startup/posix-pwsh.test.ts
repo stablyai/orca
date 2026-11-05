@@ -48,10 +48,17 @@ describe('resolvePosixPaneShellPath', () => {
   it('takes pwsh from the spawn PATH in execvp order', () => {
     executables.add('/custom/bin/pwsh').add('/opt/homebrew/bin/pwsh')
 
-    expect(resolvePosixPaneShellPath('pwsh', 'relative/bin:/usr/bin:/custom/bin')).toBe(
-      '/custom/bin/pwsh'
-    )
+    expect(resolvePosixPaneShellPath('pwsh', '/usr/bin:/custom/bin')).toBe('/custom/bin/pwsh')
   })
+
+  it.each(['tools:/custom/bin', ':/custom/bin', '/usr/bin::/custom/bin'])(
+    'leaves the lookup to execvp at a cwd-relative PATH entry in %s',
+    (spawnPath) => {
+      executables.add('/custom/bin/pwsh').add('/opt/homebrew/bin/pwsh')
+
+      expect(resolvePosixPaneShellPath('pwsh', spawnPath)).toBe('pwsh')
+    }
+  )
 
   it.each([
     ['Homebrew on Apple silicon', '/opt/homebrew/bin/pwsh'],
@@ -81,13 +88,16 @@ describe('resolvePosixPaneShellPath', () => {
     }
   )
 
-  it('resolves pwsh-preview from PATH only', () => {
-    executables.add('/opt/homebrew/bin/pwsh').add('/usr/local/bin/pwsh-preview')
+  it.each([
+    ['darwin', '/opt/homebrew/bin/pwsh-preview'],
+    ['darwin', '/usr/local/microsoft/powershell/7-preview/pwsh'],
+    ['linux', '/opt/microsoft/powershell/7-preview/pwsh'],
+    ['linux', '/snap/bin/pwsh-preview']
+  ] as const)('finds pwsh-preview on %s at %s', (platform, installed) => {
+    onPlatform(platform)
+    executables.add('/opt/homebrew/bin/pwsh').add('/usr/bin/pwsh').add(installed)
 
-    expect(resolvePosixPaneShellPath('pwsh-preview', '/usr/local/bin')).toBe(
-      '/usr/local/bin/pwsh-preview'
-    )
-    expect(resolvePosixPaneShellPath('pwsh-preview', FINDER_LAUNCH_PATH)).toBe('pwsh-preview')
+    expect(resolvePosixPaneShellPath('pwsh-preview', '/bin')).toBe(installed)
   })
 
   it('keeps the bare name for the spawn fallback when no install exists', () => {
