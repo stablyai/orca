@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { WorkerStopReceipt } from '../worker/single-worker-stop'
+import type { WorkerStopReceipt } from '../../../../../../shared/orchestration-worker-stop-receipt'
 import { archiveWorkerOutputBeforeStop } from '../worker/worker-stop-archive'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectRemoteAttachment } from './federation-attachment-observation'

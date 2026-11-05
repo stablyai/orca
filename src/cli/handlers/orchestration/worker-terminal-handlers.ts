@@ -5,9 +5,9 @@ import { WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
 import {
   formatHelperStops,
   WORKER_RELEASE_VIEW,
-  workerStopFailure,
-  type WorkerStopResult
+  workerStopFailure
 } from './worker-release-agent-view'
+import type { WorkerStopReceipt } from '../../../shared/orchestration-worker-stop-receipt'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -46,7 +46,7 @@ const keepWorkerOpen: CommandHandler = async ({ flags, client, json }) => {
 
 export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-stop': async ({ flags, client, json }) => {
-    const result = await callOrchestrationMutation<WorkerStopResult>(
+    const result = await callOrchestrationMutation<WorkerStopReceipt>(
       client,
       flags,
       'orchestration.workerStop',

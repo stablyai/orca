@@ -1,9 +1,15 @@
 import { z } from 'zod'
+import {
+  HelperStopOutcome,
+  type WorkerStopReceipt
+} from '../../../../../../shared/orchestration-worker-stop-receipt'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RpcContext } from '../../../core'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
+import {
+  ORCHESTRATION_WORKER_STOP_HELPERS_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY
+} from '../../../../../../shared/orchestration-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { inspectWorkerTerminal, resolvePinnedFederatedServer } from './worker-observation'
 import { refuseFederatedStopWhileKeptOpen } from './worker-keep-open'
@@ -15,26 +21,6 @@ import {
 import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 
 export type StopMutation = RpcContext['orchestrationMutation']
-
-export type WorkerStopReceipt = {
-  dispatchId: string
-  state: string
-  alreadySettled: boolean
-  processAction: string
-  close?: unknown
-  lastError?: string | null
-  warning?: string
-  helpers?: HelperStopOutcome[]
-}
-
-export const HelperStopOutcome = z.object({
-  dispatchId: z.string(),
-  creatorDispatchId: z.string(),
-  outcome: z.enum(['stopped', 'already_finished', 'kept_open', 'starting', 'unconfirmed']),
-  state: z.string().optional(),
-  lastError: z.string().nullable().optional()
-})
-export type HelperStopOutcome = z.infer<typeof HelperStopOutcome>
 
 /** Fence and stop exactly one Dispatch's worker, as worker-stop always has. */
 export async function stopSingleWorker(
@@ -58,14 +44,16 @@ export async function stopSingleWorker(
       return settledReceipt(dispatchId, begun.worker.state)
     }
     try {
-      const status = (await runtime.callOrchestrationWorkerServer(
-        server.environmentId,
-        'status.get',
-        undefined,
-        30_000,
-        undefined,
-        { expectedEnvironmentPairingRevision: server.pairingRevision }
-      )) as RuntimeStatus
+      const status = RemoteCapabilities.parse(
+        await runtime.callOrchestrationWorkerServer(
+          server.environmentId,
+          'status.get',
+          undefined,
+          30_000,
+          undefined,
+          { expectedEnvironmentPairingRevision: server.pairingRevision }
+        )
+      )
       if (!status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY)) {
         return unknownReceipt(
           dispatchId,
@@ -76,23 +64,25 @@ export async function stopSingleWorker(
           'none'
         )
       }
-      const remote = (await runtime.callOrchestrationWorkerServer(
-        server.environmentId,
-        'orchestration.federationStop',
-        { dispatchId: dispatchId },
-        30_000,
-        { orchestrationRequestId: orchestrationMutation.requestId },
-        { expectedEnvironmentPairingRevision: server.pairingRevision }
-      )) as RemoteStopReceipt
+      const remote = RemoteStopReceipt.parse(
+        await runtime.callOrchestrationWorkerServer(
+          server.environmentId,
+          'orchestration.federationStop',
+          { dispatchId },
+          30_000,
+          { orchestrationRequestId: orchestrationMutation.requestId },
+          { expectedEnvironmentPairingRevision: server.pairingRevision }
+        )
+      )
       if (remote.state === 'stopped') {
         const worker = db.reconcileFederatedWorkerStop(dispatchId)
         return {
-          dispatchId: dispatchId,
+          dispatchId,
           state: worker.state,
           alreadySettled: remote.alreadySettled,
           processAction: remote.processAction,
           close: remote.close,
-          ...remoteHelpers(remote)
+          ...remoteHelpers(remote, status, server.name)
         }
       }
       if (remote.state === 'succeeded' || remote.state === 'failed') {
@@ -101,11 +91,11 @@ export async function stopSingleWorker(
           .syncOrchestrationFederatedDispatchAfterCurrent(dispatchId)
           .catch(() => undefined)
         return {
-          dispatchId: dispatchId,
+          dispatchId,
           state: db.getWorkerDispatch(dispatchId)?.state ?? remote.state,
           alreadySettled: true,
           processAction: 'none',
-          ...remoteHelpers(remote)
+          ...remoteHelpers(remote, status, server.name)
         }
       }
       return {
@@ -117,7 +107,7 @@ export async function stopSingleWorker(
           ),
           remote.processAction
         ),
-        ...remoteHelpers(remote)
+        ...remoteHelpers(remote, status, server.name)
       }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
@@ -134,7 +124,7 @@ export async function stopSingleWorker(
       runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
     }
     return {
-      dispatchId: dispatchId,
+      dispatchId,
       state: begun.state,
       alreadySettled: begun.alreadySettled,
       processAction: 'none' as const,
@@ -161,7 +151,7 @@ export async function stopSingleWorker(
   if (db.getWorkerDispatch(dispatchId)?.state === 'stopped') {
     runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
     return {
-      dispatchId: dispatchId,
+      dispatchId,
       state: 'stopped',
       alreadySettled: false,
       processAction: 'none'
@@ -198,7 +188,7 @@ export async function stopSingleWorker(
   await archiveWorkerOutputBeforeStop({
     runtime,
     db,
-    dispatchId: dispatchId,
+    dispatchId,
     terminalHandle: liveHandle,
     attachedAt: begun.worker.created_at
   })
@@ -216,7 +206,7 @@ export async function stopSingleWorker(
     const stopped = db.settleWorkerStop(dispatchId)
     runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
     return {
-      dispatchId: dispatchId,
+      dispatchId,
       state: stopped.state,
       alreadySettled: false,
       processAction: 'closed_agent_terminal'
@@ -250,7 +240,7 @@ export async function stopSingleWorker(
   }
   runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
   return {
-    dispatchId: dispatchId,
+    dispatchId,
     state: db.getWorkerDispatch(dispatchId)?.state ?? 'stopped',
     alreadySettled: false,
     processAction: 'closed_agent_terminal',
@@ -258,17 +248,29 @@ export async function stopSingleWorker(
   }
 }
 
-type RemoteStopReceipt = {
-  state: string
-  alreadySettled: boolean
-  processAction: string
-  close?: unknown
-  lastError?: string | null
-  helpers?: unknown
-}
+const RemoteCapabilities = z.object({ capabilities: z.array(z.string()).optional() })
 
-/** Helpers the worker's host stopped under it; an older host reports none. */
-function remoteHelpers(remote: RemoteStopReceipt): Pick<WorkerStopReceipt, 'helpers'> {
+const RemoteStopReceipt = z.object({
+  state: z.string(),
+  alreadySettled: z.boolean(),
+  processAction: z.string(),
+  close: z.unknown().optional(),
+  lastError: z.string().nullable().optional(),
+  helpers: z.unknown().optional()
+})
+type RemoteStopReceipt = z.infer<typeof RemoteStopReceipt>
+
+/** Helpers the worker's host stopped under it; an older host stops none, so say so. */
+function remoteHelpers(
+  remote: RemoteStopReceipt,
+  status: z.infer<typeof RemoteCapabilities>,
+  serverName: string
+): Pick<WorkerStopReceipt, 'helpers' | 'warning'> {
+  if (!status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_HELPERS_RUNTIME_CAPABILITY)) {
+    return {
+      warning: `${serverName} runs an older Orca that leaves helpers this worker started there running; update it to stop them with the worker.`
+    }
+  }
   const helpers = HelperStopOutcome.array().safeParse(remote.helpers)
   return helpers.success && helpers.data.length ? { helpers: helpers.data } : {}
 }

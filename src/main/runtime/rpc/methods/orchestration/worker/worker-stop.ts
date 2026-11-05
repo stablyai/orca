@@ -3,12 +3,11 @@ import { defineMethod } from '../../../core'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
-import {
-  stopSingleWorker,
-  type HelperStopOutcome,
-  type StopMutation,
-  type WorkerStopReceipt
-} from './single-worker-stop'
+import type {
+  HelperStopOutcome,
+  WorkerStopReceipt
+} from '../../../../../../shared/orchestration-worker-stop-receipt'
+import { stopSingleWorker, type StopMutation } from './single-worker-stop'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineMethod({
