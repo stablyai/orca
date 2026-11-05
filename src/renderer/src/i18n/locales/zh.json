@@ -5402,8 +5402,6 @@
           "expandAriaLabel": "展开 {{repo}} 的隐藏工作树",
           "hiding_one": "已隐藏 {{count}} 个检测到的工作树",
           "hiding_other": "已隐藏 {{count}} 个检测到的工作树",
-          "hidingInRepo_one": "已隐藏 {{repo}} 中的 {{count}} 个检测到的工作树",
-          "hidingInRepo_other": "已隐藏 {{repo}} 中的 {{count}} 个检测到的工作树",
           "keepHiddenAriaLabel_one": "为 {{repo}} 保留 {{count}} 个检测到的工作树为隐藏状态；可从项目菜单恢复",
           "keepHiddenAriaLabel_other": "为 {{repo}} 保留 {{count}} 个检测到的工作树为隐藏状态；可从项目菜单恢复",
           "keepHiddenTooltip": "保持隐藏 - 从项目菜单恢复",
@@ -18897,8 +18895,6 @@
       },
       "turnDiff": {
         "partial": "部分差异",
-        "showDiff": "显示差异",
-        "hideDiff": "隐藏差异",
         "changedFiles_other": "{{count}} 个已更改的文件"
       },
       "receipt": {

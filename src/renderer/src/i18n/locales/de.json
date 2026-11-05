@@ -6040,8 +6040,6 @@
           "expandAriaLabel": "Ausgeblendete Worktrees für {{repo}} ausklappen",
           "hiding_one": "{{count}} entdeckter Worktree ausgeblendet",
           "hiding_other": "{{count}} entdeckte Worktrees ausgeblendet",
-          "hidingInRepo_one": "{{count}} entdeckter Worktree in {{repo}} ausgeblendet",
-          "hidingInRepo_other": "{{count}} entdeckte Worktrees in {{repo}} ausgeblendet",
           "keepHiddenAriaLabel_one": "{{count}} entdeckten Worktree für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
           "keepHiddenAriaLabel_other": "{{count}} entdeckte Worktrees für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
           "keepHiddenTooltip": "Ausgeblendet lassen - über das Projektmenü wieder einblenden",
@@ -19338,8 +19336,6 @@
       },
       "turnDiff": {
         "partial": "Teilweiser Diff",
-        "showDiff": "Diff anzeigen",
-        "hideDiff": "Diff ausblenden",
         "changedFiles_one": "{{count}} geänderte Datei",
         "changedFiles_other": "{{count}} geänderte Dateien"
       },

@@ -348,8 +348,8 @@ describe('what a send carries', () => {
       catalog,
       launch
     )
-    // Learning the model does not choose an effort.
-    expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'native' })
+    // Learning the model chooses neither the model nor an effort.
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({})
     expect(
       structuredAgentSessionMessageSelection({
         ...state,
@@ -358,7 +358,7 @@ describe('what a send carries', () => {
           effort: 'saved'
         }
       })
-    ).toEqual({ model: 'native' })
+    ).toEqual({})
     state = applyStructuredAgentSessionOptions(
       state,
       CODEX_SESSION_OPTION_CATALOG,
@@ -597,10 +597,7 @@ describe("a chat's model and effort, apart from the defaults filling them in", (
       listingNamesConfiguredModel: true
     })
     expect(shown(state, undefined, { effort: 'xhigh' })).toEqual({ model: 'opus', effort: 'xhigh' })
-    expect(carried(state, undefined, { effort: 'xhigh' })).toEqual({
-      model: 'opus',
-      effort: 'xhigh'
-    })
+    expect(carried(state, undefined, { effort: 'xhigh' })).toEqual({ effort: 'xhigh' })
   })
 })
 

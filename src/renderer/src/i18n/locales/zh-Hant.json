@@ -5887,8 +5887,6 @@
           "expandAriaLabel": "展開 {{repo}} 中隱藏的工作樹",
           "hiding_one": "已隱藏 {{count}} 個偵測到的工作樹",
           "hiding_other": "已隱藏 {{count}} 個偵測到的工作樹",
-          "hidingInRepo_one": "已隱藏 {{repo}} 中的 {{count}} 個偵測到的工作樹",
-          "hidingInRepo_other": "已隱藏 {{repo}} 中的 {{count}} 個偵測到的工作樹",
           "keepHiddenAriaLabel_one": "讓 {{repo}} 中的 {{count}} 個偵測到的工作樹保持隱藏；可從專案選單恢復顯示",
           "keepHiddenAriaLabel_other": "讓 {{repo}} 中的 {{count}} 個偵測到的工作樹保持隱藏；可從專案選單恢復顯示",
           "keepHiddenTooltip": "保持隱藏，可從專案選單恢復顯示",
@@ -19080,8 +19078,6 @@
       },
       "turnDiff": {
         "partial": "部分差異",
-        "showDiff": "顯示差異",
-        "hideDiff": "隱藏差異",
         "changedFiles_other": "{{count}} 個已變更的檔案"
       },
       "receipt": {
