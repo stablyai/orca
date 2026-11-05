@@ -126,8 +126,9 @@ export function useFileExplorerNodeCommands({
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
     (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => {
+      // A keyboard-generated click has detail 0 and must not hand the file to the chosen app.
       selectRowWithModifiers(node, event, (target) =>
-        handleClick(target, { repeated: event.detail >= 2 })
+        handleClick(target, event.detail === 0 ? undefined : { repeated: event.detail >= 2 })
       )
     },
     [handleClick, selectRowWithModifiers]
