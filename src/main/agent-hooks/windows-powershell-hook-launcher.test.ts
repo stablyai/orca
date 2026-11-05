@@ -20,7 +20,7 @@ describe('windows PowerShell hook launcher', () => {
 
     expect(command).toMatch(/ -EncodedCommand [A-Za-z0-9+/=]+$/)
     expect(command.replace(/ -EncodedCommand \S+$/, '')).toBe(
-      `${getWindowsPowerShellExecutablePath()} -NoProfile`
+      `${getWindowsPowerShellExecutablePath()} -NoProfile -NonInteractive`
     )
   })
 
