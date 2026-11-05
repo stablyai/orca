@@ -38,15 +38,16 @@ function setTabs(unifiedTabsByWorktree: Record<string, Tab[]>): void {
 }
 
 let tabVisits = 0
-/** A tab list that counts how many tabs anything reads from it. */
+/** Tabs that count how often anything reads which entity they hold. */
 function counted(list: Tab[]): Tab[] {
-  return new Proxy(list, {
-    get(target, key, receiver) {
-      if (typeof key === 'string' && /^\d+$/.test(key)) {
+  return list.map((tab) => {
+    const { entityId, ...rest } = tab
+    return Object.defineProperty({ ...rest, entityId: '' }, 'entityId', {
+      get: () => {
         tabVisits++
+        return entityId
       }
-      return Reflect.get(target, key, receiver)
-    }
+    })
   })
 }
 
