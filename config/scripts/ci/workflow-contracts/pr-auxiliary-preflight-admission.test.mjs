@@ -373,7 +373,7 @@ describe.skipIf(process.platform === 'win32')('Mobile CI complete Git change evi
 })
 
 describe.skipIf(process.platform === 'win32')('Daemon mock complete Git change evidence', () => {
-  const helper = 'src/main/daemon/daemon-init-dependency-mocks.ts'
+  const helper = 'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
   it('keeps real unit and type contracts while omitting unrelated packages for a modification', () => {
     const repo = createMobileCiScopeRepository(true, helper)
     writeFileSync(repo.tool, 'export const revision = 2\n')

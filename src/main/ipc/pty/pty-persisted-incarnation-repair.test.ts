@@ -6,7 +6,7 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   SessionNotFoundError,
   TerminalSessionOwnerUnverifiedError
-} from '../../daemon/daemon-errors'
+} from '../../daemon/protocol/daemon-errors'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerPtyHandlers } from './register-handlers'

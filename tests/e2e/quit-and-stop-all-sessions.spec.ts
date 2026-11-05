@@ -13,8 +13,8 @@ import {
   waitForActiveTerminalManager,
   waitForPaneCount
 } from './helpers/terminal'
-import { readDaemonPidRecord } from '../../src/main/daemon/daemon-endpoint-incarnation'
-import { getDaemonPidPath } from '../../src/main/daemon/daemon-spawner'
+import { readDaemonPidRecord } from '../../src/main/daemon/endpoint/identity/daemon-endpoint-incarnation'
+import { getDaemonPidPath } from '../../src/main/daemon/launch/daemon-spawner'
 
 // The label is localized; the app menu gives the item a stable id.
 const MENU_ITEM_ID = 'quit-and-stop-all-sessions'

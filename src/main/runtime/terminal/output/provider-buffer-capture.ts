@@ -14,7 +14,7 @@ import {
 } from '../../terminal-tail-read'
 import type { RuntimeTerminalProjection } from '../../orca-runtime-core'
 import { DEFAULT_TERMINAL_READ_LIMIT } from '../../terminal-tail-limits'
-import { HeadlessEmulator } from '../../../daemon/headless-emulator'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import {
   projectTerminalTailLines,
   projectTerminalVisibleLines

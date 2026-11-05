@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
 import { deferred, makeDeferred, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 import {

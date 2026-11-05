@@ -4,8 +4,11 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
-import { extractLastOsc7Uri, extractOscScanTail } from '../../../daemon/osc7-uri-extraction'
-import { parseFileUriPathParts } from '../../../daemon/osc7-file-uri'
+import {
+  extractLastOsc7Uri,
+  extractOscScanTail
+} from '../../../daemon/emulation/osc7-uri-extraction'
+import { parseFileUriPathParts } from '../../../daemon/emulation/osc7-file-uri'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'

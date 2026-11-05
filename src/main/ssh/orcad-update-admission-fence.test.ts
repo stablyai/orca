@@ -34,7 +34,7 @@ vi.mock('./orcad-local-build-hash', () => ({
 
 import { execCommand } from './remote-exec/remote-exec-command'
 import { preflightInstalledOrcad } from '../managed-server/install/orcad-remote-preflight'
-import { PROTOCOL_VERSION } from '../daemon/daemon-protocol-version'
+import { PROTOCOL_VERSION } from '../daemon/protocol/daemon-protocol-version'
 import { acquireInstallLock } from '../managed-server/install/remote-install-lock'
 import { writeAtomicOrcadRemoteRecord } from '../managed-server/install/orcad-remote-record-file'
 import { deployOrcad } from './orcad-remote-deploy'

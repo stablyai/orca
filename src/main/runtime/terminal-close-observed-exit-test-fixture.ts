@@ -1,9 +1,9 @@
 import { rmSync } from 'node:fs'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
+import { DaemonPtyRouter } from '../daemon/providers/routing/daemon-pty-router'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness
-} from '../daemon/daemon-pty-adapter-test-harness'
+} from '../daemon/providers/adapter/testing/daemon-pty-adapter-test-harness'
 import { startLateExitHarness } from '../ipc/pty/daemon-late-exit-test-fixture'
 import { bindProviderListeners } from '../ipc/pty/provider/bind-listeners'
 import { finishPtyShutdown } from '../ipc/pty/provider/liveness'

@@ -5,7 +5,7 @@ import {
   getLocalAutomaticWorkStatus,
   localTerminalLimit,
   resumeLocalAutomaticWork
-} from '../../../daemon/daemon-automatic-work-resume'
+} from '../../../daemon/providers/lifecycle/daemon-automatic-work-resume'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'

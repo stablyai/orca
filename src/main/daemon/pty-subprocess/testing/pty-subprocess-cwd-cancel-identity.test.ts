@@ -1,0 +1,89 @@
+import type * as PtySpawnValidationTypes from '../../../providers/working-directory-validation'
+// Recovery keys off the daemon’s cancellation identity; a different error takes terminal-closing rollback.
+import { describe, expect, it, vi } from 'vitest'
+import type * as LocalPtyUtils from '../../../providers/local-pty/local-pty-executable-spawn'
+
+const {
+  spawnMock,
+  isPwshAvailableMock,
+  validateWorkingDirectoryMock,
+  validateWorkingDirectoryAsyncMock,
+  resolveUnixShellPathMock,
+  resolveAgentForegroundProcessMock
+} = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  isPwshAvailableMock: vi.fn(),
+  resolveUnixShellPathMock: vi.fn((shellPath: string) => shellPath),
+  resolveAgentForegroundProcessMock: vi.fn(),
+  validateWorkingDirectoryMock: vi.fn(),
+  validateWorkingDirectoryAsyncMock: vi.fn()
+}))
+
+vi.mock('node-pty', () => ({ spawn: spawnMock }))
+vi.mock('../../../pty/shell-startup/pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
+
+vi.mock('../../../providers/local-pty/local-pty-executable-spawn', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalPtyUtils>()
+  return {
+    ...actual,
+    resolveUnixShellPath: resolveUnixShellPathMock
+  }
+})
+
+vi.mock('../../../providers/working-directory-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidationTypes>()
+  return {
+    ...actual,
+    validateWorkingDirectory: validateWorkingDirectoryMock,
+    validateWorkingDirectoryAsync: validateWorkingDirectoryAsyncMock
+  }
+})
+
+vi.mock('../../../providers/agent-foreground-process', () => ({
+  resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
+    const value = await resolveAgentForegroundProcessMock(...args)
+    return value && typeof value === 'object' && 'available' in value
+      ? value
+      : { available: true, processName: value }
+  }
+}))
+
+vi.mock('../../../providers/windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: () => new Set([12345]),
+  isWindowsPtyJobReadable: () => true
+}))
+
+import { createPtySubprocess } from '../pty-subprocess'
+import { TerminalAttachCanceledError } from '../../protocol/daemon-errors'
+import { WorkingDirectoryValidationAbortedError } from '../../../providers/working-directory-validation'
+import { useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+
+describe('createPtySubprocess cwd cancellation identity', () => {
+  useDaemonPtySubprocessEnv({
+    spawnMock,
+    isPwshAvailableMock,
+    resolveUnixShellPathMock,
+    resolveAgentForegroundProcessMock,
+    validateWorkingDirectoryMock
+  })
+
+  it('reports a canceled cwd probe as an attach cancellation, not a spawn failure', async () => {
+    const cwd = process.platform === 'win32' ? 'C:\\Volumes\\dead\\repo' : '/Volumes/dead/repo'
+    validateWorkingDirectoryAsyncMock.mockRejectedValue(
+      new WorkingDirectoryValidationAbortedError(cwd)
+    )
+    const abort = new AbortController()
+    abort.abort()
+
+    await expect(
+      createPtySubprocess({
+        sessionId: 'canceled-cwd-session',
+        cols: 80,
+        rows: 24,
+        cwd,
+        cancelSignal: abort.signal
+      })
+    ).rejects.toThrow(TerminalAttachCanceledError)
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+})
