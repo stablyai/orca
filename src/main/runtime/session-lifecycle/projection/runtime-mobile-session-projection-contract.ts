@@ -46,6 +46,7 @@ export type RuntimeMobileSessionProjectionHost = {
     getRows: (paneKey: string, terminalHandle: string | null) => AgentStatusIpcPayload[]
   ): RuntimeAgentRowSnapshot | null
   getTrackedTitle(ptyId: string | null): string | null
+  getSessionCustomTitle?(sessionId: string): string | null
   /** Display-only clear of a PTY's native title; every title/status read here is display. */
   getTitleDisplayClear(ptyId: string | null): TitleDisplayClear | null
   issuePtyHandle(pty: RuntimePtyWorktreeRecord): string

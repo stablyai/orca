@@ -1,4 +1,5 @@
 import type { StructuredHostStatus } from '../../../../shared/agent-hook-listener/listener-event'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
@@ -31,5 +32,6 @@ export type RuntimeWorktreeAgentSource = Pick<AgentStatusIpcPayload, 'subagents'
   updatedAt: number
   /** Projected by the structured session host; `owned` rows stay fresh past the staleness window. */
   structuredHost?: StructuredHostStatus
+  providerSession?: AgentProviderSessionMetadata
   programStatus?: ProgramStatusFacet
 }

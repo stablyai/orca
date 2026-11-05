@@ -4,7 +4,10 @@ import {
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
-import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import {
+  effectiveAgentStatusOwnerType,
+  type AgentStatusEntry
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeMobileSessionClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type {
@@ -19,9 +22,13 @@ import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
-import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
+import {
+  buildProjectedMobileTerminalClientTab,
+  finalizeRuntimeMobileSessionTabsResult
+} from './runtime-mobile-session-result-finalization'
 import { withStructuredChatStatus } from './runtime-mobile-structured-tab-status'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
+import { resolveManualTerminalTitle } from './manual-terminal-title'
 import {
   getLatestAgentCandidateTitle,
   getLeafDisplayRecord,
@@ -66,19 +73,12 @@ export function projectRuntimeMobileSessionTabs(
       statusRowsByPaneKey = new Map()
       statusRowsByTerminalHandle = new Map()
       for (const row of host.getStatusSnapshot()) {
-        const paneRows = statusRowsByPaneKey.get(row.paneKey)
-        if (paneRows) {
-          paneRows.push(row)
-        } else {
-          statusRowsByPaneKey.set(row.paneKey, [row])
-        }
+        statusRowsByPaneKey.set(row.paneKey, [...(statusRowsByPaneKey.get(row.paneKey) ?? []), row])
         if (row.terminalHandle) {
-          const handleRows = statusRowsByTerminalHandle.get(row.terminalHandle)
-          if (handleRows) {
-            handleRows.push(row)
-          } else {
-            statusRowsByTerminalHandle.set(row.terminalHandle, [row])
-          }
+          statusRowsByTerminalHandle.set(row.terminalHandle, [
+            ...(statusRowsByTerminalHandle.get(row.terminalHandle) ?? []),
+            row
+          ])
         }
       }
     }
@@ -176,8 +176,10 @@ export function projectRuntimeMobileSessionTabs(
     const ownerRecord = resolvePaneAgentOwnerRecord({
       launchAgent: launchOwnerAgent,
       hookAgent:
-        tab.agentStatus?.agentType ??
+        effectiveAgentStatusOwnerType(tab.agentStatus) ??
+        hookAgentStatus?.paneOwner?.agent ??
         hookAgentStatus?.agentType ??
+        retainedAgentStatus?.paneOwner?.agent ??
         retainedAgentStatus?.payload.agentType ??
         null
     })
@@ -185,13 +187,29 @@ export function projectRuntimeMobileSessionTabs(
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
     const liveTitle = trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title
-    const agentTitle = normalizeCompatibleAgentTitleForOwner(liveTitle, ownerAgent, ownerOptions)
-    // Preserve desktop ranking over fresher main titles; window emits generated names only while shown.
-    const title = resolveTerminalTabTitle({ ...tab, title: agentTitle }, true, agentTitle)
+    // Why: agents repaint their title constantly, so a user's rename must outrank it.
+    const manualTitle = resolveManualTerminalTitle(liveLeafPty ?? pty, syncedTab, tab)
+    const normalizedLiveTitle = normalizeCompatibleAgentTitleForOwner(
+      liveTitle,
+      ownerAgent,
+      ownerOptions
+    )
+    // Why: the desktop's ranking over main's fresher live title; the window sends a generated
+    // name only while the desktop shows it, so it is passed as enabled.
+    const desktopTitle = resolveTerminalTabTitle(
+      { ...tab, title: normalizedLiveTitle },
+      true,
+      normalizedLiveTitle
+    )
+    const title = manualTitle ?? desktopTitle
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Renderer status may precede hook session identity; native chat still needs a transcript address.
     const rendererStatusAgent =
-      resolveCompatibleAgentTypeForOwner(tab.agentStatus?.agentType, ownerAgent, ownerOptions) ??
+      resolveCompatibleAgentTypeForOwner(
+        effectiveAgentStatusOwnerType(tab.agentStatus),
+        ownerAgent,
+        ownerOptions
+      ) ??
       ownerAgent ??
       undefined
     const hookSessionAgent = resolveCompatibleAgentTypeForOwner(
@@ -268,11 +286,8 @@ export function projectRuntimeMobileSessionTabs(
         retainedAgentStatus,
         getHookRowsForPane
       )
-    const projectedStatusEntry = projectedAgentStatus.agentStatus as
-      | (AgentStatusEntry & { turnCompletedAt?: number })
-      | undefined
-    const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
-      projectedStatusEntry ?? {}
+    const projectedStatusEntry = projectedAgentStatus.agentStatus as (AgentStatusEntry & { turnCompletedAt?: number }) | undefined
+    const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } = projectedStatusEntry ?? {}
     const rawTurnCompletedAt =
       hookAgentStatus?.live?.payload.turnCompletedAt ??
       selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
@@ -284,36 +299,31 @@ export function projectRuntimeMobileSessionTabs(
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
-    tabs.push({
-      type: 'terminal',
-      id: tab.id,
-      parentTabId: tab.parentTabId,
-      leafId: tab.leafId,
+    const clientTab = buildProjectedMobileTerminalClientTab({
+      tab,
       title,
-      ...(tab.customTitle !== undefined ? { customTitle: tab.customTitle } : {}),
-      // A paired desktop re-ranks the title with its own generated name; the session name must reach it.
-      ...projectRuntimeMobileSessionTitle(snapshot, tab, host),
-      ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
-      // Bind identity to the handle's live owner, never a stale persisted surface.
-      ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),
-      ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
-      ...(launchAgent ? { launchAgent } : {}),
-      ...clientAgentStatus,
-      ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
-      ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
-      ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
-      ...(tab.color != null ? { color: tab.color } : {}),
-      ...(tab.isPinned ? { isPinned: true } : {}),
-      ...(tab.viewMode ? { viewMode: tab.viewMode } : {}),
-      ...(tab.launchDraft ? { launchDraft: tab.launchDraft } : {}),
-      ...(tab.launchDraftCreatedAt !== undefined
-        ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }
-        : {}),
-      isActive: tab.isActive,
-      ...(terminalHandle
-        ? { status: 'ready' as const, terminal: terminalHandle }
-        : { status: 'pending-handle' as const, terminal: null })
+      normalizedLiveTitle,
+      liveTitleEvidence,
+      manualTitle,
+      syncedTabCustomTitle: syncedTab?.customTitle,
+      providerSessionIds: [
+        (liveLeafPty ?? pty)?.providerSessionId,
+        projectedStatusEntry?.providerSession?.id ?? hookProviderSession?.id,
+        retainedAgentStatus?.providerSession?.id ?? syncedTab?.aiVaultTitle?.sessionId
+      ],
+      getSessionCustomTitle: host.getSessionCustomTitle,
+      incarnationId: terminalPty?.incarnationId,
+      launchAgent,
+      clientAgentStatus,
+      turnCompletedAt,
+      terminalHandle
     })
+    // Session name fields stay authoritative for a paired desktop; custom titles stay on the projected tab.
+    tabs.push(
+      clientTab.type === 'terminal'
+        ? { ...clientTab, ...projectRuntimeMobileSessionTitle(snapshot, tab, host) }
+        : clientTab
+    )
   }
   return finalizeRuntimeMobileSessionTabsResult({ snapshot, tabs }, host)
 }

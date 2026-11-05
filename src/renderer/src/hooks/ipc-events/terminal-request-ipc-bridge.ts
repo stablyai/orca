@@ -62,9 +62,18 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 recordInteraction: false,
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
-        const pendingStartup = data.command
+        const hasPendingStartupOptions = Boolean(
+          data.command ||
+          data.env ||
+          data.envToDelete ||
+          data.launchConfig ||
+          data.resumeProviderSession ||
+          data.launchToken ||
+          data.startupCommandDelivery
+        )
+        const pendingStartup = hasPendingStartupOptions
           ? {
-              command: data.command,
+              command: data.command ?? '',
               ...(data.env ? { env: data.env } : {}),
               ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
               ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),

@@ -41,14 +41,16 @@ export type MobileAiVaultResumeLaunch = {
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
   resumeProviderSession?: AgentProviderSessionMetadata
+  title?: string | null
 }
 
 export function buildMobileAiVaultResumeLaunch(args: {
-  session: AiVaultResumeCommandSession
+  session: AiVaultResumeCommandSession & { customTitle?: string | null }
   workspacePlatform: NodeJS.Platform
   hostTerminalWindowsShell?: string | null
   settings?: AiVaultResumeLaunchSettings | null
 }): MobileAiVaultResumeLaunch {
+  const title = args.session.customTitle?.trim() || null
   const commandOverride = args.settings?.agentCmdOverrides?.[args.session.agent]
   const startup =
     buildAiVaultRemoteResumeStartup(args.session, commandOverride) ??
@@ -70,7 +72,8 @@ export function buildMobileAiVaultResumeLaunch(args: {
     ...(startup.launchConfig && isTuiAgent(args.session.agent)
       ? { launchAgent: args.session.agent }
       : {}),
-    ...(providerSession ? { resumeProviderSession: providerSession } : {})
+    ...(providerSession ? { resumeProviderSession: providerSession } : {}),
+    title
   }
 }
 
@@ -103,6 +106,7 @@ export async function resumeAiVaultSessionInTerminal(
       ...(launch.resumeProviderSession
         ? { resumeProviderSession: launch.resumeProviderSession }
         : {}),
+      ...(launch.title ? { title: launch.title } : {}),
       ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {}),
       activate: false,
       select: true,

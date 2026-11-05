@@ -71,6 +71,12 @@ export function preserveRuntimeAuthoredWorkspaceSessionFields(
       closedTerminalTabTombstonesByTabId: prior.closedTerminalTabTombstonesByTabId
     }
   }
+  if (next.sessionCustomTitles === undefined && prior?.sessionCustomTitles !== undefined) {
+    result = {
+      ...result,
+      sessionCustomTitles: prior.sessionCustomTitles
+    }
+  }
   // Union write-once markers or omitted renderer maps would respawn defaults on every attach.
   result = keepPtyIncarnationsForUnchangedBindings(result, prior)
   return unionWriteOnceDefaultTerminalTabsApplied(result, prior)

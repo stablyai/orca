@@ -133,6 +133,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       rowSources,
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary,
+      getSessionCustomTitle: (sessionId) => this.getSessionCustomTitle(sessionId),
+      getTabCustomTitle: (tabId) => this.tabs.get(tabId)?.customTitle?.trim() || null,
       conversationName: this.orchestrationSenderNames.agentRowNamer()
     })
 

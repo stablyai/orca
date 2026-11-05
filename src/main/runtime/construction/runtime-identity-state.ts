@@ -50,6 +50,7 @@ import type {
   RuntimePtyController
 } from '../runtime-pty-controller-contract'
 import type {
+  PendingMobileTerminalCreate,
   RuntimeLeafRecord,
   PtyRegistrationClaim,
   RuntimeWorktreeTerminalSleepState
@@ -225,17 +226,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   // #7587: hidden renderer graph-sync can time out after a live PTY spawns.
   // In-flight mobile creates let the spawn publish main-side; ordinary renderer spawns must not.
-  protected pendingMobileTerminalCreatesByKey = new Map<
-    string,
-    {
-      activate: boolean
-      paired: boolean
-      selectIfNoActiveTab: boolean
-      viewMode?: 'terminal' | 'chat'
-      /** Retain launch delivery over bare renderer PTYs; silent settlement would lose the command (STA-3214). */
-      startupCommand?: string
-    }
-  >()
+  protected pendingMobileTerminalCreatesByKey = new Map<string, PendingMobileTerminalCreate>()
 
   protected mobileSessionTabListeners = new Set<{
     listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void
@@ -316,6 +307,12 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       pendingRegistration: boolean
     }
   >()
+
+  // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
+  protected readonly lastPointedMessageSequenceByHandle = new Map<string, number>()
+
+  // Why: a waiter can reserve an older row while a newer row advances the sequence watermark.
+  protected readonly pointedMessageIdsByHandle = new Map<string, Set<string>>()
 
   protected readonly mailPointerRepointScheduler = new MailPointerRepointScheduler((handle) =>
     this.repointPendingMessagesForHandle(handle)

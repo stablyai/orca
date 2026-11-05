@@ -1,3 +1,19 @@
+import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
+import type {
+  RuntimeTerminalRename,
+  RuntimeTerminalSetPaneTitle
+} from '../../../shared/runtime-terminal-contracts'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalCreateOptions } from '../terminal/launch/terminal-create-options'
+import {
+  prepareHostAgentTerminalLaunch,
+  resolveAgentTerminalCreateOptions
+} from '../terminal/launch/runtime-agent-terminal-startup'
+import {
+  renameHeadlessTerminal,
+  type HeadlessTerminalRenameHost
+} from './headless-terminal-title-write'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
 import type {
   RemoveManagedWorktreeOptions,
@@ -223,5 +239,72 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
       expectedHead,
       hostId
     )
+  }
+  async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
+    // Switch point: a terminal main owns is renamed in main's layout, with or without a window.
+    const mainRename = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? await this.renameTerminalInMainLayout(handle, title)
+      : null
+    if (mainRename) {
+      return mainRename
+    }
+    return renameHeadlessTerminal(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: helper is this method body; leaf and session stores stay protected on the class.
+      this as unknown as HeadlessTerminalRenameHost,
+      handle,
+      title
+    )
+  }
+
+  protected rememberManualTerminalTitle(tabId: string | null, title: string | null): void {
+    if (!tabId) {
+      return
+    }
+    const inMemoryTab = this.tabs.get(tabId)
+    if (!inMemoryTab) {
+      return
+    }
+    inMemoryTab.customTitle = title
+    if (title !== null) {
+      inMemoryTab.title = title
+    }
+  }
+
+  /** Names one pane of a split; the tab's own name is untouched. */
+  async setPaneTitle(handle: string, title: string | null): Promise<RuntimeTerminalSetPaneTitle> {
+    // Switch point: a pane main owns is named in main's layout, with or without a window.
+    const mainTitle = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? await this.setPaneTitleInMainLayout(handle, title)
+      : null
+    if (mainTitle) {
+      return mainTitle
+    }
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    if (!this.getAvailableAuthoritativeWindow() || !this.notifier?.setPaneTitle) {
+      throw new Error('Pane titles require a running Orca desktop with set-pane-title support')
+    }
+    const normalizedTitle = title?.trim() || null
+    if (!this.notifier.setPaneTitle(leaf.tabId, leaf.leafId, normalizedTitle)) {
+      throw new Error('runtime_unavailable')
+    }
+    return { handle, tabId: leaf.tabId, leafId: leaf.leafId, title: normalizedTitle }
+  }
+
+  async resolveAgentTerminalCreateOptions(
+    workspace: TerminalWorkspaceLaunchScope,
+    opts: TerminalCreateOptions,
+    sessionOptions: Readonly<Record<string, SessionOptionValue>> | undefined = opts.sessionOptions
+  ): Promise<TerminalCreateOptions> {
+    const resolvedLaunch = await resolveAgentTerminalCreateOptions(
+      workspace,
+      opts,
+      {
+        store: this.store,
+        hostIdentity: this.runtimeId,
+        toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
+      },
+      sessionOptions
+    )
+    return prepareHostAgentTerminalLaunch(workspace, opts, resolvedLaunch, this.accounts)
   }
 }

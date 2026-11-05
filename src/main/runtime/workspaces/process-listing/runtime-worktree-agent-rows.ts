@@ -28,6 +28,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
   terminalTitleEvidenceByWorktreeId: ReadonlyMap<string, readonly RuntimeTerminalTitleEvidence[]>
   orchestrationByPaneKey: Record<string, OrchestrationDisplay> | null | undefined
   getSummary: RuntimeWorktreePsSummaryLookup
+  getSessionCustomTitle?: (sessionId: string) => string | null
+  getTabCustomTitle?: (tabId: string) => string | null
   conversationName?: (source: RuntimeWorktreeAgentSource) => string | null
 }): void {
   const { rowSources } = args
@@ -43,6 +45,12 @@ export function attachRuntimeWorktreeAgentRows(args: {
       continue
     }
     const orchestration = args.orchestrationByPaneKey?.[source.paneKey]
+    const customTitle =
+      (source.tabId ? args.getTabCustomTitle?.(source.tabId)?.trim() : null) ||
+      (source.providerSession?.id
+        ? args.getSessionCustomTitle?.(source.providerSession.id)?.trim()
+        : null) ||
+      null
     const parentPaneKey = orchestration?.parentPaneKey ?? null
     // Like desktop lineage, a listed child running in its parent's tab does not own that tab's name.
     const parent = parentPaneKey ? rowSources.get(parentPaneKey) : undefined
@@ -55,8 +63,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
       ...(source.workingMode ? { workingMode: source.workingMode } : {}),
       agentType: source.agentType,
       prompt: source.prompt,
-      taskTitle: orchestration?.taskTitle ?? null,
-      displayName: orchestration?.displayName ?? null,
+      taskTitle: customTitle ?? orchestration?.taskTitle ?? null,
+      displayName: customTitle ?? orchestration?.displayName ?? null,
       ...(conversationName ? { conversationName } : {}),
       lastAssistantMessage: source.lastAssistantMessage,
       toolName: source.toolName,
