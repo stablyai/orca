@@ -3,14 +3,14 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { hasWindowsNativeBatchReferenceViolation } from './windows-native-batch-reference-policy'
 
-const initializer = 'config/scripts/initialize-windows-native-toolchain.mjs'
-const benchmark = 'config/scripts/benchmark-windows-native-preparation.mjs'
-const observer = 'config/scripts/windows-native-benchmark-observer.mjs'
+const initializer = 'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs'
+const benchmark = 'config/scripts/native-build/windows/benchmark-windows-native-preparation.mjs'
+const observer = 'config/scripts/native-build/windows/windows-native-benchmark-observer.mjs'
 const metadataCallers = [
-  'config/scripts/node-server-change-scope.mjs',
-  'config/scripts/pr-code-change-scope.mjs',
-  'config/scripts/orcad-windows-prebuild-cache.mjs',
-  'config/scripts/windows-native-toolchain-routing.test.mjs'
+  'config/scripts/node-server/qualification/node-server-change-scope.mjs',
+  'config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
+  'config/scripts/orcad-distribution/prebuilds/orcad-windows-prebuild-cache.mjs',
+  'config/scripts/workflow/source-routing/windows-native-toolchain-routing.test.mjs'
 ]
 const capture = 'capture-windows-native-environment.cmd'
 const initializerSource = `
@@ -24,7 +24,7 @@ const initializerSource = `
 `
 const benchmarkSource = `
   import { runProcess } from '@orca/process-host'
-  const source = 'config/scripts/${capture}'
+  const source = 'config/scripts/native-build/windows/${capture}'
   await runProcess({ program: process.execPath, args: [source] })
 `
 
@@ -47,7 +47,9 @@ describe('reviewed Windows native batch references', () => {
   )
 
   it.each(metadataCallers)('allows the fixed source path as metadata in %s', (relativePath) => {
-    expect(hasViolation(relativePath, `const source = 'config/scripts/${capture}'`)).toBe(false)
+    expect(
+      hasViolation(relativePath, `const source = 'config/scripts/native-build/windows/${capture}'`)
+    ).toBe(false)
   })
 
   it('accepts the process-host executor through its imported alias', () => {
@@ -78,7 +80,10 @@ describe('reviewed Windows native batch references', () => {
 
   it.each(metadataCallers)('rejects other batch metadata in %s', (relativePath) => {
     expect(
-      hasViolation(relativePath, `const sources = ['config/scripts/${capture}', 'other.cmd']`)
+      hasViolation(
+        relativePath,
+        `const sources = ['config/scripts/native-build/windows/${capture}', 'other.cmd']`
+      )
     ).toBe(true)
     expect(hasViolation(relativePath, `const command = 'VsDevCmd.bat'`)).toBe(true)
   })
@@ -145,13 +150,13 @@ describe('reviewed Windows native batch references', () => {
     expect(
       hasViolation(
         relativePath,
-        `const capture = 'config/scripts/${capture}'; runProcess({ program: capture })`
+        `const capture = 'config/scripts/native-build/windows/${capture}'; runProcess({ program: capture })`
       )
     ).toBe(true)
     expect(
       hasViolation(
         relativePath,
-        `import { runProcess as execute } from '@orca/process-host'; const capture = 'config/scripts/${capture}'; execute({ program: capture })`
+        `import { runProcess as execute } from '@orca/process-host'; const capture = 'config/scripts/native-build/windows/${capture}'; execute({ program: capture })`
       )
     ).toBe(true)
   })

@@ -153,7 +153,6 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       session.clearRestoredSnapshotBaseline()
     }
     if (session.rendererOrderedPtyId === exitedPtyId) {
-      session.resumeEscapeGap.reset()
       session.rendererOrderedPtyId = null
       session.rendererOrderedSeq = null
     }
@@ -161,6 +160,8 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       session.rendererChannelSeqPtyId = null
       session.rendererChannelSeq = null
     }
+    session.streamPosition.reset(exitedPtyId)
+    session.skippedQueryCarry = null
   }
 
   session.observeRendererOrderedSeqRegression = function (meta: PtyDataMeta | undefined): void {
@@ -182,6 +183,8 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
         session.rendererOrderedPtyId = null
         session.rendererOrderedSeq = null
       }
+      session.streamPosition.reset(ptyId)
+      session.skippedQueryCarry = null
     }
     session.rendererChannelSeq = meta.seq
   }

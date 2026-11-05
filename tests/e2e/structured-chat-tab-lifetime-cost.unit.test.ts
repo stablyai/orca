@@ -276,7 +276,8 @@ it('rolls back rejected membership, retains legacy Retry presentation and accept
   const { store: profile, authority } = await fixture()
   const { root, B, rejectVisibility, savedIds } =
     await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
-  const { installFakeAppEnvironment } = await import('../../config/scripts/vitest-host-ports-setup')
+  const { installFakeAppEnvironment } =
+    await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   installFakeAppEnvironment({ getPath: () => root })
   const rig = await openAuthorityRuntime(
     await authorityProfile([], { records: [B], visible: [] }, profile)
@@ -453,7 +454,7 @@ it.each([10, 100])(
     const { root, B } =
       await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
     const { installFakeAppEnvironment } =
-      await import('../../config/scripts/vitest-host-ports-setup')
+      await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
     installFakeAppEnvironment({ getPath: () => root })
     const ids = Array.from({ length: p }, (_, i) =>
       i === 0 ? B : `pending-${i.toString().padStart(5, '0')}`

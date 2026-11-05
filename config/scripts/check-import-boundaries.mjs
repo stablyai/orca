@@ -3,9 +3,9 @@ import { pathToFileURL } from 'node:url'
 import {
   collectProcessHostSources,
   main as checkProcessHostImports
-} from './check-process-host-imports.mjs'
+} from './static-analysis/process-boundaries/check-process-host-imports.mjs'
 import { main as checkCompatBoundaryImports } from './check-compat-boundary-imports.mjs'
-import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
+import { collectModuleSpecifiers } from './static-analysis/module-requests/static-module-specifiers.mjs'
 
 export function main(
   root = process.cwd(),

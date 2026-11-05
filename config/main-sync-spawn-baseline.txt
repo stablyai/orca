@@ -1,12 +1,11 @@
 # Synchronous child-process launches in production src/main and src/shared, per file: uses of
 # execFileSync/spawnSync/execSync, runProcessSync and the repo sync wrappers listed in
-# config/scripts/check-main-sync-spawn-ratchet.mjs (synchronous ACL rewrites and grants, which
+# config/scripts/static-analysis/process-boundaries/check-main-sync-spawn-ratchet.mjs (synchronous ACL rewrites and grants, which
 # can block on a whole directory subtree).
 # Some entries run in the daemon or orcad process, or are test harnesses outside the test-path
 # conventions. This is a RATCHET: counts may only go DOWN.
 # Prune after removing launches: pnpm check:main-sync-spawn-ratchet --prune
 1 src/main/agent-hooks/installer-utils.ts
-2 src/main/browser/cookies/sources/browser-cookie-key.ts
 1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
 1 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 1 src/main/claude-accounts/runtime-auth-service.ts

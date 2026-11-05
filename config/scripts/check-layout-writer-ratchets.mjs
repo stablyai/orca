@@ -12,7 +12,7 @@ import {
   parseCountBaseline,
   pruneCountBaseline,
   totalCount
-} from './ratchet-baseline.mjs'
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet layout writers downward: main Store/session-partition writes and renderer layout/selection keys/spreads.
 // Exclude existing-entry content updates; shorthand counts only in store writes, and deleted symbols stay compiler-owned.

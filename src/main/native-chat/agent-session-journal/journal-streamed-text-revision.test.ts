@@ -48,7 +48,7 @@ it('keeps image, goal and streamed text commits FULL on the rollback owner', asy
   const image = { id: 'image', type: 'imageGeneration' }
   for (const body of [
     text('assistant', 'Generating image'),
-    codexImageItemBody({ ...image, status: 'inProgress' }),
+    codexImageItemBody({ ...image, status: 'in_progress' }),
     codexImageItemBody({ ...image, status: 'completed', result: 'AAAA' }),
     text('assistant', 'Image preview unavailable'),
     { ...text('assistant', 'Goal'), sentAs: 'goal' as const },

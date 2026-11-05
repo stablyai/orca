@@ -2,7 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
+import {
+  readTrackedSources,
+  runEntryRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Bare-ID writes can edit the wrong local/SSH twin; require RepoHostTarget/HostWorktreeTarget and allow counts only to decrease.
 // Match parameter names regardless of types; known limit: IDs inside object parameters are not detected.

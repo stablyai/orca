@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { collectTerminalPerfRows } from './terminal-perf-report-annotations.mjs'
+import { collectTerminalPerfRows } from './performance/terminal-reporting/terminal-perf-report-annotations.mjs'
 
 const USAGE =
   'Usage: node config/scripts/compare-benchmark-artifacts.mjs --baseline <path> --candidate <path> [--title <title>] [--output <path>] [--json-output <path>] [--higher-is-better <metric-key> ...]'

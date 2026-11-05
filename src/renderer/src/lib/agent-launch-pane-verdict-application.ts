@@ -58,7 +58,7 @@ export function applyAgentLaunchPaneVerdict(event: AgentLaunchPaneVerdictEvent):
         })
       } else {
         state.setTabAgentLaunchPane(tabId, undefined)
-        applyClosedTerminalLeafNotice(tabId, leafId)
+        applyClosedTerminalLeafNotice(tabId, leafId, 'cleanup')
       }
     }
   }

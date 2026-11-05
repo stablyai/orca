@@ -4,7 +4,7 @@ import {
   DESKTOP_STABLE_TAG,
   agentStateRulesTag,
   isAgentStateRulesTag
-} from './release-tag-patterns.mjs'
+} from './release/versioning/release-tag-patterns.mjs'
 
 const RULES_TAGS = [agentStateRulesTag(1, 'next'), agentStateRulesTag(1, 'stable')]
 const rulesRelease = (tag, extra = {}) => ({

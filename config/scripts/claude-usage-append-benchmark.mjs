@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { cpus, release, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
 import {
   describeClaudeUsageBenchmarkTooling,
   loadClaudeUsageBenchmarkScanner,

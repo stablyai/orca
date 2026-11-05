@@ -4,8 +4,11 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
-import { collectAddedLineRanges, overlapsAddedLines } from './check-changed-code-quality.mjs'
-import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
+import {
+  collectAddedLineRanges,
+  overlapsAddedLines
+} from './preflight/changed-checks/check-changed-code-quality.mjs'
+import { resolvePullRequestDiffBase } from './git/pr-diff-base/git-pull-request-diff-base.mjs'
 import { runAuditTool } from './run-audit-tool.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:astro|tsx?|jsx?|mts|mjs|[hH][tT][mM][lL])$/

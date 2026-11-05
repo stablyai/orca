@@ -139,6 +139,8 @@ export type WorkspaceCleanupDismissArgs = {
   dismissals: WorkspaceCleanupDismissal[]
   /** Removed worktrees' persisted dismissals are dead weight; prune them. */
   removedWorktreeIds?: string[]
+  /** Exact dismissal keys to drop (Stop ignoring / Undo); host-qualified, so other hosts' rows stay ignored. */
+  restoredDismissalKeys?: string[]
 }
 
 const LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
