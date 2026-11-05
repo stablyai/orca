@@ -32,9 +32,9 @@ vi.mock('node:os', async () => {
 import {
   prepareSystemConfigForFreshRuntimeMirror,
   resolveCodexConfigMirrorSourceDirectory,
-  syncSystemConfigIntoLegacySharedCodexHome,
   syncSystemConfigIntoManagedCodexHome
 } from './codex-config-mirror'
+import { syncSystemConfigIntoLegacySharedCodexHome } from './codex-legacy-shared-home-sync'
 import '../../trust/toml/config-toml-trust'
 import { escapeTomlBasicString as escapeTomlString } from '../toml/config-toml-syntax'
 
