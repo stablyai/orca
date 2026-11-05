@@ -734,7 +734,8 @@ jobs:
           git checkout "$WORKFLOW_SHA" -- \
             tests/e2e/golden-source-control-open-diff.spec.ts \
             tests/e2e/golden-terminal-file-link.spec.ts \
-            tests/e2e/golden-worktree-create-switch.spec.ts
+            tests/e2e/golden-worktree-create-switch.spec.ts \
+            tests/e2e/helpers/e2e-completed-onboarding-profile.ts
 
       - name: Install native build tools
         if: runner.os == 'Linux'
