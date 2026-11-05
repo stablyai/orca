@@ -44,7 +44,7 @@ export class TerminalStreamPosition {
   // xterm's parser is known to be at ground: it parsed nothing yet, or Orca's own CAN-led write last.
   private grounded = true
   private skippedUnknown = 0
-  // The escape tail the replay that set `seq` re-armed ('' for none); null when stream bytes set it.
+  // The escape tail re-armed by the replay that set `seq` ('' for none); null after stream bytes.
   private replayedEscapeTail: string | null = null
 
   /**
@@ -175,22 +175,25 @@ export function streamDeliveryOf(
 }
 
 /**
- * The incomplete escape the bytes cut off before `data` end in, '' when none is known. Known only
- * when main proved the chunk starts at ground and the cut-off bytes hold no 8-bit C1 control,
- * which the scan does not follow (main's boundary tracking treats them the same way).
+ * The incomplete escape the bytes cut off before `data` end in, '' when none is known. The scan
+ * starts where the state is known: the chunk's start when main proved it is at ground, otherwise
+ * the cut-off bytes' first ESC, past which the state no longer depends on what preceded it.
+ * Cut-off bytes holding an 8-bit C1 control are not scanned; main's boundary tracking does not
+ * follow C1 either.
  */
 function escapeTailBeforeCut(
   data: string,
   delivered: { data: string; midEscape?: true | 'unknown' }
 ): string {
-  if (delivered.midEscape || !delivered.data.endsWith(data)) {
+  if (!delivered.data.endsWith(data)) {
     return ''
   }
   const cutOff = delivered.data.slice(0, delivered.data.length - data.length)
-  if (/[\u0080-\u009f]/.test(cutOff)) {
+  const from = delivered.midEscape ? cutOff.indexOf('\x1b') : 0
+  if (from === -1 || /[\u0080-\u009f]/.test(cutOff)) {
     return ''
   }
-  const tail = extractPartialEscapeTail(cutOff)
+  const tail = extractPartialEscapeTail(cutOff.slice(from))
   return tail.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : tail
 }
 

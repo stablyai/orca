@@ -1,6 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushAsyncTicks, renderHeadlessBuffer } from '../test-fixtures/pty-connection-test-async'
+import { Terminal } from '@xterm/headless'
+import { flushAsyncTicks, writeHeadlessTerminal } from '../test-fixtures/pty-connection-test-async'
 import {
   createMockTransport,
   createPane,
@@ -106,8 +107,28 @@ async function connectLocalPane(visible: boolean) {
   }
 }
 
-async function screenOf(chunks: string[]): Promise<string> {
-  return (await renderHeadlessBuffer(chunks, 120, 8)).join('\n')
+// What xterm drew from these writes, and whether it parsed the frame's ESC[?2026h whole.
+async function paneOf(
+  chunks: string[]
+): Promise<{ prompt: boolean; tail: boolean; synchronized: boolean }> {
+  const term = new Terminal({ cols: 120, rows: 8, allowProposedApi: true })
+  try {
+    for (const chunk of chunks) {
+      await writeHeadlessTerminal(term, chunk)
+    }
+    const lines: string[] = []
+    for (let index = 0; index < term.buffer.active.length; index++) {
+      lines.push(term.buffer.active.getLine(index)?.translateToString(true) ?? '')
+    }
+    const screen = lines.join('\n')
+    return {
+      prompt: screen.includes('> prompt'),
+      tail: screen.includes(TAIL),
+      synchronized: term.modes.synchronizedOutputMode
+    }
+  } finally {
+    term.dispose()
+  }
 }
 
 describe('snapshot cut inside an escape (#33766)', () => {
@@ -123,7 +144,7 @@ describe('snapshot cut inside an escape (#33766)', () => {
     await restoreTerminalTestGlobals()
   })
 
-  async function revealAfterCut(pendingEscapeTailAnsi: string | undefined): Promise<string> {
+  async function revealAfterCut(pendingEscapeTailAnsi: string | undefined) {
     const frame = `\x1b[${RESUMED}`
     // The snapshot's seq lands after the frame's ESC [.
     vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue({
@@ -142,22 +163,22 @@ describe('snapshot cut inside an escape (#33766)', () => {
     await flushAsyncTicks(20)
     drive.disposable.dispose()
     vi.useRealTimers()
-    return screenOf(drive.written())
+    return paneOf(drive.written())
   }
 
   it('completes the escape from the cut chunk when the snapshot re-arms none', async () => {
-    const screen = await revealAfterCut(undefined)
-    expect({ prompt: screen.includes('> prompt'), tail: screen.includes(TAIL) }).toEqual({
+    expect(await revealAfterCut(undefined)).toEqual({
       prompt: true,
-      tail: false
+      tail: false,
+      synchronized: true
     })
   })
 
   it('keeps the tail that finishes the escape the snapshot re-armed', async () => {
-    const screen = await revealAfterCut('\x1b[')
-    expect({ prompt: screen.includes('> prompt'), tail: screen.includes(TAIL) }).toEqual({
+    expect(await revealAfterCut('\x1b[')).toEqual({
       prompt: true,
-      tail: false
+      tail: false,
+      synchronized: true
     })
   })
 })
