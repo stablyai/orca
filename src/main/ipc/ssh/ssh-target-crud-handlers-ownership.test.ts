@@ -3,7 +3,6 @@ import type { SshTarget } from '../../../shared/ssh-types'
 
 const mocks = vi.hoisted(() => {
   const state: { target?: SshTarget } = {}
-  const settings: { hostSettingOverrides?: Record<string, Record<string, string>> } = {}
   return {
     handle: vi.fn(),
     remove: vi.fn(),
@@ -12,10 +11,7 @@ const mocks = vi.hoisted(() => {
     updateTarget: vi.fn(),
     setMutations: vi.fn(),
     closeTunnel: vi.fn(async () => {}),
-    disconnect: vi.fn(async () => {}),
-    send: vi.fn(),
-    settings,
-    updateSettings: vi.fn()
+    disconnect: vi.fn(async () => {})
   }
 })
 
@@ -34,9 +30,8 @@ vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', () => ({
   closeOrcadManagedTunnel: mocks.closeTunnel
 }))
 vi.mock('./ssh-ipc-context', () => ({
-  getCurrentMainWindow: () => ({ isDestroyed: () => false, webContents: { send: mocks.send } }),
-  connectionManager: { disconnect: mocks.disconnect },
-  persistedStore: { getSettings: () => mocks.settings, updateSettings: mocks.updateSettings }
+  getCurrentMainWindow: () => null,
+  connectionManager: { disconnect: mocks.disconnect }
 }))
 
 const { registerSshTargetCrudHandlers } = await import('./ssh-target-crud-handlers')
@@ -120,26 +115,5 @@ describe('SSH target CRUD against managed orcad targets', () => {
     })
     expect(mocks.updateTarget).toHaveBeenCalledWith('ssh-1', { label: 'renamed' })
     expect(mocks.addTarget.mock.calls[0]?.[0]).not.toHaveProperty('orcadProvisioning')
-  })
-
-  it('tells the renderer and drops the host rename however the target is removed', async () => {
-    mocks.state.target = target
-    mocks.settings.hostSettingOverrides = {
-      'ssh:ssh-1': { displayLabel: 'Renamed', defaultWorktreeLocation: '/srv' },
-      'ssh:ssh-2': { displayLabel: 'Other' }
-    }
-    // The paired-client and CLI path (ssh.removeTarget RPC) shares this mutation with Settings.
-    await mocks.setMutations.mock.calls.at(-1)?.[0].remove('ssh-1')
-    expect(mocks.remove).toHaveBeenCalledWith('ssh-1')
-    expect(mocks.send).toHaveBeenCalledWith('ssh:target-removed', { targetId: 'ssh-1' })
-    expect(mocks.updateSettings).toHaveBeenCalledWith(
-      {
-        hostSettingOverrides: {
-          'ssh:ssh-1': { defaultWorktreeLocation: '/srv' },
-          'ssh:ssh-2': { displayLabel: 'Other' }
-        }
-      },
-      { notifyListeners: true }
-    )
   })
 })

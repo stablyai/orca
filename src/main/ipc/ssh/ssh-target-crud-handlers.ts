@@ -23,10 +23,7 @@ import {
   isManagedOrcadSshTarget,
   isRuntimeOwnedSshTarget
 } from '../../ssh/connection/ssh-connection-store'
-import { connectionManager, getCurrentMainWindow, persistedStore } from './ssh-ipc-context'
-import { broadcastSshTargetRemoved } from './ssh-renderer-broadcast'
-import { clearHostSettingOverride } from '../../../shared/host-setting-overrides'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
+import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-target-fingerprint'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
@@ -153,22 +150,7 @@ async function removeSshTarget(id: string): Promise<void> {
   assertNotRuntimeOwned(id, 'removed')
   assertNotManagedServerHost(id)
   await removeRegisteredSshTarget(id)
-  broadcastSshTargetRemoved(getCurrentMainWindow, id)
-  dropRemovedSshTargetDisplayLabel(id)
   requestDesktopBrowserBridgeReconcile()
-}
-
-// Drop the orphaned rename so a stale label cannot outlive its host.
-function dropRemovedSshTargetDisplayLabel(targetId: string): void {
-  if (!persistedStore) {
-    return
-  }
-  const settings = persistedStore.getSettings()
-  const current = settings.hostSettingOverrides
-  const next = clearHostSettingOverride(settings, toSshExecutionHostId(targetId), 'displayLabel')
-  if (current && next !== current) {
-    persistedStore.updateSettings({ hostSettingOverrides: next }, { notifyListeners: true })
-  }
 }
 
 export function registerSshTargetCrudHandlers(): void {
