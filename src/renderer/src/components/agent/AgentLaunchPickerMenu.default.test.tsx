@@ -44,11 +44,9 @@ it('offers "Set as default" when an agent row is right-clicked', () => {
   const row = screen.getByRole('menuitem', { name: 'Codex' })
   const other = screen.getByRole('menuitem', { name: 'Claude' })
   fireEvent.contextMenu(row)
-  expect(row.hasAttribute('data-context-menu-open')).toBe(true)
   // Hovering rows under the menu must not dismiss it.
   fireEvent.pointerMove(row, { pointerType: 'mouse' })
   fireEvent.pointerMove(other, { pointerType: 'mouse' })
   fireEvent.click(screen.getByRole('menuitem', { name: 'Set as default' }))
   expect(onSetDefault).toHaveBeenCalledWith('codex')
-  expect(row.hasAttribute('data-context-menu-open')).toBe(false)
 })

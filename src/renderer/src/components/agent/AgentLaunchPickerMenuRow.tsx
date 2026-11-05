@@ -84,7 +84,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
   isDefault?: boolean
   /** Base agent rows only; setup rows are presets, not default-agent choices. */
-  onSetDefault?: () => void
+  onSetDefault?: (agent: AgentPickerEntry['agent']) => void
 }) {
   useUiLanguageRevision()
   const setupId = useId()
@@ -100,9 +100,11 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     : undefined
   const closeMenu = useDropdownMenuClose()
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
+  const setDefault =
+    onSetDefault && entry.surfaces.length ? () => onSetDefault(entry.agent) : undefined
   if (setupDisabled) {
     return (
-      <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={onSetDefault}>
+      <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={setDefault}>
         <DropdownMenuItem
           disabled={disabled || !entry.surfaces.length}
           data-search-default={searchDefault || undefined}
@@ -190,7 +192,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
           }}
         >
           {/* Why: the anchor is a Radix sub-trigger's asChild child, so the context menu wraps the label instead. */}
-          <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={onSetDefault}>
+          <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={setDefault}>
             <Button asChild variant="menu-launch" size="menu">
               <span>
                 <AgentIcon agent={entry.agent} size={14} />

@@ -214,9 +214,7 @@ export function AgentLaunchPickerMenu({
               runLaunch={runLaunch}
               onSelectAgent={onSelectAgent}
               isDefault={defaultAgent === entry.agent}
-              onSetDefault={
-                onSetDefault && entry.surfaces.length ? () => onSetDefault(entry.agent) : undefined
-              }
+              onSetDefault={onSetDefault}
               shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
             />
           )
