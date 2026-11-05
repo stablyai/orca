@@ -238,6 +238,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   }
   const wakesQueued = new Set<string>()
   const afterCommit = (sessionId: string, journal: AgentSessionJournal): void => {
+    if (sessions.get(sessionId)?.journal !== journal) {
+      return
+    }
     input.deliveryOrder.reconcile(sessionId, journal)
     const work = hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId)
     if (

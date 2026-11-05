@@ -1,10 +1,15 @@
+import { finishJournalStepsAsync } from '../agent-session-journal/journal-reconstruction-steps'
+import {
+  flatMapAgentSessionSteps,
+  mapAgentSessionSteps
+} from '../../../shared/agent-session/agent-session-projection-steps'
 import { projectSavedChatContextItems } from '../agent-session-saved-prompt-text'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../shared/agent-session/agent-session-wire'
-import { agentSessionCurrentContextRows } from '../../../shared/agent-session/agent-session-context-clear'
-import { buildAgentSessionHandoffContext } from '../../../shared/agent-session-handoff-context'
+import { agentSessionCurrentContextRowsSteps } from '../../../shared/agent-session/agent-session-context-clear'
+import { buildAgentSessionHandoffContextSteps } from '../../../shared/agent-session-handoff-context'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessageSteps } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { formatWorkerTranscriptMessage } from '../../../shared/worker-transcript-text'
 import { toLinuxPath } from '../../../shared/wsl-paths'
 import { writeAgentSessionContextSnapshot } from '../agent-session-context-snapshots'
@@ -15,7 +20,8 @@ import type {
 
 export function continuationContextReader(
   deps: StructuredAgentSessionHostDeps,
-  conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
+  conversation: (id: string) => Promise<StructuredAgentSessionHostSession>,
+  sessions?: ReadonlyMap<string, StructuredAgentSessionHostSession>
 ) {
   return async (input: {
     sessionId: string
@@ -33,24 +39,54 @@ export function continuationContextReader(
       return { status: 'superseded' }
     }
     const session = await conversation(input.sessionId)
-    const record = sourceConversation()
-    const snapshot = session.journal.snapshot()
-    if (
-      !record ||
-      snapshot.cursor.epoch !== input.expectedCursor.epoch ||
-      snapshot.cursor.sequence < input.expectedCursor.sequence
-    ) {
+    const journal = session.journal
+    const current = () => {
+      const cursor = journal.cursor()
+      return cursor.epoch === input.expectedCursor.epoch &&
+        cursor.sequence >= input.expectedCursor.sequence &&
+        (!sessions || sessions.get(input.sessionId) === session)
+        ? sourceConversation()
+        : null
+    }
+    // An epoch mismatch is a point read, never a reason to reconstruct discarded context.
+    if (!current()) {
       return { status: 'superseded' }
     }
-    const context = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
-    const messages = projectStructuredAgentSessionMessages(
-      context.items,
-      [],
-      context.submissions,
-      projectSavedChatContextItems
-    )
-    const capturedText = buildAgentSessionHandoffContext(messages)
-    const text = messages.map(formatWorkerTranscriptMessage).join('\n\n')
+    const capture = await journal.readInOrder(async () => {
+      if (!current()) {
+        return null
+      }
+      await finishJournalStepsAsync(journal.preparePublicReadSteps())
+      const snapshot = journal.snapshot()
+      const context = await finishJournalStepsAsync(
+        agentSessionCurrentContextRowsSteps(snapshot.items, snapshot.submissions)
+      )
+      const messages = await finishJournalStepsAsync(
+        projectStructuredAgentSessionMessageSteps(
+          context.items,
+          [],
+          context.submissions,
+          projectSavedChatContextItems,
+          function* (items) {
+            return yield* flatMapAgentSessionSteps(items, (item) =>
+              projectSavedChatContextItems([item])
+            )
+          }
+        )
+      )
+      const capturedText = await finishJournalStepsAsync(
+        buildAgentSessionHandoffContextSteps(messages)
+      )
+      const text = (
+        await finishJournalStepsAsync(mapAgentSessionSteps(messages, formatWorkerTranscriptMessage))
+      ).join('\n\n')
+      const record = current()
+      return record ? { record, capturedText, text } : null
+    })
+    if (!capture) {
+      return { status: 'superseded' }
+    }
+    const { record, capturedText, text } = capture
     if (!text.trim()) {
       return { status: 'current', capturedText: '' }
     }

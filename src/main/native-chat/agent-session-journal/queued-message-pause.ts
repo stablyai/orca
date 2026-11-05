@@ -305,7 +305,15 @@ export function resumableQueuePause(
   pauses: readonly DerivedQueuePause[],
   cards: readonly QueueCard[]
 ): DerivedQueuePause | null {
+  return finishJournalSteps(resumableQueuePauseSteps(pauses, cards))
+}
+
+export function* resumableQueuePauseSteps(
+  pauses: readonly DerivedQueuePause[],
+  cards: readonly QueueCard[]
+): Generator<void, DerivedQueuePause | null> {
   for (const card of cards) {
+    yield
     if (card.state === 'returned') {
       return null
     }

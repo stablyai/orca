@@ -12,10 +12,7 @@ import type { AgentChildWorkView } from '../../../shared/agent-status/child-work
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fields'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
-import {
-  structuredQueueSendGate,
-  tryReadQueuePublication
-} from './structured-agent-session-queued-publication'
+import { queuePublicationReaders } from './structured-agent-session-queued-publication'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -105,14 +102,11 @@ export class StructuredAgentSessionClientDelivery {
     )
     this.waitForSendSettlement = this.sendSettlement.wait
     this.subscribers = new AgentSessionSubscribers({
+      readJournal: (id) => sessions.get(id)?.journal,
       isCurrentJournal: (id, journal) => sessions.get(id)?.journal === journal,
       readCommands: (sessionId, commandsOnRequest) =>
         this.readCommands(sessionId, commandsOnRequest),
-      readQueuePublication: (sessionId) =>
-        tryReadQueuePublication(
-          sessions.get(sessionId)?.journal,
-          structuredQueueSendGate({ store: this.deps().store, sessions }, sessionId)
-        ),
+      ...queuePublicationReaders(sessions, () => this.deps().store),
       readBackgroundTasks,
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
       readCurrentWork: (sessionId, journal) => this.currentWork(sessionId, journal)
@@ -302,16 +296,21 @@ export class StructuredAgentSessionClientDelivery {
     sessionId: string,
     journal: AgentSessionJournal,
     activity = true,
-    inputChanged = true
+    inputChanged = true,
+    prepared = false
   ): void {
+    if (this.sessions.get(sessionId)?.journal !== journal) {
+      return
+    }
     if (
+      !prepared &&
       this.afterReplacementProjection(sessionId, journal, () =>
         this.publishJournal(sessionId, journal, activity, inputChanged)
       )
     ) {
       return
     }
-    this.statusFeed.publish(sessionId, journal)
+    this.statusFeed.publish(sessionId, journal, { prepared })
     this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
     // Observe completion after status projection updates, even without subscribers for background chats.
     this.turnCompletionFeed.observe(sessionId, journal)

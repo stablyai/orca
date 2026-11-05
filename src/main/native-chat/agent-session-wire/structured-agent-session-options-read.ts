@@ -1,3 +1,4 @@
+import { readJournalDerived } from '../agent-session-journal/journal-derived-read'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../agent-model-catalog/agent-model-catalog-operation'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../agent-model-catalog/agent-model-catalog-listing-waiters'
@@ -235,6 +236,13 @@ export async function readStructuredAgentSessionOptions(
     }
   }
   const recovery = await readStructuredSessionRecovery(session, context, sessionId)
+  const journalFields = await readJournalDerived(session.journal, function* () {
+    const source = yield* session.journal.threadGoalSourceSteps()
+    const usage = capabilities?.contextUsage
+      ? yield* session.journal.contextUsageSteps()
+      : undefined
+    return { goal: source.goal, usage }
+  })
   return {
     ...options,
     ...recovery,
@@ -275,11 +283,11 @@ export async function readStructuredAgentSessionOptions(
     acceptsImages: capabilities?.imagePrompts === true && options.acceptsImages !== false,
     ...structuredAgentSessionThreadGoalReport(
       capabilities?.threadGoal === true,
-      session.journal.threadGoal(),
+      journalFields.goal,
       contextFloor
     ),
     ...(capabilities?.contextUsage
-      ? { contextUsage: { current: session.journal.contextUsage(), ...contextFloor } }
+      ? { contextUsage: { current: journalFields.usage!, ...contextFloor } }
       : {})
   }
 }

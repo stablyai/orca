@@ -1,3 +1,11 @@
+import {
+  finishAgentSessionSteps,
+  indexAgentSessionSteps,
+  mapAgentSessionSteps,
+  flatMapAgentSessionSteps,
+  filterAgentSessionSteps,
+  sortAgentSessionSteps
+} from '../agent-session/agent-session-projection-steps'
 import { agentJournalSubmissionKey } from '../agent-session/journal/agent-session-journal-item-key'
 import {
   agentJournalItemPosition,
@@ -9,11 +17,11 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../agent-session/journal/agent-session-journal-types'
-import { inSendOrder } from './native-chat-send-order'
+import { inSendOrderSteps } from './native-chat-send-order'
 import {
-  stoppedTurnOpeners,
-  structuredAgentTurnAnchors
-} from './transcript/native-chat-turn-membership'
+  stoppedTurnOpenerSteps,
+  structuredAgentTurnAnchorSteps
+} from './transcript/native-chat-turn-anchors'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 
 /** Presentation key for the notice after a send stopped before execution. */
@@ -52,16 +60,32 @@ export function placeStoppedSends(
   submissions: readonly AgentJournalSubmission[],
   stopped: ReadonlyMap<string, AgentJournalSubmission>
 ): (itemId: string) => StoppedSendPlace {
-  const anchors = structuredAgentTurnAnchors(items, submissions)
-  const turnOpenedBy = new Map([...anchors].map(([turnItemId, anchorId]) => [anchorId, turnItemId]))
-  const itemsById = new Map(items.map((item) => [item.itemId, item]))
-  const pastTurnsOpenedBefore = turnEndsByOpener(items, anchors, itemsById)
-  const unloadedTurnOpened = unloadedTurnsOpened(items, itemsById, stopped)
-  const sentBefore = [...stopped.values()].some(
-    (submission) => submission.submittedSequence === undefined
+  return finishAgentSessionSteps(placeStoppedSendSteps(items, submissions, stopped))
+}
+export function* placeStoppedSendSteps(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[],
+  stopped: ReadonlyMap<string, AgentJournalSubmission>
+): Generator<void, (itemId: string) => StoppedSendPlace> {
+  const anchors = yield* structuredAgentTurnAnchorSteps(items, submissions)
+  const turnOpenedBy = yield* indexAgentSessionSteps(
+    yield* mapAgentSessionSteps(
+      anchors,
+      ([turnItemId, anchorId]) => [anchorId, turnItemId] as const
+    )
   )
-    ? latestRowsSentBefore(submissions, itemsById)
-    : undefined
+  const itemsById = yield* indexAgentSessionSteps(
+    yield* mapAgentSessionSteps(items, (item) => [item.itemId, item] as const)
+  )
+  const pastTurnsOpenedBefore = yield* turnEndsByOpenerSteps(items, anchors, itemsById)
+  const unloadedTurnOpened = yield* unloadedTurnsOpenedSteps(items, itemsById, stopped)
+  const sentBefore =
+    (yield* filterAgentSessionSteps(
+      stopped.values(),
+      (submission) => submission.submittedSequence === undefined
+    )).length > 0
+      ? yield* latestRowsSentBeforeSteps(submissions, itemsById)
+      : undefined
   return (itemId) => {
     const item = itemsById.get(itemId)
     if (!item) {
@@ -102,18 +126,21 @@ function openerPosition(
 }
 
 /** When a stopped opener’s turn record is unloaded, place it before the first loaded turn row unless that row is already user-owned. */
-function unloadedTurnsOpened(
+function* unloadedTurnsOpenedSteps(
   items: readonly AgentJournalRenderItem[],
   itemsById: ReadonlyMap<string, AgentJournalRenderItem>,
   stopped: ReadonlyMap<string, AgentJournalSubmission>
-): ReadonlyMap<string, AgentJournalPosition> {
-  const openers = new Map(
-    [...stoppedTurnOpeners([...stopped.values()])].filter(
+): Generator<void, ReadonlyMap<string, AgentJournalPosition>> {
+  const takenBack = yield* mapAgentSessionSteps(stopped.values(), (send) => send)
+  const openers = yield* indexAgentSessionSteps(
+    yield* filterAgentSessionSteps(
+      yield* stoppedTurnOpenerSteps(takenBack),
       ([turnItemId]) => !itemsById.has(turnItemId)
     )
   )
   const first = new Map<string, AgentJournalPosition | null>()
   for (const item of items) {
+    yield
     const turnItemId = item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : undefined
     if (turnItemId === undefined || !openers.has(turnItemId) || first.has(turnItemId)) {
       continue
@@ -122,8 +149,8 @@ function unloadedTurnsOpened(
     const position = agentJournalItemPosition(item)
     first.set(turnItemId, userRow ? null : { ...position, index: position.index - 0.5 })
   }
-  return new Map(
-    [...openers].flatMap(([turnItemId, itemId]) => {
+  return yield* indexAgentSessionSteps(
+    yield* flatMapAgentSessionSteps(openers, ([turnItemId, itemId]) => {
       const position = first.get(turnItemId)
       return position ? [[itemId, position] as const] : []
     })
@@ -131,11 +158,11 @@ function unloadedTurnsOpened(
 }
 
 /** For each point, advance beyond all turns opened before it. One pass plus a binary search per point; these sends opened no turn themselves. */
-function turnEndsByOpener(
+function* turnEndsByOpenerSteps(
   items: readonly AgentJournalRenderItem[],
   anchors: ReadonlyMap<string, string>,
   itemsById: ReadonlyMap<string, AgentJournalRenderItem>
-): (from: AgentJournalPosition) => AgentJournalPosition {
+): Generator<void, (from: AgentJournalPosition) => AgentJournalPosition> {
   const lastOfTurn = new Map<string, AgentJournalPosition>()
   const reach = (turnItemId: string, position: AgentJournalPosition): void => {
     const last = lastOfTurn.get(turnItemId)
@@ -144,6 +171,7 @@ function turnEndsByOpener(
     }
   }
   for (const item of items) {
+    yield
     const position = agentJournalItemPosition(item)
     if (anchors.has(item.itemId)) {
       reach(item.itemId, position)
@@ -152,16 +180,19 @@ function turnEndsByOpener(
       reach(item.turnScope.turnItemId, position)
     }
   }
-  const turns = [...anchors].flatMap(([turnItemId, anchorId]) => {
+  let turns = yield* flatMapAgentSessionSteps(anchors, ([turnItemId, anchorId]) => {
     const opener = itemsById.get(anchorId)
     const record = itemsById.get(turnItemId)
     const last = lastOfTurn.get(turnItemId)
     return opener && record && last ? [{ opener: openerPosition(opener, record), last }] : []
   })
-  turns.sort((left, right) => compareAgentJournalPositions(left.opener, right.opener))
+  turns = yield* sortAgentSessionSteps(turns, (left, right) =>
+    compareAgentJournalPositions(left.opener, right.opener)
+  )
   // The furthest row of the turns opened up to each one.
   const furthest: AgentJournalPosition[] = []
   for (const turn of turns) {
+    yield
     const previous = furthest.at(-1)
     furthest.push(
       previous && compareAgentJournalPositions(previous, turn.last) > 0 ? previous : turn.last
@@ -186,19 +217,19 @@ function turnEndsByOpener(
 }
 
 /** Legacy-only latest loaded send before each submission, by submittedAt with stable ties; removable after the submittedSequence host floor. */
-function latestRowsSentBefore(
+function* latestRowsSentBeforeSteps(
   submissions: readonly AgentJournalSubmission[],
   itemsById: ReadonlyMap<string, AgentJournalRenderItem>
-): ReadonlyMap<string, AgentJournalRenderItem> {
-  const byAcceptTime = submissions
-    .map((submission, order) => ({ submission, order }))
-    .sort(
-      (left, right) =>
-        left.submission.submittedAt - right.submission.submittedAt || left.order - right.order
-    )
+): Generator<void, ReadonlyMap<string, AgentJournalRenderItem>> {
+  const byAcceptTime = yield* sortAgentSessionSteps(
+    yield* mapAgentSessionSteps(submissions, (submission, order) => ({ submission, order })),
+    (left, right) =>
+      left.submission.submittedAt - right.submission.submittedAt || left.order - right.order
+  )
   const before = new Map<string, AgentJournalRenderItem>()
   let latest: AgentJournalRenderItem | undefined
   for (const { submission } of byAcceptTime) {
+    yield
     const key = agentJournalSubmissionKey(submission.clientMessageId)
     if (latest) {
       before.set(key, latest)
@@ -218,20 +249,29 @@ export function keepStoppedSendsInSendOrder(
   stopped: ReadonlyMap<string, AgentJournalSubmission>,
   shown: ReadonlySet<string>
 ): boolean {
+  return finishAgentSessionSteps(keepStoppedSendsInSendOrderSteps(messages, stopped, shown))
+}
+export function* keepStoppedSendsInSendOrderSteps(
+  messages: NativeChatMessage[],
+  stopped: ReadonlyMap<string, AgentJournalSubmission>,
+  shown: ReadonlySet<string>
+): Generator<void, boolean> {
   const indexById = new Map<string, number>()
-  messages.forEach((message, index) => {
+  for (const [index, message] of messages.entries()) {
+    yield
     if (shown.has(message.id)) {
       indexById.set(message.id, index)
     }
-  })
-  const taken = [...stopped].flatMap(([itemId, submission]) => {
+  }
+  const taken = yield* flatMapAgentSessionSteps(stopped, ([itemId, submission]) => {
     const index = indexById.get(itemId)
     return index === undefined ? [] : [{ index, submission }]
   })
-  const sent = inSendOrder(taken, ({ submission }) => submission)
+  const sent = yield* inSendOrderSteps(taken, ({ submission }) => submission)
   let floor: AgentJournalPosition | undefined
   let moved = false
   for (const { index } of sent) {
+    yield
     const message = messages[index]!
     const position = message.journalPosition
     if (!position) {
@@ -253,7 +293,13 @@ export function withStopRowsAfterStoppedSends(
   messages: readonly NativeChatMessage[],
   stopped: ReadonlySet<string>
 ): NativeChatMessage[] {
-  return messages.flatMap((message, index) =>
+  return finishAgentSessionSteps(withStopRowsAfterStoppedSendSteps(messages, stopped))
+}
+export function* withStopRowsAfterStoppedSendSteps(
+  messages: readonly NativeChatMessage[],
+  stopped: ReadonlySet<string>
+): Generator<void, NativeChatMessage[]> {
+  return yield* flatMapAgentSessionSteps(messages, (message, index) =>
     stopped.has(message.id) && !stopped.has(messages[index + 1]?.id ?? '')
       ? [
           message,

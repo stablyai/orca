@@ -1,3 +1,4 @@
+import { finishAgentSessionSteps, filterAgentSessionSteps } from './agent-session-projection-steps'
 // Project every journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
 
 import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
@@ -13,9 +14,9 @@ import {
 import { iterateProcessOutputLines } from '../process-output-field-scanner'
 import { agentJournalSubmissionKey } from './journal/agent-session-journal-item-key'
 import { dispatchWasWithdrawn } from './requests/structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from './view/structured-agent-session-message-projection'
-import { projectNativeChatTranscriptMessages } from '../native-chat/transcript/native-chat-transcript-projection'
-import { nativeChatTurnMembership } from '../native-chat/transcript/native-chat-turn-membership'
+import { projectStructuredAgentSessionMessageSteps } from './view/structured-agent-session-message-projection'
+import { projectNativeChatTranscriptMessageSteps } from '../native-chat/transcript/native-chat-transcript-projection'
+import { nativeChatJournalTurnKeySteps } from '../native-chat/transcript/native-chat-turn-membership'
 
 /** Cap previews on the host because the rail hides prose beyond two lines. */
 export const AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS = 200
@@ -111,9 +112,17 @@ export function nativeChatTurnReplyPreviews(
   turnKeys: readonly (string | undefined)[],
   only?: string
 ): Map<string, string> {
+  return finishAgentSessionSteps(nativeChatTurnReplyPreviewSteps(messages, turnKeys, only))
+}
+export function* nativeChatTurnReplyPreviewSteps(
+  messages: readonly Pick<NativeChatMessage, 'role' | 'blocks'>[],
+  turnKeys: readonly (string | undefined)[],
+  only?: string
+): Generator<void, Map<string, string>> {
   const replies = new Map<string, string>()
   // Newest first, so a long agentic turn reads one message, not every aside before it.
   for (let index = messages.length - 1; index >= 0; index -= 1) {
+    yield
     const turnKey = turnKeys[index]
     if (
       turnKey === undefined ||
@@ -149,28 +158,38 @@ export function projectAgentSessionConversationOutline(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[]
 ): AgentSessionConversationOutlineEntry[] {
+  return finishAgentSessionSteps(projectAgentSessionConversationOutlineSteps(items, submissions))
+}
+export function* projectAgentSessionConversationOutlineSteps(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[]
+): Generator<void, AgentSessionConversationOutlineEntry[]> {
   const sequences = new Map<string, number>()
   for (const item of items) {
+    yield
     if (item.body.kind === 'message' && item.body.role === 'user') {
       sequences.set(item.itemId, item.sequence)
     }
   }
   // Served to clients of every version, so a send a Stop took back stays out, as it always was.
-  const stopped = new Set(
-    submissions
-      .filter((submission) => dispatchWasWithdrawn(submission))
-      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
-  )
+  const stopped = new Set<string>()
+  for (const submission of submissions) {
+    if (dispatchWasWithdrawn(submission)) {
+      stopped.add(agentJournalSubmissionKey(submission.clientMessageId))
+    }
+    yield
+  }
   const entries: AgentSessionConversationOutlineEntry[] = []
-  const transcript = projectNativeChatTranscriptMessages(
-    // Unchanged on the wire: a not-sent row ticks only once a desktop loads its page.
-    projectStructuredAgentSessionMessages(items, [], submissions).filter(
+  const transcript = yield* projectNativeChatTranscriptMessageSteps(
+    yield* filterAgentSessionSteps(
+      yield* projectStructuredAgentSessionMessageSteps(items, [], submissions),
       (message) => !message.unsent
     )
   )
-  const { turnKeys } = nativeChatTurnMembership(transcript, { items, submissions })
-  const replies = nativeChatTurnReplyPreviews(transcript, turnKeys)
+  const { turnKeys } = yield* nativeChatJournalTurnKeySteps(transcript, { items, submissions })
+  const replies = yield* nativeChatTurnReplyPreviewSteps(transcript, turnKeys)
   for (const [index, message] of transcript.entries()) {
+    yield
     const sequence = sequences.get(message.id)
     if (
       sequence === undefined ||

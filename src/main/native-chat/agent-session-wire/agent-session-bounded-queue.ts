@@ -6,18 +6,17 @@ import type { QueuePublication } from './structured-agent-session-queued-publica
 
 export function boundedQueuePublication(publication: QueuePublication): QueuePublication {
   const cards = publication.queuedMessages
-  if (jsonBytes(cards) <= BOUNDED_FRAME_CONTENT_BUDGET_BYTES) {
-    return publication
-  }
-  let fits = 0
-  let fitsNot = cards.length
-  while (fitsNot - fits > 1) {
-    const middle = Math.floor((fits + fitsNot) / 2)
-    if (jsonBytes(cards.slice(0, middle)) <= BOUNDED_FRAME_CONTENT_BUDGET_BYTES) {
-      fits = middle
-    } else {
-      fitsNot = middle
+  let bytes = 2
+  let count = 0
+  for (const card of cards) {
+    const next = jsonBytes(card) + (count ? 1 : 0)
+    if (bytes + next > BOUNDED_FRAME_CONTENT_BUDGET_BYTES) {
+      break
     }
+    bytes += next
+    count++
   }
-  return { ...publication, queuedMessages: cards.slice(0, fits) }
+  return count === cards.length
+    ? publication
+    : { ...publication, queuedMessages: cards.slice(0, count) }
 }

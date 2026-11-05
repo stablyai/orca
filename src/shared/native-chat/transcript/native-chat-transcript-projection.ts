@@ -1,12 +1,17 @@
+import {
+  finishAgentSessionSteps,
+  filterAgentSessionSteps,
+  sortAgentSessionSteps
+} from '../../agent-session/agent-session-projection-steps'
 // Share ordered/filter/fold projection with the host conversation outline so visible user rows agree with renderers.
 // Journal subagent rows belong to separate agent transcripts and fold beside their spawn, never into the conversation.
 
 import { nativeChatSemanticRowId, type NativeChatMessage } from '../native-chat-types'
 import { compareAgentJournalPositions } from '../../agent-session/journal/agent-session-journal-position'
 import { agentJournalItemSubagentId } from '../../agent-session/journal/agent-session-journal-producer'
-import { stripNoiseMessages } from '../native-chat-noise'
-import { foldToolMessages } from '../tools/native-chat-tool-fold'
-import { foldSubagentItems } from './native-chat-subagent-items'
+import { isNoiseMessage } from '../native-chat-noise'
+import { foldToolMessageSteps } from '../tools/native-chat-tool-fold'
+import { foldSubagentItemSteps } from './native-chat-subagent-items'
 import { nativeChatTurnMembership, type NativeChatTurnJournal } from './native-chat-turn-membership'
 
 /** Timestamp, then id. A null timestamp sorts first so a source that cannot supply
@@ -77,7 +82,16 @@ export type NativeChatTranscriptProjection = {
 const NO_SUBAGENT_ROWS: ReadonlyMap<string, readonly NativeChatSubagentRow[]> = new Map()
 
 function projectRows(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
-  return stripNoiseMessages(foldToolMessages(foldSubagentItems(messages)))
+  return finishAgentSessionSteps(projectRowSteps(messages))
+}
+
+function* projectRowSteps(
+  messages: readonly NativeChatMessage[]
+): Generator<void, NativeChatMessage[]> {
+  return yield* filterAgentSessionSteps(
+    yield* foldToolMessageSteps(yield* foldSubagentItemSteps(messages)),
+    (message) => !isNoiseMessage(message)
+  )
 }
 
 /** Preserve canonical sequence, inserting ordinary supplemental rows by their actual clocks. */
@@ -122,7 +136,72 @@ export function projectNativeChatTranscriptMessages(
   compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages,
   order?: (messages: readonly NativeChatMessage[]) => NativeChatMessage[]
 ): NativeChatMessage[] {
-  return projectNativeChatTranscript(messages, compare, undefined, order).conversation
+  return finishAgentSessionSteps(projectNativeChatTranscriptMessageSteps(messages, compare, order))
+}
+
+export function* projectNativeChatTranscriptMessageSteps(
+  messages: readonly NativeChatMessage[],
+  compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages,
+  order?: (messages: readonly NativeChatMessage[]) => NativeChatMessage[]
+): Generator<void, NativeChatMessage[]> {
+  const sorted = order
+    ? order(messages)
+    : yield* orderNativeChatTranscriptEntrySteps(messages, (row) => row, compare)
+  const own = yield* filterAgentSessionSteps(
+    sorted,
+    (message) => agentJournalItemSubagentId(message) === null
+  )
+  return yield* projectRowSteps(own)
+}
+
+export function* orderNativeChatTranscriptEntrySteps<T>(
+  entries: readonly T[],
+  messageOf: (entry: T) => NativeChatMessage,
+  compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages
+): Generator<void, T[]> {
+  let positioned = false
+  for (const entry of entries) {
+    positioned ||= Boolean(messageOf(entry).journalPosition)
+    yield
+  }
+  if (positioned) {
+    return yield* sortAgentSessionSteps(entries, (a, b) => compare(messageOf(a), messageOf(b)))
+  }
+  const canonical: T[] = [],
+    supplemental: T[] = []
+  for (const entry of entries) {
+    const message = messageOf(entry)
+    const target =
+      message.source !== 'transcript' && message.transcriptOrder === undefined
+        ? supplemental
+        : canonical
+    target.push(entry)
+    yield
+  }
+  const orderedCanonical = yield* sortAgentSessionSteps(canonical, (a, b) =>
+    compare(messageOf(a), messageOf(b))
+  )
+  const orderedSupplemental = yield* sortAgentSessionSteps(supplemental, (a, b) =>
+    compareNativeChatMessagesByTime(messageOf(a), messageOf(b))
+  )
+  const ordered: T[] = []
+  let next = 0
+  for (const entry of orderedCanonical) {
+    while (
+      next < orderedSupplemental.length &&
+      compareNativeChatMessagesByTime(messageOf(orderedSupplemental[next]!), messageOf(entry)) < 0
+    ) {
+      ordered.push(orderedSupplemental[next++]!)
+      yield
+    }
+    ordered.push(entry)
+    yield
+  }
+  while (next < orderedSupplemental.length) {
+    ordered.push(orderedSupplemental[next++]!)
+    yield
+  }
+  return ordered
 }
 
 /** Use conversation turn membership for each subagent row, as though it were a parent row at that position. */

@@ -1,4 +1,9 @@
 import {
+  finishAgentSessionSteps,
+  mapAgentSessionSteps,
+  filterAgentSessionSteps
+} from '../../agent-session/agent-session-projection-steps'
+import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
   isToolCallBlock,
@@ -78,11 +83,17 @@ function recordFoldedPosition(target: NativeChatMessage, folded: NativeChatMessa
 
 /** Fold consecutive tool-only messages into their preceding assistant turn. */
 export function foldToolMessages(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
+  return finishAgentSessionSteps(foldToolMessageSteps(messages))
+}
+export function* foldToolMessageSteps(
+  messages: readonly NativeChatMessage[]
+): Generator<void, NativeChatMessage[]> {
   const output: NativeChatMessage[] = []
   const sources = new FoldedToolResultSources(messages)
   let mutableAssistantIndex = -1
   let clonedAssistantIndex = -1
   for (const message of messages) {
+    yield
     if (message.unpairedToolResults) {
       output.push(message)
       mutableAssistantIndex = -1
@@ -93,17 +104,26 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
       const index = mutableAssistantIndex
       const assistant = output[index]
       if (assistant?.role === 'assistant') {
-        const results = message.blocks.filter(isToolResultBlock)
+        const results = yield* filterAgentSessionSteps(message.blocks, isToolResultBlock)
         sources.append(index, assistant, message, results, output.length, output.length)
         if (clonedAssistantIndex !== index) {
-          output[index] = { ...assistant, blocks: [...assistant.blocks] }
+          output[index] = {
+            ...assistant,
+            blocks: yield* mapAgentSessionSteps(assistant.blocks, (block) => block)
+          }
           clonedAssistantIndex = index
         }
-        output[index].blocks.push(...results)
+        for (const block of results) {
+          output[index].blocks.push(block)
+          yield
+        }
         recordFoldedPosition(output[index], message)
         output.push({
           ...message,
-          blocks: message.blocks.filter((block) => !isToolResultBlock(block))
+          blocks: yield* filterAgentSessionSteps(
+            message.blocks,
+            (block) => !isToolResultBlock(block)
+          )
         })
         continue
       }
@@ -118,10 +138,16 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
       }
       sources.append(index, assistant, message, message.blocks, output.length)
       if (clonedAssistantIndex !== index) {
-        output[index] = { ...assistant, blocks: [...assistant.blocks] }
+        output[index] = {
+          ...assistant,
+          blocks: yield* mapAgentSessionSteps(assistant.blocks, (block) => block)
+        }
         clonedAssistantIndex = index
       }
-      output[index]!.blocks.push(...message.blocks)
+      for (const block of message.blocks) {
+        output[index]!.blocks.push(block)
+        yield
+      }
       recordFoldedPosition(output[index]!, message)
       continue
     }
@@ -139,7 +165,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
       clonedAssistantIndex = -1
     }
   }
-  return sources.project(output)
+  return yield* sources.projectSteps(output)
 }
 
 export function splitNativeChatBlocks(blocks: readonly NativeChatBlock[]): {

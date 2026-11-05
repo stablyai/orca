@@ -1,3 +1,4 @@
+import { finishJournalSteps } from '../../../native-chat/agent-session-journal/journal-reconstruction-steps'
 import type { AgentSessionHistoryResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { QueuePublication } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-publication'
@@ -7,7 +8,9 @@ import {
   queuedCardHoldsImage,
   queuedImageSourceIds,
   queuedImageReaderSnapshot,
-  queuedImageReaderEvent
+  queuedImageReaderSnapshotSteps,
+  queuedImageReaderEvent,
+  queuedImageReaderEventSteps
 } from '../../../native-chat/agent-session-wire/agent-session-queued-image-reader'
 import { CLIENT_HISTORY_READER } from '../../../native-chat/agent-session-wire/agent-session-item-wire-form'
 import { utf8Head } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
@@ -27,6 +30,7 @@ export function queuedImageHistoryReader(ctx: QueuedImageReader) {
     : {
         ...CLIENT_HISTORY_READER,
         snapshot: queuedImageReaderSnapshot,
+        snapshotSteps: queuedImageReaderSnapshotSteps,
         queueSourceIds: queuedImageSourceIds
       }
 }
@@ -35,8 +39,10 @@ export function queuedImageSubscriber(ctx: QueuedImageReader) {
     ? {}
     : {
         readHistorySnapshot: queuedImageReaderSnapshot,
+        readHistorySnapshotSteps: queuedImageReaderSnapshotSteps,
         readQueueSourceIds: queuedImageSourceIds,
-        projectJournalEvent: queuedImageReaderEvent
+        projectJournalEvent: queuedImageReaderEvent,
+        projectJournalEventSteps: queuedImageReaderEventSteps
       }
 }
 
@@ -73,18 +79,40 @@ export function projectQueuedImageCardHistory(
   result: AgentSessionHistoryResult,
   ctx: QueuedImageReader
 ): AgentSessionHistoryResult {
-  return readsQueuedImageCards(ctx) || !result.page.queuedMessages
-    ? result
-    : {
-        ...result,
-        page: { ...result.page, queuedMessages: result.page.queuedMessages.map(oldImageControl) }
-      }
+  return finishJournalSteps(projectQueuedImageCardHistorySteps(result, ctx))
+}
+export function* projectQueuedImageCardHistorySteps(
+  result: AgentSessionHistoryResult,
+  ctx: QueuedImageReader
+): Generator<void, AgentSessionHistoryResult> {
+  if (readsQueuedImageCards(ctx) || !result.page.queuedMessages) {
+    return result
+  }
+  const queuedMessages: AgentSessionQueuedMessage[] = []
+  for (const card of result.page.queuedMessages) {
+    queuedMessages.push(oldImageControl(card))
+    yield
+  }
+  return { ...result, page: { ...result.page, queuedMessages } }
 }
 export function projectQueuedImageCardPublication(
   publication: QueuePublication,
   ctx: QueuedImageReader
 ): QueuePublication {
-  return readsQueuedImageCards(ctx)
-    ? publication
-    : { ...publication, queuedMessages: publication.queuedMessages.map(oldImageControl) }
+  return finishJournalSteps(projectQueuedImageCardPublicationSteps(publication, ctx))
+}
+
+export function* projectQueuedImageCardPublicationSteps(
+  publication: QueuePublication,
+  ctx: QueuedImageReader
+): Generator<void, QueuePublication> {
+  if (readsQueuedImageCards(ctx)) {
+    return publication
+  }
+  const queuedMessages: AgentSessionQueuedMessage[] = []
+  for (const card of publication.queuedMessages) {
+    queuedMessages.push(oldImageControl(card))
+    yield
+  }
+  return { ...publication, queuedMessages }
 }

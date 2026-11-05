@@ -1,3 +1,7 @@
+import {
+  finishAgentSessionSteps,
+  mapAgentSessionSteps
+} from '../../agent-session/agent-session-projection-steps'
 // Hosts revise individual subagent rows at spawn positions; readers fold siblings into legacy-shaped roster rows at the first sibling.
 // Shared desktop/mobile grouping supports uncapped spawns and derives disambiguating ordinals without storing them.
 
@@ -75,9 +79,15 @@ const foldedEntries = new WeakMap<NativeChatSubagentBlock, NativeChatSubagentEnt
 export function foldSubagentItems(
   messages: readonly NativeChatMessage[]
 ): readonly NativeChatMessage[] {
+  return finishAgentSessionSteps(foldSubagentItemSteps(messages))
+}
+export function* foldSubagentItemSteps(
+  messages: readonly NativeChatMessage[]
+): Generator<void, readonly NativeChatMessage[]> {
   const groups = new Map<string, NativeChatMessage[]>()
   let any = false
   for (const message of messages) {
+    yield
     const block = subagentItemBlock(message)
     if (block === null) {
       continue
@@ -96,14 +106,16 @@ export function foldSubagentItems(
   }
   const rows = new Map<NativeChatMessage, NativeChatMessage | null>()
   for (const [groupId, members] of groups) {
-    const [first, ...rest] = members
-    rows.set(first!, groupRow(groupId, members))
-    for (const member of rest) {
-      rows.set(member, null)
+    const first = members[0]!
+    rows.set(first, yield* groupRowSteps(groupId, members))
+    for (let index = 1; index < members.length; index++) {
+      rows.set(members[index], null)
+      yield
     }
   }
   const folded: NativeChatMessage[] = []
   for (const message of messages) {
+    yield
     const row = rows.get(message)
     if (row === undefined) {
       folded.push(message)
@@ -114,39 +126,51 @@ export function foldSubagentItems(
   return folded
 }
 
-function groupRow(groupId: string, members: readonly NativeChatMessage[]): NativeChatMessage {
+function* groupRowSteps(
+  groupId: string,
+  members: readonly NativeChatMessage[]
+): Generator<void, NativeChatMessage> {
   const first = members[0]!
   const held = foldedGroups.get(first)
-  if (
-    held &&
-    held.members.length === members.length &&
-    held.members.every((member, index) => member === members[index])
-  ) {
+  let same = held?.members.length === members.length
+  if (same && held) {
+    for (let index = 0; index < members.length; index++) {
+      same &&= held.members[index] === members[index]
+      yield
+    }
+  }
+  if (held && same) {
     return held.row
   }
-  const blocks = members.map((member) => subagentItemBlock(member)!)
+  const blocks = yield* mapAgentSessionSteps(members, (member) => subagentItemBlock(member)!)
   const group: NativeChatSubagentGroupBlock = {
     type: 'subagent-group',
     groupId,
-    agents: labelledEntries(blocks)
+    agents: yield* labelledEntrySteps(blocks)
   }
   const row: NativeChatMessage = { ...first, blocks: [group] }
-  foldedGroups.set(first, { members: [...members], row })
+  foldedGroups.set(first, {
+    members: yield* mapAgentSessionSteps(members, (member) => member),
+    row
+  })
   return row
 }
 
 /** Disambiguate duplicate provider labels with ordinals that avoid existing names, including provider-authored Audit 2. */
-function labelledEntries(blocks: readonly NativeChatSubagentBlock[]): NativeChatSubagentEntry[] {
+function* labelledEntrySteps(
+  blocks: readonly NativeChatSubagentBlock[]
+): Generator<void, NativeChatSubagentEntry[]> {
   const taken = new Set<string>()
   const repeated = new Set<string>()
   for (const block of blocks) {
+    yield
     if (taken.has(block.label)) {
       repeated.add(block.label)
     }
     taken.add(block.label)
   }
   const claimed = new Set<string>()
-  return blocks.map((block) => {
+  return yield* mapAgentSessionSteps(blocks, (block) => {
     let label = block.label
     if (repeated.has(label) && claimed.has(label)) {
       for (let ordinal = 2; taken.has(label) || claimed.has(label); ordinal++) {

@@ -1,10 +1,19 @@
+import {
+  finishAgentSessionSteps,
+  flatMapAgentSessionSteps,
+  sortAgentSessionSteps,
+  mapAgentSessionSteps
+} from './agent-session/agent-session-projection-steps'
 import type {
   NativeChatMessage,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
 } from './native-chat/native-chat-types'
 import { isWordlessProviderFrameBlock } from './native-chat/native-chat-provider-frame-summary'
-import { pairToolBlocks, type NativeChatToolPair } from './native-chat/tools/native-chat-tool-pairs'
+import {
+  pairToolBlockSteps,
+  type NativeChatToolPair
+} from './native-chat/tools/native-chat-tool-pairs'
 import { formatToolInputPreview } from './native-chat/tools/native-chat-tool-summary'
 import { sliceAtCodeUnitLimit } from './surrogate-safe-text-slice'
 import { MAX_CONTEXT_CHARS } from './agent-session/requests/agent-session-context-budget'
@@ -30,11 +39,16 @@ type ConversationMessage = {
 
 /** Budget conversation messages separately from tool evidence, then restore transcript order. */
 export function buildAgentSessionHandoffContext(messages: readonly NativeChatMessage[]): string {
-  const tools = selectToolEvidence(messages)
+  return finishAgentSessionSteps(buildAgentSessionHandoffContextSteps(messages))
+}
+export function* buildAgentSessionHandoffContextSteps(
+  messages: readonly NativeChatMessage[]
+): Generator<void, string> {
+  const tools = yield* selectToolEvidenceSteps(messages)
   const entries: ContextEntry[] = [...tools.entries]
   let remaining = MAX_CONTEXT_CHARS - contextEntryChars(entries) - OMISSION_MARKER.length - 2
   let omitted = false
-  for (const candidate of prioritizeConversation(messages)) {
+  for (const candidate of yield* prioritizeConversationSteps(messages)) {
     if (remaining < MIN_ENTRY_CHARS) {
       omitted = true
       break
@@ -62,8 +76,10 @@ function contextEntryChars(entries: readonly { text: string }[]): number {
   return entries.reduce((chars, entry) => chars + entry.text.length + 2, 0)
 }
 
-function prioritizeConversation(messages: readonly NativeChatMessage[]): ConversationMessage[] {
-  const candidates = messages.flatMap((message, messageIndex) => {
+function* prioritizeConversationSteps(
+  messages: readonly NativeChatMessage[]
+): Generator<void, ConversationMessage[]> {
+  const candidates = yield* flatMapAgentSessionSteps(messages, (message, messageIndex) => {
     if (message.agentStart || message.role === 'reasoning') {
       return []
     }
@@ -85,44 +101,56 @@ function prioritizeConversation(messages: readonly NativeChatMessage[]): Convers
     entries[0].text = `[${message.role}${delivery}] ${entries[0].text}`
     return [{ messageIndex, message, entries }]
   })
-  const delivered = candidates.filter(({ message }) => !message.queued && !message.unsent)
-  const latestUser = delivered.findLast(({ message }) => message.role === 'user')
-  const latestAssistant = delivered.findLast(({ message }) => message.role === 'assistant')
+  let latestUser: ConversationMessage | undefined
+  let latestAssistant: ConversationMessage | undefined
+  for (const candidate of candidates) {
+    if (!candidate.message.queued && !candidate.message.unsent) {
+      if (candidate.message.role === 'user') {
+        latestUser = candidate
+      }
+      if (candidate.message.role === 'assistant') {
+        latestAssistant = candidate
+      }
+    }
+    yield
+  }
   const priority = (candidate: ConversationMessage): number => {
     if (candidate === latestUser || candidate === latestAssistant) {
       return 0
     }
     return candidate.message.queued || candidate.message.unsent ? 2 : 1
   }
-  return candidates.sort(
+  return yield* sortAgentSessionSteps(
+    candidates,
     (left, right) => priority(left) - priority(right) || right.messageIndex - left.messageIndex
   )
 }
 
-function selectToolEvidence(messages: readonly NativeChatMessage[]): {
-  entries: ContextEntry[]
-  omitted: boolean
-} {
+function* selectToolEvidenceSteps(
+  messages: readonly NativeChatMessage[]
+): Generator<void, { entries: ContextEntry[]; omitted: boolean }> {
   const blocks: (NativeChatToolCallBlock | NativeChatToolResultBlock)[] = []
   const positions = new Map<
     NativeChatToolCallBlock | NativeChatToolResultBlock,
     { messageIndex: number; blockIndex: number }
   >()
-  const pairsByMessage: { pair: NativeChatToolPair; blockIndex: number }[][] = messages.map(
-    () => []
-  )
-  messages.forEach((message, messageIndex) => {
+  const pairsByMessage: { pair: NativeChatToolPair; blockIndex: number }[][] =
+    yield* mapAgentSessionSteps(messages, () => [])
+  for (const [messageIndex, message] of messages.entries()) {
+    yield
     if (message.agentStart || message.role === 'reasoning') {
-      return
+      continue
     }
-    message.blocks.forEach((block, blockIndex) => {
+    for (const [blockIndex, block] of message.blocks.entries()) {
       if (block.type === 'tool-call' || block.type === 'tool-result') {
         blocks.push(block)
         positions.set(block, { messageIndex, blockIndex })
       }
-    })
-  })
-  for (const pair of pairToolBlocks(blocks)) {
+      yield
+    }
+  }
+  for (const pair of yield* pairToolBlockSteps(blocks)) {
+    yield
     const block = pair.result ?? pair.call
     const position = block && positions.get(block)
     if (position) {
@@ -134,14 +162,15 @@ function selectToolEvidence(messages: readonly NativeChatMessage[]): {
   let remaining = MAX_TOOL_CHARS
   let omitted = false
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
-    const pairs = pairsByMessage[messageIndex]
+    yield
+    let pairs = pairsByMessage[messageIndex]
     if (!pairs.length) {
       continue
     }
     if (remaining < MIN_ENTRY_CHARS) {
       return { entries, omitted: true }
     }
-    pairs.sort((left, right) => left.blockIndex - right.blockIndex)
+    pairs = yield* sortAgentSessionSteps(pairs, (left, right) => left.blockIndex - right.blockIndex)
     for (let index = pairs.length - 1; index >= 0; index--) {
       if (remaining < MIN_ENTRY_CHARS) {
         return { entries, omitted: true }

@@ -1,3 +1,8 @@
+import {
+  finishAgentSessionSteps,
+  filterAgentSessionSteps,
+  indexAgentSessionSteps
+} from '../../agent-session/agent-session-projection-steps'
 import { agentJournalItemPosition } from '../../agent-session/journal/agent-session-journal-position'
 import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../native-chat-types'
@@ -8,7 +13,15 @@ export function nativeChatTurnRowAttribution<T>(
   items: readonly AgentJournalRenderItem[],
   attribution: ReadonlyMap<string, T>
 ): ReadonlyMap<string, T> {
-  const detached = messages.filter(
+  return finishAgentSessionSteps(nativeChatTurnRowAttributionSteps(messages, items, attribution))
+}
+export function* nativeChatTurnRowAttributionSteps<T>(
+  messages: readonly Pick<NativeChatMessage, 'id' | 'role' | 'journalPosition'>[],
+  items: readonly AgentJournalRenderItem[],
+  attribution: ReadonlyMap<string, T>
+): Generator<void, ReadonlyMap<string, T>> {
+  const detached = yield* filterAgentSessionSteps(
+    messages,
     (message) =>
       message.role === 'tool' &&
       message.journalPosition !== undefined &&
@@ -20,6 +33,7 @@ export function nativeChatTurnRowAttribution<T>(
   const itemIds = new Set<string>()
   const sources = new Map<string, string | null>()
   for (const item of items) {
+    yield
     itemIds.add(item.itemId)
     const { sequence, index } = agentJournalItemPosition(item)
     const position = `${sequence}:${index}`
@@ -27,6 +41,7 @@ export function nativeChatTurnRowAttribution<T>(
   }
   let attributed: Map<string, T> | undefined
   for (const message of detached) {
+    yield
     const position = message.journalPosition
     if (!position || itemIds.has(message.id)) {
       continue
@@ -34,7 +49,7 @@ export function nativeChatTurnRowAttribution<T>(
     const sourceId = sources.get(`${position.sequence}:${position.index}`)
     const value = sourceId ? attribution.get(sourceId) : undefined
     if (value !== undefined) {
-      attributed ??= new Map(attribution)
+      attributed ??= yield* indexAgentSessionSteps(attribution)
       attributed.set(message.id, value)
     }
   }

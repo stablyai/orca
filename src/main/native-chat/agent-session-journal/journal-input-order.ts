@@ -1,11 +1,5 @@
 import { finishJournalSteps } from './journal-reconstruction-steps'
-import {
-  currentJournalInputIdentity,
-  journalInputOrderChanged,
-  isJournalInputOverride,
-  recordJournalInputAdmission,
-  restoreJournalInputPlacesSteps
-} from './journal-input-order-state'
+import * as inputState from './journal-input-order-state'
 export type { JournalInputPlace } from './journal-input-order-state'
 
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -77,8 +71,12 @@ export class JournalInputOrder extends JournalInputPlaces {
     }
     this.lineage.observe(row.seq)
     if (
-      recordJournalInputAdmission(state, row, this.cards, this.originalAcceptance, (id) =>
-        this.releasePlace(state, id)
+      inputState.recordJournalInputAdmission(
+        state,
+        row,
+        this.cards,
+        this.originalAcceptance,
+        (id) => this.releasePlace(state, id)
       )
     ) {
       this.legacyPlaces++
@@ -113,7 +111,7 @@ export class JournalInputOrder extends JournalInputPlaces {
     return finishJournalSteps(this.restoreSteps(state))
   }
   *restoreSteps(state: JournalReducerState): Generator<void, void> {
-    this.legacyPlaces = yield* restoreJournalInputPlacesSteps(state)
+    this.legacyPlaces = yield* inputState.restoreJournalInputPlacesSteps(state)
     yield* this.cards.ensureSteps(state)
     for (const id of state.submissions.keys()) {
       this.refresh(state, id)
@@ -176,6 +174,9 @@ export class JournalInputOrder extends JournalInputPlaces {
   forced(id: string): boolean {
     return this.state.inputEntries.get(id)?.witnessCardId !== undefined
   }
+  hasQueuedSubmissions(): boolean {
+    return this.queued.size > 0 || this.recoveryOwed.size > 0
+  }
   firstQueued(): AgentJournalSubmission | undefined {
     return this.queued.values().next().value
   }
@@ -185,9 +186,11 @@ export class JournalInputOrder extends JournalInputPlaces {
   enteredSubmissions(): Iterable<AgentJournalSubmission> {
     return this.entered.values()
   }
+  unsettledSubmissionCount = (): number => this.unsettled.size
   unsettledSubmissions(): readonly AgentJournalSubmission[] {
     return this.unsettled.list()
   }
+  sendingSubmissionValues = this.sending.values.bind(this.sending)
   sendingSubmissions(): readonly AgentJournalSubmission[] {
     return this.sending.list()
   }
@@ -214,7 +217,7 @@ export class JournalInputOrder extends JournalInputPlaces {
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
     this.newestTurn.afterRow(state, row)
-    if (journalInputOrderChanged(state, row, (key) => this[key])) {
+    if (inputState.journalInputOrderChanged(state, row, (key) => this[key])) {
       this.revision++
     }
     if (row.kind === 'submission' || row.kind === 'dispatch') {
@@ -259,7 +262,7 @@ export class JournalInputOrder extends JournalInputPlaces {
         this.queued.set(id, entry)
       }
       this.entered.delete(id)
-      if (isJournalInputOverride(entry, this.recoveryOwed.has(id))) {
+      if (inputState.isJournalInputOverride(entry, this.recoveryOwed.has(id))) {
         this.overrides.set(id, entry)
       }
     } else {
@@ -289,7 +292,7 @@ export class JournalInputOrder extends JournalInputPlaces {
   }
 
   private currentIdentity(state: JournalReducerState, id: string): boolean {
-    return currentJournalInputIdentity(state, id, () => this.cards.hasOverlay(id))
+    return inputState.currentJournalInputIdentity(state, id, () => this.cards.hasOverlay(id))
   }
 
   private releasePlace(state: JournalReducerState, id: string): void {

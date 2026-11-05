@@ -1,3 +1,5 @@
+import { readJournalDerived } from '../agent-session-journal/journal-derived-read'
+import { latestStructuredAgentSessionPromptSteps } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 // Recheck stored offers against live journals and the same launch support used by startup.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -17,7 +19,8 @@ export type StructuredAgentSessionRestartJournalSource = { journal: AgentSession
 
 export type StructuredAgentSessionRestartCandidateReader = (
   markers: readonly AgentSessionResumeMarker[],
-  leaseState: 'must-be-released' | 'may-be-held'
+  leaseState: 'must-be-released' | 'may-be-held',
+  previews?: ReadonlyMap<string, string> | false
 ) => StructuredAgentSessionResumableSet
 
 export function createStructuredAgentSessionRestartCandidateReader(deps: {
@@ -29,7 +32,7 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
   movedOn: (marker: AgentSessionResumeMarker) => boolean
   savedByNewerOrca: (sessionId: string) => boolean
 }): StructuredAgentSessionRestartCandidateReader {
-  return (markers, leaseState) =>
+  return (markers, leaseState, previews) =>
     structuredAgentSessionResumableSet({
       markers,
       getRecord: deps.getRecord,
@@ -37,6 +40,12 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
       movedOn: deps.movedOn,
       savedByNewerOrca: deps.savedByNewerOrca,
       latestPrompt: (sessionId) => {
+        if (previews === false) {
+          return ''
+        }
+        if (previews) {
+          return previews.get(sessionId) ?? deps.getRecord(sessionId)?.lastTurn?.prompt ?? ''
+        }
         const session = deps.sessions.get(sessionId)
         return session
           ? latestStructuredAgentSessionPrompt(session.journal.itemsRead().items)
@@ -52,9 +61,33 @@ export function createStructuredAgentSessionRestartCandidateReaders(
 ): {
   derive: StructuredAgentSessionRestartCandidateReader
   deriveAtSend: StructuredAgentSessionRestartCandidateReader
+  deriveFinite: (
+    markers: readonly AgentSessionResumeMarker[],
+    leaseState: 'must-be-released' | 'may-be-held'
+  ) => Promise<StructuredAgentSessionResumableSet>
 } {
+  const derive = createStructuredAgentSessionRestartCandidateReader(deps)
   return {
-    derive: createStructuredAgentSessionRestartCandidateReader(deps),
+    derive,
+    deriveFinite: async (markers, leaseState) => {
+      const previews = new Map<string, string>()
+      for (const marker of markers) {
+        const session = deps.sessions.get(marker.sessionId)
+        if (session) {
+          const journal = session.journal
+          const prompt = await readJournalDerived(journal, function* (finite) {
+            if (finite) {
+              yield* journal.preparePublicReadSteps()
+            }
+            return yield* latestStructuredAgentSessionPromptSteps(journal.itemsRead().items)
+          })
+          if (deps.sessions.get(marker.sessionId) === session) {
+            previews.set(marker.sessionId, prompt)
+          }
+        }
+      }
+      return derive(markers, leaseState, previews)
+    },
     deriveAtSend: createStructuredAgentSessionRestartCandidateReader({
       ...deps,
       savedByNewerOrca: () => false

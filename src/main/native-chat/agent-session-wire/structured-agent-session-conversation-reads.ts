@@ -58,11 +58,15 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
   return {
     journalCurrentRead: async (sessionId: string, inputIds?: readonly string[]) => {
       const journal = await journalOf(sessionId)
-      return readJournalDerived(journal, function* (finite) {
-        return finite
-          ? yield* journal.publicRead().currentSnapshotSteps(inputIds)
-          : journal.currentRead(inputIds)
-      })
+      return readJournalDerived(
+        journal,
+        function* (finite) {
+          return finite
+            ? yield* journal.publicRead().currentSnapshotSteps(inputIds)
+            : journal.currentRead(inputIds)
+        },
+        () => context().sessions.get(sessionId)?.journal === journal
+      )
     },
 
     readModelCatalog,

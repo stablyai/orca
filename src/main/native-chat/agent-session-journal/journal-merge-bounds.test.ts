@@ -1,3 +1,17 @@
+import {
+  createStructuredMailboxPointerHost,
+  readStructuredSessionGateFacts
+} from '../../runtime/orchestration/structured-mailbox-pointer-host'
+import {
+  call,
+  STRUCTURED_MOBILE_CLIENT
+} from '../../runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+import { setStructuredAgentSessionHost } from '../agent-session-wire/structured-agent-session-registry'
+import {
+  queuedImageSubscriber,
+  queuedImageHistoryReader,
+  projectQueuedImageCardPublicationSteps
+} from '../../runtime/rpc/methods/structured-agent-session-queued-image-capability'
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionStatusEvent
@@ -35,6 +49,7 @@ let root: string
 const journals = createTrackedJournalOpener()
 const rigs: Awaited<ReturnType<typeof createQueuedMessageTestRig>>[] = []
 afterEach(async () => {
+  setStructuredAgentSessionHost(null)
   vi.restoreAllMocks()
   for (const rig of rigs.splice(0)) {
     await rig.dispose()
@@ -47,6 +62,7 @@ afterEach(async () => {
 it('keeps logical replacement preparation finite and retained evidence reads paged at N and 10N', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-merge-bounds-'))
   const totals: number[] = []
+  const maxima: number[] = []
   for (const size of [256, 2560]) {
     const database = await openTestJournalHostDatabase(join(root, String(size)))
     const rows: JournalRow[] = [projectionEpochRow]
@@ -85,7 +101,10 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
           body: {
             kind: 'message',
             role: 'user',
-            blocks: [{ type: 'text', text: `card-${index}` }]
+            blocks:
+              index === 0
+                ? [{ type: 'image-ref', path: '/queued-image.png' }]
+                : [{ type: 'text', text: `card-${index}` }]
           },
           position: index,
           queuedAt: { epoch: projectionEpochRow.epoch, sequence: rows.length + 1 }
@@ -184,12 +203,18 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
     ])
     const rig = await createQueuedMessageTestRig({ sessionId: projectionSessionId })
     rigs.push(rig)
+    setStructuredAgentSessionHost(rig.host)
+    rig.host.deps.adapter.readOptions = async () => ({ models: [], current: {} })
     await rig.workingSend()
     const sessions = rig.host.collaboratorsForTests().sessions
     sessions.set(projectionSessionId, { ...sessions.get(projectionSessionId)!, journal })
     const frames: AgentSessionSubscribeEvent[] = []
     const delivered = Promise.withResolvers<void>()
     let replacing = false
+    const releaseMail = createStructuredMailboxPointerHost().watchJournal(
+      projectionSessionId,
+      () => {}
+    )
     const releaseChat = await rig.host.subscribe({
       id: 'live-chat',
       sessionId: projectionSessionId,
@@ -207,7 +232,7 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
     })
     const reconnects: Promise<() => void>[] = []
     const concurrentReads: Promise<unknown>[] = []
-    const reconnected = [Promise.withResolvers<void>(), Promise.withResolvers<void>()]
+    const reconnected = Array.from({ length: 3 }, () => Promise.withResolvers<void>())
     const statuses: AgentSessionStatusEvent[] = []
     let releaseStatus = () => {}
     let publicationCount = 0
@@ -281,7 +306,65 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
               })
             )
           }
+          reconnects.push(
+            rig.host.subscribe({
+              ...queuedImageSubscriber({ clientKind: 'mobile', clientCapabilities: [] }),
+              projectQueuePublicationSteps: (publication) =>
+                projectQueuedImageCardPublicationSteps(publication, {
+                  clientKind: 'mobile',
+                  clientCapabilities: []
+                }),
+              id: 'legacy-during-refresh',
+              sessionId: projectionSessionId,
+              boundedFrames: true,
+              emit: (event) => {
+                frames.push(event)
+                if (
+                  (event.type === 'snapshot' || event.type === 'reset') &&
+                  event.page.epoch === journal.cursor().epoch
+                ) {
+                  reconnected[2].resolve()
+                }
+              }
+            })
+          )
           concurrentReads.push(
+            rig.host
+              .continuationContext({
+                sessionId: projectionSessionId,
+                workspaceId: 'workspace-1',
+                expectedCursor: retainedSnapshot.cursor
+              })
+              .then((result) => expect(result).toEqual({ status: 'superseded' })),
+            rig.host
+              .continuationContext({
+                sessionId: projectionSessionId,
+                workspaceId: 'workspace-1',
+                expectedCursor: journal.cursor()
+              })
+              .then((result) => expect(result.status).toBe('current')),
+            readStructuredSessionGateFacts(projectionSessionId),
+            rig.host.readOptions(projectionSessionId),
+            call(
+              'agentSession.conversationOutline',
+              { sessionId: projectionSessionId },
+              STRUCTURED_MOBILE_CLIENT
+            ).then((reply) => expect(reply.ok).toBe(true)),
+            call(
+              'agentSession.item',
+              { sessionId: projectionSessionId, itemId: agentJournalItemKey(newIdentity) },
+              STRUCTURED_MOBILE_CLIENT
+            ).then((reply) => expect(reply.ok).toBe(true)),
+            call(
+              'agentSession.history',
+              { sessionId: projectionSessionId, direction: 'tail' },
+              STRUCTURED_MOBILE_CLIENT
+            ).then((reply) => expect(reply.ok).toBe(true)),
+            Promise.resolve(rig.host.readCommands(projectionSessionId)),
+            Promise.resolve(rig.host.handoffStatus(projectionSessionId)),
+            rig.host.queuedSendAnswer(projectionSessionId, 'card-0'),
+            rig.host.sendAnswer(projectionSessionId, 'send-0'),
+            rig.host.restartResume.list(),
             rig.host.journalCurrentRead(projectionSessionId),
             rig.host.journalSnapshot(projectionSessionId),
             rig.host.readCurrentRequests({
@@ -291,10 +374,27 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
             rig.host.history({ sessionId: projectionSessionId, direction: 'tail' }),
             rig.host.history({
               sessionId: projectionSessionId,
+              direction: 'after',
+              cursor: retainedSnapshot.cursor
+            }),
+            rig.host.history(
+              { sessionId: projectionSessionId, direction: 'tail' },
+              undefined,
+              queuedImageHistoryReader({ clientKind: 'mobile', clientCapabilities: [] })
+            ),
+            rig.host.history({
+              sessionId: projectionSessionId,
               direction: 'before',
               cursor: retainedSnapshot.cursor
             })
           )
+          rig.host.currentWork(projectionSessionId)
+          rig.host.readStatusSummary(projectionSessionId)
+          const releaseCompletion = rig.host.subscribeTurnCompletions({
+            id: 'during-refresh-completions',
+            emit: () => {}
+          })
+          releaseCompletion()
           rig.host['clientDelivery'].readStopping(projectionSessionId)
           releaseStatus = rig.host.subscribeStatus({
             id: 'reconnecting-status',
@@ -326,6 +426,7 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
     leaseRead.mockRestore()
     expect(work.maximum, work.site).toBeLessThanOrEqual(65_536)
     totals.push(work.total)
+    maxima.push(work.maximum)
     expect(work.total).toBeLessThanOrEqual(size * 4096)
     expect(peerReads).toBeGreaterThan(0)
     expect(oldReads).toBeGreaterThan(0)
@@ -349,6 +450,7 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
       release()
     }
     releaseStatus()
+    releaseMail()
     releaseChat()
     releasePublication()
     sessions.delete(projectionSessionId)
@@ -370,5 +472,6 @@ it('keeps logical replacement preparation finite and retained evidence reads pag
       `merge bounds population=${size} nativeEvidenceRequests=${requests} maximumHostWork=${work.maximum} yields=${work.yields} totalHostWork=${work.total} oldReads=${oldReads} newReads=${newReads}\n`
     )
   }
+  expect(maxima[1]).toBeLessThanOrEqual(maxima[0] * 1.5)
   expect(totals[1]).toBeLessThanOrEqual(totals[0] * 14)
 })

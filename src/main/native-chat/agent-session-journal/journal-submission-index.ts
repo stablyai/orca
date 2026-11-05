@@ -18,6 +18,9 @@ export class JournalSubmissionIndex {
     this.listed = undefined
     return true
   }
+  get size(): number {
+    return this.entries.size
+  }
   values(): Iterable<AgentJournalSubmission> {
     return this.entries.values()
   }

@@ -81,18 +81,19 @@ export function createStructuredAgentSessionRestartResume(
     enqueue: enqueueRecoveryOperation
   })
   const newerOrca = createNewerOrcaChats(() => deps.journalDatabase.readOnly)
-  const { derive, deriveAtSend } = createStructuredAgentSessionRestartCandidateReaders({
-    sessions,
-    getRecord: deps.store.getRecord,
-    adapter: deps.adapter,
-    agents: deps.agents,
-    movedOn: withdrawal.movedOn,
-    savedByNewerOrca: newerOrca.has
-  })
+  const { derive, deriveAtSend, deriveFinite } =
+    createStructuredAgentSessionRestartCandidateReaders({
+      sessions,
+      getRecord: deps.store.getRecord,
+      adapter: deps.adapter,
+      agents: deps.agents,
+      movedOn: withdrawal.movedOn,
+      savedByNewerOrca: newerOrca.has
+    })
   const failures = createStructuredAgentSessionRestartFailureLedger({
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
     getRecord: deps.store.getConversation,
-    retryable: (marker) => derive([marker], 'may-be-held').candidates.length === 1,
+    retryable: (marker) => derive([marker], 'may-be-held', false).candidates.length === 1,
     savedByNewerOrca: newerOrca.has,
     logger: deps.logger,
     now: surfaces.now,
@@ -117,7 +118,7 @@ export function createStructuredAgentSessionRestartResume(
   ): Promise<StructuredAgentSessionResumeCandidate[]> => {
     const markers = await readMarkers()
     // Inspection alone must not withdraw the offer.
-    const { candidates, superseded } = derive(markers, 'may-be-held')
+    const { candidates, superseded } = await deriveFinite(markers, 'may-be-held')
     retireSuperseded(superseded)
     return restartRowsFor(candidates, audience)
   }
@@ -132,7 +133,7 @@ export function createStructuredAgentSessionRestartResume(
       deps.store.getRecord(sessionId)
         ? structuredAgentSessionConversationFence(deps.store, sessionId)
         : null,
-    stillResumable: (marker) => deriveAtSend([marker], 'may-be-held').candidates.length === 1
+    stillResumable: (marker) => deriveAtSend([marker], 'may-be-held', false).candidates.length === 1
   }
 
   /** Reserve then continue under the shared host-wide startup limit. */
@@ -148,7 +149,7 @@ export function createStructuredAgentSessionRestartResume(
     const markers = await readActionMarkers(sessionIds)
     await revealMarkers(markers)
     const requested = new Set(sessionIds ?? markers.map((marker) => marker.sessionId))
-    const derived = derive(markers, 'may-be-held')
+    const derived = await deriveFinite(markers, 'may-be-held')
     retireSuperseded(derived.superseded)
     const eligible = restartRowsFor(derived.candidates, audience).filter((candidate) =>
       requested.has(candidate.sessionId)
@@ -172,7 +173,7 @@ export function createStructuredAgentSessionRestartResume(
           ) ?? Promise.resolve([])
       )) ?? []
     const markersBySession = new Map(reserved.map((marker) => [marker.sessionId, marker]))
-    const candidates = derive(reserved, 'may-be-held').candidates
+    const candidates = (await deriveFinite(reserved, 'may-be-held')).candidates
     progress.skipExcluded(
       eligible.map((candidate) => candidate.sessionId),
       candidates
@@ -186,7 +187,8 @@ export function createStructuredAgentSessionRestartResume(
           consumeMarker: async (sessionId) => {
             const marker = markersBySession.get(sessionId)
             return (
-              marker !== undefined && deriveAtSend([marker], 'may-be-held').candidates.length === 1
+              marker !== undefined &&
+              deriveAtSend([marker], 'may-be-held', false).candidates.length === 1
             )
           },
           resume: async (sessionId) => {

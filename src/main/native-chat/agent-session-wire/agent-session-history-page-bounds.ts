@@ -23,7 +23,6 @@ import {
   subagentFoldKey,
   subagentItemBlock
 } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
 
@@ -112,17 +111,8 @@ export function measureHistoryItem(item: AgentJournalRenderItem): HistoryItemFor
 }
 
 /** Measure pages in the exact form sent to each reader. */
-export type HistoryReader = {
-  form: (item: AgentJournalRenderItem) => HistoryItemForm
-  budgetBytes: number
-  /** Forward reads project touched identities; cold reads include retained sources before bounds. */
-  snapshot?: (
-    journal: AgentSessionJournal,
-    snapshot?: AgentJournalSnapshot,
-    touched?: ReadonlySet<string>
-  ) => AgentJournalSnapshot
-  queueSourceIds?: (journal: AgentSessionJournal, messageId: string) => readonly string[]
-}
+export type { HistoryReader } from './agent-session-history-reader'
+import type { HistoryReader } from './agent-session-history-reader'
 
 export function boundHistoryItemsByBytes(
   items: AgentJournalRenderItem[],

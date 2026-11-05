@@ -1,3 +1,5 @@
+import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
+import { mapAgentSessionSteps } from '../../../shared/agent-session/agent-session-projection-steps'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
@@ -23,6 +25,7 @@ const BOUNDED_FRAME_READER: HistoryReader = {
 export function subscriberHistoryReader(subscriber: {
   boundedFrames: boolean
   readHistorySnapshot?: HistoryReader['snapshot']
+  readHistorySnapshotSteps?: HistoryReader['snapshotSteps']
   readQueueSourceIds?: HistoryReader['queueSourceIds']
 }): HistoryReader {
   const reader = subscriber.boundedFrames ? BOUNDED_FRAME_READER : CLIENT_HISTORY_READER
@@ -30,6 +33,7 @@ export function subscriberHistoryReader(subscriber: {
     ? {
         ...reader,
         snapshot: subscriber.readHistorySnapshot,
+        snapshotSteps: subscriber.readHistorySnapshotSteps,
         queueSourceIds: subscriber.readQueueSourceIds
       }
     : reader
@@ -140,31 +144,40 @@ export function boundedFrames(
   side: BoundedSideLists,
   previousCursor?: AgentJournalCursor
 ): AgentSessionSubscribeEvent[] {
+  return finishJournalSteps(boundedFrameSteps(event, side, previousCursor))
+}
+
+export function* boundedFrameSteps(
+  event: AgentSessionSubscribeEvent,
+  side: BoundedSideLists,
+  previousCursor?: AgentJournalCursor
+): Generator<void, AgentSessionSubscribeEvent[]> {
   if (event.type === 'end') {
     return [event]
   }
-  if (event.type === 'batch' && jsonBytes(event.batch) > BOUNDED_FRAME_CONTENT_BUDGET_BYTES) {
-    const split = <T>(values: T[], first: boolean): T[] => {
-      const middle = Math.ceil(values.length / 2)
-      return first ? values.slice(0, middle) : values.slice(middle)
-    }
-    const half = (first: boolean): BatchFrame => ({
-      ...event,
-      batch: {
-        cursor: first ? (previousCursor ?? event.batch.cursor) : event.batch.cursor,
-        items: split(event.batch.items, first),
-        submissions: split(event.batch.submissions, first),
-        removedItemIds: split(event.batch.removedItemIds, first)
+  if (event.type === 'batch' && (yield* oversizedBatchSteps(event.batch))) {
+    const half = function* (first: boolean): Generator<void, BatchFrame> {
+      return {
+        ...event,
+        batch: {
+          cursor: first ? (previousCursor ?? event.batch.cursor) : event.batch.cursor,
+          items: yield* splitFrameListSteps(event.batch.items, first),
+          submissions: yield* splitFrameListSteps(event.batch.submissions, first),
+          removedItemIds: yield* splitFrameListSteps(event.batch.removedItemIds, first)
+        }
       }
-    })
-    return [
-      ...boundedFrames(
-        half(true),
-        { queued: undefined, backgroundTasks: undefined },
-        previousCursor
-      ),
-      ...boundedFrames(half(false), side, previousCursor)
-    ]
+    }
+    const frames = yield* boundedFrameSteps(
+      yield* half(true),
+      { queued: undefined, backgroundTasks: undefined },
+      previousCursor
+    )
+    const tail = yield* boundedFrameSteps(yield* half(false), side, previousCursor)
+    for (const frame of tail) {
+      frames.push(frame)
+      yield
+    }
+    return frames
   }
   const lists: SideFields[] = [
     ...(side.queued === undefined ? [] : [boundedQueuePublication(side.queued)]),
@@ -183,7 +196,33 @@ export function boundedFrames(
   })
   if (lists.length > 0 && isEmptyBatch(history)) {
     const [first, ...others] = lists
-    return [{ ...history, ...first }, ...others.map(carrier)]
+    return [{ ...history, ...first }, ...(yield* mapAgentSessionSteps(others, carrier))]
   }
-  return [history, ...lists.map(carrier)]
+  return [history, ...(yield* mapAgentSessionSteps(lists, carrier))]
+}
+
+function* splitFrameListSteps<T>(values: readonly T[], first: boolean): Generator<void, T[]> {
+  const middle = Math.ceil(values.length / 2)
+  const result: T[] = []
+  for (let index = first ? 0 : middle; index < (first ? middle : values.length); index++) {
+    result.push(values[index])
+    yield
+  }
+  return result
+}
+
+function* oversizedBatchSteps(batch: BatchFrame['batch']): Generator<void, boolean> {
+  let bytes = jsonBytes({ ...batch, items: [], submissions: [], removedItemIds: [] })
+  for (const entries of [batch.items, batch.submissions, batch.removedItemIds]) {
+    let first = true
+    for (const entry of entries) {
+      bytes += jsonBytes(entry) + (first ? 0 : 1)
+      first = false
+      yield
+      if (bytes > BOUNDED_FRAME_CONTENT_BUDGET_BYTES) {
+        return true
+      }
+    }
+  }
+  return bytes > BOUNDED_FRAME_CONTENT_BUDGET_BYTES
 }

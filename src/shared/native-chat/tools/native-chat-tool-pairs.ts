@@ -1,3 +1,4 @@
+import { finishAgentSessionSteps } from '../../agent-session/agent-session-projection-steps'
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock,
@@ -54,7 +55,7 @@ class PendingToolCalls {
     }
   }
 
-  take(callId: string | undefined): number | undefined {
+  *takeSteps(callId: string | undefined): Generator<void, number | undefined> {
     let call = this.first
     if (call && callId !== undefined && call.callId !== callId) {
       if (!this.byId) {
@@ -62,6 +63,7 @@ class PendingToolCalls {
         // Ordered results need only the FIFO; build the index when a named result misses its head.
         for (let pending: PendingCall | undefined = call; pending; pending = pending.next) {
           this.indexCall(pending, byId)
+          yield
         }
         this.byId = byId
       }
@@ -102,25 +104,33 @@ export function pairToolBlocks(
   limit = Infinity
 ): NativeChatToolPair[] {
   const pairs: NativeChatToolPair[] = []
-  pairToolBlocksReportingUnpaired(blocks, limit, pairs)
+  finishAgentSessionSteps(pairToolBlocksReportingUnpairedSteps(blocks, limit, pairs))
   return pairs
 }
 
 export function unpairedToolResultIndices(blocks: readonly NativeChatBlock[]): ReadonlySet<number> {
+  return finishAgentSessionSteps(unpairedToolResultIndexSteps(blocks))
+}
+export function* unpairedToolResultIndexSteps(
+  blocks: readonly NativeChatBlock[]
+): Generator<void, ReadonlySet<number>> {
   const unpaired = new Set<number>()
-  pairToolBlocksReportingUnpaired(blocks, Infinity, undefined, (index) => unpaired.add(index))
+  yield* pairToolBlocksReportingUnpairedSteps(blocks, Infinity, undefined, (index) =>
+    unpaired.add(index)
+  )
   return unpaired
 }
 
-function pairToolBlocksReportingUnpaired(
+function* pairToolBlocksReportingUnpairedSteps(
   blocks: readonly NativeChatBlock[],
   limit: number,
   pairs?: NativeChatToolPair[],
   onUnpaired?: (index: number) => void
-): void {
+): Generator<void> {
   let pairCount = 0
   const pending = new PendingToolCalls()
   for (let index = 0; index < blocks.length; index += 1) {
+    yield
     if (pairCount >= limit && pending.empty) {
       break
     }
@@ -136,7 +146,7 @@ function pairToolBlocksReportingUnpaired(
     if (block.type !== 'tool-result') {
       continue
     }
-    const slot = pending.take(block.callId)
+    const slot = yield* pending.takeSteps(block.callId)
     if (slot === undefined) {
       onUnpaired?.(index)
       if (pairCount < limit) {
@@ -147,4 +157,13 @@ function pairToolBlocksReportingUnpaired(
       pairs[slot]!.result = block
     }
   }
+}
+
+export function* pairToolBlockSteps(
+  blocks: readonly NativeChatBlock[],
+  limit = Infinity
+): Generator<void, NativeChatToolPair[]> {
+  const pairs: NativeChatToolPair[] = []
+  yield* pairToolBlocksReportingUnpairedSteps(blocks, limit, pairs)
+  return pairs
 }

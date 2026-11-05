@@ -207,22 +207,26 @@ function* journalNormalizationKeySteps(
     yield
   }
   const ordered = yield* sortJournalSteps(ids, (a, b) => (a < b ? -1 : a > b ? 1 : 0))
-  const corrections: (readonly unknown[])[] = []
+  const corrections: string[] = []
   for (const id of ordered) {
     const item = state.items.get(agentJournalSubmissionKey(id))
     const submission = inputForItem(agentJournalSubmissionKey(id))
     if (item && submission) {
-      corrections.push([
-        id,
-        item.sequence,
-        item.observedAt,
-        item.turnScope,
-        submission.queuedMessageId ?? null
-      ])
+      corrections.push(
+        JSON.stringify([
+          id,
+          item.sequence,
+          item.observedAt,
+          item.turnScope,
+          submission.queuedMessageId ?? null
+        ])
+      )
     }
     yield
   }
-  return corrections.length === 0 ? '' : JSON.stringify([state.epoch, corrections])
+  return corrections.length === 0
+    ? ''
+    : `[${JSON.stringify(state.epoch)},[${corrections.join(',')}]]`
 }
 
 export function renderJournalStatus(state: JournalReducerState, owner: JournalInputOrder) {

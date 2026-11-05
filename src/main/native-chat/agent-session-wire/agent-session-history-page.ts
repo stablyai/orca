@@ -82,9 +82,10 @@ function readPreparedHistory(
   request: AgentSessionHistoryRequest,
   options: HistoryReadOptions = {},
   finite = false,
-  queueSources?: ReadonlyMap<string, readonly string[]>
+  queueSources?: ReadonlyMap<string, readonly string[]>,
+  preparedSnapshot?: AgentJournalSnapshot
 ): AgentSessionHistoryResult | Promise<AgentSessionHistoryResult> {
-  if (journalDerivedRefreshPending(journal) || options.finite) {
+  if (!finite && (journalDerivedRefreshPending(journal) || options.finite)) {
     return journal.readInOrder(async () => {
       await finishJournalStepsAsync(journal.preparePublicReadSteps())
       const sources = new Map<string, readonly string[]>()
@@ -100,7 +101,9 @@ function readPreparedHistory(
       }
       const view = journal.publicRead()
       const base = view.currentSnapshot()
-      const snapshot = options.reader?.snapshot?.(journal, base) ?? base
+      const snapshot = options.reader?.snapshotSteps
+        ? await finishJournalStepsAsync(options.reader.snapshotSteps(journal, base))
+        : (options.reader?.snapshot?.(journal, base) ?? base)
       const apply = options.captureResultSteps
         ? await finishJournalStepsAsync(options.captureResultSteps(snapshot, view))
         : undefined
@@ -115,7 +118,8 @@ function readPreparedHistory(
           ...(apply ? { captureResult: () => apply } : {})
         },
         true,
-        sources
+        sources,
+        snapshot
       )
     })
   }
@@ -124,7 +128,7 @@ function readPreparedHistory(
   if (request.direction !== 'after' || !request.cursor) {
     const view = options.view ?? journal.publicRead()
     const base = options.snapshot ?? view.currentSnapshot()
-    const snapshot = reader.snapshot?.(journal, base) ?? base
+    const snapshot = preparedSnapshot ?? reader.snapshot?.(journal, base) ?? base
     const result =
       request.direction === 'after'
         ? finite
@@ -183,7 +187,7 @@ function readPreparedHistory(
       const apply = (result: AgentSessionHistoryResult) => structuredClone(captured.apply(result))
       return result instanceof Promise ? result.then(apply) : apply(result)
     },
-    (snapshot) => reader.snapshot?.(journal, snapshot) ?? snapshot
+    (snapshot) => preparedSnapshot ?? reader.snapshot?.(journal, snapshot) ?? snapshot
   )
 }
 
@@ -237,32 +241,46 @@ export function readAgentSessionHydration(
     view.currentSnapshot(),
   readWork?: () => AgentSessionPublishedWork | undefined
 ) {
-  return readJournalDerived(journal, function* (finite) {
-    if (finite) {
-      yield* journal.preparePublicReadSteps()
-    }
-    const view = journal.publicRead()
-    const snapshot = select(view)
-    const page = yield* buildHydrationPageSteps(
-      reader.snapshot?.(journal, snapshot) ?? snapshot,
-      fence,
-      reader
-    )
-    let work = readWork?.()
-    if (finite && readWork) {
-      for (;;) {
-        const captured = yield* capturePublishedWorkSteps(snapshot, work)
-        const next = readWork()
-        if (work?.viewKey() === next?.viewKey() && work?.revision === next?.revision) {
-          work = captured
-          break
-        }
-        work = next
-        yield
+  return readJournalDerived(journal, (finite) =>
+    readAgentSessionHydrationSteps(journal, fence, reader, select, readWork, finite)
+  )
+}
+
+/** The replacement callback already owns the writer reservation. */
+export function* readAgentSessionHydrationSteps(
+  journal: AgentSessionJournal,
+  fence?: number,
+  reader: HistoryReader = CLIENT_HISTORY_READER,
+  select = (view: ReturnType<AgentSessionJournal['publicRead']>) => view.currentSnapshot(),
+  readWork?: () => AgentSessionPublishedWork | undefined,
+  finite = true
+) {
+  if (finite) {
+    yield* journal.preparePublicReadSteps()
+  }
+  const view = journal.publicRead()
+  const snapshot = select(view)
+  const page = yield* buildHydrationPageSteps(
+    finite && reader.snapshotSteps
+      ? yield* reader.snapshotSteps(journal, snapshot)
+      : (reader.snapshot?.(journal, snapshot) ?? snapshot),
+    fence,
+    reader
+  )
+  let work = readWork?.()
+  if (finite && readWork) {
+    for (;;) {
+      const captured = yield* capturePublishedWorkSteps(snapshot, work)
+      const next = readWork()
+      if (work?.viewKey() === next?.viewKey() && work?.revision === next?.revision) {
+        work = captured
+        break
       }
+      work = next
+      yield
     }
-    return { page, view, work }
-  })
+  }
+  return { page, view, work }
 }
 
 export function readAgentSessionHydrationPage(

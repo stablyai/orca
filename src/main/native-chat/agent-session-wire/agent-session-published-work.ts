@@ -21,8 +21,7 @@ export type AgentSessionPublishedWork = Pick<
   | 'publishedSubmission'
   | 'restatedSubmissions'
   | 'requestProjection'
-> &
-  Partial<
+> & { snapshotFields?: PublishedWorkFields } & Partial<
     Pick<
       StructuredAgentSessionCurrentWork,
       | 'restatedSubmissionSteps'
@@ -42,6 +41,9 @@ function publishedWorkFields(
   latestTurn: AgentSessionHistoryPage['latestTurn'],
   work: AgentSessionPublishedWork
 ): PublishedWorkFields {
+  if (work.snapshotFields) {
+    return work.snapshotFields
+  }
   const ids = work.actionablePromptIds()
   return {
     latestTurn: work.publishedLatestTurn(latestTurn ?? null),
@@ -54,7 +56,16 @@ export function agentSessionPublishedWorkFields(
   journal: AgentSessionJournal,
   work: AgentSessionPublishedWork
 ): PublishedWorkFields {
-  return publishedWorkFields(snapshotLatestTurn(journal.itemsRead()), work)
+  return finishJournalSteps(agentSessionPublishedWorkFieldSteps(journal, work))
+}
+export function* agentSessionPublishedWorkFieldSteps(
+  journal: AgentSessionJournal,
+  work: AgentSessionPublishedWork
+): Generator<void, PublishedWorkFields> {
+  return (
+    work.snapshotFields ??
+    publishedWorkFields(yield* snapshotLatestTurnSteps(journal.itemsRead()), work)
+  )
 }
 
 /** Page-local effective values; off-page sends ride separately budgeted subscriber batches. */
@@ -100,23 +111,52 @@ export function* capturePublishedWorkSteps(
       finite ? yield* snapshotLatestTurnSteps(snapshot) : snapshotLatestTurn(snapshot)
     )
   )
-  const prompts = structuredClone(
+  const rawPrompts =
     finite && work.actionablePromptSteps
       ? yield* work.actionablePromptSteps(() => true)
       : work.actionablePrompts()
-  )
-  const ids = prompts.map((item) => item.itemId)
-  const submissions = structuredClone(
+  const prompts: typeof rawPrompts = []
+  const ids: string[] = []
+  for (const prompt of rawPrompts) {
+    prompts.push(structuredClone(prompt))
+    ids.push(prompt.itemId)
+    yield
+  }
+  const rawSubmissions =
     finite && work.restatedSubmissionSteps
       ? yield* work.restatedSubmissionSteps()
       : work.restatedSubmissions()
-  )
-  const byId = new Map(submissions.map((entry) => [entry.clientMessageId, entry]))
-  const requests = structuredClone(work.requestProjection(snapshot.sessionId))
+  const submissions: typeof rawSubmissions = []
+  const byId = new Map<string, (typeof rawSubmissions)[number]>()
+  for (const entry of rawSubmissions) {
+    const saved = structuredClone(entry)
+    submissions.push(saved)
+    byId.set(saved.clientMessageId, saved)
+    yield
+  }
+  const sourceRequests = work.requestProjection(snapshot.sessionId)
+  const requests = {
+    ...sourceRequests,
+    marker: structuredClone(sourceRequests.marker),
+    items: prompts
+  }
+  let idBytes = 2
+  for (const id of ids) {
+    idBytes += Buffer.byteLength(JSON.stringify(id)) + 1
+    yield
+    if (idBytes - 1 > 8 * 1024) {
+      break
+    }
+  }
   const working = finite && work.workingSteps ? yield* work.workingSteps() : work.working(),
     view = work.viewKey(),
     workView = finite && work.workViewKeySteps ? yield* work.workViewKeySteps() : work.workViewKey()
   return {
+    snapshotFields: {
+      latestTurn: latest,
+      ...(idBytes - (ids.length ? 1 : 0) <= 8 * 1024 ? { actionablePromptIds: ids } : {}),
+      working
+    },
     publishedLatestTurn: () => latest,
     actionablePrompts: () => prompts,
     actionablePromptIds: () => ids,
@@ -124,6 +164,7 @@ export function* capturePublishedWorkSteps(
     publishedSubmission: (entry) => byId.get(entry.clientMessageId) ?? entry,
     requestProjection: () => requests,
     working: () => working,
+    revision: work.revision,
     viewKey: () => view,
     workViewKey: () => workView
   }

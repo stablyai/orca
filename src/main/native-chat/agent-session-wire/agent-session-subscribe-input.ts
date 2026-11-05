@@ -12,7 +12,10 @@ export type AgentSessionSubscribeInput = {
   /** Bound each frame to the phone bridge’s limit; RPC enables this for every phone. */
   boundedFrames?: boolean
   projectQueuePublication?: SubscriberFieldState['projectQueuePublication']
+  projectQueuePublicationSteps?: SubscriberFieldState['projectQueuePublicationSteps']
+  projectJournalEventSteps?: SubscriberFieldState['projectJournalEventSteps']
   readHistorySnapshot?: HistoryReader['snapshot']
+  readHistorySnapshotSteps?: HistoryReader['snapshotSteps']
   readQueueSourceIds?: HistoryReader['queueSourceIds']
   projectJournalEvent?: SubscriberFieldState['projectJournalEvent']
   readsCurrentRequests?: boolean

@@ -1,3 +1,6 @@
+import { mapAgentSessionSteps } from '../../../shared/agent-session/agent-session-projection-steps'
+import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
+import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionPublishedWork } from './agent-session-published-work'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -8,7 +11,7 @@ import type {
 } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
-import { boundedFrames } from './agent-session-bounded-frames'
+import { boundedFrameSteps } from './agent-session-bounded-frames'
 // Deduplicate against last sent values only; withheld fields must not suppress final replacements.
 
 export type SubscriberFieldState = {
@@ -18,6 +21,12 @@ export type SubscriberFieldState = {
   /** Every frame to fit a phone's bridge frame; see `boundedFrames`. */
   boundedFrames: boolean
   projectQueuePublication?: (publication: QueuePublication) => QueuePublication
+  projectQueuePublicationSteps?: (
+    publication: QueuePublication
+  ) => Generator<void, QueuePublication>
+  projectJournalEventSteps?: (
+    ...args: Parameters<NonNullable<SubscriberFieldState['projectJournalEvent']>>
+  ) => Generator<void, AgentSessionSubscribeEvent>
   projectJournalEvent?: (
     journal: AgentSessionJournal,
     event: AgentSessionSubscribeEvent,
@@ -37,6 +46,7 @@ export type SubscriberFieldHooks = {
     commandsOnRequest?: boolean
   ) => AgentSessionSlashCommand[] | undefined
   readQueuePublication?: (sessionId: string) => QueuePublication | undefined
+  readQueuePublicationSteps?: (sessionId: string) => Generator<void, QueuePublication | undefined>
   /** Read expensive child-derived rosters only when a frame owes them. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null
 }
@@ -51,10 +61,6 @@ export type SubscriberFrame = {
   backgroundTasks: string | undefined
 }
 
-export function backgroundTaskFingerprint(state: AgentSessionBackgroundTaskState | null): string {
-  return JSON.stringify(state)
-}
-
 /** Advance dedup references only after successful emission. */
 export function buildSubscriberFrame(
   hooks: SubscriberFieldHooks,
@@ -64,6 +70,19 @@ export function buildSubscriberFrame(
   work?: AgentSessionPublishedWork,
   journal?: AgentSessionJournal
 ): SubscriberFrame {
+  return finishJournalSteps(
+    buildSubscriberFrameSteps(hooks, subscriber, event, withholdQueued, work, journal)
+  )
+}
+
+export function* buildSubscriberFrameSteps(
+  hooks: SubscriberFieldHooks,
+  subscriber: SubscriberFieldState,
+  event: AgentSessionSubscribeEvent,
+  withholdQueued: boolean,
+  work?: AgentSessionPublishedWork,
+  journal?: AgentSessionJournal
+): Generator<void, SubscriberFrame> {
   const commands =
     subscriber.boundedFrames && !subscriber.commandsOnRequest
       ? undefined
@@ -76,27 +95,44 @@ export function buildSubscriberFrame(
   const queued =
     withholdQueued || (subscriber.projectJournalEvent && !journal)
       ? undefined
-      : hooks.readQueuePublication?.(subscriber.sessionId)
+      : hooks.readQueuePublicationSteps
+        ? yield* hooks.readQueuePublicationSteps(subscriber.sessionId)
+        : hooks.readQueuePublication?.(subscriber.sessionId)
   const attachedQueued =
     queued !== undefined &&
     event.type !== 'end' &&
     (event.type !== 'batch' || queued !== subscriber.queuePublication)
-  event = journal
-    ? (subscriber.projectJournalEvent?.(
-        journal,
-        event,
-        subscriber.queuePublication,
-        queued,
-        work
-      ) ?? event)
-    : event
+  if (journal) {
+    event = subscriber.projectJournalEventSteps
+      ? yield* subscriber.projectJournalEventSteps(
+          journal,
+          event,
+          subscriber.queuePublication,
+          queued,
+          work
+        )
+      : (subscriber.projectJournalEvent?.(
+          journal,
+          event,
+          subscriber.queuePublication,
+          queued,
+          work
+        ) ?? event)
+  }
   const backgroundTasks = subscriberBackgroundTasks(hooks, subscriber, event)
   const sideQueued = attachedQueued
-    ? (subscriber.projectQueuePublication?.(queued) ?? queued)
+    ? subscriber.projectQueuePublicationSteps
+      ? yield* subscriber.projectQueuePublicationSteps(queued)
+      : (subscriber.projectQueuePublication?.(queued) ?? queued)
     : undefined
   return {
     frames: subscriber.boundedFrames
-      ? boundedFrames(event, { queued: sideQueued, backgroundTasks }, subscriber.cursor).map(
+      ? yield* mapAgentSessionSteps(
+          yield* boundedFrameSteps(
+            event,
+            { queued: sideQueued, backgroundTasks },
+            subscriber.cursor
+          ),
           (frame, index) =>
             index === 0 &&
             frame.type !== 'end' &&
@@ -122,8 +158,7 @@ export function buildSubscriberFrame(
     commands,
     attachedQueued,
     queued,
-    backgroundTasks:
-      backgroundTasks === undefined ? undefined : backgroundTaskFingerprint(backgroundTasks)
+    backgroundTasks: backgroundTasks === undefined ? undefined : JSON.stringify(backgroundTasks)
   }
 }
 
@@ -179,13 +214,27 @@ export function emitSubscriberFrame(
     journal?: AgentSessionJournal
   }
 ): void {
+  finishJournalSteps(emitSubscriberFrameSteps(hooks, subscriber, event, options))
+}
+
+export function* emitSubscriberFrameSteps(
+  hooks: SubscriberFieldHooks,
+  subscriber: Subscriber,
+  event: AgentSessionSubscribeEvent,
+  options?: {
+    withholdQueued?: boolean
+    currentWork?: AgentSessionPublishedWork
+    journal?: AgentSessionJournal
+  },
+  current: () => boolean = () => true
+): Generator<void, boolean> {
   const marker =
     event.type !== 'end' && subscriber.readsCurrentRequests
       ? options?.currentWork?.requestProjection(subscriber.sessionId).marker
       : undefined
   const includeMarker =
     marker && (event.type !== 'batch' || marker.version !== subscriber.requestVersion)
-  const built = buildSubscriberFrame(
+  const built = yield* buildSubscriberFrameSteps(
     hooks,
     subscriber,
     includeMarker && event.type !== 'end' ? { ...event, currentRequests: marker } : event,
@@ -193,8 +242,18 @@ export function emitSubscriberFrame(
     options?.currentWork,
     options?.journal
   )
+  if (!current()) {
+    return false
+  }
   for (const outgoing of built.frames) {
+    if (!current()) {
+      return false
+    }
     subscriber.emit(outgoing)
+    yield
+  }
+  if (!current()) {
+    return false
   }
   if (includeMarker) {
     subscriber.requestVersion = marker.version
@@ -205,5 +264,58 @@ export function emitSubscriberFrame(
   }
   if (built.backgroundTasks !== undefined) {
     subscriber.backgroundTasks = built.backgroundTasks
+  }
+  return true
+}
+
+export function* safeSubscriberFrameSteps(
+  hooks: SubscriberFieldHooks & {
+    isCurrentJournal?: (id: string, journal: AgentSessionJournal) => boolean
+    readCurrentWork?: SubscriberDeliveryPort['hooks']['readCurrentWork']
+  },
+  subscriber: Subscriber,
+  event: AgentSessionSubscribeEvent,
+  options: Parameters<SubscriberDeliveryPort['emit']>[2],
+  active: (subscriber: Subscriber) => boolean,
+  failed: () => void,
+  superseded: () => void
+): Generator<void, boolean> {
+  const fence = subscriber.fence
+  const reading = subscriber.cursor
+  const journal = options?.journal
+  const cursor = journal?.cursor()
+  const stopRevision = journal?.stopMarks.revision()
+  const work = options?.currentWork
+  const currentWork = () => {
+    const next = journal && hooks.readCurrentWork?.(subscriber.sessionId, journal)
+    return (
+      !work ||
+      !hooks.readCurrentWork ||
+      (work.viewKey() === next?.viewKey() && work.revision === next?.revision)
+    )
+  }
+  const current = () =>
+    active(subscriber) &&
+    subscriber.fence === fence &&
+    subscriber.cursor === reading &&
+    (!journal ||
+      (hooks.isCurrentJournal?.(subscriber.sessionId, journal) !== false &&
+        cursor?.epoch === journal.cursor().epoch &&
+        cursor?.sequence === journal.cursor().sequence &&
+        stopRevision === journal.stopMarks.revision())) &&
+    currentWork()
+  try {
+    const delivered = yield* emitSubscriberFrameSteps(hooks, subscriber, event, options, current)
+    if (!delivered) {
+      superseded()
+      return false
+    }
+    if (options?.historyView !== undefined && current()) {
+      subscriber.historyView = options.historyView
+    }
+    return true
+  } catch {
+    failed()
+    return false
   }
 }

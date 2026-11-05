@@ -1,3 +1,4 @@
+import { finishAgentSessionSteps } from './agent-session-projection-steps'
 // Derive the current goal solely from the latest journal transition.
 
 import { isRootAgentJournalItem } from './journal/agent-session-journal-producer'
@@ -71,11 +72,18 @@ export function currentAgentSessionThreadGoal(
 export function currentAgentSessionThreadGoalSourceBySequence<T extends GoalCandidate>(
   items: Iterable<T>
 ): { item: T; goal: AgentJournalThreadGoal | null } | undefined {
+  return finishAgentSessionSteps(currentAgentSessionThreadGoalSourceSteps(items))
+}
+
+export function* currentAgentSessionThreadGoalSourceSteps<T extends GoalCandidate>(
+  items: Iterable<T>
+): Generator<void, { item: T; goal: AgentJournalThreadGoal | null } | undefined> {
   let latest: T | null = null
   for (const item of items) {
     if (isGoalTransition(item) && (latest === null || item.sequence > latest.sequence)) {
       latest = item
     }
+    yield
   }
   return latest === null ? undefined : { item: latest, goal: goalFromRow(latest.body) }
 }

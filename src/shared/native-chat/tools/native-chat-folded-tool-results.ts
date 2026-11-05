@@ -1,4 +1,10 @@
-import { unpairedToolResultIndices } from './native-chat-tool-pairs'
+import {
+  finishAgentSessionSteps,
+  mapAgentSessionSteps,
+  filterAgentSessionSteps,
+  setAgentSessionSteps
+} from '../../agent-session/agent-session-projection-steps'
+import { unpairedToolResultIndexSteps } from './native-chat-tool-pairs'
 import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
 
 type ToolContribution = {
@@ -34,21 +40,29 @@ export class FoldedToolResultSources {
   }
 
   project(rows: NativeChatMessage[]): NativeChatMessage[] {
+    return finishAgentSessionSteps(this.projectSteps(rows))
+  }
+
+  *projectSteps(rows: NativeChatMessage[]): Generator<void, NativeChatMessage[]> {
     let retained: (NativeChatMessage | null)[] | undefined
     const unpairedByRow = new Map<number, ReadonlySet<number>>()
     for (const [rowIndex, message] of rows.entries()) {
+      yield
       if (
         message.unpairedToolResults ||
         !message.blocks.some((block) => block.type === 'tool-result')
       ) {
         continue
       }
-      const unpaired = unpairedToolResultIndices(message.blocks)
+      const unpaired = yield* unpairedToolResultIndexSteps(message.blocks)
       if (unpaired.size === 0) {
         continue
       }
-      const blocks = message.blocks.filter((_block, index) => !unpaired.has(index))
-      retained ??= Array.from(rows)
+      const blocks = yield* filterAgentSessionSteps(
+        message.blocks,
+        (_block, index) => !unpaired.has(index)
+      )
+      retained ??= yield* mapAgentSessionSteps(rows, (row) => row)
       retained[rowIndex] = blocks.length > 0 ? { ...message, blocks } : null
       unpairedByRow.set(rowIndex, unpaired)
     }
@@ -56,9 +70,12 @@ export class FoldedToolResultSources {
       return rows
     }
     const orphans = new Map<number, NativeChatMessage[]>()
-    const allocatedIds = new Set(this.sourceMessages.map((message) => message.id))
+    const allocatedIds = yield* setAgentSessionSteps(
+      yield* mapAgentSessionSteps(this.sourceMessages, (message) => message.id)
+    )
     const occurrences = new Map<string, number>()
     for (const [rowIndex, unpaired] of unpairedByRow) {
+      yield
       const message = rows[rowIndex]!
       const contributors = this.contributions.get(rowIndex) ?? [
         {
@@ -70,7 +87,9 @@ export class FoldedToolResultSources {
         }
       ]
       for (const contribution of contributors) {
-        const orphanBlocks = contribution.blocks.filter(
+        yield
+        const orphanBlocks = yield* filterAgentSessionSteps(
+          contribution.blocks,
           (block, index) =>
             block.type === 'tool-result' &&
             block.callId !== undefined &&
@@ -102,7 +121,11 @@ export class FoldedToolResultSources {
     }
     const projected: NativeChatMessage[] = []
     for (let index = 0; index <= retained.length; index += 1) {
-      projected.push(...(orphans.get(index) ?? []))
+      for (const orphan of orphans.get(index) ?? []) {
+        projected.push(orphan)
+        yield
+      }
+      yield
       const message = retained[index]
       if (message) {
         projected.push(message)

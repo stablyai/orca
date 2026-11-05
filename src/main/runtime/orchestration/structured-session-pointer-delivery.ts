@@ -1,9 +1,10 @@
+import { finishAgentSessionSteps } from '../../../shared/agent-session/agent-session-projection-steps'
 /** Pure gate facts for session-turn nudges; busy input steers or queues while the orchestration DB retains mail ownership. */
 
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
-import { projectStructuredAgentSessionStatus } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import { activeStructuredAgentSessionTurnIdSteps } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { projectStructuredAgentSessionStatusSteps } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** Read both facts from the full reduced timeline so downstream callers cannot infer idle from a page. */
 export type StructuredSessionGateFacts = {
@@ -18,12 +19,20 @@ export function structuredSessionGateFacts(
   /** The host's projection of current work (`structuredAgentSessionCurrentWork`). */
   scope?: StructuredAgentSessionWorkScope
 ): StructuredSessionGateFacts {
+  return finishAgentSessionSteps(structuredSessionGateFactSteps(items, scope))
+}
+
+export function* structuredSessionGateFactSteps(
+  items: readonly AgentJournalRenderItem[],
+  scope?: StructuredAgentSessionWorkScope
+): Generator<void, StructuredSessionGateFacts> {
   return {
     turnRunning:
-      activeStructuredAgentSessionTurnId(
+      (yield* activeStructuredAgentSessionTurnIdSteps(
         items,
         scope && ((item) => scope.isCurrentItem(item.itemId))
-      ) !== null,
-    awaitingHuman: projectStructuredAgentSessionStatus(items, [], undefined, scope) === 'attention'
+      )) !== null,
+    awaitingHuman:
+      (yield* projectStructuredAgentSessionStatusSteps(items, [], undefined, scope)) === 'attention'
   }
 }

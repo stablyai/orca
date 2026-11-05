@@ -1,7 +1,7 @@
 import type { AgentSessionJournal } from './journal-store'
 import { finishJournalSteps, finishJournalStepsAsync } from './journal-reconstruction-steps'
 
-const refreshing = new WeakSet<AgentSessionJournal>()
+const refreshing = new WeakMap<AgentSessionJournal, number>()
 
 export const journalDerivedRefreshPending = (journal: AgentSessionJournal): boolean =>
   refreshing.has(journal)
@@ -11,19 +11,34 @@ export async function refreshJournalDerivedRead(
   journal: AgentSessionJournal,
   refresh: () => Promise<void>
 ): Promise<void> {
-  refreshing.add(journal)
+  refreshing.set(journal, (refreshing.get(journal) ?? 0) + 1)
   try {
     await refresh()
   } finally {
-    refreshing.delete(journal)
+    const depth = refreshing.get(journal)! - 1
+    if (depth) {
+      refreshing.set(journal, depth)
+    } else {
+      refreshing.delete(journal)
+    }
   }
 }
 
 export function readJournalDerived<T>(
   journal: AgentSessionJournal,
-  read: (finite: boolean) => Generator<void, T>
+  read: (finite: boolean) => Generator<void, T>,
+  current: () => boolean = () => true
 ): T | Promise<T> {
   return refreshing.has(journal)
-    ? journal.readInOrder(() => finishJournalStepsAsync(read(true)))
+    ? journal.readInOrder(async () => {
+        if (!current()) {
+          throw new Error('Journal read superseded')
+        }
+        const result = await finishJournalStepsAsync(read(true))
+        if (!current()) {
+          throw new Error('Journal read superseded')
+        }
+        return result
+      })
     : finishJournalSteps(read(false))
 }

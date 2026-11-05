@@ -1,3 +1,9 @@
+import {
+  finishAgentSessionSteps,
+  mapAgentSessionSteps,
+  filterAgentSessionSteps,
+  setAgentSessionSteps
+} from '../../agent-session/agent-session-projection-steps'
 // Share desktop/mobile turn ownership, bar placement and row order.
 
 import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
@@ -18,8 +24,15 @@ export function nativeChatRowTurnKeys(
   turnKeysByItemId?: ReadonlyMap<string, string> | null,
   opensTurn: NativeChatOpensTurn = nativeChatUserRowOpensTurn
 ): (string | undefined)[] {
+  return finishAgentSessionSteps(nativeChatRowTurnKeySteps(messages, turnKeysByItemId, opensTurn))
+}
+export function* nativeChatRowTurnKeySteps(
+  messages: readonly NativeChatTurnRow[],
+  turnKeysByItemId?: ReadonlyMap<string, string> | null,
+  opensTurn: NativeChatOpensTurn = nativeChatUserRowOpensTurn
+): Generator<void, (string | undefined)[]> {
   let currentTurnKey: string | undefined
-  return messages.map((message) => {
+  return yield* mapAgentSessionSteps(messages, (message) => {
     const owned = turnKeysByItemId?.get(message.id)
     if (owned !== undefined) {
       currentTurnKey = owned
@@ -38,12 +51,21 @@ export function nativeChatJournalOrderTurnKeys(
   items: readonly AgentJournalRenderItem[],
   recordKeys: ReadonlyMap<string, string | null>
 ): ReadonlyMap<string, string> {
-  const openers = new Set([...recordKeys.values()].filter((key) => key !== null))
+  return finishAgentSessionSteps(nativeChatJournalOrderTurnKeySteps(items, recordKeys))
+}
+export function* nativeChatJournalOrderTurnKeySteps(
+  items: readonly AgentJournalRenderItem[],
+  recordKeys: ReadonlyMap<string, string | null>
+): Generator<void, ReadonlyMap<string, string>> {
+  const openers = yield* setAgentSessionSteps(
+    yield* filterAgentSessionSteps(recordKeys.values(), (key): key is string => key !== null)
+  )
   const keys = new Map<string, string>()
   let currentKey: string | null = null
   // User items folded into the current turn, held until a later row proves the turn continued.
   let pendingUserItemIds: string[] = []
   for (const item of items) {
+    yield
     if (recordKeys.has(item.itemId)) {
       currentKey = recordKeys.get(item.itemId) ?? null
       pendingUserItemIds = []
@@ -63,6 +85,7 @@ export function nativeChatJournalOrderTurnKeys(
     if (currentKey !== null) {
       for (const userItemId of pendingUserItemIds) {
         keys.set(userItemId, currentKey)
+        yield
       }
       pendingUserItemIds = []
       keys.set(item.itemId, currentKey)

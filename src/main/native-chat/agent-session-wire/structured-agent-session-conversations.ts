@@ -1,3 +1,4 @@
+import { refreshJournalDerivedRead } from '../agent-session-journal/journal-derived-read'
 import { advancePromptProjection } from './structured-agent-session-actionable-prompts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
@@ -41,7 +42,12 @@ export class StructuredAgentSessionConversations extends Map<
         replacement?: boolean
       ) => void | Promise<void>
       forget?: (sessionId: string) => void
-      deliver: (sessionId: string, journal: AgentSessionJournal, inputChanged?: boolean) => void
+      deliver: (
+        sessionId: string,
+        journal: AgentSessionJournal,
+        inputChanged?: boolean,
+        replacement?: boolean
+      ) => void | Promise<void>
       afterReplacementProjection?: (
         sessionId: string,
         journal: AgentSessionJournal,
@@ -99,20 +105,19 @@ export class StructuredAgentSessionConversations extends Map<
           }
         }
         if (replacement) {
-          return observe()
-            .then(() => {
-              if (current()) {
-                this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
-                this.delivery.deliver(sessionId, journal, affectsInput)
-              }
+          return refreshJournalDerivedRead(journal, async () => {
+            await observe()
+            if (current()) {
+              this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
+              await this.delivery.deliver(sessionId, journal, affectsInput, true)
+            }
+          }).catch((error) => {
+            this.delivery.logger.warn('delivering a journal commit failed', {
+              scope: 'journal-delivery',
+              sessionId,
+              error
             })
-            .catch((error) => {
-              this.delivery.logger.warn('delivering a journal commit failed', {
-                scope: 'journal-delivery',
-                sessionId,
-                error
-              })
-            })
+          })
         }
         this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
         void observe()

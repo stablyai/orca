@@ -1,3 +1,4 @@
+import { finishJournalStepsAsync } from '../../../native-chat/agent-session-journal/journal-reconstruction-steps'
 // Negotiate item-detail.v1 for full journal items beyond preview heads; fit replies to transport limits and mark remaining truncation.
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -20,7 +21,17 @@ export const STRUCTURED_AGENT_SESSION_ITEM_METHODS = [
       const snapshot = await (
         await requireInstalledStructuredHost(ctx, params.sessionId)
       ).journalSnapshot(params.sessionId)
-      const item = snapshot.items.find((each) => each.itemId === params.itemId)
+      const item = await finishJournalStepsAsync(
+        (function* () {
+          for (const each of snapshot.items) {
+            if (each.itemId === params.itemId) {
+              return each
+            }
+            yield
+          }
+          return null
+        })()
+      )
       if (!item) {
         return { item: null }
       }

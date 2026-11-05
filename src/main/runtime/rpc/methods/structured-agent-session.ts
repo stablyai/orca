@@ -1,3 +1,4 @@
+import { finishJournalStepsAsync } from '../../../native-chat/agent-session-journal/journal-reconstruction-steps'
 import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './structured-agent-session-usage-limit-continue'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './structured-agent-session-close-method'
 import { clientRequestsCommands } from './structured-agent-session-policy'
@@ -207,17 +208,19 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       const host = await requireInstalledHost(ctx, params.sessionId)
       return projectReceiptDeviceHistory(
         projectTurnItemHistory(
-          queuedImages.projectQueuedImageCardHistory(
-            projectBackgroundTaskHistory(
-              await host.history(
-                params,
-                undefined,
-                queuedImages.queuedImageHistoryReader(ctx),
-                clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+          await finishJournalStepsAsync(
+            queuedImages.projectQueuedImageCardHistorySteps(
+              projectBackgroundTaskHistory(
+                await host.history(
+                  params,
+                  undefined,
+                  queuedImages.queuedImageHistoryReader(ctx),
+                  clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+                ),
+                ctx
               ),
               ctx
-            ),
-            ctx
+            )
           ),
           ctx,
           host.sessionAgent(params.sessionId)
@@ -248,6 +251,8 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         ...queuedImages.queuedImageSubscriber(ctx),
         projectQueuePublication: (publication) =>
           queuedImages.projectQueuedImageCardPublication(publication, ctx),
+        projectQueuePublicationSteps: (publication) =>
+          queuedImages.projectQueuedImageCardPublicationSteps(publication, ctx),
         emit: (event) =>
           emit(
             projectReceiptDeviceEvent(

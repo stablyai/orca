@@ -1,3 +1,4 @@
+import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
@@ -135,7 +136,16 @@ export function structuredInputHandoverWorking(
   work: StructuredAgentSessionCurrentWork,
   currentInput?: string
 ): boolean {
+  return finishJournalSteps(structuredInputHandoverWorkingSteps(journal, work, currentInput))
+}
+
+export function* structuredInputHandoverWorkingSteps(
+  journal: AgentSessionJournal,
+  work: StructuredAgentSessionCurrentWork,
+  currentInput?: string
+): Generator<void, boolean> {
   for (const entry of journal.inputOrder.enteredSubmissions()) {
+    yield
     if (entry.clientMessageId !== currentInput && work.owesSend(entry)) {
       return true
     }

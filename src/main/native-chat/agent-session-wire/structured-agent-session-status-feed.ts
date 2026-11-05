@@ -16,6 +16,7 @@ import {
   notifyStructuredStatusObservers,
   notifyStructuredStatusPublication,
   type StatusFeedSession,
+  type StatusPublishOptions,
   type StatusPublication,
   type StructuredAgentSessionStatusSubscriber,
   type StructuredAgentSessionStatusFeedDeps
@@ -163,24 +164,23 @@ export class StructuredAgentSessionStatusFeed {
 
   advanceJournalProjection = this.projections.advance.bind(this.projections)
 
-  refreshJournalProjection = (...args: Parameters<typeof this.projections.refresh>) =>
-    this.projections.refresh(...args)
+  refreshJournalProjection = this.projections.refresh.bind(this.projections)
 
-  afterReplacementProjection = (...args: Parameters<typeof this.projections.afterRefresh>) =>
-    this.projections.afterRefresh(...args)
+  afterReplacementProjection = this.projections.afterRefresh.bind(this.projections)
 
   readStopping = (id: string): boolean => this.projections.readStopping(id)
 
   journalProjection = (...args: Parameters<typeof this.projections.read>) =>
     this.projections.read(...args)
 
-  publish(sessionId: string, journal?: AgentSessionJournal, options?: { replay?: boolean }): void {
+  publish(sessionId: string, journal?: AgentSessionJournal, options?: StatusPublishOptions): void {
     const session = this.deps.sessions.get(sessionId)
     if (!session) {
       return
     }
     const source = journal ?? session.journal
     if (
+      !options?.prepared &&
       this.afterReplacementProjection(sessionId, source, () =>
         this.publish(sessionId, source, options)
       )

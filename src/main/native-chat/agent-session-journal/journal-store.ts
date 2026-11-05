@@ -26,17 +26,13 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
+import * as journalUsage from '../../../shared/agent-session/structured-agent-session-context-usage'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { journalWroteBeforeOpen } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 
 import * as pendingRecovery from './journal-pending-submission-recovery'
-import {
-  createJournalReducerState,
-  resolveJournalItemId,
-  type JournalReducerState
-} from './journal-reducer'
+import * as journalReducer from './journal-reducer'
 import type {
   AgentSessionJournalOptions,
   JournalItemLinkageVisitor,
@@ -50,7 +46,7 @@ import type { JournalCommitObserver, JournalOperationReceipt } from './journal-r
 import { JournalWriteQueue } from './journal-write-queue'
 import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
-import { journalThreadGoalSource } from './journal-thread-goal-source'
+import * as journalGoal from './journal-thread-goal-source'
 import { adoptJournalStoreState } from './journal-store-open'
 
 type JournalCollaborators = ReturnType<typeof createJournalStoreCollaborators>
@@ -60,7 +56,7 @@ export class AgentSessionJournal {
   private readonly identity: AgentSessionJournalIdentity
   private readonly database: JournalHostDatabase
 
-  private state: JournalReducerState
+  private state: journalReducer.JournalReducerState
   private readonly history: JournalHistoryReader
   private readonly readPublic = journalPublic.createJournalPublicReader(() => this.inputOrder)
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
@@ -86,7 +82,7 @@ export class AgentSessionJournal {
     this.now = options.now ?? (() => Date.now())
     this.identity = options.identity
     this.database = options.database
-    this.state = createJournalReducerState(options.identity.sessionId, '')
+    this.state = journalReducer.createJournalReducerState(options.identity.sessionId, '')
     this.history = new JournalHistoryReader(options, () => this.state, this.publicRead)
     this.readSinceView = this.history.readSinceView.bind(this.history)
     this.queue = new JournalWriteQueue(options.identity.sessionId)
@@ -248,13 +244,18 @@ export class AgentSessionJournal {
   newestTurn = (): AgentJournalTurnLifecycle | null =>
     readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
 
-  threadGoalSource = () => journalThreadGoalSource(this.state.items.values())
+  threadGoalSource = () => journalGoal.journalThreadGoalSource(this.state.items.values())
+
+  threadGoalSourceSteps = () => journalGoal.journalThreadGoalSourceSteps(this.state.items.values())
 
   /** Read across the journal, beyond any client's loaded page. */
   threadGoal = () => this.threadGoalSource().goal
 
   /** Read across the journal, beyond any client's loaded page. */
-  contextUsage = () => latestStructuredAgentContextFacts(this.state.items.values())
+  contextUsage = () => journalUsage.latestStructuredAgentContextFacts(this.state.items.values())
+
+  contextUsageSteps = () =>
+    journalUsage.latestStructuredAgentContextFactSteps(this.state.items.values())
 
   /** Includes activity from revisions/tombstones absent from rendered items. */
   lastActivityAt = (): number => this.state.lastActivityAt
@@ -286,7 +287,8 @@ export class AgentSessionJournal {
   presentationRemoved = (itemId: string): boolean =>
     journalInput.journalInputPresentationRemoved(this.state, itemId)
 
-  canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
+  canonicalItemId = (itemId: string): string =>
+    journalReducer.resolveJournalItemId(this.state, itemId)
 
   /** Read after all preceding writes and before later ones. */
   readInOrder<T>(read: () => T | Promise<T>): Promise<T> {

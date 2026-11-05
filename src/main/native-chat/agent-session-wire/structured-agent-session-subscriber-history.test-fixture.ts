@@ -4,6 +4,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   queuedImageReaderSnapshot,
+  queuedImageReaderSnapshotSteps,
   queuedImageSourceIds
 } from './agent-session-queued-image-reader'
 
@@ -19,6 +20,7 @@ export async function subscribeQueuedHistory(
     readsCurrentRequests: true,
     boundedFrames: true,
     readHistorySnapshot: queuedImageReaderSnapshot,
+    readHistorySnapshotSteps: queuedImageReaderSnapshotSteps,
     readQueueSourceIds: queuedImageSourceIds,
     emit: (event) => frames.push(event)
   })

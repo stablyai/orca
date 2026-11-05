@@ -8,6 +8,7 @@ import type { readJournalPublicView } from './journal-public-read'
 import { readJournalSinceAsync } from './journal-cursor'
 import { readJournalRowsAfterCursorAsync } from './journal-open'
 import { captureJournalReadView } from './journal-read-view'
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 
 type PublicRead = Pick<
   ReturnType<typeof readJournalPublicView>,
@@ -63,18 +64,22 @@ export class JournalHistoryReader {
           context
         }
       },
-      (since, retained) =>
-        consume(
+      async (since, retained) => {
+        const snapshot = retained.capture.hasRetainedChanges
+          ? await finishJournalStepsAsync(retained.capture.snapshotSteps())
+          : retained.capture.snapshot()
+        return consume(
           since,
           {
-            snapshot: retained.capture.snapshot(),
+            snapshot,
             snapshotSteps: retained.capture.snapshotSteps,
             normalizationKey: retained.normalizationKey,
-            currentSnapshot: () => retained.capture.snapshot()
+            currentSnapshot: () => snapshot
           },
           retained.capture.canonical,
           retained.context
-        ),
+        )
+      },
       (retained) => retained.capture.close()
     )
   }

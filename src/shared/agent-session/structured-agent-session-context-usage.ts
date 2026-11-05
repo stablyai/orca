@@ -1,3 +1,4 @@
+import { finishAgentSessionSteps } from './agent-session-projection-steps'
 // Turn rows persist context facts across restart; writes target open/newest turns and replace their namesake, so newest facts win.
 
 import {
@@ -32,9 +33,17 @@ export function latestStructuredAgentContextFacts(
   items: Iterable<ContextFactSource>,
   minimumSequence = 0
 ): AgentSessionContextUsage {
+  return finishAgentSessionSteps(latestStructuredAgentContextFactSteps(items, minimumSequence))
+}
+
+export function* latestStructuredAgentContextFactSteps(
+  items: Iterable<ContextFactSource>,
+  minimumSequence = 0
+): Generator<void, AgentSessionContextUsage> {
   let used: { sequence: number; fact: AgentSessionContextUsed } | null = null
   let window: { sequence: number; fact: AgentSessionContextWindow } | null = null
   for (const item of items) {
+    yield
     if (isAgentSessionContextClear(item.body) && item.sequence > minimumSequence) {
       minimumSequence = item.sequence
       if (used && used.sequence <= minimumSequence) {

@@ -1,3 +1,4 @@
+import { finishAgentSessionSteps } from '../agent-session/agent-session-projection-steps'
 // Keep every retry in the journal but draw only each agent run’s latest retry row, preserving intervening non-retry rows.
 
 import { agentJournalItemSubagentId } from '../agent-session/journal/agent-session-journal-producer'
@@ -17,13 +18,17 @@ function isProviderRetryRow(message: NativeChatMessage): boolean {
 export function collapseProviderRetryRuns(
   messages: readonly NativeChatMessage[]
 ): readonly NativeChatMessage[] {
-  if (!messages.some(isProviderRetryRow)) {
-    return messages
-  }
+  return finishAgentSessionSteps(collapseProviderRetryRunSteps(messages))
+}
+export function* collapseProviderRetryRunSteps(
+  messages: readonly NativeChatMessage[]
+): Generator<void, readonly NativeChatMessage[]> {
   // Each agent's open run, as the index of its latest row in `drawn`.
+  let hasRetry = false
   const openRuns = new Map<string | null, number>()
   const drawn: (NativeChatMessage | null)[] = []
   for (const message of messages) {
+    yield
     if (isNativeChatContextClear(message)) {
       openRuns.clear()
     }
@@ -34,6 +39,7 @@ export function collapseProviderRetryRuns(
       drawn.push(message)
       continue
     }
+    hasRetry = true
     const agent = agentJournalItemSubagentId(message)
     const previous = openRuns.get(agent)
     if (previous !== undefined) {
@@ -42,5 +48,15 @@ export function collapseProviderRetryRuns(
     openRuns.set(agent, drawn.length)
     drawn.push(message)
   }
-  return drawn.filter((message) => message !== null)
+  if (!hasRetry) {
+    return messages
+  }
+  const result: NativeChatMessage[] = []
+  for (const message of drawn) {
+    if (message !== null) {
+      result.push(message)
+    }
+    yield
+  }
+  return result
 }

@@ -150,3 +150,5 @@ export function unsubscribeStructuredStatus(
     emitStructuredStatusEvent(subscribers, subscriber, { type: 'end' })
   }
 }
+
+export type StatusPublishOptions = { replay?: boolean; prepared?: boolean }

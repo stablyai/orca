@@ -1,3 +1,4 @@
+import { finishJournalStepsAsync } from '../../native-chat/agent-session-journal/journal-reconstruction-steps'
 /** Adapt host reads/sends for the pure structured-pointer policy; do not decide delivery here. */
 
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
@@ -10,7 +11,7 @@ import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
 import {
-  structuredSessionGateFacts,
+  structuredSessionGateFactSteps,
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
 import { sendAgentTurn, type StructuredSessionTurnOutcome } from './send-agent-turn'
@@ -37,7 +38,7 @@ export async function readStructuredSessionGateFacts(
   }
   // The host's projection of current work: an agent that ended is idle, whatever its rows say.
   const work = getStructuredAgentSessionHost()?.currentWork(sessionId)
-  return structuredSessionGateFacts(snapshot.items, work?.scope)
+  return finishJournalStepsAsync(structuredSessionGateFactSteps(snapshot.items, work?.scope))
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
@@ -128,7 +129,7 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
         const state = journal.queuedMessages.inputState()
         const cleared = state.queuePauseMarks.cleared?.sequence
         const changes = state.queue.revision - state.queue.cards.size
-        const key = `${state.epoch}:${changes}:${order.unsettledSubmissions().length}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared}:${state.items.size}`
+        const key = `${state.epoch}:${changes}:${order.unsettledSubmissionCount()}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared}:${state.items.size}`
         const changed = key !== seen
         seen = key
         return changed

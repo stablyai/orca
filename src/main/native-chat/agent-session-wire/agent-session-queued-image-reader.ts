@@ -1,24 +1,22 @@
 import {
+  finishJournalSteps,
+  sortJournalSteps
+} from '../agent-session-journal/journal-reconstruction-steps'
+import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { journalRenderItem } from '../agent-session-journal/journal-render-item'
-import {
-  agentSessionPublishedWorkFields,
-  type AgentSessionPublishedWork
-} from './agent-session-published-work'
-import { boundedFrameItem } from './agent-session-bounded-frame-item'
-import { agentJournalItemForWire } from './agent-session-item-wire-form'
-import {
-  readPublishedQueuedMessages,
-  type QueuePublication
-} from './structured-agent-session-queued-publication'
+import { readPublishedQueuedMessageSteps } from './structured-agent-session-queued-publication'
+export {
+  queuedImageReaderEvent,
+  queuedImageReaderEventSteps
+} from './agent-session-queued-image-events'
 
 export const queuedCardHoldsImage = (card: Pick<AgentSessionQueuedMessage, 'body'>): boolean =>
   card.body.blocks.some((block) => block.type === 'image-ref')
@@ -28,7 +26,7 @@ const relations = new WeakMap<
   object,
   { ids: ReadonlyMap<string, boolean>; imageIds: ReadonlySet<string> }
 >()
-function sourceIds(
+export function* sourceIdSteps(
   journal: AgentSessionJournal,
   cards: readonly Pick<AgentSessionQueuedMessage, 'body' | 'messageId'>[]
 ) {
@@ -39,6 +37,7 @@ function sourceIds(
   const ids = new Map<string, boolean>()
   const imageIds = new Set<string>()
   for (const card of cards) {
+    yield
     if (!queuedCardHoldsImage(card)) {
       continue
     }
@@ -63,7 +62,7 @@ function sourceIds(
   return result
 }
 
-function sourcePresentation(send: AgentJournalSubmission, active: boolean) {
+export function sourcePresentation(send: AgentJournalSubmission, active: boolean) {
   const { queuedMessageId: _queue, keptAsQueuedMessageId: _kept, ...rest } = send
   return {
     ...rest,
@@ -72,7 +71,10 @@ function sourcePresentation(send: AgentJournalSubmission, active: boolean) {
   }
 }
 
-function sourceItem(journal: AgentSessionJournal, id: string): AgentJournalRenderItem | null {
+export function sourceItem(
+  journal: AgentSessionJournal,
+  id: string
+): AgentJournalRenderItem | null {
   const key = agentJournalSubmissionKey(id)
   const state = journal.queuedMessages.displayState()
   const source = state.inputs.sources.get(id)
@@ -116,8 +118,16 @@ export function queuedImageReaderSnapshot(
   snapshot = journal.snapshot(),
   touched?: ReadonlySet<string>
 ) {
-  const cards = readPublishedQueuedMessages(journal)
-  const { ids, imageIds } = sourceIds(journal, cards)
+  return finishJournalSteps(queuedImageReaderSnapshotSteps(journal, snapshot, touched))
+}
+
+export function* queuedImageReaderSnapshotSteps(
+  journal: AgentSessionJournal,
+  snapshot: ReturnType<AgentSessionJournal['snapshot']>,
+  touched?: ReadonlySet<string>
+): Generator<void, typeof snapshot> {
+  const cards = yield* readPublishedQueuedMessageSteps(journal)
+  const { ids, imageIds } = yield* sourceIdSteps(journal, cards)
   if (imageIds.size === 0) {
     return snapshot
   }
@@ -128,118 +138,83 @@ export function queuedImageReaderSnapshot(
       : send
   let memo = presentations.get(journal)
   if (!touched && (!memo || memo.revision !== revision || memo.cards !== cards)) {
-    const submissions = snapshot.submissions.map(present)
+    const submissions: AgentJournalSubmission[] = []
+    for (const send of snapshot.submissions) {
+      submissions.push(present(send))
+      yield
+    }
     memo = { revision, cards, submissions }
     presentations.set(journal, memo)
   }
-  const items = touched ? [...touched].flatMap((id) => journal.item(id) ?? []) : snapshot.items
-  const retained = [...ids].flatMap(([id, unchanged]) =>
-    (touched && !touched.has(agentJournalSubmissionKey(id))) ||
-    !unchanged ||
-    journal.submission(id)?.dispatchState === 'accepted' ||
-    journal.item(agentJournalSubmissionKey(id))
-      ? []
-      : (sourceItem(journal, id) ?? [])
-  )
+  let items = snapshot.items
+  if (touched) {
+    items = []
+    for (const id of touched) {
+      const item = journal.item(id)
+      if (item) {
+        items.push(item)
+      }
+      yield
+    }
+  }
+  const retained: AgentJournalRenderItem[] = []
+  for (const [id, unchanged] of ids) {
+    if (
+      (!touched || touched.has(agentJournalSubmissionKey(id))) &&
+      unchanged &&
+      journal.submission(id)?.dispatchState !== 'accepted' &&
+      !journal.item(agentJournalSubmissionKey(id))
+    ) {
+      const item = sourceItem(journal, id)
+      if (item) {
+        retained.push(item)
+      }
+    }
+    yield
+  }
+  let submissions = memo?.submissions ?? []
+  if (retained.length) {
+    const selected = new Map<string, AgentJournalSubmission>()
+    for (const send of touched ? snapshot.submissions : memo!.submissions) {
+      selected.set(send.clientMessageId, touched ? present(send) : send)
+      yield
+    }
+    for (const item of retained) {
+      const original = journal.inputOrder.inputForItem(item.itemId)
+      if (original) {
+        selected.set(original.clientMessageId, present(original))
+      }
+      yield
+    }
+    submissions = yield* sortJournalSteps(
+      selected.values(),
+      (a, b) =>
+        a.submittedAt - b.submittedAt ||
+        journal.inputOrder.inputOrdinal(a.clientMessageId) -
+          journal.inputOrder.inputOrdinal(b.clientMessageId)
+    )
+  } else if (touched) {
+    submissions = []
+    for (const send of snapshot.submissions) {
+      submissions.push(present(send))
+      yield
+    }
+  }
   return {
     ...snapshot,
-    items: retained.length ? [...items, ...retained].sort(compareAgentJournalItems) : items,
-    submissions: retained.length
-      ? [
-          ...new Map(
-            [
-              ...(touched ? snapshot.submissions.map(present) : memo!.submissions),
-              ...retained.flatMap((item) => {
-                const original = journal.inputOrder.inputForItem(item.itemId)
-                return original ? [present(original)] : []
-              })
-            ].map((send) => [send.clientMessageId, send])
-          ).values()
-        ].sort(
-          (a, b) =>
-            a.submittedAt - b.submittedAt ||
-            journal.inputOrder.inputOrdinal(a.clientMessageId) -
-              journal.inputOrder.inputOrdinal(b.clientMessageId)
-        )
-      : touched
-        ? snapshot.submissions.map(present)
-        : memo!.submissions
+    items: retained.length
+      ? yield* sortJournalSteps(combinedItems(items, retained), compareAgentJournalItems)
+      : items,
+    submissions
   }
 }
 
-/** Only queue/source semantic changes correct rows; work and pause never replay the population. */
-export function queuedImageReaderEvent(
-  journal: AgentSessionJournal,
-  event: AgentSessionSubscribeEvent,
-  previous: QueuePublication | undefined,
-  current: QueuePublication | undefined,
-  work?: AgentSessionPublishedWork
-): AgentSessionSubscribeEvent {
-  if (!current || event.type !== 'batch') {
-    return event
-  }
-  const { ids: now, imageIds } = sourceIds(journal, current.queuedMessages)
-  const before = sourceIds(journal, previous?.queuedMessages ?? []).ids
-  if (
-    before === now &&
-    !event.batch.submissions.some(
-      (send) => now.has(send.clientMessageId) || imageIds.has(send.queuedMessageId ?? '')
-    )
-  ) {
-    return event
-  }
-  const changed = new Set(
-    [...before.keys(), ...now.keys()].filter((id) => before.get(id) !== now.get(id))
-  )
-  for (const send of event.batch.submissions) {
-    if (
-      now.has(send.clientMessageId) ||
-      before.has(send.clientMessageId) ||
-      imageIds.has(send.queuedMessageId ?? '')
-    ) {
-      changed.add(send.clientMessageId)
-    }
-  }
-  if (changed.size === 0) {
-    return event
-  }
-  const items = new Map(event.batch.items.map((item) => [item.itemId, item]))
-  const removed = new Set(event.batch.removedItemIds)
-  const submissions = new Map(event.batch.submissions.map((send) => [send.clientMessageId, send]))
-  for (const id of changed) {
-    const key = agentJournalSubmissionKey(id)
-    const original = submissions.get(id) ?? journal.submission(id)
-    const send = original && work ? work.publishedSubmission(original) : original
-    const active = now.get(id) === true && send?.dispatchState !== 'accepted'
-    if (!journal.item(key) && (before.get(id) === true) !== active) {
-      const item = active ? sourceItem(journal, id) : null
-      if (item) {
-        items.set(key, boundedFrameItem(agentJournalItemForWire(item)).item)
-        removed.delete(key)
-      } else {
-        items.delete(key)
-        removed.add(key)
-      }
-    }
-    if (send) {
-      submissions.set(
-        id,
-        now.has(id) || imageIds.has(send.queuedMessageId ?? '')
-          ? sourcePresentation(send, now.get(id) === true)
-          : send
-      )
-    }
-  }
-  return {
-    ...event,
-    ...(work ? agentSessionPublishedWorkFields(journal, work) : {}),
-    batch: {
-      ...event.batch,
-      items: [...items.values()].sort(compareAgentJournalItems),
-      removedItemIds: [...removed],
-      submissions: [...submissions.values()]
-    }
-  }
+function* combinedItems(
+  items: readonly AgentJournalRenderItem[],
+  retained: readonly AgentJournalRenderItem[]
+) {
+  yield* items
+  yield* retained
 }
 
 export function queuedImageSourceIds(journal: AgentSessionJournal, messageId: string): string[] {

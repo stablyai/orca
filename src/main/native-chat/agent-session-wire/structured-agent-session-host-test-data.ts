@@ -174,12 +174,20 @@ export function hostTestRestingOptionsJournal(
 ) {
   return {
     threadGoal: () => null,
+    threadGoalSourceSteps: function* () {
+      yield* []
+      return { goal: null, row: null }
+    },
     inputOrder: { hasInputs: () => false },
     visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) =>
       items.forEach((body, index) => visit(`item-${index}`, index + 1, body)),
     wroteBeforeOpen: () => wroteBeforeOpen,
     submissions: () => [],
     contextUsage: () => null,
+    contextUsageSteps: function* () {
+      yield* []
+      return null
+    },
     context: { floor: () => null }
   }
 }

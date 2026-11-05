@@ -1,10 +1,11 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
+import { currentAgentSessionThreadGoalSourceSteps } from '../../../shared/agent-session/agent-session-thread-goal'
 
 export type JournalThreadGoalSource = {
   goal: AgentJournalThreadGoal | null
@@ -14,7 +15,13 @@ export type JournalThreadGoalSource = {
 export function journalThreadGoalSource(
   items: Iterable<AgentJournalRenderItem>
 ): JournalThreadGoalSource {
-  const source = currentAgentSessionThreadGoalSourceBySequence(items)
+  return finishJournalSteps(journalThreadGoalSourceSteps(items))
+}
+
+export function* journalThreadGoalSourceSteps(
+  items: Iterable<AgentJournalRenderItem>
+): Generator<void, JournalThreadGoalSource> {
+  const source = yield* currentAgentSessionThreadGoalSourceSteps(items)
   const item = source?.item
   const identity = item ? parseAgentJournalItemKey(item.itemId) : null
   return {

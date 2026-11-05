@@ -1,3 +1,4 @@
+import { finishJournalSteps } from '../agent-session-journal/journal-reconstruction-steps'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
@@ -6,10 +7,7 @@ import {
 } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  queuePauseLiftOnItsWay,
-  resumableQueuePause
-} from '../agent-session-journal/queued-message-pause'
+import { resumableQueuePauseSteps } from '../agent-session-journal/queued-message-pause'
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
   nextStructuredQueuedMessage,
@@ -19,7 +17,7 @@ import {
   heldStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkHost
 } from './structured-agent-session-host-current-work'
-import { structuredInputExecutionWorking } from './structured-agent-session-input-selection'
+import { structuredInputHandoverWorkingSteps } from './structured-agent-session-input-selection'
 
 export type QueuePublication = {
   queuedMessages: AgentSessionQueuedMessage[]
@@ -49,9 +47,12 @@ export function structuredQueueSendGate(
 
 /** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
  *  Stop pauses the queue, published once beside it. */
-function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
+function* computePublishedQueuedMessageSteps(
+  journal: AgentSessionJournal
+): Generator<void, AgentSessionQueuedMessage[]> {
   const published: AgentSessionQueuedMessage[] = []
   for (const row of journal.queuedMessages.list()) {
+    yield
     if (row.state !== 'waiting' && row.state !== 'returned') {
       continue
     }
@@ -79,7 +80,7 @@ function isPublishedPausedReason(
   return reason === QUEUED_MESSAGE_PAUSED_SEND_FAILED
 }
 
-type ListMemo = { key: string; serialized: string; list: AgentSessionQueuedMessage[] }
+type ListMemo = { key: string; serialized: string[]; list: AgentSessionQueuedMessage[] }
 /** Stable identity avoids repeated serialization on token frames. */
 const listMemos = new WeakMap<AgentSessionJournal, ListMemo>()
 const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
@@ -87,15 +88,27 @@ const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
 export function readPublishedQueuedMessages(
   journal: AgentSessionJournal
 ): AgentSessionQueuedMessage[] {
+  return finishJournalSteps(readPublishedQueuedMessageSteps(journal))
+}
+
+export function* readPublishedQueuedMessageSteps(
+  journal: AgentSessionJournal
+): Generator<void, AgentSessionQueuedMessage[]> {
   const key = journal.queuedMessages.revision()
   const memo = listMemos.get(journal)
   if (memo && memo.key === key) {
     return memo.list
   }
-  const list = computePublishedQueuedMessages(journal)
-  // Belt for the identity dedup: equal recomputed content keeps the previous reference.
-  const serialized = JSON.stringify(list)
-  if (memo && memo.serialized === serialized) {
+  const list = yield* computePublishedQueuedMessageSteps(journal)
+  const serialized: string[] = []
+  let same = memo?.list.length === list.length
+  for (let index = 0; index < list.length; index++) {
+    const row = JSON.stringify(list[index])
+    serialized.push(row)
+    same &&= memo?.serialized[index] === row
+    yield
+  }
+  if (memo && same) {
     listMemos.set(journal, { key, serialized, list: memo.list })
     return memo.list
   }
@@ -115,7 +128,14 @@ export function readQueuePublication(
   journal: AgentSessionJournal,
   gate: QueueSendGate
 ): QueuePublication {
-  const queuedMessages = readPublishedQueuedMessages(journal)
+  return finishJournalSteps(readQueuePublicationSteps(journal, gate))
+}
+
+export function* readQueuePublicationSteps(
+  journal: AgentSessionJournal,
+  gate: QueueSendGate
+): Generator<void, QueuePublication> {
+  const queuedMessages = yield* readPublishedQueuedMessageSteps(journal)
   // Show pauses only when Resume can send a card; hide old pauses after clear/reopen.
   // Re-derive per emit because submission acceptance can lift a pause.
   const pauses = structuredQueuePauses(journal)
@@ -130,17 +150,32 @@ export function readQueuePublication(
       pause.reason === 'cleared' ||
       (pause.reason === 'restarted' && (!visible || !pause.since || visible < pause.since.sequence))
   )
-  const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
+  const resumable =
+    silent || pauses.length === 0
+      ? null
+      : yield* resumableQueuePauseSteps(pauses, journal.queuedMessages.list())
   // The input order indexes pending sends, so a held queue never rescans history.
   const input = gate(journal)
-  const pause =
-    resumable &&
-    !queuePauseLiftOnItsWay(resumable, journal.inputOrder.sendingSubmissions(), (submission) =>
-      input.work.owesSend(submission)
-    )
-      ? resumable
-      : null
-  const working = structuredInputExecutionWorking(journal, input.work)
+  let lifting = false
+  if (resumable) {
+    const anchor = resumable.since?.sequence ?? 0
+    for (const submission of journal.inputOrder.sendingSubmissionValues()) {
+      if (
+        submission.dispatchState === 'pending' &&
+        (submission.acceptedSequence ?? 0) > anchor &&
+        input.work.owesSend(submission)
+      ) {
+        lifting = true
+        break
+      }
+      yield
+    }
+  }
+  const pause = lifting ? null : resumable
+  const working =
+    input.work.activeTurnId() !== null ||
+    (yield* structuredInputHandoverWorkingSteps(journal, input.work))
+  yield* input.work.actionablePromptSteps(() => true)
   const queuePause =
     pause?.reason === 'stopped' || (pause?.reason === 'failed' && !working)
       ? { reason: pause.reason }
@@ -170,5 +205,30 @@ export function tryReadQueuePublication(
     return journal ? readQueuePublication(journal, gate) : undefined
   } catch {
     return undefined
+  }
+}
+
+export function queuePublicationReaders(
+  sessions: StructuredAgentSessionCurrentWorkHost['sessions'],
+  store: () => AgentSessionRecordStore
+) {
+  return {
+    readQueuePublication: (id: string) =>
+      tryReadQueuePublication(
+        sessions.get(id)?.journal,
+        structuredQueueSendGate({ store: store(), sessions }, id)
+      ),
+    readQueuePublicationSteps: function* (
+      id: string
+    ): Generator<void, QueuePublication | undefined> {
+      const journal = sessions.get(id)?.journal
+      if (!journal) {
+        return undefined
+      }
+      return yield* readQueuePublicationSteps(
+        journal,
+        structuredQueueSendGate({ store: store(), sessions }, id)
+      )
+    }
   }
 }

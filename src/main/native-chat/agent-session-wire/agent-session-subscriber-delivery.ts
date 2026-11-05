@@ -1,3 +1,4 @@
+import { finishJournalStepsAsync } from '../agent-session-journal/journal-reconstruction-steps'
 import {
   deliverToSubscriber,
   type SubscriberDeliveryPort
@@ -11,7 +12,7 @@ export function queueSubscriberDelivery(
   port: SubscriberDeliveryPort,
   subscriber: Subscriber,
   input: Delivery,
-  initialDelivery: (delivery: Delivery) => void
+  initialDelivery: (delivery: Delivery) => void | Promise<void>
 ): void {
   subscriber.pendingDelivery = {
     ...input,
@@ -28,7 +29,7 @@ export function queueSubscriberDelivery(
         subscriber.pendingDelivery = undefined
         await deliverToSubscriber(port, { subscriber, ...pending })
         if (pending.emitCheckpoint && port.isActive(subscriber)) {
-          initialDelivery(pending)
+          await initialDelivery(pending)
         }
       }
     })
@@ -45,4 +46,14 @@ export function queueSubscriberDelivery(
         queueSubscriberDelivery(port, subscriber, pending, initialDelivery)
       }
     })
+}
+
+export async function emitSubscriberDelivery(
+  port: SubscriberDeliveryPort,
+  ...args: Parameters<SubscriberDeliveryPort['emit']>
+): Promise<boolean | void> {
+  if (port.emitSteps) {
+    return finishJournalStepsAsync(port.emitSteps(...args))
+  }
+  port.emit(...args)
 }

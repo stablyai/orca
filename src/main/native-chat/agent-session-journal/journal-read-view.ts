@@ -20,6 +20,9 @@ export function captureJournalReadView(state: JournalReducerState, snapshot: Age
   readers.add(view)
   active.set(state, readers)
   return {
+    get hasRetainedChanges(): boolean {
+      return view.items.size !== 0 || view.submissions.size !== 0
+    },
     *snapshotSteps(): Generator<void, AgentJournalSnapshot> {
       const items: AgentJournalSnapshot['items'] = []
       const submissions: AgentJournalSnapshot['submissions'] = []

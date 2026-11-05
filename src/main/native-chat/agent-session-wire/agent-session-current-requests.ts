@@ -78,3 +78,15 @@ export function readCurrentRequestsPiece(
     nextCursor: end === json.length ? null : end
   }
 }
+
+export function* prepareCurrentRequestsJsonSteps(projection: Projection): Generator<void> {
+  if (projection.json !== undefined) {
+    return
+  }
+  const parts: string[] = []
+  for (const item of projection.items) {
+    parts.push(JSON.stringify(item))
+    yield
+  }
+  projection.json = `[${parts.join(',')}]`
+}

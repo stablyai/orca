@@ -130,7 +130,7 @@ describe('a conversation delivers what its journal commits', () => {
 
     await journal.replaceEpochItems('handle_forked', 0, [])
 
-    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal, true)
+    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal, true, true)
   })
 
   it('delivers nothing for a handle the conversation has replaced', async () => {

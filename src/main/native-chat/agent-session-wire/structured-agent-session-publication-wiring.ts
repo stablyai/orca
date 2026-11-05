@@ -27,10 +27,26 @@ export function createStructuredAgentSessionPublicationWiring(input: {
       )
     },
     forget: (id) => input.client().requestFailures.forget(id),
-    deliver: (id, journal, inputChanged) => {
+    deliver: (id, journal, inputChanged, replacement) => {
+      if (replacement) {
+        return (async () => {
+          try {
+            await input.client().subscribers.deliverReplacement(id, journal)
+          } finally {
+            try {
+              await input.client().observeReplacement(id, journal, async () => {})
+              input.client().publishJournal(id, journal, true, inputChanged, true)
+            } finally {
+              input.delivery().afterCommit(id, journal)
+            }
+          }
+        })()
+      }
       input.client().subscribers.deliverFrames(id, journal)
-      input.client().publishJournal(id, journal, true, inputChanged)
+
+      input.client().publishJournal(id, journal, true, inputChanged, replacement)
       input.delivery().afterCommit(id, journal)
+      return undefined
     },
     afterReplacementProjection: (...args) => input.client().afterReplacementProjection(...args),
     deliverSettleEdge: (id, journal) => input.delivery().afterSettleEdge(id, journal),
