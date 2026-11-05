@@ -78,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/release/publication/assert-github-release-is-draft.mjs
 
       - name: Setup pnpm
         uses: pnpm/setup@v2
@@ -130,7 +130,7 @@ jobs:
       - uses: ./.github/actions/install-mobile-dependencies
 
       - name: Verify macOS signing environment
-        run: node config/scripts/verify-macos-release-env.mjs
+        run: node config/scripts/desktop-distribution/macos/verify-macos-release-env.mjs
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
@@ -206,8 +206,8 @@ jobs:
       - name: Gate runtime file-watcher process isolation
         run: |
           # #8212: require Node and the exact Electron runtime to survive native SIGSEGV before packaging.
-          node config/scripts/runtime-file-watcher-fault-harness.mjs
-          ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
+          node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs
+          ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs
 
       - name: Abort if the parent release-cut run was cancelled
         if: ${{ !inputs.qualification_only }}
@@ -247,11 +247,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
-        run: node config/scripts/assert-github-release-is-draft.mjs "${{ inputs.tag }}"
+        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "${{ inputs.tag }}"
 
       # Check after publish because builder’s single pack/upload invocation has no cheap interposition point.
       - name: Verify telemetry constants present in app.asar
-        run: node config/scripts/verify-telemetry-constants.mjs
+        run: node config/scripts/desktop-build/telemetry-contracts/verify-telemetry-constants.mjs
 
       - name: Upload qualification artifacts
         if: inputs.qualification_only

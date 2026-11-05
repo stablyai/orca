@@ -193,6 +193,11 @@
       "sendQueueHint": "Se ejecuta después del turno actual",
       "sendSteerHint": "Entra en lo que el agente está haciendo ahora"
     },
+    "contextUsage": {
+      "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
+      "title": "Contexto",
+      "estimated": "Estimado a partir de la última respuesta."
+    },
     "composerAttachments": {
       "attachedImage": "Imagen adjunta",
       "file": "Archivo",
@@ -379,7 +384,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Predeterminado",
-      "notReportedMarker": "No indicado"
+      "notReportedMarker": "No indicado",
+      "moreModels": "Más modelos",
+      "fewerModels": "Menos modelos"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Enviado al agente — sin confirmar"
@@ -816,7 +823,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
-      "openImage": "Abrir imagen"
+      "openImage": "Abrir imagen",
+      "wrapLines": "Ajustar líneas",
+      "disableLineWrap": "Desactivar ajuste de línea"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Cerrar panel"
@@ -1246,6 +1255,10 @@
       "previewFile": "Previsualizar el archivo {{name}}",
       "retryLoading": "Reintentar cargar {{path}}",
       "unavailable": "No disponible en el móvil"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "Copiar nombre",
+      "copyRelativePath": "Copiar ruta relativa"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código fuente Markdown cargado",
@@ -1822,13 +1835,8 @@
       "noUpdate": "Sin actualizaciones desde hace {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "De {{sender}}",
-      "fromMore": "De {{sender}} +{{count}}",
-      "fromUnnamed": "De un agente",
-      "messageFrom": "Mensaje de {{sender}}",
-      "messageFromMore": "Mensaje de {{sender}} +{{count}}",
-      "messageFromUnnamed": "Mensaje de un agente",
-      "unnamedSender": "un agente"
+      "unnamedSender": "un agente",
+      "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "No se pudo crear la terminal",
@@ -1858,6 +1866,7 @@
       "countWorkflows_one": "{{count}} flujo de trabajo",
       "countWorkflows_other": "{{count}} flujos de trabajo",
       "detailsUnavailable": "Los detalles de la tarea no están disponibles para esta sesión.",
+      "outputFile": "Salida: {{value0}}",
       "groupAgents": "Agentes",
       "groupMonitors": "Monitores",
       "groupShell": "Shell",
@@ -2211,8 +2220,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "No se pueden guardar comandos en un mensaje en cola.",
-      "editing": "Editando mensaje",
-      "editingAttributed": "Editando mensaje · {{attribution}}"
+      "editing": "Editando mensaje"
     },
     "quickCommandEditorForm": {
       "action": "Acción",

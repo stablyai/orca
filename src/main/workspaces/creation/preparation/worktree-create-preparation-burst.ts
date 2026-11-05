@@ -1,4 +1,4 @@
-import { setBoundedMapEntry } from '../../../runtime/runtime-async-boundaries'
+import { setBoundedMapEntry } from '../../../runtime/repositories/remote-fetch-cache'
 
 export const WORKTREE_CREATE_BURST_MS = 5 * 60_000
 const WORKTREE_CREATE_PREPARATION_CONSUME_MAX = 64

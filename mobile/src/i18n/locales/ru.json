@@ -197,6 +197,11 @@
       "sendQueueHint": "Выполнится после текущего хода",
       "sendSteerHint": "Попадёт в то, что агент делает сейчас"
     },
+    "contextUsage": {
+      "label": "Контекст: {{used}} из {{window}} токенов, использовано {{percent}}%",
+      "title": "Контекст",
+      "estimated": "Оценка по последнему ответу."
+    },
     "composerAttachments": {
       "attachedImage": "Прикреплённое изображение",
       "file": "Файл",
@@ -383,7 +388,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "По умолчанию",
-      "notReportedMarker": "Нет данных"
+      "notReportedMarker": "Нет данных",
+      "moreModels": "Другие модели",
+      "fewerModels": "Меньше моделей"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено"
@@ -854,7 +861,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Копировать код",
-      "openImage": "Открыть изображение"
+      "openImage": "Открыть изображение",
+      "wrapLines": "Переносить строки",
+      "disableLineWrap": "Выключить перенос строк"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Закрыть панель"
@@ -1285,6 +1294,10 @@
       "previewFile": "Открыть предпросмотр файла {{name}}",
       "retryLoading": "Повторить загрузку {{path}}",
       "unavailable": "Недоступно на мобильном устройстве"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "Копировать имя",
+      "copyRelativePath": "Копировать относительный путь"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",
@@ -1875,13 +1888,8 @@
       "noUpdate": "Нет обновлений уже {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "От {{sender}}",
-      "fromMore": "От {{sender}} +{{count}}",
-      "fromUnnamed": "От агента",
-      "messageFrom": "Сообщение от {{sender}}",
-      "messageFromMore": "Сообщение от {{sender}} +{{count}}",
-      "messageFromUnnamed": "Сообщение от агента",
-      "unnamedSender": "агента"
+      "unnamedSender": "агента",
+      "fromSender": "От"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Не удалось создать терминал",
@@ -1916,6 +1924,7 @@
       "countWorkflows_one": "{{count}} процесс",
       "countWorkflows_other": "{{count}} процесса",
       "detailsUnavailable": "Подробности задач в этой сессии недоступны.",
+      "outputFile": "Вывод: {{value0}}",
       "groupAgents": "Агенты",
       "groupMonitors": "Наблюдения",
       "groupShell": "Оболочка",
@@ -2279,8 +2288,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Команды нельзя сохранять в сообщении в очереди.",
-      "editing": "Редактирование сообщения",
-      "editingAttributed": "Редактирование сообщения · {{attribution}}"
+      "editing": "Редактирование сообщения"
     },
     "quickCommandEditorForm": {
       "action": "Действие",

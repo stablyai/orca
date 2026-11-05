@@ -25,9 +25,9 @@ export const UNIT_SETUP_FILES = [
 
 export const UNIT_EXCLUDE = [
   ...defaultExclude,
-  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
-  'src/main/daemon/shell-ready.test.ts',
-  'src/main/daemon/node-pty-fd-leak.test.ts',
+  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
+  'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
+  'src/main/daemon/pty-subprocess/testing/node-pty-fd-leak.test.ts',
   'src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts',
   'src/main/pty/shell-startup/omp-shell-wrapper-alias-safety.test.ts',
   'src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts',
@@ -36,7 +36,7 @@ export const UNIT_EXCLUDE = [
   'src/main/pty/history/terminal-history-fish-session.node-pty.test.ts',
   'src/main/pty/shell-startup/zsh-scoped-histfile.live-shell.test.ts',
   'src/main/pty/shell-startup/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
-  'src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts',
+  'src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts',
   'src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts',
   'src/shared/fish-query-reply-child-stdin.node-pty.test.ts',
   'src/shared/fish-wsl-cwd-report.node-pty.test.ts',

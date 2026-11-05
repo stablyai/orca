@@ -468,7 +468,7 @@ jobs:
           shopt -s nullglob
           runs=(layout-divergence/*.jsonl layout-divergence/*-results.json)
           for run in $(printf '%s\n' "${runs[@]%.jsonl}" | sed 's/-results\.json$//' | sort -u); do
-            node config/scripts/layout-save-divergence-summary.mjs "$run.jsonl" "$run-summary.json" "$run-results.json"
+            node config/scripts/diagnostics/layout-save/layout-save-divergence-summary.mjs "$run.jsonl" "$run-summary.json" "$run-results.json"
             if [ -f "$run-results.json" ]; then
               E2E_FAILURE_SUMMARY_SCRIPT=config/scripts/ci/e2e-failures/ci-e2e-failure-summary.mjs
               if [ ! -f "$E2E_FAILURE_SUMMARY_SCRIPT" ]; then

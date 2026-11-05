@@ -1,5 +1,5 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
-import { expect, vi, type Mock } from 'vitest'
+import { vi, type Mock } from 'vitest'
 
 import type * as GitUsernameModule from '../../git/git-username'
 import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
@@ -10,7 +10,6 @@ import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracki
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
 
 type TestMock = Mock
@@ -53,13 +52,6 @@ vi.mock('../../git/worktrees/content-paths/worktree-symlink-detection', async (i
   ...(await importOriginal<Record<string, unknown>>()),
   findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock
 }))
-
-export async function waitForMobileSessionTabsEvents(
-  events: RuntimeMobileSessionTabsResult[],
-  count: number
-): Promise<void> {
-  await vi.waitFor(() => expect(events).toHaveLength(count))
-}
 
 export function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -173,6 +165,7 @@ const {
   listGitHubLabelsMock,
   listGitHubAssignableUsersMock,
   applyAgentStatusHooksEnabledMock,
+  detectAgentCommandsOnHostMock,
   detectInstalledAgentsWithShellPathHydrationMock,
   markCodexProjectTrustedMock,
   markCopilotFolderTrustedMock,
@@ -260,6 +253,7 @@ const {
     listGitHubLabelsMock: vi.fn() as TestMock,
     listGitHubAssignableUsersMock: vi.fn() as TestMock,
     applyAgentStatusHooksEnabledMock: vi.fn() as TestMock,
+    detectAgentCommandsOnHostMock: vi.fn(async () => new Set(['qodercli'])),
     detectInstalledAgentsWithShellPathHydrationMock: vi.fn() as TestMock,
     markCodexProjectTrustedMock: vi.fn() as TestMock,
     markCopilotFolderTrustedMock: vi.fn() as TestMock,
@@ -343,7 +337,7 @@ vi.mock('../../git/worktrees/removal/worktree-branch-removal', async (importOrig
   forceDeleteLocalBranch: (await getWorktreeOwnerMocks()).forceDeleteLocalBranch
 }))
 
-vi.mock('../repo-worktree-resolution-scan', () => ({
+vi.mock('../workspaces/catalog/repo-worktree-resolution-scan', () => ({
   scanLocalRepoWorktreesForResolution: scanLocalRepoWorktreesForResolutionMock
 }))
 
@@ -383,8 +377,12 @@ vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 
+vi.mock('../../preflight/agent-command-detection', () => ({
+  detectAgentCommandsOnHost: detectAgentCommandsOnHostMock
+}))
+
 vi.mock('../../preflight/agent-detection', () => ({
-  detectAgentCommandsOnHost: vi.fn(async () => new Set(['qodercli'])),
+  detectAgentCommandsOnHost: detectAgentCommandsOnHostMock,
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
 }))
 
@@ -589,7 +587,8 @@ vi.mock('../../github/issues', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
-    getIssue: getIssueMock
+    getIssue: getIssueMock,
+    listIssues: listGitHubIssuesMock
   }
 })
 
@@ -615,7 +614,7 @@ vi.mock('../../git/repo-default-base-ref', async (importOriginal) => {
   }
 })
 
-vi.mock('../../git/repo', async (importOriginal) => ({
+vi.mock('../../git/repo-branch-conflict', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBranchConflictKind: vi.fn().mockResolvedValue(null)
 }))
@@ -712,3 +711,184 @@ export {
 }
 
 export { reconcileClaudeAgentViewMock }
+
+vi.mock(import('../../preflight/installed-agent-detection'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
+}))
+
+vi.mock(import('../../github/client/lookup/pr-for-branch-outcome'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRForBranchOutcome: getPRForBranchOutcomeMock
+}))
+
+vi.mock(import('../../github/client/fetch/get-work-item'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getWorkItem: getGitHubWorkItemMock,
+  getWorkItemByOwnerRepo: getGitHubWorkItemByOwnerRepoMock
+}))
+
+vi.mock(import('../../github/client/check/get-pr-checks'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRChecks: getGitHubPRChecksMock
+}))
+
+vi.mock(import('../../github/client/check/rerun-pr-checks'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  rerunPRChecks: rerunGitHubPRChecksMock
+}))
+
+vi.mock(import('../../github/client/check/get-pr-check-details'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRCheckDetails: getGitHubPRCheckDetailsMock
+}))
+
+vi.mock(import('../../github/client/fetch/get-pr-comments'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRComments: getGitHubPRCommentsMock
+}))
+
+vi.mock(import('../../github/client/update/resolve-review-thread'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  resolveReviewThread: resolveGitHubReviewThreadMock
+}))
+
+vi.mock(import('../../github/client/update/pr-file-viewed'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  setPRFileViewed: setGitHubPRFileViewedMock
+}))
+
+vi.mock(import('../../github/client/update/pr-details'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  updatePRTitle: updateGitHubPRTitleMock,
+  updatePRDetails: updateGitHubPRDetailsMock
+}))
+
+vi.mock(import('../../github/client/merge/merge-pr'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  mergePR: mergeGitHubPRMock
+}))
+
+vi.mock(import('../../github/client/merge/pr-auto-merge'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  setPRAutoMerge: setGitHubPRAutoMergeMock
+}))
+
+vi.mock(import('../../github/client/update/pr-state'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  updatePRState: updateGitHubPRStateMock
+}))
+
+vi.mock(import('../../github/client/update/pr-reviewers'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  requestPRReviewers: requestGitHubPRReviewersMock,
+  removePRReviewers: removeGitHubPRReviewersMock
+}))
+
+vi.mock(import('../../github/client/create/add-pr-review-comment'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  addPRReviewComment: addGitHubPRReviewCommentMock,
+  addPRReviewCommentReply: addGitHubPRReviewCommentReplyMock
+}))
+
+vi.mock(import('../../github/client/list/list-work-items'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listWorkItems: listGitHubWorkItemsMock
+}))
+
+vi.mock(import('../../github/client/list/count-work-items'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  countWorkItems: countGitHubWorkItemsMock
+}))
+
+vi.mock(import('../../github/issue-create'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  createIssue: createGitHubIssueMock
+}))
+
+vi.mock(import('../../github/issue-update'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  updateIssue: updateGitHubIssueMock
+}))
+
+vi.mock(import('../../github/issue-comment'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  addIssueComment: addGitHubIssueCommentMock
+}))
+
+vi.mock(import('../../github/issue-field-options'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listLabels: listGitHubLabelsMock,
+  listAssignableUsers: listGitHubAssignableUsersMock
+}))
+
+vi.mock(import('../../gitlab/merge-request-list'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listMergeRequests: listGitLabMergeRequestsMock
+}))
+
+vi.mock(import('../../gitlab/work-item-queries'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listWorkItems: listGitLabWorkItemsMock,
+  listTodos: listGitLabTodosMock,
+  getWorkItemByProjectRef: getGitLabWorkItemByProjectRefMock
+}))
+
+vi.mock(import('../../gitlab/issues'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listIssues: listGitLabIssuesMock,
+  createIssue: createGitLabIssueMock,
+  addIssueComment: addGitLabIssueCommentMock
+}))
+
+vi.mock(import('../../gitlab/project-label-and-member-lookup'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  listLabels: listGitLabLabelsMock,
+  listAssignableUsers: listGitLabAssignableUsersMock
+}))
+
+vi.mock(import('../../gitlab/gitlab-project-ref-resolution'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getProjectRefForRemote: getGitLabProjectRefForRemoteMock
+}))
+
+vi.mock(import('../../gitlab/issue-update'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  updateIssue: updateGitLabIssueMock
+}))
+
+vi.mock(import('../../gitlab/merge-request-review-mutations'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  addMRComment: addGitLabMRCommentMock,
+  addMRInlineComment: addGitLabMRInlineCommentMock,
+  resolveMRDiscussion: resolveGitLabMRDiscussionMock,
+  updateMRReviewers: updateGitLabMRReviewersMock
+}))
+
+vi.mock(import('../../gitlab/pipeline-job-mutations'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getJobTrace: getGitLabJobTraceMock,
+  retryJob: retryGitLabJobMock
+}))
+
+vi.mock(import('../../gitlab/merge-request-state-mutations'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  mergeMR: mergeGitLabMRMock,
+  closeMR: closeGitLabMRMock,
+  reopenMR: reopenGitLabMRMock
+}))
+
+vi.mock(import('../../gitlab/merge-request-update'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  updateMR: updateGitLabMRMock
+}))
+
+vi.mock(import('../../gitlab/gitlab-known-host-probe'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getGlabKnownHosts: getGlabKnownHostsMock
+}))
+
+vi.mock(import('../../github/client/lookup/get-pr-for-branch'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRForBranch: getPRForBranchMock
+}))

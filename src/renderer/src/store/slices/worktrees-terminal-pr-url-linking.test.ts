@@ -1,3 +1,4 @@
+vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   HostedReviewInfo,
@@ -54,6 +55,10 @@ describe('worktree remote runtime mutations', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
+    Object.defineProperty(window.api, 'gh', {
+      configurable: true,
+      value: { workItemByOwnerRepo: vi.fn().mockResolvedValue(null) }
+    })
   })
 
   it('rechecks GitHub PR suppression after branch confirmation resolves', async () => {
@@ -88,9 +93,7 @@ describe('worktree remote runtime mutations', () => {
       slug: { owner: 'acme', repo: 'orca' },
       number: 42
     })
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
     store.setState({
       worktreesByRepo: {
         repo1: [{ ...wt, linkedPR: null, suppressedGitHubPR: 42 }]
@@ -98,9 +101,7 @@ describe('worktree remote runtime mutations', () => {
     })
 
     resolveLookup(confirmedReview(42))
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
@@ -137,18 +138,14 @@ describe('worktree remote runtime mutations', () => {
       number: 42
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     store.setState({
       worktreesByRepo: { repo1: [{ ...wt, linkedPR: 7 }] }
     })
 
     resolveLookup(confirmedReview(42))
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBe(7)
     expect(
@@ -192,9 +189,7 @@ describe('worktree remote runtime mutations', () => {
       number: 42
     })
 
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     expect(mockApi.worktrees.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo1',
@@ -209,9 +204,7 @@ describe('worktree remote runtime mutations', () => {
       baseBranch: 'main',
       pushTarget: { remoteName: 'origin', branchName: 'feature/pr-link' }
     })
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBe(7)
     expect(
@@ -260,9 +253,7 @@ describe('worktree remote runtime mutations', () => {
       linkedGiteaPR: null
     })
 
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
+    await vi.dynamicImportSettled()
 
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })

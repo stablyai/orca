@@ -1,5 +1,5 @@
 import type { OrchestrationCliCommand } from './cli-command'
-import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
+import type { RuntimeAgentPromptWriteOptions } from '../terminal/input/agent-prompt-write-options'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/orca-dispatch-status-prompt'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
 

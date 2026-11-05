@@ -7,7 +7,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-se
 import { claudeSessionIdForOrcaSession } from '../../src/main/claude/structured/claude-structured-session-id'
 import { hostTestMessage } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { StructuredAgentSessionStartupAttempts } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-startup-attempt'
-import { createScriptedClaudeRuntime } from '../../src/main/runtime/structured-claude-scripted-runtime-test-support'
+import { createScriptedClaudeRuntime } from '../../src/main/runtime/agent-session/installation/structured-claude-scripted-runtime-test-support'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
 import { NativeChatSessionOptionPickers } from '../../src/renderer/src/components/native-chat/NativeChatSessionOptionPickers'
 import { structuredAgentSessionSeedCatalog } from '../../src/shared/agent-session/options/structured-agent-session-seed-catalog'

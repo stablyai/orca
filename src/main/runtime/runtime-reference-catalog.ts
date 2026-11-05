@@ -22,7 +22,10 @@ import {
   isWslUncPathForLinuxMountedPath
 } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { branchSelectorMatches, runtimePathsEqual } from './runtime-worktree-path-identity'
+import {
+  branchSelectorMatches,
+  runtimePathsEqual
+} from './workspaces/catalog/runtime-worktree-path-identity'
 
 export function listReferenceWorkspaces(
   store: Pick<

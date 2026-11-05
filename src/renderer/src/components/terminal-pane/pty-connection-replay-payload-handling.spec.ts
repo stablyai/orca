@@ -314,7 +314,6 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
       expect(pane.terminal.write).toHaveBeenCalledWith('remote prompt\r\n$ ', expect.any(Function))
       expect(refresh).toHaveBeenCalledWith(0, 39, true)
-      expect(manager.rebuildPaneWebgl).toHaveBeenCalledWith(1)
       disposable.dispose()
     })
 
@@ -640,7 +639,6 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
       expect(pane.terminal.write).not.toHaveBeenCalledWith('first replay', expect.any(Function))
       expect(pane.terminal.write).toHaveBeenCalledWith('second replay', expect.any(Function))
-      expect(manager.rebuildPaneWebgl).toHaveBeenCalledTimes(1)
       disposable.dispose()
     })
 

@@ -27,7 +27,7 @@ import {
 } from '../../../shared/windows-environment-expansion'
 import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { PtySubprocessOptions } from '../pty-subprocess'
+import type { PtySubprocessOptions } from './pty-subprocess'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
 import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
 

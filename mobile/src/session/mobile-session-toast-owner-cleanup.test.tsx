@@ -58,7 +58,7 @@ vi.mock('./mobile-session-styles', () => ({ styles: { container: {}, kavInner: {
 vi.mock('../transport/use-workspace-client', () => ({
   WorkspaceServerContext: createContext(undefined)
 }))
-vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCard: () => null }))
+vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCardLayer: () => null }))
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))

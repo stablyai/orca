@@ -155,6 +155,8 @@ function Harness(props: HarnessProps) {
   captureRenderedController(current)
   return createElement(MobileNativeChatOverlay, {
     controller: current,
+    worktreePath: null,
+    connState,
     onOpenFile: vi.fn(),
     images: {
       sendNativeChat: (text: string) => controller.handleNativeChatSend(text),

@@ -9,7 +9,7 @@ import {
   startDesktopMultiplexSubscribe,
   sendDesktopMultiplexSubscribe
 } from './rpc/terminal-multiplex-test-harness'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
