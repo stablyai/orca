@@ -138,6 +138,17 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     await expect(read()).resolves.toEqual({
       titles: [{ agent: 'claude', sessionId: 'session-1', title: 'Login cleanup' }]
     })
+
+    // A reread that fails after the first parse keeps the transcript in the cache, so a later request classifies it.
+    const unclassified = { agent: 'claude', sessionId: 'session-1', title: 'Login cleanup' }
+    cached.set('session-1', { ...unclassified, transcriptPath: path })
+    parseAgentSessionFileCached
+      .mockResolvedValueOnce(unclassified)
+      .mockRejectedValueOnce(new Error('transient'))
+    await expect(read()).resolves.toEqual({ titles: [unclassified] })
+    expect(cached.get('session-1')?.transcriptPath).toBe(path)
+    parseAgentSessionFileCached.mockResolvedValueOnce({ ...unclassified, titleKind: 'named' })
+    await expect(read()).resolves.toEqual({ titles: [{ ...unclassified, kind: 'named' }] })
   })
 
   it('rejects a transcript whose parsed identity does not match the request', async () => {

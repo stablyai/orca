@@ -20,7 +20,7 @@ export type CachedAiVaultSessionTitle = AiVaultSessionTitle & { transcriptPath?:
 
 export type AiVaultSessionTitleCache = {
   get(request: AiVaultSessionTitleRequest): CachedAiVaultSessionTitle | null
-  set(title: AiVaultSessionTitle): void
+  set(title: CachedAiVaultSessionTitle): void
 }
 
 async function readOneTitle(
@@ -101,7 +101,7 @@ async function readOneTitle(
           undefined,
           'whole',
           signal
-        )) ?? session
+        ).catch(() => null)) ?? session
     }
     if (
       signal?.aborted ||
@@ -117,7 +117,8 @@ async function readOneTitle(
       title: session.title.trim(),
       ...(session.titleKind ? { kind: session.titleKind } : {})
     }
-    cache?.set(title)
+    // An unclassified title keeps its transcript so a later session-id-only request can still classify it.
+    cache?.set(title.kind ? title : { ...title, transcriptPath })
     return title
   } catch {
     return null
