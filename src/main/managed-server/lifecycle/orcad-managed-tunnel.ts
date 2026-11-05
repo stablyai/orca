@@ -3,7 +3,10 @@ import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/ru
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { probeManagedOrcadTunnel } from './orcad-managed-tunnel-resume'
-import { ensureManagedOrcadServing } from './orcad-managed-serving'
+import {
+  ensureManagedOrcadServing,
+  forgetManagedOrcadServingVerdict
+} from './orcad-managed-serving'
 import { getManagedOrcadCrashLoopBrake } from './orcad-managed-crash-loop'
 import { OrcadManagedTunnelManager } from './orcad-managed-tunnel-manager'
 import { buildOnBindableLocalPort } from './orcad-managed-tunnel-local-port'
@@ -111,6 +114,7 @@ export function forgetManagedOrcadAutomaticFailures(
 ): void {
   pairingRepairs.get(userDataPath)?.forgetFailures(environmentId)
   getManagedOrcadCrashLoopBrake().forget(environmentId)
+  forgetManagedOrcadServingVerdict(environmentId)
 }
 
 function resolveEnvironmentOrNull(userDataPath: string, id: string) {

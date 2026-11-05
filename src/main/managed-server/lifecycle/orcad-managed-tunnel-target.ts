@@ -13,7 +13,7 @@ import {
   type OrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
 import { managedOrcadSlot } from './orcad-managed-runtime-context'
-import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
+import { wakeManagedOrcadUnlessCrashLooping } from './orcad-managed-crash-loop'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { PortForwardEntry } from '../../../shared/ssh-types'
@@ -42,7 +42,11 @@ async function wakeStoppedManagedOrcadForTunnel(input: OrcadTunnelPortInput): Pr
   }
   try {
     const context = await resolveOrcadRemoteContext(input.target, input.connection)
-    await wakeStoppedManagedOrcad(managedOrcadSlot(context, access.remotePort))
+    await wakeManagedOrcadUnlessCrashLooping(
+      input.environment.id,
+      input.target.label,
+      managedOrcadSlot(context, access.remotePort)
+    )
   } catch (error) {
     // Failed wake does not settle identity; reread and validate the resulting forward.
     console.warn('[ssh] Could not start the managed Orca server behind a foreign answer:', error)

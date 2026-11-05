@@ -6,7 +6,11 @@ import { startOrcadBrowserProvider } from './orcad-browser-startup'
 import { OrcadRuntimeLifetime, type OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import type { OrcadManagedStopInstance } from '../../shared/orcad-stop-request'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
-import { recordOrcadPreviousUnexpectedExit } from './orcad-unexpected-exit'
+import {
+  markOrcadRunFailed,
+  orcadRunFailed,
+  recordOrcadPreviousUnexpectedExit
+} from './orcad-unexpected-exit'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
@@ -51,6 +55,9 @@ export function installOrcadShutdownSignals(
     }
   }
   const shutdown: OrcadShutdownTrigger = (signal, onFailed, stoppedExitCode = 0) => {
+    if (stoppedExitCode !== 0) {
+      markOrcadRunFailed()
+    }
     if (stopping) {
       // Fatal faults must escalate an in-progress clean stop to failure.
       if (stoppedExitCode !== 0 && exitCode === 0) {
@@ -162,7 +169,7 @@ export async function startOrcadWithHost<T extends object>(
     async (runtimeCleanupSucceeded) => {
       // Failed cleanup retains both ownership fences until process exit.
       const host = new OrcadRuntimeLifetime(() => {
-        if (runtimeCleanupSucceeded) {
+        if (runtimeCleanupSucceeded && !orcadRunFailed()) {
           instanceLock.release()
         }
       })

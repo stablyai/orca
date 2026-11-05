@@ -24,6 +24,7 @@ vi.mock('../install/orcad-remote-log-tail', () => ({
 }))
 
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
+import { OrcadActiveReadinessError } from '../../ssh/orcad-active-readiness'
 import {
   ensureManagedOrcadServing,
   setManagedOrcadStartListener,
@@ -87,7 +88,7 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     expect(serving).toEqual({
       state: 'unverifiable',
       detail: expect.stringContaining(
-        'Check /home/u/.orca-remote/orcad-1.2.3/orcad.log on the host, fix the cause, then reconnect the host to try again.\nLast lines of orcad.log:\n# Fatal process out of memory'
+        'Check /home/u/.orca-remote/orcad-1.2.3/orcad.log on the host, fix the cause, then disconnect and reconnect the host to try again.\nLast lines of orcad.log:\n# Fatal process out of memory'
       )
     })
     expect(listener.settled).toHaveBeenLastCalledWith(expect.anything(), 'env-1', serving)
@@ -98,6 +99,22 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
       startsReporting(report)
       expect(await findStopped()).toMatchObject({ state: 'started' })
     }
+    expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(4)
+  })
+
+  it('also stops after starts that die before becoming ready, counting each run once', async () => {
+    vi.mocked(wakeStoppedManagedOrcad).mockImplementation(async (_slot, onStarting) => {
+      onStarting?.()
+      throw new OrcadActiveReadinessError('rejected', 'orcad did not become ready')
+    })
+    await findStopped()
+    // The next orcad reports the run that just failed to start; it is already counted.
+    startsReporting(CRASHED)
+    await findStopped()
+    await findStopped()
+    expect(await findStopped()).toMatchObject({ state: 'started' })
+
+    expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
     expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(4)
   })
 
