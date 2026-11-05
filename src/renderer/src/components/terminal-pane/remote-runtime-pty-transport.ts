@@ -812,22 +812,26 @@ export function createRemoteRuntimePtyTransport(
 
   // Why: the close record already proves the end; the host's exit record only adds its code.
   async function endRetiredHostSurface(
-    { retiredHandle, incarnationId }: RetiredHostSurface,
+    retired: RetiredHostSurface,
     isCurrent: () => boolean
   ): Promise<void> {
     const rebindWatch = startHostRebindWatch()
-    const exitCode = await callRuntime<{ terminal?: RuntimeTerminalShow }>('terminal.show', {
-      terminal: retiredHandle
+    const exited = await callRuntime<{ terminal?: RuntimeTerminalShow }>('terminal.show', {
+      terminal: retired.retiredHandle
     }).then(
-      ({ terminal }) =>
-        hostRecordsTerminalExit(terminal) ? hostRecordedExitCode(terminal) : undefined,
+      ({ terminal }) => (hostRecordsTerminalExit(terminal) ? terminal : undefined),
       () => undefined
     )
     if (!isCurrent() || terminalEnded) {
       rebindWatch?.dispose()
       return
     }
-    retireWatchingForRebind(rebindWatch, exitCode, retiredHandle, incarnationId ?? null)
+    retireWatchingForRebind(
+      rebindWatch,
+      hostRecordedExitCode(exited),
+      retired.retiredHandle,
+      retired.incarnationId ?? exited?.incarnationId ?? null
+    )
   }
 
   // Why: pending host surfaces materialize only through activation.
