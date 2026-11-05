@@ -6803,7 +6803,10 @@
           "projectGroupRefreshScanFailed": "Could not scan this project group",
           "projectGroupRefreshNoProjects": "No new projects found",
           "projectGroupRefreshPartial": "Some new projects could not be added to the group",
-          "projectGroupRefreshSuccess": "Added {{count}} projects to {{group}}",
+          "projectGroupRefreshIncomplete": "The folder scan stopped early; some new projects may not have been found",
+          "projectGroupRefreshSuccess_one": "Added {{count}} project to {{group}}",
+          "projectGroupRefreshSuccess_other": "Added {{count}} projects to {{group}}",
+          "projectGroupRefreshing": "Refreshing {{group}}…",
           "refreshProjectGroup": "Refresh projects"
         },
         "WorktreeMetaDialog": {

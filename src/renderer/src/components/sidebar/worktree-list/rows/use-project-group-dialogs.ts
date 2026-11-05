@@ -120,9 +120,18 @@ export function useProjectGroupDialogs(args: {
         return
       }
       refreshingGroupIds.current.add(group.id)
+      // Why: scans of large folders can take seconds; show progress so repeat clicks aren't silently ignored.
+      const loadingToastId = toast.loading(
+        translate(
+          'auto.components.sidebar.WorktreeList.projectGroupRefreshing',
+          'Refreshing {{group}}…',
+          { group: group.name }
+        )
+      )
       try {
         await refreshFolderProjectGroup(group, {
           getRepos: () => useAppStore.getState().repos,
+          getProjectGroups: () => useAppStore.getState().projectGroups,
           scanNestedRepos: useAppStore.getState().scanNestedRepos,
           importNestedRepos: useAppStore.getState().importNestedRepos,
           moveProjectToGroup
@@ -137,6 +146,7 @@ export function useProjectGroupDialogs(args: {
           { description: error instanceof Error ? error.message : String(error) }
         )
       } finally {
+        toast.dismiss(loadingToastId)
         refreshingGroupIds.current.delete(group.id)
       }
     },

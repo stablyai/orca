@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type {
   NestedRepoScanResult,
   ProjectGroup
@@ -52,16 +53,26 @@ const scan: NestedRepoScanResult = {
 }
 
 describe('folder project group refresh', () => {
-  it('imports only new direct child repos and adds them to the existing group', async () => {
+  it('imports new repos at any depth into the deepest matching folder group', async () => {
+    const nestedGroup: ProjectGroup = {
+      ...group,
+      id: 'group-nested',
+      name: 'nested',
+      parentPath: '/projects/services/nested',
+      parentGroupId: group.id
+    }
     const knownRepo = repo('known', '/projects/services/known')
     const newRepo = repo('new', '/projects/services/new')
+    const childRepo = repo('child', '/projects/services/nested/child')
     let repos = [knownRepo]
-    const scanNestedRepos = vi.fn(async () => scan)
     const importNestedRepos = vi.fn(async () => {
-      repos = [knownRepo, newRepo]
+      repos = [knownRepo, newRepo, childRepo]
       return {
-        projects: [{ path: newRepo.path, projectId: newRepo.id, status: 'imported' as const }],
-        importedCount: 1,
+        projects: [
+          { path: newRepo.path, projectId: newRepo.id, status: 'imported' as const },
+          { path: childRepo.path, projectId: childRepo.id, status: 'imported' as const }
+        ],
+        importedCount: 2,
         alreadyKnownCount: 0,
         failedCount: 0
       }
@@ -70,7 +81,8 @@ describe('folder project group refresh', () => {
 
     await refreshFolderProjectGroup(group, {
       getRepos: () => repos,
-      scanNestedRepos,
+      getProjectGroups: () => [group, nestedGroup],
+      scanNestedRepos: vi.fn(async () => scan),
       importNestedRepos,
       moveProjectToGroup
     })
@@ -78,12 +90,31 @@ describe('folder project group refresh', () => {
     expect(importNestedRepos).toHaveBeenCalledWith(
       expect.objectContaining({
         parentPath: group.parentPath,
-        projectPaths: [newRepo.path],
+        projectPaths: [newRepo.path, childRepo.path],
         runtimeEnvironmentId: null,
         mode: 'separate'
       })
     )
     expect(moveProjectToGroup).toHaveBeenCalledWith(newRepo, group.id)
+    expect(moveProjectToGroup).toHaveBeenCalledWith(childRepo, nestedGroup.id)
+  })
+
+  it('warns instead of reporting nothing new when the scan stopped early', async () => {
+    const warning = vi.spyOn(toast, 'warning').mockImplementation(() => '')
+    const info = vi.spyOn(toast, 'info').mockImplementation(() => '')
+    const importNestedRepos = vi.fn()
+
+    await refreshFolderProjectGroup(group, {
+      getRepos: () => scan.repos.map((entry) => repo(entry.displayName, entry.path)),
+      getProjectGroups: () => [group],
+      scanNestedRepos: vi.fn(async () => ({ ...scan, truncated: true })),
+      importNestedRepos,
+      moveProjectToGroup: vi.fn()
+    })
+
+    expect(importNestedRepos).not.toHaveBeenCalled()
+    expect(warning).toHaveBeenCalledTimes(1)
+    expect(info).not.toHaveBeenCalled()
   })
 
   it('does not expose refresh for non-folder groups or SSH-owned folders', () => {
