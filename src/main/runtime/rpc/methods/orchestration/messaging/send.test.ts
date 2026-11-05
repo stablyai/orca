@@ -1,5 +1,6 @@
 import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import type { RpcContext, RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { RpcDispatcher } from '../../../dispatcher'
@@ -71,15 +72,17 @@ describe('orchestration RPC methods', () => {
         subject: 'question',
         answerSenderSnapshot: '{"version":1,"sender":{}}'
       })
-      const receipt = (await call('orchestration.reply', {
-        id: saved.id,
-        from: 'term_coord',
-        body: 'answer'
-      })) as { message: Record<string, unknown> }
+      const receipt = z.object({ message: z.record(z.string(), z.unknown()) }).parse(
+        await call('orchestration.reply', {
+          id: saved.id,
+          from: 'term_coord',
+          body: 'answer'
+        })
+      )
       expect(receipt.message).not.toHaveProperty('answer_sender_snapshot')
-      const inbox = (await call('orchestration.inbox', { terminal: `run:${activeRunId}` })) as {
-        messages: Record<string, unknown>[]
-      }
+      const inbox = z
+        .object({ messages: z.array(z.record(z.string(), z.unknown())) })
+        .parse(await call('orchestration.inbox', { terminal: `run:${activeRunId}` }))
       const message = inbox.messages.find((item) => item.id === saved.id)!
       expect(message).not.toHaveProperty('answer_sender_snapshot')
       expect(message).toHaveProperty('read', 1)
