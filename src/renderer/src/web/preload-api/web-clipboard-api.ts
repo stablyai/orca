@@ -211,6 +211,7 @@ export async function clipboardHasImage(): Promise<boolean | null> {
 }
 
 export async function saveWebClipboardImageAsTempFile(args?: {
+  imageDataUrl?: string
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
   agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
@@ -220,7 +221,16 @@ export async function saveWebClipboardImageAsTempFile(args?: {
   if (!requireActiveEnvironmentOrNull()) {
     return null
   }
-  const contentBase64 = await readClipboardImagePngBase64()
+  if (args?.imageDataUrl !== undefined && !args.imageDataUrl.startsWith(PNG_DATA_URL_PREFIX)) {
+    throw new Error('Expected a PNG data URL')
+  }
+  const contentBase64 =
+    args?.imageDataUrl !== undefined
+      ? args.imageDataUrl.slice(PNG_DATA_URL_PREFIX.length)
+      : await readClipboardImagePngBase64()
+  if (contentBase64 && contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
+    throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
+  }
   if (!contentBase64) {
     return null
   }

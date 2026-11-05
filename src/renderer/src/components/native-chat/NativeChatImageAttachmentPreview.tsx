@@ -13,6 +13,7 @@ import { chatImageAccess } from '@/lib/local-file-access'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { nativeChatImageNumberLabel } from './NativeChatImageReferencePill'
+import { NativeChatImageCommentButton } from './NativeChatImageCommentsProvider'
 
 type Props = {
   attachment: NativeChatComposerImageAttachment
@@ -258,6 +259,13 @@ function NativeChatImageThumbnail({
         src={fullSizeSrc}
         title={label}
         showTitle
+        toolbarActions={
+          <NativeChatImageCommentButton
+            src={fullSizeSrc}
+            title={label}
+            onStart={() => setIsOpen(false)}
+          />
+        }
         onInteractOutside={keepPreviewOpenForChatMenu}
         data-native-chat-copy-image-src={copySrc}
         fallback={

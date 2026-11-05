@@ -20,7 +20,8 @@ export function PanZoomImageSurface({
   background,
   fallback,
   onLoad,
-  onError
+  onError,
+  children
 }: {
   panZoom: PanZoomViewport
   src: string | null
@@ -32,6 +33,7 @@ export function PanZoomImageSurface({
   fallback?: React.ReactNode
   onLoad?: React.ReactEventHandler<HTMLImageElement>
   onError?: React.ReactEventHandler<HTMLImageElement>
+  children?: React.ReactNode
 }): React.JSX.Element {
   const { setCanvas, canvasHandlers, cursor, scale, offset } = panZoom
   return (
@@ -67,6 +69,7 @@ export function PanZoomImageSurface({
       ) : (
         <div className="flex size-full items-center justify-center">{fallback}</div>
       )}
+      {children}
     </div>
   )
 }

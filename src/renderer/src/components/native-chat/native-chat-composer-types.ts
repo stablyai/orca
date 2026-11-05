@@ -165,6 +165,7 @@ export type NativeChatLaunchSeed = {
 }
 
 export type NativeChatComposerHandle = {
+  attachCommentedImage?: (dataUrl: string, text: string) => Promise<boolean>
   resend?: (text: string, imagePaths?: string[]) => boolean
   insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean

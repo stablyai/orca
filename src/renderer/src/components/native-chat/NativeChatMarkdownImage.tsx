@@ -37,6 +37,7 @@ import { resolveNativeChatFileLink } from './native-chat-file-link'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import { observeTranscriptVisibility } from './NativeChatTranscriptChrome'
 import { useNativeChatMediaHref } from './use-native-chat-media-href'
+import { NativeChatImageCommentButton } from './NativeChatImageCommentsProvider'
 
 export const NativeChatMarkdownImageLinkContext = createContext<string | undefined>(undefined)
 const IMAGE_ACCESS = chatImageAccess()
@@ -251,39 +252,57 @@ function NativeChatMarkdownImagePreview({
         },
         onInteractOutside: keepPreviewOpenForChatMenu,
         ...copyAttributes,
-        toolbarActions: canOfferActions ? (
-          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={actionsLabel}>
-                    <FileText />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{actionsLabel}</TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent
-              align="end"
-              onCloseAutoFocus={(event) => {
-                if (handingOff.current || !open) {
-                  event.preventDefault()
-                }
+        toolbarActions: (
+          <>
+            <NativeChatImageCommentButton
+              src={displaySrc}
+              title={title}
+              onStart={() => {
+                handingOff.current = true
+                setOpen(false)
+                setMenuOpen(false)
               }}
-            >
-              {actions
-                ? [actions.primary, actions.alternate, ...(actions.secondaryActions ?? [])].map(
-                    (action) =>
-                      action ? (
-                        <DropdownMenuItem key={action.label} onSelect={() => runAction(action)}>
-                          {action.label}
-                        </DropdownMenuItem>
-                      ) : null
-                  )
-                : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null
+            />
+            {canOfferActions ? (
+              <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={actionsLabel}
+                      >
+                        <FileText />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{actionsLabel}</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent
+                  align="end"
+                  onCloseAutoFocus={(event) => {
+                    if (handingOff.current || !open) {
+                      event.preventDefault()
+                    }
+                  }}
+                >
+                  {actions
+                    ? [actions.primary, actions.alternate, ...(actions.secondaryActions ?? [])].map(
+                        (action) =>
+                          action ? (
+                            <DropdownMenuItem key={action.label} onSelect={() => runAction(action)}>
+                              {action.label}
+                            </DropdownMenuItem>
+                          ) : null
+                      )
+                    : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </>
+        )
       }}
     />
   )

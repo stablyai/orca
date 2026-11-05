@@ -14,6 +14,8 @@ import { detectImageFileSignature } from '../media/image-file-signature'
 import { nativeChatPasteFolder } from './native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {
+  /** An edited image supplied by the trusted renderer, without changing the clipboard. */
+  imageDataUrl?: string
   connectionId?: string | null
   /** A phone-picked file's own name; without it the paste is named by its image bytes. */
   fileName?: string

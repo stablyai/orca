@@ -87,6 +87,7 @@ export const uiClipboardAndWindowControlsApi = {
   readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
     ipcRenderer.invoke('clipboard:readSelectionText', options),
   saveClipboardImageAsTempFile: (args?: {
+    imageDataUrl?: string
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget

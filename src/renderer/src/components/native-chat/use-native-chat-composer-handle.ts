@@ -40,7 +40,11 @@ export function useNativeChatComposerHandle(
     insertTypedText: insertPastedText,
     setNotice: args.setNotice
   })
-  const { handlePaste: handlePasteEvent, pasteFromClipboard } = useNativeChatComposerPaste({
+  const {
+    handlePaste: handlePasteEvent,
+    pasteFromClipboard,
+    attachCommentedImage
+  } = useNativeChatComposerPaste({
     ...pasteArgs,
     insertTypedText: insertPastedTextOrFile
   })
@@ -59,6 +63,7 @@ export function useNativeChatComposerHandle(
       },
       isComposing,
       focus,
+      attachCommentedImage,
       resend: args.resend,
       insertTypedText,
       insertPastedText: insertPastedTextOrFile,
@@ -72,6 +77,7 @@ export function useNativeChatComposerHandle(
       textareaRef,
       isComposing,
       focus,
+      attachCommentedImage,
       args.resend,
       insertTypedText,
       insertPastedTextOrFile,

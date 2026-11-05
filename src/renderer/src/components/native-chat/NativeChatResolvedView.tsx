@@ -61,6 +61,7 @@ import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { handleNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { NativeChatImageCommentsProvider } from './NativeChatImageCommentsProvider'
 
 export function NativeChatResolvedView({
   paneKey,
@@ -312,7 +313,8 @@ export function NativeChatResolvedView({
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
   return (
-    <div
+    <NativeChatImageCommentsProvider
+      composerRef={composerRef}
       ref={rootRef}
       data-native-chat-root="true"
       data-native-chat-working={isWorking ? 'true' : 'false'}
@@ -416,6 +418,6 @@ export function NativeChatResolvedView({
       </div>
       {contextMenu.menu}
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
-    </div>
+    </NativeChatImageCommentsProvider>
   )
 }

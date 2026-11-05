@@ -54,7 +54,8 @@ async function drawableSrc(src: string): Promise<string> {
 export async function renderImagePngDataUrl(
   src: string,
   size: PanZoomSize,
-  background: string | null
+  background: string | null,
+  decorate?: (context: CanvasRenderingContext2D, layout: ImagePngLayout) => void
 ): Promise<string> {
   const layout = imagePngLayout(size)
   if (!layout) {
@@ -73,5 +74,6 @@ export async function renderImagePngDataUrl(
     context.fillRect(0, 0, canvas.width, canvas.height)
   }
   context.drawImage(image, 0, 0, canvas.width, canvas.height)
+  decorate?.(context, layout)
   return canvas.toDataURL('image/png')
 }

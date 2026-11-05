@@ -65,6 +65,7 @@ export async function saveNativeChatClipboardImage(
     ) => void
     /** The image has somewhere to go, now that any server it goes to has said it takes one. */
     ready?: () => void
+    imageDataUrl?: string
   }
 ): Promise<{ status: 'saved'; tempPath: string } | { status: 'empty' | 'failed' }> {
   if (!ownerAcceptsClipboardImage(owner)) {
@@ -78,7 +79,10 @@ export async function saveNativeChatClipboardImage(
       return { status: 'failed' }
     }
     report.ready?.()
-    const tempPath = await window.api.ui.saveClipboardImageAsTempFile(target.args)
+    const tempPath = await window.api.ui.saveClipboardImageAsTempFile({
+      ...target.args,
+      ...(report.imageDataUrl ? { imageDataUrl: report.imageDataUrl } : {})
+    })
     return tempPath ? { status: 'saved', tempPath } : { status: 'empty' }
   } catch (error) {
     // Report failed saves; silent SSH disconnects would look like a broken paste.
@@ -104,10 +108,12 @@ export async function saveNativeChatPastedClipboardImage(
     canNotify: () => boolean
     setNotice: (notice: string, errorText?: string) => void
     ready?: () => void
+    imageDataUrl?: string
   }
 ): ReturnType<typeof saveNativeChatClipboardImage> {
   const saved = await saveNativeChatClipboardImage(owner, {
     ready: paste.ready,
+    imageDataUrl: paste.imageDataUrl,
     setNotice: (notice, cause, errorText) => {
       if ((cause === 'serverTooOld' && paste.besideText) || !paste.canNotify()) {
         return

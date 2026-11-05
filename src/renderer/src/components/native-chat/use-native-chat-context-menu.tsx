@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { flushSync } from 'react-dom'
 import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
-import { Clipboard, Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
+import { Clipboard, Copy, GitFork, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,11 +19,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import {
-  copyNativeChatImage,
-  readNativeChatCopyImage,
-  type NativeChatCopyImage
-} from './native-chat-image-copy'
+import { readNativeChatCopyImage, type NativeChatCopyImage } from './native-chat-image-copy'
 import { isMacPlatform } from './native-chat-shortcut'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
@@ -54,6 +50,7 @@ import type { NativeChatMessageListHandle } from './use-native-chat-reveal-lates
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { useNativeChatStandaloneMenu } from './use-native-chat-standalone-menu'
 import type { NativeChatSessionMenuSource } from './use-native-chat-session-context-actions'
+import { NativeChatImageMenuItems } from './NativeChatImageCommentsProvider'
 
 type NativeChatContextMenuState = {
   open: boolean
@@ -282,12 +279,10 @@ export function useNativeChatContextMenu({
             )
           }}
         >
-          {image ? (
-            <DropdownMenuItem onSelect={() => void copyNativeChatImage(image)}>
-              <ImageIcon />
-              {translate('components.native-chat.composer.copyImage', 'Copy image')}
-            </DropdownMenuItem>
-          ) : null}
+          <NativeChatImageMenuItems
+            image={image}
+            onSelected={() => setState((previous) => ({ ...previous, open: false }))}
+          />
           {hasSelection ? (
             <DropdownMenuItem
               onSelect={() => void window.api.ui.writeClipboardText(state.selectedText)}

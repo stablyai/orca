@@ -1,12 +1,15 @@
 import {
-  app,
+  saveClipboardImageBufferForTarget,
+  type ClipboardHandlerOptions
+} from './clipboard-image-target'
+export type { ClipboardHandlerOptions } from './clipboard-image-target'
+import {
   clipboard,
   ipcMain,
   nativeImage,
   type IpcMainInvokeEvent,
   type WebContents
 } from 'electron'
-import { randomUUID } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
 import type { Store } from '../persistence/loading-store/store'
@@ -19,10 +22,7 @@ import {
   assertClipboardTextWithinLimitWithYield,
   type ReadClipboardTextOptions
 } from '../../shared/clipboard-text'
-import {
-  saveClipboardImageBufferAsTempFile,
-  type SaveClipboardImageAsTempFileArgs
-} from './clipboard-image-temp-file'
+import type { SaveClipboardImageAsTempFileArgs } from './clipboard-image-temp-file'
 import {
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit,
@@ -39,8 +39,6 @@ import {
   cleanupExpiredRemoteClipboardFiles,
   scheduleLegacyRemoteClipboardFileCleanup
 } from './clipboard-remote-file-copy'
-import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
-import { uploadPasteToAgentSessionAttachments } from '../ipc/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
@@ -54,54 +52,12 @@ import {
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 import { restoreNativeChatPastes } from './native-chat-paste-files'
 import { savePastedTextAsFile, type SavePastedTextAsFileArgs } from './native-chat-pasted-text-file'
-import { agentSessionPastedImageName } from '../../shared/agent-session/agent-session-attachments'
-import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
 type ClipboardWriteFileRequest = {
   filePath: string
   connectionId?: string
-}
-
-export type ClipboardHandlerOptions = {
-  /** This machine's chat attachment store, after starting its chat host; null when it can't. */
-  localChatAttachmentStore?: () => Promise<AgentSessionAttachmentStore | null>
-}
-
-async function saveClipboardImageBufferForTarget(
-  buffer: Buffer,
-  args: SaveClipboardImageAsTempFileArgs | undefined,
-  options: ClipboardHandlerOptions
-): Promise<string> {
-  assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
-  const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
-  // A structured chat on a paired server keeps its pasted images in that server's store.
-  if (runtimeEnvironmentId && args?.agentSessionAttachment) {
-    return uploadPasteToAgentSessionAttachments(
-      args.agentSessionAttachment,
-      runtimeEnvironmentId,
-      app.getPath('userData'),
-      buffer
-    )
-  }
-  // #17679: connectionId belongs to the owning runtime's SSH registry (Remote Server → SSH); only that runtime can save it.
-  if (runtimeEnvironmentId) {
-    return saveClipboardImageBufferInRuntime(
-      app.getPath('userData'),
-      runtimeEnvironmentId,
-      buffer,
-      args?.connectionId ?? null
-    )
-  }
-  // Local structured-chat sends claim store-owned pastes; only unclaimed images are swept. Other composers keep the paste folder.
-  if (args?.forNativeChatDraft === true && args.forStructuredChat === true && !args.connectionId) {
-    const store = await options.localChatAttachmentStore?.().catch(() => null)
-    if (store) {
-      return store.storeFile(agentSessionPastedImageName(Date.now(), randomUUID()), buffer)
-    }
-  }
-  return saveClipboardImageBufferAsTempFile(buffer, args)
 }
 
 export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
@@ -168,6 +124,28 @@ export function registerClipboardHandlers(
     'clipboard:saveImageAsTempFile',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
+      if (args?.imageDataUrl !== undefined) {
+        if (
+          typeof args.imageDataUrl !== 'string' ||
+          !args.imageDataUrl.startsWith('data:image/png;base64,')
+        ) {
+          throw new Error('Expected a PNG data URL')
+        }
+        assertClipboardImageBase64LengthWithinLimit(
+          args.imageDataUrl.length - 'data:image/png;base64,'.length
+        )
+        const buffer = Buffer.from(
+          args.imageDataUrl.slice('data:image/png;base64,'.length),
+          'base64'
+        )
+        assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
+        const image = nativeImage.createFromBuffer(buffer)
+        if (image.isEmpty()) {
+          throw new Error('Image is empty')
+        }
+        assertClipboardImageDimensionsWithinLimit(image.getSize())
+        return saveClipboardImageBufferForTarget(image.toPNG(), args, handlerOptions)
+      }
       const source = readClipboardImageSource(clipboard)
       if (!source) {
         return null

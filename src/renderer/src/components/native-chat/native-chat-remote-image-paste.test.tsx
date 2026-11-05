@@ -152,6 +152,27 @@ afterEach(() => {
 })
 
 describe('clipboard image paste into a remote terminal-backed chat', () => {
+  it('attaches an edited image to the owning server without reading the clipboard', async () => {
+    const latest = await render(() => SERVER_OWNER)
+    let attached = false
+    await act(async () => {
+      attached = await latest().paste.attachCommentedImage(
+        'data:image/png;base64,cG5n',
+        '1. [x=25%, y=75%] Align graph'
+      )
+    })
+    expect(attached).toBe(true)
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+      runtimeEnvironmentId: 'env-1',
+      imageDataUrl: 'data:image/png;base64,cG5n'
+    })
+    expect(latest().attachments.imageAttachments).toMatchObject([
+      { path: '/tmp/orca-paste-remote.png' }
+    ])
+    expect(mocks.readClipboardImageThumbnail).not.toHaveBeenCalled()
+    expect(mocks.readClipboardText).not.toHaveBeenCalled()
+  })
+
   it.each(['event', 'menu'] as const)(
     'attaches the image saved on the server via %s paste',
     async (source) => {
