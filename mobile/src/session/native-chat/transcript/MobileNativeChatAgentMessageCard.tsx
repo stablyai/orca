@@ -12,7 +12,7 @@ import {
   type AgentMessageHeading
 } from '../../../../../src/shared/agent-session/agent-message-presentation'
 import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
 import { MobileAgentIcon } from '../../../components/MobileAgentIcon'
 import { AgentStateDot } from '../../../components/AgentStateDot'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
@@ -34,7 +34,6 @@ type AgentMessageCardProps = {
   from: AgentMessageSource
   fontScale: number
   attachments: React.ReactNode
-  onOpenFile?: (path: string) => void
   onLongPress?: () => void
   status?: React.ReactNode
 }
@@ -44,7 +43,6 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   from,
   fontScale,
   attachments,
-  onOpenFile,
   onLongPress,
   status
 }: AgentMessageCardProps) {
@@ -111,11 +109,10 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
       {expandable && open ? (
         <View style={styles.compactBody}>
           {attachments}
-          <MobileMarkdown
+          <MobileNativeChatMarkdown
             content={text}
             rangeSelectable
             textScale={CHAT_PROSE_SCALE * fontScale}
-            onOpenFile={onOpenFile}
             onLongPress={onLongPress}
           />
           {status}

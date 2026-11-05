@@ -1,3 +1,4 @@
+vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../shared/repo-types'
@@ -13,6 +14,10 @@ import {
 beforeEach(() => {
   vi.clearAllMocks()
   resetRemoteRuntimeMocks()
+  Object.defineProperty(window.api, 'gh', {
+    configurable: true,
+    value: { workItemByOwnerRepo: vi.fn().mockResolvedValue(null) }
+  })
   resetWorktreeSliceModuleMemory()
 })
 
@@ -62,9 +67,7 @@ it.each([
     url: review.url,
     slug: { owner: 'acme', repo: 'orca' }
   })
-  for (let i = 0; i < 20; i++) {
-    await Promise.resolve()
-  }
+  await vi.dynamicImportSettled()
   expect(branchLookup).toHaveBeenCalledTimes(1)
   store.setState({
     repos:
@@ -112,9 +115,7 @@ it.each([
     bumpProviderRuntimeSessionGeneration()
   }
   pending.resolve(review)
-  for (let i = 0; i < 20; i++) {
-    await Promise.resolve()
-  }
+  await vi.dynamicImportSettled()
   if (change === 'label') {
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalled()
   } else {

@@ -26,8 +26,7 @@ const BUILD_SCRIPTS = [
   'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts'
 ]
 const NODE_SERVER_POLICY_TESTS = new Set([
-  'config/scripts/node-server/qualification/node-server-change-scope.test.mjs',
-  'config/scripts/node-server/qualification/node-server-qualification.test.mjs'
+  'config/scripts/node-server/qualification/node-server-change-scope.test.mjs'
 ])
 const ALWAYS_FILES = new Set([
   'package.json',

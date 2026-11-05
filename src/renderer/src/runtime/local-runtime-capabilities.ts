@@ -98,9 +98,11 @@ export function refreshLocalRuntimeCapabilities(): Promise<readonly RuntimeCapab
       return capabilities
     })
     .catch(() => {
-      // Probe failure proves no host capability; retain unknown, not an unsupported empty list.
-      publish({ state: 'unavailable' })
-      return []
+      // A failed probe cannot revoke capabilities already declared by this local runtime.
+      if (observation.state !== 'known') {
+        publish({ state: 'unavailable' })
+      }
+      return readLocalRuntimeCapabilitiesOrUnknown() ?? []
     })
     .finally(() => {
       refreshPromise = null

@@ -4,7 +4,6 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
@@ -59,8 +58,6 @@ type AgentMessageCardProps = {
   message: NativeChatMessage
   from: AgentMessageSource
   runtimeContext?: RuntimeFileOperationArgs | null
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks: boolean
   textAttachmentContent?: string
   onRefolded: () => void
 }
@@ -69,8 +66,6 @@ export function NativeChatAgentMessageCard({
   message,
   from,
   runtimeContext,
-  onLinkClick,
-  allowFileUriLinks,
   textAttachmentContent,
   onRefolded
 }: AgentMessageCardProps): React.JSX.Element {
@@ -168,8 +163,6 @@ export function NativeChatAgentMessageCard({
                 variant="document"
                 className="text-sm"
                 renderCodeBlock={NativeChatCodeBlock}
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={allowFileUriLinks}
               />
             )}
           />

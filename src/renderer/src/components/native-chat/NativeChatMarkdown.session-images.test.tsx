@@ -53,7 +53,7 @@ function Transcript({ content, owner = localOwner }: { content: string; owner?: 
   return (
     <TooltipProvider>
       <NativeChatMarkdownImageOwnerContext.Provider value={owner}>
-        <NativeChatMarkdown content={content} variant="document" allowFileUriLinks />
+        <NativeChatMarkdown content={content} variant="document" />
       </NativeChatMarkdownImageOwnerContext.Provider>
     </TooltipProvider>
   )

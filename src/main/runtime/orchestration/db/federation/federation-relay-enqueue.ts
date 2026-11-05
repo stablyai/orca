@@ -1,3 +1,4 @@
+import { readAnswerSenderRelayReport } from '../../answer-sender-relay-report'
 import type {
   WorkerReportOutcome,
   FederationRelayDirection,
@@ -17,9 +18,11 @@ export function enqueueFederationRelay(
     payload: string
     messageId?: string
     settleRemoteOutcome?: WorkerReportOutcome
+    answerSenderReport?: unknown
     remoteQuestion?: true
   }
 ): FederationRelayItemRow {
+  const answer = readAnswerSenderRelayReport(params.answerSenderReport)
   const byteCount = Buffer.byteLength(params.payload, 'utf8')
   const messageId = params.messageId ?? generateId('relay')
   if (byteCount > 64 * 1024) {
@@ -142,8 +145,8 @@ export function enqueueFederationRelay(
     this.db
       .prepare(
         `INSERT INTO federation_relay_items (
-           dispatch_id, direction, sequence, message_id, kind, payload, byte_count
-         ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+           dispatch_id, direction, sequence, message_id, kind, payload, byte_count, answer_sender_report
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         params.dispatchId,
@@ -152,7 +155,8 @@ export function enqueueFederationRelay(
         messageId,
         params.kind,
         params.payload,
-        byteCount
+        byteCount,
+        answer ? JSON.stringify(answer) : null
       )
     if (params.remoteQuestion) {
       this.db

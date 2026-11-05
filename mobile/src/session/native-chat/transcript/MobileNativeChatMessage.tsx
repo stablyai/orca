@@ -47,6 +47,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatPacedProse } from './MobileNativeChatPacedProse'
 import { Prose } from './MobileNativeChatProse'
+import { useMobileNativeChatOpenFile } from '../mobile-native-chat-open-file-context'
 
 function MobileNativeChatMessageImpl({
   message: rowMessage,
@@ -56,7 +57,6 @@ function MobileNativeChatMessageImpl({
   previousTodoWrite,
   previousUpdatePlan,
   fontScale = 1,
-  onOpenFile,
   turnStatus,
   turnStatusAbove = false,
   turnExpanded,
@@ -90,7 +90,6 @@ function MobileNativeChatMessageImpl({
   previousTodoWrite?: Chat.NativeChatToolCallBlock
   previousUpdatePlan?: Chat.NativeChatToolCallBlock
   fontScale?: number
-  onOpenFile?: (relativePath: string) => void
   turnStatus?: NativeChatTurnStatus | null
   turnStatusAbove?: boolean
   turnExpanded?: boolean
@@ -140,7 +139,6 @@ function MobileNativeChatMessageImpl({
         live={activeTurnIsWorking === true}
         expanded={openReasoning?.has(nativeChatReasoningDisclosureKey(thoughtMessage.id)) === true}
         onToggle={onToggleReasoning}
-        onOpenFile={onOpenFile}
         onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openSheet(thoughtMessage)}
       />
     )
@@ -149,7 +147,7 @@ function MobileNativeChatMessageImpl({
       before.set(block, thoughts.map(thought))
     }
     return { before, after: run.thoughtsAfter.map(thought) }
-  }, [run, fontScale, activeTurnIsWorking, openReasoning, onToggleReasoning, onOpenFile, openSheet])
+  }, [run, fontScale, activeTurnIsWorking, openReasoning, onToggleReasoning, openSheet])
   // Asks and prose read no files, so the run's own blocks or this message's give the same images.
   const viewedImages = useMemo(
     () => nativeChatToolRunViewedImages(run?.blocks ?? message.blocks),
@@ -226,7 +224,6 @@ function MobileNativeChatMessageImpl({
               live={activeTurnIsWorking === true}
               expanded={reasoningExpanded}
               onToggle={onToggleReasoning}
-              onOpenFile={onOpenFile}
               onLongPress={onLongPress}
             />
             {showFull}
@@ -255,13 +252,11 @@ function MobileNativeChatMessageImpl({
           block={block}
           userMessage
           fontScale={fontScale}
-          onOpenFile={onOpenFile}
           onLongPress={onLongPress}
           text={text}
         />
         <TextAttachmentActions
           text={text}
-          onOpenFile={onOpenFile}
           pastedText={t('chat.textAttachmentPreview.pastedText', 'Pasted text')}
         />
       </View>
@@ -271,7 +266,6 @@ function MobileNativeChatMessageImpl({
         block={block}
         userMessage={isUser}
         fontScale={fontScale}
-        onOpenFile={onOpenFile}
         onLongPress={onLongPress}
         renderVisual={message.role === 'assistant' ? renderVisual : undefined}
         text={text}
@@ -297,7 +291,6 @@ function MobileNativeChatMessageImpl({
               from={agentFrom}
               fontScale={fontScale}
               attachments={proseRows(drawnProse.filter(Chat.isImageRefBlock))}
-              onOpenFile={onOpenFile}
               onLongPress={onLongPress}
               status={showFull}
             />
@@ -308,7 +301,6 @@ function MobileNativeChatMessageImpl({
                 <MobileNativeChatNoticeRow
                   blocks={drawnProse}
                   fontScale={fontScale}
-                  onOpenFile={onOpenFile}
                   onLongPress={onLongPress}
                 />
               ) : null}
@@ -351,7 +343,6 @@ function MobileNativeChatMessageImpl({
               previousTodoWrite={previousTodoWrite}
               previousUpdatePlan={previousUpdatePlan}
               fontScale={fontScale}
-              onOpenFile={onOpenFile}
               viewedImages={
                 viewedImages.length > 0
                   ? // Keyed by path: a read finishing late inserts above images already loaded.
@@ -396,9 +387,9 @@ export const MobileNativeChatMessage = memo(MobileNativeChatMessageImpl)
 const TextAttachmentActions = memo(function TextAttachmentActions(props: {
   text: string
   pastedText: string
-  onOpenFile?: (path: string) => void
 }) {
-  const { text, pastedText, onOpenFile } = props
+  const { text, pastedText } = props
+  const onOpenFile = useMobileNativeChatOpenFile()
   const paths = useMemo(() => nativeChatTextAttachmentPaths(text), [text])
   return paths.map((path) => (
     <Text

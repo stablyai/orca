@@ -387,3 +387,45 @@ it.each([false, true])(
     await view.unmount()
   }
 )
+
+it('drops a desktop-created draft observation on phone session switches and ignores retired reads', async () => {
+  const stale = deferred<AgentSessionOptionsResult>()
+  const unknown: AgentSessionOptionsResult = {
+    models: [],
+    modelsKnown: false,
+    sessionNeverStarted: true,
+    current: { defaulted: [], acceptedInputSources: {} }
+  }
+  let reads = 0
+  const physical = optionsClient(
+    () =>
+      ++reads === 1
+        ? Promise.resolve(unknown)
+        : reads === 2
+          ? stale.promise
+          : Promise.resolve({ ...unknown, sessionNeverStarted: false }),
+    async () => ({
+      origin: 'probe',
+      models: OPTIONS.models,
+      fetchedAt: 1,
+      listingNamesConfiguredModel: true
+    })
+  )
+  const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
+  const view = await mountOptions({
+    ...BASE,
+    client: physical.client,
+    mutate,
+    coherentCatalog: true,
+    sendSelection: true
+  })
+  expect(currentValueOf(view.current().optionSnapshot, 'model')).toBe('gpt-live')
+  expect(currentValueOf(view.current().optionSnapshot, 'effort')).toBe('medium')
+  expect(view.current().sendSelection()).toMatchObject({ selection: {} })
+  await view.rerender({ optionStamp: 'pending' })
+  await view.rerender({ sessionId: 'started-other-chat' })
+  await act(async () => stale.resolve(unknown))
+  await settle()
+  expect(currentValueOf(view.current().optionSnapshot, 'model')).toBeUndefined()
+  await view.unmount()
+})

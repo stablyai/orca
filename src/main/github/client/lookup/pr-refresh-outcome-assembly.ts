@@ -40,7 +40,10 @@ export function assemblePRRefreshFoundOutcome(args: {
       title: data.title,
       state: mapPRState(data.state, data.isDraft),
       url: data.url,
-      checksStatus: checksSummary.state === 'none' ? 'neutral' : checksSummary.state,
+      checksStatus:
+        data.checksUnavailable !== false || checksSummary.state === 'none'
+          ? 'neutral'
+          : checksSummary.state,
       ...(data.checksUnavailable === false ? { checksSummary } : {}),
       updatedAt: data.updatedAt,
       mergeable,

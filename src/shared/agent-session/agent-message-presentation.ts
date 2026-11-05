@@ -85,7 +85,14 @@ export function agentMessageSavedKind(
 
 /** A Dispatch address names work, not a pane; every other sender address can be opened. */
 export function agentMessageSenderCanOpen(sender: AgentMessageSender): boolean {
-  return !sender.party.address.startsWith('dispatch:')
+  return (
+    !sender.party.address.startsWith('dispatch:') &&
+    !(
+      sender.party.address.startsWith('run:') &&
+      !sender.party.orcaSessionId &&
+      !sender.party.terminalHandle
+    )
+  )
 }
 
 export function agentMessagePrimarySender(

@@ -261,7 +261,7 @@ function setOptionCalls(calls: ReturnType<typeof vi.fn<MutateCall>>): unknown[] 
 }
 
 const HOST_CATALOG = {
-  origin: 'live-session',
+  origin: 'live-session' as const,
   models: [
     {
       id: 'gpt-hosted',
