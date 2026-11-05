@@ -1828,13 +1828,8 @@
       "noUpdate": "Sin actualizaciones desde hace {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "De {{sender}}",
-      "fromMore": "De {{sender}} +{{count}}",
-      "fromUnnamed": "De un agente",
-      "messageFrom": "Mensaje de {{sender}}",
-      "messageFromMore": "Mensaje de {{sender}} +{{count}}",
-      "messageFromUnnamed": "Mensaje de un agente",
-      "unnamedSender": "un agente"
+      "unnamedSender": "un agente",
+      "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "No se pudo crear la terminal",
@@ -2218,8 +2213,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "No se pueden guardar comandos en un mensaje en cola.",
-      "editing": "Editando mensaje",
-      "editingAttributed": "Editando mensaje · {{attribution}}"
+      "editing": "Editando mensaje"
     },
     "quickCommandEditorForm": {
       "action": "Acción",

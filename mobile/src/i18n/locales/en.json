@@ -1949,7 +1949,6 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Commands can't be saved in a queued message.",
-      "editingAttributed": "Editing message · {{attribution}}",
       "editing": "Editing message"
     },
     "accessoryKeys": {
@@ -2158,13 +2157,8 @@
       "agent": "Agent"
     },
     "agentMessageAttribution": {
-      "messageFromUnnamed": "Message from an agent",
-      "fromUnnamed": "From an agent",
       "unnamedSender": "an agent",
-      "messageFromMore": "Message from {{sender}} +{{count}}",
-      "fromMore": "From {{sender}} +{{count}}",
-      "messageFrom": "Message from {{sender}}",
-      "from": "From {{sender}}"
+      "fromSender": "From"
     },
     "backgroundTask": {
       "monitoring": "Monitoring background tasks",

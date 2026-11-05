@@ -34,6 +34,9 @@ export const styles = themedStyleSheet(() => ({
   meta: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },
   senders: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   sender: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  queuedSenders: { alignItems: 'center' },
+  queuedSender: { minWidth: 0, flexShrink: 1 },
+  queuedOpenableName: { color: colors.textPrimary },
   name: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,

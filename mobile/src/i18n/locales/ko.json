@@ -1771,13 +1771,8 @@
       "noUpdate": "{{value0}} 동안 업데이트 없음"
     },
     "agentMessageAttribution": {
-      "from": "발신: {{sender}}",
-      "fromMore": "발신: {{sender}} 외 {{count}}명",
-      "fromUnnamed": "발신: 에이전트",
-      "messageFrom": "{{sender}}의 메시지",
-      "messageFromMore": "{{sender}} 외 {{count}}명의 메시지",
-      "messageFromUnnamed": "에이전트의 메시지",
-      "unnamedSender": "에이전트"
+      "unnamedSender": "에이전트",
+      "fromSender": "보낸 사람:"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "터미널을 생성하지 못했습니다.",
@@ -2146,8 +2141,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "대기 중인 메시지에는 명령어를 저장할 수 없습니다.",
-      "editing": "메시지 편집 중",
-      "editingAttributed": "메시지 편집 중 · {{attribution}}"
+      "editing": "메시지 편집 중"
     },
     "quickCommandEditorForm": {
       "action": "동작",

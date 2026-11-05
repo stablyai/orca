@@ -10,17 +10,20 @@ import {
   useMobileNativeChatDraftInputs
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { prepareQueuedMessageEditText } from '../../../src/shared/queued-message-edit-command'
-import { colors } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
+import { MobileAgentMessageSenders } from './native-chat/transcript/MobileAgentMessageSenders'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { createUuidV4 } from '../../../src/shared/uuid-v4'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function MobileQueuedMessageComposer({
   editor,
-  attribution
+  from
 }: {
   editor: MobileQueuedMessageInlineEditor
-  attribution: string | null
+  from: AgentMessageSource | undefined
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -72,17 +75,12 @@ export function MobileQueuedMessageComposer({
   }
   return (
     <View testID="queued-card-editor">
-      <Text style={{ color: colors.textMuted }}>
-        {attribution
-          ? t(
-              'session.queuedMessageComposer.editingAttributed',
-              'Editing message · {{attribution}}',
-              {
-                attribution
-              }
-            )
-          : t('session.queuedMessageComposer.editing', 'Editing message')}
-      </Text>
+      <View style={styles.heading}>
+        <Text style={styles.headingLabel}>
+          {t('session.queuedMessageComposer.editing', 'Editing message')}
+        </Text>
+        {from ? <MobileAgentMessageSenders queued from={from} /> : null}
+      </View>
       <MobileNativeChatComposer
         inputRef={inputRef}
         draftScopeKey={editor.scopeKey}
@@ -138,3 +136,8 @@ export function MobileQueuedMessageComposer({
     </View>
   )
 }
+
+const styles = themedStyleSheet(() => ({
+  heading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
+  headingLabel: { color: colors.textMuted, fontSize: typography.metaSize }
+}))

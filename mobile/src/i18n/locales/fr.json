@@ -1828,13 +1828,8 @@
       "noUpdate": "Aucune mise à jour depuis {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "De la part de {{sender}}",
-      "fromMore": "De la part de {{sender}} +{{count}}",
-      "fromUnnamed": "D'un agent",
-      "messageFrom": "Message envoyé par {{sender}}",
-      "messageFromMore": "Message envoyé par {{sender}} +{{count}}",
-      "messageFromUnnamed": "Message d'un agent",
-      "unnamedSender": "un agent"
+      "unnamedSender": "un agent",
+      "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Impossible de créer le terminal",
@@ -2218,8 +2213,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Les commandes ne peuvent pas être enregistrées dans un message en attente.",
-      "editing": "Modification du message",
-      "editingAttributed": "Modification du message · {{attribution}}"
+      "editing": "Modification du message"
     },
     "quickCommandEditorForm": {
       "action": "Action",

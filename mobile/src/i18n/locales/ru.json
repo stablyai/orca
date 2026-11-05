@@ -1881,13 +1881,8 @@
       "noUpdate": "Нет обновлений уже {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "От {{sender}}",
-      "fromMore": "От {{sender}} +{{count}}",
-      "fromUnnamed": "От агента",
-      "messageFrom": "Сообщение от {{sender}}",
-      "messageFromMore": "Сообщение от {{sender}} +{{count}}",
-      "messageFromUnnamed": "Сообщение от агента",
-      "unnamedSender": "агента"
+      "unnamedSender": "агента",
+      "fromSender": "Отправитель"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Не удалось создать терминал",
@@ -2286,8 +2281,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Команды нельзя сохранять в сообщении в очереди.",
-      "editing": "Редактирование сообщения",
-      "editingAttributed": "Редактирование сообщения · {{attribution}}"
+      "editing": "Редактирование сообщения"
     },
     "quickCommandEditorForm": {
       "action": "Действие",
