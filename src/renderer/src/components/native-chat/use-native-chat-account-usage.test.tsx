@@ -49,8 +49,7 @@ function Chat({
     sessionId,
     target,
     fence: 1,
-    turnId,
-    sending: false
+    turnId
   })
   return (
     <>
