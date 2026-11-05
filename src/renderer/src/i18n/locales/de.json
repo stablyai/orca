@@ -20489,7 +20489,8 @@
           "tooltip": "tooltip",
           "preview": "vorschau",
           "url": "url",
-          "bar": "leiste"
+          "bar": "leiste",
+          "terminalLink": "Terminal-Link"
         }
       },
       "nativeChat": {

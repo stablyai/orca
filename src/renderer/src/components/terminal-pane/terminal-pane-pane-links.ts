@@ -191,6 +191,11 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
         pane.terminal.clearSelection()
       }
     },
+    /**
+     * Shows the bottom link-target bar while hovering an OSC 8 hyperlink.
+     * Gated by the Link Target Preview setting so the bar can be hidden without giving up
+     * clickable links; leave() still hides it when the pointer moves off.
+     */
     hover: (_event, text) => {
       if (!isTerminalLinkTooltipEnabled()) {
         return

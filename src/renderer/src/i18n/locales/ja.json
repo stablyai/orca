@@ -19785,7 +19785,8 @@
           "tooltip": "ツールチップ",
           "preview": "プレビュー",
           "url": "url",
-          "bar": "バー"
+          "bar": "バー",
+          "terminalLink": "ターミナルリンク"
         }
       },
       "nativeChat": {

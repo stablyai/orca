@@ -20321,7 +20321,8 @@
           "tooltip": "tooltip",
           "preview": "vista previa",
           "url": "url",
-          "bar": "barra"
+          "bar": "barra",
+          "terminalLink": "enlace del terminal"
         }
       }
     },

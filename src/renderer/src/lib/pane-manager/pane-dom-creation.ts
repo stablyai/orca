@@ -78,6 +78,11 @@ export function createPaneDOM(
 
   const linkHandlers = {
     activate: (event, uri) => options.onLinkClick?.(id, event, uri),
+    /**
+     * Shows the Ghostty-style bottom link-target bar while hovering a detected HTTP link.
+     * Gated by the Link Target Preview setting so the bar can be hidden without giving up
+     * clickable links; leave() still hides it when the pointer moves off or the setting flips.
+     */
     hover: (_event, uri) => {
       if (uri && isTerminalLinkTooltipEnabled()) {
         linkTooltipHoverToken += 1

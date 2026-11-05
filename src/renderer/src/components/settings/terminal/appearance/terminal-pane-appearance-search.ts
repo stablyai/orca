@@ -69,6 +69,11 @@ export const getTerminalLinkTooltipSearchEntry = createLocalizedCatalog(() => [
       'Show the link target bar at the bottom of the pane while hovering detected links and paths.'
     ),
     keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.39ea7c0d28', 'terminal'),
+      ...translateSearchKeyword(
+        'components.settings.terminal.search.terminalLink',
+        'terminal link'
+      ),
       ...translateSearchKeyword('components.settings.terminal.search.link', 'link'),
       ...translateSearchKeyword('components.settings.terminal.search.tooltip', 'tooltip'),
       ...translateSearchKeyword('components.settings.terminal.search.preview', 'preview'),

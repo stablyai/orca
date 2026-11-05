@@ -20473,7 +20473,8 @@
           "tooltip": "ipucu",
           "preview": "önizleme",
           "url": "url",
-          "bar": "çubuk"
+          "bar": "çubuk",
+          "terminalLink": "terminal bağlantısı"
         }
       },
       "nativeChat": {

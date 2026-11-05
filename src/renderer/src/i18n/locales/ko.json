@@ -19785,7 +19785,8 @@
           "tooltip": "툴팁",
           "preview": "미리보기",
           "url": "url",
-          "bar": "막대"
+          "bar": "막대",
+          "terminalLink": "터미널 링크"
         }
       },
       "nativeChat": {

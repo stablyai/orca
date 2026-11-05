@@ -233,6 +233,11 @@ export function createTerminalHandleLinkProvider(
                 terminal.clearSelection()
               }
             },
+            /**
+             * Shows the bottom link-target bar while hovering a detected terminal handle.
+             * Gated by the Link Target Preview setting so the bar can be hidden without giving
+             * up clickable handles; leave() still hides it when the pointer moves off.
+             */
             hover: () => {
               if (!isTerminalLinkTooltipEnabled()) {
                 return

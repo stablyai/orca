@@ -20591,7 +20591,8 @@
           "tooltip": "info-bulle",
           "preview": "aperçu",
           "url": "url",
-          "bar": "barre"
+          "bar": "barre",
+          "terminalLink": "lien de terminal"
         }
       },
       "nativeChat": {

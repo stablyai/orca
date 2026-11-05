@@ -21114,7 +21114,8 @@
           "tooltip": "tooltip",
           "preview": "preview",
           "url": "url",
-          "bar": "bar"
+          "bar": "bar",
+          "terminalLink": "terminal link"
         }
       },
       "nativeChat": {

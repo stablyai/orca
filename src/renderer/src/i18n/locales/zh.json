@@ -19788,7 +19788,8 @@
           "tooltip": "提示",
           "preview": "预览",
           "url": "网址",
-          "bar": "栏"
+          "bar": "栏",
+          "terminalLink": "终端链接"
         }
       },
       "nativeChat": {

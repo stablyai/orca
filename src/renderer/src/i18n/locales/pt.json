@@ -21451,7 +21451,8 @@
           "tooltip": "tooltip",
           "preview": "pré-visualização",
           "url": "url",
-          "bar": "barra"
+          "bar": "barra",
+          "terminalLink": "link do terminal"
         }
       },
       "nativeChat": {

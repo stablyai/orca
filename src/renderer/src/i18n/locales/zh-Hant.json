@@ -20177,7 +20177,8 @@
           "tooltip": "提示",
           "preview": "預覽",
           "url": "網址",
-          "bar": "欄"
+          "bar": "欄",
+          "terminalLink": "終端機連結"
         }
       },
       "nativeChat": {
