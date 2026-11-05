@@ -228,17 +228,25 @@ describe('terminal worker turn stops', () => {
       from: 'term_coordinator',
       to: `dispatch:${ctx.dispatch.id}`,
       subject: 'check again',
+      type: 'status',
       runId: ctx.run.id
     })
-    // A helper's report is not the coordinator asking again.
-    const helperReport = ctx.db.insertMessage({
+    // A helper's report up to its creator, even a status, is not the coordinator asking again.
+    const helper = ctx.db.createDispatchContext({
+      taskId: ctx.db.createTask({ spec: 'help', runId: ctx.run.id }).id,
+      assigneeHandle: 'term_helper',
+      creator: { kind: 'terminal', handle: HANDLE, paneKey: PANE },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    ctx.db.completeDispatch(helper.id)
+    const helperStatus = ctx.db.insertMessage({
       from: 'term_helper',
       to: `dispatch:${ctx.dispatch.id}`,
-      subject: 'helper done',
-      type: 'worker_done',
+      subject: 'helper progress',
+      type: 'status',
       runId: ctx.run.id
     })
-    ctx.db.markAsRead([helperReport.id])
+    ctx.db.markAsRead([helperStatus.id])
     // Mail the worker has not taken yet belongs to its next turn, not to a stop seen before it arrived.
     current.row = hookRow({ stateStartedAt: 500 })
     stops.observe(moved('working', 'done'))
