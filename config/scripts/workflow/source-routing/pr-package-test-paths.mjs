@@ -154,7 +154,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'config/scripts/native-build/node-addons/rebuild-native-deps.test.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps-windows-process-tree.test.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps-node-pty.test.mjs',
-  'config/scripts/native-build/node-addons/ensure-native-runtime-job-ownership.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/verify-packaged-node-pty-job-ownership.test.mjs',
   'config/scripts/native-build/windows/windows-pe-machine.test.mjs',
   'config/scripts/native-build/windows/build-windows-cli-launcher.test.mjs',
