@@ -290,6 +290,8 @@ type AgentJournalStatusItemFields = {
   /** On the row about a reply Orca's own stop cut off: why Orca stopped. Its cause is open (a newer
    *  host may name one this build does not know), so read it with `readAgentSessionOrcaStop`. */
   orcaStop?: { cause: string }
+  /** On the derived "Forked from" row: the chat this one was forked from. */
+  forkedFrom?: { sessionId: string }
 }
 
 /** A status row that reports no failure; its text is its writer's own. */
