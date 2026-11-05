@@ -3,6 +3,7 @@
 import type { AgentSessionCapabilities } from '../agent-session/agent-session-capabilities'
 import type { StructuredAgentSessionHostCapabilityState } from '../agent-session/structured-agent-session-host-capability'
 import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from './native-chat-types'
 
 /** What a chat can fork: nothing, not yet known (drawn disabled), or through which turns. */
@@ -26,6 +27,23 @@ export function nativeChatForkSupport(
   return fork === 'checkpoint' || fork === 'tip' ? { kind: 'known', fork } : { kind: 'none' }
 }
 
+/** The journal rows a fork can go through: the chat's own agent's messages. A displayed row that only
+ *  reads as a response (a tool call, or a status projected as a plan) maps to none of them. */
+export function nativeChatForkableItemIds(
+  items: readonly Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'agentId'>[]
+): ReadonlySet<string> {
+  return new Set(
+    items
+      .filter(
+        (item) =>
+          item.body.kind === 'message' &&
+          item.body.role === 'assistant' &&
+          isRootAgentJournalItem(item)
+      )
+      .map((item) => item.itemId)
+  )
+}
+
 /** A finished response of the chat's own agent, still in its current context. A fork copies through
  *  the end of that response's turn, so any of the turn's responses offers it, not only its last. */
 export function nativeChatRowOffersFork(
@@ -37,13 +55,18 @@ export function nativeChatRowOffersFork(
     /** The row belongs to the conversation's newest turn. */
     inLatestTurn: boolean
   },
-  chat: { support: NativeChatForkSupport; contextFloorSequence: number }
+  chat: {
+    support: NativeChatForkSupport
+    contextFloorSequence: number
+    forkableItemIds: ReadonlySet<string>
+  }
 ): boolean {
   const { message } = row
   const sequence = message.journalPosition?.sequence
   return (
     chat.support.kind !== 'none' &&
     message.role === 'assistant' &&
+    chat.forkableItemIds.has(message.id) &&
     message.source === 'transcript' &&
     !message.agentStart &&
     !row.inSubagentSection &&

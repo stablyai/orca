@@ -12,6 +12,7 @@ import type { AgentType } from '../../../../shared/agent-status/contracts/agent-
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
+  nativeChatForkableItemIds,
   nativeChatForkSupport,
   type NativeChatForkSupport
 } from '../../../../shared/native-chat/native-chat-fork-offer'
@@ -20,6 +21,7 @@ import { launchNativeChatFork, nativeChatForkSurfaceAddress } from './native-cha
 export type NativeChatForkSurface = {
   support: Exclude<NativeChatForkSupport, { kind: 'none' }>
   contextFloorSequence: number
+  forkableItemIds: ReadonlySet<string>
   /** A fork is opening; every fork action in the chat waits for it. */
   pending: boolean
   request: (throughItemId: string) => void
@@ -71,6 +73,7 @@ export function useNativeChatFork(input: {
     latestAgentSessionContextClearSequence(input.items),
     agentSessionContextFloorSequence(input.contextFloor, input.epoch)
   )
+  const forkableItemIds = useMemo(() => nativeChatForkableItemIds(input.items), [input.items])
   const supportKind = support.kind
   const fork = support.kind === 'known' ? support.fork : undefined
   return useMemo(
@@ -80,9 +83,19 @@ export function useNativeChatFork(input: {
         : {
             support: fork ? { kind: 'known' as const, fork } : { kind: 'unknown' as const },
             contextFloorSequence,
+            forkableItemIds,
             pending,
             request
           },
-    [contextFloorSequence, fork, input.agent, input.worktreeId, pending, request, supportKind]
+    [
+      contextFloorSequence,
+      fork,
+      forkableItemIds,
+      input.agent,
+      input.worktreeId,
+      pending,
+      request,
+      supportKind
+    ]
   )
 }
