@@ -192,6 +192,8 @@ export class AcpStructuredTurns {
 
   private start(send: Send): void {
     const { lane } = this.deps
+    // A Stop covers only the work it interrupted; the next message may ask again.
+    this.stopAt = null
     this.active = send
     const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
     lane.apply(opened.events)

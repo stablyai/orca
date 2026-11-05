@@ -1,5 +1,8 @@
+import { z } from 'zod'
 import { AcpRpcError } from './acp-errors'
 import type { AcpJsonRpcMessage, AcpPeerHandlers } from './acp-json-rpc-peer'
+
+const cancelRequestSchema = z.looseObject({ requestId: z.union([z.string(), z.number()]) })
 
 type OpenRequest = {
   controller: AbortController
@@ -29,12 +32,20 @@ export class AcpIncomingRequests {
   }
 
   // Handlers own cancellation replies; do not preempt an answer still being saved.
-  cancel(): void {
-    for (const request of this.open.values()) {
-      if (!request.cancelled) {
+  cancel(id?: string | number): void {
+    for (const [openId, request] of this.open) {
+      if ((id === undefined || id === openId) && !request.cancelled) {
         request.cancelled = true
         request.controller.abort(new AcpRpcError(-32800, 'Request cancelled'))
       }
+    }
+  }
+
+  /** The agent withdrew one request with `$/cancel_request`; its handler still answers it. */
+  cancelRequested(params: unknown): void {
+    const parsed = cancelRequestSchema.safeParse(params)
+    if (parsed.success) {
+      this.cancel(parsed.data.requestId)
     }
   }
 

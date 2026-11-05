@@ -120,17 +120,14 @@ it.each(['Stop', 'close'] as const)(
   }
 )
 
-it('shows a permission from OMP own turn outside the held message and returns the answer', async () => {
-  const { rig, host, send, fence } = await fixture()
-  await send('first')
-  await rig.frame('session/prompt')
-  await rig.settle()
-  const asked = rig.child().agent.request('own-turn', 'session/request_permission', {
-    sessionId: PROVIDER_SESSION,
-    toolCall: { toolCallId: 'own-call', title: 'orca worktree set --unread' },
-    options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }]
-  })
-  const card = await waitFor(async () => {
+const ownPermission = (toolCallId: string) => ({
+  sessionId: PROVIDER_SESSION,
+  toolCall: { toolCallId, title: 'orca worktree set --unread' },
+  options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }]
+})
+
+async function pendingCard(host: Awaited<ReturnType<typeof fixture>>['host']) {
+  return waitFor(async () => {
     await host.flushStreamedEvents(SESSION)
     const found = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items.find(
       (row) => row.body.kind === 'approval'
@@ -138,6 +135,17 @@ it('shows a permission from OMP own turn outside the held message and returns th
     expect(found?.body).toMatchObject({ resolution: { state: 'pending' } })
     return found!
   })
+}
+
+it('shows a permission from OMP own turn outside the held message and returns the answer', async () => {
+  const { rig, host, send, fence } = await fixture()
+  await send('first')
+  await rig.frame('session/prompt')
+  await rig.settle()
+  const asked = rig
+    .child()
+    .agent.request('own-turn', 'session/request_permission', ownPermission('own-call'))
+  const card = await pendingCard(host)
   expect(card.turnScope).toEqual({ kind: 'thread' })
   await rig.adapter.answerPrompt({
     sessionId: SESSION,
@@ -150,4 +158,17 @@ it('shows a permission from OMP own turn outside the held message and returns th
   expect(await asked).toMatchObject({
     result: { outcome: { outcome: 'selected', optionId: 'allow' } }
   })
+})
+
+it('Cancel on a card from OMP own work, with no message running, cancels that request', async () => {
+  const { rig, host } = await fixture()
+  const asked = rig
+    .child()
+    .agent.request('own-cancel', 'session/request_permission', ownPermission('own-cancel'))
+  const card = await pendingCard(host)
+  const fields = { prompt: { itemId: card.itemId, expectedRevision: card.revision } }
+  expect(
+    await host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
+  ).toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(await asked).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
 })

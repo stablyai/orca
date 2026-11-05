@@ -136,4 +136,44 @@ describe('Grok requests and the turn they belong to', () => {
       result: { outcome: { outcome: 'selected', optionId: 'allow-once' } }
     })
   })
+
+  it('shows a later permission after a Stop cancelled an earlier card', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    const { agent } = rig.child()
+    const first = agent.request(9, 'session/request_permission', permission('call-9'))
+    await waitFor(async () => expect(await cards()).toHaveLength(1))
+    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
+    expect(await first).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
+    await sendHello(rig, 'next')
+    await rig.frame('session/prompt')
+    void agent.request(10, 'session/request_permission', permission('call-10'))
+    await waitFor(async () =>
+      expect((await cards()).map((row) => row.body.resolution.state)).toEqual([
+        'cancelled',
+        'pending'
+      ])
+    )
+
+    async function cards() {
+      return (await rig.rig.rows()).filter((row) => row.body.kind === 'approval')
+    }
+  })
+
+  it('withdraws the card when the agent cancels its own permission request', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    const { agent } = rig.child()
+    const asked = agent.request(11, 'session/request_permission', permission('call-11'))
+    const approvals = async () =>
+      (await rig.rig.rows()).filter((row) => row.body.kind === 'approval')
+    await waitFor(async () => expect(await approvals()).toHaveLength(1))
+    agent.notify('$/cancel_request', { requestId: 11 })
+    expect(await asked).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
+    await waitFor(async () =>
+      expect((await approvals()).map((row) => row.body)).toMatchObject([
+        { resolution: { state: 'cancelled' } }
+      ])
+    )
+  })
 })
