@@ -6799,7 +6799,12 @@
           "childCount_one": "{{count}} child",
           "childCount_other": "{{count}} children",
           "groupProjectsRemained_one": "{{remaining}} of {{count}} contained project remained after deleting the group.",
-          "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group."
+          "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group.",
+          "projectGroupRefreshScanFailed": "Could not scan this project group",
+          "projectGroupRefreshNoProjects": "No new projects found",
+          "projectGroupRefreshPartial": "Some new projects could not be added to the group",
+          "projectGroupRefreshSuccess": "Added {{count}} projects to {{group}}",
+          "refreshProjectGroup": "Refresh projects"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
