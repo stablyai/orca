@@ -51,7 +51,8 @@ describe('plugin approval over RPC', () => {
         syntaxes: [],
         customEditors: [],
         newFiles: [],
-        statusBarItems: []
+        statusBarItems: [],
+        linkRoutes: []
       }
     }
   }

@@ -52,7 +52,8 @@ function serviceOff(userDataPath: string) {
     activationError: () => null,
     contentPacks: {
       vmRecipes: { preview: () => [] },
-      commands: { preview: () => [] }
+      commands: { preview: () => [] },
+      linkRoutes: { declared: () => [] }
     }
   } as unknown as PluginService
   return { service, getDiscovered }
