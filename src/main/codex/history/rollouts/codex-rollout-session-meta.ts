@@ -58,10 +58,10 @@ async function readFirstRolloutRecord(
   signal?: AbortSignal
 ): Promise<string> {
   const head = await readTranscriptSlice(filePath, 0, ROLLOUT_READ_LIMIT, priority, signal)
-  if (head.includes(10) || head.length < ROLLOUT_READ_LIMIT) {
+  if (head.includes(10)) {
     return head.toString('utf8').split(/\r?\n/, 1)[0]?.trim() ?? ''
   }
-  // Long base_instructions are valid metadata; read only the first complete, bounded record.
+  // A short read need not mean EOF; stream the first complete, bounded record.
   const stream = openTranscriptReadStream(filePath, {}, priority, signal)
   try {
     for await (const record of splitTranscriptStreamLines(stream, MAX_METADATA_RECORD_BYTES)) {
