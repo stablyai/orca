@@ -207,7 +207,7 @@ it.each([100, 1000])(
     visits = 0
     normalize.mockClear()
     resolve.mockClear()
-    act(() => useAppStore.setState({ sidebarBody: 'worktrees' }))
+    act(() => useAppStore.setState({ sidebarBody: 'workspaces' }))
     expect(visits).toBe(0)
     expect(normalize).not.toHaveBeenCalled()
     expect(resolve.mock.calls.length).toBeLessThanOrEqual(n * 4)
