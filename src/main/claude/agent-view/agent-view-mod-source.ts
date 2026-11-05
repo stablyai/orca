@@ -77,9 +77,13 @@ let mailTimerStarted = false
       const reply = await post($, 'poll', {}, session, ${JSON.stringify(CLAUDE_TERMINAL_MAIL_PATH)})
       for (const item of Array.isArray(reply.submissions) ? reply.submissions : []) {
         let submitted = false
+        // A /clear or resume during an await starts another session; its mail is not this one's.
+        const current = mailIdentity === session && (await $.session.id()) === session.sessionId
         try {
-          const result = await $.prompt.submit({ text: String(item.text) })
-          submitted = !result || !result.drop
+          if (current) {
+            const result = await $.prompt.submit({ text: String(item.text) })
+            submitted = !result || !result.drop
+          }
         } catch {}
         await post($, 'ack', { id: String(item.id), submitted }, session, ${JSON.stringify(CLAUDE_TERMINAL_MAIL_PATH)})
       }
