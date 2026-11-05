@@ -527,6 +527,14 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
         approvalPolicy: 'on-request',
         approvalsReviewer: 'user',
         sandboxPolicy: { type: 'readOnly' },
+        collaborationMode: {
+          mode: 'default',
+          settings: {
+            model: 'gpt-live',
+            reasoning_effort: 'medium',
+            developer_instructions: null
+          }
+        },
         input: [
           { type: 'text', text: 'ship it' },
           { type: 'localImage', path: '/tmp/shot.png' },

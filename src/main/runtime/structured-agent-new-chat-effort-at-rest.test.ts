@@ -318,6 +318,7 @@ describe("a new chat's effort pill before its agent starts", () => {
         effort: undefined,
         defaulted: [],
         ...modeOf(agent),
+        ...(agent === 'codex' ? { interactionMode: 'default' } : {}),
         ...AT_REST_METADATA,
         acceptedInputSources: { model: 'policy' }
       })
@@ -355,6 +356,7 @@ describe("a new chat's effort pill before its agent starts", () => {
       effort: undefined,
       defaulted: [],
       permissionMode: 'ask',
+      interactionMode: 'default',
       ...AT_REST_METADATA,
       acceptedInputSources: { model: 'policy' }
     })
@@ -369,6 +371,7 @@ describe("a new chat's effort pill before its agent starts", () => {
       effort: undefined,
       defaulted: [],
       permissionMode: 'ask',
+      interactionMode: 'default',
       ...AT_REST_METADATA,
       acceptedInputSources: { model: 'policy' }
     })
@@ -395,6 +398,7 @@ describe("a new chat's effort pill before its agent starts", () => {
       model: 'gpt-5.5-mini',
       defaulted: [],
       permissionMode: 'ask',
+      interactionMode: 'default',
       effort: undefined,
       ...AT_REST_METADATA,
       acceptedInputSources: { model: 'saved' }

@@ -489,6 +489,7 @@ describe('Claude effort default at rest', () => {
       model: 'gpt-5.5',
       defaulted: [],
       permissionMode: 'ask',
+      interactionMode: 'default',
       acceptedInputSources: { model: 'saved' }
     })
     expect(result.current?.effort).toBeUndefined()

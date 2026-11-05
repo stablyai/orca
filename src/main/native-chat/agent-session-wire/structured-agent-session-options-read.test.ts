@@ -299,7 +299,12 @@ describe('a chat at rest, read by the host', () => {
     expect(native.appliedTurnOptions?.model).toBe('B')
     request.mockResolvedValueOnce({ turn: { id: 'accepted' } })
     await sendTurn('accepted')
-    expect(native.appliedTurnOptions).toEqual({ model: 'C', effort: 'high', serviceTier: 'rapid' })
+    expect(native.appliedTurnOptions).toEqual({
+      model: 'C',
+      effort: 'high',
+      serviceTier: 'rapid',
+      interactionMode: 'default'
+    })
   })
 
   it('uses seeds only for an unknown inventory, never beside known rows or a known empty list', () => {
