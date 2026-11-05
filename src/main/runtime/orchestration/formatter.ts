@@ -123,6 +123,13 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
   return `\n--- Orchestration Messages (${messages.length}) ---\n${banners}\n---\n`
 }
 
+const MESSAGE_POINTER_TEXT = /^You have \d+ (?:new )?orchestration messages?[. ]/
+
+/** Whether composer text is a pointer Orca typed (see formatMessagePointer) rather than the user's draft. */
+export function isMessagePointerText(text: string): boolean {
+  return MESSAGE_POINTER_TEXT.test(text.trimStart())
+}
+
 export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,

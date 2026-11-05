@@ -18,6 +18,7 @@ import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
 import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
+import { isMessagePointerText } from '../../orchestration/formatter'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
 
@@ -149,14 +150,22 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (this.isPtyAwaitingUserInput(ptyId)) {
       return true
     }
-    const lastInputAt = this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+    const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
-    return (
-      lastInputAt !== null &&
-      Date.now() - lastInputAt <= USER_INPUT_HOLD_CAP_MS &&
-      !!state &&
-      !!readTerminalComposerTypedText(state.emulator.getCursorLineContext())
+    const draft = state
+      ? readTerminalComposerTypedText(state.emulator.getCursorLineContext())
+      : null
+    const userDraft = !!draft && !isMessagePointerText(draft)
+    // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
+    // launch text; a process it attached to, as after a restart, may hold one typed before.
+    const unattributedSince = facts.noteUnattributedDraft(
+      ptyId,
+      userDraft &&
+        facts.readLastDrivingInputAt(ptyId) === null &&
+        facts.readProcessStartedAt(ptyId) === null
     )
+    const holdSince = facts.readLastDrivingInputAt(ptyId) ?? unattributedSince
+    return userDraft && holdSince !== null && Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
   }
 
   protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {

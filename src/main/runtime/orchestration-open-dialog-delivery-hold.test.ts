@@ -102,6 +102,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       })
       const run = createBoundRun(db, 'Claude Run')
       await runtime.listTerminals()
+      runtime.terminalRunFacts.recordSpawnCommit({ id: PTY_ID })
 
       runtime.onPtyData(PTY_ID, `\x1b]0;✳ Claude Code\x07${'─'.repeat(40)}\r\n❯ `, 1)
       runtime.terminalRunFacts.recordInput(PTY_ID, inputKind, 'please refactor the auth')
@@ -151,4 +152,36 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     ])
     db.close()
   })
+
+  it.each([
+    ['holds a draft typed before the restart until the cap', 'please refactor the auth', true],
+    ["does not hold on Orca's own unsent pointer", 'You have 1 orchestration message.', false]
+  ] as const)(
+    'after an Orca restart reattaches the agent, %s',
+    async (_label, composerText, held) => {
+      vi.useFakeTimers()
+      const db = createDatabase('orca-restored-draft-delivery-hold-')
+      const { runtime, write } = createRuntime(db, {
+        getAgentStatusSnapshot: () => [claudeHookRow('done')],
+        checkHookAgentPresence: async () => 'live',
+        launchAgent: 'claude'
+      })
+      const run = createBoundRun(db, 'Claude Run')
+      await runtime.listTerminals()
+
+      runtime.onPtyData(PTY_ID, `\x1b]0;✳ Claude Code\x07${'─'.repeat(40)}\r\n❯ ${composerText}`, 1)
+      await vi.advanceTimersByTimeAsync(200)
+      insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(write).toHaveBeenCalledTimes(held ? 0 : 2)
+
+      await vi.advanceTimersByTimeAsync(USER_INPUT_HOLD_CAP_MS)
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r'
+      ])
+      db.close()
+    }
+  )
 })
