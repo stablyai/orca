@@ -42,7 +42,16 @@ const OBSERVER_OPTIONS: MutationObserverInit = {
 
 type RunningDetector = { fill: (payload: unknown) => void }
 
-function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
+function enableReportsPageForms(payload: unknown): boolean {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    'reportPageForms' in payload &&
+    payload.reportPageForms === true
+  )
+}
+
+function startDetector(port: BrowserPasswordGuestPort, reportsPageForms: boolean): RunningDetector {
   // Why only these values: page script can write any DOM value; only trusted input or our own fill is the user's.
   const trackedValues = new WeakMap<HTMLInputElement, string>()
   const valueOf = (input: HTMLInputElement): string => trackedValues.get(input) ?? ''
@@ -100,6 +109,10 @@ function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
 
   let lastPageForms = JSON.stringify([])
   const snapshotPageForms = (): void => {
+    // Main reads page forms only while judging a login that navigated here; elsewhere a scan forces layout for nothing.
+    if (!reportsPageForms) {
+      return
+    }
     const payload: BrowserPasswordGuestPageForms = {
       forms: scanner.hasAnyInput() ? scanner.scan().map(scanner.summaryOf) : []
     }
@@ -195,8 +208,8 @@ export function installBrowserPasswordDetector(port: BrowserPasswordGuestPort): 
     return
   }
   let running: RunningDetector | null = null
-  port.on(PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable, () => {
-    running ??= startDetector(port)
+  port.on(PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable, (payload) => {
+    running ??= startDetector(port, enableReportsPageForms(payload))
   })
   port.on(PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS.fill, (payload) => running?.fill(payload))
 }
