@@ -1,8 +1,9 @@
-import {
-  hasFeatureInteraction,
-  type FeatureInteractionId,
-  type FeatureInteractionState
-} from './feature-interactions'
+import type { FeatureInteractionId } from './feature-interactions'
+export {
+  isContextualTourStepDone,
+  hasContextualTourActionStep,
+  hasUndoneContextualTourAction
+} from './contextual-tour-progress'
 
 export type ContextualTourId =
   | 'workspace-board'
@@ -114,6 +115,14 @@ export const CONTEXTUAL_TOURS = [
         preferredPlacement: 'bottom',
         primaryAction: { kind: 'split-terminal-pane', label: 'Split terminal' },
         advanceOnFeatureInteraction: 'terminal-pane-split'
+      },
+      {
+        id: 'agent-sessions-add-project',
+        title: 'Add a project',
+        body: 'Add a folder or Git repository to start working on your project.',
+        targetSelector: '[data-contextual-tour-target="project-add-control"]',
+        preferredPlacement: 'bottom',
+        advanceOnFeatureInteraction: 'project-add-introduction'
       },
       {
         id: 'agent-sessions-parallel',
@@ -276,37 +285,19 @@ export function getContextualTour(id: ContextualTourId): ContextualTour {
   return CONTEXTUAL_TOURS.find((tour) => tour.id === id)!
 }
 
-// A step that waits for a user action is done only once that action succeeded, never when it is shown.
-export function isContextualTourStepDone(
-  step: ContextualTourStep,
-  featureInteractions: FeatureInteractionState
-): boolean {
-  return (
-    step.advanceOnFeatureInteraction !== undefined &&
-    hasFeatureInteraction(featureInteractions, step.advanceOnFeatureInteraction)
-  )
-}
-
-export function hasContextualTourActionStep(tour: ContextualTour): boolean {
-  return tour.steps.some((step) => step.advanceOnFeatureInteraction !== undefined)
-}
-
-export function hasUndoneContextualTourAction(
-  tour: ContextualTour,
-  featureInteractions: FeatureInteractionState,
-  fromStepIndex = 0
-): boolean {
-  return tour.steps
-    .slice(fromStepIndex)
-    .some(
-      (step) =>
-        step.advanceOnFeatureInteraction !== undefined &&
-        !isContextualTourStepDone(step, featureInteractions)
-    )
-}
-
 export const getContextualTourStepIndex = (id: ContextualTourId, stepId: ContextualTourStepId) =>
   getContextualTour(id).steps.findIndex((step) => step.id === stepId)
+
+export function isContextualTourStepActive(
+  state: { activeContextualTourId: ContextualTourId | null; activeContextualTourStepIndex: number },
+  stepId: ContextualTourStepId
+): boolean {
+  return (
+    state.activeContextualTourId !== null &&
+    getContextualTour(state.activeContextualTourId).steps[state.activeContextualTourStepIndex]
+      ?.id === stepId
+  )
+}
 
 export function normalizeContextualTourIds(value: unknown): ContextualTourId[] {
   if (!Array.isArray(value)) {

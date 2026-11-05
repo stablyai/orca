@@ -2,8 +2,10 @@ import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type {
   ContextualTour,
   ContextualTourId,
+  ContextualTourStep,
   ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
+import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { ContextualTourOutcome } from '../../../../shared/feature-education-telemetry'
 import { useAppStore } from '@/store'
 import {
@@ -57,8 +59,11 @@ export function getContextualTourMeasurementAction(args: {
   tour: ContextualTour
   visibleStepIndexes: readonly number[]
   activeStepIndex: number
+  activeTabType?: WorkspaceVisibleTabType
+  isStepDone?: (step: ContextualTourStep) => boolean
 }): ContextualTourMeasurementAction {
-  const activeKind = args.tour.steps[args.activeStepIndex]?.primaryAction?.kind
+  const activeStep = args.tour.steps[args.activeStepIndex]
+  const activeKind = activeStep?.primaryAction?.kind
   if (
     args.tour.id === 'workspace-agent-sessions' &&
     (activeKind === 'split-chat-pane' || activeKind === 'split-terminal-pane')
@@ -69,13 +74,23 @@ export function getContextualTourMeasurementAction(args: {
       (index) => args.tour.steps[index]?.primaryAction?.kind === alternateKind
     )
     if (alternateIndex !== undefined) {
+      if (args.isStepDone?.(args.tour.steps[alternateIndex])) {
+        return { kind: 'advance' }
+      }
       return { kind: alternateIndex < args.activeStepIndex ? 'regress' : 'advance' }
     }
     // A just-opened terminal or chat pane mounts after the tab switch; don't skip its split lesson.
-    const activeTabType = useAppStore.getState().activeTabType
+    const activeTabType = args.activeTabType
     if (activeTabType === 'terminal' || activeTabType === 'agent-session') {
       return { kind: 'wait' }
     }
+  }
+  if (
+    args.tour.id === 'workspace-agent-sessions' &&
+    activeStep?.advanceOnFeatureInteraction &&
+    !args.isStepDone?.(activeStep)
+  ) {
+    return { kind: 'wait' }
   }
   if (args.visibleStepIndexes.some((index) => index > args.activeStepIndex)) {
     return { kind: 'advance' }
@@ -104,16 +119,25 @@ export function measureContextualTourOverlayRenderState(args: {
   sidebarOpen: boolean
   keybindings: Parameters<typeof formatOptionalShortcutLabel>[1]
   previousTelemetryTotalSteps: number
+  activeTabType?: WorkspaceVisibleTabType
+  isStepDone?: (step: ContextualTourStep) => boolean
 }): ContextualTourOverlayMeasurementResult {
   const targetExists = (selector: string): boolean =>
     getMeasurableContextualTourTarget(selector) !== null
-  const visibleStepIndexes = getVisibleContextualTourStepIndexes(args.tour, targetExists)
+  const visibleStepIndexes = getVisibleContextualTourStepIndexes(
+    args.tour,
+    targetExists,
+    args.activeTabType
+  )
   const telemetryTotalSteps = Math.max(
     args.previousTelemetryTotalSteps,
     getContextualTourOutcomeStepTotal(visibleStepIndexes)
   )
   const activeStep = args.tour.steps[args.activeStepIndex]
-  const target = activeStep ? getMeasurableContextualTourTarget(activeStep.targetSelector) : null
+  const target =
+    activeStep && visibleStepIndexes.includes(args.activeStepIndex)
+      ? getMeasurableContextualTourTarget(activeStep.targetSelector)
+      : null
   const progress = getContextualTourDisplayProgress({
     tour: args.tour,
     visibleStepIndexes,
@@ -121,6 +145,13 @@ export function measureContextualTourOverlayRenderState(args: {
     activeStep
   })
 
+  if (
+    visibleStepIndexes.length === 0 &&
+    activeStep?.advanceOnFeatureInteraction &&
+    !args.isStepDone?.(activeStep)
+  ) {
+    return { kind: 'wait' }
+  }
   if (visibleStepIndexes.length === 0 || !activeStep) {
     return { kind: 'cancel' }
   }
@@ -130,13 +161,15 @@ export function measureContextualTourOverlayRenderState(args: {
     const canSwitchSplitLesson =
       args.tour.id === 'workspace-agent-sessions' &&
       (actionKind === 'split-chat-pane' || actionKind === 'split-terminal-pane')
-    if (!progress && !canSwitchSplitLesson) {
+    if (!progress && !canSwitchSplitLesson && !activeStep.advanceOnFeatureInteraction) {
       return { kind: 'cancel' }
     }
     const measurementAction = getContextualTourMeasurementAction({
       tour: args.tour,
       visibleStepIndexes,
-      activeStepIndex: args.activeStepIndex
+      activeStepIndex: args.activeStepIndex,
+      activeTabType: args.activeTabType,
+      isStepDone: args.isStepDone
     })
     return measurementAction
   }

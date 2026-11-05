@@ -3,8 +3,7 @@ import {
   getContextualTour,
   hasContextualTourActionStep,
   type ContextualTourId,
-  isContextualTourStepDone,
-  getContextualTourStepIndex
+  isContextualTourStepDone
 } from '../../../../../shared/contextual-tours'
 import {
   getContextualTourRequestDecision,
@@ -94,6 +93,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           activeModal: s.activeModal,
           blockingSurfaceVisible: s.contextualToursBlockingSurfaceVisible,
           targetExists: hasContextualTourTarget,
+          activeTabType: s.activeTabType,
           isStepDone: (step) => isContextualTourStepDone(step, s.featureInteractions)
         })
         if (decision.kind !== 'start') {
@@ -152,33 +152,28 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           return s
         }
         const tour = getContextualTour(s.activeContextualTourId)
-        if (
-          tour.id === 'workspace-agent-sessions' &&
-          tour.steps[s.activeContextualTourStepIndex]?.id === 'agent-sessions-new-tab'
-        ) {
-          return {
-            activeContextualTourStepIndex: getContextualTourStepIndex(
-              tour.id,
-              s.activeTabType === 'agent-session'
-                ? 'agent-sessions-split-chat'
-                : 'agent-sessions-split'
-            )
-          }
-        }
         const nextStepIndex = getNextVisibleContextualTourStepIndex({
           tour,
           currentStepIndex: s.activeContextualTourStepIndex,
-          targetExists: hasContextualTourTarget
+          targetExists: hasContextualTourTarget,
+          activeTabType: s.activeTabType,
+          isStepDone: (step) => isContextualTourStepDone(step, s.featureInteractions)
         })
         if (nextStepIndex !== null) {
           return { activeContextualTourStepIndex: nextStepIndex }
         }
-        // Why: browser step 3's target lives in a closed menu until that step is active.
-        if (
-          s.activeContextualTourId === 'browser' &&
-          s.activeContextualTourStepIndex + 1 < tour.steps.length
-        ) {
-          return { activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1 }
+        // Preserve an owed action-tour step while its target is unavailable.
+        if (hasContextualTourActionStep(tour) || s.activeContextualTourId === 'browser') {
+          const pendingStepIndex = getNextVisibleContextualTourStepIndex({
+            tour,
+            currentStepIndex: s.activeContextualTourStepIndex,
+            targetExists: () => true,
+            activeTabType: s.activeTabType,
+            isStepDone: (step) => isContextualTourStepDone(step, s.featureInteractions)
+          })
+          if (pendingStepIndex !== null) {
+            return { activeContextualTourStepIndex: pendingStepIndex }
+          }
         }
         return s
       }),
@@ -190,7 +185,8 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         const previousStepIndex = getPreviousVisibleContextualTourStepIndex({
           tour: getContextualTour(s.activeContextualTourId),
           currentStepIndex: s.activeContextualTourStepIndex,
-          targetExists: hasContextualTourTarget
+          targetExists: hasContextualTourTarget,
+          activeTabType: s.activeTabType
         })
         if (previousStepIndex === null) {
           return s

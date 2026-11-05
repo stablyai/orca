@@ -4,7 +4,6 @@ import {
   mergeContextualTourSeenIds
 } from './ui-slice-hydration-values'
 import { getContextualTourProgressionForFeatureInteraction } from './ui-slice-contextual-tour-progression'
-import { getContextualTourStepIndex } from '../../../../../shared/contextual-tours'
 import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
 
 export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -72,27 +71,20 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
           // Why: split can fire from keyboard/menu with the sidebar closed, but the next tour target lives in the sidebar.
           return {
             featureInteractions: next,
-            sidebarOpen: true,
-            activeContextualTourStepIndex: getContextualTourStepIndex(
-              'workspace-agent-sessions',
-              'agent-sessions-parallel'
-            )
+            sidebarOpen: true
           }
         }
         if (tourProgression === 'reveal-sidebar') {
           return { featureInteractions: next, sidebarOpen: true }
         }
-        if (tourProgression === 'advance-to-next-step') {
-          return {
-            featureInteractions: next,
-            activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
-          }
-        }
         return { featureInteractions: next }
       })
       if (tourProgression === 'complete') {
         get().completeContextualTour()
-      } else if (tourProgression === 'advance') {
+      } else if (
+        tourProgression === 'advance' ||
+        tourProgression === 'reveal-sidebar-and-advance'
+      ) {
         get().advanceContextualTour()
       }
       return persistPromise

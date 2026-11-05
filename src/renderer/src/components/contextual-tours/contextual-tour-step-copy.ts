@@ -34,6 +34,13 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
       'Drag workspaces between lanes as their status changes.'
     )
   }),
+  'agent-sessions-add-project': () => ({
+    title: translate('components.contextualTours.addProject.title', 'Add a project'),
+    body: translate(
+      'components.contextualTours.addProject.body',
+      'Add a folder or Git repository to start working on your project.'
+    )
+  }),
   'agent-sessions-new-tab': () => ({
     title: translate(
       'components.contextualTours.agentSessions.newTab.title',

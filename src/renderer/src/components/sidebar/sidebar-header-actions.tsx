@@ -25,6 +25,7 @@ function AddProjectButton({
           type="button"
           className="text-muted-foreground"
           aria-label={label}
+          data-contextual-tour-target="project-add-control"
           data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
           onClick={() => openModal('add-repo')}
         >

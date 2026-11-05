@@ -1,4 +1,5 @@
 import type { ContextualTour, ContextualTourStep } from '../../../../shared/contextual-tours'
+import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 
 export type ContextualTourTarget = {
   element: Element
@@ -43,9 +44,6 @@ export function getMeasurableContextualTourTarget(
 ): ContextualTourTarget | null {
   const queryRoot = root ?? (typeof document !== 'undefined' ? document : null)
   const elements = getContextualTourTargetCandidates(selector, queryRoot)
-  if (!elements) {
-    return null
-  }
   for (const element of elements) {
     if (!element || typeof element.getBoundingClientRect !== 'function') {
       continue
@@ -73,10 +71,36 @@ export function hasContextualTourTarget(selector: string, root?: ParentNode): bo
 export function getContextualTourStartStepIndex(
   tour: ContextualTour,
   targetExists: (selector: string) => boolean,
-  isStepDone: (step: ContextualTourStep) => boolean = () => false
+  isStepDone: (step: ContextualTourStep) => boolean = () => false,
+  activeTabType?: WorkspaceVisibleTabType
 ): number | null {
+  const completedSplitIndex = tour.steps.findIndex(
+    (step) =>
+      isContextualTourStepApplicable(step, activeTabType) &&
+      (step.primaryAction?.kind === 'split-chat-pane' ||
+        step.primaryAction?.kind === 'split-terminal-pane') &&
+      isStepDone(step)
+  )
+  if (
+    tour.id === 'workspace-agent-sessions' &&
+    (activeTabType === 'terminal' || activeTabType === 'agent-session') &&
+    completedSplitIndex !== -1
+  ) {
+    const nextIndex = getNextVisibleContextualTourStepIndex({
+      tour,
+      currentStepIndex: completedSplitIndex,
+      targetExists,
+      isStepDone,
+      activeTabType
+    })
+    return nextIndex !== null && targetExists(tour.steps[nextIndex].targetSelector)
+      ? nextIndex
+      : null
+  }
   const requiredStepIndexes = tour.steps.flatMap((step, index) =>
-    step.requiredForStart === true ? [index] : []
+    step.requiredForStart === true && isContextualTourStepApplicable(step, activeTabType)
+      ? [index]
+      : []
   )
   const candidates = requiredStepIndexes.length > 0 ? requiredStepIndexes : [0]
   for (const candidate of candidates) {
@@ -85,7 +109,9 @@ export function getContextualTourStartStepIndex(
       const nextIndex = getNextVisibleContextualTourStepIndex({
         tour,
         currentStepIndex: startIndex,
-        targetExists
+        targetExists,
+        isStepDone,
+        activeTabType
       })
       if (nextIndex === null) {
         return null
@@ -102,35 +128,64 @@ export function getContextualTourStartStepIndex(
 
 export function getVisibleContextualTourStepIndexes(
   tour: ContextualTour,
-  targetExists: (selector: string) => boolean
+  targetExists: (selector: string) => boolean,
+  activeTabType?: WorkspaceVisibleTabType
 ): number[] {
   const indexes: number[] = []
   tour.steps.forEach((step, index) => {
-    if (targetExists(step.targetSelector)) {
+    if (isContextualTourStepApplicable(step, activeTabType) && targetExists(step.targetSelector)) {
       indexes.push(index)
     }
   })
   return indexes
 }
 
+function isContextualTourStepApplicable(
+  step: ContextualTourStep,
+  activeTabType: WorkspaceVisibleTabType | undefined
+): boolean {
+  if (activeTabType === undefined) {
+    return true
+  }
+  if (step.primaryAction?.kind === 'split-chat-pane') {
+    return activeTabType === 'agent-session'
+  }
+  if (step.primaryAction?.kind === 'split-terminal-pane') {
+    return activeTabType === 'terminal'
+  }
+  return true
+}
+
 export function getNextVisibleContextualTourStepIndex(args: {
   tour: ContextualTour
   currentStepIndex: number
   targetExists: (selector: string) => boolean
+  isStepDone?: (step: ContextualTourStep) => boolean
+  activeTabType?: WorkspaceVisibleTabType
 }): number | null {
-  return (
-    getVisibleContextualTourStepIndexes(args.tour, args.targetExists).find(
-      (index) => index > args.currentStepIndex
-    ) ?? null
+  const index = args.tour.steps.findIndex(
+    (step, index) =>
+      index > args.currentStepIndex &&
+      isContextualTourStepApplicable(step, args.activeTabType) &&
+      !args.isStepDone?.(step) &&
+      (args.targetExists(step.targetSelector) ||
+        (args.tour.id === 'workspace-agent-sessions' &&
+          step.advanceOnFeatureInteraction !== undefined))
   )
+  return index === -1 ? null : index
 }
 
 export function getPreviousVisibleContextualTourStepIndex(args: {
   tour: ContextualTour
   currentStepIndex: number
   targetExists: (selector: string) => boolean
+  activeTabType?: WorkspaceVisibleTabType
 }): number | null {
-  const visible = getVisibleContextualTourStepIndexes(args.tour, args.targetExists)
+  const visible = getVisibleContextualTourStepIndexes(
+    args.tour,
+    args.targetExists,
+    args.activeTabType
+  )
   let prev: number | null = null
   for (const index of visible) {
     if (index >= args.currentStepIndex) {
@@ -153,6 +208,7 @@ export function getContextualTourRequestDecision(args: {
   blockingSurfaceVisible: boolean
   targetExists: (selector: string) => boolean
   isStepDone?: (step: ContextualTourStep) => boolean
+  activeTabType?: WorkspaceVisibleTabType
 }): ContextualTourRequestDecision {
   if (!args.persistedUIReady) {
     return { kind: 'blocked', reason: 'persisted-ui-not-ready' }
@@ -179,7 +235,12 @@ export function getContextualTourRequestDecision(args: {
     return { kind: 'blocked', reason: 'blocking-surface' }
   }
 
-  const stepIndex = getContextualTourStartStepIndex(args.tour, args.targetExists, args.isStepDone)
+  const stepIndex = getContextualTourStartStepIndex(
+    args.tour,
+    args.targetExists,
+    args.isStepDone,
+    args.activeTabType
+  )
   if (stepIndex === null) {
     return { kind: 'blocked', reason: 'missing-start-target' }
   }
@@ -217,7 +278,7 @@ function isMeasurableRect(rect: DOMRect): boolean {
 function getContextualTourTargetCandidates(
   selector: string,
   queryRoot: ParentNode | null
-): Element[] | null {
+): Element[] {
   if (!queryRoot) {
     return []
   }
@@ -227,7 +288,7 @@ function getContextualTourTargetCandidates(
     }
     return queryRoot.querySelector(selector) ? [queryRoot.querySelector(selector)!] : []
   } catch {
-    return null
+    return []
   }
 }
 

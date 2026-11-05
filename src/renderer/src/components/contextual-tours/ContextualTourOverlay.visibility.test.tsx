@@ -131,6 +131,7 @@ describe('ContextualTourOverlay full-pass interval visibility gate', () => {
     async (type) => {
       tourTarget('tab-create-menu', 50)
       tourTarget('workspace-create-control', 300)
+      tourTarget('project-add-control', 250)
       useAppStore.setState({
         activeContextualTourId: 'workspace-agent-sessions',
         activeContextualTourStepIndex: 0,
@@ -177,6 +178,37 @@ describe('ContextualTourOverlay full-pass interval visibility gate', () => {
     }
   )
 
+  it('continues to Add Project when switching onto an already completed chat split', async () => {
+    tourTarget('terminal-pane-split-target', 150)
+    tourTarget('chat-pane-split-target', 180)
+    tourTarget('project-add-control', 250)
+    tourTarget('workspace-create-control', 300)
+    useAppStore.setState({
+      persistedUIReady: true,
+      activeContextualTourId: 'workspace-agent-sessions',
+      activeContextualTourStepIndex: 2,
+      activeTabType: 'terminal',
+      featureInteractions: { 'tab-splits': { firstInteractedAt: 1, interactionCount: 1 } },
+      contextualToursSeenIds: [],
+      activeModal: 'none',
+      contextualToursOnboardingVisible: false,
+      contextualToursBlockingSurfaceVisible: false,
+      activeContextualTourSuppressed: false
+    })
+    act(() => root.render(<ContextualTourOverlay />))
+    await settle(50)
+    expect(container.querySelector('[data-contextual-tour-panel]')?.textContent).toContain(
+      'Split a terminal pane'
+    )
+
+    act(() => useAppStore.setState({ activeTabType: 'agent-session' }))
+    await settle(50)
+    expect(container.querySelector('[data-contextual-tour-panel]')?.textContent).toContain(
+      'Add a project'
+    )
+    expect(useAppStore.getState().contextualToursSeenIds).not.toContain('workspace-agent-sessions')
+  })
+
   it('hides the previous browser lesson while waiting for its menu target', async () => {
     tourTarget('browser-grab-control', 50)
     tourTarget('browser-annotation-control', 150)
@@ -215,6 +247,7 @@ describe('ContextualTourOverlay full-pass interval visibility gate', () => {
   ] as const)('keeps the tour when the + menu changes %s to %s', async (before, after) => {
     tourTarget('tab-create-menu', 50)
     tourTarget('workspace-agent-terminal-tip', 150)
+    tourTarget('project-add-control', 250)
     tourTarget('workspace-create-control', 300)
     const target = document.querySelector<HTMLElement>(
       '[data-contextual-tour-target="workspace-agent-terminal-tip"]'
@@ -255,6 +288,10 @@ describe('ContextualTourOverlay full-pass interval visibility gate', () => {
       await state.recordFeatureInteraction(
         after === 'agent-session' ? 'tab-splits' : 'terminal-pane-split'
       )
+    })
+    expect(useAppStore.getState().activeContextualTourStepIndex).toBe(3)
+    await act(async () => {
+      await useAppStore.getState().recordFeatureInteraction('project-add-introduction')
     })
     expect(useAppStore.getState().activeContextualTourStepIndex).toBe(PARALLEL_STEP_INDEX)
   })
