@@ -22,7 +22,6 @@ type TrackedCodexSubagent = {
   model?: string
   state: 'working' | 'waiting'
   startedAt: number
-  identityTranscriptPath?: string
   /** Relay session whose own roster listed this child; only that session may retire it by omission. */
   reportedBy?: string
 }
@@ -72,7 +71,7 @@ export function enrichCodexSubagentIdentity(
   transcriptPath: string | undefined
 ): boolean {
   const child = roster.get(id.trim())
-  if (!child || !transcriptPath || child.identityTranscriptPath === transcriptPath) {
+  if (!child || child.description || !transcriptPath) {
     return false
   }
   const identity = readCodexSubagentIdentity(transcriptPath, id.trim())
@@ -81,10 +80,6 @@ export function enrichCodexSubagentIdentity(
     AGENT_STATUS_TOOL_INPUT_MAX_LENGTH
   )
   if (!description) {
-    return false
-  }
-  child.identityTranscriptPath = transcriptPath
-  if (child.description) {
     return false
   }
   child.description = description
