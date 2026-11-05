@@ -208,6 +208,7 @@ describe('sweepAgentSessionAttachments', () => {
       let entered!: () => void
       let release!: () => void
       let completed!: () => void
+      let successes = 0
       const held = new Promise<void>((resolve) => {
         release = resolve
       })
@@ -231,6 +232,7 @@ describe('sweepAgentSessionAttachments', () => {
       fault.completed = (actualStore, actualFacts) => {
         expect(actualStore).toBe(store)
         expect(actualFacts).toBe(sweepFacts)
+        successes++
         completed()
       }
       fault.inspect = async () => {
@@ -280,6 +282,7 @@ describe('sweepAgentSessionAttachments', () => {
         await finished
         await new Promise<void>((resolve) => setImmediate(resolve))
         expect(errors).toEqual([])
+        expect(successes).toBe(1)
         expect(counts.reduce((a, b) => a + b, 0)).toBe(size)
         expect(Math.max(...counts)).toBeLessThanOrEqual(32)
         expect(claimedSessions()).toHaveLength(size + 2)
@@ -313,21 +316,23 @@ describe('sweepAgentSessionAttachments', () => {
         await next
         await new Promise<void>((resolve) => setImmediate(resolve))
         expect(errors).toEqual([])
+        expect(successes).toBe(2)
         expect(claimedSessions()).toHaveLength(size)
         expect(pruneSizes.reduce((a, b) => a + b, 0)).toBe(2)
         expect(Math.max(...pruneSizes)).toBeLessThanOrEqual(32)
         recorded!.delete('session-00000')
         let inspected = 0
+        const uncertain = new Error('later-page uncertain inspection')
         fault.inspect = async () => {
           if (++inspected === 40) {
-            throw new Error('later-page uncertain inspection')
+            throw uncertain
           }
         }
         await vi.advanceTimersByTimeAsync(100_000)
         await errored
         await new Promise<void>((resolve) => setImmediate(resolve))
-        expect(errors).toHaveLength(1)
-        expect(String(errors[0])).toContain('later-page uncertain inspection')
+        expect(errors).toEqual([uncertain])
+        expect(successes).toBe(2)
         expect(claimedSessions()).toHaveLength(size - 1)
         expect(claimedSessions()).not.toContain('session-00000')
         fault.inspect = undefined
@@ -339,7 +344,8 @@ describe('sweepAgentSessionAttachments', () => {
         await vi.advanceTimersByTimeAsync(100_000)
         await retry
         await new Promise<void>((resolve) => setImmediate(resolve))
-        expect(errors).toHaveLength(1)
+        expect(errors).toEqual([uncertain])
+        expect(successes).toBe(3)
         expect(claimedSessions()).toHaveLength(size - 1)
         expect(await readFile(join(store.rootDir, SENT, 'shot.png'), 'utf8')).toBe('bytes')
       } finally {
@@ -365,7 +371,8 @@ describe('sweepAgentSessionAttachments', () => {
       if (!replaced) {
         replaced = true
         journal.fixtureTransaction(() => {
-          for (const id of ['s-0', 's-64']) {
+          // Recreating the maximum first would reuse its rowid without AUTOINCREMENT.
+          for (const id of ['s-64', 's-0']) {
             db.prepare('DELETE FROM agent_session_attachment_claims WHERE session_id = ?').run(id)
             insert.run(SENT, id, NOW)
           }
