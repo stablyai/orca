@@ -89,7 +89,7 @@ export class RuntimeAgentSenderAssociations {
   readonly publisher = new AgentSenderPublisher((id) => this.deps.hasPublishedScope?.(id) ?? false)
   constructor(private readonly deps: Dependencies) {}
 
-  /** Display bookkeeping: a failure keeps the last good publication and never fails a caller. */
+  /** Display bookkeeping: a failure preserves ordinary rows but withdraws unproved workers. */
   build(worktreeId?: string): AgentSenderPublication {
     try {
       this.refresh()

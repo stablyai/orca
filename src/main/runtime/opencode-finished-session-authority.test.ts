@@ -434,6 +434,7 @@ it.each([false, true])(
       ).toBe(false)
     } finally {
       unsubscribe?.()
+      vi.restoreAllMocks()
       db.close()
     }
   }
