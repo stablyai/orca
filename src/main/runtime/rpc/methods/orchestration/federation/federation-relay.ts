@@ -9,6 +9,7 @@ import {
 } from '../../../../orchestration/federation-lifecycle-settlement'
 import { defineMethod, type RpcMethod } from '../../../core'
 import { takesFinishedWorkerMail } from '../../../../orchestration/finished-worker-relay'
+import { noteRunHomeAsked } from '../../../../orchestration/run-home-listening'
 import {
   FederationAckParams,
   FederationFinishedMailParams,
@@ -22,7 +23,12 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     permission: 'workspace',
     params: FederationPullParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
-      requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
+      const attachment = requireHomeAttachment(
+        runtime,
+        params.dispatchId,
+        authenticatedCallerFingerprint
+      )
+      noteRunHomeAsked(runtime.getOrchestrationDb(), attachment.home_peer_fingerprint)
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
@@ -43,8 +49,11 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     name: 'orchestration.federationFinishedMail',
     permission: 'workspace',
     params: FederationFinishedMailParams,
-    handler: (_params, { runtime, authenticatedCallerFingerprint }) =>
-      runtime.getOrchestrationDb().listFinishedRemoteWorkers(authenticatedCallerFingerprint ?? '')
+    handler: (_params, { runtime, authenticatedCallerFingerprint }) => {
+      const db = runtime.getOrchestrationDb()
+      noteRunHomeAsked(db, authenticatedCallerFingerprint ?? '')
+      return db.listFinishedRemoteWorkers(authenticatedCallerFingerprint ?? '')
+    }
   }),
   defineMethod({
     name: 'orchestration.federationAck',

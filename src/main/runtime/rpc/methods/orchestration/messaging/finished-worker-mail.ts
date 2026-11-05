@@ -5,6 +5,7 @@ import type {
   RemoteDispatchAttachmentRow
 } from '../../../../orchestration/types'
 import { takesFinishedWorkerMail } from '../../../../orchestration/finished-worker-relay'
+import { isRunHomeListening } from '../../../../orchestration/run-home-listening'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 import { reportCorrectsUnobservedPrompt } from '../../../../orchestration/worker-report-admission'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
@@ -132,7 +133,8 @@ function finishedRemoteAttachment(
   }
   if (
     !takesFinishedWorkerMail(attachment) ||
-    !db.isFinishedRemoteWorkerHeard(attachment.dispatch_id)
+    !db.isFinishedRemoteWorkerHeard(attachment.dispatch_id) ||
+    !isRunHomeListening(db, attachment.home_peer_fingerprint)
   ) {
     throw new OrchestrationError(
       'run_home_unreachable',

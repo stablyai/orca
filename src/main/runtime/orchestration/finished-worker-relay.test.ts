@@ -18,6 +18,13 @@ describe('rounds for finished remote workers', () => {
     rounds.ensure(['slow', 'down'])
     await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(calls.filter((id) => id === 'down')).toHaveLength(6)
+    // Asking again never hurries a host given up on; only its answering another call does.
+    rounds.ensure(['down'])
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(calls.filter((id) => id === 'down')).toHaveLength(6)
+    rounds.revive('down')
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(calls.filter((id) => id === 'down')).toHaveLength(7)
     rounds.stop()
     rounds.ensure(['slow', 'slow'])
     await vi.advanceTimersByTimeAsync(60_000)

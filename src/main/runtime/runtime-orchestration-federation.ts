@@ -148,6 +148,11 @@ export class RuntimeOrchestrationFederation {
         if (this.syncs.get(dispatchId)?.promise === sync) {
           this.warnings.delete(dispatchId)
         }
+        // A host that answers again may hold mail a finished worker sent while it was unreachable.
+        const environmentId = db.getFederatedDispatch(dispatchId)?.environment_id
+        if (environmentId) {
+          this.finishedMail.revive(environmentId)
+        }
       })
       .catch((error: unknown) => {
         if (this.syncs.get(dispatchId)?.promise === sync && !this.warnings.has(dispatchId)) {
@@ -214,8 +219,8 @@ export class RuntimeOrchestrationFederation {
     this.ensureFinishedWorkerMail()
   }
 
-  // Ask every host once per database, then only a host with an answer to deliver, so a routine call never
-  // restarts rounds a host already ended.
+  // Every host once per database, then a host with an answer to deliver; a host's own workers finishing ask
+  // for it too. Asking again never hurries a host that is failing.
   private ensureFinishedWorkerMail(): void {
     const all = this.finishedMailGeneration !== this.relayGeneration
     this.finishedMailGeneration = this.relayGeneration

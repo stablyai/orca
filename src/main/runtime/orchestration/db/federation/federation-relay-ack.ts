@@ -206,16 +206,18 @@ export function hasPendingFederatedWorkerReport(
   )
 }
 
-/** A finished worker here is heard for this long after its last message to its Run home; the home keeps
- *  asking a little longer, so mail accepted at the edge is still taken. */
+/** A finished worker here is heard for this long after it last wrote to its Run home or was answered; the home
+ *  keeps asking a little longer, so mail accepted at the edge is still taken. */
 export const FINISHED_WORKER_HEARD_SECONDS = 120
 const FINISHED_WORKER_ASKED_SECONDS = FINISHED_WORKER_HEARD_SECONDS + 30
 
-const LAST_MAIL_SQL = `(SELECT MAX(r.created_at) FROM federation_relay_items r
-  WHERE r.dispatch_id = a.dispatch_id AND r.direction = 'to_home')`
+const LAST_MAIL_SQL = `MAX(
+  COALESCE((SELECT MAX(r.created_at) FROM federation_relay_items r
+    WHERE r.dispatch_id = a.dispatch_id AND r.direction = 'to_home'), ''),
+  COALESCE((SELECT MAX(q.answered_at) FROM remote_questions q WHERE q.dispatch_id = a.dispatch_id), ''))`
 
-/** For a Run home: its finished workers here still heard, and those with mail it has not taken. Durable and
- *  read from this host's clock alone, so either side restarting changes nothing. */
+/** For a Run home: its finished workers here still heard (a closed terminal sends nothing more), and those with
+ *  mail it has not taken. Durable and read from this host's clock alone. */
 export function listFinishedRemoteWorkers(
   this: OrchestrationDb,
   homePeerFingerprint: string
@@ -223,7 +225,8 @@ export function listFinishedRemoteWorkers(
   const rows = this.db
     .prepare(
       `SELECT a.dispatch_id AS dispatchId,
-         ${LAST_MAIL_SQL} > datetime('now', ?) AS open,
+         ${LAST_MAIL_SQL} > datetime('now', ?) AND NOT EXISTS (SELECT 1 FROM worker_terminal_resources t
+           WHERE t.owner_dispatch_id = a.dispatch_id AND t.release_state = 'released') AS open,
          EXISTS (SELECT 1 FROM federation_relay_items r WHERE r.dispatch_id = a.dispatch_id
                   AND r.direction = 'to_home' AND r.acked_at IS NULL) AS mail
        FROM remote_dispatch_attachments a

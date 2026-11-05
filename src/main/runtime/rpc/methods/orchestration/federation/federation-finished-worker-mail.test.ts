@@ -167,6 +167,7 @@ describe('a finished worker on a paired host', () => {
   }
 
   beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.useRealTimers())
 
   it('still reaches its coordinator, and an ask gets its answer', async () => {
     setup(ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
@@ -240,7 +241,16 @@ describe('a finished worker on a paired host', () => {
   it('stops the home listening once the worker stops writing', async () => {
     setup(ORCHESTRATION_FEDERATION_FINISHED_WORKER_MAIL_PROTOCOL_VERSION)
     await finish()
+    // A home that stopped asking cannot read mail, so the host takes none until it asks again.
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 31_000 })
+    await expect(workerCall('orchestration.send', { subject: 'Unread' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'run_home_unreachable' }
+    })
     expect(await homePull()).toBe('listening')
+    await expect(workerCall('orchestration.send', { subject: 'Read' })).resolves.toMatchObject({
+      ok: true
+    })
 
     ageWorkerMail(FINISHED_WORKER_HEARD_SECONDS)
     await expect(

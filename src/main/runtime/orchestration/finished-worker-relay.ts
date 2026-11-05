@@ -48,7 +48,7 @@ export async function pullFinishedWorkerMail(
       failed = true
     })
   }
-  return reply.data.open.length > 0 ? 'listening' : failed ? 'unreachable' : 'done'
+  return failed ? 'unreachable' : reply.data.open.length > 0 ? 'listening' : 'done'
 }
 
 const FinishedWorkersReply = z.object({ open: z.array(z.string()), mail: z.array(z.string()) })
@@ -56,12 +56,13 @@ const FinishedWorkersReply = z.object({ open: z.array(z.string()), mail: z.array
 const FINISHED_MAIL_INTERVAL_MS = 5_000
 const FINISHED_MAIL_RETRIES = 5
 
-/** At most one round per host, even across a reset; one asked for meanwhile runs after it. A host that keeps
- *  failing is retried less often, then left until it is asked for again. */
+/** At most one round per host, even across a reset; one asked for meanwhile runs after it. A failing host is
+ *  retried less often, never sooner when asked again, then left alone until it answers some other call. */
 export class FinishedWorkerMailRounds {
   private readonly scheduled = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly running = new Set<string>()
   private readonly again = new Set<string>()
+  private readonly failures = new Map<string, number>()
   private generation = 0
 
   constructor(
@@ -72,9 +73,17 @@ export class FinishedWorkerMailRounds {
     for (const environmentId of environmentIds) {
       if (this.running.has(environmentId)) {
         this.again.add(environmentId)
-      } else if (!this.scheduled.has(environmentId)) {
-        this.schedule(environmentId, 0, 0)
+      } else if (!this.scheduled.has(environmentId) && !this.isExhausted(environmentId)) {
+        this.schedule(environmentId, 0)
       }
+    }
+  }
+
+  /** A host that answered again gets another round if it had been given up on. */
+  revive(environmentId: string): void {
+    if (this.isExhausted(environmentId)) {
+      this.failures.delete(environmentId)
+      this.ensure([environmentId])
     }
   }
 
@@ -85,34 +94,47 @@ export class FinishedWorkerMailRounds {
     }
     this.scheduled.clear()
     this.again.clear()
+    this.failures.clear()
   }
 
-  private schedule(environmentId: string, delayMs: number, failures: number): void {
+  private isExhausted(environmentId: string): boolean {
+    return (this.failures.get(environmentId) ?? 0) > FINISHED_MAIL_RETRIES
+  }
+
+  private schedule(environmentId: string, delayMs: number): void {
     const timer = setTimeout(() => {
       this.scheduled.delete(environmentId)
-      this.run(environmentId, failures)
+      this.run(environmentId)
     }, delayMs)
     timer.unref?.()
     this.scheduled.set(environmentId, timer)
   }
 
-  private run(environmentId: string, failures: number): void {
+  private run(environmentId: string): void {
     const generation = this.generation
     this.running.add(environmentId)
     void this.round(environmentId)
       .catch((): FinishedWorkerHostRound => 'unreachable')
       .then((round) => {
         this.running.delete(environmentId)
-        if (this.again.delete(environmentId)) {
-          this.schedule(environmentId, 0, 0)
-        } else if (generation === this.generation && round === 'listening') {
-          this.schedule(environmentId, FINISHED_MAIL_INTERVAL_MS, 0)
-        } else if (
-          generation === this.generation &&
-          round === 'unreachable' &&
-          failures < FINISHED_MAIL_RETRIES
-        ) {
-          this.schedule(environmentId, FINISHED_MAIL_INTERVAL_MS * 2 ** failures, failures + 1)
+        const again = this.again.delete(environmentId)
+        if (generation !== this.generation) {
+          if (again) {
+            this.schedule(environmentId, 0)
+          }
+          return
+        }
+        if (round === 'unreachable') {
+          const failures = (this.failures.get(environmentId) ?? 0) + 1
+          this.failures.set(environmentId, failures)
+          if (failures <= FINISHED_MAIL_RETRIES) {
+            this.schedule(environmentId, FINISHED_MAIL_INTERVAL_MS * 2 ** (failures - 1))
+          }
+          return
+        }
+        this.failures.delete(environmentId)
+        if (again || round === 'listening') {
+          this.schedule(environmentId, again ? 0 : FINISHED_MAIL_INTERVAL_MS)
         }
       })
   }
