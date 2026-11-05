@@ -31,7 +31,7 @@ import { RuntimeManagedWorktreeQueries } from '../runtime-managed-worktree-queri
 import { RuntimePtyForegroundAgent } from '../runtime-pty-foreground-agent'
 import { OpenCodeRunLifetimeStatus } from '../opencode-run-lifetime-status'
 import { readLocalPtyForegroundCommandLine } from '../local-pty-foreground-command-line'
-import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { RuntimeTerminalAgentStatusQuery } from '../runtime-terminal-agent-status-query'
 import type { OrchestrationDb } from '../orchestration/db'
 import { OrchestrationMailboxOwner } from '../orchestration/mailbox-owner'

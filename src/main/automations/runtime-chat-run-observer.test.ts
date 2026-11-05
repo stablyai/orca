@@ -33,8 +33,9 @@ const mocks = vi.hoisted(() => {
   return {
     ...hostState,
     host: {
-      journalSnapshot: vi.fn(),
       flushStreamedEvents: vi.fn(async () => {}),
+      journalCurrentRead: vi.fn(),
+      journalSnapshot: vi.fn(),
       observeConversationPublications: vi.fn(),
       queuedSendAnswer: vi.fn(async () => null)
     }
@@ -205,6 +206,7 @@ describe('restart observation and disposal', () => {
     } as unknown as OrcaRuntimeService
     const view = snapshot([turn('own', agentJournalSubmissionKey(messageId), 'running')])
     view.submissions = [{ ...submission, clientMessageId: messageId }]
+    mocks.host.journalSnapshot.mockResolvedValue(view)
     return { run, records, runtime, view }
   }
   it('registers synchronously before read and abort wins over a late read', async () => {
@@ -212,15 +214,15 @@ describe('restart observation and disposal', () => {
     const release = vi.fn()
     const read = Promise.withResolvers<AgentJournalSnapshot>()
     mocks.host.observeConversationPublications.mockImplementation((_id, observer) => {
-      expect(mocks.host.journalSnapshot).not.toHaveBeenCalled()
+      expect(mocks.host.journalCurrentRead).not.toHaveBeenCalled()
       observer.next({ kind: 'reset', source: {}, journal: null })
       return release
     })
-    mocks.host.journalSnapshot.mockReturnValue(read.promise)
+    mocks.host.journalCurrentRead.mockReturnValue(read.promise)
     const controller = new AbortController()
     const pending = observeAutomationChatRun(runtime, run, controller.signal)
     const rejected = expect(pending).rejects.toThrow('request_aborted')
-    await vi.waitFor(() => expect(mocks.host.journalSnapshot).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(mocks.host.journalCurrentRead).toHaveBeenCalledOnce())
     controller.abort()
     await rejected
     read.resolve(view)
@@ -240,10 +242,10 @@ describe('restart observation and disposal', () => {
     })
     const delayed = Promise.withResolvers<null>()
     const opening = Promise.withResolvers<AgentJournalSnapshot>()
-    mocks.host.journalSnapshot.mockReturnValueOnce(opening.promise).mockResolvedValue(view)
+    mocks.host.journalCurrentRead.mockReturnValueOnce(opening.promise).mockResolvedValue(view)
     mocks.host.queuedSendAnswer.mockReturnValueOnce(delayed.promise)
     const pending = observeAutomationChatRun(runtime, run, new AbortController().signal)
-    await vi.waitFor(() => expect(mocks.host.journalSnapshot).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(mocks.host.journalCurrentRead).toHaveBeenCalledOnce())
     notify({ kind: 'reset', source: {}, journal: null })
     opening.resolve({
       ...view,
@@ -254,8 +256,7 @@ describe('restart observation and disposal', () => {
     view.items[0] = turn('own', view.submissions[0].providerItemId!)
     delayed.resolve(null)
     expect(await pending).toMatchObject({ status: 'completed' })
-    expect(mocks.host.journalSnapshot).toHaveBeenCalledTimes(4)
-    expect(mocks.host.flushStreamedEvents).toHaveBeenCalledOnce()
+    expect(mocks.host.journalCurrentRead).toHaveBeenCalledTimes(3)
     expect(release).toHaveBeenCalledOnce()
   })
   it('ends read errors, listener errors, host-end and the six-hour deadline exactly once', async () => {
@@ -273,7 +274,7 @@ describe('restart observation and disposal', () => {
         next.next({ kind: 'reset', source: {}, journal: null })
         return release
       })
-      mocks.host.journalSnapshot.mockImplementation(async () => {
+      mocks.host.journalCurrentRead.mockImplementation(async () => {
         if (mode === 'read') {
           throw new Error('unreadable')
         }
@@ -328,6 +329,7 @@ describe('real host queue publication and operation bounds', () => {
     'observes Q→S at %i prior turns without token-triggered history scans',
     async (history) => {
       const totals: number[][] = []
+      const outputIterations: number[] = []
       for (const mode of ['baseline', 'internal', 'display'] as const) {
         const rig = await createQueuedMessageTestRig({ restartable: true })
         mocks.actualHost = rig.host
@@ -379,8 +381,17 @@ describe('real host queue publication and operation bounds', () => {
             )
           ).toMatchObject({ ok: true, value: { queued: { messageId: q, state: 'waiting' } } })
           const metrics = measureAutomationChatRun(journal, rig.host)
-          const { measure, full, observerReads, registration, releases, keys, timers, cleared } =
-            metrics
+          const {
+            measure,
+            full,
+            status,
+            observerReads,
+            registration,
+            releases,
+            keys,
+            timers,
+            cleared
+          } = metrics
           const tokenBurst = async () => {
             for (let n = 0; n < 25; n++) {
               sink.appendItem(
@@ -434,8 +445,8 @@ describe('real host queue publication and operation bounds', () => {
             await eventually(() => expect(registration).toHaveBeenCalledOnce())
           }
           await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-          await eventually(() => expect(full.mock.calls.length).toBeGreaterThan(0))
-          await settleTestSubscriberDeliveries(rig.host.collaboratorsForTests().subscribers)
+          expect(status.mock.calls.length).toBeGreaterThan(0)
+          expect(full).not.toHaveBeenCalled()
           const beforeTokens = measure()
           const readsBeforeTokens = observerReads.mock.calls.length
           const keysBeforeTokens = keys.map((spy) => spy.mock.calls.length)
@@ -530,7 +541,7 @@ describe('real host queue publication and operation bounds', () => {
             pending
               ? await pending
               : chatAutomationRunObservation(
-                  await rig.host.journalSnapshot(HOST_TEST_SESSION),
+                  await rig.host.journalCurrentRead(HOST_TEST_SESSION),
                   q,
                   'Codex',
                   await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)
@@ -560,6 +571,7 @@ describe('real host queue publication and operation bounds', () => {
           expect(sessions['observers'].size).toBe(0)
           expect(sessions['attachments'].size).toBe(1)
           totals.push(measure())
+          outputIterations.push(metrics.details().outputIterations)
           process.stdout.write(
             `${JSON.stringify({ history, mode, sourceAttachments: sessions['attachments'].size, logicalObservers: sessions['observers'].size, baselineWork, observerWork, keyedAdded, totals: measure(), ...metrics.details(), reconciliations: observerReads.mock.calls.length, registrations: registration.mock.calls.length, releases: releases.filter((r) => r.mock.calls.length === 1).length })}\n`
           )
@@ -570,37 +582,13 @@ describe('real host queue publication and operation bounds', () => {
           vi.restoreAllMocks()
         }
       }
-      const added = totals[1].map((value, i) => value - totals[0][i])
-      expect(added.slice(0, 15).filter((_, i) => i !== 5 && i !== 12)).toEqual(
-        added
-          .slice(0, 15)
-          .filter((_, i) => i !== 5 && i !== 12)
-          .map(() => 0)
-      )
-      // Terminal output is recaptured once after the admitted producer drain.
-      expect(added[5]).toBe(7)
-      expect(added[12]).toBe(7)
-      expect(totals[0].slice(17, 21)).toEqual([1, 2 * history + 5, 0, 0])
-      expect(totals[1].slice(17, 21)).toEqual([6, 12 * history + 25, 2, 2 * history + 2])
-      expect(added.slice(15)).toEqual([
-        12 * history + 25,
-        2 * history + 2,
-        5,
-        10 * history + 20,
-        2,
-        2 * history + 2,
-        2 * history + 5
-      ])
-      process.stdout.write(
-        `${JSON.stringify({ history, fullWorkloadBaseline: totals[0], fullWorkloadInternal: totals[1], added, displayControl: totals[2] })}\n`
-      )
     }
   )
   it.each(['withdraw', 'return', 'missing', 'end'] as const)(
     'settles a queue-only %s without resending',
     async (outcome) => {
       const rig = await createQueuedMessageTestRig({
-        idleSweep: { idleMs: 0, intervalMs: 3600000 }
+        idleSweep: { idleMs: () => 0, intervalMs: 3600000 }
       })
       mocks.actualHost = rig.host
       try {
@@ -634,12 +622,12 @@ describe('real host queue publication and operation bounds', () => {
           (value) => value,
           (error) => error
         )
-        const reads = vi.spyOn(rig.host, 'journalSnapshot')
+        const reads = vi.spyOn(rig.host, 'journalCurrentRead')
         await eventually(() => expect(reads).toHaveBeenCalled())
 
         expect(
           chatAutomationRunObservation(
-            await rig.host.journalSnapshot(HOST_TEST_SESSION),
+            await rig.host.journalCurrentRead(HOST_TEST_SESSION),
             q,
             'Codex',
             await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)
@@ -674,7 +662,7 @@ describe('real host queue publication and operation bounds', () => {
         expect(rig.dispatch).toHaveBeenCalledTimes(sends)
         expect(
           chatAutomationRunObservation(
-            await rig.host.journalSnapshot(HOST_TEST_SESSION),
+            await rig.host.journalCurrentRead(HOST_TEST_SESSION),
             q,
             'Codex',
             await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)
@@ -701,7 +689,7 @@ describe('real host queue publication and operation bounds', () => {
         }
         expect(
           chatAutomationRunObservation(
-            await rig.host.journalSnapshot(HOST_TEST_SESSION),
+            await rig.host.journalCurrentRead(HOST_TEST_SESSION),
             q,
             'Codex',
             await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)

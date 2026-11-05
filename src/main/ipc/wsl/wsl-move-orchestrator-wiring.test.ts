@@ -40,12 +40,12 @@ const host = vi.hoisted(() => {
 // Runs inside the running-distro read, so a test can land a change mid-step.
 const runningRead = vi.hoisted((): { hook: (() => void) | null } => ({ hook: null }))
 const deployments = vi.hoisted(() => new Map<string, Record<string, unknown>>())
-vi.mock('../../../shared/runtime-environment-wsl-host-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store', () => ({
   findWslHostDeployment: (_userData: string, environmentId: string) =>
     deployments.get(environmentId) ?? null
 }))
 const hostFile = vi.hoisted(() => ({ unreadable: false }))
-vi.mock('../../../shared/wsl-host-deployment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/wsl-host-deployment-store', () => ({
   readWslHostDeployments: () => {
     if (hostFile.unreadable) {
       throw new Error('orca-wsl-host-deployments.json is not valid')

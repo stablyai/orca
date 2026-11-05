@@ -2,8 +2,8 @@ import { resetAgentPaneAuthorityAliasesForTests } from '../../src/renderer/src/s
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../src/main/agent-hooks/server'
 import { toAgentStatusIpcPayload } from '../../src/main/agent-hooks/server/server-status-identity'
-import type { AgentStatusIpcPayload } from '../../src/shared/agent-status-types'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
+import type { AgentStatusIpcPayload } from '../../src/shared/agent-status/contracts/agent-status-ipc-payload'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { isAgentStatusForRecentlyClosedTab } from '../../src/renderer/src/hooks/ipc-events/agent-status-routing'
 import { createTestStore } from '../../src/renderer/src/store/slices/store-test-helpers'
 

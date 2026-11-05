@@ -24,6 +24,7 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
+import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 const MAIL_SOURCE: AgentMessageSource = {
   kind: 'agent',
@@ -43,8 +44,6 @@ const CHAT_CLOSED = agentSessionFailureWords(agentSessionFailureFact('chatClosed
   surface: 'rejection'
 })
 const KEPT = { state: 'waiting' }
-
-import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 let rig: QueuedMessageTestRig
 const observationClock = createStructuredSessionObservationClock(() => rig.host, SESSION)
@@ -607,7 +606,9 @@ describe("the reopen's mark", () => {
       await observationClock.observe(100)
       expect(await rig.handoff(queued.id)).toBeUndefined()
       expect(dispatchedTexts()).toEqual(['work on this'])
-      void working
+      expect(await rig.deleteQueued(`recovery:${working}`)).toMatchObject({
+        value: { deleted: false }
+      })
 
       const next = rig.send('after the reopen')
       await next.result
@@ -628,7 +629,9 @@ describe("the reopen's mark", () => {
   it('an idle-sweep eviction of a stopped chat writes nothing, and its Stop row stays', async () => {
     await observationClock.restoreBeforeCleanup(() => rig.dispose())
     observationClock.start()
-    rig = await createQueuedMessageTestRig({ idleSweep: { idleMs: 0, intervalMs: 60 * 60 * 1000 } })
+    rig = await createQueuedMessageTestRig({
+      idleSweep: { idleMs: () => 0, intervalMs: 60 * 60 * 1000 }
+    })
     const marks = vi.spyOn(AgentSessionJournal.prototype, 'appendQueueReopen')
     const working = await rig.workingSend()
     const held = rig.send('held by the Stop', 'queue-if-active')

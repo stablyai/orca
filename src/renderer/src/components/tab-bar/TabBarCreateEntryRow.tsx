@@ -19,7 +19,7 @@ import { formatBrowserHistoryUrl } from '@/lib/browser-history-match'
 import type { ActiveOption } from './tab-create-entry-active-option'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { AgentLaunchSetupButton } from '../agent/AgentLaunchSetupButton'
-import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 export const RESULT_LISTBOX_ID = 'tab-create-entry-results'
 

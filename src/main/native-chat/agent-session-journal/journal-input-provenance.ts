@@ -1,3 +1,4 @@
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalQueueRebaseWithAcceptance } from './journal-queue-rebase'
 export {
   journalQueueRebaseWithAcceptance,
@@ -8,7 +9,6 @@ import type { JournalReducerState } from './journal-reducer'
 import { journalInputOrder } from './journal-input-order'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readCommandReceipt } from './command-receipt-table'
 import type { CommandReceiptRead } from './command-receipt-table'
 import type { JournalReadConnection } from './journal-sql-owner'

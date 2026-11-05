@@ -7,7 +7,7 @@ import {
 } from './runtime-environment-subscription-handlers'
 import { ipcMain } from 'electron'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { Store } from '../../persistence/loading-store/store'
 import { recordRemoteLayoutFrame } from '../../remote-layout-snapshot/remote-layout-snapshot-recorder'
 import { recordHostRepoCatalogAnswer } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'

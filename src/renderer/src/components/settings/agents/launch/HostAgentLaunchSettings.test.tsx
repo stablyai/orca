@@ -10,17 +10,17 @@ import {
   projectAgentLaunchSettings,
   type AgentLaunchSettings,
   type AgentLaunchSettingsMutation
-} from '../../../../../../shared/agent-launch-settings'
+} from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
 import * as permissionControls from '../../../agent/launch-settings/AgentPermissionChoiceControls'
 import { SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
-import type { AgentPermissionChoice } from '../../../../../../shared/tui-agent-permission-choice'
+import type { AgentPermissionChoice } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { TooltipProvider } from '../../../ui/tooltip'
 import type { AgentPermissionsRenderer } from './AgentLaunchSettingsCatalog'
 import { AgentPermissionsSetting } from '../permissions/AgentPermissionsSetting'
 import { AgentsPane } from '../AgentsPane'
 import { useAppStore } from '@/store/index'
-import { applyAgentPermissionMode } from '../../../../../../shared/tui-agent-permissions'
+import { applyAgentPermissionMode } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() } }))

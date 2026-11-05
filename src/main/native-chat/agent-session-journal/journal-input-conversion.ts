@@ -75,7 +75,9 @@ function* liftJournalNativePrefix(
       yield
       if (
         state.submissions.get(id)?.dispatchState === 'pending' &&
-        !fold.replaced('submissions', id)
+        !fold.replaced('submissions', id) &&
+        (own.context.source.epoch !== state.epoch ||
+          own.context.source.sequence === state.submissions.get(id)?.acceptedSequence)
       ) {
         state.inputEntries.set(id, own)
       }

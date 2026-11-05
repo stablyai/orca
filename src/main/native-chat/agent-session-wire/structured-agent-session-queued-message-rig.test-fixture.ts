@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, vi } from 'vitest'
+import { expect } from 'vitest'
 import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
@@ -9,7 +9,6 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionMessagePayload } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
@@ -34,34 +33,28 @@ import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-le
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   createQueuedRigProvider,
+  eventually,
+  type RigSendOptions,
   type QueuedRigProviderOptions
 } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
-type RigSendOptions = {
-  internal?: true
-  from?: AgentMessageSource
-  carried?: Readonly<Record<string, string>>
-}
-
-export function eventually(assertion: () => void | Promise<void>): Promise<void> {
-  return vi.waitFor(assertion, { timeout: 10_000 })
-}
-
 export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessageTestRig>>
 
 export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
     sessionId?: string
     legacyInputs?: true
-    idleSweep?: { idleMs: number; intervalMs: number }
+    idleSweep?: StructuredAgentSessionHostDeps['idleSweep']
     now?: () => number
     /** Teardown records its restart offers, which `restartOffers` lists. */
     recoveryCapsule?: true
     location?: AgentSessionExecutionLocation
     /** Defaults to indeterminate. */
     probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
+    onRequestFailure?: StructuredAgentSessionHostDeps['onRequestFailure']
+    usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']
   } = {}
 ) {
   const SESSION = options.sessionId ?? DEFAULT_SESSION
@@ -80,6 +73,8 @@ export async function createQueuedMessageTestRig(
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-1',
       now: options.now ?? (() => NOW),
+      onRequestFailure: options.onRequestFailure,
+      usageLimitAutoContinue: options.usageLimitAutoContinue,
       ...(options.probeOwner ? { probeOwner: options.probeOwner } : {}),
       ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
@@ -221,6 +216,7 @@ export async function createQueuedMessageTestRig(
   }
 
   async function settleAccepted(id: string, itemId: string): Promise<void> {
+    await host.history({ sessionId: SESSION, direction: 'tail' })
     await host.settleLateDispatch({
       sessionId: SESSION,
       clientMessageId: id,
@@ -330,3 +326,5 @@ export async function createQueuedMessageTestRig(
     dispose
   }
 }
+
+export { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'

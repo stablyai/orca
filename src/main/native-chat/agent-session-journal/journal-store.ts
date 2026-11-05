@@ -1,3 +1,6 @@
+import * as journalInput from './journal-input-obligations'
+import * as journalContext from './journal-context-cursor'
+import { journalInputSourceBody } from './journal-input-source'
 import { JournalHistoryReader } from './journal-history-read'
 
 import { withJournalInputOrder } from './journal-input-provenance'
@@ -9,16 +12,17 @@ import { JournalWriteProjection } from './journal-write-projection'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { retireCoveredJournalFloor } from './journal-commit'
-import { createJournalPublicReader } from './journal-public-read'
+import { createJournalPublicReader, renderJournalStatus } from './journal-public-read'
 import type {
   AgentJournalItemBody,
+  AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
-  AgentJournalCursor,
   AgentJournalItemIdentity,
+  AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -38,7 +42,6 @@ import {
   resolveJournalItemId,
   type JournalReducerState
 } from './journal-reducer'
-import { journalTombstoneRowBuilder } from './journal-row-builders'
 import type {
   AgentSessionJournalOptions,
   JournalItemLinkageVisitor,
@@ -68,10 +71,10 @@ export class AgentSessionJournal {
 
   private state: JournalReducerState
   private readonly history: JournalHistoryReader
-  private readonly readPublic = createJournalPublicReader()
+  private readonly readPublic = createJournalPublicReader(() => this.inputOrder)
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private reopenUnmarked: AgentJournalCursor | null = null
-  private onCommitted: ((rows?: readonly JournalRow[]) => void) | null = null
+  private onCommitted: Parameters<AgentSessionJournal['observeCommits']>[0] | null = null
   private readonly queue: JournalWriteQueue
   private readonly rowWriter: JournalCollaborators['rowWriter']
   private readonly now: () => number
@@ -94,6 +97,7 @@ export class AgentSessionJournal {
     this.database = options.database
     this.state = createJournalReducerState(options.identity.sessionId, '')
     this.history = new JournalHistoryReader(options, () => this.state, this.publicRead)
+    this.readSinceView = this.history.readSinceView.bind(this.history)
     this.queue = new JournalWriteQueue(options.identity.sessionId)
     this.projection = new JournalWriteProjection({
       ...options,
@@ -115,12 +119,12 @@ export class AgentSessionJournal {
       adopt: (loaded) =>
         adoptJournalStoreState(this.state, loaded, (state) => (this.state = state)),
       publish: () => this.onCommitted?.(),
-      prepare: (db, rows, savedAt) => {
+      prepare: (db, rows, savedAt, finishFold) => {
         this.queuedMessages.inputState()
-        return this.projection.prepare(db, rows, savedAt)
+        return this.projection.prepare(db, rows, savedAt, finishFold)
       },
-      commit: (rows) => {
-        this.onCommitted?.(rows)
+      commit: (rows, _savedAt, inputChanged) => {
+        this.onCommitted?.(rows, inputChanged)
       },
       verify: () => this.projection.verify(),
       notifyCommitted: () => this.onCommitted?.([]),
@@ -142,7 +146,7 @@ export class AgentSessionJournal {
   }
 
   get epoch(): string {
-    return this.state.epoch
+    return journalContext.journalContextCursor(this.state).epoch
   }
 
   get agent(): AgentSessionJournalIdentity['agent'] {
@@ -169,7 +173,7 @@ export class AgentSessionJournal {
 
   async open(): Promise<void> {
     await this.restore()
-    this.openedThrough = this.cursor()
+    this.openedThrough = this.physicalCursor()
     await finishJournalStepsAsync(journalInputOrder(this.state).markOpeningRecoverySteps())
   }
 
@@ -181,7 +185,9 @@ export class AgentSessionJournal {
   }
 
   /** One nonthrowing listener; undefined rows mean adopted history, an empty array means metadata. */
-  observeCommits(listener: (rows?: readonly JournalRow[]) => void): () => void {
+  observeCommits(
+    listener: (rows?: readonly JournalRow[], inputChanged?: boolean) => void
+  ): () => void {
     const registered: typeof listener = (...args) => listener(...args)
     this.onCommitted = registered
     return () => {
@@ -191,12 +197,15 @@ export class AgentSessionJournal {
     }
   }
 
-  cursor = (): AgentJournalCursor => ({
-    epoch: this.state.epoch,
-    sequence: this.state.lastSequence
-  })
+  cursor = (): AgentJournalCursor => journalContext.journalContextCursor(this.state)
 
   snapshot = () => this.publicRead().snapshot
+
+  itemsRead = () => this.publicRead().snapshotForItems(new Set())
+
+  currentRead = (inputIds?: readonly string[]) => this.publicRead().currentSnapshot(inputIds)
+
+  statusRead = () => renderJournalStatus(this.queuedMessages.displayState(), this.inputOrder)
 
   publicRead = () =>
     this.readPublic(this.state, this.queuedMessages.displayState(), this.queuedMessages.revision())
@@ -204,30 +213,30 @@ export class AgentSessionJournal {
   /** Visit without allocating/sorting a snapshot. */
   visitItems = (
     visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
-  ): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body)
-    }
-  }
+  ): void => this.visitItemsWithLinkage(visit)
 
-  itemBody = (itemId: string): AgentJournalItemBody | null =>
-    this.state.items.get(itemId)?.body ?? null
+  /** One reduced item's body by its journal key, for a writer revising a row it can name. */
+  itemBody = (itemId: string): AgentJournalItemBody | null => this.item(itemId)?.body ?? null
 
   /** Host-only stopped-history IDs carried by each send. */
   stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
     this.state.stoppedHistoryCarried
 
-  item = (itemId: string): AgentJournalRenderItem | null => this.state.items.get(itemId) ?? null
+  submissionBody = (clientMessageId: string): AgentJournalMessageItem | null =>
+    journalInputSourceBody(this.state.inputs.sources.get(clientMessageId))
+
+  /** One reduced item with its attribution, for a writer that needs the turn a row joined. */
+  item = (itemId: string): AgentJournalRenderItem | null =>
+    journalInput.readJournalInputItem(this.state, itemId)
+
+  /** Visits reduced items with the producer that wrote each, for a producer re-deriving what an
+   *  earlier run of this session left. */
+  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void =>
+    journalInput.visitJournalInputItems(this.state, visit)
 
   /** Remember publication even after a rewind removes the row. */
   hasRecordedItem = (itemId: string): boolean =>
     this.state.items.has(itemId) || this.state.tombstones.has(itemId)
-
-  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body, item)
-    }
-  }
 
   /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
   runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
@@ -262,10 +271,17 @@ export class AgentSessionJournal {
 
   submission = (clientMessageId: string) => this.state.submissions.get(clientMessageId)
 
-  pendingSubmissions = () => this.submissions().filter((entry) => entry.dispatchState === 'pending')
+  pendingSubmissions = () =>
+    this.inputOrder.unsettledSubmissions().filter((entry) => entry.dispatchState === 'pending')
 
   /** Reconnecting clients read durable acceptance instead of resending. */
-  receiptFor = (clientMessageId: string) => this.state.receipts.get(clientMessageId) ?? null
+  receiptFor = (clientMessageId: string) =>
+    journalContext.journalContextReceipt(this.state, clientMessageId)
+
+  physicalCursor = (): AgentJournalCursor => journalContext.physicalJournalCursor(this.state)
+
+  presentationRemoved = (itemId: string): boolean =>
+    journalInput.journalInputPresentationRemoved(this.state, itemId)
 
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
 
@@ -276,8 +292,7 @@ export class AgentSessionJournal {
 
   readSince = (cursor: AgentJournalCursor, limit?: number) => this.history.readSince(cursor, limit)
 
-  readSinceView: JournalHistoryReader['readSinceView'] = (cursor, limit, capture, consume) =>
-    this.history.readSinceView(cursor, limit, capture, consume)
+  readSinceView: JournalHistoryReader['readSinceView']
 
   /** Assign revisions here so callers cannot publish reducer-stale upserts. */
   appendItem(...args: Parameters<JournalCollaborators['itemAppender']['append']>) {
@@ -291,16 +306,8 @@ export class AgentSessionJournal {
   appendResolvedItem: typeof this.itemAppender.appendResolved = (resolve, options) =>
     this.itemAppender.appendResolved(resolve, options)
 
-  appendTombstone(
-    identity: AgentJournalItemIdentity,
-    { fence }: JournalTombstoneInput,
-    receipt?: JournalOperationReceipt
-  ): Promise<AgentJournalCursor> {
-    const itemId = agentJournalItemKey(identity)
-    return this.rowWriter.append(
-      journalTombstoneRowBuilder(() => this.state, itemId, fence),
-      receipt
-    )
+  appendTombstone(...args: Parameters<JournalCollaborators['itemAppender']['tombstone']>) {
+    return this.itemAppender.tombstone(...args)
   }
 
   withdrawGoalObjective(
@@ -314,9 +321,8 @@ export class AgentSessionJournal {
     )
   }
 
-  keepGoalAttachments(identity: AgentJournalItemIdentity): Promise<void> {
-    return this.queue.serialize(() => this.goalAttachments.keep(agentJournalItemKey(identity)))
-  }
+  keepGoalAttachments = (identity: AgentJournalItemIdentity): Promise<void> =>
+    this.queue.serialize(() => this.goalAttachments.keep(agentJournalItemKey(identity)))
 
   appendStopEvent(event: Omit<JournalStopEvent, 'at'>, fence: number): Promise<AgentJournalCursor> {
     return this.rowWriter.append(
@@ -325,8 +331,10 @@ export class AgentSessionJournal {
   }
 
   appendQueueResume(fence: number, receipt?: JournalOperationReceipt): Promise<AgentJournalCursor> {
-    const build = journalQueueResumeRowBuilder(() => this.state, fence)
-    return this.rowWriter.append(build, receipt)
+    return this.rowWriter.append(
+      journalQueueResumeRowBuilder(() => this.state, fence),
+      receipt
+    )
   }
 
   appendQueueReopen(fence: number, since?: number): Promise<AgentJournalCursor> {

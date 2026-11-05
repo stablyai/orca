@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
-import { agentForksConversations } from '../../../../shared/agent-resume-argv'
+import { agentForksConversations } from '../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { NativeChatTabSession } from '../tab-bar/tab-session-history-switch'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
@@ -91,6 +91,7 @@ export function NativeChatPaneHeader({
               variant="pane-title"
               size="icon-xs"
               aria-label={split}
+              data-contextual-tour-target={focused ? 'chat-pane-split-target' : undefined}
               onClick={(event) => {
                 event.stopPropagation()
                 actions.onSplitRight()

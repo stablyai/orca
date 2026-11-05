@@ -3,7 +3,7 @@ import {
   prepareNativeChatCliFork,
   type NativeChatCliForkSubject
 } from './native-chat-cli-fork-preparation'
-import { AI_VAULT_CHAT_FORK_SOURCE_CAPABILITY } from '../../../shared/ai-vault-resume-preparation'
+import { AI_VAULT_CHAT_FORK_SOURCE_CAPABILITY } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 
 const { call } = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: call }))

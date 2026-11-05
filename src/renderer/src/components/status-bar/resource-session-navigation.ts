@@ -1,4 +1,4 @@
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 type TabLookup = Record<string, { id: string }[]>
 

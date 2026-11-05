@@ -1,8 +1,8 @@
+import type Database from '../../sqlite/sync-database'
 import { finishJournalSteps, finishJournalStepsAsync } from './journal-reconstruction-steps'
 import { journalInputAcceptance, prepareJournalAcceptance } from './journal-input-provenance'
-import { copyJournalNativeState, copyJournalNativeStateSteps } from './journal-input-conversion'
+import { copyJournalNativeStateSteps } from './journal-input-conversion'
 import { journalInputOrder } from './journal-input-order'
-import type Database from '../../sqlite/sync-database'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import {
@@ -22,7 +22,7 @@ export function journalOutcomeAcceptanceIds(
 }
 
 export function* journalOutcomeAcceptanceIdSteps(
-  state: JournalReducerState,
+  _state: JournalReducerState,
   rows: readonly JournalRow[]
 ): Generator<void, string[]> {
   const ids = new Set<string>()
@@ -32,8 +32,7 @@ export function* journalOutcomeAcceptanceIdSteps(
       row.kind === 'submission' &&
       row.handoverRecorded &&
       row.queuedMessageId === undefined &&
-      (!row.inputOrderContext || row.inputOrderContext.basis === 'legacy') &&
-      !state.inputEntries.has(row.clientMessageId)
+      (!row.inputOrderContext || row.inputOrderContext.basis === 'legacy')
     ) {
       ids.add(row.clientMessageId)
     }
@@ -53,7 +52,8 @@ export async function prepareJournalOutcomeWriteAsync(
   plan: JournalPersistencePlan,
   live: JournalReducerState,
   rows: readonly JournalRow[],
-  savedAt: number
+  savedAt: number,
+  finishFold?: (draft: JournalReducerState) => void
 ) {
   const previous = await plan.source(live.sessionId, live.epoch)
   if (previous && previous.through !== live.lastSequence) {
@@ -69,7 +69,12 @@ export async function prepareJournalOutcomeWriteAsync(
     rows,
     savedAt,
     !previous || previous.format < 2,
-    undefined,
+    finishFold
+      ? function* (state) {
+          finishFold(state)
+          yield
+        }
+      : undefined,
     acceptance
   )
   plan.add({
@@ -151,7 +156,8 @@ export function prepareJournalOutcomeWrite(
   db: Database.Database,
   live: JournalReducerState,
   rows: readonly JournalRow[],
-  savedAt: number
+  savedAt: number,
+  finishFold?: (draft: JournalReducerState) => void
 ): { state: JournalReducerState; adopt: () => JournalReducerState } {
   const previous = journalOutcomeSource(db, live.sessionId, live.epoch)
   const source =
@@ -165,7 +171,8 @@ export function prepareJournalOutcomeWrite(
     source,
     rows,
     savedAt,
-    !previous || previous.format < 2
+    !previous || previous.format < 2,
+    finishFold
   )
   advanceJournalOutcomeSource(db, live.sessionId, live.epoch, transition.state.lastSequence)
   return transition
@@ -176,8 +183,7 @@ export function publishJournalOutcomeEpoch(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  rows: readonly JournalRow[],
-  previous?: JournalReducerState
+  rows: readonly JournalRow[]
 ): { adopt: () => JournalReducerState } {
   const first = rows[0]
   if (!first || first.seq !== 1 || first.kind !== 'epoch') {
@@ -187,9 +193,6 @@ export function publishJournalOutcomeEpoch(
   const initial = createJournalReducerState(sessionId, epoch, (id) =>
     journalInputAcceptance(db, sessionId, id)
   )
-  if (previous) {
-    copyJournalNativeState(previous, initial)
-  }
   journalInputOrder(initial).beginReconstruction()
   const transition = persistJournalOutcomeRows(
     db,

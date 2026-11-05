@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { inspectSetupScriptImportCandidates } from '../../../shared/setup-script-imports'
+import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'

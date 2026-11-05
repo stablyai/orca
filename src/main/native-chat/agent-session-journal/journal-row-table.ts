@@ -50,7 +50,7 @@ export function journalRowReadBack(
   row: JournalRow
 ): { rowJson: string; stored: JournalRow } {
   const rowJson = serializeJournalRow(row)
-  const readBack = parseJournalRow(rowJson)
+  const readBack = parseJournalRow(rowJson, true)
   if (!readBack.ok || readBack.row.seq !== row.seq) {
     throw new AgentSessionJournalError(
       'journal_row_rejected',

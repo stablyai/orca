@@ -1,7 +1,5 @@
-import type {
-  BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult
-} from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 
 // Preserve half of the subscription's 32 nested-request slots for future control traffic.
 const DEFAULT_MAX_CONCURRENT_COMMAND_RESULTS = 16

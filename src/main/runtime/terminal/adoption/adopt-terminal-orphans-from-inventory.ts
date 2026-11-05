@@ -19,7 +19,7 @@ import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution
 import { adoptRuntimeTerminalOrphansFromInventory } from '../../runtime-terminal-orphan-adoption'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 
 export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntimeWithSubscribeToTerminalResize {
   protected abstract issueHandle(

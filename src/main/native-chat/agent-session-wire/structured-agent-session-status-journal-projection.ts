@@ -113,20 +113,27 @@ export class StructuredAgentSessionJournalProjections {
       projection.stopRevision !== stopRevision
     ) {
       // Journal sequence captures sends; lease/live-work/Stop keys capture row-free changes.
-      const snapshot = journal.snapshot()
+      const snapshot = journal.statusRead()
       const sameContext =
         projection?.epoch === cursor.epoch && projection.contextId === contextId
           ? projection
           : undefined
       let firstInputSubmissionKey = sameContext?.firstInputSubmissionKey ?? null
-      const start = sameContext?.submissionCount ?? 0
       const floor = sameContext ? 0 : (journal.context.floor()?.sequence ?? 0)
-      const submissions =
-        !firstInputSubmissionKey && snapshot.submissions.length !== start
-          ? journal.submissions()
-          : snapshot.submissions
-      for (let index = start; !firstInputSubmissionKey && index < submissions.length; index++) {
-        const submission = submissions[index]
+      const start = sameContext?.submissionCount ?? 0
+      const submissions = firstInputSubmissionKey
+        ? []
+        : snapshot.submissions
+            .filter((entry) => journal.inputOrder.inputOrdinal(entry.clientMessageId) >= start)
+            .sort(
+              (a, b) =>
+                journal.inputOrder.inputOrdinal(a.clientMessageId) -
+                journal.inputOrder.inputOrdinal(b.clientMessageId)
+            )
+      for (const submission of submissions) {
+        if (firstInputSubmissionKey) {
+          break
+        }
         const item =
           journal.item(agentJournalSubmissionKey(submission.clientMessageId)) ??
           (submission.providerItemId ? journal.item(submission.providerItemId) : null)
@@ -150,7 +157,7 @@ export class StructuredAgentSessionJournalProjections {
           journal.itemBody
         ),
         firstInputSubmissionKey,
-        submissionCount: snapshot.submissions.length,
+        submissionCount: journal.inputOrder.inputCount(),
         fence,
         liveFence: work.liveFence,
         workRevision: work.revision,
@@ -158,7 +165,7 @@ export class StructuredAgentSessionJournalProjections {
         state: withDiedTurnVerdict(
           projectStructuredAgentSessionStatusState(
             snapshot.items,
-            snapshot.submissions.map(work.publishedSubmission),
+            snapshot.submissions,
             fence,
             work.scope
           ),

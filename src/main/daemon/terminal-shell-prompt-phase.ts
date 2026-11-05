@@ -1,4 +1,4 @@
-import { closesAppOsc133Zone } from '../../shared/terminal-osc133-command-finished'
+import { closesAppOsc133Zone } from '../../shared/terminal/output/terminal-osc133-command-finished'
 
 /** OSC 133 hint that a shell sits at its prompt. Apps print these markers too (#10923), so any
  * doubt is 'unknown' and only a clean C → D;0 → A cycle at the shell's own depth reaches 'prompt'. */

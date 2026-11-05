@@ -58,8 +58,8 @@ import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/w
 import { seedWslMoveCutover } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 
 const LINES = 2_000
 const LEAF = '6f1b0c3e-8d2a-4c5b-9e7f-1a2b3c4d5e6f'

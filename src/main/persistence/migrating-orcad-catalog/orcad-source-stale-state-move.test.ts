@@ -4,11 +4,11 @@ import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-work
 import {
   CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION,
   type PersistedClientHostedBrowserPage
-} from '../../../shared/client-hosted-browser-page-record'
+} from '../../../shared/workspace-session/client-hosted-browser-page-record'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { PersistedOpenFile } from '../../../shared/workspace-session-state-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { PersistedOpenFile } from '../../../shared/workspace-session/workspace-session-state-types'
 import { createOrcadMigrationManifest } from '../../ssh/orcad-migration-manifest-export'
 import { orcadMigrationRefusalReason } from '../../ssh/orcad-migration-refusal-reason'
 import { collectUntransferredDependentBlockers } from '../../ssh/targets/ssh-target-orcad-dependents'

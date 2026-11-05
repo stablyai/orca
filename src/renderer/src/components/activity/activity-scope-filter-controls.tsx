@@ -2,13 +2,13 @@ import React from 'react'
 import { useAppStore } from '@/store'
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import SidebarRepositoryFilterSection from '@/components/sidebar/SidebarRepositoryFilterSection'
-import { SidebarHostScopeMenuSection } from '@/components/sidebar/SidebarHostScopeMenuSection'
+import SidebarRepositoryFilterSection from '@/components/sidebar/worktree-list/controls/SidebarRepositoryFilterSection'
+import { SidebarHostScopeMenuSection } from '@/components/sidebar/worktree-list/controls/SidebarHostScopeMenuSection'
 import {
   getSidebarHostVisibilityLabel,
   shouldShowHostScopeControls
-} from '@/components/sidebar/sidebar-host-options'
-import { useSidebarHostScopeOptions } from '@/components/sidebar/use-sidebar-host-scope-options'
+} from '@/components/sidebar/worktree-list/controls/sidebar-host-options'
+import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
 
 /** Persisted Agents scope is separate from workspace navigation filters; the parent owns the Filters label/separator. */
 export function ActivityScopeFilterMenuItems(): React.JSX.Element {

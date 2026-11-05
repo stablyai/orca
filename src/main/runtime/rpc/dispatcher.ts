@@ -197,7 +197,8 @@ export class RpcDispatcher {
     // Runtime test fakes may omit client-hosted browser routing.
     const clientHostedBrowser = await (runtime.routeClientHostedBrowserRpc?.(
       request.method,
-      params
+      params,
+      context.caller
     ) ?? { handled: false as const })
     if (clientHostedBrowser.handled) {
       recordRuntimeFeatureInteraction(

@@ -40,7 +40,7 @@ import { defaultScopeHost } from '@/lib/default-creation-host'
 import {
   blockRemovalForUnsavedFiles,
   projectRemovalTargets
-} from '@/components/sidebar/removal-unsaved-files'
+} from '@/components/sidebar/workspace-actions/deletion/removal-unsaved-files'
 
 export function useSettingsStoreModel() {
   const settings = useAppStore((s) => s.settings)

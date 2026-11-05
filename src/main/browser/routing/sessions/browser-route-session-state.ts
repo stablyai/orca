@@ -1,4 +1,4 @@
-import type { BrowserClientProfileMetadata } from '../../../../shared/browser-client-profile-switch-protocol'
+import type { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 import type { BrowserRoutePartitionIdentity } from '../partitions/browser-route-identity'
 import type { BrowserRoutePreparedPageLedger } from './browser-route-prepared-page-ledger'
 import type { BrowserRoutePageAuthority } from '../guest-authority/browser-route-page-authority'

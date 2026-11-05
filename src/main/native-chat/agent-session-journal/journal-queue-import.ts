@@ -1,12 +1,14 @@
-import { finishJournalSteps, finishJournalStepsAsync } from './journal-reconstruction-steps'
-import type { JournalReadConnection } from './journal-sql-owner'
-import type Database from '../../sqlite/sync-database'
-import { journalInputOrder } from './journal-input-order'
-import {
-  legacyQueuedChange,
-  legacyQueuedChangeSteps,
-  handOffInDoubt
+import { readLegacyRowsAsync } from './journal-queue-legacy-change'
+export {
+  readJournalLegacyCards,
+  readJournalLegacyCardsAsync,
+  readLegacyRowsAsync
 } from './journal-queue-legacy-change'
+import { JournalDraftMap, JournalDraftSet } from './journal-transition-collections'
+import { journalDispatchRowApplies, queuedHandOffInDoubt } from './journal-dispatch-settlement'
+import { finishJournalSteps, finishJournalStepsAsync } from './journal-reconstruction-steps'
+import { journalInputOrder } from './journal-input-order'
+import { legacyQueuedChange, legacyQueuedChangeSteps } from './journal-queue-legacy-change'
 export { legacyQueuedChange } from './journal-queue-legacy-change'
 // Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
 // Retry failed bulk import on next open; do not loop while the host is running.
@@ -17,12 +19,10 @@ import { queuedCardFromChange } from './journal-queue-fold'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalOperationReceipt } from './journal-row-writer'
 import type { JournalQueuedMessagesDeps } from './journal-store-contracts'
-import { foldQueuedHandOffInDoubt } from './journal-submission-fold'
+import { foldQueuedHandOffInDoubt, placeQueuedHandOffInDoubt } from './journal-submission-fold'
 import type { QueuedMessageRow } from './queued-message-table'
-import {
-  LEGACY_QUEUED_MESSAGE_COLUMNS,
-  readStoredQueuedMessageRow
-} from './queued-message-stored-row'
+// Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
+// Retry failed bulk import on next open; do not loop while the host is running.
 
 type LegacyDeps = Pick<
   JournalQueuedMessagesDeps,
@@ -32,6 +32,7 @@ type LegacyDeps = Pick<
 export class LegacyQueuedCards {
   private revision = 0
   private stored: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
+  private readonly witnesses = new Map<string, { messageId: string; change: JournalQueuedChange }>()
   private viewed: {
     owner: JournalReducerState
     key: string
@@ -39,7 +40,7 @@ export class LegacyQueuedCards {
     byId: ReadonlyMap<string, QueuedMessageRow>
     display?: JournalReducerState
     displayThrough?: number
-    handedOff: readonly AgentJournalSubmission[]
+    handedOff: readonly { card: QueuedMessageRow; submission: AgentJournalSubmission }[]
   } | null = null
 
   constructor(private readonly deps: LegacyDeps) {}
@@ -68,7 +69,7 @@ export class LegacyQueuedCards {
     const state = this.deps.state()
     if (this.viewed?.key !== key || this.viewed.owner !== state) {
       const cards: QueuedMessageRow[] = []
-      const handedOff: AgentJournalSubmission[] = []
+      const handedOff: { card: QueuedMessageRow; submission: AgentJournalSubmission }[] = []
       const byId = new Map<string, QueuedMessageRow>()
       for (const row of this.rows()) {
         const change = yield* legacyQueuedChangeSteps(state, row)
@@ -76,10 +77,9 @@ export class LegacyQueuedCards {
           const card = queuedCardFromChange(state, row.messageId, change)
           cards.push(card)
           byId.set(card.messageId, card)
-          const submission =
-            card.consumedAs === null ? undefined : state.submissions.get(card.consumedAs)
-          if (submission && handOffInDoubt(submission)) {
-            handedOff.push(submission)
+          const submission = selectedHandOff(state, card)
+          if (submission) {
+            handedOff.push({ card, submission })
           }
         }
         yield
@@ -111,16 +111,19 @@ export class LegacyQueuedCards {
       }
       return state
     }
-    const display = {
+    const display: JournalReducerState = {
       ...state,
-      normalizedHandOffs: new Set(state.normalizedHandOffs),
-      items: new Map(state.items),
-      submissions: new Map(state.submissions)
+      items: new JournalDraftMap(state.items),
+      submissions: new JournalDraftMap(state.submissions),
+      normalizedHandOffs: new JournalDraftSet(state.normalizedHandOffs),
+      inputs: { ...state.inputs, presentations: new JournalDraftMap(state.inputs.presentations) }
     }
-    for (const entry of handedOff) {
-      const submission = { ...entry }
-      display.submissions.set(submission.clientMessageId, submission)
-      foldQueuedHandOffInDoubt(display, submission)
+    for (const { card, submission: entry } of handedOff) {
+      const send = { ...entry }
+      display.submissions.set(send.clientMessageId, send)
+      display.inputs.presentations.set(send.clientMessageId, card)
+      foldQueuedHandOffInDoubt(send)
+      placeQueuedHandOffInDoubt(display, send)
     }
     if (this.viewed) {
       this.viewed.display = display
@@ -128,9 +131,28 @@ export class LegacyQueuedCards {
     return display
   }
 
+  /** Derived during the existing import pass; the selected operation persists this witness. */
+  witness(clientMessageId: string): { messageId: string; change: JournalQueuedChange } | undefined {
+    const witness = this.witnesses.get(clientMessageId)
+    return witness && !this.deps.state().queue.cards.has(witness.messageId) ? witness : undefined
+  }
+
+  witnessRows(
+    clientMessageId: string,
+    adopted?: string[]
+  ): ReturnType<typeof journalQueueRowBuilder>[] {
+    const witness = this.witness(clientMessageId)
+    if (!witness || adopted?.includes(witness.messageId)) {
+      return []
+    }
+    const row = journalQueueRowBuilder(this.deps.state, witness.messageId, witness.change)
+    adopted?.push(witness.messageId)
+    return [row]
+  }
+
   /** Resolve adoption on the write lane from current disk state; null means no legacy card. */
   adoption(messageId: string): JournalQueuedChange | null {
-    if (this.key() === '') {
+    if (this.deps.state().queue.cards.has(messageId) || this.key() === '') {
       return null
     }
     const card = this.rows().find((row) => row.messageId === messageId) ?? null
@@ -156,12 +178,23 @@ export class LegacyQueuedCards {
     }
   }
 
-  messageIds(): string[] {
-    return this.rows().map((row) => row.messageId)
-  }
-
-  deletionOfAll(): JournalOperationReceipt {
-    return this.deletion(this.messageIds())
+  async cleanup(messageIds: readonly string[]): Promise<void> {
+    if (!messageIds.length) {
+      return
+    }
+    const receipt = this.deletion(messageIds)
+    try {
+      await this.deps.database().transaction(
+        (db) => receipt.write(db),
+        false,
+        () => receipt.committed()
+      )
+    } catch (error) {
+      console.warn('[journal-queue] legacy cleanup skipped:', {
+        sessionId: this.deps.sessionId,
+        error
+      })
+    }
   }
 
   async deletionOfAllAsync(): Promise<JournalOperationReceipt> {
@@ -203,6 +236,12 @@ export class LegacyQueuedCards {
             for (const row of rows) {
               const change = yield* legacyQueuedChangeSteps(state, row)
               if (change) {
+                for (const send of journalInputOrder(state).linkedTo(row.messageId)) {
+                  if (journalDispatchRowApplies(send)) {
+                    owner.witnesses.set(send.clientMessageId, { messageId: row.messageId, change })
+                  }
+                  yield
+                }
                 builders.push(journalQueueRowBuilder(owner.deps.state, row.messageId, change))
               }
               yield
@@ -211,7 +250,20 @@ export class LegacyQueuedCards {
           })(this)
         )
         if (plan.length > 0) {
-          await this.deps.writer.writeRows(() => plan, deletion)
+          await this.deps.writer.writeRows(() => plan, {
+            ...deletion,
+            fold: (draft) => {
+              for (const row of rows) {
+                const card = draft.queue.cards.get(row.messageId)
+                const send = card && selectedHandOff(draft, card)
+                if (send) {
+                  draft.inputs.presentations.set(send.clientMessageId, row)
+                  foldQueuedHandOffInDoubt(send)
+                  placeQueuedHandOffInDoubt(draft, send)
+                }
+              }
+            }
+          })
           return
         }
         // Empty append plans open no transaction, so legacy deletion must commit independently.
@@ -247,60 +299,11 @@ export class LegacyQueuedCards {
   }
 }
 
-export function readJournalLegacyCards(
-  db: Database.Database,
-  state: JournalReducerState
-): QueuedMessageRow[] {
-  return readLegacyRows(db, state.sessionId).flatMap((row) => {
-    const change = legacyQueuedChange(state, row)
-    return change ? [queuedCardFromChange(state, row.messageId, change)] : []
-  })
-}
-
-function readLegacyRows(db: Database.Database, sessionId: string): QueuedMessageRow[] {
-  return db
-    .prepare(
-      `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`
-    )
-    .all(sessionId)
-    .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
-}
-
-export async function readLegacyRowsAsync(
-  read: JournalReadConnection,
-  sessionId: string
-): Promise<QueuedMessageRow[]> {
-  const rows: QueuedMessageRow[] = []
-  for await (const page of read.pages(
-    `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`,
-    [sessionId]
-  )) {
-    for (const row of page) {
-      const stored = readStoredQueuedMessageRow(row)
-      if (stored) {
-        rows.push(stored)
-      }
-    }
-    await new Promise<void>((resolve) => setImmediate(resolve))
-  }
-  return rows
-}
-
-export async function readJournalLegacyCardsAsync(
-  read: JournalReadConnection,
-  state: JournalReducerState
-): Promise<QueuedMessageRow[]> {
-  const rows = await readLegacyRowsAsync(read, state.sessionId)
-  function* convert(): Generator<void, QueuedMessageRow[]> {
-    const cards: QueuedMessageRow[] = []
-    for (const row of rows) {
-      const change = yield* legacyQueuedChangeSteps(state, row)
-      if (change) {
-        cards.push(queuedCardFromChange(state, row.messageId, change))
-      }
-      yield
-    }
-    return cards
-  }
-  return finishJournalStepsAsync(convert())
+function selectedHandOff(
+  state: JournalReducerState,
+  card: QueuedMessageRow
+): AgentJournalSubmission | undefined {
+  const id = card.consumedAs ?? card.recovers
+  const send = id ? state.submissions.get(id) : undefined
+  return send && queuedHandOffInDoubt(send) ? send : undefined
 }

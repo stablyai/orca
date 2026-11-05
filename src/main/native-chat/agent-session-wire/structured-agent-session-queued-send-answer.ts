@@ -16,7 +16,10 @@ function latestHandoff(
 ): AgentJournalSubmission | undefined {
   let latest: AgentJournalSubmission | undefined
   for (const handoff of journal.inputOrder.linkedTo(messageId)) {
-    if ((handoff.submittedSequence ?? 0) >= (latest?.submittedSequence ?? 0)) {
+    if (
+      handoff.queuedMessageId === messageId &&
+      (handoff.submittedSequence ?? 0) >= (latest?.submittedSequence ?? 0)
+    ) {
       latest = handoff
     }
   }

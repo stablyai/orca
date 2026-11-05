@@ -8,8 +8,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session/agent-session-background-task-wire'
-import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers

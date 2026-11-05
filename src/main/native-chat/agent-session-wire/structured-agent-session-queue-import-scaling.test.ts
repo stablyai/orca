@@ -1,6 +1,10 @@
 import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import * as provenance from '../agent-session-journal/journal-input-provenance'
-import { JournalDraftMap } from '../agent-session-journal/journal-transition-collections'
+import {
+  JournalDraftMap,
+  JournalDraftSet
+} from '../agent-session-journal/journal-transition-collections'
+import { LegacyQueuedCards } from '../agent-session-journal/journal-queue-import'
 import * as transitions from '../agent-session-journal/journal-reducer-transition'
 import * as outcomes from '../agent-session-journal/journal-outcome-codec'
 import { JournalInputCardIndex } from '../agent-session-journal/journal-input-card-index'
@@ -27,21 +31,27 @@ import {
 it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, adopt }))))(
   'publication reuse: $size historical items, adopted=$adopt',
   async ({ size, adopt }) => {
-    const corrections = size / 10
+    const corrections = 1
     const earlier = await journalFor(SESSION)
     await earlier.open()
-    await handOff(earlier, 'u-0', 'q-0', 'stopped words', 'cancelled', 0, async () => {
-      for (let ordinal = 0; ordinal < size; ordinal++) {
-        await earlier.appendItem(
-          { provider: 'codex', threadId: 'history', turnId: 't', ordinal },
-          { ...message('old answer'), role: 'assistant' },
-          { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-        )
-      }
-    })
-    for (let index = 1; index < corrections; index++) {
-      await handOff(earlier, `u-${index}`, `q-${index}`, 'stopped words', 'cancelled')
-    }
+    await handOff(
+      earlier,
+      'u-0',
+      'q-0',
+      'stopped words',
+      'cancelled',
+      0,
+      async () => {
+        for (let ordinal = 0; ordinal < size; ordinal++) {
+          await earlier.appendItem(
+            { provider: 'codex', threadId: 'history', turnId: 't', ordinal },
+            { ...message('old answer'), role: 'assistant' },
+            { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+          )
+        }
+      },
+      { turn: { provider: 'codex', threadId: 'history', turnId: 't', ordinal: -1 }, via: 'steer' }
+    )
     await earlier.close()
     await seedLegacy(
       SESSION,
@@ -54,16 +64,40 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
     const journal = await journalFor(SESSION)
     await journal.open()
     expect(await legacyIds()).toHaveLength(adopt ? 0 : corrections)
-    const display = journal.queuedMessages.displayState()
+    let display = journal['state']
     const feed = new AgentSessionSubscribers()
     const events: AgentSessionSubscribeEvent[] = []
     let visits = 0
     let keyVisits = 0
+    let currentDisplay = display
+    let snapshotReading = false
+    let snapshotVisits = 0
+    let projecting = false
+    let projectionVisits = 0
+    let projectionReads = 0
+    let recordWrites = 0
+    const displayState = LegacyQueuedCards.prototype.displayState
+    const displayRead = vi
+      .spyOn(LegacyQueuedCards.prototype, 'displayState')
+      .mockImplementation(function (this: LegacyQueuedCards) {
+        projecting = true
+        try {
+          return (currentDisplay = displayState.call(this))
+        } finally {
+          projecting = false
+        }
+      })
     function counted<T>(iterator: MapIterator<T>, correction = false): MapIterator<T> {
       const next = iterator.next.bind(iterator)
       iterator.next = (...args) => {
         const result = next(...args)
         if (!result.done) {
+          if (projecting) {
+            projectionVisits++
+          }
+          if (snapshotReading) {
+            snapshotVisits++
+          }
           if (correction) {
             keyVisits++
           } else {
@@ -90,11 +124,119 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
     const sets = vi.spyOn(Set.prototype, Symbol.iterator).mockImplementation(function (
       this: Set<unknown>
     ) {
-      return this.has('u-0') ? counted(setIterator.call(this), true) : setIterator.call(this)
+      return this === journal['state'].normalizedHandOffs
+        ? counted(setIterator.call(this), true)
+        : projectionIterator(setIterator.call(this))
     })
-    const gets = vi.spyOn(Map.prototype, 'get')
+    function projectionIterator<T>(iterator: MapIterator<T>): MapIterator<T> {
+      const next = iterator.next.bind(iterator)
+      iterator.next = (...args) => {
+        const result = next(...args)
+        if (!result.done) {
+          if (projecting) {
+            projectionVisits++
+          }
+          if (snapshotReading) {
+            snapshotVisits++
+          }
+        }
+        return result
+      }
+      return iterator
+    }
+    const mapKeys = Map.prototype.keys
+    const mapEntries = Map.prototype.entries
+    const overlayKeys = JournalDraftMap.prototype.keys
+    const setKeys = Set.prototype.keys
+    const setValues = Set.prototype.values
+    const setEntries = Set.prototype.entries
+    const overlayValues = JournalDraftSet.prototype.values
+    const collectionSpies = [
+      vi.spyOn(Map.prototype, 'keys').mockImplementation(function (this: Map<unknown, unknown>) {
+        return projectionIterator(mapKeys.call(this))
+      }),
+      vi.spyOn(Map.prototype, 'entries').mockImplementation(function (this: Map<unknown, unknown>) {
+        return projectionIterator(mapEntries.call(this))
+      }),
+      vi.spyOn(JournalDraftMap.prototype, 'keys').mockImplementation(function (
+        this: JournalDraftMap<unknown, unknown>
+      ) {
+        return projectionIterator(overlayKeys.call(this))
+      }),
+      vi.spyOn(Set.prototype, 'keys').mockImplementation(function (this: Set<unknown>) {
+        return projectionIterator(setKeys.call(this))
+      }),
+      vi.spyOn(Set.prototype, 'values').mockImplementation(function (this: Set<unknown>) {
+        return projectionIterator(setValues.call(this))
+      }),
+      vi.spyOn(Set.prototype, 'entries').mockImplementation(function (this: Set<unknown>) {
+        return projectionIterator(setEntries.call(this))
+      }),
+      vi.spyOn(JournalDraftSet.prototype, 'values').mockImplementation(function (
+        this: JournalDraftSet<unknown>
+      ) {
+        return projectionIterator(overlayValues.call(this))
+      })
+    ]
+    const mapGet = Map.prototype.get
+    const gets = vi.spyOn(Map.prototype, 'get').mockImplementation(function (
+      this: Map<unknown, unknown>,
+      key
+    ) {
+      if (projecting) {
+        projectionReads++
+      }
+      return mapGet.call(this, key)
+    })
+    const overlayGet = JournalDraftMap.prototype.get
+    const draftGets = vi.spyOn(JournalDraftMap.prototype, 'get').mockImplementation(function (
+      this: JournalDraftMap<unknown, unknown>,
+      key
+    ) {
+      if (projecting) {
+        projectionReads++
+      }
+      return overlayGet.call(this, key)
+    })
+    const mapHas = Map.prototype.has
+    const sourceHas = vi.spyOn(Map.prototype, 'has').mockImplementation(function (
+      this: Map<unknown, unknown>,
+      key
+    ) {
+      const state = journal['state']
+      if (
+        projecting &&
+        (this === state.items || this === state.submissions || this === state.inputs.presentations)
+      ) {
+        projectionReads++
+      }
+      return mapHas.call(this, key)
+    })
+    const setHas = Set.prototype.has
+    const sourceSetHas = vi.spyOn(Set.prototype, 'has').mockImplementation(function (
+      this: Set<unknown>,
+      key
+    ) {
+      if (projecting && this === journal['state'].normalizedHandOffs) {
+        projectionReads++
+      }
+      return setHas.call(this, key)
+    })
+    const overlaySet = JournalDraftMap.prototype.set
+    const writes = vi.spyOn(JournalDraftMap.prototype, 'set').mockImplementation(function (
+      this: JournalDraftMap<unknown, unknown>,
+      key,
+      value
+    ) {
+      if (projecting) {
+        recordWrites++
+      }
+      return overlaySet.call(this, key, value)
+    })
     const sourceGets = () =>
-      gets.mock.contexts.filter((m) => m === display.items || m === display.submissions)
+      [...gets.mock.contexts, ...draftGets.mock.contexts].filter(
+        (m) => m === currentDisplay.items || m === currentDisplay.submissions
+      )
     const sorts = vi.spyOn(Array.prototype, 'sort')
     const json = vi.spyOn(JSON, 'stringify')
     const work = () => [
@@ -106,11 +248,16 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
     ]
     const reset = () => {
       keyVisits = 0
+      projectionVisits = projectionReads = recordWrites = 0
       gets.mockClear()
+      draftGets.mockClear()
       sorts.mockClear()
       json.mockClear()
     }
     try {
+      display = journal.queuedMessages.displayState()
+      const coldProjection = { visits: projectionVisits, reads: projectionReads, recordWrites }
+      reset()
       for (const id of ['perf-a', 'perf-b', 'old']) {
         feed.open({
           sessionId: SESSION,
@@ -125,14 +272,17 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
         })
         await settleTestSubscriberDeliveries(feed)
       }
-      expect(work()).toEqual([corrections, 1, 1])
-      expect(sourceGets()).toHaveLength(2 * corrections)
+      expect(work()).toEqual([0, 1, 1])
+      // Adopted display shares the raw map used by the keyed inverse lookup.
+      expect(sourceGets()).toHaveLength((adopt ? 3 : 2) * corrections)
       expect(visits).toBeGreaterThanOrEqual(size)
       const key = journal.publicRead().normalizationKey
+      const coldPublication = { visits, corrections: work() }
       reset()
       visits = 0
       for (let publication = 0; publication < 5; publication++) {
         feed.publish(SESSION, journal)
+        await settleTestSubscriberDeliveries(feed)
         await settleTestSubscriberDeliveries(feed)
       }
       // Only subscriber visits; history copies/materialization would add N visits.
@@ -147,28 +297,72 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(journal.snapshot()).not.toBe(snapshot)
       feed.publish(SESSION, journal)
       await settleTestSubscriberDeliveries(feed)
-      // Import normalizes the one affected submission and refreshes its derived entered index.
-      // Each touched map key is listed for encoding and adoption; no other history key is visited.
-      expect(work()).toEqual([corrections + (adopt ? 0 : 2 * 2), 1, 1])
+      // Count canonical normalization reads, not the draft’s changed-key metadata.
+      expect(work()).toEqual([0, 1, 1])
       reset()
-      await journal.appendItem(
-        { provider: 'codex', threadId: 'progress', turnId: 't', ordinal: 0 },
-        message('progress'),
-        { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-      )
-      expect(journal.snapshot().items.at(-1)?.body).toEqual(message('progress'))
-      expect(work()).toEqual([0, 0, 0])
+      const hotWork: { visits: number; reads: number; recordWrites: number }[] = []
+      for (let publication = 0; publication < 10; publication++) {
+        const before = journal.cursor()
+        const from = events.length
+        const body = { ...message(`progress-${publication}`), role: 'assistant' as const }
+        reset()
+        await journal.appendItem(
+          { provider: 'codex', threadId: 'progress', turnId: 't', ordinal: publication },
+          body,
+          { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+        )
+        feed.publish(SESSION, journal)
+        await settleTestSubscriberDeliveries(feed)
+        const delivered = events.slice(from)
+        expect(delivered).toHaveLength(3)
+        for (const event of delivered) {
+          expect(event.type).toBe('batch')
+          if (event.type === 'batch') {
+            expect(event.batch.cursor.epoch).toBe(before.epoch)
+            expect(event.batch.cursor.sequence).toBeGreaterThan(before.sequence)
+            expect(event.batch.items.map((item) => item.body)).toEqual([body])
+            expect(event.batch.removedItemIds).toEqual([])
+          }
+        }
+        hotWork.push({ visits: projectionVisits, reads: projectionReads, recordWrites })
+        expect(projectionVisits).toBe(0)
+        expect(projectionReads).toBeLessThanOrEqual(8 * corrections)
+        expect(recordWrites).toBe(adopt ? 0 : 3 * corrections)
+        expect(work()).toEqual([0, 1, 1])
+        expect(journal.publicRead().normalizationKey).toBe(key)
+        // Plain point reads prove unchanged presentation without a full snapshot in the hot phase.
+        const current = journal.queuedMessages.displayState()
+        expect(current.submissions.get('u-0')).toMatchObject({ dispatchState: 'unknown' })
+        expect(current.items.get('orca:u-0')?.body).toEqual(message('stopped words'))
+        expect(current.items.get('orca:u-0')?.sequence).toBe(
+          display.items.get('orca:u-0')?.sequence
+        )
+      }
+      await journal.open()
       reset()
-      feed.publish(SESSION, journal)
-      await settleTestSubscriberDeliveries(feed)
-      const latest = events.at(-1)
-      expect(latest?.type === 'batch' && latest.batch.items.at(-1)?.body).toEqual(
-        message('progress')
+      snapshotVisits = 0
+      snapshotReading = true
+      expect(journal.snapshot().items).toHaveLength(size + corrections + 10)
+      snapshotReading = false
+      expect(snapshotVisits).toBeGreaterThanOrEqual(size)
+      process.stdout.write(
+        `FIXED_RECOVERY_PROJECTION ${JSON.stringify({ size, corrections, adopt, coldProjection, coldPublication, hotWork, requestedSnapshotVisits: snapshotVisits })}\n`
       )
-      expect(work()).toEqual([corrections, 1, 1])
-      expect(journal.publicRead().normalizationKey).toBe(key)
     } finally {
-      for (const spy of [sets, gets, sorts, json, entriesRead, valuesRead]) {
+      for (const spy of [
+        ...collectionSpies.toReversed(),
+        displayRead,
+        sourceHas,
+        sourceSetHas,
+        writes,
+        sets,
+        gets,
+        draftGets,
+        sorts,
+        json,
+        entriesRead,
+        valuesRead
+      ]) {
         spy.mockRestore()
       }
       if (!adopt) {
@@ -261,6 +455,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     return (
       typeof first === 'object' &&
       first !== null &&
+      !('kind' in first) &&
       'messageId' in first &&
       typeof first.messageId === 'string' &&
       first.messageId.startsWith('D')
@@ -340,7 +535,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
   }
   try {
     await journal.open()
-    measurements.discovery = measure()
+    measurements.discovery = await measure()
     expect(indexed).toBeLessThanOrEqual(5 * n + 1)
     expect(cohortVisits).toBeLessThanOrEqual(8 * n)
     expect(frontiers).toBe(1)
@@ -371,7 +566,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
       expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('C')
     }
     expect(encodeJournalState(journal['state'])).toEqual(before)
-    expect(measure()).toEqual({
+    expect(await measure()).toEqual({
       indexed: 0,
       draftKeys: 0,
       receiptQueries: 0,
@@ -388,13 +583,13 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     mutation.mockRestore()
     deletion.mockRestore()
     clearing.mockRestore()
-    measurements.reads = measure()
+    measurements.reads = await measure()
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'unrelated' },
       message('unrelated'),
       threadWrite
     )
-    measurements.firstWrite = measure()
+    measurements.firstWrite = await measure()
     expect(introduced).toBe(n)
     expect(cards).toBe(n)
     expect(indexed).toBe(n)
@@ -418,7 +613,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
         )
       ).toBe(true)
     }
-    measurements.admissions = measure()
+    measurements.admissions = await measure()
     expect({
       indexed,
       draftKeys,
@@ -439,7 +634,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
       entries: n
     })
     // One input's fixed graph plus at most two AVL paths, each with bounded wrapper fields.
-    expect(measure().nodes).toBeLessThanOrEqual(160 * n * (1 + Math.ceil(Math.log2(n + 2))))
+    expect((await measure()).nodes).toBeLessThanOrEqual(160 * n * (1 + Math.ceil(Math.log2(n + 2))))
     // Each native entry contains fixed IDs/cursors and one witness, never card bodies/populations.
     expect(bytes).toBeLessThanOrEqual(400 * n)
     reset()
@@ -454,7 +649,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     ).toMatchObject({ status: 'updated' })
     expect(journal.queuedMessages.get('D0')?.body).toEqual(message('latest D'))
     expect(journal['state'].inputCards.size).toBe(n + 1)
-    measurements.edit = measure()
+    measurements.edit = await measure()
     expect({ indexed, cards, cohortVisits, introduced }).toEqual({
       indexed: 1,
       cards: 0,
@@ -465,7 +660,7 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
     await journal.queuedMessages.withdraw(Array.from({ length: n }, (_, i) => `D${i}`))
     expect(journal['state'].inputCards.size).toBe(1)
     expect(await legacyIds(session)).toEqual([])
-    measurements.retirement = measure()
+    measurements.retirement = await measure()
     // One bulk adoption, withdrawals, then current-cohort retirement; not n separate flushes.
     expect(cards).toBe(n)
     expect(bytes).toBe(4 * n) // Native tombstone null values.

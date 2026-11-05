@@ -33,9 +33,16 @@ export class JournalWriteProjection {
   async prepare(
     db: JournalPersistencePlan,
     rows: readonly JournalRow[],
-    savedAt: number
+    savedAt: number,
+    finishFold?: (draft: JournalReducerState) => void
   ): Promise<() => void> {
-    const transition = await prepareJournalOutcomeWriteAsync(db, this.deps.state(), rows, savedAt)
+    const transition = await prepareJournalOutcomeWriteAsync(
+      db,
+      this.deps.state(),
+      rows,
+      savedAt,
+      finishFold
+    )
     // A stopped cut and its withdrawal commit together, so no reader sees it schedulable.
     const cut = this.deps.withdrawStoppedCut && journalStoppedUsageLimitCut(transition.state, rows)
     const withdrawal = cut ? this.deps.withdrawStoppedCut?.(cut) : undefined

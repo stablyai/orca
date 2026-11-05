@@ -11,7 +11,7 @@ import {
   claudeProviderHandle
 } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
-import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
+import { createCodexJournalTranslator } from '../../codex/structured/journal/codex-structured-journal-translation'
 import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/structured-agent-session-event-sink'
 import {
   createTrackedJournalOpener,

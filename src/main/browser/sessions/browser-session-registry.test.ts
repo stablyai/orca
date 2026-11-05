@@ -14,6 +14,7 @@ const {
   getMediaAccessStatusMock: vi.fn(),
   removeCertificateRequestGuardMock: vi.fn()
 }))
+const forgetBrowserPasswordVaultMock = vi.hoisted(() => vi.fn(() => true))
 const processUserAgentMode = vi.hoisted(() => {
   const state: { value: 'clean' | 'native' } = { value: 'clean' }
   return state
@@ -51,6 +52,10 @@ vi.mock('../browser-manager', () => ({
     removeCertificateRequestGuard: removeCertificateRequestGuardMock,
     resolvePagePromptTarget: vi.fn(() => null)
   }
+}))
+
+vi.mock('../../browser-passwords/browser-password-vaults', () => ({
+  forgetBrowserPasswordVault: forgetBrowserPasswordVaultMock
 }))
 
 import { browserSessionRegistry } from './browser-session-registry'
@@ -109,6 +114,59 @@ describe('BrowserSessionRegistry', () => {
     expect(defaultProfile.scope).toBe('default')
     expect(defaultProfile.partition).toBe(ORCA_BROWSER_PARTITION)
   })
+
+  it.each([10, 100])(
+    'resolves only known actual Sessions with linear profile work at %s',
+    (population) => {
+      const directory = mkdtempSync(join(tmpdir(), 'orca-session-media-'))
+      browserSessionRegistry.configureForOrcaProfile({
+        orcaProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+        profileDirectory: directory
+      })
+      const policySession = sessionFromPartitionMock()
+      const sessions = new Map<string, typeof policySession>()
+      sessionFromPartitionMock.mockImplementation((partition: string) => {
+        const known = sessions.get(partition)
+        if (!known) {
+          throw new Error('Lookup attempted to materialize an unknown Session')
+        }
+        return known
+      })
+      const profiles = Array.from({ length: population }, (_, index) => {
+        const id = `00000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`
+        const partition = getOrcaProfileBrowserSessionPartition(DEFAULT_LOCAL_ORCA_PROFILE_ID, id)
+        sessions.set(partition, { ...policySession })
+        return {
+          id,
+          partition,
+          scope: 'isolated' as const,
+          label: `Profile ${index}`,
+          source: null
+        }
+      })
+      const defaultProfile = browserSessionRegistry.getDefaultProfile()
+      sessions.set(defaultProfile.partition, { ...policySession })
+      browserSessionRegistry.hydrateFromPersisted(profiles)
+      sessionFromPartitionMock.mockClear()
+      expect(
+        browserSessionRegistry.profileIdForSession(sessions.get(defaultProfile.partition)!)
+      ).toBe('default')
+      expect(sessionFromPartitionMock).toHaveBeenCalledTimes(1)
+      sessionFromPartitionMock.mockClear()
+      const last = profiles.at(-1)!
+      expect(browserSessionRegistry.profileIdForSession(sessions.get(last.partition)!)).toBe(
+        last.id
+      )
+      expect(sessionFromPartitionMock).toHaveBeenCalledTimes(population + 1)
+      sessionFromPartitionMock.mockClear()
+      expect(browserSessionRegistry.profileIdForSession({ ...policySession })).toBeNull()
+      expect(sessionFromPartitionMock).toHaveBeenCalledTimes(population + 1)
+      browserSessionRegistry.configureForOrcaProfile({
+        orcaProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+        profileDirectory: directory
+      })
+    }
+  )
 
   it('allows the default partition', () => {
     expect(browserSessionRegistry.isAllowedPartition(ORCA_BROWSER_PARTITION)).toBe(true)
@@ -308,6 +366,14 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(false)
     expect(browserSessionRegistry.getProfile(profile!.id)).toBeNull()
     expect(listBrowserSitePermissions(profile!.id)).toEqual([])
+  })
+
+  it('keeps a profile whose saved logins could not be deleted', async () => {
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Vault Stuck')
+    forgetBrowserPasswordVaultMock.mockReturnValueOnce(false)
+
+    await expect(browserSessionRegistry.deleteProfile(profile!.id)).resolves.toBe(false)
+    expect(browserSessionRegistry.getProfile(profile!.id)).not.toBeNull()
   })
 
   it('retains session security policies when deleting a profile', async () => {

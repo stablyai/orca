@@ -1,5 +1,5 @@
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
-import { createOsc133CommandFinishedScanner } from '../../shared/terminal-osc133-command-finished'
+import { createOsc133CommandFinishedScanner } from '../../shared/terminal/output/terminal-osc133-command-finished'
 import { normalizeTerminalChunk } from './terminal-ansi-normalization'
 
 // eslint-disable-next-line no-control-regex -- control bytes are exactly what is not visible.

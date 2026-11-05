@@ -12,6 +12,15 @@ import {
 import type { QueuedMessageRow } from './queued-message-table'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 
+export type JournalIndexedInputCard = {
+  card: QueuedMessageRow
+  actionable: boolean
+  handoff: boolean
+  source: JournalInputCard
+  released: boolean
+  releasedAt?: number
+}
+
 type Node = { index: JournalInputPlaceIndex; left?: Node; right?: Node }
 const LIMIT = Number.MAX_SAFE_INTEGER
 
@@ -25,13 +34,42 @@ export class JournalInputDomainIndex {
     actionable: boolean,
     handoff: boolean
   ): void {
-    finishJournalSteps(this.setSteps(card, source, actionable, handoff))
+    return finishJournalSteps(this.setSteps(card, source, actionable, handoff))
   }
   *setSteps(
     card: QueuedMessageRow,
     source: JournalInputCard,
     actionable: boolean,
     handoff: boolean
+  ): Generator<void, void> {
+    yield* this.changeSteps(card, source, actionable, handoff, false)
+  }
+
+  setPosition(card: QueuedMessageRow, source: JournalInputCard): void {
+    this.change(card, source, false, false, card.state === 'withdrawn', true)
+  }
+
+  delete(card: QueuedMessageRow, source: JournalInputCard): void {
+    this.change(card, source, false, false, true)
+  }
+
+  private change(
+    card: QueuedMessageRow,
+    source: JournalInputCard,
+    actionable: boolean,
+    handoff: boolean,
+    remove: boolean,
+    positionOnly = false
+  ): void {
+    finishJournalSteps(this.changeSteps(card, source, actionable, handoff, remove, positionOnly))
+  }
+  private *changeSteps(
+    card: QueuedMessageRow,
+    source: JournalInputCard,
+    actionable: boolean,
+    handoff: boolean,
+    remove: boolean,
+    positionOnly = false
   ): Generator<void> {
     if (!source.baseline) {
       return
@@ -40,15 +78,33 @@ export class JournalInputDomainIndex {
       low = 0,
       high = LIMIT
     while (true) {
-      yield* node.index.setSteps(card, actionable, handoff, source.baseline.coordinate)
+      if (remove) {
+        node.index.delete(card.messageId)
+      } else if (positionOnly) {
+        node.index.setPosition(
+          card.messageId,
+          card.position,
+          0,
+          source.baseline.coordinate ?? { epoch: '', sequence: 0 }
+        )
+      } else {
+        yield* node.index.setSteps(card, actionable, handoff, source.baseline.coordinate)
+      }
+      yield
       if (high - low <= 1) {
         break
       }
       const mid = low + Math.floor((high - low) / 2)
       if (source.introduced < mid) {
+        if (remove && !node.left) {
+          break
+        }
         node = node.left ??= { index: new JournalInputPlaceIndex('') }
         high = mid
       } else {
+        if (remove && !node.right) {
+          break
+        }
         node = node.right ??= { index: new JournalInputPlaceIndex('') }
         low = mid
       }
@@ -56,29 +112,35 @@ export class JournalInputDomainIndex {
   }
 
   query(context: JournalInputContext, original?: AgentJournalCursor): InputPlaceQuery {
+    return this.before(context.cut, (index) =>
+      queryInputContext(
+        context,
+        original,
+        (coordinate) => index.query(coordinate.epoch, coordinate.sequence),
+        () => index.allPlaces(),
+        mergeInputPlaces
+      )
+    )
+  }
+
+  private before(
+    cut: number,
+    query: (index: JournalInputPlaceIndex) => InputPlaceQuery
+  ): InputPlaceQuery {
     let result: InputPlaceQuery = { position: -Infinity }
     const append = (node: Node) => {
-      result = mergeInputPlaces(
-        result,
-        queryInputContext(
-          context,
-          original,
-          (coordinate) => node.index.query(coordinate.epoch, coordinate.sequence),
-          () => node.index.allPlaces(),
-          mergeInputPlaces
-        )
-      )
+      result = mergeInputPlaces(result, query(node.index))
     }
     let node: Node | undefined = this.root,
       low = 0,
       high = LIMIT
-    while (node && low < context.cut) {
-      if (high <= context.cut) {
+    while (node && low < cut) {
+      if (high <= cut) {
         append(node)
         break
       }
       const mid = low + Math.floor((high - low) / 2)
-      if (context.cut <= mid) {
+      if (cut <= mid) {
         node = node.left
         high = mid
       } else {

@@ -68,6 +68,7 @@ import {
 } from './agent-session-store-state'
 import { AgentSessionRecordTabs } from '../agent-session-tab-table'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
+import { readStoredWorkspaceAttention } from '../../../native-chat/agent-session-journal/journal-stored-cursor'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
 import { loadAgentSessionStoreRowsAsync } from './agent-session-record-rows'
@@ -132,6 +133,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
+  workspaceAttentionReads = (location: AgentSessionExecutionLocation) =>
+    readStoredWorkspaceAttention(this.database, this.listConversations(), location)
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
   /** Sessions a committed /clear continued into this one, read through the clear-successor index;
    *  each candidate is checked on its conversation, so unreadable leases still count. */

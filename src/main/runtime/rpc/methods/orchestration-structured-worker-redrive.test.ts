@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from '../../../native-chat/agent-session-wire/agent-session-subscriber-test-support'
 import '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
@@ -241,7 +242,7 @@ async function reattach(sessionId: string) {
 
 describe('the structured redrive publication edge', () => {
   it.each(['stream', 'journal'] as const)(
-    '%s queues real CLI mail behind the running turn, retains failed sends and cancels teardown',
+    '%s steers real CLI mail into the running turn, retains failed sends and cancels teardown',
     async (carrier) => {
       vi.useRealTimers()
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
@@ -349,32 +350,27 @@ describe('the structured redrive publication edge', () => {
         // A send that throws keeps its reservation; the session's next journal edge finds it never
         // admitted and sends it again under the same id.
         const send = vi.spyOn(host, 'send').mockRejectedValueOnce(new Error('provider unavailable'))
-        const messageId = await sendMail('Continue after the current turn')
+        const messageId = await sendMail('Continue during the current turn')
         expect(send).toHaveBeenCalledTimes(1)
         expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0 })
         expect(state.db.getStructuredMailSends(mailbox)).toHaveLength(1)
         await worker.append('provider-available')
+        await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
         await vi.advanceTimersByTimeAsync(300)
         await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2))
-        // Queued behind the running turn, like a person's message: delivered, not yet handed over.
-        await vi.waitFor(() =>
-          expect(state.db.getMessageById(messageId)).toMatchObject({
-            read: 0,
-            delivered_at: expect.any(String)
-          })
-        )
-        expect(dispatch).not.toHaveBeenCalled()
-        // The turn ends and the chat's own drain hands the card over.
-        await worker.journal.appendTombstone(turn, { fence })
-        await vi.advanceTimersByTimeAsync(300)
-        await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
+        // Retried mail joins the current turn through the host's automatic drain.
+        expect(state.db.getMessageById(messageId)).toMatchObject({
+          read: 0,
+          delivered_at: expect.any(String)
+        })
+        expect(dispatch).toHaveBeenCalledTimes(1)
         expect(dispatch.mock.calls[0]![0].body).toMatchObject({
           kind: 'message',
           role: 'user',
           blocks: [
             {
               type: 'text',
-              text: expect.stringContaining('Subject: Continue after the current turn')
+              text: expect.stringContaining('Subject: Continue during the current turn')
             }
           ],
           from: {

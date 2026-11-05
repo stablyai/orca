@@ -1,21 +1,19 @@
-import { finishJournalSteps, sortJournalSteps } from './journal-reconstruction-steps'
-import { journalItemDeclaresEcho } from './journal-item-echo'
+import { finishJournalSteps } from './journal-reconstruction-steps'
+import { journalContextCursor } from './journal-context-cursor'
+import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import {
+  foldJournalInputObligations,
+  journalInputPresentationMember
+} from './journal-input-obligations'
+import { resolveJournalItemId } from './journal-item-echo'
 import { journalInputOrder } from './journal-input-order'
-// Live append and replay share this fold. Revisions change content, preserving creation position
-// and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
-
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSnapshot
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalHistoryOrigin } from './journal-history-origin'
 import { journalBatchMutationProducer, journalRenderItem } from './journal-render-item'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+
+import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import { removeJournalItem, statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import { journalItemRevisionIsStale } from './journal-item-revision'
 import { observeJournalProviderActivity } from './journal-provider-activity'
@@ -25,13 +23,20 @@ import {
   applyJournalSubmission
 } from './journal-submission-fold'
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
-import { isWriteFailureSubmission } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+
 import { projectJournalStopNote } from './journal-stop-note-projection'
 import { journalItemExecutionFence } from './journal-item-provenance'
 import { retireRewoundJournalSubmissionSteps } from './journal-rewind-submission-retirement'
-import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session/agent-session-context-clear'
+
 import { foldJournalQueuePauseMark } from './queued-message-pause'
 import { foldJournalQueueRowSteps } from './journal-queue-fold'
+export {
+  resolveJournalItemId,
+  journalEchoClaimant,
+  isProviderUserMessageEcho
+} from './journal-item-echo'
+// Live append and replay share this fold. Revisions change content, preserving creation position
+// and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
@@ -52,20 +57,48 @@ export function* applyJournalRowSteps(
 ): Generator<void> {
   const order = journalInputOrder(state)
   yield* order.prepareRowSteps(state, row)
-  order.beforeRow(state, row)
+  const dispatchApplies =
+    row.kind !== 'dispatch' || journalDispatchRowApplies(state.submissions.get(row.clientMessageId))
+  journalInputOrder(state).beforeRow(state, row)
   yield* applyJournalRowFactsSteps(state, row, savedAt)
   yield* foldJournalQueueRowSteps(state, row)
-  order.afterRow(state, row)
+  foldJournalInputObligations(state, row, dispatchApplies)
+  journalInputOrder(state).afterRow(state, row)
+}
+
+/** Marker 5 freezes the common-field interpretation that its outcome tail was written over. */
+export function applyMarker5JournalRow(
+  state: JournalReducerState,
+  row: JournalRow,
+  savedAt = row.ts
+): void {
+  finishJournalSteps(applyMarker5JournalRowSteps(state, row, savedAt))
+}
+export function* applyMarker5JournalRowSteps(
+  state: JournalReducerState,
+  row: JournalRow,
+  savedAt = row.ts
+): Generator<void> {
+  yield* journalInputOrder(state).prepareRowSteps(state, row)
+  journalInputOrder(state).beforeRow(state, row)
+  yield* applyJournalRowFactsSteps(state, row, savedAt, true)
+  yield* foldJournalQueueRowSteps(state, row, true)
+  journalInputOrder(state).afterRow(state, row)
 }
 
 function* applyJournalRowFactsSteps(
   state: JournalReducerState,
   row: JournalRow,
-  savedAt: number
+  savedAt: number,
+  marker5 = false
 ): Generator<void> {
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
+    if (!marker5) {
+      state.contextBoundary = row.seq
+      state.derivedTurnScope = new JournalDerivedTurnScope()
+    }
     state.historyOrigin = journalHistoryOrigin(row)
     return
   }
@@ -81,7 +114,7 @@ function* applyJournalRowFactsSteps(
     if (!state.itemEchoes.has(row.itemId) && Object.hasOwn(row, 'echoOf')) {
       state.itemEchoes.set(row.itemId, row.echoOf)
     }
-    const itemId = yield* resolveJournalItemIdSteps(state, row.itemId, row.body)
+    const itemId = resolveJournalItemId(state, row.itemId, row.body, marker5)
     if (!state.itemEchoes.has(row.itemId)) {
       yield* acceptSubmissionFromProviderItemSteps(state, row.itemId, itemId, row)
     }
@@ -104,6 +137,11 @@ function* applyJournalRowFactsSteps(
     removeJournalItem(state, resolveItemId(state, row.itemId), row.revision)
     if (row.retireSubmission === true) {
       yield* retireRewoundJournalSubmissionSteps(state, row.itemId)
+      const identity = parseAgentJournalItemKey(row.itemId)
+      if (marker5 && identity?.provider === 'orca') {
+        state.submissions.delete(identity.clientMessageId)
+        state.receipts.delete(identity.clientMessageId)
+      }
     }
     return
   }
@@ -120,7 +158,7 @@ function* applyJournalRowFactsSteps(
           state.itemEchoes.set(mutation.itemId, mutation.echoOf)
         }
         const { revision, body } = mutation
-        const itemId = yield* resolveJournalItemIdSteps(state, mutation.itemId, body)
+        const itemId = resolveJournalItemId(state, mutation.itemId, body, marker5)
         if (!state.itemEchoes.has(mutation.itemId)) {
           yield* acceptSubmissionFromProviderItemSteps(state, mutation.itemId, itemId, row)
         }
@@ -162,101 +200,23 @@ export function rememberAppliedSettlementId(
   }
 }
 
-export function resolveJournalItemId(
-  state: JournalReducerState,
-  itemId: string,
-  body?: AgentJournalRenderItem['body']
-): string {
-  return finishJournalSteps(resolveJournalItemIdSteps(state, itemId, body))
-}
-function* resolveJournalItemIdSteps(
-  state: JournalReducerState,
-  itemId: string,
-  body?: AgentJournalRenderItem['body']
-): Generator<void, string> {
-  const aliased = state.aliases.get(itemId)
-  if (aliased) {
-    return aliased
-  }
-  const submissionId = yield* journalEchoClaimantSteps(state, itemId, body)
-  if (!submissionId) {
-    return itemId
-  }
-  state.aliases.set(itemId, submissionId)
-  return submissionId
+export function renderJournalItems(state: JournalReducerState): AgentJournalSnapshot['items'] {
+  // Map insertion order changes on recreation; journal position alone orders the timeline.
+  return [...state.items.values()]
+    .filter((item) => journalInputPresentationMember(state, item.itemId))
+    .map((item) => projectJournalStopNote(item, state.items))
+    .sort(compareAgentJournalItems)
 }
 
-export function isProviderUserMessageEcho(
-  itemId: string,
-  body: AgentJournalRenderItem['body']
-): boolean {
-  const identity = parseAgentJournalItemKey(itemId)
-  return (
-    body.kind === 'message' &&
-    body.role === 'user' &&
-    identity !== null &&
-    identity.provider !== 'orca'
-  )
-}
-
-/** Find an echo's eligible submission without claiming it. */
-export function journalEchoClaimant(
-  state: JournalReducerState,
-  itemId: string,
-  body?: AgentJournalRenderItem['body']
-): string | null {
-  return finishJournalSteps(journalEchoClaimantSteps(state, itemId, body))
-}
-function* journalEchoClaimantSteps(
-  state: JournalReducerState,
-  itemId: string,
-  body?: AgentJournalRenderItem['body']
-): Generator<void, string | null> {
-  if (
-    !body ||
-    journalItemDeclaresEcho(state.itemEchoes, itemId) ||
-    !isProviderUserMessageEcho(itemId, body)
-  ) {
-    return null
+export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
+  return {
+    sessionId: state.sessionId,
+    cursor: journalContextCursor(state),
+    items: renderJournalItems(state),
+    submissions: [...state.submissions.values()].sort((a, b) => a.submittedAt - b.submittedAt)
   }
-  const fingerprint = agentSessionSendBodyFingerprint(state.sessionId, body)
-  let contextSequence = 0
-  for (const item of state.items.values()) {
-    contextSequence = Math.max(contextSequence, latestAgentSessionContextClearSequence([item]))
-    yield
-  }
-  const submissions = yield* sortJournalSteps(
-    state.submissions.values(),
-    (left, right) => left.submittedAt - right.submittedAt
-  )
-  for (const candidate of submissions) {
-    yield
-    if (
-      (contextSequence === 0 || (candidate.acceptedSequence ?? 0) > contextSequence) &&
-      candidate.dispatchState !== 'rejected' &&
-      !isWriteFailureSubmission(candidate) &&
-      candidate.payloadFingerprint === fingerprint &&
-      state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
-    ) {
-      return agentJournalSubmissionKey(candidate.clientMessageId)
-    }
-  }
-  return null
 }
 
 function resolveItemId(state: JournalReducerState, itemId: string): string {
   return state.aliases.get(itemId) ?? itemId
-}
-
-export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
-  // Map insertion order changes on recreation; journal position alone orders the timeline.
-  const items = [...state.items.values()]
-    .map((item) => projectJournalStopNote(item, state.items))
-    .sort(compareAgentJournalItems)
-  return {
-    sessionId: state.sessionId,
-    cursor: { epoch: state.epoch, sequence: state.lastSequence },
-    items,
-    submissions: [...state.submissions.values()].sort((a, b) => a.submittedAt - b.submittedAt)
-  }
 }

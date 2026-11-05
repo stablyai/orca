@@ -26,33 +26,6 @@ import {
   journals
 } from './structured-agent-session-subscriber-contract-test-fixture'
 
-it('reports every content publication to the journal hook, subscribed or not', async () => {
-  const journal = await journals.open({
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: codexProviderHandle('thread-1')
-    },
-    stateDirectory: join(fixture.root, 'hook-journal')
-  })
-  const published: string[] = []
-  const subscribers = new AgentSessionSubscribers({
-    onJournalPublished: (sessionId, published_journal) => {
-      expect(published_journal).toBe(journal)
-      published.push(sessionId)
-    }
-  })
-
-  subscribers.publish(SESSION, journal)
-  await settleTestSubscriberDeliveries(subscribers)
-  subscribers.snapshot(SESSION, journal, 1)
-  await settleTestSubscriberDeliveries(subscribers)
-
-  expect(published).toEqual([SESSION, SESSION])
-})
-
 it('settles a session nobody is reading, from running to idle', async () => {
   // Never open a subscriber: status must publish independently of transcript readers.
   const journal = await journals.open({

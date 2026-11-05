@@ -3,14 +3,14 @@ import type {
   AgentSessionRecord
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import type { AgentChildWorkRecord } from '../../../shared/agent-status-child-work'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentChildWorkRecord } from '../../../shared/agent-status/child-work/agent-status-child-work'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import {
   parseAgentStatusSubject,
   serializeAgentStatusSubject,
   type AgentStatusStructuredSessionSubject
-} from '../../../shared/agent-status-subject'
+} from '../../../shared/agent-status/contracts/agent-status-subject'
 import {
   StructuredAgentSessionOpenChildWork,
   type ChildWorkLifetimeToken

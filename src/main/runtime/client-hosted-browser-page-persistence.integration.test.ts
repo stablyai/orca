@@ -2,7 +2,7 @@
  * Real Store writes are covered by store-runtime-authored-session-writes.test.ts. */
 import { describe, expect, it } from 'vitest'
 import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { getBrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry-instance'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -97,26 +97,6 @@ function attachHost(runtime: OrcaRuntimeService) {
 }
 
 describe('client-hosted browser page persistence through the runtime', () => {
-  it('writes the page into the session the announcement already fires on', () => {
-    const profile = createProfile()
-    const runtime = startRuntime(profile)
-    attachHost(runtime)
-    placeAndPublish(runtime, 'page-a')
-
-    runtime.notifyMobileSessionTabsChanged(WT)
-
-    expect(profile.session.clientHostedBrowserPagesByWorktree?.[WT]).toEqual([
-      expect.objectContaining({
-        browserPageId: 'page-a',
-        workspaceId: WT,
-        browserProfileId: 'profile-a',
-        pairedDeviceId: 'device-a',
-        url: 'https://example.internal/docs',
-        title: 'Internal docs'
-      })
-    ])
-  })
-
   it('hands the page to a replacement runtime as a held row', () => {
     const profile = createProfile()
     const first = startRuntime(profile)

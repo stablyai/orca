@@ -19,8 +19,9 @@ export function createStructuredAgentSessionPublicationWiring(input: {
       input.client().advanceStatusProjection(journal, rows),
     observe: (id, journal, rows) => input.client().requestFailures.observe(id, journal, rows),
     forget: (id) => input.client().requestFailures.forget(id),
-    deliver: (id, journal) => {
-      input.client().subscribers.publish(id, journal)
+    deliver: (id, journal, inputChanged) => {
+      input.client().subscribers.deliverFrames(id, journal)
+      input.client().publishJournal(id, journal, true, inputChanged)
       input.delivery().afterCommit(id, journal)
     },
     deliverSettleEdge: (id, journal) => input.delivery().afterSettleEdge(id, journal),

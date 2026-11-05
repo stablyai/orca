@@ -4,7 +4,8 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import { JournalNewestTurn } from './journal-newest-turn'
 import { finishJournalSteps } from './journal-reconstruction-steps'
 
-const owners = new WeakMap<JournalReducerState, JournalInputOrder>()
+import { getJournalInputOrder, setJournalInputOrder } from './journal-input-order-registry'
+export { setJournalInputOrder } from './journal-input-order-registry'
 export function initializeJournalInputOrder(
   state: JournalReducerState,
   originalAcceptance?: (id: string) => AgentJournalCursor | undefined
@@ -17,12 +18,9 @@ export function* initializeJournalInputOrderSteps(
 ): Generator<void, JournalInputOrder> {
   const newest = yield* JournalNewestTurn.createSteps(state)
   const owner = new JournalInputOrder(state, originalAcceptance, newest)
-  owners.set(state, owner)
+  setJournalInputOrder(state, owner)
   return owner
 }
 export function journalInputOrder(state: JournalReducerState): JournalInputOrder {
-  return owners.get(state) ?? initializeJournalInputOrder(state)
-}
-export function setJournalInputOrder(state: JournalReducerState, owner: JournalInputOrder): void {
-  owners.set(state, owner)
+  return getJournalInputOrder(state) ?? initializeJournalInputOrder(state)
 }

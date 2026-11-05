@@ -1,7 +1,7 @@
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
+} from '../../agent-status/contracts/agent-status-types'
 import type { HookListenerState } from '../listener-state'
 import {
   resolvePrompt,

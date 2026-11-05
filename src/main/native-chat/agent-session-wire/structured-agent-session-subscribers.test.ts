@@ -17,7 +17,7 @@ import {
   journals
 } from './structured-agent-session-subscriber-contract-test-fixture'
 
-it('renders history once per source for N/10N items and one/three readers', async () => {
+it('keeps catch-up keyed and shares requested snapshots for N/10N items and one/three readers', async () => {
   const render = vi.spyOn(journalReducer, 'renderJournalState')
   try {
     for (const size of [100, 1000]) {
@@ -68,6 +68,7 @@ it('renders history once per source for N/10N items and one/three readers', asyn
         }
         subscribers.publish(SESSION, journal)
         await settleTestSubscriberDeliveries(subscribers)
+        await settleTestSubscriberDeliveries(subscribers)
         for (const text of ['streamed', 'newer']) {
           const prior = journal.snapshot()
           await journal.appendItem(identity(size - 1), body(text), options)
@@ -75,7 +76,7 @@ it('renders history once per source for N/10N items and one/three readers', asyn
           events.length = 0
           subscribers.publish(SESSION, journal)
           await settleTestSubscriberDeliveries(subscribers)
-          expect(render).toHaveBeenCalledTimes(1)
+          expect(render).toHaveBeenCalledTimes(0)
           const current = journal.snapshot()
           expect(current).not.toBe(prior)
           expect(current.items).toHaveLength(size)
@@ -111,6 +112,7 @@ it('bounds retained turn activity across session churn', async () => {
 
   for (let index = 0; index < MAX_RETAINED_SESSION_ACTIVITIES + 4; index += 1) {
     subscribers.publish(`session-${index}`, journal, { turnId: `turn-${index}`, text: 'working' })
+    await settleTestSubscriberDeliveries(subscribers)
     await settleTestSubscriberDeliveries(subscribers)
   }
 
@@ -190,6 +192,7 @@ it('stamps the host clock once per published frame', async () => {
   )
   subscribers.publish(SESSION, journal)
   await settleTestSubscriberDeliveries(subscribers)
+  await settleTestSubscriberDeliveries(subscribers)
   roster = {
     state: 'monitoring',
     tasks: [{ id: 'task-1', kind: 'command', description: 'run the build' }]
@@ -240,6 +243,7 @@ it('includes catalogs on reconnect and sends an idle checkpoint without journal 
   expect(events[0]).toMatchObject({ type: 'snapshot', commands })
   commands = [{ name: 'second', kind: 'skill' as const }]
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
   await settleTestSubscriberDeliveries(subscribers)
   expect(events[1]).toEqual({
     type: 'batch',

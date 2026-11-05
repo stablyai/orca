@@ -1,6 +1,6 @@
 /** Which recorded `wsl.exe` holders an Orca launch keeps, and releasing the rest (E11). */
 import { existsSync } from 'node:fs'
-import { readWslHostDeployments } from '../../../shared/wsl-host-deployment-store'
+import { readWslHostDeployments } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import { sameWslDistro } from './wsl-host-add-admission'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 import type { WslDistroHolder, WslDistroHolderAdoption } from '../discovery/wsl-distro-holder-types'

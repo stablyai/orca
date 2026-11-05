@@ -4,6 +4,8 @@ import {
 } from './journal-native-fixture-test-support'
 export {
   seedLegacyTestJournal,
+  appendTestJournalQueueRow,
+  finishTestJournalHistoricalInputs,
   pinTestJournalInputMode,
   publishTestJournalEpoch,
   readTestJournalRows,
@@ -34,9 +36,11 @@ import { JournalHostDatabase } from './journal-host-database'
 
 import { restoreJournal, type JournalLoad } from './journal-open'
 
-import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
+// Share one connection per test profile to match production host ownership.
+
+import type Database from '../../sqlite/sync-database'
 
 export type TestJournalHostDatabase = JournalHostDatabase & {
   /** Explicit native fixture access for seeding old/corrupt bytes and checking saved data. */

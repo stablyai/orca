@@ -1,8 +1,9 @@
-import { aiVaultScopePathsForWslDistro } from '../../../../../shared/ai-vault-scope-cwd-match'
+import { aiVaultScopePathsForWslDistro } from '../../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { recordSessionScanIssue, scanIssueTextFromError } from '../../../session-scan-issues'
 import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
-import type { AiVaultScanIssue, AiVaultSession } from '../../../../../shared/ai-vault-types'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
+import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { throwIfSignalAborted } from '../../../../../shared/abort-signal-reason'
 import { openCodeTranscriptPageLimit } from '../../../../../shared/opencode-transcript-page-limit'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
@@ -34,7 +35,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`OpenCode SQLite worker entry not found: ${workerPath}`)
   }
-  return new Worker(workerPath)
+  return spawnWorkerThread(workerPath)
 }
 
 let sharedClient: OpenCodeSqliteWorkerClient | null = null
@@ -71,19 +72,19 @@ export function listZcodeSqliteSessionsViaWorker(
 
 export function parseOpenCodeSqliteSessionViaWorker(
   args: SqliteParseArgs
-): Promise<AiVaultSession | null> {
+): Promise<AiVault.AiVaultSession | null> {
   return parseForHost(args)
 }
 
 export function parseOpenCode2SqliteSessionViaWorker(
   args: SqliteParseArgs
-): Promise<AiVaultSession | null> {
+): Promise<AiVault.AiVaultSession | null> {
   return parseForHost({ ...args, agent: 'opencode2' })
 }
 
 export function parseZcodeSqliteSessionViaWorker(
   args: SqliteParseArgs
-): Promise<AiVaultSession | null> {
+): Promise<AiVault.AiVaultSession | null> {
   return parseForHost({ ...args, agent: 'zcode' })
 }
 
@@ -110,7 +111,7 @@ async function listForHost(
 ): Promise<SessionFileCandidate[]> {
   const agent = args.agent ?? 'opencode'
   const scoped = Boolean(args.scopePaths?.length)
-  const issues: AiVaultScanIssue[] = []
+  const issues: AiVault.AiVaultScanIssue[] = []
   const closeSource =
     !scoped && args.dbPaths.length > 0 ? openAiVaultScanSource(args.signal, agent) : null
   try {
@@ -170,7 +171,7 @@ async function listCandidatesForHost(
         return []
       }
       const first = paths.values().next().value!
-      const issues: AiVaultScanIssue[] = []
+      const issues: AiVault.AiVaultScanIssue[] = []
       try {
         const result = await runOpenCodeSqliteScanRequest(
           args.signal,
@@ -226,7 +227,7 @@ async function listCandidatesForHost(
 
 async function parseForHost(
   args: Parameters<OpenCodeSqliteWorkerClient['parse']>[0]
-): Promise<AiVaultSession | null> {
+): Promise<AiVault.AiVaultSession | null> {
   const wsl = openCodeWslPath(args.dbPath)
   if (!wsl) {
     return getSharedClient().parse(args)

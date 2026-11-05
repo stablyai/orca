@@ -1,12 +1,15 @@
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry, GitStagingArea } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type {
+  GitStatusEntry,
+  GitStagingArea
+} from '../../../../../../shared/git/status/git-status-types'
 import {
   buildGitStatusSourceControlTree,
   buildSourceControlTree,
   compactSourceControlTree,
   flattenSourceControlTree,
   type SourceControlTreeNode
-} from '../../../../../../shared/source-control-tree'
+} from '../../../../../../shared/source-control/listing/source-control-tree'
 import {
   getCombinedDiffFileTreeSectionKey,
   isGitStatusEntry,

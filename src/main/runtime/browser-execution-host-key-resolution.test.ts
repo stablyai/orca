@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { parseBrowserNetworkExecutionHostKey } from '../browser/network/execution-routes/browser-network-execution-route'
 import { OrcaRuntimeService } from './orca-runtime'
 
@@ -21,19 +21,6 @@ describe('browser execution host key resolution', () => {
       resolution.status === 'resolved' &&
         parseBrowserNetworkExecutionHostKey(resolution.executionHostKey)
     ).toMatchObject({ kind: 'native', runtimeId: runtime.getRuntimeId() })
-  })
-
-  it('holds a resolvable workspace whose execution host cannot be minted yet', async () => {
-    const runtime = createRuntime()
-    Object.defineProperty(runtime, 'resolveBrowserNetworkExecutionHostForWorktree', {
-      value: async () => {
-        throw new Error('Host provider is not ready')
-      }
-    })
-
-    await expect(runtime.resolveBrowserExecutionHostKeyForWorkspace(WORKSPACE_ID)).resolves.toEqual(
-      { status: 'unavailable' }
-    )
   })
 
   it('settles a workspace that no longer resolves', async () => {

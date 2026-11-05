@@ -1,3 +1,5 @@
+import { assertTestJournalHistoricalInputs } from './journal-historical-inputs.test-support'
+import { buildJournalQueueRow, type JournalQueueChange } from './journal-queue-events'
 import type {
   TestJournalHostDatabase,
   TestJournalOptions
@@ -8,7 +10,6 @@ import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-se
 // Share one connection per test profile to match production host ownership.
 
 import { runJournalTransaction } from './journal-database'
-import { journalRowReadBack } from './journal-row-table'
 import { randomUUID } from 'node:crypto'
 import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
@@ -216,32 +217,20 @@ export function readTestQueueChanges(
 /** Input fixtures stand for a chat an older build wrote and goes on writing: writes to its input
  * epoch stay input rows, as that build's writer stored them, so the input reader meets writer-made
  * rows. An epoch this build founds (rollover, replacement) is written as this build writes it. */
-export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
-  const projection = journal['projection']
-  const prepare = projection.prepare.bind(projection)
-  projection.prepare = async (db, rows, savedAt) => {
-    const state = journal['state']
-    if (await db.source(state.sessionId, state.epoch)) {
-      return prepare(db, rows, savedAt)
-    }
-    for (const row of rows) {
-      db.add({
-        kind: 'rows',
-        sessionId: state.sessionId,
-        rows: [
-          {
-            epoch: row.epoch,
-            seq: row.seq,
-            savedAt,
-            json: journalRowReadBack(state.sessionId, row).rowJson
-          }
-        ]
-      })
-    }
-    return () => {
-      for (const row of rows) {
-        applyJournalRow(state, row, savedAt)
-      }
-    }
-  }
+export {
+  pinTestJournalInputMode,
+  finishTestJournalHistoricalInputs
+} from './journal-historical-inputs.test-support'
+
+export function appendTestJournalQueueRow(
+  db: Database.Database,
+  journal: AgentSessionJournal,
+  messageId: string,
+  change: JournalQueueChange
+): void {
+  const state = journal['state']
+  assertTestJournalHistoricalInputs(db, journal)
+  const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, Date.now())
+  insertTestJournalRow(db, state.sessionId, row)
+  applyJournalRow(state, row)
 }

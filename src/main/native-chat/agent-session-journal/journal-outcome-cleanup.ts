@@ -193,6 +193,7 @@ export class JournalOutcomeSweeper {
           break
         }
       }
+      await this.pace.rest()
     }
   }
 

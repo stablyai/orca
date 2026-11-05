@@ -1,8 +1,8 @@
 import { vi } from 'vitest'
+import { JournalInputCardIndex } from '../../native-chat/agent-session-journal/journal-input-card-index'
 import * as legacy from '../../native-chat/agent-session-journal/journal-queue-import'
 import * as fold from '../../native-chat/agent-session-journal/journal-queue-fold'
 import * as stored from '../../native-chat/agent-session-journal/queued-message-stored-row'
-import { JournalInputCardIndex } from '../../native-chat/agent-session-journal/journal-input-card-index'
 
 export const emptyLegacyCounts = () => ({
   decodedRows: 0,
@@ -10,6 +10,10 @@ export const emptyLegacyCounts = () => ({
   ownerClassifications: 0,
   cardConstructions: 0,
   sourceVisits: 0,
+  sourceIdEntries: 0,
+  handoffVisits: 0,
+  identityEntries: 0,
+  overlayEntries: 0,
   overlayVisits: 0,
   priorOverlayVisits: 0,
   rebuildVisits: 0,
@@ -65,6 +69,38 @@ function countValues<K, V>(map: Map<K, V>, visit: () => void) {
         visit()
         yield value
       }
+    }
+  })
+}
+
+function countMap<T>(array: readonly T[], visit: () => void) {
+  const map = array.map.bind(array)
+  Object.defineProperty(array, 'map', {
+    configurable: true,
+    value: <U>(
+      callback: (value: T, index: number, array: readonly T[]) => U,
+      thisArg?: unknown
+    ): U[] =>
+      map((value, index, source) => {
+        visit()
+        return callback.call(thisArg, value, index, source)
+      })
+  })
+}
+
+function countFlatMap<T>(array: readonly T[], visit: () => void) {
+  const flatMap = array.flatMap.bind(array)
+  Object.defineProperty(array, 'flatMap', {
+    configurable: true,
+    value: <U, This = undefined>(
+      callback: (this: This, value: T, index: number, array: readonly T[]) => U | readonly U[],
+      thisArg?: This
+    ): U[] => {
+      const values = flatMap<U, This>(function (value, index, source) {
+        visit()
+        return callback.call(this, value, index, source)
+      }, thisArg)
+      return values
     }
   })
 }
@@ -199,12 +235,15 @@ export function countLegacyFailureDisplay() {
             return rows
           }
           instrumentedSources.add(rows)
+          countMap(rows, () => counts[phase].sourceIdEntries++)
           countIteration(rows, () => {
             if (classifying) {
               counts[phase].ownerClassifications++
+              counts[phase].handoffVisits++
+              counts[phase].identityEntries++
             }
-            counts[phase].sourceVisits++
           })
+          countFlatMap(rows, () => counts[phase].ownerClassifications++)
           return rows
         }
         const steps = this['cardSteps'].bind(this)

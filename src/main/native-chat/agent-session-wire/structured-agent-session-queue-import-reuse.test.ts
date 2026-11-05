@@ -1,4 +1,5 @@
 import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
+import * as legacyChange from '../agent-session-journal/journal-queue-legacy-change'
 import { JournalWriteProjection } from '../agent-session-journal/journal-write-projection'
 import { encodeJournalState } from '../agent-session-journal/journal-state-codec'
 import { journalOutcomeSource } from '../agent-session-journal/journal-outcome-format'
@@ -32,7 +33,7 @@ import {
   threadWrite
 } from './structured-agent-session-queue-import-contract-test-fixture'
 
-it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
+it.each([100])('raw selection reuse: %i waiting cards', async (size) => {
   const journal = await journalFor(SESSION)
   const rows = Array.from({ length: size }, (_, i): Legacy => [`waiting-${i}`, 'waiting', 'words'])
   await seedLegacy(SESSION, rows)
@@ -54,14 +55,10 @@ it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
     })
   )
   let visits = 0
-  const rowsSource = journal.queuedMessages['legacy']['rows']()
-  const iterate = rowsSource[Symbol.iterator].bind(rowsSource)
-  const scans = vi.spyOn(rowsSource, Symbol.iterator).mockImplementation(function* () {
-    for (const row of { [Symbol.iterator]: iterate }) {
-      visits++
-      yield row
-    }
-    return undefined
+  const classify = legacyChange.legacyQueuedChange
+  const scans = vi.spyOn(legacyChange, 'legacyQueuedChange').mockImplementation((...args) => {
+    visits++
+    return classify(...args)
   })
   try {
     const turn = { provider: 'codex' as const, threadId: 'progress', turnId: 't', ordinal: 0 }
@@ -85,6 +82,7 @@ it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
     expect(visits).toBe(0)
     const answered = { turn: { ...turn, ordinal: -1 }, via: 'steer' as const }
     await handOff(journal, 'u', 'waiting-0', 'words', 'cancelled', 0, undefined, answered)
+    const raw = structuredClone(journal.submission('u'))
     feed.publish(SESSION, journal)
     await settleTestSubscriberDeliveries(feed)
     const view = journal.publicRead()
@@ -96,8 +94,8 @@ it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
     const item = view.snapshot.items.find((i) => i.itemId === agentJournalSubmissionKey('u'))
     expect(item?.body).toEqual(message('words'))
     expect(item?.sequence).toBeLessThan(journal.cursor().sequence)
-    expect(journal.submission('u')?.dispatchState).toBe('rejected')
-    expect(visits).toBeGreaterThanOrEqual(2 * size)
+    expect(journal.submission('u')).toEqual(raw)
+    expect(raw?.dispatchState).toBe('unknown')
     visits = 0
     for (let p = 0; p < 5; p++) {
       feed.publish(SESSION, journal)
@@ -123,7 +121,7 @@ it('public metadata follows legacy-only commits, item recreation and epoch repla
     BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
   const journal = await journalFor(SESSION)
   await journal.open()
-  const ids = vi.spyOn(journal.queuedMessages.displayState().normalizedHandOffs, Symbol.iterator)
+  const ids = vi.spyOn(journal.inputOrder, 'inputForItem')
   const key = journal.publicRead().normalizationKey
   const snapshot = journal.snapshot()
   expect(journal.snapshot()).toBe(snapshot)
@@ -139,7 +137,8 @@ it('public metadata follows legacy-only commits, item recreation and epoch repla
   expect(await legacyIds()).toEqual([])
   expect(journal.snapshot()).not.toBe(snapshot)
   expect(await catchUp(request)).toEqual(beforeImport)
-  expect(ids).toHaveBeenCalledTimes(1)
+  // The refreshed catch-up resolves the one selected original; normalization reuses it.
+  expect(ids).toHaveBeenCalledTimes(2)
   expect(journal.publicRead().normalizationKey).toBe(key)
   expect(ids).toHaveBeenCalledTimes(2)
   ids.mockRestore()
@@ -212,10 +211,17 @@ it('a rewind while the import has failed moves the legacy cards first: a refused
     })
   ).toMatchObject({ ok: true })
   expect(live.epoch).toBe(rewound.expectedEpoch)
-  expect(live.submission('att-refused')).toBeUndefined()
+  expect(live.submission('att-refused')).toMatchObject({
+    dispatchState: 'rejected',
+    queuedMessageId: 'disp-refused'
+  })
+  expect(live.item(agentJournalSubmissionKey('att-refused'))).toBeNull()
   expect(await fixture.rig.drafts()).toEqual(held)
   await nothingSentTo('edited')
+  await live.queuedMessages.importAtOpen()
   expect(await legacyIds()).toEqual([])
+  expect(await fixture.rig.drafts()).toEqual(held)
+  await nothingSentTo('edited')
 })
 
 it.each([

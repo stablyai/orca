@@ -1,6 +1,14 @@
+import type Database from '../../sqlite/sync-database'
+import type { JournalReadConnection } from './journal-sql-owner'
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
+import {
+  LEGACY_QUEUED_MESSAGE_COLUMNS,
+  readStoredQueuedMessageRow
+} from './queued-message-stored-row'
+import { dispatchWasWithdrawn } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { finishJournalSteps, sortJournalSteps } from './journal-reconstruction-steps'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { journalDispatchRowApplies, queuedHandOffOutcome } from './journal-dispatch-settlement'
+import { journalDispatchRowApplies, queuedHandOffInDoubt } from './journal-dispatch-settlement'
 import type { JournalQueuedChange } from './journal-queue-events'
 import { queuedCardFromChange } from './journal-queue-fold'
 import { queuedChangeOf } from './journal-queue-retention'
@@ -33,6 +41,7 @@ export function* legacyQueuedChangeSteps(
     ...queuedChangeOf(row),
     ...(holdReason !== null ? { holdReason } : {}),
     ...(attempt !== null ? { attempt } : {}),
+    ...(unconfirmed?.recovers ? { recovers: unconfirmed.recovers } : {}),
     ...(row.state === 'returned' && (attempt === null || !state.submissions.has(attempt))
       ? {
           returned: {
@@ -49,8 +58,8 @@ export function* legacyQueuedChangeSteps(
 /** Legacy refusals may have cleared handoff links without proving non-delivery.
  * Spend unchanged cards on uncertain attempts; edited/resubmitted cards require explicit Send. */
 type UnconfirmedHandOff =
-  | { attempt: string; holdReason?: undefined }
-  | { attempt?: undefined; holdReason: string }
+  | { attempt: string; holdReason?: undefined; recovers?: undefined }
+  | { attempt?: undefined; holdReason: string; recovers?: string }
   | null
 
 function* unconfirmedHandOffSteps(
@@ -75,14 +84,19 @@ function* unconfirmedHandOffSteps(
   const latest = attempts.at(-1)!
   return handOffInDoubt(latest) && latest.payloadFingerprint === row.fingerprint
     ? { attempt: latest.clientMessageId }
-    : { holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED }
+    : {
+        holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED,
+        ...(handOffInDoubt(latest) && (!dispatchWasWithdrawn(latest) || latest.answeredInTurn)
+          ? { recovers: latest.clientMessageId }
+          : {})
+      }
 }
 
 export function handOffInDoubt(submission: AgentJournalSubmission): boolean {
-  return submission.dispatchState === 'rejected' && queuedHandOffOutcome(submission) === 'inDoubt'
+  return queuedHandOffInDoubt(submission)
 }
 
-function unanswered(
+export function unanswered(
   card: QueuedMessageRow,
   submissions: ReadonlyMap<string, AgentJournalSubmission>
 ): boolean {
@@ -91,4 +105,62 @@ function unanswered(
   }
   const handOff = card.consumedAs === null ? undefined : submissions.get(card.consumedAs)
   return handOff === undefined || journalDispatchRowApplies(handOff) || handOffInDoubt(handOff)
+}
+
+export function readJournalLegacyCards(
+  db: Database.Database,
+  state: JournalReducerState
+): QueuedMessageRow[] {
+  return readLegacyRows(db, state.sessionId).flatMap((row) => {
+    const change = legacyQueuedChange(state, row)
+    return change ? [queuedCardFromChange(state, row.messageId, change)] : []
+  })
+}
+
+function readLegacyRows(db: Database.Database, sessionId: string): QueuedMessageRow[] {
+  return db
+    .prepare(
+      `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`
+    )
+    .all(sessionId)
+    .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
+}
+
+export async function readLegacyRowsAsync(
+  read: JournalReadConnection,
+  sessionId: string
+): Promise<QueuedMessageRow[]> {
+  const rows: QueuedMessageRow[] = []
+  for await (const page of read.pages(
+    `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`,
+    [sessionId]
+  )) {
+    for (const row of page) {
+      const stored = readStoredQueuedMessageRow(row)
+      if (stored) {
+        rows.push(stored)
+      }
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+  return rows
+}
+
+export async function readJournalLegacyCardsAsync(
+  read: JournalReadConnection,
+  state: JournalReducerState
+): Promise<QueuedMessageRow[]> {
+  const rows = await readLegacyRowsAsync(read, state.sessionId)
+  function* convert(): Generator<void, QueuedMessageRow[]> {
+    const cards: QueuedMessageRow[] = []
+    for (const row of rows) {
+      const change = yield* legacyQueuedChangeSteps(state, row)
+      if (change) {
+        cards.push(queuedCardFromChange(state, row.messageId, change))
+      }
+      yield
+    }
+    return cards
+  }
+  return finishJournalStepsAsync(convert())
 }

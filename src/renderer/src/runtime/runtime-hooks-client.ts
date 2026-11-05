@@ -1,6 +1,6 @@
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
+import type { SetupScriptImportCandidate } from '../../../shared/workspace-setup/setup-script-imports'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { ipcOrRuntimeTargetForHostId } from './runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'

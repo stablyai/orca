@@ -3,6 +3,7 @@ import type {
   AgentSenderPublication,
   AgentSenderRevision
 } from '../../shared/agent-sender-associations'
+
 import {
   readAgentSenderPrincipals,
   readAgentSenderSessions,

@@ -73,7 +73,9 @@ afterEach(async () => {
 
 function plain(state: JournalReducerState): unknown {
   const fields: Record<string, unknown> = Object.fromEntries(
-    Object.entries(state).filter(([key]) => key !== 'inputEntries' && key !== 'inputCards')
+    Object.entries(state).filter(
+      ([key]) => !['inputEntries', 'inputCards', 'inputs', 'contextBoundary'].includes(key)
+    )
   )
   return JSON.parse(
     JSON.stringify({
@@ -125,6 +127,7 @@ it('reads the checked-in format-1 outcomes into the same chat, every field and s
     'lastActivityAt',
     'oldestSequence',
     'highestFence',
+    'contextBoundary',
     'derivedTurnScope',
     'latestAcceptedTurnSequence',
     'queuePauseMarks',
@@ -138,10 +141,14 @@ it('reads the checked-in format-1 outcomes into the same chat, every field and s
   // The sequence is never stored: it is the epoch's coverage.
   expect(
     new Set(stored.filter(([, field]) => field === '$').map(([, , key]) => JSON.parse(key)))
-  ).toEqual(new Set(scalars.filter((scalar) => scalar !== 'lastSequence')))
+  ).toEqual(
+    new Set(scalars.filter((scalar) => scalar !== 'lastSequence' && scalar !== 'contextBoundary'))
+  )
   expect(stored.some(([, , , , , , deleted]) => deleted === 1)).toBe(true)
 
   const state = restored()
+  expect(state.contextBoundary).toBe(1)
+  expect([...state.inputs.sources.keys()]).toEqual(['send-1', 'send-3', 'send-2'])
   expect(plain(state)).toEqual(fixture.expected)
   // An echo declared undefined stays present without a value.
   const echoes = [...state.itemEchoes]
@@ -229,4 +236,25 @@ it('distinguishes new canonical damage from newer keys, without changing frozen 
   // A new native family is never accepted as an additive format-1 record.
   database.db.prepare("UPDATE journal_outcomes SET format=1 WHERE field='inputEntries'").run()
   expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
+})
+
+it('declares only an optional safe noninitial context boundary while preserving every frozen value', () => {
+  const before = plain(restored())
+  insertOutcome('$', '"contextBoundary"', '9')
+  expect(restored().contextBoundary).toBe(9)
+  expect(plain(restored())).toEqual(before)
+  for (const value of [1, 0, -1, 2.5, Number.MAX_SAFE_INTEGER + 1, null, '9']) {
+    database.db
+      .prepare("UPDATE journal_outcomes SET value_json=? WHERE field='$' AND entry_key=?")
+      .run(JSON.stringify(value), '"contextBoundary"')
+    expect(restoreJournal(database.db, sessionId)).toMatchObject({
+      newer: null,
+      damage: { cause: 'unparseable-row' }
+    })
+  }
+  database.db
+    .prepare("DELETE FROM journal_outcomes WHERE field='$' AND entry_key=?")
+    .run('"contextBoundary"')
+  expect(restored().contextBoundary).toBe(1)
+  expect(plain(restored())).toEqual(before)
 })

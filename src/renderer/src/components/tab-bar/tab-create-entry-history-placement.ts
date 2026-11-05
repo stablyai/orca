@@ -1,7 +1,7 @@
 // Place history with matching URL entries, otherwise below file matches and above creation/search fallbacks.
 
 import { dropUrlEntriesCoveredByHistoryRows } from './open-tab-entry-dedupe'
-import { normalizeBrowserHistoryUrl } from '../../../../shared/workspace-session-browser-history'
+import { normalizeBrowserHistoryUrl } from '../../../../shared/workspace-session/workspace-session-browser-history'
 import {
   isActiveEntryOption,
   type ActiveEntryOption,

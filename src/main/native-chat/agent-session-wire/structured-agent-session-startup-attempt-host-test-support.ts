@@ -141,7 +141,7 @@ async function startHost({ startupLimits, supportsGoals }: StartupHostOptions = 
     journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
-    idleSweep: { intervalMs: 60 * 60_000, idleMs: 60 * 60_000 },
+    idleSweep: { intervalMs: 60 * 60_000, idleMs: () => 60 * 60_000 },
     ...(startupLimits === undefined ? {} : { startupLimits }),
     now: () => NOW
   })

@@ -40,6 +40,7 @@ export type SubscriberDeliveryPort = {
     event: AgentSessionSubscribeEvent,
     options?: {
       withholdQueued?: boolean
+      journal?: AgentSessionJournal
       currentWork?: AgentSessionPublishedWork
       historyView?: string
     }
@@ -70,9 +71,12 @@ export async function deliverToSubscriber(
     journal
   )
   const emit: SubscriberDeliveryPort['emit'] = (target, event, options) =>
-    port.emit(target, event, { ...options, currentWork: work })
+    port.emit(target, event, { ...options, currentWork: work, journal })
   const delivery = { ...port, emit }
-  let view = journal.publicRead()
+  let view: Pick<
+    ReturnType<AgentSessionJournal['publicRead']>,
+    'snapshot' | 'normalizationKey' | 'currentSnapshot'
+  > = journal.publicRead()
   if (
     subscriber.snapshotCatchUp !== false &&
     subscriber.readsCurrentRequests &&
@@ -85,7 +89,7 @@ export async function deliverToSubscriber(
         journal,
         subscriber.fence,
         subscriberHistoryReader(subscriber),
-        view.snapshot
+        view.currentSnapshot()
       ),
       work
     )

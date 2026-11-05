@@ -23,7 +23,7 @@ import {
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 import { AgentHookServer } from '../agent-hooks/server'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { AgentSessionRecoveryCapsule } from './agent-session/records/agent-session-recovery-capsule'
 import {
   openStructuredCodexRpcHarness,

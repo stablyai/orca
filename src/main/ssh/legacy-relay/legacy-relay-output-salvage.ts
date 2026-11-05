@@ -2,8 +2,8 @@
 import {
   findCsiFinalByteIndex,
   isStatefulRendererReplyCsiQuery
-} from '../../../shared/terminal-reply-query-extraction'
-import { isReplayableCsi } from '../../../shared/terminal-reply-query-scan'
+} from '../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
+import { isReplayableCsi } from '../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 
 const MAX_CSI_CHARS = 64
 // Inline images are huge painting OSCs; bound their retained payload.

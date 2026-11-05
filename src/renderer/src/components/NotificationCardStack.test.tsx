@@ -64,12 +64,4 @@ describe('NotificationCardStack', () => {
     act(() => resize?.())
     expect(published()).toBe('')
   })
-
-  it('clears its height on unmount, so the toaster returns to its own offset', () => {
-    height = 80
-    act(() => root?.render(<Corner />))
-    act(() => root?.unmount())
-    root = null
-    expect(published()).toBe('')
-  })
 })

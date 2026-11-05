@@ -125,11 +125,18 @@ export async function seedLegacy(sessionId: string, rows: readonly Legacy[]): Pr
   })
 }
 
-export const legacyIds = async (sessionId = SESSION) =>
-  (await db())
-    .prepare('SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position')
-    .all(sessionId)
-    .map((row) => (typeof row === 'object' && row !== null && 'id' in row ? row.id : null))
+export const legacyIds = async (sessionId = SESSION) => {
+  const database = await openTestJournalHostDatabase(rig.root)
+  return database.read(async (read) =>
+    (
+      await read
+        .prepare(
+          'SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position'
+        )
+        .all(sessionId)
+    ).map((row) => row.id)
+  )
+}
 
 export async function queueRows(sessionId = SESSION): Promise<string[]> {
   return readTestQueueChanges(await db(), sessionId).map(

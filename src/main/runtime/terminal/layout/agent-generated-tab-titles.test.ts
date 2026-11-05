@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
-import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceLayoutStreamEvent } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { Store } from '../../../persistence/loading-store/store'
 import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
@@ -149,7 +149,6 @@ describe('main titles agent tabs from its own hook status', () => {
   })
 })
 
-// Main's twins of agent-generated-tab-title.test.ts, which pins the window's own titles.
 describe('main keeps the window’s generated-title rules', () => {
   async function titled(
     statuses: AgentStatusIpcPayload[][],

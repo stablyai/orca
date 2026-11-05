@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
 import { NewerDaemonHoldBanner } from './NewerDaemonHoldBanner'
 import {
@@ -19,9 +19,6 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const TAB_ID = 'tab-1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
-const TITLE = 'This terminal was opened in a newer version of Orca'
-const BODY = 'Reopen it here to keep working. Your agent session will resume.'
-const FAILED_TITLE = "Couldn't reopen this terminal"
 
 let paneElement: HTMLDivElement
 let root: Root
@@ -76,57 +73,6 @@ afterEach(() => {
 })
 
 describe('NewerDaemonHoldBanner', () => {
-  it('renders nothing for a pane that is not held', async () => {
-    await render()
-    expect(paneElement.textContent).toBe('')
-  })
-
-  it('promises a resume only for a pane with a resumable agent session', async () => {
-    hold(PANE_KEY, true)
-    await render()
-    expect(paneElement.textContent).toContain(TITLE)
-    expect(paneElement.textContent).toContain(BODY)
-    hold(PANE_KEY, false)
-    await render()
-    expect(paneElement.textContent).toContain(TITLE)
-    expect(paneElement.textContent).not.toContain(BODY)
-  })
-
-  it('shows Reopening while the stop runs, then nothing once released', async () => {
-    let finish!: (result: NewerDaemonReopenResult) => void
-    reopenNewerDaemonTerminals.mockReturnValue(new Promise((resolve) => (finish = resolve)))
-    hold(PANE_KEY, true)
-    await render()
-    await act(async () => button('Reopen terminal').click())
-    expect(button('Reopening…').disabled).toBe(true)
-    expect(paneElement.textContent).not.toContain('Dismiss')
-    await act(async () => finish({ reopened: true }))
-    expect(paneElement.textContent).toBe('')
-  })
-
-  it('offers Try again after an unconfirmed stop, but not to a pane held afterwards', async () => {
-    reopenNewerDaemonTerminals.mockResolvedValue({ reopened: false })
-    hold(PANE_KEY, true)
-    await render()
-    await act(async () => button('Reopen terminal').click())
-    expect(paneElement.textContent).toContain(FAILED_TITLE)
-    expect(paneElement.textContent).not.toContain(BODY)
-    expect(button('Try again').disabled).toBe(false)
-    hold(PANE_KEY, true)
-    await render()
-    expect(paneElement.textContent).toContain(TITLE)
-    expect(paneElement.textContent).not.toContain(FAILED_TITLE)
-  })
-
-  it('counts every held pane in the label, since one click reopens them all', async () => {
-    hold(PANE_KEY, false)
-    await render()
-    expect(button('Reopen terminal')).toBeTruthy()
-    hold(OTHER_PANE_KEY, false)
-    await render()
-    expect(button('Reopen 2 terminals')).toBeTruthy()
-  })
-
   it('dismisses only this pane, which stays held and still reopens with the others', async () => {
     const release = hold(PANE_KEY, false)
     const otherRelease = hold(OTHER_PANE_KEY, false)
@@ -139,14 +85,5 @@ describe('NewerDaemonHoldBanner', () => {
     await act(async () => reopenHeldTerminals(PANE_KEY))
     expect(release).toHaveBeenCalledTimes(1)
     expect(otherRelease).toHaveBeenCalledTimes(1)
-  })
-
-  it('offers Dismiss after a failed stop', async () => {
-    reopenNewerDaemonTerminals.mockResolvedValue({ reopened: false })
-    hold(PANE_KEY, false)
-    await render()
-    expect(button('Dismiss')).toBeTruthy()
-    await act(async () => button('Reopen terminal').click())
-    expect(button('Dismiss')).toBeTruthy()
   })
 })

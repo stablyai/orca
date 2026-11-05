@@ -1,6 +1,18 @@
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type {
+  AutomationLaunchSetup,
+  AutomationLaunchSetupPatch,
+  AutomationLaunchPreferences
+} from './automation-launch-types'
+export type {
+  AutomationLaunchSetup,
+  AutomationLaunchSetupPatch,
+  AutomationLaunchPreferences,
+  AutomationArgumentEdit,
+  AutomationLaunchSourceEdits
+} from './automation-launch-types'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -88,11 +100,6 @@ export type AutomationPrecheckResult = {
   completedAt: number
 }
 
-export type AutomationLaunchSetupPatch = {
-  surface?: 'chat' | 'terminal'
-  arguments?: { kind: 'legacy-extras'; value: string }
-}
-
 export type Automation = {
   id: string
   /** Optional client request key used to make cross-authority creates retry-safe. */
@@ -102,7 +109,9 @@ export type Automation = {
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
   surface?: 'chat' | 'terminal'
-  launchSetup?: { surface?: 'chat' | 'terminal'; extraAgentArgs?: string }
+  launchSetup?: AutomationLaunchSetup
+  launchPreferences?: AutomationLaunchPreferences
+  agentArgs?: string | null
   /** Saved text appended to the host's default agent Arguments on each fresh run; absent means none. */
   extraAgentArgs?: string
   /** Why: runContext carries the logical project + host setup identity for

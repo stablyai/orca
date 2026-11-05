@@ -11,13 +11,17 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { getAllWorktreesFromState } from '../../store/selectors'
-import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
+import { runWorktreeDelete } from '../sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
-import type { DaemonSession, UnifiedSessionRow } from './resource-usage-merge-types'
-import type { ResourceSessionBindingInputs } from './resource-session-bindings'
-import { selectUnboundDaemonSessions } from './resource-session-bindings'
+import type { UnifiedSessionRow } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
+
+import {
+  type ResourceSessionBindingInputs,
+  selectUnboundDaemonSessions
+} from './resource-session-bindings'
 import { navigateResourceSessionToTab } from './resource-session-navigation'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'

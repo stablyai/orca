@@ -5,9 +5,11 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { JournalRow } from './journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
 import type { JournalWriteBody } from './journal-write-queue'
+import type { JournalReducerState } from './journal-reducer'
 
 /** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
+  fold?: (draft: JournalReducerState) => void
   write: (plan: JournalPersistencePlan, row?: JournalRow) => void | Promise<void>
   committed: () => void
 }
@@ -20,6 +22,11 @@ export function composeJournalOperationReceipts(
   ...receipts: JournalOperationReceipt[]
 ): JournalOperationReceipt {
   return {
+    fold: (draft) => {
+      for (const receipt of receipts) {
+        receipt.fold?.(draft)
+      }
+    },
     write: async (plan, row) => {
       for (const receipt of receipts) {
         await receipt.write(plan, row)
@@ -54,12 +61,15 @@ export type JournalRowWriterDeps = {
   prepare?: (
     plan: JournalPersistencePlan,
     rows: readonly JournalRow[],
-    savedAt: number
+    savedAt: number,
+    finishFold?: (draft: JournalReducerState) => void
   ) => Promise<() => void>
-  commit: (rows: readonly JournalRow[], savedAt: number) => void
+  project?: (rows: readonly JournalRow[]) => JournalRow[]
+  commit: (rows: readonly JournalRow[], savedAt: number, inputChanged?: boolean) => void
   verify?: () => Promise<void>
   /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
   streamedTextRevision?: (row: JournalRow) => boolean
+  outputRevision?: (row: JournalRow) => boolean
 }
 
 export class JournalRowWriter {
@@ -114,8 +124,10 @@ export class JournalRowWriter {
             this.stageRow(db, row, savedAt)
           }
         }
-        const adopt = rows.length ? await this.deps.prepare?.(db, rows, savedAt) : undefined
-        await receipt?.write(db, receiptRow?.(rows))
+        const adopt = rows.length
+          ? await this.deps.prepare?.(db, rows, savedAt, receipt?.fold)
+          : undefined
+        await receipt?.write(db, receiptRow?.(this.project(rows)))
         return { rows, savedAt, receipt, adopt }
       },
       () => streamed,
@@ -125,7 +137,7 @@ export class JournalRowWriter {
           () => receipt?.committed(),
           () => {
             if (rows.length) {
-              this.deps.commit(rows, savedAt)
+              this.deps.commit(rows, savedAt, Boolean(receipt) || !this.outputOnly(rows))
             }
           }
         )
@@ -134,7 +146,7 @@ export class JournalRowWriter {
     if (result.rows.length) {
       await this.deps.verify?.()
     }
-    return result.rows
+    return this.project(result.rows)
   }
 
   /** Serialize sequence assignment, durable write and replay-equivalent folding. */
@@ -161,6 +173,13 @@ export class JournalRowWriter {
         }
       ]
     })
+  }
+
+  private project(rows: readonly JournalRow[]): JournalRow[] {
+    return this.deps.project?.(rows) ?? [...rows]
+  }
+  private outputOnly(rows: readonly JournalRow[]): boolean {
+    return this.deps.outputRevision !== undefined && rows.every(this.deps.outputRevision)
   }
 
   private streamed(rows: readonly JournalRow[]): boolean {

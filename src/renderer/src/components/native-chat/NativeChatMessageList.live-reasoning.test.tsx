@@ -563,8 +563,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 }
 
 {
-  const scrollTo = vi.fn()
-
   function item(
     itemId: string,
     body: AgentJournalItemBody,
@@ -759,25 +757,13 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       expect(screen.getAllByText('Awaiting user input:')).toHaveLength(1)
     })
 
-    it('reveals and scrolls to a folded diff card from a collapsed completed turn', () => {
-      vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
+    it('opens a recorded patch while completed work stays folded', () => {
       render(view([user, prose, diff()]))
-      expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
-      const header = screen.getByRole('button', { name: /1 changed file/ })
-      expect(header).toHaveAttribute('aria-expanded', 'false')
-      fireEvent.click(header)
+      expect(screen.queryByText('after')).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-      expect(screen.getByText('Edited')).toBeInTheDocument()
       expect(screen.getByText('after')).toBeInTheDocument()
       expect(screen.getByText('before')).toBeInTheDocument()
-      expect(scrollTo).toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: /Edited 1 file/ }))
-      expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
-      fireEvent.click(header)
-      expect(header).toHaveAttribute('aria-expanded', 'false')
-      fireEvent.click(header)
-      fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-      expect(scrollTo.mock.calls.length).toBeGreaterThanOrEqual(2)
+      expect(screen.getByRole('button', { name: /Edited 1 file/, expanded: false })).toBeVisible()
     })
 
     it('updates journal revisions and replaces flat approval text with a passive receipt', () => {
@@ -817,7 +803,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         }
       }
       rerender(view([user, prose, diff('@@ -0,0 +1,2 @@\n+first\n+second'), resolved]))
-      expect(screen.getByRole('button', { name: /1 changed file \+2/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /src\/a.ts \+2/ })).toBeInTheDocument()
       expect(screen.getByText('Run tests?')).toBeInTheDocument()
       expect(screen.getByText('Allow once')).toBeInTheDocument()
       expect(screen.getByText('Answered on another device')).toBeInTheDocument()
@@ -825,7 +811,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       expect(screen.queryByText('resolved')).toBeNull()
     })
 
-    it('keeps rollups turn-local and leaves legacy message lists unchanged', () => {
+    it('keeps changed files turn-local in journal and legacy transcripts', () => {
       const secondUser = item(
         'user-two',
         { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Again' }] },
@@ -834,9 +820,9 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       const secondDiff = { ...diff(), itemId: 'second-diff', sequence: 6, observedAt: 6000 }
       const items = [user, prose, diff(), secondUser, secondDiff]
       const { rerender } = render(view(items))
-      expect(screen.getAllByRole('button', { name: /1 changed file/ })).toHaveLength(2)
+      expect(screen.getAllByRole('button', { name: /src\/a.ts/ })).toHaveLength(2)
       rerender(view(items, false))
-      expect(screen.queryByRole('button', { name: /changed file/ })).toBeNull()
+      expect(screen.getAllByRole('button', { name: /src\/a.ts/ })).toHaveLength(2)
     })
   })
 }

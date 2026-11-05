@@ -18,6 +18,7 @@ export function isolateJournalTransition<T>(
   adopt: () => JournalReducerState
   adoptPrivate: () => Promise<JournalReducerState>
   tracked: () => number
+  input: <V>(value: V) => V
   trackedDerived: () => number
 } {
   const draft = new JournalDraft()
@@ -30,6 +31,7 @@ export function isolateJournalTransition<T>(
   const result = fold(candidate)
   return {
     state: candidate,
+    input: (value) => draft.wrap(value, () => undefined, 'input'),
     result,
     changes: (reset) =>
       draft.changes(reset).filter((entry) => !entry.path.startsWith('@inputOrder')),

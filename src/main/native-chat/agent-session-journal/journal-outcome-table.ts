@@ -1,3 +1,5 @@
+import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
+import { isNativeOutcomeField } from './journal-outcome-format-2'
 import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 import type { JournalReadConnection } from './journal-sql-owner'
 import { journalInputOrder } from './journal-input-order'
@@ -37,6 +39,9 @@ export function readJournalOutcomes(
   baseline?: JournalReducerState
 ): JournalReducerState {
   const newest = db.prepare(JOURNAL_NEWEST_OUTCOME_SQL)
+  const recoveries = [...(baseline?.queue.cards.values() ?? [])].flatMap((card) =>
+    card.recovers ? [{ id: card.messageId, recovers: card.recovers }] : []
+  )
   const prefix = detachJournalNativePrefix(baseline)
   const fold = new JournalOutcomeFold()
   let after = { field: '', key: '' }
@@ -44,6 +49,13 @@ export function readJournalOutcomes(
     const row = newest.get(source.generation, after.field, after.key, source.through)
     if (!row) {
       const state = fold.finish(sessionId, epoch, source.through, baseline)
+      // Tail values omit derived recovery links; only the same raw-prefix incarnation inherits one.
+      for (const { id, recovers } of recoveries) {
+        const card = state.queue.cards.get(id)
+        if (card && !fold.replaced('queue.cards', id)) {
+          card.recovers = recovers
+        }
+      }
       restoreJournalNativeState(db, state, source.format, fold, prefix)
       return state
     }
@@ -80,7 +92,11 @@ function* prepareJournalOutcomeSteps(
     // Folding what a reload reads keeps live state equal to it: an annotation the reader drops as
     // unusable never reaches the model, so it is never refused by the strict record encoder.
     const { stored } = journalRowReadBack(state.sessionId, row)
-    const applying = applyJournalRowSteps(transition.state, stored, savedAt ?? row.ts)
+    const applying = applyJournalRowSteps(
+      transition.state,
+      transition.input(stored),
+      savedAt ?? row.ts
+    )
     for (;;) {
       const next = () => applying.next()
       const result = acceptance
@@ -106,7 +122,17 @@ function* prepareJournalOutcomeSteps(
         }
       }
     }
-    const changes = yield* transition.changesSteps(true)
+    const allChanges = yield* transition.changesSteps(true)
+    const changes: typeof allChanges = []
+    for (const entry of allChanges) {
+      if (
+        isNativeOutcomeField(entry.path) ||
+        OUTCOME_FORMAT_1_COLLECTIONS.some((path) => path === entry.path)
+      ) {
+        changes.push(entry)
+      }
+      yield
+    }
     if (upgradeNative) {
       for (const path of ['inputEntries', 'inputCards'] as const) {
         const changed = new Set<unknown>()
@@ -196,6 +222,15 @@ export async function readJournalOutcomesAsync(
   source: JournalOutcomeSource,
   baseline?: JournalReducerState
 ): Promise<JournalReducerState> {
+  const recoveries: { id: string; recovers: string }[] = []
+  for (const card of baseline?.queue.cards.values() ?? []) {
+    if (card.recovers) {
+      recoveries.push({ id: card.messageId, recovers: card.recovers })
+    }
+    if (recoveries.length % 128 === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+  }
   const prefix = await finishJournalStepsAsync(detachJournalNativePrefixSteps(baseline))
   const fold = new JournalOutcomeFold()
   let after = { field: '', key: '' }
@@ -205,6 +240,12 @@ export async function readJournalOutcomesAsync(
       const state = await finishJournalStepsAsync(
         fold.finishSteps(sessionId, epoch, source.through, baseline)
       )
+      for (const { id, recovers } of recoveries) {
+        const card = state.queue.cards.get(id)
+        if (card && !fold.replaced('queue.cards', id)) {
+          card.recovers = recovers
+        }
+      }
       await restoreJournalNativeStateAsync(read, state, source.format, fold, prefix)
       return state
     }

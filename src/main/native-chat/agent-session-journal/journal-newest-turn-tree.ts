@@ -7,6 +7,8 @@ import { finishJournalSteps } from './journal-reconstruction-steps'
 export type TurnSource = {
   item: AgentJournalRenderItem
   failedAt: number
+  /** Reconstruction proved this failure's native chronology through this removal frontier. */
+  witnessedThrough?: number
   ordinary: boolean
   relevant: boolean
 }

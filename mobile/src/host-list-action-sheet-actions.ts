@@ -51,28 +51,11 @@ export function getHostListActionSheetActions(args: {
           }
         ]
       : []),
-    {
-      id: 'networkDiagnostics',
-      label: translate(
-        'hostScreen.hostListActionSheetActions.networkDiagnostics',
-        'Network diagnostics'
-      ),
-      icon: Activity,
-      closeBeforePress: true,
-      onPress: () => {
-        args.onDiagnostics(host.id)
-      }
-    },
-    {
-      id: 'editHost',
-      label: translate('hostScreen.hostListActionSheetActions.editHost', 'Edit host'),
-      icon: Edit3,
-      closeBeforePress: true,
-      onPress: () => {
-        args.onDismiss()
-        args.onEdit(host.id)
-      }
-    },
+    hostDiagnosticsAction(() => args.onDiagnostics(host.id)),
+    hostEditAction(() => {
+      args.onDismiss()
+      args.onEdit(host.id)
+    }),
     {
       id: 'remove',
       label: translate('common.remove', 'Remove'),
@@ -83,4 +66,28 @@ export function getHostListActionSheetActions(args: {
       }
     }
   ]
+}
+
+// Shared with the host screen's ⋯ menu; each runs once the sheet or menu it sits in has closed.
+export function hostDiagnosticsAction(onPress: () => void): ActionSheetAction {
+  return {
+    id: 'networkDiagnostics',
+    label: translate(
+      'hostScreen.hostListActionSheetActions.networkDiagnostics',
+      'Network diagnostics'
+    ),
+    icon: Activity,
+    closeBeforePress: true,
+    onPress
+  }
+}
+
+export function hostEditAction(onPress: () => void): ActionSheetAction {
+  return {
+    id: 'editHost',
+    label: translate('hostScreen.hostListActionSheetActions.editHost', 'Edit host'),
+    icon: Edit3,
+    closeBeforePress: true,
+    onPress
+  }
 }

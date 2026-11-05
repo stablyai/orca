@@ -6,6 +6,7 @@ import type {
   AgentSessionHistoryResult
 } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { HistoryReader } from './agent-session-history-page-bounds'
 import {
   readAgentSessionHistory,
   type AgentSessionHistoryScope
@@ -28,6 +29,7 @@ export function readStructuredAgentSessionHistoryResult(input: {
   record: AgentSessionConversationView | null
   request: AgentSessionHistoryRequest
   scope?: AgentSessionHistoryScope
+  reader?: HistoryReader
   replaceNormalizedHistory?: boolean
   /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
@@ -36,6 +38,7 @@ export function readStructuredAgentSessionHistoryResult(input: {
   const providerSession = structuredAgentSessionProviderSessionMetadata(input.record)
   return readAgentSessionHistory(input.journal, input.request, {
     scope: input.scope,
+    reader: input.reader,
     rowReplay: input.replaceNormalizedHistory === false,
     captureResult: (snapshot) => {
       const work = capturePublishedWork(snapshot, input.work)

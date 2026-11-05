@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { writeEnvironmentStore } from '../../shared/runtime-environment-store-file'
+import { writeEnvironmentStore } from '../../shared/remote-runtime/host-store/runtime-environment-store-file'
 import { createRuntimeAgentProjections } from './construction/runtime-agent-projections'
 import {
   fingerprintOrchestrationPeer,

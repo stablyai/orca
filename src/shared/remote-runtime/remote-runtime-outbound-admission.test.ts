@@ -1,12 +1,12 @@
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../paired-runtime-connection'
+} from './pairing/paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
-import { generateKeyPair, publicKeyToBase64 } from '../e2ee-crypto'
-import { encodePairingOffer, parsePairingCode } from '../pairing'
+import { generateKeyPair, publicKeyToBase64 } from './e2ee/node/e2ee-crypto'
+import { encodePairingOffer, parsePairingCode } from './pairing/pairing'
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 import {
   REMOTE_RUNTIME_MAX_PENDING_REQUESTS,

@@ -1,7 +1,8 @@
 import { observeNativeJournalTransactions } from './journal-native-test-instrumentation'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexImageItemBody } from '../../codex/codex-image-item-translation'
+import { codexImageItemBody } from '../../codex/structured/items/codex-image-item-translation'
+
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/structured-agent-session-event-sink'
@@ -67,7 +68,7 @@ it('keeps image and goal transitions FULL, streams text at NORMAL, and restores 
   const image = { id: 'image', type: 'imageGeneration' }
   for (const body of [
     text('assistant', 'Generating image'),
-    codexImageItemBody({ ...image, status: 'inProgress' }),
+    codexImageItemBody({ ...image, status: 'in_progress' }),
     codexImageItemBody({ ...image, status: 'completed', result: 'AAAA' }),
     text('assistant', 'Image preview unavailable'),
     { ...text('assistant', 'Goal'), sentAs: 'goal' as const },

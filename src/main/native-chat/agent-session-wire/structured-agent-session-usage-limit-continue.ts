@@ -1,17 +1,14 @@
+export { readSavedUsageLimitCut } from './structured-agent-session-saved-usage-limit-cut'
 import { AgentSessionPreDispatchError } from './structured-agent-session-operation-settlement'
 import { createHash, randomUUID } from 'node:crypto'
 import {
   isNativeChatUsageLimitCutSchedulable,
-  latestNativeChatUsageLimitCut,
   NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE,
   type NativeChatUsageLimitCut
 } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
-import { restoreJournalAsync } from '../agent-session-journal/journal-open'
-import { renderJournalState } from '../agent-session-journal/journal-reducer'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
-import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
@@ -41,16 +38,6 @@ type Deps = {
   readLoadedCut: (id: string) => NativeChatUsageLimitCut | null
   publish: (id: string) => void
   now: () => number
-}
-
-/** Reads a chat's saved conversation without opening it, as main does for unopened chats. */
-export async function readSavedUsageLimitCut(
-  database: JournalHostDatabase,
-  id: string
-): Promise<NativeChatUsageLimitCut | null> {
-  const load = await database.read((read) => restoreJournalAsync(read, id))
-  const snapshot = load && !load.newer && !load.damage ? renderJournalState(load.state) : null
-  return snapshot ? latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions) : null
 }
 
 const identity = (cut: NativeChatUsageLimitCut): string =>

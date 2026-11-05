@@ -6,7 +6,7 @@ import {
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand
 } from '../../shared/wsl-login-shell-command'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { getBashWrapperLaunchArgs } from './local-pty/local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from './local-pty/local-pty-shell-ready-wrapper-generation'
 import { encodePowerShellCommand } from '../../shared/powershell-command-encoding'
@@ -14,7 +14,7 @@ import {
   getPowerShellOsc133Bootstrap,
   getPowerShellOsc133StartupCommandMark
 } from '../pty/shell-startup/powershell-osc133-bootstrap'
-import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
+import { quoteStartupArg } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { WSL_GUEST_ROOT_MARKER_COMMAND } from '../../shared/wsl-guest-root-marker'
 
 /** cmd.exe's own documented ceiling; callers that go through sshd budget below it. */

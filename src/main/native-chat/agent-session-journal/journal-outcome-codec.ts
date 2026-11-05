@@ -15,7 +15,8 @@ import {
   type AdmittedOutcome
 } from './journal-outcome-format-1'
 import { decodeOutcomeFormat1Onto } from './journal-outcome-format-1-decode'
-import { AgentSessionJournalError } from './journal-write-guards'
+export { JournalOutcomeDecodeError } from './journal-write-guards'
+import { AgentSessionJournalError, JournalOutcomeDecodeError } from './journal-write-guards'
 import { finishJournalSteps, sortJournalSteps } from './journal-reconstruction-steps'
 
 export type JournalOutcome = {
@@ -30,12 +31,6 @@ export type JournalOutcome = {
 
 /** A key first written over a frozen input prefix keeps the place the prefix gave it. */
 export const JOURNAL_PREFIX_ORDINAL = 'b'
-
-/** Stored outcome content this build rejects; storage errors never become this, so they stay
- * retryable, as main's replay keeps them. */
-export class JournalOutcomeDecodeError extends Error {
-  override readonly name = 'JournalOutcomeDecodeError'
-}
 
 const scalars = (state: JournalReducerState): Record<string, unknown> =>
   z.record(z.string(), z.unknown()).parse(JSON.parse(journalStateScalars(state)))
@@ -72,7 +67,16 @@ export function* encodeJournalOutcomeSteps(
         ? 'null'
         : entry.path === 'items'
           ? JSON.stringify(entry.value, untracked)
-          : journalEntryJson(entry.key, entry.value, untracked),
+          : journalEntryJson(entry.key, entry.value, (key, value) => {
+              const current = untracked(key, value)
+              if (entry.path === 'queue.cards' && current === untracked('', entry.value)) {
+                const { recovers: _derived, ...stored } = z
+                  .record(z.string(), z.unknown())
+                  .parse(current)
+                return stored
+              }
+              return current
+            }),
       deleted: entry.deleted
     })
     yield
@@ -162,7 +166,7 @@ export function decodingOutcome<T>(decode: () => T): T {
   }
 }
 
-type Newest = AdmittedOutcome & Pick<JournalOutcome, 'ordinal' | 'deleted'>
+type Newest = AdmittedOutcome & Pick<JournalOutcome, 'ordinal' | 'deleted' | 'format'>
 
 /** Last-write-wins per key, deletions included, so the tail can remove values from a frozen prefix;
  * order comes from the canonical log. */
@@ -176,7 +180,12 @@ export class JournalOutcomeFold {
       field = new Map()
       this.values.set(value.field, field)
     }
-    field.set(value.key, { ordinal: value.ordinal, deleted: value.deleted, ...admitted })
+    field.set(value.key, {
+      ordinal: value.ordinal,
+      deleted: value.deleted,
+      format: value.format,
+      ...admitted
+    })
     return value
   }
 

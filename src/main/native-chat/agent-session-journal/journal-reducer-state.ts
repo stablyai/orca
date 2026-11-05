@@ -1,3 +1,4 @@
+import { createJournalInputObligations } from './journal-input-obligations'
 import { initializeJournalInputOrder, type JournalInputOrder } from './journal-input-order'
 import type { JournalInputEntry, JournalInputCard } from './journal-input-lineage'
 import type {
@@ -13,6 +14,7 @@ import { createJournalQueueState, type JournalQueueState } from './journal-queue
 export type JournalReducerState = {
   sessionId: string
   epoch: string
+  contextBoundary: number
   lastSequence: number
   lastActivityAt: number
   /** Earliest individually replayable sequence. */
@@ -28,6 +30,7 @@ export type JournalReducerState = {
   tombstones: Map<string, number>
   /** Rewound turns remain ended even after their visible records disappear. */
   removedTurnIds: Set<string>
+  inputs: ReturnType<typeof createJournalInputObligations>
   submissions: Map<string, AgentJournalSubmission>
   receipts: Map<string, AgentJournalAcceptanceReceipt>
   /** Alias provider echoes to existing optimistic submissions to prevent duplicate bubbles. */
@@ -61,6 +64,7 @@ export function createJournalReducerState(
   const state: JournalReducerState = {
     sessionId,
     epoch,
+    contextBoundary: 1,
     lastSequence: 0,
     lastActivityAt: 0,
     oldestSequence: 1,
@@ -71,6 +75,7 @@ export function createJournalReducerState(
     providerActivityAt: new Map(),
     tombstones: new Map(),
     removedTurnIds: new Set(),
+    inputs: createJournalInputObligations(),
     submissions: new Map(),
     receipts: new Map(),
     aliases: new Map(),

@@ -18,7 +18,7 @@ const writeTerminalRenderDesyncEvidence = vi.fn().mockResolvedValue({
   pngPath: '/evidence/capture/corrupt.png',
   metadataPath: '/evidence/capture/corrupt.json'
 })
-vi.mock('../../../../shared/terminal-webgl-diagnostics', () => ({
+vi.mock('../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics', () => ({
   recordTerminalWebglDiagnostic: (...args: Parameters<typeof recordTerminalWebglDiagnostic>) =>
     recordTerminalWebglDiagnostic(...args)
 }))

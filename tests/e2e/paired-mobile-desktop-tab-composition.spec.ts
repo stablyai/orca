@@ -5,7 +5,10 @@ import { expect, test } from './helpers/orca-app'
 import { launchPhoneMirrorTopology } from './helpers/phone-mirror-topology'
 import type { PairedMobileSocket } from './helpers/paired-mobile-client'
 import { readPublishedLayout, readSessionTabs } from './helpers/layout-compat-baseline'
-import { toHostSessionTabId, toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import {
+  toHostSessionTabId,
+  toWebTerminalSurfaceTabId
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 import { z } from 'zod'
 
 type Frame = PairedMobileSocket['frames'][number]

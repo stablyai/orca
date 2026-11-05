@@ -23,8 +23,8 @@ import type {
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
-} from '../../../../../shared/agent-status-types'
-import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status-ipc-payload'
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,

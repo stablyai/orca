@@ -94,8 +94,9 @@ it('preserves existing queuedAt across two live replacements despite an older or
         result: { kind: 'journal-row', epoch: epoch1 }
       }
     })
-    expect(card.queuedAt!.epoch).not.toBe(epoch1)
-    expect(card.queuedAt!.epoch).toBe(journal.epoch)
+    expect(card.queuedAt!.epoch).toBe(epoch1)
+    expect(journal.cursor().epoch).not.toBe(epoch1)
+    expect(card.queuedAt!.epoch).toBe(journal.physicalCursor().epoch)
     expect(card.queuedAt!.sequence).toBeGreaterThanOrEqual(
       journal.submission(m.id)!.acceptedSequence!
     )

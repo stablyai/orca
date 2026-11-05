@@ -4,7 +4,7 @@ import {
   agentJournalSubmissionKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { reportedChildWork } from './structured-agent-session-reported-child-work.test-support'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import {
@@ -504,7 +504,7 @@ describe('a /compact that waits in line', () => {
     await rig.crashRestartHostProcess()
     await rig.host.revealSession(SESSION)
     release()
-    // In-flight commands need a fresh user request after restart.
+    // Only the earlier unconfirmed message is recoverable; the command must be run again.
     expect(await rig.drafts()).toEqual([])
     expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected' })
   })

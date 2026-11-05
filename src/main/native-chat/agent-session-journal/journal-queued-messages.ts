@@ -1,9 +1,14 @@
+import type { JournalReducerState } from './journal-reducer'
+import { journalInputAttemptEnded, type JournalInputWork } from './journal-input-obligations'
 import {
   journalQueuePausesAsync,
   prepareJournalQueueRestatement
 } from './journal-queue-restatement'
 import { journalInputOrder } from './journal-input-order'
-import { nextEligibleQueuedCard } from './journal-queue-mail-eligibility'
+import {
+  assertQueuedCardConsumable,
+  nextEligibleQueuedCard
+} from './journal-queue-mail-eligibility'
 import { journalQueueAdoptionPlan, type JournalQueuePlan } from './journal-queue-adoption-plan'
 export type { JournalQueuePlan } from './journal-queue-adoption-plan'
 import { journalAttachmentClaimReceipt } from './journal-submission-hook'
@@ -35,11 +40,10 @@ import {
   type QueuedMessageHoldReason,
   type QueuedMessageRow
 } from './queued-message-table'
-import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import { QueuedMessageEditLeases } from './queued-message-edit-leases'
 import { queuedMessageUpdateDecision, type QueuedMessageUpdate } from './queued-message-update'
-import type { JournalReducerState } from './journal-reducer'
 import { queuedMessageMovePlan } from './queued-message-move'
+// Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
 
 export type JournalQueueRestatement = {
   cards: readonly JournalQueueCardChange[]
@@ -53,6 +57,7 @@ export class JournalQueuedMessages {
     (id) => this.get(id)
   )
   private readonly legacy: LegacyQueuedCards
+  inputWork: () => JournalInputWork | null = () => null
   private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
 
   constructor(private readonly deps: JournalQueuedMessagesDeps) {
@@ -76,17 +81,24 @@ export class JournalQueuedMessages {
   }
 
   revision(): string {
-    const { epoch, queue } = this.deps.state()
-    return `${epoch}:${queue.revision}:${this.legacy.key()}`
+    const state = this.inputState()
+    return `${state.epoch}:${state.queue.revision}:${journalInputOrder(state).cardVersion(state)}:${this.legacy.key()}`
   }
 
   list(): readonly QueuedMessageRow[] {
     const key = this.revision()
     if (this.viewed?.key !== key) {
-      const cards = [...this.deps.state().queue.cards.values(), ...this.legacy.cards()]
+      const state = this.inputState()
+      const cards = [...journalInputOrder(state).liveCards(state)]
       this.viewed = { key, cards: cards.sort((a, b) => a.position - b.position) }
     }
     return this.viewed.cards
+  }
+
+  attemptEnded(clientMessageId: string): boolean {
+    const state = this.deps.state()
+    const send = state.submissions.get(clientMessageId)
+    return send !== undefined && journalInputAttemptEnded(state, send, this.inputWork())
   }
 
   get(messageId: string): QueuedMessageRow | null {
@@ -98,14 +110,15 @@ export class JournalQueuedMessages {
   mailUnavailable: ((card: QueuedMessageRow) => boolean) | undefined
 
   /** Selection reads identity summaries; current values are resolved after edits. */
-  nextInputCard(automatic = true): QueuedMessageRow | null {
+  nextInputCard(automatic = true, steer = false): QueuedMessageRow | null {
     return nextEligibleQueuedCard({
       state: this.inputState(),
       floor: this.deps.reopenFloor(),
       get: (messageId) => this.get(messageId),
       editHeld: (messageId) => automatic && this.editLeases.isHeld(messageId),
       revisions: [this.revision(), automatic ? this.editLeases.version() : -1],
-      unavailable: this.mailUnavailable
+      unavailable: this.mailUnavailable,
+      steer
     })
   }
 
@@ -131,7 +144,7 @@ export class JournalQueuedMessages {
           return { changes: [], result: undefined }
         }
         const { epoch, lastSequence } = this.deps.state()
-        const position = Math.max(0, ...this.list().map((card) => card.position)) + 1
+        const position = journalInputOrder(this.inputState()).cardBounds(this.deps.state()).last + 1
         const change = {
           op: 'queued' as const,
           body,
@@ -162,18 +175,20 @@ export class JournalQueuedMessages {
     )
     return this.write<AgentSessionQueuedMessageUpdateResult>(() => {
       edit = undefined
-      const decision = queuedMessageUpdateDecision(
-        this.get(input.messageId),
-        this.deps.sessionId,
-        input
-      )
+      const card = this.get(input.messageId)
+      const decision = queuedMessageUpdateDecision(card, this.deps.sessionId, input)
       if (decision.status !== 'ready') {
         return { changes: [], result: decision }
       }
       edit = { body: decision.body, previous: decision.previous }
       const { messageId } = input
       return {
-        changes: [{ messageId, change: { op: 'edited', body: decision.body } }],
+        changes: [
+          {
+            messageId,
+            change: { op: 'edited', body: decision.body }
+          }
+        ],
         result: { status: 'updated', messageId, fingerprint: decision.fingerprint }
       }
     }, receipt)
@@ -220,7 +235,7 @@ export class JournalQueuedMessages {
     return this.write(() => queuedMessageMovePlan(this.list(), input), receipt)
   }
 
-  /** Plan on the journal lane; adopt/delete legacy cards in the same transaction before changing them. */
+  /** Adopt each selected legacy witness with its action; deletion is optional cleanup after commit. */
   plan(changes: readonly JournalQueueCardChange[]): JournalQueuePlan {
     return journalQueueAdoptionPlan(this.deps, this.legacy, changes)
   }
@@ -229,21 +244,9 @@ export class JournalQueuedMessages {
   assertConsumable(
     input: JournalSubmissionConsume & { consumedAs: string; fingerprint: string }
   ): void {
-    const card = this.get(input.messageId)
-    const consumable =
-      card !== null &&
-      card.state === input.expect &&
-      card.fingerprint === input.fingerprint &&
-      input.consumedAs !== input.messageId
-    if (consumable && input.yieldsToPause) {
-      const next = this.nextInputCard()
-      if (next?.messageId === input.messageId) {
-        return
-      }
-    } else if (consumable) {
-      return
-    }
-    throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
+    assertQueuedCardConsumable(input, this.get(input.messageId), () =>
+      this.nextInputCard(true, input.steer)
+    )
   }
 
   restatementAsync(): Promise<JournalQueueRestatement> {
@@ -257,30 +260,29 @@ export class JournalQueuedMessages {
     return journalQueuePausesAsync(this.deps.state(), this.legacy, this.deps.reopenFloor())
   }
 
-  /** Latch legacy card outcomes before retiring their handoff rows. */
-  adoptionOfAll(): JournalQueuePlan {
-    const { rows, receipt } = this.plan(
-      this.legacy.messageIds().map((messageId) => ({ messageId }))
-    )
-    return { rows, receipt: composeJournalOperationReceipts(receipt, this.legacy.deletionOfAll()) }
+  proofWitness(clientMessageId: string): JournalQueuePlan {
+    const witness = this.legacy.witness(clientMessageId)
+    return this.plan(witness ? [{ messageId: witness.messageId }] : [])
   }
 
   importAtOpen = (): Promise<void> => this.legacy.importAtOpen()
 
   awaitReopenMark(): boolean {
-    const { submissions } = this.deps.state()
-    return this.list().some((card) => {
-      if (card.state === 'waiting') {
-        return true
-      }
-      const handOff = card.consumedAs ? submissions.get(card.consumedAs) : undefined
-      // Recovered uncertainty cannot return a card to waiting.
-      return (
-        card.state === 'dispatched' &&
-        (handOff?.dispatchState === 'pending' ||
-          (handOff?.dispatchState === 'unknown' && handOff.recovered !== true))
-      )
-    })
+    if (this.list().some((card) => card.state === 'waiting')) {
+      return true
+    }
+    const state = this.inputState()
+    return journalInputOrder(state)
+      .recoverableSubmissions()
+      .some((entry) => {
+        const card = entry.queuedMessageId ? this.get(entry.queuedMessageId) : null
+        return (
+          card?.state === 'dispatched' &&
+          card.consumedAs === entry.clientMessageId &&
+          (entry.dispatchState === 'pending' ||
+            (entry.dispatchState === 'unknown' && entry.recovered !== true))
+        )
+      })
   }
 
   userStopInForce(): JournalQueuePauseMarks['latestStop'] {

@@ -1,6 +1,5 @@
 import { queueSubscriberDelivery } from './agent-session-subscriber-delivery'
 import type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
-export type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 import type { CurrentRequestsSubscriber } from './agent-session-current-requests'
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -29,7 +28,12 @@ import { subscriberHistoryReader } from './agent-session-bounded-frames'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
 import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
 import { refreshPublishedWork } from './agent-session-work-refresh'
+import type { HistoryReader } from './agent-session-history-page-bounds'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+export type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
+// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
+
+// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
 export type Subscriber = CurrentRequestsSubscriber &
@@ -38,6 +42,8 @@ export type Subscriber = CurrentRequestsSubscriber &
     emit: AgentSessionSubscriberEmit
     cursor: AgentJournalCursor
     fence: number
+    readHistorySnapshot?: HistoryReader['snapshot']
+    readQueueSourceIds?: HistoryReader['queueSourceIds']
     snapshotCatchUp?: boolean
     /** Last frame’s current-work key; row-free changes still require a frame. */
     workView?: string
@@ -77,16 +83,12 @@ export class AgentSessionSubscribers {
   open(
     input: AgentSessionSubscribeInput & { journal: AgentSessionJournal; fence: number }
   ): () => void {
-    const liveCursor = input.journal.cursor()
+    const { journal, ...fields } = input
+    const liveCursor = journal.cursor()
     const subscriber: Subscriber = {
-      commandsOnRequest: input.commandsOnRequest,
-      id: input.id,
-      sessionId: input.sessionId,
-      emit: input.emit,
+      ...fields,
       cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
-      fence: input.fence,
       boundedFrames: input.boundedFrames === true,
-      projectQueuePublication: input.projectQueuePublication,
       readsCurrentRequests: input.readsCurrentRequests === true,
       snapshotCatchUp: input.snapshotCatchUp !== false
     }
@@ -105,7 +107,7 @@ export class AgentSessionSubscribers {
           input.journal,
           input.fence,
           subscriberHistoryReader(subscriber),
-          view.snapshot
+          view.currentSnapshot()
         ),
         work
       )
@@ -117,9 +119,9 @@ export class AgentSessionSubscribers {
           page,
           fence: input.fence,
           hostNow,
-          ...this.activityField(input.sessionId)
+          activity: this.activityBySession.get(input.sessionId) ?? null
         },
-        { currentWork: work, historyView: view.normalizationKey }
+        { currentWork: work, historyView: view.normalizationKey, journal }
       )
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       refreshPublishedWork(this.deliveryPort(), subscriber, input.journal, work, { hostNow })
@@ -187,14 +189,16 @@ export class AgentSessionSubscribers {
           journal,
           fence,
           subscriberHistoryReader(subscriber),
-          view.snapshot
+          view.currentSnapshot()
         ),
         work
       )
     const pageFor = (subscriber: Subscriber): AgentSessionHistoryPage =>
-      subscriber.boundedFrames
-        ? (boundedPage ??= read(subscriber))
-        : (storedPage ??= read(subscriber))
+      subscriber.readHistorySnapshot
+        ? read(subscriber)
+        : subscriber.boundedFrames
+          ? (boundedPage ??= read(subscriber))
+          : (storedPage ??= read(subscriber))
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
       const page = pageFor(subscriber)
@@ -206,9 +210,9 @@ export class AgentSessionSubscribers {
           page,
           fence,
           hostNow,
-          ...this.activityField(sessionId)
+          activity: this.activityBySession.get(sessionId) ?? null
         },
-        { currentWork: work, historyView: view.normalizationKey }
+        { currentWork: work, historyView: view.normalizationKey, journal }
       )
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.fence = fence
@@ -293,7 +297,7 @@ export class AgentSessionSubscribers {
       hooks: this.hooks,
       emit: (target, event, options) => this.emit(target, event, options),
       isActive: this.isActive,
-      activity: (sessionId) => this.activityField(sessionId).activity
+      activity: (sessionId) => this.activityBySession.get(sessionId) ?? null
     }
   }
 
@@ -322,9 +326,5 @@ export class AgentSessionSubscribers {
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
     }
-  }
-
-  private activityField(sessionId: string): { activity: AgentSessionTurnActivity | null } {
-    return { activity: this.activityBySession.get(sessionId) ?? null }
   }
 }

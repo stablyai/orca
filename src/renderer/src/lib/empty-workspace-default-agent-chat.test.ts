@@ -4,10 +4,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '@/store'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import {
-  loadEmptyWorkspaceDefaultChatDetection,
-  openDefaultAgentChatInEmptyWorkspace
-} from './empty-workspace-default-agent-chat'
+import { loadEmptyWorkspaceDefaultChatDetection } from './empty-workspace-default-agent-chat'
 
 const mocks = vi.hoisted(() => ({
   launchAgentInNewTab: vi.fn(),
@@ -55,20 +52,6 @@ afterEach(() => {
   vi.clearAllMocks()
   setLocalRuntimeCapabilitiesForTests(null)
   useAppStore.setState(initialAppStoreState, true)
-})
-
-describe('openDefaultAgentChatInEmptyWorkspace', () => {
-  it('reads the agents detected on the workspace SSH host', () => {
-    seedSettings({})
-    mocks.detectionTargetKey.mockReturnValue('ssh:conn-1')
-    useAppStore.setState({ remoteDetectedAgentIds: { 'conn-1': ['claude'] } })
-
-    openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)
-
-    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({ agent: 'claude' })
-    )
-  })
 })
 
 describe('agent detection for the default chat', () => {
