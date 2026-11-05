@@ -297,6 +297,13 @@
       "unnamedServer": "遠端伺服器",
       "update": "此回覆進行期間，{{machine}} 上的 Orca 為更新而重新啟動。"
     },
+    "interruptedContinue": {
+      "failed": "無法繼續此聊天。請重試，或傳送一則訊息。",
+      "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。"
+    },
+    "sendError": {
+      "dismiss": "關閉"
+    },
     "permission": {
       "needsAccessTo": "需要存取： ",
       "newerVersionRequired": "此請求需要更新版本的 Orca。",

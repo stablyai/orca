@@ -255,7 +255,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
                 : {}),
               transcriptPath: adoption.transcriptPath,
               providerSessionId: input.resumeFrom.providerSessionId,
-              workspaceCwd
+              workspaceCwd,
+              conversationName: adoption.conversationName
             })
           }
         : {}),

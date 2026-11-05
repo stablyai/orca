@@ -24,6 +24,7 @@ import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-im
 import { useMobileNativeChatMarkdownLinks } from './use-mobile-native-chat-markdown-links'
 import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/types'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
   controller: MobileNativeChatController
@@ -178,9 +179,26 @@ export function MobileNativeChatOverlay({
       onMicPressOut
     ]
   )
-  const noticeNames = useMemo(
-    () => ({ hostName, ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}) }),
-    [hostName, agent]
+  const t = useMobileTranslation()
+  const continuation = controller.nativeChatInterruptedContinue
+  const noticeView = useMemo(
+    () => ({
+      hostName,
+      ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
+      ...(continuation
+        ? {
+            continuation: {
+              ...continuation,
+              // A Continue tap is the person's newer action, so it clears the composer's error.
+              continueNow: () => {
+                onClearSendError()
+                continuation.continueNow()
+              }
+            }
+          }
+        : {})
+    }),
+    [hostName, agent, continuation, onClearSendError]
   )
   const markdownLinks = useMobileNativeChatMarkdownLinks({
     enabled: controller.showNativeChat,
@@ -190,6 +208,7 @@ export function MobileNativeChatOverlay({
     worktreePath,
     isWorking: controller.nativeChatTurnActive
   })
+  const continueFailed = sendErrorMessage === null && continuation?.failed === true
   if (!controller.showNativeChat) {
     return null
   }
@@ -205,7 +224,7 @@ export function MobileNativeChatOverlay({
             <MobileNativeChatVisualContext.Provider value={visuals}>
               <MobileNativeChatRootItemSourceContext.Provider value={detailSource}>
                 <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
-                  <MobileNativeChatNoticeContext.Provider value={noticeNames}>
+                  <MobileNativeChatNoticeContext.Provider value={noticeView}>
                     <MobileNativeChatView
                       messages={session.messages}
                       folded={folded}
@@ -286,7 +305,15 @@ export function MobileNativeChatOverlay({
                       onMicPressIn={onMicPressIn}
                       onMicPressOut={onMicPressOut}
                       inputLockReason={inputLockReason}
-                      sendErrorMessage={sendErrorMessage}
+                      sendErrorMessage={
+                        continueFailed
+                          ? t(
+                              'chat.interruptedContinue.failed',
+                              "Couldn't continue this chat. Try again, or send a message."
+                            )
+                          : sendErrorMessage
+                      }
+                      onDismissSendError={continueFailed ? continuation?.dismissFailure : undefined}
                       onClearSendError={onClearSendError}
                       filePaths={controller.nativeChatFilePaths}
                       onNeedFiles={controller.loadNativeChatFiles}

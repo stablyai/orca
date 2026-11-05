@@ -287,6 +287,9 @@ export function useMobileNativeChatController(args: {
     nativeChatQueued: structuredNativeChat.queued,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
     nativeChatContextUsage: activeChatStructured ? structuredNativeChat.contextUsage : null,
+    nativeChatInterruptedContinue: activeChatStructured
+      ? structuredNativeChat.interruptedContinue
+      : null,
     ...workspaceCatalog,
     handleNativeChatSend: activeChatStructured
       ? structuredNativeChatSend.send

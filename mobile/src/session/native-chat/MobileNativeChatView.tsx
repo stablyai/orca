@@ -7,6 +7,7 @@ import {
   useMobileNativeChatDisclosures
 } from './transcript/mobile-native-chat-disclosure-store'
 import { type NativeScrollEvent, type NativeSyntheticEvent, Text, View } from 'react-native'
+import { MobileNativeChatSendErrorBanner } from './MobileNativeChatSendErrorBanner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
@@ -113,6 +114,8 @@ type ChatViewProps = MobileNativeChatSendProps &
     // Report send failures here only while mounted; the route uses a toast otherwise.
     sendErrorMessage?: string | null
     onClearSendError?: () => void
+    /** Present for an error that stays until dismissed, such as a failed Continue. */
+    onDismissSendError?: () => void
     filePaths?: string[]
     onNeedFiles?: (query: string) => void
     skillDiscovery?: NativeChatSkillDiscoverySnapshot
@@ -174,6 +177,7 @@ export function MobileNativeChatView({
   inputLockReason,
   sendErrorMessage,
   onClearSendError,
+  onDismissSendError,
   filePaths,
   onNeedFiles,
   skillDiscovery,
@@ -377,16 +381,10 @@ export function MobileNativeChatView({
         >
           {lockReason === 'waiting' ? composerPlaceholder : null}
         </Text>
-        {sendErrorMessage ? (
-          // This banner is the only channel for a send failure — announce it.
-          <View
-            style={styles.sendError}
-            accessibilityRole="alert"
-            accessibilityLiveRegion="assertive"
-          >
-            <Text style={styles.sendErrorText}>{sendErrorMessage}</Text>
-          </View>
-        ) : null}
+        <MobileNativeChatSendErrorBanner
+          message={sendErrorMessage}
+          onDismiss={onDismissSendError}
+        />
         {trayContent}
         <View style={promptOwnsInput ? styles.hidden : undefined}>
           <MobileNativeChatDraftComposer

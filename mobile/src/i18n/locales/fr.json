@@ -301,6 +301,13 @@
       "unnamedServer": "le serveur distant",
       "update": "Orca sur {{machine}} a redémarré pour une mise à jour pendant que cette réponse était en cours."
     },
+    "interruptedContinue": {
+      "failed": "Impossible de poursuivre cette conversation. Réessayez ou envoyez un message.",
+      "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée."
+    },
+    "sendError": {
+      "dismiss": "Ignorer"
+    },
     "permission": {
       "needsAccessTo": "Accès nécessaire à : ",
       "newerVersionRequired": "Cette demande nécessite une version plus récente d'Orca.",

@@ -297,6 +297,13 @@
       "unnamedServer": "원격 서버",
       "update": "이 응답이 진행되는 동안 {{machine}}의 Orca가 업데이트를 위해 다시 시작되었습니다."
     },
+    "interruptedContinue": {
+      "failed": "이 채팅을 계속할 수 없습니다. 다시 시도하거나 메시지를 보내세요.",
+      "explanation": "계속하면 에이전트가 먼저 마지막 단계가 완료되었는지 확인합니다."
+    },
+    "sendError": {
+      "dismiss": "닫기"
+    },
     "permission": {
       "needsAccessTo": "접근이 필요한 경로: ",
       "newerVersionRequired": "이 요청에는 최신 버전의 Orca가 필요합니다.",
