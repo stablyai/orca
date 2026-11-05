@@ -3115,7 +3115,6 @@
       },
       "UpdateCard": {
         "68b235d264": "重新啟動即可更新",
-        "6714206e5a": "Orca v{{value0}} 已下載。準備好後請重新啟動。",
         "93794ea932": "Orca v{{value0}} 正在下載。",
         "8acbdd3961": "最小化到狀態列",
         "17412483da": "準備安裝",
@@ -3132,7 +3131,6 @@
         "9abc59f814": "可用更新",
         "aad383aecc": "閱讀完整的發行說明",
         "b1d867f4fb": "更新期間您的終端機工作階段不會中斷。",
-        "09a55c39b5": "正在安裝...",
         "ea2a41adbe": "您使用的是最新版本。",
         "ba5ffc949c": "正在檢查更新...",
         "2c2d3e03ca": "重試",
@@ -21630,6 +21628,15 @@
       "rateLimitedInMinuteSignedOut": "已達 GitHub 速率限制。請約一分鐘後再試，或執行 `gh auth login`，讓 Orca 使用您帳戶的較高額度。",
       "rateLimitedInMinutes_other": "已達 GitHub 速率限制。請約 {{count}} 分鐘後再試。",
       "rateLimitedInMinutesSignedOut_other": "已達 GitHub 速率限制。請約 {{count}} 分鐘後再試，或執行 `gh auth login`，讓 Orca 使用您帳戶的較高額度。"
+    },
+    "restartConfirm": {
+      "title": "現在重新啟動以更新嗎？",
+      "chatsMidReply_one": "{{count}} 個聊天仍在回覆。重新啟動會中止它，Orca 重新開啟後你可以繼續。終端機會繼續執行。",
+      "chatsMidReply_other": "{{count}} 個聊天仍在回覆。重新啟動會中止它們，Orca 重新開啟後你可以繼續。終端機會繼續執行。",
+      "cancel": "暫不"
+    },
+    "readyToInstall": {
+      "installsOnQuit": "Orca v{{version}} 已下載。準備好後重新啟動，或在下次結束 Orca 時自動安裝。"
     }
   },
   "jira": {

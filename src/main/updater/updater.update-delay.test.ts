@@ -255,8 +255,7 @@ describe('updater update delay', () => {
 
   it.each<UpdateStatus>([
     { state: 'available', version: '1.4.3', changelog: null },
-    { state: 'downloading', version: '1.4.3', percent: 50 },
-    { state: 'downloaded', version: '1.4.3' }
+    { state: 'downloading', version: '1.4.3', percent: 50 }
   ])('preserves $state updates when a background check holds the release', async (status) => {
     const { UpdaterSetup } = await import('./lifecycle/updater-setup')
     class TestUpdater extends UpdaterSetup {

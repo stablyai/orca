@@ -18326,7 +18326,6 @@
       },
       "UpdateCard": {
         "68b235d264": "Reiniciar para Atualizar",
-        "6714206e5a": "O Orca v{{value0}} foi baixado. Reinicie quando estiver pronto.",
         "93794ea932": "O Orca v{{value0}} está sendo baixado.",
         "8acbdd3961": "Minimizar para a barra de status",
         "17412483da": "Pronto para Instalar",
@@ -18343,7 +18342,6 @@
         "9abc59f814": "Atualização Disponível",
         "aad383aecc": "Leia as notas completas da versão",
         "b1d867f4fb": "Suas sessões de terminal não serão interrompidas durante a atualização.",
-        "09a55c39b5": "Instalando...",
         "ea2a41adbe": "Você está na versão mais recente.",
         "ba5ffc949c": "Verificando atualizações...",
         "2c2d3e03ca": "Tentar Novamente",
@@ -22326,6 +22324,16 @@
       "rateLimitedInMinutesSignedOut_one": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minuto ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
       "rateLimitedInMinutesSignedOut_other": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta.",
       "rateLimitedInMinutesSignedOut_many": "Limite de taxa do GitHub atingido. Tente novamente em cerca de {{count}} minutos ou execute `gh auth login` para que o Orca possa usar o limite maior da sua conta."
+    },
+    "restartConfirm": {
+      "title": "Reiniciar agora para atualizar?",
+      "chatsMidReply_one": "{{count}} chat ainda está respondendo. Reiniciar o interrompe, e você pode retomá-lo quando o Orca abrir de novo. Os terminais continuam em execução.",
+      "chatsMidReply_other": "{{count}} chats ainda estão respondendo. Reiniciar os interrompe, e você pode retomá-los quando o Orca abrir de novo. Os terminais continuam em execução.",
+      "chatsMidReply_many": "{{count}} chats ainda estão respondendo. Reiniciar os interrompe, e você pode retomá-los quando o Orca abrir de novo. Os terminais continuam em execução.",
+      "cancel": "Agora não"
+    },
+    "readyToInstall": {
+      "installsOnQuit": "O Orca v{{version}} foi baixado. Reinicie quando quiser ou ele será instalado na próxima vez que você sair do Orca."
     }
   },
   "jira": {

@@ -1,9 +1,19 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen, type RenderResult } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+  type RenderResult
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../../shared/update-status-types'
+import { structuredAgentSessionPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { useAppStore } from '../store'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { UpdateCard } from './UpdateCard'
 import { NotificationCardStack } from './NotificationCardStack'
 
@@ -555,5 +565,71 @@ describe('UpdateCard recovery keyboard and motion', () => {
     expect(getInstructions).toHaveBeenCalledTimes(1)
     // Why: the card's Escape handler sits on the wrapper and must not swallow action keys.
     expect(useAppStore.getState().updateCardCollapsed).toBe(false)
+  })
+})
+
+describe('UpdateCard restart after download', () => {
+  function seedLocalChatMidReply(): void {
+    const tab = {
+      id: 'chat-tab',
+      entityId: 'chat-session',
+      contentType: 'agent-session' as const,
+      agentSessionAgent: 'claude' as const,
+      worktreeId: 'repo::/wt',
+      executionHostId: 'local' as const,
+      groupId: 'group',
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    const status: AgentStatusEntry = {
+      state: 'working',
+      prompt: '',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      paneKey,
+      stateHistory: []
+    }
+    useAppStore.setState({
+      unifiedTabsByWorktree: { 'repo::/wt': [tab] },
+      agentStatusByPaneKey: { [paneKey]: status }
+    })
+  }
+
+  it('waits for Restart to Update after the user-started download finishes', () => {
+    renderAfterAvailableStatus()
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }))
+    expect(download).toHaveBeenCalledOnce()
+    act(() => {
+      useAppStore
+        .getState()
+        .setUpdateStatus({ state: 'downloading', percent: 40, version: '1.4.200' })
+    })
+    act(() => {
+      useAppStore.getState().setUpdateStatus({ state: 'downloaded', version: '1.4.200' })
+    })
+
+    expect(quitAndInstall).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Restart to Update' }))
+    expect(quitAndInstall).toHaveBeenCalledOnce()
+  })
+
+  it('asks before a restart that would stop a local chat mid-reply', () => {
+    seedLocalChatMidReply()
+    renderWithInitialStatus({ state: 'downloaded', version: '1.4.200' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restart to Update' }))
+    expect(screen.getByText(/1 chat is still replying/)).toBeTruthy()
+    expect(quitAndInstall).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Not Now' }))
+    expect(quitAndInstall).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restart to Update' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restart to Update' }))
+    expect(quitAndInstall).toHaveBeenCalledOnce()
   })
 })
