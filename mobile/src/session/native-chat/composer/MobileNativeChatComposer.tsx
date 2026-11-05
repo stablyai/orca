@@ -48,7 +48,7 @@ import {
 } from './MobileNativeChatComposerMic'
 import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
 import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
-import { MobileNativeChatWidthToggle } from './MobileNativeChatWidthToggle'
+import { MobileNativeChatActionGap } from './MobileNativeChatActionGap'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -292,6 +292,7 @@ export function MobileNativeChatComposer({
     }
   }
 
+  const usage = editSession ? null : agent
   return (
     <View>
       {menu.rows.length > 0 ? (
@@ -384,9 +385,7 @@ export function MobileNativeChatComposer({
                 }}
               />
             ) : null}
-            <View style={inputStyles.actionSpacer} />
-            {contextRing.ring}
-            {widthToggle ? <MobileNativeChatWidthToggle {...widthToggle} /> : null}
+            <MobileNativeChatActionGap agent={usage} ring={contextRing.ring} toggle={widthToggle} />
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 onMicPress={onMicPress}
