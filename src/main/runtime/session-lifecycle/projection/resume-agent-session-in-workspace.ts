@@ -98,6 +98,7 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     return result
   }
 
+  /** Resume into a fresh pane after the claim, refusing when another pane owns the conversation. */
   private async resumeClaimedAgentSession(
     worktreeId: string,
     session: ResumedAgentSession,

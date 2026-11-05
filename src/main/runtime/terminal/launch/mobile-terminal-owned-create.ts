@@ -52,6 +52,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     }
   }
 
+  /** Create or reconcile the pane a resume needs, reporting the recipe it actually launched with. */
   protected async createRuntimeOwnedMobileSessionTerminal(
     worktreeId: string,
     activate: boolean,
