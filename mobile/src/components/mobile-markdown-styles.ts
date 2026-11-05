@@ -98,6 +98,26 @@ export const styles = themedStyleSheet(() => ({
   codeLines: {
     paddingRight: spacing.md
   },
+  codeLinesWrapped: {
+    flex: 1,
+    paddingLeft: spacing.md
+  },
+  codeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  codeWrapButton: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.control
+  },
+  codeWrapButtonOn: {
+    backgroundColor: colors.translucentFill
+  },
+
   codeText: {
     fontFamily: typography.monoFamily,
     fontSize: 12,

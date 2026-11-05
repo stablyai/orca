@@ -861,7 +861,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Копировать код",
-      "openImage": "Открыть изображение"
+      "openImage": "Открыть изображение",
+      "wrapLines": "Переносить строки",
+      "disableLineWrap": "Выключить перенос строк"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Закрыть панель"

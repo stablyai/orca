@@ -781,7 +781,9 @@
     },
     "markdownBlocks": {
       "copyCode": "コードをコピーする",
-      "openImage": "画像を開く"
+      "openImage": "画像を開く",
+      "wrapLines": "行を折り返す",
+      "disableLineWrap": "行の折り返しを無効にする"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "ドロワーを閉じる"

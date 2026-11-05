@@ -1316,7 +1316,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Copy code",
-      "openImage": "Open image"
+      "openImage": "Open image",
+      "wrapLines": "Wrap lines",
+      "disableLineWrap": "Disable line wrap"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Dismiss drawer"

@@ -785,7 +785,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Kodu kopyala",
-      "openImage": "Görseli aç"
+      "openImage": "Görseli aç",
+      "wrapLines": "Satırları kaydır",
+      "disableLineWrap": "Satır kaydırmayı kapat"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Alt paneli kapat"

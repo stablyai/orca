@@ -785,7 +785,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Code kopieren",
-      "openImage": "Bild öffnen"
+      "openImage": "Bild öffnen",
+      "wrapLines": "Zeilen umbrechen",
+      "disableLineWrap": "Zeilenumbruch deaktivieren"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Bereich schließen"
