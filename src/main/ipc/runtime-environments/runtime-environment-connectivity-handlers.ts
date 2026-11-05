@@ -39,7 +39,7 @@ import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { noteRuntimeEnvironmentConnectRequested } from './runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'
 import {
-  readWslHostProjectPins,
+  wslHostProjectReaders,
   withWslOrcadAccountEnv
 } from '../../wsl/orcad/wsl-orcad-account-env'
 import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/ssh-credential-decline'
@@ -265,12 +265,9 @@ function registerPassiveCallHandler(
           wslOrcadHostSupports(environment.id, capability, () =>
             callRuntimeEnvironment(getUserDataPath(), environment.id, 'status.get', undefined)
           ),
-        readProjectPins: (repoId) =>
-          readWslHostProjectPins(() =>
-            callRuntimeEnvironment(getUserDataPath(), environment.id, 'repo.show', {
-              repo: repoId
-            })
-          )
+        ...wslHostProjectReaders((method, params) =>
+          callRuntimeEnvironment(getUserDataPath(), environment.id, method, params)
+        )
       })
       if (!accounts.ok) {
         return {

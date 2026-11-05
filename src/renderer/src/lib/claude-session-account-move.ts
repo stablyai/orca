@@ -12,7 +12,7 @@ import {
 } from '../../../shared/agent-status/process/agent-process-recognition'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { projectAccountPin } from './project-agent-account-pin'
+import { isPinLane, projectAccountPin } from './project-agent-account-pin'
 import {
   type TerminalProcessInspection as RuntimeTerminalProcessInspection,
   isClientOnlyUnverifiableInspection
@@ -106,7 +106,7 @@ function* localClaudePanes(
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     // A project pinned to an account of this lane relaunches on it, so a switch cannot move its panes.
     if (
-      projectAccountPin(state, 'claude', worktreeId)?.laneKey === getCodexSelectionLaneKey(target)
+      isPinLane(projectAccountPin(state, 'claude', worktreeId), getCodexSelectionLaneKey(target))
     ) {
       continue
     }

@@ -46,3 +46,8 @@ export function projectAccountPin(
 function laneKey(wsl: boolean, wslDistro: string | null | undefined): string {
   return getCodexSelectionLaneKey(wsl ? { runtime: 'wsl', wslDistro } : { runtime: 'host' })
 }
+
+/** Whether a pin's lane is `laneKey`. Distro names compare without case, as launches do. */
+export function isPinLane(pin: ProjectAccountPin | null, laneKey: string): boolean {
+  return pin !== null && pin.laneKey.toLowerCase() === laneKey.toLowerCase()
+}

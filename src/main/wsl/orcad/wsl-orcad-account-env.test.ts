@@ -45,6 +45,20 @@ function dependencies(
 }
 
 describe('prepareWslOrcadAccountEnv', () => {
+  it("still launches a pane that is not Claude when its project's Claude pointer can't be written", async () => {
+    const deps = dependencies({
+      claudeProjectPointer: async () => {
+        throw new Error('guest write failed')
+      }
+    })
+    await expect(
+      prepareWslOrcadAccountEnv('Ubuntu', 'codex', deps, { claude: 'acct-w' })
+    ).resolves.toEqual({
+      ORCA_CLAUDE_PROFILE_POINTER: POINTER,
+      CODEX_HOME: '/home/u/.orca/codex-b'
+    })
+  })
+
   it('gives every other process only the Claude pointer, never waiting on Claude setup', async () => {
     const deps = dependencies()
     await expect(prepareWslOrcadAccountEnv('Ubuntu', 'codex', deps)).resolves.toEqual({
@@ -120,6 +134,9 @@ describe('withWslOrcadAccountEnv', () => {
           method: 'terminal.create',
           params: { worktree },
           hostSupports: async () => 'supported',
+          // The host resolves a path selector to the project it belongs to.
+          resolveWorktreeRepoId: async (selector) =>
+            selector === 'path:/home/u/app' ? 'repo-1' : null,
           // Only this host's repo-1 pins accounts.
           readProjectPins: (repoId) =>
             readWslHostProjectPins(async () => ({
@@ -143,6 +160,9 @@ describe('withWslOrcadAccountEnv', () => {
           CODEX_HOME: '/home/u/.orca/codex-w'
         }
       }
+    })
+    await expect(launch('path:/home/u/app')).resolves.toMatchObject({
+      params: { env: { ORCA_CLAUDE_PROFILE_POINTER: '~/pointers/acct-w' } }
     })
     // Another project on the same host keeps the distro's selection.
     await expect(launch('id:repo-2::/home/u/other')).resolves.toMatchObject({

@@ -103,7 +103,14 @@ export async function prepareWslOrcadAccountEnv(
     }
   } else {
     Object.assign(env, accountKeysOf(dependencies.claudeTerminalEnv(target)))
-    const pointer = pins.claude ? await dependencies.claudeProjectPointer?.(claudeTarget) : null
+    // A pane that is not Claude only needs the pointer if the user types `claude`; launch anyway.
+    const pointer =
+      pins.claude && dependencies.claudeProjectPointer
+        ? await dependencies.claudeProjectPointer(claudeTarget).catch((error: unknown) => {
+            console.warn('[claude-profile] Could not pin the WSL project account:', error)
+            return null
+          })
+        : null
     if (pointer) {
       env[CLAUDE_PROFILE_POINTER_ENV] = pointer
     }
@@ -188,6 +195,8 @@ export type WslOrcadAccountEnvCall = {
   hostSupports: (capability: string) => Promise<WslOrcadHostCapabilityVerdict>
   /** The pins the host's project records for `repoId`; omitted, no pin applies. */
   readProjectPins?: (repoId: string) => Promise<WslProjectPins>
+  /** The project of a `path:`, `name:` or `branch:` worktree selector, as the host resolves it. */
+  resolveWorktreeRepoId?: (selector: string) => Promise<string | null>
 }
 
 /** The pins in a WSL host's `repo.show` reply; anything malformed pins nothing. */
@@ -202,13 +211,48 @@ export async function readWslHostProjectPins(
   return { ...(claude ? { claude } : {}), ...(codex ? { codex } : {}) }
 }
 
-/** The workspace a launch names, from the `id:` selectors clients send. */
-function launchWorktreeId(params: Record<string, unknown>): string | null {
+/** The project in a `worktree.show` reply from the host; anything malformed names none. */
+export async function readWslHostWorktreeRepoId(
+  showWorktree: () => Promise<unknown>
+): Promise<string | null> {
+  const reply = await showWorktree()
+  const result = isRecord(reply) && reply.ok === true && isRecord(reply.result) ? reply.result : {}
+  const worktree = isRecord(result.worktree) ? result.worktree : {}
+  return typeof worktree.repoId === 'string' && worktree.repoId.length > 0 ? worktree.repoId : null
+}
+
+/** Reads a WSL host's project pins over `call`, resolving non-id worktree selectors there first. */
+export function wslHostProjectReaders(
+  call: (method: string, params: unknown) => Promise<unknown>
+): Pick<WslOrcadAccountEnvCall, 'readProjectPins' | 'resolveWorktreeRepoId'> {
+  return {
+    readProjectPins: (repoId) => readWslHostProjectPins(() => call('repo.show', { repo: repoId })),
+    resolveWorktreeRepoId: (selector) =>
+      readWslHostWorktreeRepoId(() => call('worktree.show', { worktree: selector }))
+  }
+}
+
+/** The project a launch's worktree selector belongs to. An id carries it; other selectors ask the host. */
+async function launchRepoId(
+  params: Record<string, unknown>,
+  call: WslOrcadAccountEnvCall
+): Promise<string | null> {
   const target = isRecord(params.target) ? params.target : {}
   const selector = [params.worktree, params.worktreeId, target.worktree].find(
     (value): value is string => typeof value === 'string' && value.length > 0
   )
-  return selector ? (selector.startsWith('id:') ? selector.slice(3) : selector) : null
+  if (!selector) {
+    return null
+  }
+  if (selector.startsWith('id:')) {
+    return getRepoIdFromWorktreeId(selector.slice(3))
+  }
+  if (/^(path|name|branch):/.test(selector)) {
+    return call.resolveWorktreeRepoId
+      ? await call.resolveWorktreeRepoId(selector).catch(() => null)
+      : null
+  }
+  return getRepoIdFromWorktreeId(selector)
 }
 
 /** `params` with the account env of the WSL distro behind `environmentId`; as is for any other. */
@@ -235,11 +279,9 @@ export async function withWslOrcadAccountEnv(
   }
   let env: Record<string, string>
   try {
-    const worktreeId = launchWorktreeId(params)
+    const repoId = call.readProjectPins ? await launchRepoId(params, call) : null
     const pins =
-      worktreeId && call.readProjectPins
-        ? await call.readProjectPins(getRepoIdFromWorktreeId(worktreeId)).catch(() => ({}))
-        : {}
+      repoId && call.readProjectPins ? await call.readProjectPins(repoId).catch(() => ({})) : {}
     env = await prepareWslOrcadAccountEnv(distro, plan.agent, dependencies, pins)
   } catch (error) {
     // Preparation failure must refuse launch or it would silently use another account.
