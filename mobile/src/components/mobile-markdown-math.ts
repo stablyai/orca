@@ -5,6 +5,7 @@ import {
   isCitationBracketMath,
   isDisplayMathOpener,
   markdownMathCloser,
+  endsDollarAmount,
   rejectsSingleDollarClose,
   rejectsSingleDollarOpen
 } from '../../../src/shared/markdown-math-rules'
@@ -16,6 +17,8 @@ type InlineMathIndex = {
   escaped: Uint8Array
   /** Start of each unescaped `$` run, keyed by run length. */
   dollarRuns: Map<number, number[]>
+  /** Start of every unescaped `$` run, whatever its length: a single `$` closes at the first. */
+  dollarStarts: number[]
   /** Unescaped `\` starting `\)` or `\]`, keyed by the closer. */
   closers: Map<string, number[]>
   newlines: number[]
@@ -58,6 +61,7 @@ function indexInlineSource(src: string): InlineMathIndex {
   const index: InlineMathIndex = {
     escaped,
     dollarRuns: new Map(),
+    dollarStarts: [],
     closers: new Map(),
     newlines: [],
     backticks: []
@@ -67,6 +71,7 @@ function indexInlineSource(src: string): InlineMathIndex {
     if (char === '$' && !escaped[at]) {
       const end = dollarRunEnd(src, at)
       pushKeyed(index.dollarRuns, end - at, at)
+      index.dollarStarts.push(at)
       at = end - 1
     } else if (char === '\\' && !escaped[at] && (src[at + 1] === ')' || src[at + 1] === ']')) {
       pushKeyed(index.closers, `\\${src[at + 1]}`, at)
@@ -111,6 +116,18 @@ function openerAt(src: string, at: number, brackets: boolean): string | null {
   return end > at ? src.slice(at, end) : null
 }
 
+/** `$` then a number that ends there (`$5 or`, `$10;`) is a price, not an opener. */
+function isDollarAmount(src: string, bodyStart: number): boolean {
+  if (!/[0-9]/.test(src[bodyStart] ?? '')) {
+    return false
+  }
+  let end = bodyStart
+  while (/[0-9.,]/.test(src[end] ?? '')) {
+    end += 1
+  }
+  return endsDollarAmount(src[end])
+}
+
 function inlineMath(state: StateInline, silent: boolean): boolean {
   const { src, pos } = state
   const brackets = chatDelimiters(state.env)
@@ -131,25 +148,29 @@ function inlineMath(state: StateInline, silent: boolean): boolean {
     return false
   }
   const bodyStart = pos + opener.length
-  if (opener === '$' && rejectsSingleDollarOpen(src[bodyStart])) {
+  if (
+    opener === '$' &&
+    (rejectsSingleDollarOpen(src[bodyStart]) || isDollarAmount(src, bodyStart))
+  ) {
     return false
   }
   const closer = markdownMathCloser(opener)
   const close =
-    opener[0] === '$'
-      ? nextAtOrAfter(index.dollarRuns.get(opener.length), bodyStart)
-      : nextAtOrAfter(index.closers.get(closer), bodyStart)
-  const singleLine = opener === '$' || opener === '\\('
+    opener === '$'
+      ? nextAtOrAfter(index.dollarStarts, bodyStart)
+      : opener[0] === '$'
+        ? nextAtOrAfter(index.dollarRuns.get(opener.length), bodyStart)
+        : nextAtOrAfter(index.closers.get(closer), bodyStart)
   const stop = Math.min(
     nextAtOrAfter(index.backticks, bodyStart),
-    singleLine ? nextAtOrAfter(index.newlines, bodyStart) : Infinity
+    opener === '\\(' ? nextAtOrAfter(index.newlines, bodyStart) : Infinity
   )
   if (close >= stop || close + closer.length > state.posMax) {
     return false
   }
   const body = src.slice(bodyStart, close)
   if (
-    (opener === '$' && rejectsSingleDollarClose(body, /[0-9]/.test(src[close + 1] ?? ''))) ||
+    (opener === '$' && rejectsSingleDollarClose(src[close - 1], src[close + 1])) ||
     isCitationBracketMath(opener, body)
   ) {
     return false

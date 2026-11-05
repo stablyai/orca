@@ -32,6 +32,13 @@ describe('math in mobile Markdown follows desktop chat', () => {
       '\u200b37'
     ],
     ['prices', '$10 and $20', [], '$10 and $20'],
+    ['shell variables', 'echo $HOME and $PATH', [], 'echo $HOME and $PATH'],
+    [
+      'a price with operators',
+      'Keep $5 + 2$ typed, render $5+2$',
+      ['I:5+2'],
+      'Keep $5 + 2$ typed, render '
+    ],
     ['a price then a formula', '$5 $x$', ['I:x'], '$5 '],
     ['a block that interrupts a paragraph', 'para\n$$\nx=1\n$$\nafter', ['D:x=1'], 'paraafter'],
     ['display formulas alone in a paragraph', '$$a$$ $$b$$', ['D:a', 'D:b'], ''],

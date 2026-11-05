@@ -18,18 +18,28 @@ export function isDisplayMathOpener(opener: string): boolean {
   return opener !== '$' && opener !== '\\('
 }
 
-/** A single `$` followed by whitespace is money or prose (`$ 5`), never an opener. */
-export function rejectsSingleDollarOpen(next: string | undefined): boolean {
-  return next === undefined || /^[ \t\r\n]$/.test(next)
+/** TeX delimiter whitespace: ASCII space, tab and line endings; the end of the text counts too. */
+export function isMathDelimiterSpace(char: string | undefined): boolean {
+  return char === undefined || /^[ \t\r\n]$/.test(char)
 }
 
-/** Prices stay text: `$10 and $20`, `$5 each`, `$3$4`; operators or TeX make it math. */
-export function rejectsSingleDollarClose(body: string, closerFollowedByDigit: boolean): boolean {
-  return (
-    /\s/.test(body.at(-1) ?? '') ||
-    closerFollowedByDigit ||
-    (/^[+-]?\d[\d,]*(?:\.\d+)?(?:[^\p{ASCII}]|\s)/u.test(body) && !/[\\_^=<>+*/{}-]/.test(body))
-  )
+/** A single `$` followed by whitespace (`$ 5`) never opens math. */
+export function rejectsSingleDollarOpen(next: string | undefined): boolean {
+  return isMathDelimiterSpace(next)
+}
+
+/** `$` and a number ending here is a price (`$5 or`, `$10;`, `$5?`), while `$5+2$` stays math. */
+export function endsDollarAmount(next: string | undefined): boolean {
+  return isMathDelimiterSpace(next) || (next !== undefined && '!):;?'.includes(next))
+}
+
+/** A single `$` closer after whitespace (`$5 + tax $`) or before a digit (`$3$4`) is no closer, so
+ *  the opener stays text. Shell variables and prices (`$HOME and $PATH`) stay as written. */
+export function rejectsSingleDollarClose(
+  previous: string | undefined,
+  next: string | undefined
+): boolean {
+  return isMathDelimiterSpace(previous) || (next !== undefined && next >= '0' && next <= '9')
 }
 
 /** `\[1, 2\]` is an escaped citation, not display math. */
