@@ -137,6 +137,14 @@ export function assertLinkedWorkItemSourceContextMatch(
   }
 }
 
+/** A create's caller context, resolved by the caller's own Orca as its same-machine create would. */
+export const WorktreeResolveCallerParent = z.object({
+  envParentWorkspace: OptionalString,
+  callerTerminalHandle: OptionalString,
+  cwdParentWorktree: OptionalString,
+  cwdParentAmbiguous: z.literal(true).optional()
+})
+
 export const WorktreeSet = WorktreeSelector.extend({
   // Empty clears to branch/folder fallback; OptionalString would drop remote clears and restore the old name.
   displayName: OptionalPlainString,

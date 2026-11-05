@@ -26,7 +26,8 @@ import {
   WorktreeResolvePrBase,
   WorktreeSelector,
   WorktreeSortOrder,
-  WorktreeTeardownMissingTerminalsParams
+  WorktreeTeardownMissingTerminalsParams,
+  WorktreeResolveCallerParent
 } from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
@@ -60,6 +61,12 @@ export const WORKTREE_METHODS = [
       // Paired clients name this store by it when linking a child on another machine.
       installationId: await runtime.readStoreInstallationId()
     })
+  }),
+  defineMethod({
+    name: 'worktree.resolveCallerParent',
+    permission: 'workspace',
+    params: WorktreeResolveCallerParent,
+    handler: async (params, { runtime }) => await runtime.resolveCallerParentForAnotherStore(params)
   }),
   defineMethod({
     name: 'worktree.show',

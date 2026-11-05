@@ -1,4 +1,9 @@
-import type { WorktreeLineage, WorkspaceLineage } from '../../shared/worktree/lineage-types'
+import type {
+  CrossStoreInferredSource,
+  CrossStoreParentRef,
+  WorktreeLineage,
+  WorkspaceLineage
+} from '../../shared/worktree/lineage-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 
@@ -102,6 +107,46 @@ export class RuntimeWorktreeLineageController {
       throw new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, formatAmbiguousCwdParentMessage())
     }
     return retained
+  }
+
+  /** Read-only: the parent a same-store create would infer from this caller context, as a ref
+   * for a child in another store. A reason replaces it when none is valid or contexts conflict. */
+  async resolveCallerParentForAnotherStore(
+    input: Pick<
+      WorktreeLineageInput,
+      'envParentWorkspace' | 'callerTerminalHandle' | 'cwdParentWorktree' | 'cwdParentAmbiguous'
+    >
+  ): Promise<
+    { parent: CrossStoreParentRef; source: CrossStoreInferredSource } | { reason: string }
+  > {
+    let resolution: WorktreeLineageResolution
+    try {
+      resolution = await this.resolveCreate(input)
+    } catch (error) {
+      return { reason: error instanceof Error ? error.message : String(error) }
+    }
+    if (resolution.kind !== 'lineage') {
+      const conflict =
+        resolution.kind === 'none' &&
+        resolution.warnings.some((warning) => warning.code === 'LINEAGE_PARENT_CONTEXT_CONFLICT')
+      return {
+        reason: conflict
+          ? "this terminal's contexts name different workspaces."
+          : "Orca couldn't find this terminal's workspace."
+      }
+    }
+    const { parent, capture } = resolution
+    if (parent.type !== 'worktree') {
+      return { reason: "a folder workspace can't parent a workspace on another machine yet." }
+    }
+    const installationId = await this.readStoreInstallationId()
+    if (!parent.instanceId || !installationId) {
+      return { reason: "Orca couldn't confirm this workspace's identity." }
+    }
+    return {
+      parent: { installationId, workspaceKey: parent.workspaceKey, instanceId: parent.instanceId },
+      source: capture.source as CrossStoreInferredSource
+    }
   }
 
   /** This store's identity; the published descriptor reads the same file at the canonical path. */
