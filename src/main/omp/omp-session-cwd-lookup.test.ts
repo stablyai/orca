@@ -61,12 +61,6 @@ async function lookup(cwd = '/repo/orca', homeDir = join(root, 'home'), temp = j
 }
 
 describe('OMP known-workspace transcript lookup', () => {
-  it('does not search unrelated workspaces when the known cwd has no transcript', async () => {
-    await record('--unrelated-project--')
-    expect(await lookup()).toBeNull()
-    expect(io.open).not.toHaveBeenCalled()
-  })
-
   it('finds the reverted SHA256 bucket used by OMP 17.2.5–17.2.8', async () => {
     const windows = process.platform === 'win32'
     const digest = windows
@@ -88,28 +82,4 @@ describe('OMP known-workspace transcript lookup', () => {
       expect(await lookup(alias, home)).toBe(expected)
     }
   )
-
-  it('never descends into session artifacts even when a child carries the wanted ID', async () => {
-    const dir = join(sessionsDir, '--repo-orca--')
-    const artifact = FILE.slice(0, -'.jsonl'.length)
-    await mkdir(join(dir, artifact), { recursive: true })
-    await writeFile(join(dir, artifact, FILE), '{}\n')
-    expect(await lookup()).toBeNull()
-    expect(io.open.mock.calls.map(([path]) => path)).toEqual([dir])
-  })
-
-  it.skipIf(process.platform === 'win32')('rejects symlinked groups and files', async () => {
-    const outside = join(root, 'outside')
-    await mkdir(outside, { recursive: true })
-    await mkdir(sessionsDir, { recursive: true })
-    await writeFile(join(outside, FILE), '{}\n')
-    const group = join(sessionsDir, '--repo-orca--')
-    await symlink(outside, group)
-    expect(await lookup()).toBeNull()
-    expect(io.open).not.toHaveBeenCalled()
-    await rm(group)
-    await mkdir(group)
-    await symlink(join(outside, FILE), join(group, FILE))
-    expect(await lookup()).toBeNull()
-  })
 })

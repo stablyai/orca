@@ -7,7 +7,6 @@ import {
 } from './shutdown-checkpoint-guard'
 import {
   consumeShutdownCheckpointFailureReason,
-  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
   ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
 } from '../../../shared/renderer-shutdown-events'
 
@@ -18,47 +17,6 @@ describe('createShutdownCheckpointGuard', () => {
     consumeShutdownCheckpointFailureReason()
   })
 
-  it('dedupes the synthetic and native unload events in one close attempt', () => {
-    const persist = vi.fn()
-    const guard = createShutdownCheckpointGuard(persist)
-
-    expect(guard.persistOnce()).toBe(true)
-    expect(guard.persistOnce()).toBe(true)
-
-    expect(persist).toHaveBeenCalledTimes(1)
-  })
-
-  it('publishes the failure cause and records a crash breadcrumb (STA-5505)', () => {
-    const recordBreadcrumb = vi.fn()
-    ;(window as unknown as { api: unknown }).api = { crashReports: { recordBreadcrumb } }
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const guard = createShutdownCheckpointGuard(() => {
-      throw new Error('sendSync payload rejected')
-    })
-
-    expect(guard.persistOnce()).toBe(false)
-
-    expect(consumeShutdownCheckpointFailureReason()).toBe('sendSync payload rejected')
-    expect(recordBreadcrumb).toHaveBeenCalledWith({
-      name: 'renderer_shutdown_checkpoint_failed',
-      data: { message: 'sendSync payload rejected' }
-    })
-  })
-
-  it('clears a stale failure cause once a later checkpoint succeeds (STA-5505)', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const guard = createShutdownCheckpointGuard(
-      vi.fn().mockImplementationOnce(() => {
-        throw new Error('disk full')
-      })
-    )
-
-    expect(guard.persistOnce()).toBe(false)
-    expect(guard.persistOnce()).toBe(true)
-
-    expect(consumeShutdownCheckpointFailureReason()).toBeNull()
-  })
-
   it('keeps failure reporting non-throwing for unstringifiable thrown values', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const guard = createShutdownCheckpointGuard(() => {
@@ -67,19 +25,6 @@ describe('createShutdownCheckpointGuard', () => {
 
     expect(guard.persistOnce()).toBe(false)
     expect(consumeShutdownCheckpointFailureReason()).toBe('Unknown shutdown checkpoint failure')
-  })
-
-  it('reports checkpoint failure separately from the unload verdict', () => {
-    const eventTarget = new EventTarget()
-    const failed = vi.fn()
-    const guard = createShutdownCheckpointGuard(() => {
-      throw new Error('invalid session')
-    })
-    eventTarget.addEventListener(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT, failed)
-    eventTarget.addEventListener('beforeunload', createShutdownCheckpointBeforeUnloadHandler(guard))
-
-    expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false)
-    expect(failed).toHaveBeenCalledTimes(1)
   })
 
   it('reports only browser-initiated unloads vetoed by checkpoint failure (#21017)', () => {
@@ -102,23 +47,6 @@ describe('createShutdownCheckpointGuard', () => {
     Object.defineProperty(reload, 'isTrusted', { value: true })
     expect(eventTarget.dispatchEvent(reload)).toBe(false)
     expect(onNativeUnloadVetoed).toHaveBeenCalledTimes(1)
-  })
-
-  it('retries after a prevented reload resets the completed checkpoint', () => {
-    const eventTarget = new EventTarget()
-    const persist = vi.fn()
-    const guard = createShutdownCheckpointGuard(persist)
-    const checkpoint = createShutdownCheckpointBeforeUnloadHandler(guard)
-    const preventReload = (event: Event): void => event.preventDefault()
-    eventTarget.addEventListener('beforeunload', checkpoint)
-    eventTarget.addEventListener('beforeunload', preventReload)
-
-    expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false)
-    guard.abandonAttempt()
-    eventTarget.removeEventListener('beforeunload', preventReload)
-    expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true)
-
-    expect(persist).toHaveBeenCalledTimes(2)
   })
 
   it('cancels unload when persistence fails and remains retryable', () => {

@@ -1,4 +1,5 @@
 import type { JSONContent } from '@tiptap/react'
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentReferenceToken } from '../../../../shared/orchestration-agent-reference'
 import {
   imageReferenceToken,
@@ -47,6 +48,53 @@ export function promptTextContent(text: string): JSONContent {
           : [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }]
       )
     }))
+  }
+}
+
+export function seedPromptSkillReferences(
+  node: JSONContent,
+  skills: readonly AgentJournalSkillRef[] = [],
+  occurrences = new Map<string, number>()
+): JSONContent {
+  if ((node.type === 'text' && node.text) || skills.length === 0) {
+    return node
+  }
+  return {
+    ...node,
+    content: node.content?.flatMap((child) => {
+      if (child.type !== 'text' || !child.text) {
+        return [seedPromptSkillReferences(child, skills, occurrences)]
+      }
+      const pieces: JSONContent[] = []
+      const text = child.text
+      let start = 0
+      const names = [...new Set(skills.map(({ name }) => name))]
+        .sort((a, b) => b.length - a.length)
+        .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      const pattern = new RegExp(`[$/](?:${names.join('|')})(?![\\w:-])`, 'gu')
+      for (const match of text.matchAll(pattern)) {
+        if (match[0].startsWith('/') && match.index > 0 && !/\s/u.test(text[match.index - 1])) {
+          continue
+        }
+        const name = match[0].slice(1)
+        const matching = skills.filter((skill) => skill.name === name)
+        const occurrence = occurrences.get(name) ?? 0
+        const skill = matching[occurrence] ?? matching[0]
+        occurrences.set(name, occurrence + 1)
+        if (!skill) {
+          continue
+        }
+        if (match.index > start) {
+          pieces.push({ type: 'text', text: text.slice(start, match.index) })
+        }
+        pieces.push({ type: 'nativeChatSkill', attrs: { token: match[0], path: skill.path } })
+        start = match.index + match[0].length
+      }
+      if (start < text.length) {
+        pieces.push({ type: 'text', text: text.slice(start) })
+      }
+      return pieces
+    })
   }
 }
 

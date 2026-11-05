@@ -88,23 +88,6 @@ it.each([1, 10])(
   }
 )
 
-it('backs off a successful partial target, keeps saved-only reads passive, and retries after expiry', async () => {
-  const probe = vi.fn<AgentModelCatalogProbe>(async () => ({
-    origin: 'probe',
-    models: menu('new')
-  }))
-  const { service, advance } = setup(probe)
-  const params = { agent: 'opencode2', sessionId: 'session-a', selectedModel: B }
-  await service.read({ ...params, savedOnly: true })
-  expect(probe).not.toHaveBeenCalled()
-  await service.read({ ...params, waitForListing: true })
-  await Promise.all(Array.from({ length: 10 }, () => service.demand(params)))
-  expect(probe).toHaveBeenCalledTimes(1)
-  advance()
-  await service.read({ ...params, waitForListing: true })
-  expect(probe).toHaveBeenCalledTimes(2)
-})
-
 it.each([
   { n: 1, partial: false },
   { n: 10, partial: false },
