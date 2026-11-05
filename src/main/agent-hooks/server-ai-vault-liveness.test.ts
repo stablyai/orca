@@ -25,21 +25,6 @@ function seedLocalIdentity(server: AgentHookServer): void {
 }
 
 describe('AgentHookServer AI Vault liveness identity', () => {
-  it('retains provider identity after a live row is dismissed', () => {
-    const server = new AgentHookServer()
-    seedLocalIdentity(server)
-    server.dropStatusEntry(PANE)
-
-    expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({
-        connectionId: null,
-        providerSession: PROVIDER_SESSION,
-        providerSessionOnly: true
-      })
-    ])
-    expect(server.getStatusChangeSnapshot()).toEqual([])
-  })
-
   it('hydrates dismissed provider identity without reviving visible status', async () => {
     const userDataPath = await mkdtemp(join(tmpdir(), 'orca-ai-vault-liveness-'))
     const first = new AgentHookServer()

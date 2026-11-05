@@ -45,14 +45,14 @@ import {
   movedWorkspaceRows,
   withMovedRows
 } from './helpers/wsl-moved-host-profile'
-import { HistoryReader } from '../../src/main/daemon/history-reader'
+import { HistoryReader } from '../../src/main/daemon/history/restoration/history-reader'
 import { getOrcadMigrationReceivedBlobPath } from '../../src/main/persistence/migrating-orcad-catalog/orcad-migration-blob-staging'
 import {
   installOrcadMigrationTerminalHistory,
   movedPaneHistorySessionId,
   orcadMigrationTerminalHistoryKey
 } from '../../src/main/persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
-import { getHistorySessionDirName } from '../../src/main/daemon/history-paths'
+import { getHistorySessionDirName } from '../../src/main/daemon/history/storage/history-paths'
 import { readWslMoveSleptScrollbackFromHistory } from '../../src/main/persistence/moving-wsl-projects/wsl-move-slept-scrollback'
 import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'

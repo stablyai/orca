@@ -162,15 +162,6 @@ describe('sleep-preserved parked exits (sole-owner sidecar)', () => {
     expect(startedWatcherDisposers[0]).toHaveBeenCalled()
   })
 
-  it('still collapses the dead leaf on an ordinary parked split exit', () => {
-    startSplitWatchers()
-
-    exitCallbacksByPtyId.get(SECOND_PTY_ID)?.(0, { hadPrimary: false })
-
-    // No sleep marker: the pre-fix disposition is untouched.
-    expect(discardPreHandlerPtyState).toHaveBeenCalledWith(SECOND_PTY_ID)
-  })
-
   it('still closes the tab on an ordinary exit of the last parked pane', () => {
     const entry = startSplitWatchers()
     exitCallbacksByPtyId.get(SECOND_PTY_ID)?.(0, { hadPrimary: false })

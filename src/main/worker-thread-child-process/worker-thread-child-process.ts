@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../worker-threads/lazy-worker-thread-host'
 import type { WorkerThreadFactory } from '../worker-threads/worker-thread-transport'
 import {
@@ -213,7 +214,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Child process worker entry not found: ${workerPath}`)
   }
-  return new Worker(workerPath)
+  return spawnWorkerThread(workerPath)
 }
 
 let sharedHost: WorkerThreadChildProcessHost | null = null

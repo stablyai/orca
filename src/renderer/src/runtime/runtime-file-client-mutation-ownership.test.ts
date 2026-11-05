@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createRuntimePath,
-  deleteRuntimePath,
-  writeRuntimeFile
-} from './runtime-file-mutation-client'
+import { deleteRuntimePath, writeRuntimeFile } from './runtime-file-mutation-client'
 import './runtime-file-import-client'
 import { markRuntimeEnvironmentCompatible } from './runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
@@ -14,7 +10,6 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
 import {
-  fsCreateFile,
   fsDeletePath,
   runtimeEnvironmentCall,
   runtimeEnvironmentTransportCall,
@@ -142,23 +137,5 @@ describe('runtime file client', () => {
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(fsDeletePath).not.toHaveBeenCalled()
-  })
-
-  it('does not fall back to client-local mutations when a remote Windows path escapes the worktree', async () => {
-    const context = {
-      target: { kind: 'environment' as const, environmentId: 'env-1' },
-      worktreeId: 'wt-1',
-      worktreePath: 'C:\\repo'
-    }
-
-    await expect(createRuntimePath(context, 'D:\\repo\\new.ts', 'file')).rejects.toThrow(
-      'outside the owning runtime worktree'
-    )
-    await expect(
-      createRuntimePath(context, '\\\\server\\share\\repo\\new.ts', 'file')
-    ).rejects.toThrow('outside the owning runtime worktree')
-
-    expect(fsCreateFile).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })

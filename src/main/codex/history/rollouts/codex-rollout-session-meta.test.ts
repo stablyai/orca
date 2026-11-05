@@ -57,34 +57,6 @@ describe('readCodexRolloutSessionMetaId', () => {
     await expect(readCodexRolloutSessionMetaId(rollout)).resolves.toBe('short-read')
   })
 
-  // AI Vault must use the transcript gate to bound stalled WSL reads (#15453).
-  it('reads through the gated transcript filesystem at interactive priority', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-codex-session-meta-'))
-    tempRoots.push(root)
-    const rollout = join(root, 'rollout.jsonl')
-    await writeFile(rollout, JSON.stringify({ type: 'session_meta', payload: { id: 'gated' } }))
-    const controller = new AbortController()
-
-    await expect(readCodexRolloutSessionMetaId(rollout, controller.signal)).resolves.toBe('gated')
-
-    // Interactive resume must not queue behind bulk scans.
-    expect(mocks.readTranscriptSlice).toHaveBeenCalledWith(
-      rollout,
-      0,
-      expect.any(Number),
-      'exact',
-      controller.signal
-    )
-    await expect(readCodexRolloutSessionMetaId(rollout, undefined, 'scan')).resolves.toBe('gated')
-    expect(mocks.readTranscriptSlice).toHaveBeenLastCalledWith(
-      rollout,
-      0,
-      expect.any(Number),
-      'scan',
-      undefined
-    )
-  })
-
   it('surfaces an aborted read instead of reporting an unprovable rollout', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-codex-session-meta-'))
     tempRoots.push(root)

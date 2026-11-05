@@ -17,9 +17,14 @@ import type {
   OrcadManagedStaleLockReclaimResult
 } from '../../../shared/orcad-managed-runtime'
 import { restartManagedOrcadEnvironment } from '../../managed-server/lifecycle/orcad-managed-launch-session'
+import { forgetManagedOrcadAutomaticFailures } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { runManagedOrcadStaleLockReclaim } from '../../managed-server/lifecycle/orcad-managed-stale-lock-reclaim'
 import { clearLaunchSessionNote } from './runtime-environment-managed-tunnel'
 import { forgetLaunchSessionVerdict } from '../ssh/ssh-host-launch-session-note'
+import {
+  liftUserHoldsForServerAction,
+  resumeRuntimeEnvironmentStatus
+} from '../ssh/ssh-host-user-disconnect'
 import type { ManagedServerActions } from '../../runtime/managed-server-actions-registry'
 import {
   retireRemovedRuntimeEnvironment,
@@ -53,11 +58,13 @@ export function createManagedOrcadActions(
   return {
     status: (selector) => getManagedOrcadRuntimeStatus(userDataPath(), selector),
     update: async (selector, force, pastLiveTerminals) => {
-      const result = await updateManagedOrcadEnvironment(userDataPath(), {
-        selector,
-        force,
-        ...(pastLiveTerminals ? { pastLiveTerminals } : {})
-      })
+      const result = await asExplicitServerAction(userDataPath(), selector, () =>
+        updateManagedOrcadEnvironment(userDataPath(), {
+          selector,
+          force,
+          ...(pastLiveTerminals ? { pastLiveTerminals } : {})
+        })
+      )
       if (result.outcome === 'updated') {
         await options.invalidateTransport(result.environment.id)
       }
@@ -70,17 +77,21 @@ export function createManagedOrcadActions(
       return result
     },
     rollback: async (selector) => {
-      const result = await rollbackManagedOrcadEnvironment(userDataPath(), { selector })
+      const result = await asExplicitServerAction(userDataPath(), selector, () =>
+        rollbackManagedOrcadEnvironment(userDataPath(), { selector })
+      )
       if (result.outcome === 'rolled-back') {
         await options.invalidateTransport(result.environment.id)
       }
       return result
     },
     recover: async (selector, acceptChangedState) => {
-      const result = await recoverManagedOrcadEnvironment(userDataPath(), {
-        selector,
-        acceptChangedState: acceptChangedState === true
-      })
+      const result = await asExplicitServerAction(userDataPath(), selector, () =>
+        recoverManagedOrcadEnvironment(userDataPath(), {
+          selector,
+          acceptChangedState: acceptChangedState === true
+        })
+      )
       if (result.outcome === 'recovered' && result.activeVersion) {
         await options.invalidateTransport(result.environment.id)
       }
@@ -108,7 +119,9 @@ export async function restartManagedOrcad(
   options: ManagedOrcadActionOptions,
   selector: string
 ): Promise<OrcadManagedRestartResult> {
-  const result = await restartManagedOrcadEnvironment(options.getUserDataPath(), selector)
+  const result = await asExplicitServerAction(options.getUserDataPath(), selector, () =>
+    restartManagedOrcadEnvironment(options.getUserDataPath(), selector)
+  )
   if (result.outcome === 'restarted') {
     await reconnectRestartedManagedOrcad(options, result.environmentId)
   }
@@ -139,5 +152,35 @@ async function reconnectRestartedManagedOrcad(
     options.clearHostServerNotes(targetId, environmentId)
     forgetLaunchSessionVerdict(targetId)
     clearLaunchSessionNote(targetId, environmentId)
+  }
+}
+
+/** A user's Update, Rollback, Recover or Restart is a Connect: it re-arms automatic starts and lifts a Disconnect. */
+async function asExplicitServerAction<T>(
+  userDataPath: string,
+  selector: string,
+  action: () => Promise<T>
+): Promise<T> {
+  let lifted: string[] = []
+  try {
+    const environment = resolveEnvironment(userDataPath, selector)
+    forgetManagedOrcadAutomaticFailures(userDataPath, environment.id)
+    lifted = liftUserHoldsForServerAction(environment)
+  } catch {
+    // An unknown selector fails in the action itself with its own error.
+  }
+  try {
+    return await action()
+  } finally {
+    resumeLiftedStatus(lifted)
+  }
+}
+
+function resumeLiftedStatus(environmentIds: readonly string[]): void {
+  try {
+    resumeRuntimeEnvironmentStatus(environmentIds)
+  } catch (error) {
+    // A server removed during the action has no status to resume; keep the action's own result.
+    console.warn('[managed-orcad] Could not resume status after an explicit action:', error)
   }
 }

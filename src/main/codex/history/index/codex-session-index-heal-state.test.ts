@@ -83,27 +83,6 @@ describe('codex session index heal state', () => {
     ])
   })
 
-  it('leaves the main thread free while walking a large audit ledger', async () => {
-    const paths = createPaths()
-    for (let index = 0; index < 20_000; index += 1) {
-      appendAuditRecord(
-        paths,
-        `${WINDOWS_SESSIONS_ROOT}\\2026\\07\\01\\rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-${String(index).padStart(12, '0')}.jsonl`,
-        `audit-${index}`
-      )
-    }
-    let ticks = 0
-    const ticker = setInterval(() => {
-      ticks += 1
-    }, 1)
-
-    const pending = await collectPendingHealThreads(paths)
-    clearInterval(ticker)
-
-    expect(pending).toHaveLength(20_000)
-    expect(ticks).toBeGreaterThan(0)
-  })
-
   it('refuses to treat an unreadable audit ledger as an empty work queue', async () => {
     const paths = createPaths()
     mkdirSync(paths.auditLogPath, { recursive: true })

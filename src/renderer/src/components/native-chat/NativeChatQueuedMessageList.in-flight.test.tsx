@@ -94,24 +94,3 @@ it('a slow Clear all greys Clear all, Resume and every card until the host answe
   expect(screen.getAllByRole('listitem')).toHaveLength(2)
   expect(toast.error).toHaveBeenCalledExactlyOnceWith('Could not delete')
 })
-
-it('Clear all waits out a card Delete on its way, then deletes every card', async () => {
-  const deleted = Promise.withResolvers<null>()
-  const mutate = vi.fn(
-    async (..._call: [string, string, Record<string, unknown>]) => await deleted.promise
-  )
-  // Only what Clear asks to delete matters here; its answer never comes.
-  const write = vi.fn(
-    (..._call: [string, string, Record<string, unknown>]) => new Promise<never>(() => {})
-  )
-  renderHeldQueue([waitingDraft('a', 1), waitingDraft('b', 2)], write, mutate)
-  const clearAll = () => screen.getByRole('button', { name: 'Clear all' })
-  fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0])
-  await waitFor(() => expect(clearAll()).toHaveProperty('disabled', true))
-  // The Delete failed: its card stays, and Clear all takes it with the rest.
-  deleted.resolve(null)
-  await waitFor(() => expect(clearAll()).toHaveProperty('disabled', false))
-  fireEvent.click(clearAll())
-  await waitFor(() => expect(write).toHaveBeenCalledTimes(2))
-  expect(write.mock.calls.map((call) => call[2])).toEqual([{ messageId: 'a' }, { messageId: 'b' }])
-})

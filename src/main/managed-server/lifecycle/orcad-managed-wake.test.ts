@@ -85,6 +85,17 @@ describe('wakeStoppedManagedOrcad', () => {
     expect(launches()).toHaveLength(1)
   })
 
+  // The crash-loop brake decides here, under the fence, so a server dying after an earlier check cannot slip past it.
+  it('launches nothing, and frees the fence, when the caller refuses a proven-stopped launch', async () => {
+    host = stoppedHost()
+
+    expect(await wakeStoppedManagedOrcad(slot, undefined, () => false)).toEqual({
+      outcome: 'launch-refused'
+    })
+    expect(launches()).toEqual([])
+    expect(host.fence).toBe(false)
+  })
+
   it('releases the fence its own wake left when the connection dropped, and starts the slot', async () => {
     host = stoppedHost()
     const lost = Object.assign(new Error('connection lost'), { sshChannelCloseConfirmed: false })
@@ -227,5 +238,16 @@ describe('wakeStoppedManagedOrcad', () => {
     expect(await wakeStoppedManagedOrcad(slot)).toMatchObject({ outcome: 'started' })
     expect(launches()).toHaveLength(1)
     expect(host.fence).toBe(false)
+  })
+
+  it('leaves an abandoned fence for later when the caller refuses a launch', async () => {
+    host = stoppedHost()
+    host.fence = true
+    host.wakeOwner = 'exited-run'
+
+    expect(await wakeStoppedManagedOrcad(slot, undefined, () => false)).toEqual({
+      outcome: 'launch-refused'
+    })
+    expect(launches()).toEqual([])
   })
 })

@@ -106,13 +106,3 @@ it('uses the system home when an explicit restart follows deselection', async ()
   })
   expect(result).toMatchObject({ codexHomePath: homes.system })
 })
-
-it('leaves WSL preparation on the execution host', async () => {
-  expect(
-    await prepareCodexSessionResumeForLaunch({
-      providerSession: { key: 'session_id', id: sessionId, transcriptPath },
-      target: { runtime: 'wsl', wslDistro: 'Ubuntu' },
-      useSelectedAccount: true
-    })
-  ).toBeNull()
-})

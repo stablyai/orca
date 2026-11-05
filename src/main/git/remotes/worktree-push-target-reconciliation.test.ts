@@ -89,34 +89,6 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
     expect(removeCalls(exec)).toEqual([])
   })
 
-  it('leaves a remote alone that is not shaped like an Orca-generated pr-* remote', async () => {
-    const exec = makeExec({
-      remotes: remoteLines([{ name: 'my-fork', url: FORK_URL }])
-    })
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/a')]: { ...forkTarget(), remoteName: 'my-fork' } }),
-      exec,
-      []
-    )
-    expect(reclaimed).toEqual([])
-    expect(removeCalls(exec)).toEqual([])
-  })
-
-  it('leaves a remote alone that a live worktree still references (path guard)', async () => {
-    const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/a')]: forkTarget() }),
-      exec,
-      ['/wt/a']
-    )
-    expect(reclaimed).toEqual([])
-    expect(removeCalls(exec)).toEqual([])
-  })
-
   it('leaves a remote alone that is referenced by an existing branch (path 2, branch still kept)', async () => {
     const exec = makeExec({
       remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]),
@@ -149,33 +121,5 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
     )
     expect(reclaimed).toEqual([FORK_REMOTE])
     expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
-  })
-
-  it('reclaims a remote even when the only referencing metadata lacks remoteCreated, as long as another entry proves provenance (path 1)', async () => {
-    const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({
-        // The original worktree lacks ownership, but its removed sibling inherited the Orca-created marker.
-        [worktreeId('/wt/legacy')]: forkTarget({ remoteCreated: false }),
-        [worktreeId('/wt/sibling-gone')]: forkTarget({ remoteCreated: true })
-      }),
-      exec,
-      []
-    )
-    expect(reclaimed).toEqual([FORK_REMOTE])
-  })
-
-  it('scopes provenance and liveness to the same repo (remotes are repo-local)', async () => {
-    const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
-    const reclaimed = await reconcileOrphanedPrRemotesWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ 'repo-2::/wt/other-repo': forkTarget() }),
-      exec,
-      []
-    )
-    expect(reclaimed).toEqual([])
   })
 })

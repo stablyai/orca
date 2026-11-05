@@ -1,8 +1,8 @@
 import * as spawnRouting from './host-env/fresh-spawn-routing'
-import * as teamsShim from '../../runtime/claude-agent-teams-shim-env'
+import * as teamsShim from '../../runtime/terminal/launch/claude-agent-teams-shim-env'
 import { WorktreeTerminalMutationLock } from '../../runtime/worktree-terminal-mutation-lock'
 import * as teamsPlan from '../../runtime/terminal/launch/agent-teams-launch-plan'
-import { SessionNotFoundError } from '../../daemon/daemon-errors'
+import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { classifyErrorMock, statSyncMock, trackMock } from './pty-ipc-mock-registry'
@@ -187,7 +187,10 @@ function stubOpenCodeV2(): void {
     .mockResolvedValue({ primaryAgent: 'build' })
 }
 
-async function runHostCall(lanes: ParityLanes, c: HostLaunchCase): Promise<unknown> {
+async function runHostCall(
+  lanes: ParityLanes,
+  c: Pick<HostLaunchCase, 'call' | 'row' | 'workspace'>
+): Promise<unknown> {
   if (c.call.kind === 'create') {
     return lanes.runtime.createTerminal(`id:${launchWorkspaceId(c.workspace)}`, c.call.options)
   }

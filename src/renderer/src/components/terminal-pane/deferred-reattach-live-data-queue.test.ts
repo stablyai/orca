@@ -54,7 +54,11 @@ class ReferenceDeferredQueue {
       dropped = true
     }
     if (dropped && this.chunks[0]) {
-      this.chunks[0].meta = { ...this.chunks[0].meta, droppedOutput: true }
+      this.chunks[0].meta = {
+        ...this.chunks[0].meta,
+        droppedOutput: true,
+        midEscape: 'unknown'
+      }
     }
   }
 
@@ -139,7 +143,11 @@ describe('deferred reattach live data queue', () => {
     const counted = countQueue.takeAll()
     expect(countAcks[0]).toHaveBeenCalledOnce()
     expect(counted).toHaveLength(MAX_DEFERRED_REATTACH_LIVE_CHUNKS)
-    expect(counted[0]?.meta).toEqual({ seq: 1, droppedOutput: true })
+    expect(counted[0]?.meta).toEqual({
+      seq: 1,
+      droppedOutput: true,
+      midEscape: 'unknown'
+    })
     expect(counted.at(-1)?.meta?.seq).toBe(MAX_DEFERRED_REATTACH_LIVE_CHUNKS)
     releaseTransferred(counted)
     expect(countAcks.every((ack) => ack.mock.calls.length === 1)).toBe(true)
@@ -159,7 +167,10 @@ describe('deferred reattach live data queue', () => {
     const characterBounded = charQueue.takeAll()
     expect(fullAck).toHaveBeenCalledOnce()
     expect(characterBounded.map((chunk) => chunk.data)).toEqual(['tail'])
-    expect(characterBounded[0]?.meta).toEqual({ droppedOutput: true })
+    expect(characterBounded[0]?.meta).toEqual({
+      droppedOutput: true,
+      midEscape: 'unknown'
+    })
     expect(tailAck).not.toHaveBeenCalled()
     releaseTransferred(characterBounded)
     expect(tailAck).toHaveBeenCalledOnce()
@@ -180,7 +191,13 @@ describe('deferred reattach live data queue', () => {
     const retained = queue.takeAll()
     expect(retained).toHaveLength(1)
     expect(retained[0]?.data).toBe('T'.repeat(MAX_DEFERRED_REATTACH_LIVE_CHARS))
-    expect(retained[0]?.meta).toEqual({ ...meta, droppedOutput: true })
+    // The kept tail keeps its true raw range: the head chars it lost are no longer counted.
+    expect(retained[0]?.meta).toEqual({
+      ...meta,
+      rawLength: MAX_DEFERRED_REATTACH_LIVE_CHARS,
+      droppedOutput: true,
+      midEscape: 'unknown'
+    })
     expect(meta).not.toHaveProperty('droppedOutput')
     expect(ackCredit).not.toHaveBeenCalled()
     releaseTransferred(retained)

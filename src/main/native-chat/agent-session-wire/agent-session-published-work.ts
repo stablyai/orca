@@ -41,7 +41,7 @@ export function agentSessionPublishedWorkFields(
   journal: AgentSessionJournal,
   work: AgentSessionPublishedWork
 ): PublishedWorkFields {
-  return publishedWorkFields(snapshotLatestTurn(journal.snapshot()), work)
+  return publishedWorkFields(snapshotLatestTurn(journal.itemsRead()), work)
 }
 
 /** Page-local effective values; off-page sends ride separately budgeted subscriber batches. */

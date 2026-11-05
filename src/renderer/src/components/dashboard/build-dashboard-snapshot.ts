@@ -17,15 +17,16 @@ import {
 import { readDashboardClientHost } from './dashboard-client-host'
 import { dashboardCardParentPaneKey } from './agent-row-lineage'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
-import { selectTerminalLayoutsForWorktree } from '../sidebar/worktree-agent-row-selectors'
-import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/worktree-agent-orchestration-batch'
+import { selectTerminalLayoutsForWorktree } from '../sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import '../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
+import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 import {
   finishWorktreeAgentRowsCachePass,
   selectWorktreeAgentRowsCached,
   startWorktreeAgentRowsCachePass,
   type WorktreeAgentRowsCache
 } from './worktree-agent-rows-cache'
-import { selectRuntimePaneTitlesForWorktree } from '../sidebar/worktree-card-status-inputs'
+import { selectRuntimePaneTitlesForWorktree } from '../sidebar/workspace-card/activity/worktree-card-status-inputs'
 import {
   resolveDashboardCardContext,
   type DashboardCardContextState

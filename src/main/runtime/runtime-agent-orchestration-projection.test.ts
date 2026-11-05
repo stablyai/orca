@@ -43,7 +43,7 @@ import {
 } from './dispatch-predicate-visits.test-fixture'
 import { benchmarkPresentationCorpus } from './runtime-agent-orchestration-benchmark.test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
-import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from './terminal/records/runtime-terminal-state-records'
 import { OrchestrationDb } from './orchestration/db'
 import {
   mintStructuredWorkerHandle,

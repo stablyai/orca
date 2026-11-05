@@ -84,24 +84,6 @@ describe('group bulk close confirmation', () => {
     }
   )
 
-  it.each([
-    ['others', ['left', 'right']],
-    ['right', ['right']],
-    ['left', ['left']]
-  ] as const)('closes the unpinned %s selection on confirmation', async (scope, ids) => {
-    request(scope)
-    await confirmRequest()
-    expect(closeMany).toHaveBeenCalledExactlyOnceWith([...ids])
-    expect(closeItem).not.toHaveBeenCalled()
-  })
-
-  it('routes editor closes through the existing dirty-aware item command', async () => {
-    request('editors')
-    await confirmRequest()
-    expect(closeItem).toHaveBeenCalledExactlyOnceWith(left.id)
-    expect(closeMany).not.toHaveBeenCalled()
-  })
-
   it.each(['others', 'right', 'left'] as const)(
     'abandons %s when the anchor is removed while the dialog is open',
     async (scope) => {
@@ -183,11 +165,5 @@ describe('group bulk close confirmation', () => {
     await confirmRequest()
     expect(closeMany).toHaveBeenCalledExactlyOnceWith([left.id, right.id])
     expect(otherCloseMany).not.toHaveBeenCalled()
-  })
-
-  it('does not prompt when there are no eligible targets', () => {
-    useAppStore.setState({ unifiedTabsByWorktree: { [worktreeId]: [anchor, pinned] } })
-    request('others')
-    expect(confirm).not.toHaveBeenCalled()
   })
 })

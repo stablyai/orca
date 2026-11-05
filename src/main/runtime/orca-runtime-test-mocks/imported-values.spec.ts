@@ -10,7 +10,7 @@ import {
 import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests } from '../runtime-legacy-worker-terminal-recovery-controller'
 import { setRuntimeTerminalUnavailableCause } from '../native-terminal-availability'
 import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { performance } from 'node:perf_hooks'
 import { EventEmitter as NodeEventEmitter } from 'node:events'
 import { createHash, randomUUID } from 'node:crypto'
@@ -79,7 +79,7 @@ import {
   appendBrowserTabOrder,
   collectBrowserGroupAssignment
 } from '../mobile-session-browser-group-projection'
-import { HeadlessEmulator } from '../../daemon/headless-emulator'
+import { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 import '../../../shared/terminal/input/terminal-input'
 import {
@@ -116,7 +116,7 @@ import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../../workspaces/removal/watche
 import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
-} from '../terminal-view-attribute-store'
+} from '../terminal/view/terminal-view-attribute-store'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktrees/content-paths/worktree-shared-directories'
 import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'

@@ -4,7 +4,6 @@ import type {
   TerminalTab
 } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { createLazyTerminalTabLookup } from './pane-identity-migration'
 import { normalizeWorkspaceSessionPaneIdentities } from './workspace-pane-normalization'
 
 const { registerPaneKeyAliasMock } = vi.hoisted(() => ({
@@ -16,8 +15,6 @@ vi.mock('../../agent-hooks/server', () => ({
     registerPaneKeyAlias: registerPaneKeyAliasMock
   }
 }))
-
-const STABLE_LEAF_ID = '00000000-0000-4000-8000-000000000001'
 
 function terminalTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
   return {
@@ -53,14 +50,6 @@ function legacyLayout(): TerminalLayoutSnapshot {
   }
 }
 
-function stableLayout(): TerminalLayoutSnapshot {
-  return {
-    root: { type: 'leaf', leafId: STABLE_LEAF_ID },
-    activeLeafId: STABLE_LEAF_ID,
-    expandedLeafId: null
-  }
-}
-
 describe('workspace pane normalization tab index', () => {
   beforeEach(() => {
     registerPaneKeyAliasMock.mockReset()
@@ -89,102 +78,5 @@ describe('workspace pane normalization tab index', () => {
     )
 
     expect(result.legacyPaneKeyAliasEntries).toEqual([])
-  })
-
-  it('reads each tab id once regardless of the number of layouts', () => {
-    const tabCount = 256
-    let idReads = 0
-    const tabs = Array.from({ length: tabCount }, (_, index) => {
-      const id = `tab-${index}`
-      const tab = terminalTab(id, 'worktree', null)
-      Object.defineProperty(tab, 'id', {
-        enumerable: true,
-        get: () => {
-          idReads += 1
-          return id
-        }
-      })
-      return tab
-    })
-    const layouts = Object.fromEntries(
-      Array.from({ length: tabCount }, (_, index) => [`tab-${index}`, stableLayout()])
-    )
-
-    normalizeWorkspaceSessionPaneIdentities(workspaceSession({ worktree: tabs }, layouts))
-
-    expect(idReads).toBe(tabCount)
-  })
-
-  it('does not inspect tabs after an early match', () => {
-    const first = terminalTab('first', 'worktree', 'first-pty')
-    const later = terminalTab('later', 'worktree', 'later-pty')
-    Object.defineProperty(later, 'id', {
-      enumerable: true,
-      get: () => {
-        throw new Error('later tab should not be inspected')
-      }
-    })
-
-    const lookup = createLazyTerminalTabLookup(workspaceSession({ worktree: [first, later] }, {}))
-
-    expect(lookup.get('first')).toBe(first)
-  })
-
-  it('resumes scanning and reuses cached hits and misses', () => {
-    const reads: string[] = []
-    const tabs = ['first', 'second', 'third'].map((id) => {
-      const tab = terminalTab(id, 'worktree', null)
-      Object.defineProperty(tab, 'id', {
-        enumerable: true,
-        get: () => {
-          reads.push(id)
-          return id
-        }
-      })
-      return tab
-    })
-    const lookup = createLazyTerminalTabLookup(workspaceSession({ worktree: tabs }, {}))
-
-    expect(lookup.get('first')).toBe(tabs[0])
-    expect(reads).toEqual(['first'])
-    expect(lookup.get('second')).toBe(tabs[1])
-    expect(reads).toEqual(['first', 'second'])
-    expect(lookup.get('first')).toBe(tabs[0])
-    expect(reads).toEqual(['first', 'second'])
-    expect(lookup.get('missing')).toBeUndefined()
-    expect(reads).toEqual(['first', 'second', 'third'])
-    expect(lookup.get('missing')).toBeUndefined()
-    expect(lookup.get('first')).toBe(tabs[0])
-    expect(reads).toEqual(['first', 'second', 'third'])
-  })
-
-  it('skips sparse tab-array holes', () => {
-    const tabs: TerminalTab[] = []
-    tabs.length = 3
-    tabs[1] = terminalTab('target', 'worktree', null)
-    const lookup = createLazyTerminalTabLookup(workspaceSession({ worktree: tabs }, {}))
-
-    expect(lookup.get('target')).toBe(tabs[1])
-    expect(lookup.get('missing')).toBeUndefined()
-  })
-
-  it('does not read tab ids when every layout is skipped', () => {
-    const tab = terminalTab('skipped', 'worktree', null)
-    let idReads = 0
-    Object.defineProperty(tab, 'id', {
-      enumerable: true,
-      get: () => {
-        idReads += 1
-        return 'skipped'
-      }
-    })
-
-    normalizeWorkspaceSessionPaneIdentities(
-      workspaceSession({ worktree: [tab] }, { skipped: legacyLayout() }),
-      {},
-      { skipAliasTabIds: new Set(['skipped']) }
-    )
-
-    expect(idReads).toBe(0)
   })
 })

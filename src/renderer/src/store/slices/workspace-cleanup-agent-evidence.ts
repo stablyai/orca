@@ -10,11 +10,11 @@ import {
   buildActivityTabHostIndex,
   resolveActivityExecutionHostId
 } from '@/components/activity/activity-event-builder-context'
-import { buildWorktreeAgentRows } from '@/components/sidebar/worktree-agent-rows'
+import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree
-} from '@/components/sidebar/worktree-agent-row-selectors'
+} from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { isExecutionHostAliasForWorktree } from '@/lib/worktree-execution-host-alias'
 import {
   findIndexedDetectedWorktrees,

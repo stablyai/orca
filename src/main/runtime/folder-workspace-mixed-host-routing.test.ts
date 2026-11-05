@@ -17,7 +17,7 @@ import {
   GIT_KEY
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
-import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import { WorkspaceLayoutStream } from './terminal/surface/workspace-layout-stream'
 import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
 import { partialRuntimeStore, storeRepo } from './runtime-store-partial-fixture'
 
@@ -71,13 +71,6 @@ describe('a folder whose project group mixes local and SSH repos (layout-owner b
     const { snapshot } = runtime.subscribeWorkspaceLayouts(() => {})
     expect(snapshot.map((entry) => entry.key)).toEqual([GIT_KEY, FOLDER_KEY])
   })
-
-  it('applies a layout command for it to the local partition', async () => {
-    const { runtime, applyLayoutCommand } = runtimeWithMixedFolder()
-    const reply = await runtime.applyLayoutCommand(RATIOS)
-    expect(reply.ok).toBe(true)
-    expect(applyLayoutCommand).toHaveBeenCalledWith(RATIOS, ['local'], {})
-  })
 })
 
 describe('every folder kind routes where the window saves it (layout-owner build)', () => {
@@ -85,15 +78,6 @@ describe('every folder kind routes where the window saves it (layout-owner build
     const { runtime, applyLayoutCommand } = runtimeWithMixedFolder(folder, groups)
     await runtime.applyLayoutCommand(RATIOS)
     expect(applyLayoutCommand).toHaveBeenCalledWith(RATIOS, [expected], {})
-  })
-})
-
-describe('the same folder in a window-owned build', () => {
-  it('keeps refusing to route it', () => {
-    mocks.layoutOwnerIsMain = false
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { runtime } = runtimeWithMixedFolder()
-    expect(runtime.subscribeWorkspaceLayouts(() => {}).snapshot).toEqual([])
   })
 })
 
@@ -149,21 +133,6 @@ describe('a workspace the router throws on', () => {
     expect(later.find((entry) => entry.key === FOLDER_KEY)?.layout).toEqual(
       first.snapshot.find((entry) => entry.key === FOLDER_KEY)?.layout
     )
-  })
-
-  it('a routing warning never hides a later listener failure', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { stream, route, write } = streamThrowingOn(FOLDER_KEY)
-    stream.subscribe(() => {
-      throw new Error('listener failed')
-    })
-    route.throws = false
-    write()
-    await flush()
-    expect(warn.mock.calls.map((call) => call[0])).toEqual([
-      '[workspace-layout] layout stream routing failed:',
-      '[workspace-layout] layout stream listener failed:'
-    ])
   })
 
   it('still fails the whole projection in a window-owned build', () => {

@@ -39,7 +39,7 @@ import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../../shared/wo
 import { WORKTREE_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import { WorktreeIdRequiresFullPathError } from '../../runtime-worktree-lineage-resolution'
-import { triggerTerminalSpawnPushTargetMaterialization } from '../../runtime-terminal-spawn-push-target-materialization'
+import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
 import { resolveCreatedWorktreeTerminalTarget } from '../../runtime-created-worktree-terminal-target'
 
 export type TerminalWorkspaceCreationEvidence = [

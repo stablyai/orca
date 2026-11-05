@@ -93,8 +93,8 @@ async function loadBuild(ref: string | null): Promise<Build> {
   if (ref === null) {
     const [ledger, proof, retirement] = await Promise.all([
       import('../../../src/shared/workspace-layout/terminal-retirement-proof-ledger'),
-      import('../../../src/main/runtime/mobile-session-terminal-retirement-proof'),
-      import('../../../src/main/runtime/mobile-session-terminal-retirement')
+      import('../../../src/main/runtime/terminal/surface/mobile-session-terminal-retirement-proof'),
+      import('../../../src/main/runtime/terminal/surface/mobile-session-terminal-retirement')
     ])
     return {
       label: 'stack',
@@ -109,9 +109,12 @@ async function loadBuild(ref: string | null): Promise<Build> {
     importReleaseCheckoutModule(checkout, 'src/shared/terminal-retirement-proof-ledger.ts'),
     importReleaseCheckoutModule(
       checkout,
-      'src/main/runtime/mobile-session-terminal-retirement-proof.ts'
+      'src/main/runtime/terminal/surface/mobile-session-terminal-retirement-proof.ts'
     ),
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/mobile-session-terminal-retirement.ts')
+    importReleaseCheckoutModule(
+      checkout,
+      'src/main/runtime/terminal/surface/mobile-session-terminal-retirement.ts'
+    )
   ])
   return {
     label: ref,

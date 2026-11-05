@@ -20,7 +20,7 @@ import {
   isKnownReadyPromptBody,
   isKnownReadyPromptPreview,
   isQuietReadyScreenBody
-} from './terminal-wait-detection'
+} from './terminal/wait/terminal-wait-detection'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

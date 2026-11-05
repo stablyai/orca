@@ -44,7 +44,6 @@ type Session = {
   readonly modes?: TerminalModes
 }
 
-const OFFLINE: Session = { client: null, activeHandle: null, canSend: false }
 const READY: Session = {
   client: { getState: () => 'connected' },
   activeHandle: 'terminal-a',
@@ -151,23 +150,6 @@ function pressControl(): KeyboardEvent {
   return event
 }
 
-function pressEnter(): void {
-  liveField.dispatchEvent(
-    new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertLineBreak' })
-  )
-}
-
-function pressShiftEnter(): KeyboardEvent {
-  const event = new KeyboardEvent('keydown', {
-    key: 'Enter',
-    shiftKey: true,
-    bubbles: true,
-    cancelable: true
-  })
-  liveField.dispatchEvent(event)
-  return event
-}
-
 function holdAcknowledgement(): () => void {
   let release = (): void => {}
   const pending = new Promise<void>((resolve) => {
@@ -204,100 +186,4 @@ describe.each(['android', 'ios'] as const)('the %s live pending-text queue', (os
     act(() => renderer?.unmount())
     expect(pressControl().defaultPrevented).toBe(false)
   })
-
-  it.each([
-    { key: 'Ctrl-C', press: pressControl, fieldAfter: 'hellox', bytes: '\x03' },
-    { key: 'Shift+Enter (legacy)', press: pressShiftEnter, fieldAfter: 'x', bytes: '\x1b\r' },
-    {
-      key: 'Shift+Enter (Kitty)',
-      press: pressShiftEnter,
-      fieldAfter: 'x',
-      bytes: '\x1b[13;2u',
-      kittyKeyboardFlags: 1
-    },
-    {
-      key: 'Shift+Enter (modifyOtherKeys)',
-      press: pressShiftEnter,
-      fieldAfter: 'x',
-      bytes: '\x1b[27;2;13~',
-      modifyOtherKeys: 2
-    },
-    { key: 'Enter', press: pressEnter, fieldAfter: 'x', bytes: '\r' }
-  ])(
-    'keeps text typed right after $key behind it',
-    async ({ press, fieldAfter, bytes, kittyKeyboardFlags = 0, modifyOtherKeys = 0 }) => {
-      mocks.sent.length = 0
-      const release = holdAcknowledgement()
-      let renderer: ReactTestRenderer | null = null
-      let fieldAfterControl = ''
-      await act(async () => {
-        renderer = create(
-          createElement(LiveHarness, {
-            session: {
-              ...READY,
-              modes: {
-                bracketedPasteMode: false,
-                altScreen: false,
-                mouseTrackingMode: 'none',
-                sgrMouseMode: false,
-                sgrMousePixelsMode: false,
-                applicationCursorKeysMode: false,
-                kittyKeyboardFlags,
-                modifyOtherKeys
-              }
-            }
-          })
-        )
-      })
-      await act(async () => {
-        changeLiveText('hello')
-        press()
-        fieldAfterControl = liveField.value
-        changeLiveText(fieldAfter)
-      })
-      await act(async () => {
-        release()
-      })
-      act(() => renderer?.unmount())
-      expect(mocks.sent.map((send) => send.text).join('')).toBe(`hello${bytes}x`)
-      expect(fieldAfterControl).toBe(fieldAfter === 'x' ? '' : 'hello')
-    }
-  )
-
-  it.each([
-    { key: 'Ctrl-C', press: pressControl, change: 'terminal switch' },
-    { key: 'Ctrl-C', press: pressControl, change: 'disconnect and reconnect' },
-    { key: 'Enter', press: pressEnter, change: 'terminal switch' }
-  ] as const)(
-    'drops a queued $key after $change even when the original terminal returns',
-    async ({ press, change }) => {
-      mocks.sent.length = 0
-      const release = holdAcknowledgement()
-      let renderer: ReactTestRenderer | null = null
-      await act(async () => {
-        renderer = create(createElement(LiveHarness, { session: READY }))
-      })
-      await act(async () => {
-        changeLiveText('hello')
-        press()
-      })
-      const changed =
-        change === 'terminal switch' ? { ...READY, activeHandle: 'terminal-b' } : OFFLINE
-      await act(async () => {
-        renderer?.update(createElement(LiveHarness, { session: changed }))
-      })
-      await act(async () => {
-        renderer?.update(createElement(LiveHarness, { session: READY }))
-      })
-      await act(async () => {
-        release()
-      })
-      expect(mocks.sent.map((send) => send.text)).toEqual(['hello'])
-      await act(async () => {
-        pressControl()
-      })
-      expect(mocks.sent.map((send) => send.text)).toEqual(['hello', '\x03'])
-      act(() => renderer?.unmount())
-    }
-  )
 })

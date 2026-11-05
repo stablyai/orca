@@ -106,6 +106,7 @@ export function useMobileStructuredAgentSession(
     mutate,
     optionStamp,
     turnId,
+    hasTurn: state.latestTurn != null || state.submissions.length > 0,
     hostSupport
   })
   const sendController = useMobileStructuredCommandController(options)
@@ -189,7 +190,8 @@ export function useMobileStructuredAgentSession(
     stateRef,
     stopping,
     accept: sends.accept,
-    hold: sends.hold,
+    acknowledge: sends.acknowledge,
+    reject: sends.reject,
     commandPending: commandPendingRef,
     sendsOut,
     controller: sendController,

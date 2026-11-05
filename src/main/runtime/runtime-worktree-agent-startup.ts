@@ -1,3 +1,4 @@
+import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import type { Repo } from '../../shared/repo-types'
@@ -12,7 +13,7 @@ import {
 } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
-import type { resolveStartupAgentLaunchRuntime } from './agent-launch-scope-runtime'
+import type { resolveStartupAgentLaunchRuntime } from './terminal/launch/agent-launch-scope-runtime'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan
@@ -21,7 +22,7 @@ import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt
 import {
   launchHostProvesAgentInFront,
   nameLocalTypedLineShell
-} from './agent-launch-typed-line-shell'
+} from './terminal/launch/agent-launch-typed-line-shell'
 import { detectAgentsOnHost } from '../preflight/workspace-agent-detection'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -42,6 +43,7 @@ type StartupEnvironment = {
   /** Replaces the configured arguments for this launch; `null` means none. */
   agentArgs?: string | null
   /** An automation's saved extras, merged over the launch's arguments. */
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   extraAgentArgs?: string
   /** Orca, not a user, types into this agent once it starts. */
   suppressStartupUpdatePrompt?: boolean
@@ -177,7 +179,8 @@ export function buildWorktreeStartupForAgent(
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
     ...(environment.extraAgentArgs ? { extraAgentArgs: environment.extraAgentArgs } : {}),
     ...(environment.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
-    sessionOptions: environment.toSessionOptions(environment.launchPreferences)
+    sessionOptions:
+      environment.sessionOptions ?? environment.toSessionOptions(environment.launchPreferences)
   })
   const prompt = environment.prompt ?? ''
   let startupPlan: ReturnType<typeof buildAgentStartupPlan>
@@ -232,6 +235,7 @@ export function resolveWorktreeCreateAgentStartup(
     preferences: AgentLaunchPreferences | undefined,
     inputs: {
       agentArgs?: string | null
+      sessionOptions?: Readonly<Record<string, SessionOptionValue>>
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
       launchSource?: string
@@ -249,6 +253,7 @@ export function resolveWorktreeCreateAgentStartup(
   }
   const built = build(args.startupAgent, args.startupPrompt, args.startupLaunchPreferences, {
     ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
+    ...(args.startupSessionOptions ? { sessionOptions: args.startupSessionOptions } : {}),
     ...(args.startupExtraAgentArgs ? { extraAgentArgs: args.startupExtraAgentArgs } : {}),
     ...(args.startupSuppressUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
     ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {}),

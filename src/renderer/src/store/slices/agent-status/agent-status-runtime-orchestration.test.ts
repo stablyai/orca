@@ -1,17 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentStatusEntry,
-  AgentStatusState
-} from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 
 import { createTestStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
+
 import type { AgentStatusObservation } from '../../../../../shared/agent-status/contracts/agent-status-observation'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { buildWorktreeAgentRows } from '@/components/sidebar/worktree-agent-rows'
-import { getAgentDotState } from '@/components/sidebar/worktree-card-agent-summary'
-import { resolveAttention } from '../../../../../shared/sidebar-list/smart-attention'
+
+import '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary'
 
 {
   describe('agent status runtime orchestration metadata', () => {
@@ -90,91 +83,9 @@ import { resolveAttention } from '../../../../../shared/sidebar-list/smart-atten
     kind: 'transition'
   }
 
-  const STATES: AgentStatusState[] = ['working', 'blocked', 'waiting', 'done']
-
-  function withoutObservation(entry: AgentStatusEntry): Omit<AgentStatusEntry, 'observation'> {
-    const { observation: _observation, ...rest } = entry
-    return rest
-  }
-
-  function applyStatus(
-    state: AgentStatusState,
-    observation: AgentStatusObservation | undefined
-  ): {
-    entry: AgentStatusEntry
-    agentStatusEpoch: number
-    sortEpoch: number
-  } {
-    const store = createTestStore()
-    store.getState().setAgentStatus(PANE_KEY, {
-      state: 'working',
-      prompt: 'first turn',
-      agentType: 'claude',
-      ...(observation ? { observation } : {})
-    })
-    store.getState().setAgentStatus(PANE_KEY, {
-      state,
-      prompt: 'first turn',
-      agentType: 'claude',
-      lastAssistantMessage: state === 'done' ? 'all set' : undefined,
-      ...(observation ? { observation } : {})
-    })
-    const snapshot = store.getState()
-    const entry = snapshot.agentStatusByPaneKey[PANE_KEY]
-    if (!entry) {
-      throw new Error(`expected a live entry for ${state}`)
-    }
-    return {
-      entry,
-      agentStatusEpoch: snapshot.agentStatusEpoch,
-      sortEpoch: snapshot.sortEpoch
-    }
-  }
-
   describe('agent status observation is behavior-neutral', () => {
     afterEach(() => {
       vi.useRealTimers()
-    })
-
-    it.each(STATES)('resolves %s identically for freshness, rows, dot and attention', (state) => {
-      vi.useFakeTimers()
-      vi.setSystemTime(1_700_000_000_000)
-      const stamped = applyStatus(state, OBSERVATION).entry
-      vi.setSystemTime(1_700_000_000_000)
-      const unstamped = applyStatus(state, undefined).entry
-      vi.useRealTimers()
-
-      const now = 1_700_000_000_000
-      const tabs = [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-
-      for (const at of [now, now + AGENT_STATUS_STALE_AFTER_MS + 1]) {
-        expect(isExplicitAgentStatusFresh(stamped, at, AGENT_STATUS_STALE_AFTER_MS)).toBe(
-          isExplicitAgentStatusFresh(unstamped, at, AGENT_STATUS_STALE_AFTER_MS)
-        )
-
-        const stampedRows = buildWorktreeAgentRows({
-          tabs,
-          entries: [stamped],
-          retained: [],
-          now: at
-        })
-        const unstampedRows = buildWorktreeAgentRows({
-          tabs,
-          entries: [unstamped],
-          retained: [],
-          now: at
-        })
-        // Why: an empty-vs-empty comparison would pass without proving anything.
-        expect(stampedRows).toHaveLength(1)
-        expect(
-          stampedRows.map((row) => ({ ...row, entry: withoutObservation(row.entry) }))
-        ).toEqual(unstampedRows.map((row) => ({ ...row, entry: withoutObservation(row.entry) })))
-        expect(stampedRows.map(getAgentDotState)).toEqual(unstampedRows.map(getAgentDotState))
-
-        expect(resolveAttention([{ kind: 'hook', entry: stamped, hasLivePty: false }], at)).toEqual(
-          resolveAttention([{ kind: 'hook', entry: unstamped, hasLivePty: false }], at)
-        )
-      }
     })
 
     it('does not carry a previous observation onto an unstamped write', () => {

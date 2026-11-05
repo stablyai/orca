@@ -40,6 +40,8 @@ export type StaleStructuredAgentSessionStateJournal = Pick<
   | 'itemFence'
   | 'itemBody'
   | 'submissions'
+  | 'statusRead'
+  | 'inputOrder'
   | 'stopMarks'
   | 'lastProviderActivityAt'
   | 'cursor'
@@ -88,14 +90,14 @@ export function planStaleStructuredAgentSessionState(
   const { journal, below } = input
   const ended = (fence: number | undefined) =>
     below === undefined || (fence !== undefined && fence < below)
-  const items = providerTimelineExecutionItems(journal.snapshot().items).filter((item) =>
+  const items = providerTimelineExecutionItems(journal.statusRead().items).filter((item) =>
     ended(journal.itemFence(item.itemId))
   )
   const dispatches =
     below === undefined
       ? []
       : journalPendingSubmissionResolutions(
-          journal.submissions().filter((entry) => ended(entry.fence)),
+          journal.inputOrder.recoverableSubmissions().filter((entry) => ended(entry.fence)),
           input.fence,
           // Unanswered handover proves uncertainty, never non-delivery.
           { reason: DISPATCH_DOUBT_PROVIDER_EXITED }

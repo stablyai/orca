@@ -110,9 +110,9 @@ describe('options at rest', () => {
       readsWithoutModel: false
     })
     expect(older.current).toEqual({
-      acceptedInputSources: { model: 'policy' },
+      acceptedInputSources: {},
       model: 'gpt-account',
-      defaulted: [],
+      defaulted: ['model'],
       permissionMode: 'ask'
     })
     expect(read).toHaveBeenCalledWith(

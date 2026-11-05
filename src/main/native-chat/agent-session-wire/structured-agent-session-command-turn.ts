@@ -67,6 +67,7 @@ type AwaitedSubmission = Pick<
 >
 
 export type StructuredAgentSessionAwaitedCommandJournal = {
+  inputOrder?: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
   submissions?: () => readonly AwaitedSubmission[]
   itemBody: AgentSessionJournal['itemBody']
 }
@@ -76,7 +77,9 @@ export function structuredAgentSessionAwaitedCommand(
   journal: StructuredAgentSessionAwaitedCommandJournal
 ): AgentSessionConversationCommand | undefined {
   let oldest: AwaitedSubmission | undefined
-  for (const submission of journal.submissions?.() ?? []) {
+  for (const submission of journal.inputOrder?.recoverableSubmissions() ??
+    journal.submissions?.() ??
+    []) {
     if (
       submission.dispatchState === 'pending' &&
       (oldest === undefined || (submission.acceptedSequence ?? 0) < (oldest.acceptedSequence ?? 0))
@@ -115,12 +118,12 @@ export function isStructuredAgentSessionStopNote(itemId: string): boolean {
 
 /** Read Stop from the journal so cached state cannot outlive the command. */
 export function structuredAgentSessionCommandWasStopped(
-  journal: Pick<AgentSessionJournal, 'snapshot'>,
+  journal: Pick<AgentSessionJournal, 'itemsRead'>,
   turnId: string
 ): boolean {
   const { itemId } = structuredAgentSessionCommandTurn(turnId.slice('compact:'.length))
   return journal
-    .snapshot()
+    .itemsRead()
     .items.some(
       (item) =>
         item.turnScope?.kind === 'turn' &&
@@ -239,9 +242,7 @@ export function structuredAgentSessionHandoverOrigin(
   journal: AgentSessionJournal,
   submission: AgentJournalSubmission
 ): number {
-  const handedOver = journal
-    .submissions()
-    .find((entry) => entry.clientMessageId === submission.clientMessageId)
+  const handedOver = journal.submission(submission.clientMessageId)
   return handedOver?.handedOverAt ?? submission.submittedAt
 }
 

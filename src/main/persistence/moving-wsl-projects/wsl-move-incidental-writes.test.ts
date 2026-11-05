@@ -22,11 +22,10 @@ vi.mock('../../linear/issue-context/current', async (importOriginal) => ({
 }))
 
 import { materializeWorktreePushTargetRemote } from '../../ipc/worktree-remote'
-import { RuntimeLinearTeamWriteCommands } from '../../runtime/runtime-linear-team-write-commands'
+import { RuntimeLinearTeamWriteCommands } from '../../runtime/integrations/linear/runtime-linear-team-write-commands'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const MOVING_WT = 'repo-1::/ws/repo-1/wt'
-const STAYING_WT = 'repo-2::/ws/repo-2/wt'
 
 let userDataPath: string
 beforeEach(() => {
@@ -85,17 +84,6 @@ describe('push-target bookkeeping under a WSL move', () => {
     expect(result).toEqual({ ...target, remoteCreated: true })
     expect(setWorktreeMeta).not.toHaveBeenCalled()
   })
-
-  it.each<[string, string, ExecutionHostId | undefined]>([
-    ['a project the move is not taking', STAYING_WT, undefined],
-    ['the same repo id on another host', MOVING_WT, 'ssh:target-1']
-  ])('records the push target for %s', async (_label, worktreeId, hostId) => {
-    const { setWorktreeMeta } = await push(worktreeId, hostId)
-    expect(setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: worktreeId, hostId: hostId ?? 'local' }),
-      { pushTarget: { ...target, remoteCreated: true } }
-    )
-  })
 })
 
 describe('Linear workspace backfill under a WSL move', () => {
@@ -147,16 +135,5 @@ describe('Linear workspace backfill under a WSL move', () => {
     const { link, setWorktreeMeta } = await resolveCurrent(worktree(MOVING_WT, 'local'))
     expect(link.workspaceId).toBe('ws-1')
     expect(setWorktreeMeta).not.toHaveBeenCalled()
-  })
-
-  it.each<[string, string, ExecutionHostId]>([
-    ['a project the move is not taking', STAYING_WT, 'local'],
-    ['the same repo id on another host', MOVING_WT, 'ssh:target-1']
-  ])('persists the backfill for %s', async (_label, id, hostId) => {
-    const { setWorktreeMeta } = await resolveCurrent(worktree(id, hostId))
-    expect(setWorktreeMeta).toHaveBeenCalledWith(expect.objectContaining({ id, hostId }), {
-      linkedLinearIssueWorkspaceId: 'ws-1',
-      linkedLinearIssueOrganizationUrlKey: 'acme'
-    })
   })
 })

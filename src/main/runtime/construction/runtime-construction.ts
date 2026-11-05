@@ -29,7 +29,7 @@ import {
 import {
   type RuntimeGitCommandSurface,
   installRuntimeGitCommandSurface
-} from '../runtime-git-command-surface'
+} from '../integrations/git/runtime-git-command-surface'
 import {
   type RuntimeRepositoryCommandSurface,
   installRuntimeRepositoryCommandSurface
@@ -42,11 +42,11 @@ import {
   type RuntimeServiceCommandSurface,
   installRuntimeServiceCommandSurface
 } from '../runtime-service-command-surface'
-import { RuntimeSkillCommands } from '../runtime-skill-command-surface'
+import { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
 import {
   type RuntimeSkillCommandSurface,
   installRuntimeSkillCommandSurface
-} from '../runtime-skill-command-contract'
+} from '../integrations/skill/runtime-skill-command-contract'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
 import { RuntimeSessionSearchSettingsController } from '../runtime-session-search-settings'
@@ -56,7 +56,7 @@ import { configureAiVaultSessionSources } from '../../ai-vault/cached-session-li
 import { configureHostReadableTranscriptPathSources } from '../../native-chat/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal-model-query-authority'
-import { registerTerminalViewAttributesApplier } from '../terminal-view-attribute-store'
+import { registerTerminalViewAttributesApplier } from '../terminal/view/terminal-view-attribute-store'
 import { RuntimeMachineName } from '../runtime-machine-name'
 import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'

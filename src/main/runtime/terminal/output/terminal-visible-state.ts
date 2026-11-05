@@ -3,19 +3,19 @@ import {
   TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
   type RuntimeTerminalProjection
 } from '../../orca-runtime-core'
-import { buildPreview } from '../../terminal-tail-state'
+import { buildPreview } from './tail/terminal-tail-state'
 import type {
   RuntimeHeadlessTerminal,
   RuntimeVisibleTerminalState
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import {
   VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from '../../orca-runtime-postlude'
-import { projectTerminalVisibleLines } from '../../orca-runtime-terminal-projection'
-import { visibleNonBlankTerminalLines } from '../../terminal-tail-read'
-import type { RuledScreen } from '../../screen-input-veto'
-import { HeadlessEmulator } from '../../../daemon/headless-emulator'
+import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-projection'
+import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
+import type { RuledScreen } from '../wait/screen-input-veto'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { withTimeout } from '../../runtime-async-boundaries'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {

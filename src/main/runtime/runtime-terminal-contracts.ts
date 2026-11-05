@@ -1,4 +1,8 @@
-import type { RuntimePtyWorktreeRecord, RuntimeLeafRecord } from './runtime-terminal-state-records'
+import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
+import type {
+  RuntimePtyWorktreeRecord,
+  RuntimeLeafRecord
+} from './terminal/records/runtime-terminal-state-records'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
@@ -23,7 +27,7 @@ import type {
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
-import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
+import type { RuntimeTerminalWriteOptions } from './terminal/input/runtime-terminal-writer'
 import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
@@ -57,6 +61,7 @@ export type TerminalCreateOptions = {
   onStartupPromptCarry?: (carried: boolean) => void
   /** Override Settings arguments for this agent (null means none); plan input is not a caller-supplied command and does not take launch ownership. */
   agentArgs?: string | null
+  extraAgentArgs?: string
   /** Main-internal: Orca, not a user, types into this `startupAgent` once it starts. */
   suppressStartupUpdatePrompt?: boolean
   /** Host-only runtime fact used to quote this launch; spawn must take its shell from that same fact, never client input. */
@@ -64,6 +69,7 @@ export type TerminalCreateOptions = {
   /** Account routing env merged over `startupAgent`'s plan env; an input to that plan, like
    *  `agentArgs`, so not part of `callerSuppliedLaunch`. */
   accountEnv?: Record<string, string>
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   launchPreferences?: AgentLaunchPreferences
   terminalKittyKeyboardProtocol?: boolean
   terminalImageViewerSupported?: boolean

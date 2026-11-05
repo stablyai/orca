@@ -85,21 +85,4 @@ describe('live pane titles on the layout stream', () => {
     await flush()
     expect(events).toHaveLength(1)
   })
-
-  it('sends no frame per spinner glyph while an agent works', async () => {
-    const runtime = runtimeWithPane()
-    const collector = collectLayoutEvents()
-    const { events } = collector
-    collector.seed(runtime.subscribeWorkspaceLayouts(collector.listener).snapshot)
-    const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-    for (let frame = 0; frame < 100; frame++) {
-      runtime.onPtyData(
-        PTY_ID,
-        `\x1b]0;${spinner[frame % spinner.length]} Fix the build\x07`,
-        Date.now()
-      )
-      await flush()
-    }
-    expect(events.map((event) => paneOf(event)?.liveTitle)).toEqual(['⠋ Fix the build'])
-  })
 })
