@@ -45,6 +45,8 @@ export type MobileNativeChatFork = {
 
 export const MobileNativeChatForkContext = createContext<MobileNativeChatFork | null>(null)
 
+const AGENTS_READ_RETRIES_MS = [2_000, 8_000, 30_000]
+
 /** The host's agents, read once per connection, only from a host that can fork. */
 function useRegisteredAgent(
   client: RpcClient | null,
@@ -63,18 +65,45 @@ function useRegisteredAgent(
       return
     }
     let cancelled = false
-    void client
-      .sendRequest(AGENT_SESSION_AGENTS_METHOD, {})
-      .then((response) => {
-        const rows = response.ok ? decodeAgentSessionAgentsResult(response.result) : null
-        if (!cancelled && rows) {
-          setAgents({ client, generation, rows })
-        }
-      })
-      // An unread list leaves the action disabled; the next connection asks again.
-      .catch(() => {})
+    let reading = false
+    let failures = 0
+    let retry: ReturnType<typeof setTimeout> | undefined
+    const read = (): void => {
+      if (cancelled || reading) {
+        return
+      }
+      reading = true
+      void client
+        .sendRequest(AGENT_SESSION_AGENTS_METHOD, {})
+        .then((response) => (response.ok ? decodeAgentSessionAgentsResult(response.result) : null))
+        .catch(() => null)
+        .then((rows) => {
+          reading = false
+          if (cancelled) {
+            return
+          }
+          if (rows) {
+            setAgents({ client, generation, rows })
+            return
+          }
+          // The action stays disabled while unread: a few spaced retries, then the next reconnect.
+          if (++failures <= AGENTS_READ_RETRIES_MS.length) {
+            retry = setTimeout(read, AGENTS_READ_RETRIES_MS[failures - 1])
+          }
+        })
+    }
+    read()
+    const stopWatching = client.onStateChange((state) => {
+      if (state === 'connected') {
+        failures = 0
+        clearTimeout(retry)
+        read()
+      }
+    })
     return () => {
       cancelled = true
+      clearTimeout(retry)
+      stopWatching()
     }
   }, [client, generation, host, learned])
   return learned ? agents.rows.find((row) => row.agent === agent) : undefined
