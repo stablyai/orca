@@ -138,3 +138,30 @@ describe('useSourceControlBranchCompare scheduler', () => {
     expect(coalescedSettled).toBe(true)
   })
 })
+
+it('compares once on first status load and refreshes subsequent HEAD and upstream changes', async () => {
+  const root = await mount({ isBranchVisible: true })
+  await flush()
+  expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
+
+  const remoteStatus = { hasUpstream: true, upstreamName: 'origin/feature', ahead: 1, behind: 0 }
+  await act(async () => {
+    root.render(<Probe isBranchVisible statusHead="head-1" remoteStatus={remoteStatus} />)
+  })
+  await flush()
+  expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
+
+  await act(async () => {
+    root.render(<Probe isBranchVisible statusHead="head-2" remoteStatus={remoteStatus} />)
+  })
+  await flush()
+  expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(2)
+
+  await act(async () => {
+    root.render(
+      <Probe isBranchVisible statusHead="head-2" remoteStatus={{ ...remoteStatus, ahead: 0 }} />
+    )
+  })
+  await flush()
+  expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(3)
+})
