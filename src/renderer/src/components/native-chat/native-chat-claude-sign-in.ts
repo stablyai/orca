@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
-import { pinnedProjectAccountId } from '@/lib/project-agent-account-pin'
+import { projectAccountPin } from '@/lib/project-agent-account-pin'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
@@ -38,14 +38,19 @@ export function useNativeChatClaudeSignIn(input: {
   failureRows: number
 }): NativeChatClaudeSignIn | null {
   // Why local only: the hidden sign-in runs on this device, and Claude chats run on its host.
-  const accountId = useAppStore((s) =>
-    input.agent === 'claude' && input.target.kind === 'local'
-      ? (pinnedProjectAccountId(s, 'claude', input.worktreeId) ??
-        s.settings?.activeClaudeManagedAccountIdsByRuntime?.host ??
-        s.settings?.activeClaudeManagedAccountId ??
-        null)
-      : null
-  )
+  const accountId = useAppStore((s) => {
+    if (input.agent !== 'claude' || input.target.kind !== 'local') {
+      return null
+    }
+    // Chats launch on host accounts only, so a WSL pin leaves them on the host selection.
+    const pin = projectAccountPin(s, 'claude', input.worktreeId)
+    return (
+      (pin?.laneKey === 'host' ? pin.accountId : null) ??
+      s.settings?.activeClaudeManagedAccountIdsByRuntime?.host ??
+      s.settings?.activeClaudeManagedAccountId ??
+      null
+    )
+  })
   const [signingIn, setSigningIn] = useState(false)
   // Why a ref: the notice and a transcript row both sign in, and state lags a double press.
   const signingInRef = useRef(false)

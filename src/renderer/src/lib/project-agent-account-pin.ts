@@ -1,15 +1,21 @@
 import type { AppState } from '@/store'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { getCodexSelectionLaneKey } from '../../../shared/codex-selection-lane'
+import { parseWslUncPath } from '../../../shared/wsl-paths'
 
 export type ProjectPinAgent = 'claude' | 'codex'
 
+/** A project's saved account and the lane it runs in (`host` or `wsl:<distro>`). Launches honor a
+ *  pin only in that lane; a session in any other lane follows that lane's selection. */
+export type ProjectAccountPin = { accountId: string; laneKey: string }
+
 /** The saved account (host or WSL) a project pins an agent's sessions to, whatever is selected;
  *  null when none or when that account is gone. */
-export function pinnedProjectAccountId(
+export function projectAccountPin(
   state: Pick<AppState, 'repos' | 'settings'>,
   agent: ProjectPinAgent,
   worktreeId: string | null | undefined
-): string | null {
+): ProjectAccountPin | null {
   if (!worktreeId) {
     return null
   }
@@ -19,18 +25,24 @@ export function pinnedProjectAccountId(
   if (!accountId) {
     return null
   }
-  const saved =
-    agent === 'claude'
-      ? state.settings?.claudeManagedAccounts.some((account) => account.id === accountId)
-      : state.settings?.codexManagedAccounts.some((account) => account.id === accountId)
-  return saved ? accountId : null
+  if (agent === 'claude') {
+    const saved = state.settings?.claudeManagedAccounts.find((account) => account.id === accountId)
+    if (!saved) {
+      return null
+    }
+    const wsl = saved.managedAuthRuntime === 'wsl'
+    return { accountId, laneKey: laneKey(wsl, saved.wslDistro) }
+  }
+  const saved = state.settings?.codexManagedAccounts.find((account) => account.id === accountId)
+  if (!saved) {
+    return null
+  }
+  // Older WSL accounts only record their home as a UNC path.
+  const legacyDistro = parseWslUncPath(saved.managedHomePath)?.distro
+  const wsl = saved.managedHomeRuntime === 'wsl' || legacyDistro !== undefined
+  return { accountId, laneKey: laneKey(wsl, saved.wslDistro ?? legacyDistro) }
 }
 
-/** A pinned project relaunches its sessions on its account, so a selection switch cannot move them. */
-export function isPinnedProject(
-  state: Pick<AppState, 'repos' | 'settings'>,
-  agent: ProjectPinAgent,
-  worktreeId: string
-): boolean {
-  return pinnedProjectAccountId(state, agent, worktreeId) !== null
+function laneKey(wsl: boolean, wslDistro: string | null | undefined): string {
+  return getCodexSelectionLaneKey(wsl ? { runtime: 'wsl', wslDistro } : { runtime: 'host' })
 }
