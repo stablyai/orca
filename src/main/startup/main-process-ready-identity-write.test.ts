@@ -167,6 +167,9 @@ vi.mock('./dev-education-suppression', () => ({
   shouldSuppressDevEducation: () => false,
   suppressDevEducationForStore: vi.fn()
 }))
+vi.mock('./existing-profile-tour-backfill', () => ({
+  backfillAgentSessionsTourForExistingProfiles: vi.fn()
+}))
 vi.mock('../browser/sessions/browser-session-proxy', () => ({
   awaitBrowserSessionProxies: vi.fn(async () => {}),
   setBrowserNetworkProxySettingsResolver: vi.fn(),

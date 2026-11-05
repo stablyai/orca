@@ -35,6 +35,7 @@ import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
 } from './dev-education-suppression'
+import { backfillAgentSessionsTourForExistingProfiles } from './existing-profile-tour-backfill'
 import {
   awaitBrowserSessionProxies,
   setBrowserNetworkProxySettingsResolver
@@ -286,6 +287,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   if (shouldSuppressDevEducation({ isDev: !app.isPackaged })) {
     suppressDevEducationForStore(store)
   }
+  backfillAgentSessionsTourForExistingProfiles(store)
   // Install the proxy resolver before partitions materialize.
   setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())
   // Protocol-scoped preview handlers must exist before webview attachment.
