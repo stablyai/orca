@@ -406,15 +406,18 @@ describe('agent prompt render gate on a ConPTY host', () => {
     // Claude parks the cursor at the end of its composer line.
     const composer = (text: string): string =>
       `\x1b[H\x1b[2J${rule}\r\n\u276f ${text}\r\n${rule}\x1b[2;${text.length + 3}H`
+    // A dim suggestion with the cursor parked before it, as Claude paints one in an empty composer.
+    const suggesting = (text: string): string =>
+      `\x1b[H\x1b[2J${rule}\r\n\u276f \x1b[2m${text}\x1b[22m\r\n${rule}\x1b[2;3H`
 
     async function submitTime(shown: { before: string; after: string }): Promise<number> {
       const { runtime, handle, submitTimes } = await createSettlementRuntime({
         noiseUntilMs: 20_000,
         // A progress row repainting elsewhere leaves the composer and its cursor as they were.
         noise: '\x1b7\x1b[5;1Hworking\x1b8',
-        composer: composer(shown.after).slice('\x1b[H\x1b[2J'.length)
+        composer: shown.after.slice('\x1b[H\x1b[2J'.length)
       })
-      runtime.onPtyData(PTY_ID, composer(shown.before), Date.now())
+      runtime.onPtyData(PTY_ID, shown.before, Date.now())
       const submission = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
       const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
       await vi.runAllTimersAsync()
@@ -427,14 +430,24 @@ describe('agent prompt render gate on a ConPTY host', () => {
       useHostPlatform('win32')
       vi.useFakeTimers()
       // Marker at 100ms plus the settle window, well before the 1.5s quiet window or 8s cap.
-      const at = await submitTime({ before: '', after: prompt })
+      const at = await submitTime({ before: composer(''), after: composer(prompt) })
       expect(at).toBeGreaterThanOrEqual(400)
       expect(at).toBeLessThan(1_500)
     })
 
     it.each([
-      ['only the end of the paste is shown', { before: '', after: prompt.slice(8) }],
-      ['the composer already held the prompt', { before: prompt, after: prompt }]
+      [
+        'only the end of the paste is shown',
+        { before: composer(''), after: composer(prompt.slice(8)) }
+      ],
+      [
+        'the composer already held the prompt',
+        { before: composer(prompt), after: composer(prompt) }
+      ],
+      [
+        'a dim suggestion already showed the prompt',
+        { before: suggesting(prompt), after: suggesting(prompt) }
+      ]
     ])('waits for the cap when %s', async (_case, shown) => {
       useHostPlatform('win32')
       vi.useFakeTimers()

@@ -98,12 +98,14 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       if (!composerProof || prompt === undefined || !observedMarker || !ingested || draftRead) {
         return
       }
+      // The read waits for the screen model to catch up; typed text then excludes a dim suggestion.
       draftRead = this.readCurrentTerminalWaitScreen(ptyId)
         .then((screen) => {
           if (!composerProof) {
             return
           }
-          if (!isCompleteAgentPromptDraft(screen?.draft, prompt)) {
+          const typed = screen ? this.readCaughtUpComposerTypedText(ptyId) : null
+          if (!isCompleteAgentPromptDraft(typed, prompt)) {
             draftMatchedAt = null
             return
           }

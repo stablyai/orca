@@ -105,7 +105,10 @@ const collapseComposerWhitespace = (text: string): string => text.replace(/\s+/g
 
 /** Whether the composer shows all of `prompt` and nothing else: proof its paste landed. Stricter
  *  than the held-draft match, whose suffix and placeholder-count slack also fit a partial paste. */
-export function isCompleteAgentPromptDraft(draft: string | undefined, prompt: string): boolean {
+export function isCompleteAgentPromptDraft(
+  draft: string | null | undefined,
+  prompt: string
+): boolean {
   return (
     !!draft &&
     collapseComposerWhitespace(draft) ===
