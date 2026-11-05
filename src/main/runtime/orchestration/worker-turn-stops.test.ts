@@ -244,15 +244,22 @@ describe('terminal worker turn stops', () => {
       creator: { kind: 'terminal', handle: HANDLE, paneKey: PANE },
       maxDepth: Number.MAX_SAFE_INTEGER
     })
+    // Nor are its own heartbeats or a sibling worker's broadcast.
+    createRootDispatch(
+      ctx.db,
+      ctx.db.createTask({ spec: 'sibling', runId: ctx.run.id }).id,
+      'term_sibling'
+    )
     const helperReports = [
-      { from: 'term_helper' },
-      { from: 'term_helper_reminted', senderPaneKey: helperPane }
+      { from: 'term_helper', type: 'status' as const },
+      { from: 'term_helper_reminted', senderPaneKey: helperPane, type: 'status' as const },
+      { from: HANDLE, type: 'heartbeat' as const },
+      { from: 'term_sibling', type: 'status' as const }
     ].map((sender) =>
       ctx.db.insertMessage({
         ...sender,
         to: `dispatch:${ctx.dispatch.id}`,
-        subject: 'helper progress',
-        type: 'status',
+        subject: 'worker mail',
         runId: ctx.run.id
       })
     )

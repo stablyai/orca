@@ -4,13 +4,16 @@ import { exposeUtcTimestamp } from '../utc-timestamp'
 
 const text = (value: unknown): string | null => (typeof value === 'string' ? value : null)
 
-/** How much mail from above (the coordinator, or Orca for it) the worker has consumed, in any order.
- *  A helper's reports up to it while it was open, and mail it has not taken yet, do not count. */
+/** How much mail from above (its coordinator, or Orca for it) the worker has consumed, in any order.
+ *  Mail a worker of the Run sent while its Dispatch was open (this worker's own heartbeats, its helpers'
+ *  reports, a sibling's broadcast) does not count, nor does mail it has not taken yet. */
 export function readCoordinatorMailCount(db: OrchestrationDb, dispatchId: string): number {
-  const helpers = db.db
+  // The Dispatch that started this one is its coordinator, so its worker's mail is from above.
+  const workers = db.db
     .prepare(
-      `SELECT id, assignee_handle, assignee_pane_key, completed_at FROM dispatch_contexts
-        WHERE creator_dispatch_id = ?`
+      `SELECT d.id, d.assignee_handle, d.assignee_pane_key, d.completed_at
+         FROM dispatch_contexts d JOIN dispatch_contexts own ON own.id = ?
+        WHERE d.run_id = own.run_id AND d.id IS NOT own.creator_dispatch_id`
     )
     .all(dispatchId)
     .flatMap((row) => {
@@ -35,12 +38,12 @@ export function readCoordinatorMailCount(db: OrchestrationDb, dispatchId: string
   return read.filter((message) => {
     const from = text(message.from_handle) ?? ''
     const sentAt = Date.parse(exposeUtcTimestamp(text(message.created_at)) ?? '')
-    // A settled helper can go on to coordinate the Run; only what it sent while helping is a report.
-    return !helpers.some(
-      (helper) =>
-        (Number.isNaN(helper.completedAt) || sentAt <= helper.completedAt) &&
-        (from === `dispatch:${helper.id}` ||
-          isDispatchAssignee(helper, from, text(message.sender_pane_key)))
+    // A settled worker can go on to coordinate the Run; only what it sent while working is a worker's.
+    return !workers.some(
+      (worker) =>
+        (Number.isNaN(worker.completedAt) || sentAt <= worker.completedAt) &&
+        (from === `dispatch:${worker.id}` ||
+          isDispatchAssignee(worker, from, text(message.sender_pane_key)))
     )
   }).length
 }
