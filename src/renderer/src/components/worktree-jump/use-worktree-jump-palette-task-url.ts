@@ -43,7 +43,12 @@ export type CmdJGitHubWorkItemPreview = {
 
 function getComposerDefaultWorkspaceTarget(state: ReturnType<typeof useAppStore.getState>) {
   const eligibleRepos = getComposerEligibleRepos(state.repos)
-  const activeRepoId = resolveComposerActiveRepoId(state.repos, eligibleRepos, state.activeRepoId)
+  const activeRepoId = resolveComposerActiveRepoId(
+    state.repos,
+    eligibleRepos,
+    state.activeRepoId,
+    state.runtimeEnvironments
+  )
   const resolution = resolveWorkspaceCreationTarget({
     eligibleRepos,
     projects: state.projects,

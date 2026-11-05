@@ -28,7 +28,8 @@ function getComposerPrefetchRepoId(
     activeRepoId: resolveComposerActiveRepoId(
       state.repos,
       getComposerEligibleRepos(state.repos),
-      state.activeRepoId
+      state.activeRepoId,
+      state.runtimeEnvironments
     ),
     focusedHostScope: state.workspaceHostScope
   })
