@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import {
+  getDefaultWorktreePaletteSelectionId,
   getWorktreePaletteSelectionItemIds,
   CREATE_WORKTREE_ITEM_ID
 } from '@/lib/worktree-palette-create-action'
@@ -18,14 +19,18 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 
 import type { WorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
+import { appendPaletteAgentGroupEntries } from './use-worktree-jump-palette-agent-groups'
 
 type WorktreeJumpPaletteListEntriesInput = WorktreeJumpPaletteSections &
   Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
   Pick<WorktreeJumpPaletteLocalState, 'autoSelectedItemIdRef' | 'taskSourceUrl'> &
-  Pick<WorktreeJumpPaletteSections, 'middleLeadsSections' | 'handleExpandSection'>
+  Pick<WorktreeJumpPaletteSections, 'middleLeadsSections' | 'handleExpandSection'> & {
+    agentGroups: Parameters<typeof appendPaletteAgentGroupEntries>[1]
+  }
 
 export function useWorktreeJumpPaletteListEntries({
+  agentGroups,
   hasQuery,
   openTabsLeadSections,
   paletteSections,
@@ -181,6 +186,7 @@ export function useWorktreeJumpPaletteListEntries({
       return entries
     }
     if (!hasQuery) {
+      appendPaletteAgentGroupEntries(entries, agentGroups)
       pushOpenTabSection()
       pushWorktreeSection()
       return entries
@@ -262,6 +268,7 @@ export function useWorktreeJumpPaletteListEntries({
     return entries
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
+    agentGroups,
     handleExpandSection,
     hasQuery,
     middleLeadsSections,
@@ -291,7 +298,7 @@ export function useWorktreeJumpPaletteListEntries({
     [listEntries, listEntryRenderKeys]
   )
   useEffect(() => {
-    autoSelectedItemIdRef.current = selectionItemIds[0] ?? null
+    autoSelectedItemIdRef.current = getDefaultWorktreePaletteSelectionId(selectionItemIds)
   }, [autoSelectedItemIdRef, selectionItemIds])
   return { listEntries, listEntryRenderKeys, selectableItems, selectionItemIds }
 }

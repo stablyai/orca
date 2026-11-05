@@ -10,6 +10,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useOpenTabSearch } from './use-open-tab-search'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 
 const initialAppState = useAppStore.getInitialState()
 
@@ -235,6 +236,36 @@ describe('useOpenTabSearch', () => {
 
     expect(result.current.results.map((entry) => entry.title)).not.toContain('zebra delta')
     expect(result.current.results.every((entry) => entry.worktreeId === 'wt-1')).toBe(true)
+  })
+
+  it('finds a native chat by its saved host name instead of only its default tab label', () => {
+    const chat = {
+      ...makeUnifiedTab({
+        id: 'chat-tab',
+        entityId: 'chat-session',
+        groupId: 'group-1',
+        contentType: 'agent-session',
+        label: 'New chat'
+      }),
+      agentSessionAgent: 'codex' as const,
+      executionHostId: 'local' as const
+    }
+    seedStore({
+      unifiedTabsByWorktree: { 'wt-1': [chat] },
+      groupsByWorktree: { 'wt-1': [makeGroup('group-1', 'chat-tab', ['chat-tab'])] }
+    })
+    vi.spyOn(
+      getStructuredAgentSessionStatusFeed({ kind: 'local' }),
+      'getNamingSnapshot'
+    ).mockReturnValue(
+      new Map([
+        ['chat-session', { sessionId: 'chat-session', conversationName: 'Lunar migration' }]
+      ])
+    )
+
+    const { result } = renderSearch({ query: 'Lunar migration' })
+
+    expect(result.current.results).toMatchObject([{ source: 'workspace', tabId: 'chat-tab' }])
   })
 
   it('keeps the active runtime host when worktree ids collide', () => {

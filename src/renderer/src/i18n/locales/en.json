@@ -1315,7 +1315,13 @@
     "taskCreate": "Create workspace",
     "taskSearchLoading": "Searching tasks…",
     "taskSearchFailed": "Some task sources could not be searched",
-    "taskSearchRetry": "Retry"
+    "taskSearchRetry": "Retry",
+    "agents": {
+      "needsYouHeader": "Needs you · {{count}}",
+      "unreadResultsHeader": "Unread results · {{count}}",
+      "workingHeader": "Working · {{count}}",
+      "unavailable": "No longer available"
+    }
   },
   "auto": {
     "App": {

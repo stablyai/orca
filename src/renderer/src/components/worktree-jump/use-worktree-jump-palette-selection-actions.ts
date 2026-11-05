@@ -11,10 +11,13 @@ import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activatio
 import type { BrowserPaletteSearchResult } from '@/lib/browser-palette-search'
 import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search-types'
 import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace-tab-palette-results'
-import type { CmdJActionResult, CmdJSettingsResult } from '@/components/cmd-j/palette-results'
+import {
+  getSettingsTargetFromSectionId,
+  type CmdJActionResult,
+  type CmdJSettingsResult
+} from '@/components/cmd-j/palette-results'
 import type { CmdJProjectSearchResult } from '@/components/cmd-j/palette-project-results'
 import { getUnavailableQuickActionMessage } from '../cmd-j/quick-action-context'
-import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
@@ -24,25 +27,17 @@ import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-
 import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
 import type { WorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
-
-function getSettingsTargetFromSectionId(sectionId: string): {
-  pane: SettingsNavTarget
-  repoId: string | null
-  sectionId?: string
-} {
-  if (sectionId.startsWith('repo-')) {
-    return { pane: 'repo', repoId: sectionId.slice('repo-'.length) }
-  }
-  return { pane: sectionId as SettingsNavTarget, repoId: null }
-}
+import type { WorktreeJumpPaletteAgentGroups } from './use-worktree-jump-palette-agent-groups'
 
 type WorktreeJumpPaletteSelectionActionsInput = WorktreeJumpPaletteStoreState &
   Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
   WorktreeJumpPaletteLocalState &
   Pick<WorktreeJumpPaletteQuickActions, 'buildQuickActionContext'> &
-  Pick<WorktreeJumpPaletteSelectionLifecycle, 'focusFallbackSurface' | 'requestBrowserFocus'>
+  Pick<WorktreeJumpPaletteSelectionLifecycle, 'focusFallbackSurface' | 'requestBrowserFocus'> &
+  Pick<WorktreeJumpPaletteAgentGroups, 'openAgentThread'>
 
 export function useWorktreeJumpPaletteSelectionActions({
+  openAgentThread,
   visible,
   taskItems,
   workspaces,
@@ -263,7 +258,12 @@ export function useWorktreeJumpPaletteSelectionActions({
   })
   const handleSelectItem = useCallback(
     (item: PaletteItem) => {
-      if (item.type === 'worktree') {
+      if (item.type === 'agent') {
+        // An agent that left the pipeline keeps its row, but Enter on it does nothing.
+        if (openAgentThread(item.paneKey)) {
+          dismissForSelection()
+        }
+      } else if (item.type === 'worktree') {
         handleSelectWorktree(item.worktree)
       } else if (item.type === 'project-target') {
         handleSelectProjectTarget(item.result)
@@ -282,6 +282,8 @@ export function useWorktreeJumpPaletteSelectionActions({
       }
     },
     [
+      dismissForSelection,
+      openAgentThread,
       handleSelectTask,
       handleSelectBrowserPage,
       handleSelectProjectTarget,

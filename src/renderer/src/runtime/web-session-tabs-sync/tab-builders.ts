@@ -18,7 +18,8 @@ export function buildTerminalUnifiedTab(
   groupId: string,
   environmentId: string,
   // Why: viewMode is host-tracked but the client's optimistic toggle must win during the echo window; callers pass the reconciled value.
-  viewMode?: Tab['viewMode']
+  viewMode?: Tab['viewMode'],
+  existingUnifiedTab?: Tab | null
 ): Tab {
   return {
     id: tab.id,
@@ -35,6 +36,9 @@ export function buildTerminalUnifiedTab(
     color: tab.color,
     sortOrder: tab.sortOrder,
     createdAt: tab.createdAt,
+    ...(existingUnifiedTab?.lastFocusedAt !== undefined
+      ? { lastFocusedAt: existingUnifiedTab.lastFocusedAt }
+      : {}),
     isPreview: false,
     isPinned: tab.isPinned === true,
     ...(viewMode ? { viewMode } : {})
@@ -95,6 +99,9 @@ export function buildEditorUnifiedTab(
     color: tab.color !== undefined ? tab.color : (existingUnifiedTab?.color ?? null),
     sortOrder,
     createdAt,
+    ...(existingUnifiedTab?.lastFocusedAt !== undefined
+      ? { lastFocusedAt: existingUnifiedTab.lastFocusedAt }
+      : {}),
     isPreview: false,
     isPinned:
       tab.isPinned !== undefined ? tab.isPinned === true : existingUnifiedTab?.isPinned === true

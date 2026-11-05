@@ -18,7 +18,7 @@ import type { Worktree } from '../worktree/types'
 import type { AgentStateHistoryEntry } from '../agent-status/lifecycle/agent-state-history'
 import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../agent-status/contracts/agent-status-ipc-payload'
-import { parsePaneKey } from '../workspace-layout/stable-pane-id'
+import { isTerminalLeafId, parsePaneKey } from '../workspace-layout/stable-pane-id'
 
 /** Attention priority: 1 Needs you; 2 recent unrequested Done; 3 Working; 4 stale evidence with a live PTY;
  * 5 Idle (including stopped/aged Done or stale without live PTY). Lower wins; ties use attention timestamps.
@@ -177,16 +177,17 @@ export function buildExplicitEntriesByTabId(
 ): Map<string, AgentStatusEntry[]> {
   const byTab = new Map<string, AgentStatusEntry[]>()
   const pushEntry = (entry: AgentStatusEntry): void => {
-    const parsed = parsePaneKey(entry.paneKey)
-    // Why: skip malformed/legacy-numeric paneKeys rather than bucketing unroutable rows under a tab.
-    if (!parsed) {
+    // Why: split at the last colon so collision-resolved chat ids (`<id>:history-N`) keep their rows; malformed/legacy-numeric keys still skip.
+    const separator = entry.paneKey.lastIndexOf(':')
+    if (separator <= 0 || !isTerminalLeafId(entry.paneKey.slice(separator + 1))) {
       return
     }
-    const bucket = byTab.get(parsed.tabId)
+    const tabId = entry.paneKey.slice(0, separator)
+    const bucket = byTab.get(tabId)
     if (bucket) {
       bucket.push(entry)
     } else {
-      byTab.set(parsed.tabId, [entry])
+      byTab.set(tabId, [entry])
     }
   }
   for (const entry of Object.values(agentStatusByPaneKey ?? {})) {

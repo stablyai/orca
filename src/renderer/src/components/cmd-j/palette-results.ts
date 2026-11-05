@@ -1,5 +1,9 @@
 import { translate } from '@/i18n/i18n'
-import type { SettingsNavIcon, SettingsNavSection } from '@/lib/settings-navigation-types'
+import type {
+  SettingsNavIcon,
+  SettingsNavSection,
+  SettingsNavTarget
+} from '@/lib/settings-navigation-types'
 import type { CmdJQuickAction } from './quick-actions'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
@@ -24,6 +28,18 @@ export type CmdJSettingsResult = {
   targetSectionId?: string
   order: number
   configKeywords: string[]
+}
+
+/** The settings pane a settings result opens; project sections encode their repo id. */
+export function getSettingsTargetFromSectionId(sectionId: string): {
+  pane: SettingsNavTarget
+  repoId: string | null
+  sectionId?: string
+} {
+  if (sectionId.startsWith('repo-')) {
+    return { pane: 'repo', repoId: sectionId.slice('repo-'.length) }
+  }
+  return { pane: sectionId as SettingsNavTarget, repoId: null }
 }
 
 export type CmdJActionResult = CmdJQuickAction & {

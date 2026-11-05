@@ -70,6 +70,7 @@ export function useAgentPaneThreads(args: {
   groupBy: ActivityGroupBy
   selectedPaneKey: string | null
   showChildAgents?: boolean
+  statusUpdatesEnabled?: boolean
 }): {
   storeData: AgentPaneThreadsStoreData
   allThreads: AgentPaneThread[]
@@ -81,7 +82,29 @@ export function useAgentPaneThreads(args: {
   markAllReadThreads: AgentPaneThread[]
   visibleThreadGroups: ActivityThreadGroup[]
 } {
-  const { query, readFilter, groupBy, selectedPaneKey, showChildAgents = false } = args
+  const {
+    query,
+    readFilter,
+    groupBy,
+    selectedPaneKey,
+    showChildAgents = false,
+    statusUpdatesEnabled = true
+  } = args
+  const statusSnapshot = useMemo(() => {
+    if (statusUpdatesEnabled) {
+      return null
+    }
+    const s = useAppStore.getState()
+    return {
+      agentStatusByPaneKey: s.agentStatusByPaneKey,
+      runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
+      retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
+      acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
+      activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
+      agentStatusEpoch: s.agentStatusEpoch,
+      runtimeStatusByEnvironmentId: s.runtimeStatusByEnvironmentId
+    }
+  }, [statusUpdatesEnabled])
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.agentsHideWorkspacesFromOtherDevices)
@@ -94,7 +117,9 @@ export function useAgentPaneThreads(args: {
     s.agentsHideWorkspacesFromOtherDevices ? s.runtimeEnvironments : null
   )
   const runtimeStatusByEnvironmentId = useAppStore((s) =>
-    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeStatusByEnvironmentId : null
+    s.agentsHideWorkspacesFromOtherDevices
+      ? (statusSnapshot ?? s).runtimeStatusByEnvironmentId
+      : null
   )
   const pairedDeviceIdsByEnvironment = useMemo(
     () =>
@@ -110,10 +135,11 @@ export function useAgentPaneThreads(args: {
   }>({ raw: null, projected: null })
   const storeData = useAppStore(
     useShallow((s) => ({
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
+      agentStatusByPaneKey: (statusSnapshot ?? s).agentStatusByPaneKey,
+      runtimeAgentOrchestrationByPaneKey:
+        statusSnapshot?.runtimeAgentOrchestrationByPaneKey ?? selectVisibleAgentOrchestration(s),
       migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
-      retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
+      retainedAgentsByPaneKey: (statusSnapshot ?? s).retainedAgentsByPaneKey,
       tabsByWorktree: s.tabsByWorktree,
       activityTabs: (() => {
         const cache = tabProjectionRef.current
@@ -132,8 +158,8 @@ export function useAgentPaneThreads(args: {
       getKnownWorktreeById: s.getKnownWorktreeById,
       worktreeMap: getWorktreeMapFromState(s),
       repoMap: getRepoMapFromState(s),
-      acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
-      activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
+      acknowledgedAgentsByPaneKey: (statusSnapshot ?? s).acknowledgedAgentsByPaneKey,
+      activityClearedAtByPaneKey: (statusSnapshot ?? s).activityClearedAtByPaneKey,
       acknowledgeAgents: s.acknowledgeAgents,
       unacknowledgeAgents: s.unacknowledgeAgents,
       generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true,
@@ -141,7 +167,7 @@ export function useAgentPaneThreads(args: {
     }))
   )
   // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const agentStatusEpoch = useAppStore((s) => (statusSnapshot ?? s).agentStatusEpoch)
   const chatNames = useStructuredChatTabNames()
 
   // Per-hook caches preserve unchanged pane/event/thread identities across status writes, including repeated StrictMode/deferred builds.

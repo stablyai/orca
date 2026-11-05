@@ -35,12 +35,18 @@ export function prepareWebSessionTabsSnapshotUnified(
     hostGroupIdByTabId,
     targetGroupId
   } = base
+  const existingTerminalUnifiedTabById = new Map(
+    (state.unifiedTabsByWorktree[worktreeId] ?? [])
+      .filter((tab) => tab.contentType === 'terminal')
+      .map((tab) => [tab.id, tab])
+  )
   const mirroredTerminalUnifiedTabs = mirroredTerminalTabs.map((entry) =>
     buildTerminalUnifiedTab(
       entry.tab,
       hostGroupIdByTabId.get(entry.hostTabId) ?? targetGroupId,
       environmentId,
-      entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id)
+      entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id),
+      existingTerminalUnifiedTabById.get(entry.tab.id)
     )
   )
   const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)

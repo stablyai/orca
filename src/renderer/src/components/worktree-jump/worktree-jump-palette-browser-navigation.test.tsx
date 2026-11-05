@@ -65,6 +65,7 @@ function navigationItem(query: string): QuickActionPaletteItem {
 
 function listInput(query: string, overrides: Partial<ListInput> = {}): ListInput {
   return {
+    agentGroups: [],
     hasQuery: true,
     openTabsLeadSections: true,
     middleLeadsSections: true,

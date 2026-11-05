@@ -11,6 +11,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AgentMetadata, WorkspaceTabAgentMetadataState } from './workspace-tab-agent-metadata'
 import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
+import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 export {
   searchWorkspaceTabs,
   type WorkspaceTabPaletteSearchResult
@@ -18,6 +19,7 @@ export {
 
 export type WorkspaceTabContentType =
   | 'terminal'
+  | 'agent-session'
   | 'editor'
   | 'diff'
   | 'conflict-review'
@@ -73,6 +75,7 @@ export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState
   activeFileIdByWorktree: Record<string, string | null | undefined>
   activeTabTypeByWorktree: Record<string, WorkspaceTabPaletteActiveTabType | undefined>
   generatedTitlesEnabled: boolean
+  chatNames?: StructuredChatTabNames
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }

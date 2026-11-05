@@ -238,16 +238,16 @@ export function PaletteRecentTabStatusDot({
   fallback: React.ReactNode
 }): React.JSX.Element {
   const live = useLiveStatus()
-  const terminalTabId = row?.terminalTab?.id
+  const agentStatusTabId = row?.agentStatusTab?.id
   const status: WorktreeStatus | null =
-    live && row?.terminalTab
+    live && row?.agentStatusTab
       ? resolveRecentWorkspaceTabStatus(row, live.paneSources, live.now)
       : null
   const hasUnread =
     live != null &&
-    terminalTabId != null &&
+    agentStatusTabId != null &&
     terminalTabHasUnreadActivity({
-      terminalTabId,
+      terminalTabId: agentStatusTabId,
       unreadTerminalTabs: live.unreadTerminalTabs,
       unreadAgentCompletionPanes: live.unreadAgentCompletionPanes
     })

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { FileText, SquareTerminal } from 'lucide-react'
+import { FileText, MessageSquare, SquareTerminal } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { CommandItem } from '@/components/ui/command'
 import { PaletteRecentTabStatusDot } from '@/components/cmd-j/palette-live-status'
@@ -44,16 +44,17 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
     controller.hostFilterActive
   )
   const recentRow = controller.recentTabRowByItem.get(entry) ?? null
-  const fallback =
-    result.contentType === 'terminal' && result.occupantAgent ? (
-      <span className="inline-flex" data-agent-icon={result.occupantAgent} aria-hidden="true">
-        <AgentIcon agent={result.occupantAgent} size={14} />
-      </span>
-    ) : result.contentType === 'terminal' ? (
-      <SquareTerminal className="size-3.5" aria-hidden="true" />
-    ) : (
-      <FileText className="size-3.5" aria-hidden="true" />
-    )
+  const fallback = result.occupantAgent ? (
+    <span className="inline-flex" data-agent-icon={result.occupantAgent} aria-hidden="true">
+      <AgentIcon agent={result.occupantAgent} size={14} />
+    </span>
+  ) : result.contentType === 'terminal' ? (
+    <SquareTerminal className="size-3.5" aria-hidden="true" />
+  ) : result.contentType === 'agent-session' ? (
+    <MessageSquare className="size-3.5" aria-hidden="true" />
+  ) : (
+    <FileText className="size-3.5" aria-hidden="true" />
+  )
   const sessionAge = formatPaletteSessionAge(result.lastActiveAt ?? null, controller.paletteNowMs)
 
   return (

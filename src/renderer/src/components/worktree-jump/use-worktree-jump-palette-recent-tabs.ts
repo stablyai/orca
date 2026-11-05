@@ -54,8 +54,6 @@ export function useWorktreeJumpPaletteRecentTabs({
   simulatorTabEntries,
   browserPageEntries,
   resolveWorktree,
-  unreadTerminalTabs,
-  unreadAgentCompletionPanes,
   visible,
   hasQuery,
   query,
@@ -142,10 +140,14 @@ export function useWorktreeJumpPaletteRecentTabs({
             ])
           ),
           unifiedTabId: item.type === 'browser-page' ? null : item.result.tabId,
-          terminalTab:
-            item.type === 'workspace-tab' && item.result.contentType === 'terminal'
-              ? (terminalTabsByWorktree.get(worktree.id)?.get(item.result.entityId) ?? null)
-              : null,
+          agentStatusTab:
+            item.type !== 'workspace-tab'
+              ? null
+              : item.result.contentType === 'terminal'
+                ? (terminalTabsByWorktree.get(worktree.id)?.get(item.result.entityId) ?? null)
+                : item.result.contentType === 'agent-session'
+                  ? { id: item.result.tabId, title: item.result.title }
+                  : null,
           worktreeLastActivityAt: worktree.lastActivityAt
         }
       })
@@ -164,7 +166,7 @@ export function useWorktreeJumpPaletteRecentTabs({
       if (
         item.type !== 'workspace-tab' ||
         item.result.contentType !== 'terminal' ||
-        row.terminalTab ||
+        row.agentStatusTab ||
         worktree.isArchived
       ) {
         continue
@@ -193,21 +195,9 @@ export function useWorktreeJumpPaletteRecentTabs({
     ) {
       return
     }
-    // Why here: inclusion reads wall time, so it is sampled when the snapshot is captured.
-    const now = Date.now()
     const rows: RecentWorkspaceTabRow[] = []
     for (const { item, worktree, row } of openTabRecentRows) {
-      if (
-        shouldIncludeOpenTabInRecentSection({
-          item,
-          worktree,
-          row,
-          paneSources: recentTabPaneSources,
-          unreadTerminalTabs,
-          unreadAgentCompletionPanes,
-          now
-        })
-      ) {
+      if (shouldIncludeOpenTabInRecentSection({ item, worktree })) {
         rows.push(row)
       }
     }
@@ -228,10 +218,7 @@ export function useWorktreeJumpPaletteRecentTabs({
     query.length,
     recentOrderAttentionIncomplete,
     recentTabSnapshot,
-    recentTabPaneSources,
     setSelectedItemId,
-    unreadAgentCompletionPanes,
-    unreadTerminalTabs,
     visible
   ])
   const recentTabItems = useMemo<PaletteItem[]>(() => {

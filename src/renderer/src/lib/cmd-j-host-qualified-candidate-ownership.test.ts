@@ -214,6 +214,14 @@ describe('Cmd-J host-qualified candidate ownership', () => {
   })
 
   it('keeps generic workspace rows isolated by execution host', () => {
+    const chat = makeTab({
+      id: 'remote-chat',
+      entityId: 'session-1',
+      contentType: 'agent-session',
+      agentSessionAgent: 'codex',
+      executionHostId: RUNTIME_HOST_ID,
+      label: 'Codex Chat'
+    })
     const terminalTabs: TerminalTab[] = [
       {
         id: 'local-terminal',
@@ -242,6 +250,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
       worktreeOrder: new Map(),
       unifiedTabsByWorktree: {
         [SHARED_WORKTREE_ID]: [
+          chat,
           makeTab({
             id: 'local-terminal',
             entityId: 'local-terminal',
@@ -270,7 +279,17 @@ describe('Cmd-J host-qualified candidate ownership', () => {
       activeFileId: null,
       activeFileIdByWorktree: {},
       activeTabTypeByWorktree: {},
-      generatedTitlesEnabled: true
+      generatedTitlesEnabled: true,
+      chatNames: new Map([
+        [
+          chat,
+          {
+            owner: RUNTIME_HOST_ID,
+            sessionId: 'session-1',
+            savedName: 'Investigate launch failure'
+          }
+        ]
+      ])
     })
 
     expect(
@@ -281,6 +300,12 @@ describe('Cmd-J host-qualified candidate ownership', () => {
       ['local-terminal', 'local'],
       ['remote-terminal', RUNTIME_HOST_ID]
     ])
+    expect(
+      searchWorkspaceTabs(entries, 'launch failure').map((result) => [
+        result.tabId,
+        result.executionHostId
+      ])
+    ).toEqual([['remote-chat', RUNTIME_HOST_ID]])
   })
 
   it('keeps hidden same-id hosts in the legacy ownership ambiguity set', () => {

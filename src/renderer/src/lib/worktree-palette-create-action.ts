@@ -47,6 +47,7 @@ type WorktreePaletteSelectionCandidateEntry = {
 
 // Include every rendered item type or keyboard navigation’s includes guard snaps its highlight to top, leaving mouse-only rows.
 const SELECTABLE_ENTRY_TYPES = [
+  'agent',
   'worktree',
   'create-worktree',
   'settings',
@@ -81,6 +82,24 @@ export function getWorktreePaletteSelectionItemIds<
     .map(({ id }) => id)
 }
 
+// Agent rows sit above Recent but never take the default, so "Cmd+J, Enter" still returns to the last session.
+export const AGENT_PALETTE_ITEM_ID_PREFIX = 'agent:'
+
+export function getDefaultWorktreePaletteSelectionId(
+  selectableItemIds: readonly string[],
+  autoSelectCreateAction = false
+): string | null {
+  const isCandidate = (id: string): boolean =>
+    autoSelectCreateAction || id !== CREATE_WORKTREE_ITEM_ID
+  return (
+    selectableItemIds.find(
+      (id) => isCandidate(id) && !id.startsWith(AGENT_PALETTE_ITEM_ID_PREFIX)
+    ) ??
+    selectableItemIds.find(isCandidate) ??
+    null
+  )
+}
+
 export function getNextWorktreePaletteSelection({
   currentSelectedItemId,
   queryChanged,
@@ -98,10 +117,10 @@ export function getNextWorktreePaletteSelection({
    */
   autoSelectCreateAction?: boolean
 }): string {
-  const defaultSelectableId =
-    (autoSelectCreateAction
-      ? selectableItemIds[0]
-      : selectableItemIds.find((id) => id !== CREATE_WORKTREE_ITEM_ID)) ?? null
+  const defaultSelectableId = getDefaultWorktreePaletteSelectionId(
+    selectableItemIds,
+    autoSelectCreateAction
+  )
   const fallbackId =
     defaultSelectableId ??
     (showCreateAction && autoSelectCreateAction ? CREATE_WORKTREE_ITEM_ID : '')

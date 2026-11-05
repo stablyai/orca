@@ -18,6 +18,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getPaletteOwnershipWorktreeIds } from '@/lib/unified-tab-host-ownership'
+import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -202,13 +203,15 @@ export function buildOpenTabSearchBrowserPages(
 
 export function buildOpenTabSearchEntries(
   state: OpenTabSearchEntryState,
-  agentState: OpenTabSearchAgentState
+  agentState: OpenTabSearchAgentState,
+  chatNames?: StructuredChatTabNames
 ): OpenTabSearchEntries {
   const scope = openTabSearchScope(state)
 
   return {
     workspaceTabs: buildSearchableWorkspaceTabs({
       ...scope,
+      chatNames,
       unifiedTabsByWorktree: state.unifiedTabsByWorktree,
       tabsByWorktree: state.tabsByWorktree,
       openFiles: state.openFiles,

@@ -32,6 +32,7 @@ import {
   buildWorkspaceTabPaletteItems
 } from './worktree-jump-palette-open-tab-items'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 
 const EMPTY_BROWSER_PAGE_ENTRIES: SearchableBrowserPage[] = []
 const EMPTY_SIMULATOR_TAB_ENTRIES: SearchableSimulatorTab[] = []
@@ -80,6 +81,7 @@ export function useWorktreeJumpPaletteOpenTabs({
   resolveWorktree
 }: WorktreeJumpPaletteOpenTabsInput) {
   const languageRevision = useUiLanguageRevision()
+  const chatNames = useStructuredChatTabNames()
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
     if (!paletteStatusInputsActive) {
       return EMPTY_BROWSER_PAGE_ENTRIES
@@ -186,6 +188,7 @@ export function useWorktreeJumpPaletteOpenTabs({
       activeFileIdByWorktree,
       activeTabTypeByWorktree,
       generatedTitlesEnabled: settings?.tabAutoGenerateTitle === true,
+      chatNames,
       terminalLayoutsByTabId,
       paneForegroundAgentByPaneKey
     })
@@ -202,6 +205,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     activeWorkspaceExecutionHostId,
     workspaces,
     agentStatusByPaneKey,
+    chatNames,
     browserSortedWorktrees,
     groupsByWorktree,
     openFiles,

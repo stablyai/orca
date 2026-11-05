@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
+import type { Tab } from '../../../../shared/tab-types'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
@@ -553,29 +554,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getCommandValue()).toBe(movedTo)
   })
 
-  it('admits a high-signal current tab whose terminal entity hydrates late', async () => {
-    // Wait for the terminal entity before freezing attention membership or late current tabs stay excluded for the whole open.
-    const hydrated = makeRecentTabState({
-      activeWorktreeId: 'wt-alpha',
-      activeTabType: 'terminal',
-      activeTabId: 'term-alpha',
-      activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
-      activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
-      agentStatusByPaneKey: {
-        [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
-      }
-    })
-    await renderPalette({ ...hydrated, tabsByWorktree: {} })
-    expect(getTabRowIds()).toEqual(['tab-beta'])
-
-    await act(async () => {
-      useAppStore.setState({ tabsByWorktree: hydrated.tabsByWorktree } as Partial<AppState>)
-    })
-    await flushEffects()
-
-    expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
-  })
-
   it('captures the unfiltered order when reopened after a search', async () => {
     await renderPalette(makeRecentTabState())
 
@@ -599,39 +577,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toHaveLength(2)
   })
 
-  it('keeps the current tab in recent when its agent needs permission', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        activeWorktreeId: 'wt-alpha',
-        activeTabType: 'terminal',
-        activeTabId: 'term-alpha',
-        activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
-        activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
-        },
-        unifiedTabsByWorktree: {
-          'wt-alpha': [
-            {
-              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
-              lastFocusedAt: Date.now() - 3 * 86400_000
-            }
-          ],
-          'wt-beta': [
-            {
-              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
-              lastFocusedAt: Date.now()
-            }
-          ]
-        }
-      })
-    )
-
-    // Attention on the current tab still earns a row; idle current tabs do not.
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
-    expect(testContainer.textContent).toContain('Current Tab')
-  })
-
   it.each([undefined, true])('excludes current terminal outcomes', async (interrupted) => {
     await renderPalette(
       makeRecentTabState({
@@ -652,20 +597,63 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-beta'])
   })
 
-  it('keeps the current tab in recent on a pane-only unread completion marker', async () => {
+  it('lists native chats in recent by visit time and leaves out the one you are on', async () => {
+    const chat = (id: string, worktreeId: string, lastFocusedAt: number): Tab => ({
+      ...makeUnifiedTab(id, worktreeId, `session-${id}`, `${id} chat`),
+      contentType: 'agent-session',
+      agentSessionAgent: 'codex',
+      lastFocusedAt
+    })
+    const now = 1_700_000_000_000
     await renderPalette(
       makeRecentTabState({
         activeWorktreeId: 'wt-alpha',
-        activeTabType: 'terminal',
-        activeTabId: 'term-alpha',
-        activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
-        activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
-        // Exercise pane-only unacknowledged completion independently of unreadTerminalTabs.
-        unreadAgentCompletionPanes: { [makePaneKey('term-alpha', LEAF_ID)]: true }
+        activeTabType: 'agent-session',
+        activeTabTypeByWorktree: { 'wt-alpha': 'agent-session' },
+        unifiedTabsByWorktree: {
+          'wt-alpha': [
+            chat('chat-current', 'wt-alpha', now),
+            {
+              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
+              lastFocusedAt: now - 60_000
+            }
+          ],
+          'wt-beta': [
+            chat('chat-beta', 'wt-beta', now - 1_000),
+            {
+              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
+              lastFocusedAt: now - 120_000
+            }
+          ]
+        },
+        groupsByWorktree: {
+          'wt-alpha': [makeGroup('wt-alpha', ['chat-current', 'tab-alpha'])],
+          'wt-beta': [makeGroup('wt-beta', ['chat-beta', 'tab-beta'])]
+        }
       })
     )
 
-    expect(getTabRowIds()).toContain('tab-alpha')
+    expect(getTabRowIds()).toEqual(['chat-beta', 'tab-alpha', 'tab-beta'])
+  })
+
+  it('shows a working agent above recent without moving the default off recent', async () => {
+    const now = Date.parse('2026-11-04T12:00:00Z')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(now)
+    await renderPalette(
+      makeRecentTabState({
+        agentStatusByPaneKey: {
+          [makePaneKey('term-beta', LEAF_ID)]: makeAgentEntry('term-beta', 'working', now)
+        }
+      })
+    )
+    vi.useRealTimers()
+
+    const rowIds = getRenderedRowIds()
+    expect(rowIds[0]).toBe(`agent:${makePaneKey('term-beta', LEAF_ID)}`)
+    expect(testContainer.textContent).toContain('Working · 1')
+    expect(getCommandValue()).toBe(rowIds[1])
+    expect(getCommandValue()).toMatch(/workspace-tab/)
   })
 
   it('keeps the recent section under a sidebar-seeded repository filter and refreshes on clear', async () => {

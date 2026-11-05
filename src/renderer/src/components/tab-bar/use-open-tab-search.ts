@@ -14,6 +14,7 @@ import {
 } from './open-tab-search'
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
@@ -40,6 +41,7 @@ export function useOpenTabSearch({
   retainedResultId
 }: UseOpenTabSearchOptions): OpenTabSearchSnapshot {
   const languageRevision = useUiLanguageRevision()
+  const chatNames = useStructuredChatTabNames()
   // Why null while disabled: a closed menu stays stable across store churn.
   const state = useAppStore(
     useShallow((store) => (enabled ? selectOpenTabSearchEntryState(store, worktreeId) : null))
@@ -51,8 +53,8 @@ export function useOpenTabSearch({
     [enabled, state?.tabsByWorktree, state?.unifiedTabsByWorktree, worktreeId]
   )
   const entries = useMemo(
-    () => (state && agentState ? buildOpenTabSearchEntries(state, agentState) : null),
-    [agentState, state]
+    () => (state && agentState ? buildOpenTabSearchEntries(state, agentState, chatNames) : null),
+    [agentState, state, chatNames]
   )
   const deferredQuery = useDeferredValue(query)
   const evaluationSnapshot = useMemo(

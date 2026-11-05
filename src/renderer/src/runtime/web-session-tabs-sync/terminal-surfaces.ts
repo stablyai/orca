@@ -152,6 +152,8 @@ export function buildMirroredAgentTabs(
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,
+        // Why: focus visits are client-owned; host rebuilds must not sink chats to Recent's bottom.
+        ...(existing?.lastFocusedAt !== undefined ? { lastFocusedAt: existing.lastFocusedAt } : {}),
         isPinned: tab.isPinned !== undefined ? tab.isPinned : existing?.isPinned === true
       }
     }

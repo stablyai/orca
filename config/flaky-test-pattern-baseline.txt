@@ -1361,7 +1361,7 @@
 7 test-no-real-time-wait:tests/e2e/korean-ime-terminal-shift-enter-commit.spec.ts
 7 test-no-wall-clock:src/main/runtime/worker-terminal-wrap-provenance.test.ts
 7 test-no-wall-clock:src/main/skills/skill-install-lock.test.ts
-7 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.behavior.test.tsx
+4 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.behavior.test.tsx
 7 test-no-wall-clock:src/renderer/src/store/slices/jira.test.ts
 7 test-no-wall-clock:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 7 test-timeout-needs-reason:mobile/src/tasks/worktree-create-retry.test.ts
@@ -1371,7 +1371,6 @@
 8 test-no-wall-clock:src/main/ai-vault-search/session-search-indexer.test.ts
 8 test-no-wall-clock:src/main/ssh/orcad-exited-own-fence.test.ts
 8 test-no-wall-clock:src/renderer/src/components/native-chat/structured-child-records-switch.test.tsx
-8 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.test.tsx
 8 test-timeout-needs-reason:src/main/worker-thread-child-process/worker-thread-child-process.test.ts
 9 test-no-real-time-wait:tests/e2e/chinese-ime-chat-input-repro.spec.ts
 9 test-no-real-time-wait:tests/e2e/terminal-inline-tui-reveal-convergence.spec.ts

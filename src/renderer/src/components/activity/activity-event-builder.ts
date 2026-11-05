@@ -48,6 +48,8 @@ export type BuildActivityEventsArgs = {
   /** Per-pane "Clear completed" cutoffs; events stamped at or before the cutoff are hidden. */
   activityClearedAtByPaneKey?: Record<string, number>
   now: number
+  /** Membership snapshots must see every pane before the timeline's global history cap. */
+  capHistory?: boolean
 }
 
 export function buildActivityEvents(
@@ -155,5 +157,9 @@ export function buildActivityEvents(
       }
     }
   }
-  return { events: capActivityEvents(events), liveAgentByPaneKey, paneEntryByPaneKey }
+  return {
+    events: args.capHistory === false ? events : capActivityEvents(events),
+    liveAgentByPaneKey,
+    paneEntryByPaneKey
+  }
 }

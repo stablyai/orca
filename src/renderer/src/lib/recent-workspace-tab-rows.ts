@@ -22,8 +22,8 @@ export type RecentWorkspaceTabRow = {
   worktreeHostId?: ExecutionHostId
   /** Unified tab id — the key `TabGroup.recentTabIds` uses. Null for rows outside a tab group. */
   unifiedTabId: string | null
-  /** Terminal tab whose panes carry agent state. Null for editor, browser and simulator rows. */
-  terminalTab: Pick<TerminalTab, 'id' | 'title'> | null
+  /** Tab whose panes carry agent state: a terminal, or a native chat by its unified tab id. Null for editor, browser and simulator rows. */
+  agentStatusTab: Pick<TerminalTab, 'id' | 'title'> | null
   worktreeLastActivityAt: number
   lastFocusedAt?: number | null
 }
@@ -47,10 +47,15 @@ export function resolveRecentWorkspaceTabStatus(
   paneSources: TabPaneInputSources,
   now: number
 ): WorktreeStatus {
-  if (!row.terminalTab) {
+  if (!row.agentStatusTab) {
     return 'inactive'
   }
-  const panes = collectTabPaneInputs(row.terminalTab, row.worktreeLastActivityAt, paneSources, now)
+  const panes = collectTabPaneInputs(
+    row.agentStatusTab,
+    row.worktreeLastActivityAt,
+    paneSources,
+    now
+  )
   const attention = resolveAttention(panes, now)
   const explicit = STATUS_BY_ATTENTION_CLASS[attention.cls]
   if (explicit === 'permission') {
@@ -86,7 +91,7 @@ export function resolveRecentWorkspaceTabStatus(
   if (explicit === 'done') {
     return explicit
   }
-  return tabHasLivePty(paneSources.ptyIdsByTabId, row.terminalTab.id) ? 'active' : 'inactive'
+  return tabHasLivePty(paneSources.ptyIdsByTabId, row.agentStatusTab.id) ? 'active' : 'inactive'
 }
 
 /** Unknown visit times stay at the bottom in their existing order. */

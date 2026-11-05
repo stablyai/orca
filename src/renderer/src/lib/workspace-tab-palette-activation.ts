@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { activateAndRevealWorkspace } from './worktree-activation'
+import { activateStructuredAgentSessionTab } from './agent-session/structured-agent-session-tab-activation'
 import {
   findAmbiguousWorktreeIds,
   getPaletteOwnershipWorktreeIds,
@@ -79,7 +80,7 @@ function validateTarget(
   if (tabs.length !== 1 || !tab) {
     return 'missing-tab'
   }
-  if (result.contentType !== 'terminal') {
+  if (result.contentType !== 'terminal' && result.contentType !== 'agent-session') {
     const files = state.openFiles.filter((file) => file.id === result.entityId)
     if (files.length !== 1 || files[0].worktreeId !== result.worktreeId) {
       return 'missing-file'
@@ -117,6 +118,12 @@ export function activateWorkspaceTabPaletteResult(
   const finalFailure = validateTarget(state, result)
   if (finalFailure) {
     return { status: 'failed', reason: finalFailure }
+  }
+
+  if (result.contentType === 'agent-session') {
+    return activateStructuredAgentSessionTab({ worktreeId: result.worktreeId, tabId: result.tabId })
+      ? { status: 'activated' }
+      : { status: 'failed', reason: 'missing-tab' }
   }
 
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, result.worktreeId)

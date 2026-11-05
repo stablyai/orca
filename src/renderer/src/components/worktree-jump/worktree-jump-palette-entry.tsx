@@ -12,6 +12,7 @@ import {
   WorktreeJumpPaletteProjectRow
 } from './worktree-jump-palette-project-action-rows'
 import { WorktreeJumpPaletteWorkspaceTabRow } from './worktree-jump-palette-workspace-tab-row'
+import { WorktreeJumpPaletteAgentRow } from './worktree-jump-palette-agent-row'
 import {
   WorktreeJumpPaletteBrowserRow,
   WorktreeJumpPaletteSimulatorRow
@@ -76,6 +77,11 @@ export function WorktreeJumpPaletteEntry({
         taskUrlPreview={controller.taskUrlCreatePreview}
         onSelect={controller.handleCreateWorktree}
       />
+    )
+  }
+  if (entry.type === 'agent') {
+    return (
+      <WorktreeJumpPaletteAgentRow entry={entry} renderKey={renderKey} controller={controller} />
     )
   }
   if (entry.type === 'worktree') {

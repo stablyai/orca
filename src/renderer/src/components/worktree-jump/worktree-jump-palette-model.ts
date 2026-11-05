@@ -17,6 +17,7 @@ import { CREATE_WORKSPACE_QUICK_ACTION_ID } from '@/components/cmd-j/quick-actio
 import type { CREATE_WORKTREE_ITEM_ID } from '@/lib/worktree-palette-create-action'
 
 import type { CmdJTaskSearchResult } from '../cmd-j/task-search-results'
+import type { PaletteAgentGroupKey } from '../cmd-j/palette-agent-groups'
 
 export type TaskPaletteItem = { id: string; type: 'task'; result: CmdJTaskSearchResult }
 
@@ -75,7 +76,16 @@ export type CreateWorktreePaletteItem = {
   type: 'create-worktree'
 }
 
+/** An agent row in the empty-query agent groups; its own id namespace keeps it distinct from its Recent row. */
+export type AgentPaletteItem = {
+  id: string
+  type: 'agent'
+  paneKey: string
+  groupKey: PaletteAgentGroupKey
+}
+
 export type PaletteItem =
+  | AgentPaletteItem
   | TaskPaletteItem
   | WorktreePaletteItem
   | ProjectTargetPaletteItem

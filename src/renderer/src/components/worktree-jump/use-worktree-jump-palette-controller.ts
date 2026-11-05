@@ -4,6 +4,7 @@ import { useWorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter
 import { useWorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import { useWorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
 import { useWorktreeJumpPaletteRecentTabs } from './use-worktree-jump-palette-recent-tabs'
+import { useWorktreeJumpPaletteAgentGroups } from './use-worktree-jump-palette-agent-groups'
 import { useWorktreeJumpPaletteProjectTargets } from './use-worktree-jump-palette-project-targets'
 import { useWorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
 import { useWorktreeJumpPaletteSections } from './use-worktree-jump-palette-sections'
@@ -85,6 +86,12 @@ export function useWorktreeJumpPaletteController({
     ...worktrees,
     ...openTabs
   })
+  const agentGroups = useWorktreeJumpPaletteAgentGroups({
+    ...localState,
+    ...filter,
+    ...worktrees,
+    visible
+  })
   const projectTargets = useWorktreeJumpPaletteProjectTargets({
     ...storeState,
     ...localState,
@@ -109,6 +116,7 @@ export function useWorktreeJumpPaletteController({
     ...taskUrl
   })
   const listEntries = useWorktreeJumpPaletteListEntries({
+    ...agentGroups,
     ...localState,
     ...worktrees,
     ...openTabs,
@@ -131,6 +139,7 @@ export function useWorktreeJumpPaletteController({
     ...taskUrl
   })
   const selectionActions = useWorktreeJumpPaletteSelectionActions({
+    ...agentGroups,
     ...storeState,
     ...localState,
     ...quickActions,
@@ -163,6 +172,7 @@ export function useWorktreeJumpPaletteController({
     ...worktrees,
     ...openTabs,
     ...recentTabs,
+    ...agentGroups,
     ...projectTargets,
     ...quickActions,
     ...sections,

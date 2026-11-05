@@ -297,65 +297,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-beta'])
   })
 
-  it('keeps a frozen current row listed after it quiets mid-open', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        activeWorktreeId: 'wt-alpha',
-        activeTabType: 'terminal',
-        activeTabId: 'term-alpha',
-        activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
-        activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
-        unreadTerminalTabs: { 'term-alpha': true }
-      })
-    )
-
-    expect(getTabRowIds()).toContain('tab-alpha')
-
-    await act(async () => {
-      useAppStore.setState({
-        unreadTerminalTabs: {},
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'working', Date.now())
-        }
-      } as Partial<AppState>)
-    })
-    await flushEffects()
-
-    // Frozen rows keep live badges without moving their slots.
-    expect(getTabRowIds()).toContain('tab-alpha')
-    expect(testContainer.textContent).toContain('Alpha chat')
-    expect(document.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Working')
-  })
-
-  it('keeps a frozen current row listed when its agent finishes mid-open', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        activeWorktreeId: 'wt-alpha',
-        activeTabType: 'terminal',
-        activeTabId: 'term-alpha',
-        activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
-        activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'working', Date.now())
-        }
-      })
-    )
-
-    expect(getTabRowIds()).toContain('tab-alpha')
-
-    await act(async () => {
-      useAppStore.setState({
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now())
-        }
-      } as Partial<AppState>)
-    })
-    await flushEffects()
-
-    expect(getTabRowIds()).toContain('tab-alpha')
-    expect(document.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Done')
-  })
-
   it('activates the row a digit chord addresses while open', async () => {
     await renderPalette(
       makeRecentTabState({
