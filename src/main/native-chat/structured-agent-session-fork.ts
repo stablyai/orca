@@ -217,7 +217,8 @@ export async function prepareStructuredAgentSessionFork(input: {
     providerSessionId: copy.sessionId,
     selectedAccountHome: record.accountHome,
     launchEnv,
-    workspaceCwd
+    workspaceCwd,
+    conversationName: title
   })
   await requireCurrent()
   return {
@@ -225,7 +226,6 @@ export async function prepareStructuredAgentSessionFork(input: {
     fork: {
       sessionId: record.sessionId,
       itemId: input.throughItemId,
-      title,
       revalidate: requireCurrent
     },
     location: input.location,
@@ -244,6 +244,7 @@ export async function prepareStructuredAgentSessionFork(input: {
       definition: metadata.definition,
       handleNamesTranscript: importer.handleNamesTranscript,
       transcriptPath: adoption.transcriptPath,
+      conversationName: adoption.conversationName,
       providerSessionId: copy.sessionId,
       workspaceCwd,
       ...(input.agent === 'codex'

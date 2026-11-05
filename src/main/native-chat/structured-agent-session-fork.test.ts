@@ -29,6 +29,14 @@ import {
   hostTestOperationId
 } from './agent-session-wire/structured-agent-session-host-test-data'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/agent-session/structured-agent-session-create-adoption'
+import { structuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
+
+vi.mock('../ai-vault/session-titles/session-title-resolver', () => ({
+  resolveLocalAiVaultSessionTitles: async () => ({
+    titles: [{ title: 'Original transcript title' }]
+  })
+}))
 
 const SOURCE = '019e6b26-18e2-7103-b7a0-7ba6bb071123'
 const COPY = '019e6b26-18e2-7103-b7a0-7ba6bb071124'
@@ -301,6 +309,40 @@ it('copies the selected retained root, founds its relationship and title, and re
   })
   expect(test.copy).toHaveBeenCalledOnce()
 })
+
+it.each(['claude', 'codex'] as const)(
+  'names a renamed %s source fork independently of its copied transcript title',
+  async (agent) => {
+    const test = source(agent)
+    test.record.conversationName = 'Renamed source'
+    const params = await test.prepare()
+    expect(params.adopt?.conversationName).toBe('Renamed source fork')
+
+    const importer = structuredAgentRuntimeMetadata(agent)?.transcriptImport
+    if (!importer) {
+      throw new Error('Transcript importer is not registered')
+    }
+    const ordinaryAdoption = await resolveStructuredAgentSessionAdoptionForCreate({
+      settings: {},
+      agent,
+      transcriptImport: { ...importer, accountHomeCandidates: () => [test.record.accountHome] },
+      providerSessionId: COPY,
+      selectedAccountHome: test.record.accountHome,
+      launchEnv: {},
+      workspaceCwd: rig.root
+    })
+    expect(ordinaryAdoption.conversationName).toBe('Original transcript title')
+
+    expect(await rig.host.create({ callerKey: 'device-1' }, params)).toMatchObject({ ok: true })
+    expect(rig.store.getRecord(test.intent.envelope.sessionId)?.conversationName).toBe(
+      'Renamed source fork'
+    )
+    await rig.restart()
+    expect(rig.store.getRecord(test.intent.envelope.sessionId)?.conversationName).toBe(
+      'Renamed source fork'
+    )
+  }
+)
 
 it.each(['claude', 'codex'] as const)(
   'keeps the %s source selection through native import, options readback and reload',

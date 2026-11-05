@@ -129,6 +129,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   selectedAccountHome: AgentSessionAccountHome
   launchEnv: NodeJS.ProcessEnv
   workspaceCwd: string
+  conversationName?: string
   resolveTranscriptSource?: () => StructuredAgentCliSourceLocator
   prepareCodexResume?: NativeCodexResumePreparation
 }) {
@@ -225,11 +226,12 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
             candidates
           )
         : adoption,
-      resolveAdoptedConversationName({
-        agent: input.agent,
-        providerSessionId: input.providerSessionId,
-        transcriptPath: adoption.transcriptPath
-      })
+      input.conversationName ??
+        resolveAdoptedConversationName({
+          agent: input.agent,
+          providerSessionId: input.providerSessionId,
+          transcriptPath: adoption.transcriptPath
+        })
     ])
     return { ...prepared, conversationName }
   } catch (error) {

@@ -11,13 +11,13 @@ export function createAgentSessionConversationReceipts(
   transactions: Pick<AgentSessionStoreTransactions, 'receipt'>
 ) {
   return {
-    forkBoundary: (sessionId: string, forkedFrom: AgentSessionForkedFrom, title: string) =>
+    forkBoundary: (sessionId: string, forkedFrom: AgentSessionForkedFrom) =>
       transactions.receipt((draft) => {
         const record = draft.records.get(sessionId)
         if (!record) {
           throw new Error('agent_session_fork:record-missing')
         }
-        draft.records.set(sessionId, { ...record, forkedFrom, conversationName: title })
+        draft.records.set(sessionId, { ...record, forkedFrom })
       }),
     clear: (
       clear: () => AgentSessionConversationClear,

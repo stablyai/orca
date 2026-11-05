@@ -125,17 +125,13 @@ async function applyAdoptedTranscript(
     const last = prepared.at(-1)
     const receipt =
       fork && store
-        ? store.conversationReceipts.forkBoundary(
-            record.sessionId,
-            {
-              sessionId: fork.sessionId,
-              itemId: fork.itemId,
-              childBoundary: last
-                ? { kind: 'item', itemId: agentJournalItemKey(last.identity) }
-                : { kind: 'start' }
-            },
-            fork.title
-          )
+        ? store.conversationReceipts.forkBoundary(record.sessionId, {
+            sessionId: fork.sessionId,
+            itemId: fork.itemId,
+            childBoundary: last
+              ? { kind: 'item', itemId: agentJournalItemKey(last.identity) }
+              : { kind: 'start' }
+          })
         : undefined
     await attached.journal.replaceEpochItems(
       'legacy_import',

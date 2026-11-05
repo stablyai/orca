@@ -23,7 +23,6 @@ export async function prepareForkFounding(
       ? { kind: 'item', itemId: agentJournalItemKey(last.identity) }
       : { kind: 'start' }
   }
-  request.conversationName = params.fork.title
 }
 
 export function readForkHydration(
