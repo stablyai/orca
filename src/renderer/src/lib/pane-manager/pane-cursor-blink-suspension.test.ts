@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-control'
 import { resetHiddenWebglRetentionForTest } from './terminal-webgl-hidden-retention'
-import { isTerminalCursorBlinkSuspended } from './pane-cursor-blink-suspension'
+import {
+  isTerminalCursorBlinkSuspended,
+  suspendTerminalCursorBlink
+} from './pane-cursor-blink-suspension'
 
 /** Hidden panes must stop redraws and restore their exact cursor state. Assert rendered cursor classes, not options alone; a separate redraw counter covers WebGL’s document-focused timer leak. */
 
@@ -101,7 +104,9 @@ describe('hidden-pane cursor blink suspension', () => {
     expect(rendersBlinkingCursor(pane)).toBe(true)
 
     suspendPaneRendering([pane])
-    expect(isTerminalCursorBlinkSuspended(pane.terminal)).toBe(true)
+    // DOM blink is focus-gated CSS; toggling the option would rewrite xterm's stylesheet on every switch.
+    expect(isTerminalCursorBlinkSuspended(pane.terminal)).toBe(false)
+    expect(pane.terminal.options.cursorBlink).toBe(true)
 
     await reveal([pane])
     await nextFrame()
@@ -157,7 +162,8 @@ describe('hidden-pane cursor blink suspension', () => {
 
   it('does not re-arm a hidden pane when the blink setting changes mid-hide', async () => {
     const pane = createTestPane({ cursorBlink: false })
-    suspendPaneRendering([pane])
+    // Park as a retained hidden WebGL pane does; the DOM fixture has no WebGL addon to retain.
+    suspendTerminalCursorBlink(pane.terminal)
 
     const { setTerminalCursorBlinkOption } = await import('./pane-cursor-blink-suspension')
     setTerminalCursorBlinkOption(pane.terminal, true)

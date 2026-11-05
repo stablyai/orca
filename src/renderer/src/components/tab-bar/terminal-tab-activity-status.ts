@@ -28,7 +28,7 @@ type ProgressRingStatus = Extract<TerminalTabActivityStatus, 'working' | 'permis
 
 type PaneProgramProgress = { progress: number; updatedAt: number }
 
-type TerminalTabActivityFlags = AgentPaneActivityFlags & {
+export type TerminalTabActivityFlags = AgentPaneActivityFlags & {
   paneIds: Set<string>
   /** Panes whose row went stale; suppress generated permission labels only. */
   stalePaneIds: Set<string>
@@ -45,7 +45,7 @@ type FlagsCache = {
 // Index each pane-status snapshot once so per-tab Zustand selectors cost O(agents + tabs), not O(agents × tabs).
 let flagsCache: FlagsCache | null = null
 
-function getTerminalTabActivityFlags(
+export function getTerminalTabActivityFlags(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
   agentStatusEpoch: number | undefined
 ): Map<string, TerminalTabActivityFlags> {
@@ -149,7 +149,7 @@ function parseAgentStatusPaneKey(paneKey: string): { tabId: string; paneId: stri
 
 const EMPTY_PANE_IDS: ReadonlySet<string> = new Set()
 
-type TerminalTabActivityInput = {
+export type TerminalTabActivityInput = {
   // Carry launchAgent to attribute providerless spinner titles; omitting this optional field compiles but loses the status signal.
   tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>

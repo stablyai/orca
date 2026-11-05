@@ -71,7 +71,10 @@ export function suspendPaneRendering(
     pane.webglAttachmentDeferred = true
     pane.terminal.blur()
     // Suspend blink before the retention return: live WebGL uses document focus, so an unfocused terminal could otherwise redraw for five minutes.
-    suspendTerminalCursorBlink(pane.terminal)
+    // DOM-rendered blink is focus-gated CSS, and toggling the option there rewrites xterm's stylesheet and refits on every hide and reveal.
+    if (pane.webglAddon) {
+      suspendTerminalCursorBlink(pane.terminal)
+    }
   }
   // Retain recent hidden WebGL for immediate switch-back; evicted/over-cap owners dispose.
   if (retention && tryRetainHiddenPanesWebgl(retention.owner, retention.livePanes)) {
