@@ -714,5 +714,50 @@ describe('Claude permission wait that Claude denies itself', () => {
       ])
       expect(states.at(-1)).toBe('PostToolBatch:waiting')
     })
+
+    const leadCommand = { command: 'touch /private/tmp/orca-permcap-lead' }
+    const leadRequest = [
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: leadCommand,
+        tool_use_id: 'toolu-lead'
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: leadCommand }
+    ]
+
+    it("keeps the lead's open prompt when a task notification arrives before a subagent's request ends", async () => {
+      const states = await replay([
+        { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+        { hook_event_name: 'SubagentStart', ...childB },
+        ...leadRequest,
+        {
+          hook_event_name: 'UserPromptSubmit',
+          prompt:
+            '<task-notification>\n<task-id>a1</task-id>\n<status>completed</status>\n</task-notification>'
+        },
+        ...childBDenial
+      ])
+      expect(states.at(-1)).toBe('PostToolBatch:waiting')
+    })
+
+    it("keeps the lead's open prompt when another agent reports a result under the same id", async () => {
+      const childC = { agent_id: 'agent-c', agent_type: 'general-purpose' }
+      const states = await replay([
+        { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+        { hook_event_name: 'SubagentStart', ...childB },
+        { hook_event_name: 'SubagentStart', ...childC },
+        ...leadRequest,
+        {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_input: leadCommand,
+          tool_use_id: 'toolu-lead',
+          ...childC
+        },
+        ...childBDenial
+      ])
+      expect(states.at(-1)).toBe('PostToolBatch:waiting')
+    })
   })
 })

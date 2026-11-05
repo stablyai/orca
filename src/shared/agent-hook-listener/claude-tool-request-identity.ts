@@ -3,6 +3,8 @@ import { isAskUserQuestionTool } from '../agent-status/lifecycle/agent-question-
 import type { HookListenerState } from './listener-state'
 import { deriveToolInputPreview, readString } from './tool-input-preview'
 import { readClaudeBatchSettledRequests } from './claude-settled-permission-requests'
+import { extractPromptText } from './prompt-fields'
+import { hasExplicitUserPrompt } from './provider-event-routing'
 
 /** The fields that tie a Claude PermissionRequest to the PreToolUse it is asking about. */
 export type ClaudeToolRequestFields = {
@@ -175,7 +177,7 @@ function endedRequests(
     return 'all'
   }
   if (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') {
-    return (entry) => entry.kind === 'tool' && entry.toolUseId === toolUseId
+    return (entry) => isOwnedCall(entry, toolAgentId) && entry.toolUseId === toolUseId
   }
   if (eventName === 'ElicitationResult') {
     const result = { ...readRequestFields(hookPayload), ...elicitationWait(hookPayload) }
@@ -191,13 +193,28 @@ function endedRequests(
   }
   if (eventName === 'PostToolBatch') {
     const settled = new Set(readClaudeBatchSettledRequests(hookPayload)?.map((r) => r.toolUseId))
-    return (entry) => entry.kind === 'tool' && settled.has(entry.toolUseId)
+    return (entry) => isOwnedCall(entry, toolAgentId) && settled.has(entry.toolUseId)
   }
-  // A lead's calls never outlive its turn; background children's can.
+  // A lead's calls never outlive its turn; background children's can. An injected task notification is not a turn.
   const leadTurnBoundary =
     toolAgentId === undefined &&
-    (eventName === 'UserPromptSubmit' || eventName === 'Stop' || eventName === 'StopFailure')
+    (eventName === 'Stop' ||
+      eventName === 'StopFailure' ||
+      (eventName === 'UserPromptSubmit' && isExplicitUserPrompt(hookPayload)))
   return (entry) => leadTurnBoundary && entry.toolAgentId === undefined
+}
+
+// A result or batch ends only its own agent's call, so a reused id cannot end another agent's prompt.
+function isOwnedCall(
+  entry: ClaudeToolRequest,
+  toolAgentId: string | undefined
+): entry is ClaudeToolCall {
+  return entry.kind === 'tool' && entry.toolAgentId === toolAgentId
+}
+
+function isExplicitUserPrompt(hookPayload: Record<string, unknown>): boolean {
+  const prompt = extractPromptText(hookPayload)
+  return hasExplicitUserPrompt('claude', 'UserPromptSubmit', prompt, prompt.text)
 }
 
 // Claude pairs a dialog with its result by elicitation_id, which is unique only within its MCP server.
