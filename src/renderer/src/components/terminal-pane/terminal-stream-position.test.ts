@@ -52,6 +52,25 @@ describe('TerminalStreamPosition', () => {
     )
   })
 
+  it('re-arms an escape the replay omitted for a chunk cut at its seq (#33766)', () => {
+    const position = new TerminalStreamPosition()
+    position.anchor(PTY, 100, '')
+    const cut = { startsAtGround: false, boundaryUnknown: true, cutEscapeTail: '[' }
+    expect(position.admit(PTY, '>4;2m', at(100, '>4;2m', cut))).toBe('[>4;2m')
+    // Only the delivery at the replay's own seq re-arms.
+    expect(position.admit(PTY, '>4;2m', at(105, '>4;2m', cut))).toBe('>4;2m')
+  })
+
+  it('leaves a cut as it is when the replay re-armed a tail or did not say', () => {
+    const cut = { startsAtGround: false, boundaryUnknown: true, cutEscapeTail: '[' }
+    const rearmed = new TerminalStreamPosition()
+    rearmed.anchor(PTY, 100, '[')
+    expect(rearmed.admit(PTY, '>4;2m', at(100, '>4;2m', cut))).toBe('>4;2m')
+    const unsaid = new TerminalStreamPosition()
+    unsaid.anchor(PTY, 100)
+    expect(unsaid.admit(PTY, '>4;2m', at(100, '>4;2m', cut))).toBe('>4;2m')
+  })
+
   it('treats bytes after its own reset as a gap, even at the same position', () => {
     const position = new TerminalStreamPosition()
     position.anchor(PTY, 100)
@@ -169,6 +188,16 @@ describe('streamDeliveryOf', () => {
       startsAtGround: false,
       boundaryUnknown: true
     })
+  })
+
+  it('reports the escape a cut leaves open when main proved the chunk starts at ground', () => {
+    const cutTail = (delivered: { data: string; seq: number; midEscape?: true | 'unknown' }) =>
+      streamDeliveryOf('>4;2m', delivered, { seqCountsChars: true }).cutEscapeTail
+    expect(cutTail({ data: 'ab[>4;2m', seq: 9 })).toBe('[')
+    expect(cutTail({ data: 'ab[1m>4;2m', seq: 11 })).toBeUndefined()
+    // Unknown when the chunk starts inside an escape or its cut-off bytes hold a C1 control.
+    expect(cutTail({ data: 'ab[>4;2m', seq: 9, midEscape: true })).toBeUndefined()
+    expect(cutTail({ data: 'ab[>4;2m', seq: 10 })).toBeUndefined()
   })
 
   it('never fabricates a position for a suffix of a transformed chunk', () => {
