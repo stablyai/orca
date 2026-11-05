@@ -31,14 +31,15 @@ function UsageDialog({
     document.activeElement instanceof HTMLElement ? document.activeElement : null
   )
   const title = translate('components.native-chat.usage.title', 'Codex usage')
-  // Sized to the card, capped at /resume's height; the card holds its layout while loading.
+  // Sized to the card, capped at /resume's height. The top is pinned where /resume's top sits,
+  // so title and Close stay put while the card grows from its loading layout to the loaded one.
   return (
     <Dialog open onOpenChange={(open) => !open && closeModal()}>
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
         surface="panel"
-        className="flex max-h-[min(640px,calc(100vh-4rem))] flex-col overflow-hidden sm:max-w-[560px]"
+        className="top-[max(2rem,calc(50%-320px))] flex max-h-[min(640px,calc(100vh-4rem))] translate-y-0 flex-col overflow-hidden sm:max-w-[560px]"
         onCloseAutoFocus={(event) => {
           event.preventDefault()
           if (returnFocusTo?.isConnected) {
