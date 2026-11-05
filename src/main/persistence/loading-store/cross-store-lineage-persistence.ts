@@ -3,7 +3,10 @@ import type { WorkspaceKey } from '../../../shared/workspace-scope'
 import type { CrossStoreWorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { validCrossStoreLineage } from '../../../shared/worktree/cross-store-lineage-records'
+import {
+  isCrossStoreWorkspaceLineage,
+  validCrossStoreLineage
+} from '../../../shared/worktree/cross-store-lineage-records'
 import { ownsRawIdBucket } from './metadata-lineage-operations'
 import type { StoreRuntimeState } from './store-runtime-state'
 import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
@@ -27,9 +30,13 @@ export class CrossStoreLineagePersistence {
   getCrossStoreWorkspaceLineage(
     childWorkspaceKey: WorkspaceKey
   ): CrossStoreWorkspaceLineage | undefined {
-    return validCrossStoreLineage(
+    const saved =
       this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey
-    )[childWorkspaceKey]
+    const entry =
+      saved && Object.hasOwn(saved, childWorkspaceKey) ? saved[childWorkspaceKey] : undefined
+    return isCrossStoreWorkspaceLineage(entry) && entry.childWorkspaceKey === childWorkspaceKey
+      ? entry
+      : undefined
   }
 
   getAllCrossStoreWorkspaceLineage(): Record<WorkspaceKey, CrossStoreWorkspaceLineage> {
