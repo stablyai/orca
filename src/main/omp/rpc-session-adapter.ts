@@ -113,6 +113,15 @@ export class OmpRpcSessionAdapter extends PiRpcSessionAdapter {
       const options = await session.readOptions()
       return fastOptions.get(session.connection)?.read(options) ?? options
     }
+    this.canSetOptionWhileIdle = (input) => {
+      const session = this.sessions.get(input.sessionId)
+      return (
+        session !== undefined &&
+        !session.connection.closed &&
+        session.input.fence === input.fence &&
+        input.key === 'model'
+      )
+    }
     const parentOpen = this.open
     this.open = async (input) => {
       const result = await parentOpen(input)
@@ -137,6 +146,7 @@ export class OmpRpcSessionAdapter extends PiRpcSessionAdapter {
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']>
   backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']>
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']>
+  canSetOptionWhileIdle: NonNullable<StructuredAgentSessionAdapter['canSetOptionWhileIdle']>
 
   copyConversation: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = (input) =>
     this.copies.copy(input)
