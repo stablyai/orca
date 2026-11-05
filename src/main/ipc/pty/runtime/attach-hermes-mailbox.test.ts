@@ -139,13 +139,23 @@ describe('mail to a Hermes terminal attached without a renderer', () => {
     const db = new OrchestrationDb(':memory:')
     try {
       const { runtime } = createRuntime(db, { headless: true, launchAgent: 'hermes' })
-      const reflow = vi.spyOn(runtime, 'reflowHeadlessTerminalToPtyGrid')
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => 'hermes',
+        getSize: getSizeFromRuntimeController
+      })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach needs only runtime; its delivery callbacks are optional.
       const deps = { runtime } as unknown as PtyRuntimeControllerDeps
       expect(await attachPtyFromRuntimeController(deps, PTY_ID)).toBe(true)
       expect(ptySizes.get(PTY_ID)).toEqual({ cols: 140, rows: 48 })
-      expect(reflow).toHaveBeenCalledWith(PTY_ID, 140, 48)
-      expect(reflow).not.toHaveBeenCalledWith(PTY_ID, 120, 40)
+      // The TUI repaints for the resize, and the screen rules can read that repaint.
+      runtime.onPtyData(PTY_ID, '\x1b[2J\x1b[H─ ready │ grok 4.7 │ 150k tokens\r\n❯', Date.now())
+      await runtime.serializeMainTerminalBuffer(PTY_ID)
+      expect(runtime['readRuledScreen'](PTY_ID)?.lines).toEqual([
+        '─ ready │ grok 4.7 │ 150k tokens',
+        '❯'
+      ])
     } finally {
       db.close()
     }
