@@ -14,7 +14,8 @@ function holdsLaunchIdentity(
   if (lifecycle === 'failed' || lifecycle === 'cancelled') {
     return false
   }
-  if (state.intent.params.resumeFrom) {
+  // A fork of one response holds like a resume, so a lost reply replays rather than copies again.
+  if (state.intent.params.resumeFrom || state.intent.params.forkFrom) {
     return true
   }
   const { attempt } = state.callers
