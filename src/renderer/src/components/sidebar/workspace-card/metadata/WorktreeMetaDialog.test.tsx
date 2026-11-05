@@ -225,5 +225,8 @@ describe('workspace linked work editor', () => {
       target: { value: 'app.test' }
     })
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Save' }).disabled).toBe(true)
+    expect(screen.getByRole('textbox', { name: 'Link' }).getAttribute('aria-describedby')).toBe(
+      screen.getByText('Enter a full http:// or https:// link.').id
+    )
   })
 })
