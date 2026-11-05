@@ -71,9 +71,14 @@ export function selectSidebarLineageParentIdentities(
   }
   const result = resolveSidebarParents(state)
   lastCall = {
-    inputs: Object.fromEntries(
-      INPUT_KEYS.map((key) => [key, state[key]])
-    ) as CrossStoreLineageInputs,
+    inputs: {
+      worktreesByRepo: state.worktreesByRepo,
+      worktreeLineageById: state.worktreeLineageById,
+      crossStoreLineageByStoreKey: state.crossStoreLineageByStoreKey,
+      ownLineageInstallationId: state.ownLineageInstallationId,
+      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+      removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds
+    },
     result
   }
   return result
