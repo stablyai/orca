@@ -63,7 +63,7 @@ export function sourceControlVariableDescription(variable: SourceControlActionVa
     case 'linkedIssue':
       return translate(
         'sourceControl.variables.linkedIssue',
-        'The GitHub issue number linked to this workspace. Empty when no GitHub issue is linked (including GitLab-linked workspaces). Prefer instructional templates: a bare "Fixes #{linkedIssue}" becomes "Fixes #" when unlinked.'
+        'The issue number linked to this workspace on its git host (GitHub or GitLab). Empty when no host issue is linked (including Linear-only workspaces). Prefer instructional templates: a bare "Fixes #{linkedIssue}" becomes "Fixes #" when unlinked.'
       )
   }
 }

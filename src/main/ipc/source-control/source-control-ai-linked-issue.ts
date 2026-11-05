@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
-import { isLinkedIssueNumber } from '../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
+import { linkedIssueNumberForTemplate } from '../../source-control/linked-issue-provider'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 
@@ -67,11 +67,7 @@ export function resolveSourceControlAiLinkedIssue(
   args: LinkedIssueLookupArgs,
   resolvedWorktreePath?: string
 ): number | null {
-  const linkedIssue = resolveSourceControlAiLinkedIssueMeta(
-    store,
-    args,
-    resolvedWorktreePath
-  )?.linkedIssue
-  // This metadata source supports GitHub links only.
-  return isLinkedIssueNumber(linkedIssue) ? linkedIssue : null
+  return linkedIssueNumberForTemplate(
+    resolveSourceControlAiLinkedIssueMeta(store, args, resolvedWorktreePath)
+  )
 }

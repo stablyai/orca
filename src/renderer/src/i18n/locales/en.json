@@ -21552,7 +21552,7 @@
       "patch": "The branch diff against the base branch used for PR-details generation.",
       "firstPrompt": "The first user request for this workspace or chat.",
       "assistantMessage": "The initial agent response, when Orca has one available.",
-      "linkedIssue": "The GitHub issue number linked to this workspace. Empty when no GitHub issue is linked (including GitLab-linked workspaces). Prefer instructional templates: a bare \"Fixes #{linkedIssue}\" becomes \"Fixes #\" when unlinked."
+      "linkedIssue": "The issue number linked to this workspace on its git host (GitHub or GitLab). Empty when no host issue is linked (including Linear-only workspaces). Prefer instructional templates: a bare \"Fixes #{linkedIssue}\" becomes \"Fixes #\" when unlinked."
     },
     "model": {
       "configDefault": "Config default",

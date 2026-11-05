@@ -8,7 +8,9 @@ const LOCAL_ID = `repo-1::${LOCAL_PATH}`
 const REMOTE_PATH = '/home/tester/wt'
 const REMOTE_ID = `repo-1::${REMOTE_PATH}`
 
-function makeStore(meta: Record<string, { linkedIssue?: number | null }>): Store {
+function makeStore(
+  meta: Record<string, { linkedIssue?: number | null; linkedGitLabIssue?: number | null }>
+): Store {
   return {
     getWorktreeMeta: vi.fn((worktreeId: string) => meta[worktreeId])
   } as unknown as Store
@@ -29,6 +31,14 @@ describe('resolveSourceControlAiLinkedIssue', () => {
   })
 
   // Independent callers can mismatch ID/path; renderer-derived stale pairs still agree and are not rejected here.
+  it('resolves a GitLab-only linked issue', () => {
+    const store = makeStore({ [LOCAL_ID]: { linkedIssue: null, linkedGitLabIssue: 7 } })
+
+    expect(
+      resolveSourceControlAiLinkedIssue(store, { worktreeId: LOCAL_ID, worktreePath: LOCAL_PATH })
+    ).toBe(7)
+  })
+
   it('rejects an independently supplied id whose path does not match the request', () => {
     const store = makeStore({ [LOCAL_ID]: { linkedIssue: 123 } })
 
