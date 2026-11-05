@@ -146,6 +146,37 @@ vi.mock('../sleep/WorkspaceSleepMenuItems', () => ({
 
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
+function makeWorktree(id: string, isMainWorktree = false): Worktree {
+  return {
+    id,
+    instanceId: `${id}-instance`,
+    repoId: id.split('::')[0],
+    path: `/path/to/${id}`,
+    displayName: id,
+    branch: 'refs/heads/feature',
+    head: 'abc123',
+    isBare: false,
+    isMainWorktree,
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0
+  }
+}
+
+function contextMenuScope(container: HTMLElement): HTMLElement {
+  const scope = container.querySelector<HTMLElement>('[data-worktree-context-menu-scope]')
+  if (!scope) {
+    throw new Error('context menu scope not rendered')
+  }
+  return scope
+}
+
 function renderContextMenu(worktree: Worktree, isActive = true) {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -182,16 +213,10 @@ describe('WorktreeContextMenu delete shortcut display', () => {
   })
 
   it('renders the delete shortcut badge for standard worktree delete', () => {
-    const worktree = {
-      id: 'repo::wt-1',
-      repoId: 'repo',
-      name: 'wt-1',
-      path: '/path/to/wt-1',
-      isMainWorktree: false
-    } as unknown as Worktree
+    const worktree = makeWorktree('repo::wt-1')
 
     const container = renderContextMenu(worktree)
-    const target = container.querySelector('[data-worktree-context-menu-scope]') as HTMLElement
+    const target = contextMenuScope(container)
     expect(target).toBeTruthy()
     act(() => {
       target.dispatchEvent(
@@ -205,16 +230,10 @@ describe('WorktreeContextMenu delete shortcut display', () => {
   })
 
   it('omits the delete shortcut badge on a row that is not active', () => {
-    const worktree = {
-      id: 'repo::wt-1',
-      repoId: 'repo',
-      name: 'wt-1',
-      path: '/path/to/wt-1',
-      isMainWorktree: false
-    } as unknown as Worktree
+    const worktree = makeWorktree('repo::wt-1')
 
     const container = renderContextMenu(worktree, false)
-    const target = container.querySelector('[data-worktree-context-menu-scope]') as HTMLElement
+    const target = contextMenuScope(container)
     act(() => {
       target.dispatchEvent(
         new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })
@@ -226,16 +245,10 @@ describe('WorktreeContextMenu delete shortcut display', () => {
   })
 
   it('omits the delete shortcut on disabled Delete Worktree for primary checkout', () => {
-    const worktree = {
-      id: 'repo-1::main',
-      repoId: 'repo-1',
-      name: 'main',
-      path: '/path/to/main',
-      isMainWorktree: true
-    } as unknown as Worktree
+    const worktree = makeWorktree('repo-1::main', true)
 
     const container = renderContextMenu(worktree)
-    const target = container.querySelector('[data-worktree-context-menu-scope]') as HTMLElement
+    const target = contextMenuScope(container)
     act(() => {
       target.dispatchEvent(
         new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })
@@ -249,16 +262,10 @@ describe('WorktreeContextMenu delete shortcut display', () => {
 
   it('omits the shortcut badge when the action is unassigned', () => {
     shortcutLabelMock.mockReturnValue(null)
-    const worktree = {
-      id: 'repo::wt-1',
-      repoId: 'repo',
-      name: 'wt-1',
-      path: '/path/to/wt-1',
-      isMainWorktree: false
-    } as unknown as Worktree
+    const worktree = makeWorktree('repo::wt-1')
 
     const container = renderContextMenu(worktree)
-    const target = container.querySelector('[data-worktree-context-menu-scope]') as HTMLElement
+    const target = contextMenuScope(container)
     act(() => {
       target.dispatchEvent(
         new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })
