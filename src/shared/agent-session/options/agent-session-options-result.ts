@@ -18,6 +18,7 @@ export type AgentSessionAcceptedInputSources = Partial<
 export type AgentSessionOptionsResult = {
   /** This host verified that account selection moves this chat with its history intact. */
   canSwitchAccount?: boolean
+  accountUsage?: true
   /** Saved conversation on this execution host, resolved from the record's own account store. */
   transcriptPath?: string
   rewind?: AgentSessionRewindSupport

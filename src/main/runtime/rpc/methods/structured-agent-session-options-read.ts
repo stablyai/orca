@@ -1,3 +1,4 @@
+import { supportsSessionAccountUsage } from './structured-agent-session-account-usage'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 // options reads at-rest records/catalogs or the live provider; modelCatalog reads stored/start-published facts without waiting on attach.
 // Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
@@ -54,7 +55,13 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     handler: async (params, ctx) => {
       const readsWithoutModel = clientReadsOptionsWithoutModel(ctx)
       const host = await requireInstalledStructuredHost(ctx, params.sessionId)
-      const result = await host.readOptions(params.sessionId, { readsWithoutModel })
+      const read = await host.readOptions(params.sessionId, { readsWithoutModel })
+      const result = {
+        ...read,
+        ...(supportsSessionAccountUsage(host.deps.store.getRecord(params.sessionId))
+          ? { accountUsage: true as const }
+          : {})
+      }
       if (result.current.model === undefined && !readsWithoutModel) {
         return {
           ...result,

@@ -20510,7 +20510,20 @@
         "cancel": "Don't continue"
       },
       "settings": "Chat settings",
-      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message."
+      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
+      "usage": {
+        "description": "Show usage for this chat’s Codex account",
+        "loading": "Loading Codex usage…",
+        "failed": "Codex usage couldn’t be loaded. Try again.",
+        "codexVersion": "This Codex version doesn’t report usage. Update Codex.",
+        "apiKeyAuth": "Codex usage isn’t available with an API key. Sign in to Codex with a ChatGPT account to view usage.",
+        "dismiss": "Dismiss Codex usage",
+        "account": "Account used by this chat",
+        "retry": "Retry",
+        "resetFailed": "Codex limits couldn’t be reset. Try again.",
+        "confirmReset": "This uses one Codex rate-limit reset credit for {{account}} and resets any eligible usage windows immediately.",
+        "sharedAccount": "Current shared account"
+      }
     },
     "tab": {
       "bar": {

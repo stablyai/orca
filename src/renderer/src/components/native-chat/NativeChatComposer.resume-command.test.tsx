@@ -153,6 +153,75 @@ describe('/resume in the native chat composer', () => {
   })
   afterEach(() => cleanup())
 
+  it('offers usage only with host support and consumes a pick without dropping the remaining draft or attachments', () => {
+    mocks.draft = '/usa'
+    mocks.imageAttachments = [{ id: 'img-1', path: '/tmp/a.png' }]
+    const { transport, rerender } = renderStructuredChat()
+    expect(
+      mocks.fieldProps?.autocomplete?.items?.some(
+        (item) => item.name === 'usage' && item.kind === 'command'
+      ) ?? false
+    ).toBe(false)
+    const open = vi.fn()
+    transport.accountUsage = { open }
+    rerender()
+    expect(
+      mocks.fieldProps?.autocomplete?.items?.some(
+        (item) => item.name === 'usage' && item.kind === 'command'
+      )
+    ).toBe(true)
+    mocks.draft = '/usa keep this draft'
+    rerender()
+    act(() =>
+      mocks.keyDownArgs?.dispatchPickerCommand({
+        ...RESUME,
+        id: 'command:usage',
+        name: 'usage',
+        token: '/usage'
+      })
+    )
+    expect(open).toHaveBeenCalledOnce()
+    expect(mocks.setDraft).toHaveBeenCalledWith('keep this draft')
+    expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
+    expect(transport.send).not.toHaveBeenCalled()
+    mocks.draft = '/usage'
+    rerender()
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(open).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a picked skill named usage as a skill', () => {
+    mocks.draft = '/usa'
+    const { transport, rerender } = renderStructuredChat()
+    const open = vi.fn()
+    transport.accountUsage = { open }
+    rerender()
+    act(() =>
+      mocks.fieldProps?.onChoosePickerItem?.({
+        kind: 'skill',
+        id: 'skill:usage',
+        name: 'usage',
+        token: '/usage',
+        description: null,
+        sources: []
+      })
+    )
+    mocks.draft = '/usage'
+    rerender()
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(open).not.toHaveBeenCalled()
+    expect(transport.dispatchCommand).toHaveBeenCalledWith('/usage')
+    act(() =>
+      mocks.keyDownArgs?.dispatchPickerCommand({
+        ...RESUME,
+        id: 'command:usage',
+        name: 'usage',
+        token: '/usage'
+      })
+    )
+    expect(open).toHaveBeenCalledOnce()
+  })
+
   it("opens a structured chat's history, typed in any case, and sends nothing", () => {
     mocks.draft = '/Resume  auth  retry'
     mocks.imageAttachments = [{ id: 'img-1', path: '/tmp/a.png' }]

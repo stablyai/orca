@@ -1,3 +1,4 @@
+import type { CodexAccountUsageRead } from '../../rate-limits/codex-rpc-rate-limit-probe'
 import type { ClaudeAccountRecipe } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
@@ -177,6 +178,7 @@ export type StructuredAgentSessionSetOptionInput = {
 }
 
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
+  readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */

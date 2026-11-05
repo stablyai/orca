@@ -1,3 +1,4 @@
+import { STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS } from './structured-agent-session-account-usage'
 import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './structured-agent-session-usage-limit-continue'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './structured-agent-session-close-method'
 import { clientRequestsCommands } from './structured-agent-session-policy'
@@ -297,5 +298,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS,
   ...STRUCTURED_AGENT_SESSION_ITEM_METHODS,
   ...STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS,
+  ...STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS,
   ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS
 ]

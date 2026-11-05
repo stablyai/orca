@@ -30,7 +30,10 @@ import {
   consumeCodexRateLimitResetCreditFromBackend,
   supplementCodexRateLimitResetCredits
 } from './codex-reset-credit-client'
-import { readCodexRateLimitsViaRpc } from './codex-rpc-rate-limit-probe'
+import {
+  readCodexAccountUsageViaRpc,
+  readCodexRateLimitsViaRpc
+} from './codex-rpc-rate-limit-probe'
 import { getHiddenProbeWslCwdSetupCommands, resolveHiddenProbeCwd } from './hidden-probe-cwd'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { resolveWslInteropSpawnCwd } from '../wsl/execution/wsl-interop-spawn-directory'
@@ -82,10 +85,7 @@ function requestCodexBackend(url: string, init: RequestInit): Promise<Response> 
   return getMainHttpClient().fetch(url, { ...init, credentials: 'omit' })
 }
 
-async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<ProviderRateLimits> {
-  if (options?.signal?.aborted) {
-    return abortedCodexRateLimitResult()
-  }
+function codexRpcProbeOptions(options?: CodexRateLimitFetchOptions) {
   const codexArgs = [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS]
   const wslCodex = options?.codexHomePath
     ? buildWslCodexCommand(options.codexHomePath, codexArgs)
@@ -104,13 +104,27 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
       ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
     })
   })
-  return readCodexRateLimitsViaRpc({
+  return {
     child,
     codexCommand,
     initTimeoutMs: wslCodex ? WSL_RPC_INIT_TIMEOUT_MS : RPC_INIT_TIMEOUT_MS,
     rpcTimeoutMs: wslCodex ? WSL_RPC_TIMEOUT_MS : RPC_TIMEOUT_MS,
     fetchOptions: options,
     terminate: () => terminateCodexProbeChild(child)
+  }
+}
+
+async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<ProviderRateLimits> {
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
+  return readCodexRateLimitsViaRpc(codexRpcProbeOptions(options))
+}
+
+export function readCodexAccountUsageForHome(codexHomePath: string, signal: AbortSignal) {
+  return withCodexHomeProcessLock(resolveCodexHomeProcessLockKey(codexHomePath), () => {
+    signal.throwIfAborted()
+    return readCodexAccountUsageViaRpc(codexRpcProbeOptions({ codexHomePath, signal }))
   })
 }
 

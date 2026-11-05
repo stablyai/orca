@@ -7,21 +7,10 @@ import {
 } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { redactString } from '../observability/redactor'
-import {
-  classifyCodexRateLimitWindows,
-  CODEX_SESSION_WINDOW_MINUTES,
-  CODEX_WEEKLY_WINDOW_MINUTES,
-  type CodexRateLimitWindowsSnapshot
-} from './codex-rate-limit-window-classification'
-import { mapCodexCredits } from './codex-credit-balance'
+import { mapCodexRpcRateLimits, type RpcRateLimitsResponse } from './codex-rpc-rate-limit-mapper'
 import { classifyCodexRpcErrorFailureKind } from './codex-rpc-failure-kind'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
 import { abortedCodexRateLimitResult } from './codex-rate-limit-fetch-result'
-import { mapCodexRateLimitWindow } from './codex-rate-limit-window-mapper'
-import {
-  mapRpcRateLimitResetCredits,
-  type RpcRateLimitResetCredits
-} from './codex-reset-credit-client'
 
 const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
 
@@ -29,11 +18,6 @@ type RpcResponse = {
   id: number
   result?: unknown
   error?: { code: number; message: string }
-}
-
-type RpcRateLimitsResponse = {
-  rateLimits?: CodexRateLimitWindowsSnapshot | null
-  rateLimitResetCredits?: RpcRateLimitResetCredits
 }
 
 type RpcDataStream = {
@@ -60,7 +44,7 @@ export type CodexRpcRateLimitChild = {
   off(event: 'close', listener: CodexRpcCloseListener): unknown
 }
 
-type CodexRpcRateLimitProbeOptions = {
+export type CodexRpcRateLimitProbeOptions = {
   child: CodexRpcRateLimitChild
   codexCommand: string
   initTimeoutMs: number
@@ -76,8 +60,29 @@ function buildRpcMessage(id: number, method: string, params?: unknown): string {
 export function readCodexRateLimitsViaRpc(
   options: CodexRpcRateLimitProbeOptions
 ): Promise<ProviderRateLimits> {
-  return new Promise<ProviderRateLimits>((resolve) => {
+  return readCodexUsageProbe(options, false).then(({ rateLimits }) => rateLimits)
+}
+
+export type CodexAccountUsageRead = {
+  account?: { type?: string; email?: string; planType?: string } | null
+  rateLimits: ProviderRateLimits
+  live?: boolean
+}
+
+export function readCodexAccountUsageViaRpc(
+  options: CodexRpcRateLimitProbeOptions
+): Promise<CodexAccountUsageRead> {
+  return readCodexUsageProbe(options, true)
+}
+
+function readCodexUsageProbe(
+  options: CodexRpcRateLimitProbeOptions,
+  readAccount: boolean
+): Promise<CodexAccountUsageRead> {
+  return new Promise((resolve, reject) => {
     const { child, codexCommand, fetchOptions } = options
+    let account: CodexAccountUsageRead['account']
+    let rpcError: RpcResponse['error']
     let buffer = ''
     let stderr = ''
     let resolved = false
@@ -102,14 +107,18 @@ export function readCodexRateLimitsViaRpc(
       }
       resolved = true
       cleanupListeners()
+      const finish = (): void => {
+        if (readAccount && (rpcError || result.status !== 'ok')) {
+          reject(rpcError ?? new Error(result.error ?? 'Codex usage unavailable'))
+        } else {
+          resolve({ account, rateLimits: result })
+        }
+      }
       if (settleOptions?.kill) {
-        void options.terminate().then(
-          () => resolve(result),
-          () => resolve(result)
-        )
+        void options.terminate().then(finish, finish)
         return
       }
-      resolve(result)
+      finish()
     }
 
     function onAbort(): void {
@@ -195,6 +204,7 @@ export function readCodexRateLimitsViaRpc(
       })
     }
 
+    let accountId: number | null = null
     let rateLimitsId: number | null = null
     let initId: number
 
@@ -213,19 +223,48 @@ export function readCodexRateLimitsViaRpc(
             continue
           }
           if (message.id === initId) {
+            if (readAccount && message.error) {
+              rpcError = message.error
+              onError(new Error(message.error.message))
+              return
+            }
             armRpcDeadline(options.rpcTimeoutMs)
             try {
               sendNotification('initialized')
-              rateLimitsId = sendRpc('account/rateLimits/read')
+              if (readAccount) {
+                accountId = sendRpc('account/read')
+              } else {
+                rateLimitsId = sendRpc('account/rateLimits/read')
+              }
             } catch (error) {
               onError(error instanceof Error ? error : new Error(String(error)))
             }
+            continue
+          }
+          if (accountId !== null && message.id === accountId) {
+            if (message.error) {
+              rpcError = message.error
+              onError(new Error(message.error.message))
+              return
+            }
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: account/read supplies the Codex account envelope; missing account remains unknown.
+            account = (message.result as { account?: CodexAccountUsageRead['account'] })?.account
+            if (account?.type === 'apiKey') {
+              rpcError = {
+                code: -1,
+                message: 'API key authentication requires a ChatGPT account for usage'
+              }
+              onError(new Error(rpcError.message))
+              return
+            }
+            rateLimitsId = sendRpc('account/rateLimits/read')
             continue
           }
           if (rateLimitsId === null || message.id !== rateLimitsId || resolved) {
             continue
           }
           if (message.error) {
+            rpcError = message.error
             const failureKind = classifyCodexRpcErrorFailureKind(message.error.message)
             settle(
               {
@@ -241,23 +280,8 @@ export function readCodexRateLimitsViaRpc(
             )
             return
           }
-          const wrapper = message.result as RpcRateLimitsResponse | undefined
-          const classified = classifyCodexRateLimitWindows(wrapper?.rateLimits)
-          const credits = mapRpcRateLimitResetCredits(wrapper?.rateLimitResetCredits)
-          const extraUsage = mapCodexCredits(wrapper?.rateLimits?.credits)
-          settle(
-            {
-              provider: 'codex',
-              session: mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES),
-              weekly: mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES),
-              ...(credits !== undefined ? { rateLimitResetCredits: credits } : {}),
-              ...(extraUsage ? { extraUsage } : {}),
-              updatedAt: Date.now(),
-              error: null,
-              status: 'ok'
-            },
-            { kill: true }
-          )
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared mapper reads only optional fields from the Codex rate-limit reply.
+          settle(mapCodexRpcRateLimits(message.result as RpcRateLimitsResponse), { kill: true })
         } catch {
           // Non-JSON output from the RPC server is not part of the protocol stream.
         }

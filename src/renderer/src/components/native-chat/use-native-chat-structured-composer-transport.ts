@@ -1,3 +1,4 @@
+import { useNativeChatAccountUsage } from './use-native-chat-account-usage'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { localizeStructuredComposerOutcome } from './structured-composer-command-error-text'
@@ -56,6 +57,14 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.agent,
     controller.acceptsImages
   )
+  const accountUsage = useNativeChatAccountUsage({
+    supported: controller.accountUsage === true,
+    sessionId: props.sessionId,
+    target: props.target,
+    fence: controller.accountUsageFence,
+    turnId: controller.turnId,
+    sending: controller.sendOut
+  })
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
     const setThreadGoalObjective = threadGoal?.hostChanges
@@ -65,6 +74,9 @@ export function useNativeChatStructuredComposerTransport(args: {
             : Promise.resolve(false)
       : null
     return {
+      accountUsage: accountUsage.command
+        ? { ...accountUsage.command, card: accountUsage.card }
+        : undefined,
       capturePresentation: controller.capturePresentation,
       send: (text, attachments, ...request) =>
         sendBlockedReason === null &&
@@ -130,6 +142,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     }
   }, [
     acceptsImages,
+    accountUsage,
     controller,
     worktreeId,
     onError,
