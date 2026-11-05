@@ -143,6 +143,7 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
     rowsBelowWrapped,
     rowsBelowCustomForeground,
     beforeCursor: cursorLine.translateToString(true, 0, buffer.cursorX),
+    rawBeforeCursor: cursorLine.translateToString(false, 0, buffer.cursorX),
     afterCursor: undimmedText(
       cursorLine,
       buffer.cursorX,
