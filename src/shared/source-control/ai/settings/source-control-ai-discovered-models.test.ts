@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../generation/commit-message-host-key'
 import { savedDiscoveredModels, withDiscoveredModels } from './source-control-ai-model-selection'
-import type { SourceControlAiSettings } from './source-control-ai-settings-types'
+import { normalizeSourceControlAiSettings } from './source-control-ai-settings'
 
 it('saves discovered Claude rows without the resolved model an alias row carries', () => {
   const discovered = [
@@ -9,7 +9,7 @@ it('saves discovered Claude rows without the resolved model an alias row carries
     { id: 'opus', label: 'Opus alias', resolvedModel: 'claude-opus-5-5' }
   ]
   const saved = withDiscoveredModels(
-    {} as SourceControlAiSettings,
+    normalizeSourceControlAiSettings(undefined),
     'claude',
     discovered,
     LOCAL_COMMIT_MESSAGE_HOST_KEY
