@@ -1,5 +1,6 @@
 import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
 import { readClaudeBatchSettledRequests } from '../claude-settled-permission-requests'
+import { claudeHasPendingPermission } from '../claude-tool-request-identity'
 import type { HookListenerState } from '../listener-state'
 import type { ClaudeLeadTurnState } from '../main-agent-turn-state'
 import { buildClaudeCachedLeadStatusPayload } from './claude-lifecycle-events'
@@ -30,8 +31,8 @@ export function settleClaudeToolBatch(
       ? null
       : buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
   }
-  // A child wait stashes no state only when it displaced the lead's own open prompt, which it can't restore; stay waiting.
-  if (eventAgentId !== undefined && lead.stateBeforeWait === undefined) {
+  // The single wait slot holds only the newest prompt; while another is still open, keep the held row.
+  if (claudeHasPendingPermission(state, paneKey)) {
     return null
   }
   const restored = setClaudeMainAgentTurnState(

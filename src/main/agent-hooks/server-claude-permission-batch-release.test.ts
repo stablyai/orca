@@ -178,6 +178,61 @@ describe('Claude permission wait that Claude denies itself', () => {
     expect(states.at(-1)).toBe('PostToolBatch:waiting')
   })
 
+  it("keeps the pane waiting when one subagent's request ends while another's prompt is open", async () => {
+    const childA = { agent_id: 'agent-a', agent_type: 'general-purpose' }
+    const childB = { agent_id: 'agent-b', agent_type: 'general-purpose' }
+    const commandA = { command: 'touch /private/tmp/orca-permcap-a' }
+    const commandB = { command: 'touch /private/tmp/orca-permcap-b' }
+    const states = await replay([
+      { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+      { hook_event_name: 'SubagentStart', ...childA },
+      { hook_event_name: 'SubagentStart', ...childB },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: commandA,
+        tool_use_id: 'toolu-a',
+        ...childA
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: commandA, ...childA },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: commandB,
+        tool_use_id: 'toolu-b',
+        ...childB
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: commandB, ...childB },
+      {
+        hook_event_name: 'PostToolBatch',
+        tool_calls: [{ tool_name: 'Bash', tool_input: commandB, tool_use_id: 'toolu-b' }],
+        ...childB
+      }
+    ])
+    expect(states.at(-1)).toBe('PostToolBatch:waiting')
+  })
+
+  it("ends a subagent's self-denied wait when the listener has no earlier record of the lead", async () => {
+    const child = { agent_id: 'agent-child', agent_type: 'general-purpose' }
+    const command = { command: 'touch /private/tmp/orca-permcap-fresh' }
+    const states = await replay([
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: command,
+        tool_use_id: 'toolu-x',
+        ...child
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: command, ...child },
+      {
+        hook_event_name: 'PostToolBatch',
+        tool_calls: [{ tool_name: 'Bash', tool_input: command, tool_use_id: 'toolu-x' }],
+        ...child
+      }
+    ])
+    expect(states.slice(-2)).toEqual(['PermissionRequest:waiting', 'PostToolBatch:working'])
+  })
+
   it("keeps the lead's wait when a background subagent's batch ends", async () => {
     const leadWait = capture.leadDenied.slice(
       0,
