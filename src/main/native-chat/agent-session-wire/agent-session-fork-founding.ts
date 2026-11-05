@@ -4,8 +4,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session/record
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
-import type { reserveRequestFor } from './structured-agent-session-attach'
-import type { AgentSessionAttachParams } from './structured-agent-session-attach'
+import type { AgentSessionAttachParams, reserveRequestFor } from './structured-agent-session-attach'
 
 export async function prepareForkFounding(
   params: AgentSessionAttachParams,

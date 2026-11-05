@@ -1,7 +1,9 @@
 import { createImportedForkTip } from './agent-session-journal/imported-fork-tip'
 import type {
+  OpenCodeForkTipEvent,
   OpenCodeTranscriptItem,
-  OpenCodeForkTipEvent
+  OpenCodeTranscriptPage,
+  OpenCodeTranscriptSignal
 } from './transcript-opencode-sqlite-query'
 import {
   OPENCODE_CAPTURE_RECORD_LIMIT,
@@ -15,10 +17,6 @@ import {
   readOpenCodeTranscriptSignalViaWorker
 } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { discoverOpenCodeTranscriptDatabase } from './transcript-opencode-database'
-import type {
-  OpenCodeTranscriptPage,
-  OpenCodeTranscriptSignal
-} from './transcript-opencode-sqlite-query'
 import { DESKTOP_READ_WINDOW } from './transcript-watch-contract'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 

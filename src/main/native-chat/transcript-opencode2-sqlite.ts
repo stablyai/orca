@@ -220,7 +220,7 @@ export function readOpenCode2TranscriptPage(
       }
       const record = typeof row.data === 'string' ? parseJsonObject(row.data) : null
       forkTip.push({
-        id: `opencode:${row.id}`,
+        id: `opencode:${String(row.id)}`,
         role: row.type === 'idle' ? 'terminal' : String(row.type),
         terminal:
           row.type === 'idle' &&
