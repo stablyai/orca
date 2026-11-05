@@ -817,7 +817,7 @@ export function createRemoteRuntimePtyTransport(
     announceSpawn: boolean,
     isCurrent: () => boolean
   ): Promise<boolean> {
-    const rebindWatch = startHostRebindWatch()
+    const rebindWatch = startHostRebindWatch({ surfaceRetired: true })
     const [exited, stillRetired] = await Promise.all([
       callRuntime<{ terminal?: RuntimeTerminalShow }>('terminal.show', {
         terminal: retired.retiredHandle
@@ -2471,7 +2471,9 @@ export function createRemoteRuntimePtyTransport(
   }
 
   // Why: a restart's new process can land just after the probe read the old one's exit (#31968).
-  function startHostRebindWatch(): HostRebindAfterExitWatch | null {
+  function startHostRebindWatch(
+    options: { surfaceRetired?: boolean } = {}
+  ): HostRebindAfterExitWatch | null {
     if (destroyed || !onHostReboundExitedPty || !worktreeId || !tabId || !leafId) {
       return null
     }
@@ -2487,7 +2489,8 @@ export function createRemoteRuntimePtyTransport(
         if (!destroyed && terminalEnded && watchLifecycle === lifecycleEpoch) {
           onHostReboundExitedPty(toRemoteRuntimePtyId(nextHandle, environmentId))
         }
-      }
+      },
+      options
     )
   }
 

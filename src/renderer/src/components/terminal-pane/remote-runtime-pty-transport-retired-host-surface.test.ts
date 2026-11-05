@@ -94,7 +94,7 @@ async function createHostMirror(onPtyExit = vi.fn(), onPtySpawn = vi.fn()) {
   return { transport, onPtyExit, onPtySpawn, onHostReboundExitedPty }
 }
 
-async function publishLiveHostSurface(terminal: string): Promise<void> {
+async function publishHostSurface(terminal: string | null, snapshotVersion: number): Promise<void> {
   // Why dynamic: the harness resets modules, so the transport's channel is the freshly loaded one.
   const { queueAcceptedWebSessionTerminalSnapshot } =
     await import('../../runtime/web-session-terminal-handle-events')
@@ -102,22 +102,24 @@ async function publishLiveHostSurface(terminal: string): Promise<void> {
     {
       worktree: 'wt-1',
       publicationEpoch: 'epoch-ready',
-      snapshotVersion: 4,
+      snapshotVersion,
       activeGroupId: null,
-      activeTabId: 'host-tab-1::pane:1',
-      activeTabType: 'terminal',
-      tabs: [
-        {
-          type: 'terminal',
-          id: 'host-tab-1::pane:1',
-          parentTabId: 'host-tab-1',
-          leafId: 'pane:1',
-          title: 'Terminal',
-          isActive: true,
-          status: 'ready',
-          terminal
-        }
-      ]
+      activeTabId: terminal ? 'host-tab-1::pane:1' : null,
+      activeTabType: terminal ? 'terminal' : null,
+      tabs: terminal
+        ? [
+            {
+              type: 'terminal',
+              id: 'host-tab-1::pane:1',
+              parentTabId: 'host-tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal',
+              isActive: true,
+              status: 'ready',
+              terminal
+            }
+          ]
+        : []
     },
     'env-1'
   )
@@ -184,7 +186,7 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
     transport.destroy?.()
   })
 
-  it('hands the pane to a replacement the host publishes while it reads the exit', async () => {
+  it('hands the ended pane to a replacement the host publishes later', async () => {
     answerAsHostThatRetired({ retired: 'terminal-ended', show: EXITED_127 })
     const exitRead = Promise.withResolvers<void>()
     const answer = runtimeCall.getMockImplementation()
@@ -200,8 +202,10 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
     await vi.waitFor(() =>
       expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.show' }))
     )
-    await publishLiveHostSurface('terminal-restarted')
+    await publishHostSurface(null, 4)
     exitRead.resolve()
+    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledOnce())
+    await publishHostSurface('terminal-restarted', 5)
 
     await vi.waitFor(() =>
       expect(onHostReboundExitedPty).toHaveBeenCalledWith('remote:env-1@@terminal-restarted')
