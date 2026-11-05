@@ -4,6 +4,7 @@ import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
+import type { NativeChatIdleStopSettings } from './native-chat/native-chat-idle-stop'
 import type { EditorTypographySettings } from './editor-typography-settings-types'
 import type { FileExplorerOpenInSettings } from './file-explorer-open-in-settings-types'
 import type { PluginAppearanceSettings } from './plugin-appearance-settings-types'
@@ -20,6 +21,7 @@ import type { EditorSaveSettings } from './editor-save-settings'
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
+  NativeChatIdleStopSettings &
   WorktreeDeletionPreferences &
   ClaudeAccountSwitchSettings &
   AgentPermissionGlobalSettings &
