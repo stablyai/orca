@@ -1224,7 +1224,6 @@
       "src/main/browser/sessions/browser-session-proxy.test.ts": 857,
       "src/main/browser/sessions/browser-session-registry-identity.persistence.test.ts": 603,
       "src/main/browser/sessions/browser-session-registry-startup-metadata.test.ts": 478,
-      "src/main/browser/sessions/browser-session-registry.persistence.test.ts": 1132,
       "src/main/browser/sessions/browser-session-registry.test.ts": 883,
       "src/main/browser/identity/browser-session-ua-wire-identity-cross-context.electron.test.ts": 7167,
       "src/main/browser/identity/browser-session-ua-wire-identity.electron.test.ts": 8280,
