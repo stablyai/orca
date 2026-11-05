@@ -31,13 +31,18 @@ async function startLongLivedChild(page: Page): Promise<number> {
     ptyId,
     `node -e "console.log('${tag}_PID=' + process.pid); setInterval(() => {}, 1000)"`
   )
-  await waitForTerminalOutput(page, `${tag}_PID=`, 20_000)
-  const content = await getTerminalContent(page)
-  const match = new RegExp(`${tag}_PID=(\\d+)`).exec(content)
-  if (!match) {
-    throw new Error(`Child PID marker missing from terminal output: ${content.slice(-500)}`)
-  }
-  const pid = Number(match[1])
+  // Match digits, not the bare marker: the echoed command line contains the marker too.
+  const pidPattern = new RegExp(`${tag}_PID=(\\d+)`)
+  let pid = 0
+  await expect
+    .poll(
+      async () => {
+        pid = Number(pidPattern.exec(await getTerminalContent(page))?.[1] ?? 0)
+        return pid
+      },
+      { timeout: 20_000 }
+    )
+    .toBeGreaterThan(0)
   expect(isProcessAlive(pid)).toBe(true)
   return pid
 }
@@ -76,9 +81,15 @@ test('stops terminal children on quit when enabled, then restores the tab', asyn
     const stoppedPid = await startLongLivedChild(firstLaunch.page)
     childPid = stoppedPid
 
+    const firstProcess = firstApp.process()
     await session.close(firstApp)
     firstApp = null
 
+    // A forced tree kill on close would also end the PTY child; only a clean quit proves stop-on-quit did.
+    expect({ exitCode: firstProcess.exitCode, signal: firstProcess.signalCode }).toEqual({
+      exitCode: 0,
+      signal: null
+    })
     await expect.poll(() => isProcessAlive(stoppedPid), { timeout: 15_000 }).toBe(false)
 
     const secondLaunch = await session.launch()

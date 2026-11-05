@@ -4,8 +4,15 @@ import { disconnectDaemon } from '../../daemon/providers/lifecycle/daemon-provid
 import { killAllDaemonSessions } from '../../ipc/pty/pty-management'
 
 // Why after the final save: exits from the killed sessions must not persist closed tabs, so next launch reopens them.
-async function stopTerminalSessionsThenDisconnect(finalSave: Promise<void>): Promise<void> {
-  await finalSave
+async function stopTerminalSessionsThenDisconnect(
+  finalSaveFrozen: Promise<boolean>
+): Promise<void> {
+  if (!(await finalSaveFrozen)) {
+    // Unfrozen writes could persist closed tabs, and live sessions are the only recovery source left.
+    console.warn('[shutdown] Final save did not complete; keeping terminal sessions')
+    await disconnectDaemon()
+    return
+  }
   try {
     const { remainingCount, listingIncomplete } = await killAllDaemonSessions()
     if (remainingCount > 0 || listingIncomplete) {
@@ -25,12 +32,14 @@ export function disconnectDaemonOnQuit(options: {
   settings: Pick<GlobalSettings, 'stopTerminalSessionsOnQuit'> | undefined
   isUpdateQuit: boolean
   isServeMode: boolean
-  finalSave: Promise<void>
+  finalSaveFrozen: Promise<boolean>
 }): Promise<void> {
   const stopSessions =
     options.settings?.stopTerminalSessionsOnQuit === true &&
     !options.isUpdateQuit &&
     !options.isServeMode &&
     !isAppRelaunchRequested()
-  return stopSessions ? stopTerminalSessionsThenDisconnect(options.finalSave) : disconnectDaemon()
+  return stopSessions
+    ? stopTerminalSessionsThenDisconnect(options.finalSaveFrozen)
+    : disconnectDaemon()
 }

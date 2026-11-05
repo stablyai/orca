@@ -211,17 +211,20 @@ function installWillQuitHandler(): void {
       const sshShutdown = beginSshShutdown()
       killAllPty()
       const watcherShutdown = shutdownWatchersOnce()
-      const storeFlush = (async () => {
+      // Resolves true only once the final save is written and writes are frozen.
+      const storeFlush = (async (): Promise<boolean> => {
         if (!finalStore) {
-          return
+          return false
         }
         try {
           await finalStore.flushFinalOrThrowAsync()
           await finalStore.freezeWritesAsync()
           state.profileStateAdmission?.release()
           state.profileStateAdmission = undefined
+          return true
         } catch (error) {
           console.error('[persistence] Failed to finalize profile state:', error)
+          return false
         }
       })()
       return { sshShutdown, watcherShutdown, storeFlush }
@@ -270,7 +273,7 @@ function installWillQuitHandler(): void {
           settings: finalStore?.getSettings(),
           isUpdateQuit: updateQuitInProgress,
           isServeMode: state.isServeMode,
-          finalSave: storeFlush
+          finalSaveFrozen: storeFlush
         })
     // Bound unsettled transports and final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
     settleTeardownWithinDeadline([
