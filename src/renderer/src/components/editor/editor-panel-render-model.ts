@@ -48,6 +48,10 @@ type EditorPanelRenderModelParams = {
   customEditorChoice?: CustomEditorViewChoice
 }
 
+function hasLoadedTextContent(content: FileContent | undefined): content is FileContent {
+  return content !== undefined && !content.isBinary && !content.rangeDocument && !content.loadError
+}
+
 export function getEditorPanelRenderModel({
   activeFile,
   fileContents,
@@ -133,7 +137,9 @@ export function getEditorPanelRenderModel({
     diffSource: activeFile.diffSource
   })
   const isBinaryEditSurface =
-    activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
+    activeFile.mode === 'edit' &&
+    (fileContents[activeFile.id]?.isBinary === true ||
+      fileContents[activeFile.id]?.rangeDocument !== undefined)
   const availableEditorToggleModes =
     isBinaryEditSurface || !canUseChangesModeForFile(activeFile)
       ? editorToggleModes.filter((mode) => mode !== 'changes')
@@ -147,12 +153,15 @@ export function getEditorPanelRenderModel({
     activeFile.conflict === undefined
   // Read-only tabs keep raw source, as for every other rich view.
   const textEditorEligible =
-    customEditorContentReady && !rawReadOnly && inlineFileContent?.isBinary !== true
+    customEditorContentReady && !rawReadOnly && hasLoadedTextContent(inlineFileContent)
   // Bytes editors honor read-only themselves, so they open read-only tabs too; they need a pageable route.
   const bytesEditorEligible =
     customEditorContentReady && inlineFileContent?.byteSource !== undefined
   const eligibleCustomEditors = customEditors.filter((editor) =>
-    editor.contentKind === 'bytes' ? bytesEditorEligible : textEditorEligible
+    editor.contentKind === 'bytes'
+      ? bytesEditorEligible &&
+        (editor.documentAccess === 'ranges' || inlineFileContent?.isBinary === true)
+      : textEditorEligible
   )
   const customEditorToggle: CustomEditorToggle | null = resolveCustomEditorToggle({
     editors: eligibleCustomEditors,
@@ -170,8 +179,8 @@ export function getEditorPanelRenderModel({
         : 'edit'
   const toggleModes = customEditorToggle?.modes ?? availableEditorToggleModes
   const inlineMarkdownContent =
-    activeFile.mode === 'edit'
-      ? (editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null)
+    activeFile.mode === 'edit' && hasLoadedTextContent(inlineFileContent)
+      ? (editorDrafts[activeFile.id] ?? inlineFileContent.content)
       : null
   const shouldShowMarkdownExportAction =
     viewerLanguage === 'markdown' &&
@@ -181,9 +190,7 @@ export function getEditorPanelRenderModel({
     activeFile.mode === 'edit' &&
     inlineMarkdownContent !== null &&
     !isChangesMode &&
-    inlineFileContent !== undefined &&
-    inlineFileContent.isBinary !== true &&
-    !inlineFileContent.loadError &&
+    hasLoadedTextContent(inlineFileContent) &&
     activeFile.conflict?.kind !== 'conflict-placeholder' &&
     activeFile.conflict?.conflictStatus !== 'unresolved'
   let inlineMarkdownRenderState: MarkdownRenderState | null = null
@@ -208,9 +215,7 @@ export function getEditorPanelRenderModel({
   const canExportMarkdownToPdf =
     shouldShowMarkdownExportAction &&
     ((activeFile.mode === 'markdown-preview' &&
-      fileContents[activeFile.id] !== undefined &&
-      fileContents[activeFile.id]?.isBinary !== true &&
-      !fileContents[activeFile.id]?.loadError &&
+      hasLoadedTextContent(fileContents[activeFile.id]) &&
       !exceedsMarkdownRichModeSizeLimit(
         editorDrafts[activeFile.markdownPreviewSourceFileId ?? activeFile.filePath] ??
           fileContents[activeFile.id].content
@@ -263,6 +268,7 @@ export function getEditorPanelRenderModel({
     inlineMarkdownRenderState,
     canShowMarkdownTableOfContents:
       viewerLanguage === 'markdown' &&
+      hasLoadedTextContent(fileContents[activeFile.id]) &&
       activeCustomEditor === null &&
       (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
     canShowMarkdownPreview: canOpenMarkdownPreview({

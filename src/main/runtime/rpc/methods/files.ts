@@ -1,3 +1,4 @@
+import { FILE_RANGED_DOCUMENT_METHODS } from './files-ranged-document-methods'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
@@ -36,6 +37,7 @@ import { limitSearchResultToContentBudget } from '../../../../shared/search-resu
 let filesWatchSubscriptionSeq = 0
 
 export const FILE_METHODS = [
+  ...FILE_RANGED_DOCUMENT_METHODS,
   defineMethod({
     name: 'files.list',
     permission: 'workspace',

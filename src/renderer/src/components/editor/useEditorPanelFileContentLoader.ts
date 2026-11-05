@@ -5,6 +5,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
+import { readEditorRangeFileContent, EditorRangeLoadError } from './editor-range-document'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
@@ -45,7 +46,8 @@ export function useEditorPanelFileContentLoader({
   fileReadGenerationRef,
   openFilesRef,
   outstandingFileReadsRef,
-  setFileContents
+  setFileContents,
+  fileContentsRef
 }: UseEditorPanelFileContentLoaderParams): EditorPanelFileContentLoader {
   return useCallback(
     async (
@@ -231,10 +233,23 @@ export function useEditorPanelFileContentLoader({
         }
         const readPathKey = `${readScope ?? ''}::${filePath}`
         const key = `${readPathKey}::${JSON.stringify(acquisition?.provenance)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}${options?.wakeWslDistro ? '::wake' : ''}`
-        const result = await readEditorPanelFileContent(key, options, () =>
-          readEditorCsvFileContent(readArgs, allowPagedPreview)
-        )
+        const previousRange = fileContentsRef?.current[id]
+        const result = await readEditorRangeFileContent({
+          args: readArgs,
+          fileId: id,
+          file: restoredOpenFile,
+          previous: previousRange,
+          replaceRangeDocument: options?.replaceRangeDocument,
+          isCurrent: requestCurrent,
+          readSource: () =>
+            readEditorPanelFileContent(key, options, () =>
+              readEditorCsvFileContent(readArgs, allowPagedPreview)
+            )
+        })
         if (!requestCurrent()) {
+          if (result.rangeDocument !== previousRange?.rangeDocument) {
+            result.rangeDocument?.dispose()
+          }
           return
         }
         if (result.csvPreview && useAppStore.getState().editorDrafts[id] !== undefined) {
@@ -249,27 +264,25 @@ export function useEditorPanelFileContentLoader({
           useAppStore.getState().setCsvPreviewOnly(id, Boolean(result.csvPreview))
         }
         delete fileLoadRetryAttemptsRef.current[id]
-        // Why: a bytes custom editor pages a binary file on the same route; a grant has no ranged reads.
-        const byteSource = result.isBinary && !readArgs.terminalArtifactGrantId ? readArgs : null
-        const loaded = byteSource ? { ...result, byteSource } : result
-        setFileContents((prev) => (requestCurrent() ? { ...prev, [id]: loaded } : prev))
+        setFileContents((prev) => (requestCurrent() ? { ...prev, [id]: result } : prev))
         stampCleanTabDiskBaseline(id, result)
       } catch (err) {
         if (!requestCurrent()) {
           return
         }
+        const error = err instanceof EditorRangeLoadError ? err.cause : err
         const failure = getEditorFileLoadFailureContent(
           useAppStore.getState(),
           worktreeId,
           readConnectionId,
-          err
+          error
         )
         applyEditorFileLoadFailure({
-          error: err,
+          error,
           fileId: id,
           filePath,
           tabs: openFilesRef.current,
-          failure,
+          failure: err instanceof EditorRangeLoadError ? err.markFailure(failure) : failure,
           setFileContents: (update) =>
             setFileContents((prev) =>
               requestCurrent() ? (typeof update === 'function' ? update(prev) : update) : prev
@@ -287,7 +300,8 @@ export function useEditorPanelFileContentLoader({
       fileReadGenerationRef,
       openFilesRef,
       outstandingFileReadsRef,
-      setFileContents
+      setFileContents,
+      fileContentsRef
     ]
   )
 }

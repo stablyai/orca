@@ -87,9 +87,10 @@ if (process.isMainFrame && document.contentType === 'text/html') {
       },
       (receive: (message: unknown) => void) => {
         receiver = receive
-        ipcRenderer.on(PRELOAD_PLUGIN_FRAME_IPC_CHANNEL, (_event, message: unknown) =>
+        ipcRenderer.on(PRELOAD_PLUGIN_FRAME_IPC_CHANNEL, (_event, message: unknown) => {
+          admitSend.settle(message)
           receive(message)
-        )
+        })
       }
     ]
   })

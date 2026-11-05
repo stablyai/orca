@@ -1,3 +1,4 @@
+import { RANGED_FILE_DOCUMENT_CAPABILITY } from './ranged-file-document'
 import {
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
@@ -15,7 +16,10 @@ export const FILE_READ_DIR_PAGED_RUNTIME_CAPABILITY = 'files.readDir.paged.v1' a
 
 export const FILE_DOC_PREVIEW_RUNTIME_CAPABILITY = 'files.readDocPreview' as const
 
+export { RANGED_FILE_DOCUMENT_CAPABILITY } from './ranged-file-document'
+
 export const FILES_RUNTIME_CAPABILITIES = [
+  RANGED_FILE_DOCUMENT_CAPABILITY,
   'files.pathsExist',
   'files.resolve-terminal-path.cross-workspace.v1',
   'files.resolve-terminal-path.absolute-files.v1',

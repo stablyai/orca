@@ -5,6 +5,7 @@ import {
   pluginFieldDoc,
   pluginPathFieldDoc,
   PLUGIN_EDITOR_FRAME_SINCE,
+  PLUGIN_DOCUMENT_RANGES_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
@@ -77,6 +78,16 @@ export const pluginCustomEditorContributionSchema = z
           "`text` (the default) sends the file as text and accepts full-text edits. `bytes` sends the file's raw bytes, for binary formats such as spreadsheets, and accepts full-byte edits.",
           PLUGIN_MANIFEST_V2_SINCE,
           ['bytes']
+        )
+      ),
+    documentAccess: z
+      .enum(['buffer', 'ranges'])
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          '`buffer` (the default) supplies the whole document, up to 64 MiB. `ranges` requires `contentKind: bytes` and supplies read-only, versioned ranges up to 256 KiB from files up to 1 GiB, through `orca.document.rangeSession()`. It never supplies a full buffer or accepts edits.',
+          PLUGIN_DOCUMENT_RANGES_SINCE,
+          ['ranges']
         )
       ),
     frame: z

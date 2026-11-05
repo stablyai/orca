@@ -30,6 +30,18 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     prepareDroppedPaths: async () => {
       throw new Error('Preparing dropped file paths is not supported in the web client')
     },
+    rangeDocumentOpen: async ({ filePath }) => {
+      const file = await resolveRuntimeFilePath(filePath)
+      return callRuntimeResult('files.rangeDocumentOpen', {
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
+        relativePath: file.relativePath
+      })
+    },
+    rangeDocumentRead: (params) => callRuntimeResult('files.rangeDocumentRead', params),
+    rangeDocumentStatus: (params) => callRuntimeResult('files.rangeDocumentStatus', params),
+    rangeDocumentReload: (params) => callRuntimeResult('files.rangeDocumentReload', params),
+    rangeDocumentClose: (params) => callRuntimeResult('files.rangeDocumentClose', params),
+    rangeDocumentCancel: (params) => callRuntimeResult('files.rangeDocumentCancel', params),
     readFileChunk: async ({ filePath, offset, length }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.readChunk', {

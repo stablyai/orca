@@ -1,3 +1,4 @@
+import type { RuntimeRangeDocument } from '@/runtime/runtime-range-document'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -47,6 +48,8 @@ type PluginCustomEditorFrameProps = {
   /** Set for a binary editor: its bytes once loaded (null before). Text props are then unused. */
   binaryDocument?: CustomEditorBinaryDocument | null
   onBytesChange?: (document: CustomEditorBinaryDocument) => void
+  rangeDocument?: RuntimeRangeDocument
+  rangeFileType?: string
 }
 
 function FrameMessage({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -67,7 +70,9 @@ export default function PluginCustomEditorFrame({
   onSave,
   onDirtyHint,
   binaryDocument,
-  onBytesChange
+  onBytesChange,
+  rangeDocument,
+  rangeFileType
 }: PluginCustomEditorFrameProps): React.JSX.Element {
   const [refusal, setRefusal] = useState<CustomEditorEditRefusal | null>(null)
   const [saveBlocked, setSaveBlocked] = useState(false)
@@ -97,7 +102,7 @@ export default function PluginCustomEditorFrame({
       onBytesChange
     }
   })
-  const isBinary = binaryDocument !== undefined
+  const isBinary = binaryDocument !== undefined || rangeDocument !== undefined
   // Why code units for text: a byte count would re-encode the whole document on every edit.
   const isLarge =
     (binaryDocument?.bytes.byteLength ?? content.length) > CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES
@@ -113,6 +118,9 @@ export default function PluginCustomEditorFrame({
 
   const host = useMemo(() => {
     const created = createCustomEditorHost({
+      ...(rangeDocument
+        ? { rangeDocument: { source: rangeDocument, fileType: rangeFileType ?? '' } }
+        : {}),
       getFrameWindow: () => pluginFrameWindowOf(frameRef.current),
       getDocument: () => ({
         text: latestRef.current.content,
@@ -152,12 +160,21 @@ export default function PluginCustomEditorFrame({
       }
     })
     return created
-  }, [isBinary])
+  }, [isBinary, rangeDocument, rangeFileType])
 
+  useEffect(() => () => rangeDocument?.close(), [rangeDocument])
+  useEffect(() => {
+    if (liveEntry.status === 'error' || liveEntry.status === 'unresponsive') {
+      rangeDocument?.close()
+    }
+  }, [liveEntry.status, rangeDocument])
   const entry = useCustomEditorReloadFlush(liveEntry, host.flush)
   const { captureLoad, captureSize } = usePluginEditorCaptureView(fileId)
+  const rangeFrameKey = useMemo(() => (rangeDocument ? createBrowserUuid() : ''), [rangeDocument])
   const frameKey =
-    entry.status === 'ready' ? `${editor.key}:${entry.revision}:${captureLoad}` : null
+    entry.status === 'ready'
+      ? `${editor.key}:${entry.revision}:${captureLoad}:${rangeFrameKey}`
+      : null
   const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
   const entryHtml = entry.status === 'ready' && !guest ? entry.html : null
   // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.

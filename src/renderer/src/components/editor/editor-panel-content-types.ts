@@ -1,3 +1,4 @@
+import type { RuntimeRangeDocument } from '@/runtime/runtime-range-document'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
@@ -35,10 +36,14 @@ export type FileContent = {
   loadError?: string
   /** Machine code from a runtime RPC failure; `loadError` alone may be prose (#21041). */
   loadErrorCode?: string
+  /** A selected range source failed; Source remains an explicit user choice. */
+  rangeLoadError?: true
   /** Superseded by an external change; still rendered until the lazy reload lands. */
   isStale?: boolean
   /** How the loader reached the file, so a binary custom editor can page its bytes from the same host. */
   byteSource?: RuntimeFileReadArgs
+  rangeDocument?: RuntimeRangeDocument
+  rangeSourceKey?: string
 }
 
 export type DiffContent = GitDiffResult & {
@@ -65,5 +70,6 @@ export type UseEditorPanelFileContentLoaderParams = {
   fileReadGenerationRef: MutableRefObject<Record<string, number>>
   openFilesRef: MutableRefObject<OpenFile[]>
   outstandingFileReadsRef: MutableRefObject<Record<string, number>>
+  fileContentsRef?: MutableRefObject<Record<string, FileContent>>
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
 }

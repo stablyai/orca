@@ -1,3 +1,9 @@
+export {
+  shouldRouteCallBySupport,
+  shouldRouteSubscriptionBySupport
+} from './runtime-environment-support-methods'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { isRangedFileDocumentMethod } from '../../../shared/ranged-file-document'
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
@@ -34,10 +40,7 @@ import {
   sendRemoteRuntimeRequestAbortable,
   sendRemoteRuntimeSharedControlRequestAbortable
 } from './runtime-environment-abortable-requests'
-import {
-  getRemoteRuntimeSharedControlDiagnostics,
-  subscribeRemoteRuntimeSharedControlRequest
-} from './runtime-environment-request-connections'
+import { subscribeRemoteRuntimeSharedControlRequest } from './runtime-environment-request-connections'
 import { sendSupportRoutedCallOnRuntime } from './runtime-environment-runtime-pinned-send'
 
 type SupportRoute = {
@@ -55,31 +58,6 @@ type SubscriptionCallbacks = {
       | { type: 'close' }
   ) => void
   onClose: () => void
-}
-
-export function shouldRouteCallBySupport(method: string, environmentId: string): boolean {
-  if (method === 'status.get') {
-    return false
-  }
-  if (method === 'session.tabs.list' || method === 'session.tabs.listAll') {
-    // Use ready shared sockets for tab reads; one-shot recovery remains available during reconnect (#26785).
-    return getRemoteRuntimeSharedControlDiagnostics(environmentId)?.state === 'ready'
-  }
-  return true
-}
-
-export function shouldRouteSubscriptionBySupport(method: string): boolean {
-  if (method === 'browser.screencast' || method === 'terminal.multiplex') {
-    return false
-  }
-  return (
-    method === 'runtime.clientEvents.subscribe' ||
-    method === 'session.tabs.subscribe' ||
-    method === 'session.tabs.subscribeAll' ||
-    method === 'accounts.subscribe' ||
-    method === 'notifications.subscribe' ||
-    method === 'files.watch'
-  )
 }
 
 export function executeSupportRoutedCall(args: {
@@ -114,17 +92,24 @@ export function executeSupportRoutedCall(args: {
             args.signal
           ),
     unsupported: (route) =>
-      args.expectedRuntimeId !== undefined
-        ? sendSupportRoutedCallOnRuntime(route, args, args.expectedRuntimeId, 'one-shot')
-        : sendRemoteRuntimeRequestAbortable(
-            route.connection,
-            args.method,
-            args.params,
-            args.timeoutMs,
-            args.envelope,
-            args.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-          ),
+      isRangedFileDocumentMethod(args.method)
+        ? Promise.reject(
+            new RemoteRuntimeClientError(
+              'range_document_unsupported',
+              'Ranged documents require an updated Orca server with shared control.'
+            )
+          )
+        : args.expectedRuntimeId !== undefined
+          ? sendSupportRoutedCallOnRuntime(route, args, args.expectedRuntimeId, 'one-shot')
+          : sendRemoteRuntimeRequestAbortable(
+              route.connection,
+              args.method,
+              args.params,
+              args.timeoutMs,
+              args.envelope,
+              args.signal,
+              ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            ),
     markUsed: (environmentId, response) => {
       if (response.ok) {
         markEnvironmentUsed(args.userDataPath, environmentId, {
@@ -177,6 +162,12 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
       )
     },
     unsupported: (route) => {
+      if (isRangedFileDocumentMethod(args.method)) {
+        throw new RemoteRuntimeClientError(
+          'range_document_unsupported',
+          'Ranged documents require an updated Orca server with shared control.'
+        )
+      }
       supportOutcome = route.outcome
       return subscribeRemoteRuntimeRequest(
         route.connection,

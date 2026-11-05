@@ -1,3 +1,4 @@
+import type { RuntimeRangeDocument } from '@/runtime/runtime-range-document'
 import type { CustomEditorKeyChord } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import type { PluginFrameEditorChannel } from '../plugins/frames/plugin-frame-host'
 import type {
@@ -16,6 +17,7 @@ export type CustomEditorBinaryDocument = { bytes: Uint8Array<ArrayBuffer>; fileT
 
 export type CustomEditorHostOptions = {
   getFrameWindow: () => PluginFrameWindow | null
+  rangeDocument?: { source: RuntimeRangeDocument; fileType: string }
   /** The buffer as Orca holds it now. */
   getDocument: () => { text: string; readOnly: boolean }
   /** Binary editors only: the document's bytes, or null while they load. */

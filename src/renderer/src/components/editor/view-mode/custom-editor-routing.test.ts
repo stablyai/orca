@@ -1,3 +1,4 @@
+import { RuntimeRangeDocument } from '@/runtime/runtime-range-document'
 import { describe, expect, it } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
@@ -79,6 +80,43 @@ function model(args: {
 }
 
 describe('custom editor routing', () => {
+  it('does not export or render empty metadata as loaded Markdown for a ranged editor', () => {
+    const unavailable = async (): Promise<never> => {
+      throw new Error('This test only projects document metadata')
+    }
+    const rangeDocument = new RuntimeRangeDocument(
+      {
+        id: 'range',
+        version: 1,
+        byteLength: 100,
+        maxReadBytes: 262144,
+        readOnly: true,
+        isBinary: false,
+        valid: true
+      },
+      {
+        open: unavailable,
+        read: unavailable,
+        reload: unavailable,
+        close: unavailable,
+        status: unavailable,
+        cancel: unavailable
+      }
+    )
+    const result = model({
+      activeFile: file({
+        id: '/repo/readme.md',
+        filePath: '/repo/readme.md',
+        relativePath: 'readme.md',
+        language: 'markdown'
+      }),
+      content: { content: '', isBinary: false, rangeDocument }
+    })
+    expect(result.canExportMarkdownToPdf).toBe(false)
+    expect(result.inlineMarkdownRenderState).toBeNull()
+    expect(result.canShowMarkdownTableOfContents).toBe(false)
+  })
+
   it('opens a matching file in its default editor with an Editor | Source | Changes toggle', () => {
     const result = model({})
     expect(result.activeCustomEditor?.key).toBe('stablyai.excalidraw/draw')

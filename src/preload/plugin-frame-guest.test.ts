@@ -180,3 +180,108 @@ describe('isolated-world send budget', () => {
     expect(gestures.current(true)).toBe(0)
   })
 })
+
+it('delivers an acknowledged one GiB range scan through the actual isolated preload', async () => {
+  const { transport, sendToHost, ipcListeners } = runPreload(true)
+  let receivedBytes = 0
+  let eof = false
+  let failure: unknown
+  transport().subscribe((message) => {
+    if (typeof message !== 'object' || message === null) {
+      return
+    }
+    if ('error' in message) {
+      failure = message.error
+      return
+    }
+    if (
+      'result' in message &&
+      typeof message.result === 'object' &&
+      message.result !== null &&
+      'bytes' in message.result &&
+      message.result.bytes instanceof ArrayBuffer &&
+      'eof' in message.result
+    ) {
+      receivedBytes += message.result.bytes.byteLength
+      eof = message.result.eof === true
+    }
+  })
+  const page = new ArrayBuffer(262144)
+  sendToHost.mockImplementation((_channel, message: { id: number; params: { offset: number } }) => {
+    ipcListeners[0](
+      {},
+      {
+        orca: 1,
+        kind: 'res',
+        id: message.id,
+        result: { version: 1, bytes: page, eof: message.params.offset === 1073479680 }
+      }
+    )
+  })
+  for (let offset = 0; offset < 1073741824; offset += 262144) {
+    transport().send({
+      orca: 1,
+      kind: 'req',
+      id: offset / 262144,
+      method: 'editor.readRange',
+      params: { version: 1, offset, length: 262144 }
+    })
+  }
+  await Promise.resolve()
+  expect({ receivedBytes, eof, failure }).toEqual({
+    receivedBytes: 1073741824,
+    eof: true,
+    failure: undefined
+  })
+})
+
+it('keeps unknown and oversized range envelopes in the ordinary control budget', () => {
+  const admit = createPluginFrameSendBudget(() => 0, {
+    maxMessages: 1,
+    maxBytes: 1000000,
+    perMs: 100
+  })
+  const request = {
+    orca: 1,
+    kind: 'req',
+    id: 1,
+    method: 'editor.readRange',
+    params: { version: 1, offset: 0, length: 1 }
+  }
+  expect(admit({ orca: 1, kind: 'evt', event: 'control' })).toBeNull()
+  expect(admit({ ...request, junk: new Map([['hidden', new ArrayBuffer(2048)]]) })).toMatchObject({
+    code: 'rate_limited'
+  })
+  expect(
+    admit({ ...request, params: { ...request.params, path: '/not-authorized' } })
+  ).toMatchObject({ code: 'rate_limited' })
+  expect(admit({ ...request, junk: new ArrayBuffer(1024 * 1024) })).toEqual({ code: 'too_large' })
+})
+
+it('refuses acknowledged range traffic when its aggregate byte window is full', () => {
+  const admit = createPluginFrameSendBudget(() => 0, {
+    maxMessages: 1000,
+    maxBytes: 500,
+    perMs: 100
+  })
+  let refusal: unknown
+  for (let id = 0; id < 20; id += 1) {
+    refusal = admit({
+      orca: 1,
+      kind: 'req',
+      id,
+      method: 'editor.readRange',
+      params: { version: 1, offset: id, length: 1 }
+    })
+    if (refusal) {
+      break
+    }
+    admit.settle({
+      orca: 1,
+      kind: 'res',
+      id,
+      result: { version: 1, bytes: new ArrayBuffer(1), eof: false }
+    })
+  }
+  expect(refusal).toMatchObject({ code: 'rate_limited' })
+})

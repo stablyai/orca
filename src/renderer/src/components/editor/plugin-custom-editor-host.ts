@@ -26,6 +26,7 @@ import {
   structuredCloneMessageBytes
 } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 
+import { createRangeEditorHost } from './plugin-range-editor-host'
 import { handleCustomEditorFrameEvent } from './plugin-custom-editor-frame-events'
 import { createPendingOutsideMerge } from './plugin-custom-editor-outside-merge'
 import type {
@@ -38,6 +39,13 @@ import type {
 
 /** The frame only ever holds the document: Orca owns the buffer, dirty state and save. */
 export function createCustomEditorHost(options: CustomEditorHostOptions): CustomEditorHost {
+  if (options.rangeDocument) {
+    return createRangeEditorHost(
+      options,
+      options.rangeDocument.source,
+      options.rangeDocument.fileType
+    )
+  }
   const budget =
     options.budget ??
     createPanelMessageBudget({

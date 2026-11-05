@@ -271,6 +271,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
         // Optional: runtime stand-ins without staged saves must still close cleanly.
         void this.runtime.stagedFileSaves?.abortConnection(socket.connectionId)
+        void this.runtime.rangedFileDocuments?.closeOwner(socket.connectionId)
         this.binaryMessageRouter.deleteConnection(socket.connectionId)
         this.declaredDesktopClients.forget(socket.connectionId)
         if (!hasOtherConnections) {

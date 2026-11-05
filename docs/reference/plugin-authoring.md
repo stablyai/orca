@@ -318,6 +318,55 @@ desktop app with isolated frames switched off, then never run it in the fallback
 opens in Source with "This editor needs the Orca desktop app". The default, `any`, runs wherever
 the client can.
 
+For a large binary viewer, set `"contentKind": "bytes", "documentAccess": "ranges"`
+(planned first release: Orca 1.4.250; declare `engines.orca: ">=1.4.250"`). This
+access mode is always read-only. It supplies no full document, accepts no edits, and uses a
+separate API from `get()`/`session()`:
+
+```js
+const controller = new AbortController()
+const signal = controller.signal
+const doc = await orca.document.rangeSession()
+const { version, byteLength, maxReadBytes } = doc.value
+const chunk = await doc.readRange(
+  { version, offset: 0, length: Math.min(maxReadBytes, 4096) },
+  { signal }
+)
+const invalidation = doc.onInvalidate(() => showReloadButton())
+// Only after the person chooses Reload:
+const next = await doc.reload()
+// When the viewer leaves:
+invalidation.dispose()
+doc.dispose()
+```
+
+Ranges describe saved file bytes. Unsaved edits in this tab or a sibling view block acquisition,
+reads and reloads; becoming dirty invalidates pending reads. Save or discard the draft, then
+explicitly reload the ranged document. Source and editable buffer drafts remain available.
+
+Files may be empty and may be up to 1 GiB inclusive. Each read takes safe integer `version`
+and `offset`, and a length from 1 through 256 KiB. Reads crossing EOF truncate; a read at EOF
+returns an empty `ArrayBuffer` and `eof: true`; an offset past EOF is refused. Two reads per
+document may be unfinished at once; an additional read is refused as busy. Abort cancels queued
+work and fences its reply; a native read already issued retains its permit until it settles.
+Orca stores no full payload, hash or editable baseline for ranged documents.
+
+The owner watches for changes and validates the file identity and revision around each read.
+A change, replacement or loss of authority invalidates that version and cancels its reads.
+Previously returned ranges are live-file data, not an immutable snapshot: discard them after
+invalidation. There is no automatic retry or mixing of revisions; only explicit `reload()` binds
+a new version. Closing or remounting a ranged view also requires an explicit reload before more reads;
+its public document version advances rather than returning to an old handle's initial version.
+The descriptor contains only `version`, `byteLength`, `maxReadBytes`,
+`readOnly: true`, and optional `fileType`; replies contain `version`, `bytes` and `eof`.
+The guest never receives a path, runtime address or backend handle. Local desktop, WSL and
+updated paired/managed SSH hosts use their owning file service. Older hosts and terminal
+artifact grants are unsupported; Orca does not fall back to a full read or SFTP.
+
+Omitting `documentAccess` (or using `buffer`) preserves the existing editable whole-document
+API and its 64 MiB limit. `ranges` is valid only with `contentKind: bytes`; changing access mode
+requires renewed plugin approval.
+
 An editor's `window.orca` adds `document`. Most editors need only `session()`, which does the
 document sync for you:
 

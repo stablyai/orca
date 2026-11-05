@@ -30,7 +30,7 @@ function clearDraftUnlessWhitespaceOnly(state: AppState, tab: OpenFile, diskCont
 
 // Clean loads advance baselines; dirty models keep their draft’s original base. Metadata failures must not turn a delivered load into an error.
 export function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
-  if (result.isBinary || result.loadError || result.csvPreview) {
+  if (result.isBinary || result.rangeDocument || result.loadError || result.csvPreview) {
     return
   }
   try {
