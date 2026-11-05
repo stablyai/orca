@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { OpenFile } from '@/store/slices/editor'
-import type { FileExplorerRowProjection } from './file-explorer-row-projection'
+import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import { useFileExplorerAutoReveal } from './useFileExplorerAutoReveal'
 
 const WORKTREE = '/repo'
