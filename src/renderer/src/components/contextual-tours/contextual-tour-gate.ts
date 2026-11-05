@@ -150,8 +150,7 @@ export function getContextualTourRequestDecision(args: {
   autoEligible: boolean
   onboardingVisible: boolean
   seenIds: readonly string[]
-  // Forced replays and tours already running this session may continue past done steps.
-  allowStartAfterProgress: boolean
+  progressBlocked: boolean
   sessionConsumed: boolean
   activeTourId: string | null
   activeModal: string
@@ -171,8 +170,7 @@ export function getContextualTourRequestDecision(args: {
   if (args.seenIds.includes(args.tour.id)) {
     return { kind: 'blocked', reason: 'seen' }
   }
-  // A step added ahead of actions the user already did must not reopen the tour for them.
-  if (!args.allowStartAfterProgress && args.tour.steps.some((step) => args.isStepDone?.(step))) {
+  if (args.progressBlocked) {
     return { kind: 'blocked', reason: 'already-progressed' }
   }
   if (args.sessionConsumed) {
