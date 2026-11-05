@@ -11,16 +11,13 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
     config,
     selectPortalRoot,
     setSelectPortalHost,
-    agentSelectValue,
     activeCapability,
-    activeModel,
-    activeThinking,
     isCustom,
     unsupportedAgentLabel,
     toggleAi,
     onAgentChange,
-    onModelChange,
-    onThinkingChange,
+    pickerEntries,
+    onPick,
     writeConfig
   } = useAiCommitPrSettings()
 
@@ -54,15 +51,12 @@ export function AiCommitPrSettingsCard(): JSX.Element | null {
           <AiCommitPrSettingsFields
             config={config}
             selectPortalRoot={selectPortalRoot}
-            agentSelectValue={agentSelectValue}
             activeCapability={activeCapability}
-            activeModel={activeModel}
-            activeThinking={activeThinking}
             isCustom={isCustom}
             unsupportedAgentLabel={unsupportedAgentLabel}
             onAgentChange={onAgentChange}
-            onModelChange={onModelChange}
-            onThinkingChange={onThinkingChange}
+            pickerEntries={pickerEntries}
+            onPick={onPick}
             writeConfig={writeConfig}
           />
         ) : null}
