@@ -25,7 +25,7 @@ export function insertNativeChatComposerDraftText(
     return
   }
   const insert = <T extends NativeChatComposerDraft>(draft: T): T => {
-    const next = `${draft.text}${draft.text && !/\s$/.test(draft.text) ? ' ' : ''}${text}`
+    const next = `${draft.text}${draft.text && !/\s$/.test(draft.text) && !/^\s/.test(text) ? ' ' : ''}${text}`
     return {
       ...draft,
       ...(options?.owner ? { owner: options.owner } : {}),

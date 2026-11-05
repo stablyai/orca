@@ -76,5 +76,6 @@ it('lands late dictation in the composer draft after a click moved focus to its 
   }
   screen.getByRole('button', { name: 'Stop dictation' }).focus()
   act(() => insertText('dictated words', target))
-  expect(readNativeChatComposerDraft(scope).text).toBe('dictated words')
+  act(() => insertText(' and more', target))
+  expect(readNativeChatComposerDraft(scope).text).toBe('dictated words and more')
 })
