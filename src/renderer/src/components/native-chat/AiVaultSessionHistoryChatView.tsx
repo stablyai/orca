@@ -15,8 +15,8 @@ import { useNativeChatFontSize } from './use-native-chat-font-size'
 import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
-import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
-import { agentLabel } from '../../../../shared/ai-vault-session-filters'
+import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 
 /**
  * A read-only chat rendering of one Agent Session History row, mounted as its own tab.

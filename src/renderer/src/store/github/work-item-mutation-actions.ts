@@ -64,7 +64,8 @@ export const createWorkItemMutationActions = (
           continue
         }
         const updatedItems = [...entry.data]
-        updatedItems[idx] = { ...updatedItems[idx], ...patch }
+        const row = updatedItems[idx]
+        updatedItems[idx] = { ...row, ...(typeof patch === 'function' ? patch(row) : patch) }
         nextCache[key] = { ...entry, data: updatedItems }
         changed = true
       }
@@ -72,37 +73,28 @@ export const createWorkItemMutationActions = (
     })
   },
 
-  setIssueSourcePreference: async (repoId, repoPath, preference, hostId) => {
-    // Why: map 'auto' to undefined so persistence drops the key entirely (see main/persistence.ts#updateRepo).
-    const issueSourcePreference = preference === 'auto' ? undefined : preference
-    // Why: optimistically patch the row so the segmented control updates this frame; a twin's other row keeps its own.
-    set((s) => ({
-      repos: s.repos.map((r) =>
-        repoMatchesHostIdentity(r, repoId, hostId) ? { ...r, issueSourcePreference } : r
-      )
-    }))
-    // Why: updateRepo routes by the row's host, so a twin's write lands on the row the user changed.
-    const saved = await get().updateRepo(repoId, { issueSourcePreference }, { hostId })
-    if (!saved) {
-      // Why: without this toast the pill silently snaps back (optimistic patch + resync) and the user wouldn't know the write failed.
-      toast.error(
-        translate('auto.store.slices.github.d49ef4b944', 'Failed to save issue-source preference'),
-        {
-          duration: ERROR_TOAST_DURATION
-        }
-      )
-      // Why: the optimistic patch may now disagree with disk; resync rather than leave a lie on screen.
-      void get().fetchReposForAllHosts()
+  setIssueSourcePreference: async (repoId, _repoPath, preference, hostId) => {
+    const repo = get().repos.find((row) => repoMatchesHostIdentity(row, repoId, hostId))
+    if (!repo) {
+      return
     }
-    const eviction = repoCacheEvictionForRow(get(), repoId, repoPath, hostId)
-    // Why: clear inflight dedupe BEFORE bumping the nonce so the re-triggered fetch can't collapse onto a pre-flip in-flight entry.
-    clearInflightWorkItemsForRepo(eviction)
-    // Why: evict AFTER the await so an overlapping fetch can't repopulate with pre-flip data; also drops legacy path-scoped keys.
+    const issueSourcePreference = preference === 'auto' ? undefined : preference
+    const owner = get().githubSourceCollections
+    const write = owner.begin(repo, issueSourcePreference)
     set((s) => ({
-      workItemsCache: evictRepoCacheEntries(s.workItemsCache, eviction).cache,
-      // Why: the Tasks fetch effect keys on the nonce, not the cache, so bump it to re-run and re-populate the evicted entries.
+      repos: s.repos.map((row) =>
+        repoMatchesHostIdentity(row, repoId, hostId) ? { ...row, issueSourcePreference } : row
+      ),
       workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1
     }))
+    const saved = await get().updateRepo(repoId, { issueSourcePreference }, { hostId })
+    owner.settle(write, saved)
+    if (!saved) {
+      toast.error(
+        translate('auto.store.slices.github.d49ef4b944', 'Failed to save issue-source preference'),
+        { duration: ERROR_TOAST_DURATION }
+      )
+    }
   },
 
   evictGitHubRepoCaches: (repoId, repoPath, hostId) => {

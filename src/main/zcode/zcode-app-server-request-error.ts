@@ -1,4 +1,7 @@
-import { providerDiagnostic, type ProviderDiagnostic } from '../../shared/agent-session-failure'
+import {
+  providerDiagnostic,
+  type ProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 
 /** The ZCode app-server answered the call and refused it, rather than timing out or exiting. */
 export class ZcodeAppServerRequestError extends Error {

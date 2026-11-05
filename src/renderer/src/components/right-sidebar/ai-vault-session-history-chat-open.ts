@@ -2,12 +2,12 @@ import { toast } from 'sonner'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { activateAiVaultResumeWorkspace } from './ai-vault-session-resume-in-chat-launch'
+import { activateAiVaultResumeWorkspace } from './ai-vault/session-actions/ai-vault-session-resume-in-chat-launch'
 import {
   aiVaultSessionHistoryChatTabId,
   canOpenAiVaultSessionHistoryChat
 } from './ai-vault-session-history-chat'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 /**
  * Handles a history row that opens as a read-only chat tab, returning whether it did.

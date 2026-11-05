@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import type {
   BundledSkillCleanup,
   BundledSkillInstallResult,
@@ -8,7 +7,7 @@ import type {
   BundledSkillOutcome,
   BundledSkillPlanEntry
 } from '../../../shared/bundled-skill-plan'
-import { acquireSkillInstallLock, skillInstallLockPath } from '../skill-install-lock'
+import { isBundledSkillAutoUpdateOp } from '../../../shared/bundled-skill-summary'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import { classifyBundledSkillPath } from './classify'
 import { filesystemErrorCode } from './filesystem'
@@ -20,9 +19,11 @@ import {
   putBundledSkillFolder,
   removeBundledSkillSibling,
   replaceBundledSkillPath,
+  retireBundledSkillPlacement,
   swapBundledSkillFolder
 } from './swap'
-import { bundledSkillPathKey, resolveBundledSkillTargets } from './targets'
+import { findBundledSkillSource } from './renamed-skill-placement'
+import { withBundledSkillTargetLocks } from './target-locks'
 
 export type BundledSkillExecuteInput = BundledSkillPlanInput & {
   /** Per-lock wait; the shared 5s default applies when unset. */
@@ -33,48 +34,6 @@ type SkillRun = {
   input: BundledSkillExecuteInput
   entry: BundledSkillPlanEntry
   source: BundledSkillSource
-}
-
-/** Lock literal paths consistently with delete/cloud installs; sort to prevent deadlocks. */
-async function lockPaths(input: BundledSkillExecuteInput): Promise<string[]> {
-  const roots = await resolveBundledSkillTargets(input, input.filesystem)
-  const names = input.names ?? input.sources.map((source) => source.name)
-  return [
-    ...new Map(
-      roots.flatMap((root) =>
-        names.map((name) => [bundledSkillPathKey(join(root.path, name)), join(root.path, name)])
-      )
-    ).entries()
-  ]
-    .sort(([left], [right]) => (left < right ? -1 : 1))
-    .map(([, path]) => path)
-}
-
-async function acquireLocks(
-  input: BundledSkillExecuteInput,
-  paths: readonly string[]
-): Promise<(() => Promise<void>)[]> {
-  const releases: (() => Promise<void>)[] = []
-  try {
-    for (const path of paths) {
-      releases.push(
-        await acquireSkillInstallLock({
-          path: skillInstallLockPath(input.stateDirectory, path),
-          ...(input.lockTimeoutMs === undefined ? {} : { timeoutMs: input.lockTimeoutMs })
-        })
-      )
-    }
-  } catch (error) {
-    await releaseAll(releases)
-    throw error
-  }
-  return releases
-}
-
-async function releaseAll(releases: readonly (() => Promise<void>)[]): Promise<void> {
-  for (const release of releases.toReversed()) {
-    await release().catch(() => undefined)
-  }
 }
 
 function verifier(run: SkillRun, path: string, expected: BundledSkillObserved) {
@@ -110,19 +69,34 @@ async function settleCleanup(run: SkillRun, cleanup: BundledSkillCleanup) {
     : backUpBundledSkillPath(run.input.filesystem, cleanup.path, backupFor(run)))
 }
 
+/** The moved-aside copy held edits that could not be backed up; they stay at `path`. */
+class BundledSkillStrandedError extends Error {
+  constructor(
+    readonly path: string,
+    readonly code: string
+  ) {
+    super(`bundled-skill-stranded: ${path}`)
+  }
+}
+
 /** Preserve bytes from a writer that raced the lock by re-hashing the moved-aside copy. */
 async function settleOldCopy(run: SkillRun, old: string) {
-  const { folderClass } = await classifyBundledSkillPath(
-    run.input.filesystem,
-    old,
-    run.source,
-    run.entry.digest
-  )
-  if (folderClass === 'current' || folderClass === 'released') {
-    await removeBundledSkillSibling(run.input.filesystem, old)
-    return undefined
+  try {
+    const { folderClass } = await classifyBundledSkillPath(
+      run.input.filesystem,
+      old,
+      run.source,
+      run.entry.digest
+    )
+    if (folderClass === 'current' || folderClass === 'released') {
+      // A released leftover is the next plan's delete cleanup if this fails.
+      await removeBundledSkillSibling(run.input.filesystem, old).catch(() => undefined)
+      return undefined
+    }
+    return await backUpBundledSkillPath(run.input.filesystem, old, backupFor(run))
+  } catch (error) {
+    throw new BundledSkillStrandedError(old, filesystemErrorCode(error))
   }
-  return backUpBundledSkillPath(run.input.filesystem, old, backupFor(run))
 }
 
 function requireLinkTarget(op: BundledSkillOp): string {
@@ -132,7 +106,7 @@ function requireLinkTarget(op: BundledSkillOp): string {
   return op.linkTarget
 }
 
-async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<string | undefined> {
+async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string | undefined> {
   const { filesystem } = run.input
   const files = [{ path: 'SKILL.md', text: run.source.text }]
   const verify = verifier(run, op.path, op.observed)
@@ -153,8 +127,8 @@ async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<string | unde
       return undefined
     case 'update': {
       const old = await swapBundledSkillFolder(filesystem, op.path, files, verify)
-      // The new copy is in; a leftover old copy is the next plan's cleanup, not a failed update.
-      return settleOldCopy(run, old).catch(() => undefined)
+      // The new copy is in; unpreservable edits in the old copy surface as a stranded failure.
+      return settleOldCopy(run, old)
     }
     case 'replace': {
       const backupPath = backupFor(run)
@@ -180,6 +154,25 @@ async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<string | unde
   }
 }
 
+async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<string | undefined> {
+  let backup = await applyContent(run, op)
+  for (const previous of op.previous ?? []) {
+    if (previous.retain) {
+      await requireUnchanged(run, previous.path, previous.observed)
+      continue
+    }
+    const retiredBackup = await retireBundledSkillPlacement(
+      run.input.filesystem,
+      previous.path,
+      previous.forward ? op.path : undefined,
+      (path) => verifier(run, path, previous.observed)(),
+      backupFor(run)
+    )
+    backup ??= retiredBackup
+  }
+  return backup
+}
+
 async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
   const statuses = new Map<string, BundledSkillOpOutcome['status']>()
   const ops: BundledSkillOpOutcome[] = []
@@ -195,17 +188,26 @@ async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
               ...(op.reason ? { reason: op.reason } : {}),
               ...(backupPath ? { backupPath } : {})
             }),
-            (error: unknown) =>
-              error instanceof BundledSkillChangedError
-                ? { path: op.path, kind: op.kind, status: 'changed' as const }
-                : {
+            (error: unknown): BundledSkillOpOutcome =>
+              error instanceof BundledSkillStrandedError
+                ? {
                     path: op.path,
                     kind: op.kind,
-                    status: 'failed' as const,
-                    error: filesystemErrorCode(error)
+                    status: 'failed',
+                    error: error.code,
+                    strandedPath: error.path
                   }
+                : error instanceof BundledSkillChangedError
+                  ? { path: op.path, kind: op.kind, status: 'changed' as const }
+                  : {
+                      path: op.path,
+                      kind: op.kind,
+                      status: 'failed' as const,
+                      error: filesystemErrorCode(error)
+                    }
           )
-    statuses.set(op.path, outcome.status)
+    // A stranded old copy still means the new copy is in place for dependent links.
+    statuses.set(op.path, outcome.strandedPath ? 'done' : outcome.status)
     ops.push(outcome)
   }
   return { name: run.entry.name, status: 'ran', ops }
@@ -221,28 +223,47 @@ export async function executeBundledSkillPlan(
     scope: input.destination.scope,
     skills: names.map((name) => ({ name, status, ops: [] }))
   })
-  const paths = await lockPaths(input)
-  let releases: (() => Promise<void>)[]
-  try {
-    releases = await acquireLocks(input, paths)
-  } catch {
-    return unrun('busy')
-  }
-  try {
+  return withBundledSkillTargetLocks(input, unrun, async () => {
     const { plan } = await buildBundledSkillPlan(input)
     if (plan.planDigest !== planDigest) {
       return unrun('changed')
     }
     const skills: BundledSkillOutcome[] = []
     for (const entry of plan.skills) {
-      const source = input.sources.find((candidate) => candidate.name === entry.name)
-      if (!source) {
-        throw new Error(`bundled-skill-unknown: ${entry.name}`)
-      }
-      skills.push(await runSkill({ input, entry, source }))
+      skills.push(
+        await runSkill({ input, entry, source: findBundledSkillSource(input.sources, entry.name) })
+      )
     }
     return { scope: plan.scope, skills }
-  } finally {
-    await releaseAll(releases)
-  }
+  })
+}
+
+/**
+ * Plans each named installed skill under its locks and applies only hash-verified released-copy
+ * updates; edited, foreign or interrupted locations are never touched. Each write re-checks its
+ * location, and one skill's failure leaves the others' outcomes intact.
+ */
+export async function autoUpdateBundledSkills(
+  input: BundledSkillExecuteInput & { names: readonly string[] }
+): Promise<BundledSkillInstallResult> {
+  const unrun = (status: 'changed' | 'busy'): BundledSkillInstallResult => ({
+    scope: input.destination.scope,
+    skills: input.names.map((name) => ({ name, status, ops: [] }))
+  })
+  return withBundledSkillTargetLocks(input, unrun, async () => {
+    const { plan } = await buildBundledSkillPlan({ ...input, installedOnly: true })
+    const skills: BundledSkillOutcome[] = []
+    for (const entry of plan.skills) {
+      const safe = entry.ops.filter(isBundledSkillAutoUpdateOp)
+      const required = new Set(safe.flatMap((op) => (op.requires ? [op.requires] : [])))
+      const ops = entry.ops.filter(
+        (op) => safe.includes(op) || (op.kind === 'keep' && required.has(op.path))
+      )
+      if (ops.length > 0) {
+        const source = findBundledSkillSource(input.sources, entry.name)
+        skills.push(await runSkill({ input, entry: { ...entry, ops }, source }))
+      }
+    }
+    return { scope: plan.scope, skills }
+  })
 }

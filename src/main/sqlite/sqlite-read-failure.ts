@@ -18,7 +18,7 @@ function primaryErrcode(error: unknown): number | null {
   return typeof errcode === 'number' && Number.isFinite(errcode) ? errcode & 0xff : null
 }
 
-function isSqliteDriverError(error: unknown): boolean {
+export function isSqliteDriverError(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ERR_SQLITE_ERROR'
 }
 

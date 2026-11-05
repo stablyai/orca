@@ -1,7 +1,7 @@
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { lstat } from 'node:fs/promises'
-import { PATH_ACCESS_DENIED_MESSAGE } from './filesystem/filesystem-auth'
-import { realpathAcrossWslDriveMount, windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
+import { PATH_ACCESS_DENIED_MESSAGE } from './filesystem/access/filesystem-auth'
+import { realpathAcrossWslDriveMount, windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 
 /** List only folders reached through a symlink whose own folder is inside a project. */
 export async function resolveProjectFolderLinkPath(

@@ -14,6 +14,7 @@ const dependencies = vi.hoisted(() => ({
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   KeyboardAvoidingView: 'KeyboardAvoidingView',
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
@@ -27,9 +28,6 @@ vi.mock('react-native', () => ({
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 })
 }))
-vi.mock('./layout/side-safe-area', () => ({
-  SideSafeArea: ({ children }: { children: unknown }) => children
-}))
 
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ hostId: 'host-1' }),
@@ -37,6 +35,8 @@ vi.mock('expo-router', () => ({
 }))
 
 vi.mock('lucide-react-native', () => ({
+  Check: 'Check',
+  ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft'
 }))
 
@@ -45,7 +45,14 @@ vi.mock('./transport/host-store', () => ({
   updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
 }))
 
+vi.mock('./components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+
+vi.mock('./transport/host-removal-lifecycle', () => ({
+  removeHostAndCloseClient: vi.fn()
+}))
+
 vi.mock('./transport/host-client-hooks', () => ({
+  useForgetHostClient: () => () => {},
   usePrimeHosts: () => dependencies.primeHosts,
   useRefreshHostClient: () => dependencies.refreshHostClient
 }))

@@ -4,9 +4,14 @@ import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import type Database from '../../sqlite/sync-database'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX,
+  type AgentSessionExpiredAttachment
+} from '../../../shared/agent-session/failures/agent-session-expired-attachments'
 import {
   AGENT_SESSION_ATTACHMENT_PART_FILE,
+  agentSessionAttachmentReferenceNames,
   agentSessionAttachmentReferences,
   agentSessionAttachmentStoreRoot
 } from './agent-session-attachment-references'
@@ -30,9 +35,12 @@ CREATE TABLE IF NOT EXISTS agent_session_attachment_sweeps (
 }
 
 export class AgentSessionAttachmentExpiredError extends Error {
-  constructor() {
+  readonly expired: readonly AgentSessionExpiredAttachment[]
+
+  constructor(expired: readonly AgentSessionExpiredAttachment[]) {
     super('A referenced chat attachment is no longer stored on this host.')
     this.name = 'AgentSessionAttachmentExpiredError'
+    this.expired = expired
   }
 }
 
@@ -103,8 +111,17 @@ export function claimAgentSessionAttachmentsInTransaction(
     ? agentSessionAttachmentReferences(root, claim.previous)
     : new Set<string>()
   const required = claim.required ? [...uploadIds].filter((id) => !kept.has(id)) : []
-  if (required.some((uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId))) {
-    throw new AgentSessionAttachmentExpiredError()
+  const expired = required.filter(
+    (uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId)
+  )
+  if (expired.length > 0) {
+    throw new AgentSessionAttachmentExpiredError(
+      agentSessionAttachmentReferenceNames(
+        root,
+        claim.body,
+        expired.slice(0, AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX)
+      )
+    )
   }
   const inserted = insertClaims(db, required, claim.sessionId, claim.now)
   const bestEffort = [...uploadIds].filter((id) => !required.includes(id))

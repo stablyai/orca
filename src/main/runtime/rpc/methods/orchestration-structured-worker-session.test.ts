@@ -1,16 +1,16 @@
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import { getAppEnvironment } from '../../../../shared/app-environment'
-import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import { codexDispatchRejection } from '../../../codex/codex-structured-turn-end-settlement'
+import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { codexDispatchRejection } from '../../../codex/structured/turns/codex-structured-turn-end-settlement'
 
 type WorkerHost = Pick<
   StructuredAgentSessionHost,
@@ -22,6 +22,7 @@ type WorkerHost = Pick<
   | 'observeJournalPublications'
 > & {
   deps: {
+    logger: Pick<StructuredAgentSessionHost['deps']['logger'], 'warn'>
     store: Pick<
       StructuredAgentSessionHost['deps']['store'],
       'requireWritableRecord' | 'getConversation' | 'getSessionTabId' | 'isSessionTabRetired'
@@ -45,8 +46,10 @@ const {
   sendStructuredWorkerPreamble
 } = await import('./orchestration-structured-worker-session')
 const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
-const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
-const { sealedChildEnv } = await import('../../structured-session-child-env.test-support')
+const { structuredWorkerIdentities } =
+  await import('../../orchestration/terminal-authority/structured-sessions/structured-worker-identity')
+const { sealedChildEnv } =
+  await import('../../agent-session/environment/structured-session-child-env.test-support')
 
 function installHost(
   location: Pick<AgentSessionExecutionLocation, 'executionHostId' | 'wslDistro'> = {
@@ -56,8 +59,7 @@ function installHost(
 ) {
   const hidden = new Set<string>()
   const record = (sessionId: string) => agentSessionRecordFixture({ sessionId, location })
-  const dispose = vi.fn()
-  const observeJournalPublications = vi.fn(() => dispose)
+  const observeJournalPublications = vi.fn(() => () => {})
   hostRef.current = {
     hasSession: () => false,
     getSessionTabId: (id: string) => (hidden.has(id) ? null : `agent-session:${id}`),
@@ -71,6 +73,7 @@ function installHost(
     },
     close: async () => {},
     deps: {
+      logger: { warn: vi.fn() },
       store: {
         requireWritableRecord: record,
         getConversation: (id: string) => agentSessionConversationView(record(id)),
@@ -80,7 +83,7 @@ function installHost(
     },
     observeJournalPublications
   } satisfies WorkerHost
-  return { observeJournalPublications, dispose }
+  return { observeJournalPublications }
 }
 
 describe('structured worker session', () => {
@@ -93,28 +96,22 @@ describe('structured worker session', () => {
     }))
   })
 
-  it('binds only a journal observer at start, and settlement drops it', async () => {
-    const { observeJournalPublications, dispose } = installHost()
+  it('watches no journal for a worker with no parked mail, and settlement drops its identity', async () => {
+    const { observeJournalPublications } = installHost()
     const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'claude',
-      dispatchId: 'd1',
-      onJournalActivity: () => {}
+      dispatchId: 'd1'
     })
     // No hold: while the dispatch is open the idle sweep reads it from the orchestration database.
     expect(hostRef.current).not.toHaveProperty('hold')
-    expect(observeJournalPublications).toHaveBeenCalledWith(
-      created.identity.sessionId,
-      expect.any(Function)
-    )
-    expect(dispose).not.toHaveBeenCalled()
+    // Parked mail watches its own chat's journal; a worker alone watches nothing.
+    expect(observeJournalPublications).not.toHaveBeenCalled()
+    expect(structuredWorkerIdentities.get(created.identity.handle)).not.toBeNull()
 
-    releaseStructuredWorkerSession('d1')
-    expect(dispose).toHaveBeenCalledTimes(1)
+    releaseStructuredWorkerSession(created.identity.sessionId)
     expect(structuredWorkerIdentities.get(created.identity.handle)).toBeNull()
-    releaseStructuredWorkerSession('d1')
-    expect(dispose).toHaveBeenCalledTimes(1)
   })
 
   it('registers the identity BEFORE the session is created, so the child gets the handle', async () => {
@@ -129,8 +126,7 @@ describe('structured worker session', () => {
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'claude',
-      dispatchId: 'd_spawn',
-      onJournalActivity: () => {}
+      dispatchId: 'd_spawn'
     })
     expect(envAtSpawn?.ORCA_TERMINAL_HANDLE).toBe(created.identity.handle)
     // This app's own launcher by absolute path, so a login shell's profile cannot swap in a global.
@@ -143,7 +139,7 @@ describe('structured worker session', () => {
       )
     )
     expect(envAtSpawn?.ORCA_PANE_KEY).toBeUndefined()
-    releaseStructuredWorkerSession('d_spawn')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('forgets the identity and discards the session when the start fails', async () => {
@@ -158,8 +154,7 @@ describe('structured worker session', () => {
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
         worktreeId: 'wt_1',
         agent: 'claude',
-        dispatchId: 'd_fail',
-        onJournalActivity: () => {}
+        dispatchId: 'd_fail'
       })
     ).rejects.toThrow(/local execution host outside WSL/)
     // Neither a live provider child nor a registry entry may outlive the failed start.
@@ -186,8 +181,7 @@ describe('structured worker session', () => {
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
         worktreeId: 'wt_1',
         agent: 'claude',
-        dispatchId: 'd_unknown',
-        onJournalActivity: () => {}
+        dispatchId: 'd_unknown'
       })
     ).rejects.toThrow(/was refused/)
     expect(closed).toHaveLength(1)
@@ -212,8 +206,7 @@ describe('structured worker session', () => {
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
         worktreeId: 'wt_1',
         agent: 'claude',
-        dispatchId: 'd_definitive',
-        onJournalActivity: () => {}
+        dispatchId: 'd_definitive'
       })
     ).rejects.toThrow(/was refused/)
     expect(closed).toEqual([])
@@ -225,28 +218,26 @@ describe('structured worker session', () => {
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'codex',
-      dispatchId: 'd2',
-      onJournalActivity: () => {}
+      dispatchId: 'd2'
     })
     expect(created.identity.handle.startsWith('structworker_')).toBe(true)
     expect(created.identity.processIncarnation).toBe(`structured:${created.identity.sessionId}`)
     expect(structuredWorkerIdentities.getBySessionId(created.identity.sessionId)?.agent).toBe(
       'codex'
     )
-    releaseStructuredWorkerSession('d2')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('does not activate the worker session, so a dispatch cannot steal the surface', async () => {
     installHost()
-    await createStructuredWorkerSession({
+    const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'claude',
-      dispatchId: 'd3',
-      onJournalActivity: () => {}
+      dispatchId: 'd3'
     })
     expect(createSpy.mock.calls[0]![0].activate).toBe(false)
-    releaseStructuredWorkerSession('d3')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('refuses a session pinned to a non-local execution host', async () => {
@@ -256,8 +247,7 @@ describe('structured worker session', () => {
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
         worktreeId: 'wt_1',
         agent: 'claude',
-        dispatchId: 'd4',
-        onJournalActivity: () => {}
+        dispatchId: 'd4'
       })
     ).rejects.toThrow(/local execution host/)
   })

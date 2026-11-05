@@ -2,11 +2,15 @@
 // session, driven over the ZCode NDJSON protocol. Creates and resumes answer a whole
 // conversation snapshot, so `acquire` seeds the journal and every send after that is `session/send`.
 
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
-import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+
+import {
+  agentSessionFailureFact,
+  providerDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/agent-launch/catalog/tui-agent-display-names'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError,
@@ -19,7 +23,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   acquireZcodeStructuredSession,
   openZcodeStructuredSession

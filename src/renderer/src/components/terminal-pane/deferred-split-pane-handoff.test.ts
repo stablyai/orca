@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   PTY_PRECONNECT_INPUT_MAX_CODE_UNITS,
   PTY_PRECONNECT_INPUT_MAX_ENTRIES
@@ -245,7 +245,8 @@ describe('deferred split pane handoff', () => {
     vi.useFakeTimers()
     try {
       const key = makePaneKey('tab-1', LEAF_1)
-      beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
+      const handle = beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
+      releaseDeferredSplitPaneHandoff(handle)
       expect(getDeferredSplitPaneHandoffCountForTests()).toBe(1)
 
       vi.advanceTimersByTime(DEFERRED_SPLIT_PANE_HANDOFF_TTL_MS)

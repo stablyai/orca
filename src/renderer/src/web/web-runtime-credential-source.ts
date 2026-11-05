@@ -1,7 +1,7 @@
 import {
   DEVICE_KEY_EPHEMERAL_RUNTIME_CAPABILITY,
   DEVICE_KEY_RUNTIME_CAPABILITY
-} from '../../../shared/device-key-capability'
+} from '../../../shared/remote-runtime/pairing/device-key-capability'
 import {
   createSessionDeviceSigningKey,
   getOrCreatePendingWebDeviceKey,

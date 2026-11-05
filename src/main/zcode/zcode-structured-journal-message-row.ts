@@ -2,10 +2,8 @@
 //
 // Payload readers: zcode-structured-journal-payload-readers.ts.
 
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { readZcodeMessageParts } from './zcode-protocol-events'
 import { readRecord, readString } from './zcode-structured-journal-payload-readers'
 import { zcodeMessageIdentity } from './zcode-structured-journal-sink'

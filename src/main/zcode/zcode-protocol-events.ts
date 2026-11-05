@@ -4,7 +4,7 @@
 // needs by field, so a newer server adding fields (or an unknown event type)
 // degrades to an ignored row instead of a dropped connection.
 
-import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

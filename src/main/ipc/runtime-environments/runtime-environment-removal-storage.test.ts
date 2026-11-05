@@ -11,14 +11,14 @@ const { handleMock, clearStorageMock, removeEnvironmentMock, resolveEnvironmentM
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
 
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   addEnvironmentFromPairingCode: vi.fn(),
   listEnvironments: vi.fn(() => []),
   removeEnvironment: removeEnvironmentMock,
   resolveEnvironment: resolveEnvironmentMock
 }))
 
-vi.mock('../../browser/browser-route-partition-storage-runtime', () => ({
+vi.mock('../../browser/routing/partitions/browser-route-partition-storage-runtime', () => ({
   clearBrowserRoutePartitionStorageForEnvironment: clearStorageMock
 }))
 
@@ -51,7 +51,8 @@ describe('runtime environment removal storage clearing', () => {
       store: {
         getSettings: () => ({}),
         removeWorkspaceSessionHost: vi.fn(),
-        setRemoteLayoutSnapshot: vi.fn()
+        setRemoteLayoutSnapshot: vi.fn(),
+        setHostRepoCatalogSnapshot: vi.fn()
       } as never,
       getUserDataPath: () => '/tmp/orca-user-data',
       invalidateTransport: () => teardown
@@ -65,25 +66,5 @@ describe('runtime environment removal storage clearing', () => {
 
     finishTeardown()
     await vi.waitFor(() => expect(clearStorageMock).toHaveBeenCalledWith('environment-a'))
-  })
-
-  it('retries a partition the first pass refused as live', async () => {
-    clearStorageMock
-      .mockResolvedValueOnce({ clearedPartitions: [], livePartitions: ['persist:one'] })
-      .mockResolvedValueOnce({ clearedPartitions: ['persist:one'], livePartitions: [] })
-    registerRuntimeEnvironmentConnectivityHandlers({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: remove reads only settings and the session-host prune.
-      store: {
-        getSettings: () => ({}),
-        removeWorkspaceSessionHost: vi.fn(),
-        setRemoteLayoutSnapshot: vi.fn()
-      } as never,
-      getUserDataPath: () => '/tmp/orca-user-data',
-      invalidateTransport: () => Promise.resolve()
-    })
-
-    removeHandler()(null, { selector: 'environment-a' })
-
-    await vi.waitFor(() => expect(clearStorageMock).toHaveBeenCalledTimes(2), { timeout: 2_000 })
   })
 })

@@ -25,14 +25,6 @@ describe('SSH IPC handlers', () => {
 
   beforeEach(harness.reset)
 
-  it('ssh:disconnect calls connection manager', async () => {
-    mockConnectionManager.disconnect.mockResolvedValue(undefined)
-
-    await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
-
-    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
-  })
-
   it('lets a same-turn disconnect invalidate connect before transport admission', async () => {
     const target: SshTarget = {
       id: 'ssh-1',

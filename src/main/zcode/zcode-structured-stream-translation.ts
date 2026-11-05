@@ -7,11 +7,9 @@
 // are SNAPSHOT rewrites of the text so far (`state: 'running'`), and a turn's
 // end closes every stream it left open with one completed rewrite.
 
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import {
   boundInlineText,
   JOURNAL_RUNNING_PREVIEW_LIMITS

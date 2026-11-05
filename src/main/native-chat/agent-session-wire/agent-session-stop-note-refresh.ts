@@ -1,5 +1,5 @@
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { measureHistoryItem, oversizedHistoryItem } from './agent-session-history-page-bounds'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
@@ -33,7 +33,7 @@ export function refreshDerivedStopNotes(
   if (!hasUnconfirmedStop) {
     return
   }
-  const snapshot = journal.snapshot()
+  const snapshot = journal.itemsRead()
   const { form, budgetBytes } = subscriberHistoryReader(subscriber)
   let pending: AgentJournalRenderItem[] = []
   let bytes = 0
@@ -48,7 +48,7 @@ export function refreshDerivedStopNotes(
         ...(work ? agentSessionPublishedWorkFields(journal, work) : {}),
         hostNow
       },
-      { currentWork: work }
+      { currentWork: work, journal }
     )
     pending = []
     bytes = 0

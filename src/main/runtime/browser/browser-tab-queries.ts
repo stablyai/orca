@@ -31,6 +31,7 @@ export class RuntimeBrowserTabQueries {
       | 'resolveBrowserCommandTarget'
       | 'resolveBrowserWorktreeId'
       | 'notifyRendererBrowserPaneFocus'
+      | 'ensureBrowserPageActive'
     >,
     private readonly catalog: Pick<
       RuntimeBrowserTabCatalog,
@@ -110,6 +111,17 @@ export class RuntimeBrowserTabQueries {
         'browser_tab_not_found',
         `${label} out of range (0-${listed.tabs.length - 1})`
       )
+    }
+    if (selected.loaded === false) {
+      try {
+        await this.targets.ensureBrowserPageActive(
+          selected.worktreeId ?? undefined,
+          selected.browserPageId,
+          { waitForFirstLoad: true }
+        )
+      } catch {
+        // The switch below reports browser_tab_not_found if the page could not load.
+      }
     }
     const clientPage = this.host.getRuntimeBrowserPageRegistry().getPage(selected.browserPageId)
     if (clientPage) {

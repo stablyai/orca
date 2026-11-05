@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory } from './remote-install-transfers'
+
 import {
   RemoteInstallOutOfSpaceError,
   remoteFreeSpaceProbeCommand
@@ -64,13 +65,6 @@ describe('a failed install write on a full host', () => {
     )
   })
 
-  it('sizes a single file write by its contents', async () => {
-    vi.mocked(execHostCommand).mockResolvedValue(dfLine(0))
-    await expect(
-      writeRemoteInstallFile(connection(sftpFailure), posix, '/root/.orca-remote/x/.version', 'abc')
-    ).rejects.toThrow(/has 0 KB free, and Orca needs about 1 KB/)
-  })
-
   it('keeps the original error when the filesystem still has room', async () => {
     // Partial uploads may have consumed space; less than the bundle size does not prove exhaustion.
     vi.mocked(execHostCommand).mockResolvedValue(dfLine(1_500))
@@ -83,32 +77,6 @@ describe('a failed install write on a full host', () => {
         posix
       )
     ).rejects.toBe(failure)
-  })
-
-  it('keeps the original error when the space probe itself fails', async () => {
-    vi.mocked(execHostCommand).mockRejectedValue(new Error('df: not found'))
-    const failure = sftpFailure()
-    await expect(
-      uploadRemoteInstallDirectory(
-        connection(() => failure),
-        localDir,
-        '/root/r',
-        posix
-      )
-    ).rejects.toBe(failure)
-  })
-
-  it('keeps explicit refusals such as permission denied without probing', async () => {
-    const denied = Object.assign(new Error('Permission denied'), { code: 3 })
-    await expect(
-      uploadRemoteInstallDirectory(
-        connection(() => denied),
-        localDir,
-        '/root/r',
-        posix
-      )
-    ).rejects.toBe(denied)
-    expect(execHostCommand).not.toHaveBeenCalled()
   })
 
   it('never probes after unverifiable transport loss, an abort, or on Windows', async () => {

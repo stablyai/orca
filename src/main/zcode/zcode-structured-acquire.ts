@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { zcodeProviderHandle } from './zcode-provider-handle'
-import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
+import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionPreSpawnError,

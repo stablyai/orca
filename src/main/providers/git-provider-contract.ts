@@ -2,20 +2,26 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitDiffResult
-} from '../../shared/git-diff-compare-types'
-import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+} from '../../shared/git/diff/git-diff-compare-types'
+import type {
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult
+} from '../../shared/git/remotes/git-fork-sync'
 import type {
   GitConflictOperation,
   GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus
-} from '../../shared/git-status-types'
-import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
+} from '../../shared/git/status/git-status-types'
+import type { GitStageWorktreeScope } from '../../shared/git/paths/git-stage-worktree-scope'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
-import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
-import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
-import type { ConflictResolution } from '../../shared/source-control-entry-actions'
+import type {
+  GitHistoryOptions,
+  GitHistoryResult
+} from '../../shared/git/history/git-history-types'
+import type { CommitMessageDraftContext } from '../../shared/source-control/ai/generation/commit-message-generation'
+import type { ConflictResolution } from '../../shared/source-control/listing/source-control-entry-actions'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 
@@ -37,7 +43,8 @@ export type IGitProvider = {
     worktreePath: string,
     filePath: string,
     staged: boolean,
-    compareAgainstHead?: boolean
+    compareAgainstHead?: boolean,
+    oldPath?: string
   ): Promise<GitDiffResult>
   stageFile(worktreePath: string, filePath: string): Promise<void>
   resolveConflict(

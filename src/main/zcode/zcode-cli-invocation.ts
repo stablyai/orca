@@ -1,5 +1,8 @@
 import { isAbsolute, win32 } from 'node:path'
-import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
+import {
+  resolveStartupShell,
+  tokenizeStartupCommand
+} from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   resolveCliCommand,
   resolveExecutableCommand
@@ -32,6 +35,13 @@ export type ResolveZcodeCliInvocationOptions = {
   homePath?: string
   platform?: NodeJS.Platform
   officialRuntime?: ZcodeOfficialRuntimeDeps
+}
+
+export function assertZcodeTerminalInvocation(options: ResolveZcodeCliInvocationOptions): void {
+  const refusal = zcodeDesktopTerminalRefusal(resolveZcodeCliInvocation(options))
+  if (refusal) {
+    throw new Error(refusal)
+  }
 }
 
 function invocationIdentity(invocation: Omit<ZcodeCliInvocation, 'identity'>): string {

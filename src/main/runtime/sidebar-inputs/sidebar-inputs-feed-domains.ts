@@ -2,7 +2,7 @@ import {
   getRegisteredSshState,
   listRegisteredSshTargets
 } from '../../ssh/targets/ssh-target-registry'
-import { getWslHostService } from '../../wsl/wsl-host-service-instance'
+import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/desktop-sidebar-facts'
 import type { RuntimeStore } from '../runtime-store-contract'
@@ -10,7 +10,7 @@ import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/workt
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeWithSidebarTemporal } from './orca-runtime-sidebar-temporal'
 import type { PairedServerRowsProducer } from './paired-server-rows-producer'
-import type { WorkspaceLifecycleQueue } from '../workspaces/workspace-lifecycle-queue'
+import type { WorkspaceLifecycleQueue } from '../workspaces/lifecycle/workspace-lifecycle-queue'
 import type { WorkspaceRowsProducer } from './workspace-rows-producer'
 import type { RepoIconDataUrls } from './repo-icon-data-urls'
 import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'

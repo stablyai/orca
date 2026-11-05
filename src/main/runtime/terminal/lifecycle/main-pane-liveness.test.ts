@@ -8,9 +8,10 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
   }
 }))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService } = await import('../../orca-runtime-test-mocks.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('../../orca-runtime')
 const { toAppSshPtyId } = await import('../../../../shared/ssh-pty-id')
 const {
   HEADLESS_LEAF_ID,
@@ -24,9 +25,9 @@ const {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-test-fixtures.spec')
+} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
-const { registerBoundPty } = await import('../../bind-first-pane.test-fixture')
+const { registerBoundPty } = await import('../../orca-runtime-tests/bind-first-pane.test-fixture')
 
 const SSH_PTY = toAppSshPtyId('ssh-target', 'relay-pty')
 
@@ -284,6 +285,52 @@ describe('a reused terminal id of another workspace (switch on)', () => {
     const liveIds = runtime['getLivePtyIdsForWorktree'](TEST_WORKTREE_ID)
     expect(liveIds).toEqual(new Set())
   })
+})
+
+describe('idle admission across SSH inventory uncertainty', () => {
+  it.each([
+    { isMain: true, windowed: true },
+    { isMain: true, windowed: false }
+  ])(
+    'recovers the same incarnation ($isMain, windowed=$windowed)',
+    async ({ isMain, windowed }) => {
+      layoutOwner.isMain = isMain
+      const { runtime, host } = savedPaneHost(SSH_PTY, { windowed })
+      runtime.registerPty(SSH_PTY, TEST_WORKTREE_ID, 'ssh-target', {
+        tabId: 'host-tab',
+        leafId: HEADLESS_LEAF_ID,
+        incarnationId: 'ssh-inc-1'
+      })
+      await sweepProvider(runtime, 'ssh-target')
+      const handle = runtime.resolveTerminalPane(
+        `host-tab:${HEADLESS_LEAF_ID}`,
+        TEST_WORKTREE_ID
+      ).handle
+      host.live.clear()
+      await sweepProvider(runtime, 'ssh-target')
+      expect(record(runtime, SSH_PTY)).toMatchObject({ connected: false, lastExitCode: null })
+      // An uncertain host cannot supply the positive live claim an exit wait needs.
+      runtime.markPtyLivenessUnverifiable(SSH_PTY, 'relay unavailable')
+      await expect(runtime.waitForTerminal(handle, { condition: 'exit' })).resolves.toMatchObject({
+        satisfied: true,
+        status: 'unknown',
+        exitCode: null
+      })
+      const settled = vi.fn()
+      const waiting = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 5_000 })
+      waiting.then(settled, settled)
+      await vi.waitFor(() => {
+        expect(runtime['terminalWaiters'].forPty(SSH_PTY)).toHaveLength(1)
+      })
+      expect(settled).not.toHaveBeenCalled()
+      host.live.add(SSH_PTY)
+      await sweepProvider(runtime, 'ssh-target')
+      expect(record(runtime, SSH_PTY)?.incarnationId).toBe('ssh-inc-1')
+      runtime.onPtyData(SSH_PTY, '\x1b]0;Codex ready\x07', 1)
+      await expect(waiting).resolves.toMatchObject({ satisfied: true, status: 'running' })
+      expect(runtime['terminalWaiters'].forPty(SSH_PTY)).toHaveLength(0)
+    }
+  )
 })
 
 describe('an exit wait through a listing gap (switch on)', () => {

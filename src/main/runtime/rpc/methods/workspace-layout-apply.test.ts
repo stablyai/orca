@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { LayoutApplyOutcome } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { Tab } from '../../../../shared/tab-types'
@@ -10,7 +10,10 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 import { LAYOUT_APPLY_METHODS } from './workspace-layout'
 import { ALL_RPC_METHODS } from './index'
-import { partialRuntimeStore, type PartialRuntimeStore } from '../../runtime-store-partial-fixture'
+import {
+  partialRuntimeStore,
+  type PartialRuntimeStore
+} from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
 // Pin a window-owned build even under `ORCA_LAYOUT_OWNER=main`, so the default registry omits layout commands.
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
@@ -356,7 +359,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(page)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(page, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(page, ['local'], {})
   })
 
   it('accepts an editor open under the window’s tab id, its promote, and an unrecorded close', async () => {
@@ -495,7 +498,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(open)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(open, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(open, ['local'], {})
   })
 
   it('accepts a sleep of one tab’s panes and a wake of exactly one pane', async () => {
@@ -574,7 +577,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(ratios)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(ratios, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(ratios, ['local'], {})
   })
 
   it('takes a terminal tab create under valid window ids, and only an activation initial', async () => {
@@ -613,7 +616,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(create)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(create, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(create, ['local'], {})
   })
 
   it('takes a tab’s titles, color, pin, view and ended launch agent, and no other property', async () => {
@@ -766,7 +769,7 @@ describe('layout.apply', () => {
       result: { leafId: 'minted' },
       frameSeq: 0
     })
-    expect(applyLayoutCommand).toHaveBeenCalledWith(SPLIT, ['ssh:target-1'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(SPLIT, ['ssh:target-1'], {})
   })
 
   it('names the stream position of the frame its write produced, sent before the reply', async () => {

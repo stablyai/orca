@@ -1,16 +1,16 @@
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 import { useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import {
-  STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG
-} from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
-import { runtimeHostContactForEntry } from '../../../../shared/runtime-host-contact'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import {
+  isRuntimeHostContactRevokedVerdict,
+  runtimeHostContactForEntry
+} from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useAppStore } from '@/store'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import {
@@ -21,16 +21,15 @@ import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import {
   readHostStructuredAgents,
-  readHostStructuredAgentsForRuntime,
-  hostStructuredAgentsReadFailed
+  hostStructuredAgentsCatalogUnlearned as catalogUnlearned
 } from '@/runtime/host-structured-agents'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structured-agent-availability'
 import {
   buildNewTabAgentMenuRows,
-  hostChatAnswer,
   type HostChatAnswer
-} from '@/lib/new-tab-agent-menu-rows'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
+import { hostChatAnswer } from '@/lib/new-tab-agent-menu-rows'
 import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
@@ -40,22 +39,9 @@ import { readDetectedAgentsForTarget } from '@/lib/agent-detection-target-invent
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/host-chat-program'
 import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
-import { useHostAgentMenuSettings } from '@/components/settings/use-host-agent-launch-preferences'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
-
-function catalogUnlearned(
-  host: string,
-  runtimeId: string | null | undefined,
-  capabilities: readonly string[] | null | undefined
-): boolean {
-  return (
-    runtimeId !== undefined &&
-    capabilities?.includes(CATALOG) === true &&
-    !readHostStructuredAgentsForRuntime(host, runtimeId) &&
-    !hostStructuredAgentsReadFailed(host, runtimeId)
-  )
-}
 
 /** `detectionTarget` is the workspace's agent-inventory host, resolved by the caller. */
 export function useNewTabAgentMenuRows(
@@ -102,19 +88,6 @@ export function useAgentMenuObservation(
     readLocalRuntimeCapabilityObservation,
     readLocalRuntimeCapabilityObservation
   )
-  useAppStore(
-    useShallow((state) => [
-      state.settings?.defaultTuiAgent,
-      state.settings?.disabledTuiAgents,
-      state.settings?.experimentalNativeChat,
-      state.settings?.nativeChatProviders,
-      state.settings?.agentDefaultArgs,
-      state.settings?.agentPermissionDefault,
-      state.settings?.agentPermissionOverrides,
-      state.settings?.nativeChatSessionOptions,
-      state.settings?.nativeChatPermissionMode
-    ])
-  )
   // The observation owns these settings; picker consumers reuse its snapshot.
   const desktopSettings = useAppStore.getState().settings
   const workspace =
@@ -135,7 +108,7 @@ export function useAgentMenuObservation(
         runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
         pairingRevision:
           host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined,
-        contact: `${status?.connectionGeneration}:${status?.hostContactEpoch}`,
+        contact: `${status?.connectionGeneration}:${status?.hostContactEpoch}:${isRuntimeHostContactRevokedVerdict(contact)}`,
         checking:
           contact.verdict === 'unverifiable' &&
           ['checking', 'transport-connecting'].includes(contact.reason),
@@ -151,7 +124,22 @@ export function useAgentMenuObservation(
     open || worktreeShown,
     open
   )
-  const chatEnabled = isNativeChatEnabled(settings)
+  useAppStore(
+    useShallow((state) => [
+      state.settings?.defaultTuiAgent,
+      state.settings?.disabledTuiAgents,
+      state.settings?.agentDefaultSurface,
+      state.settings?.nativeChatProviders,
+      state.settings?.agentDefaultArgs,
+      state.settings?.agentPermissionDefault,
+      state.settings?.agentPermissionOverrides,
+      state.settings?.nativeChatSessionOptions,
+      settings?.agentLaunchChoices === desktopSettings?.agentLaunchChoices
+        ? state.settings?.agentLaunchChoices
+        : undefined,
+      state.settings?.nativeChatPermissionMode
+    ])
+  )
   const plain = hostChatAnswer(input) === 'no-chats'
   const local = facts.executionHostId === LOCAL_EXECUTION_HOST_ID
   // Use published host-wide availability when supported; older hosts defer final admission to the launch request.
@@ -189,7 +177,7 @@ export function useAgentMenuObservation(
       ...(hostCatalog ?? []),
       ...Object.keys(settings?.nativeChatProviders ?? {})
         .filter(isTuiAgent)
-        .filter((agent) => settings?.nativeChatProviders?.[agent] === true)
+        .filter((agent) => nativeChatPreferenceFor(settings, agent))
     ])
   ].filter(isTuiAgent)
   const inventoryFailed =
@@ -216,8 +204,7 @@ export function useAgentMenuObservation(
     !unresolvedTarget &&
     (preferencesPending ||
       (detection.detectedIds === null && detectionTarget !== undefined && !inventoryFailed) ||
-      (chatEnabled &&
-        !plain &&
+      (!plain &&
         (capabilityPending ||
           (!local && localAcquiring) ||
           availability?.state === 'pending' ||
@@ -267,6 +254,7 @@ export function useAgentMenuObservation(
         defaultTuiAgent: settings?.defaultTuiAgent,
         pickerContext: {
           workspace,
+          launchCwd,
           executionHostId: facts.executionHostId,
           pairingRevision: facts.pairingRevision,
           runtimeId: facts.runtimeId,
@@ -274,14 +262,18 @@ export function useAgentMenuObservation(
           key: JSON.stringify([workspace, launchCwd, facts])
         }
       }
-  const { defaultTuiAgent, disabledTuiAgents } = settings ?? {}
+  const { defaultTuiAgent, disabledTuiAgents, agentLaunchChoices } = settings ?? {}
   return {
     model,
-    preferences: { defaultTuiAgent, disabledTuiAgents },
+    preferences: { defaultTuiAgent, disabledTuiAgents, agentLaunchChoices },
     preferencesPending,
     detection,
     contextKey: JSON.stringify([workspace, launchCwd, facts]),
-    selectionFor: (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {
+    selectionFor: (
+      agent: TuiAgent | null,
+      surface?: AgentLaunchSurface,
+      preferredSurface?: 'chat'
+    ) => {
       // A chat row can open through a host-run chat program; a terminal still needs the CLI.
       const chatRow = rows.some((row) => row.kind === 'chat' && row.agent === agent)
       const cliMissing =
@@ -289,6 +281,7 @@ export function useAgentMenuObservation(
       return resolveAgentMenuSelection({
         agent,
         surface,
+        preferredSurface,
         settings,
         executionHostId,
         inventoryReady:

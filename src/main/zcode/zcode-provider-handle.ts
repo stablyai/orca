@@ -1,7 +1,7 @@
 import type {
   AgentSessionProviderHandle,
   AgentSessionProviderHandleNamespace
-} from '../../shared/agent-session-provider-handle'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 
 export const ZCODE_STRUCTURED_HANDLE_NAMESPACE = {
   transport: 'zcode-app-server',

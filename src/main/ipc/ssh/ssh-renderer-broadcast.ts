@@ -22,7 +22,7 @@ import {
   persistedStore,
   portForwardManager
 } from './ssh-ipc-context'
-import { requestDesktopBrowserBridgeReconcile } from '../desktop-browser-bridge-reconcile'
+import { requestDesktopBrowserBridgeReconcile } from '../browser/desktop-browser-bridge-reconcile'
 import { listUnrestoredPortForwards } from './ssh-port-forward-unrestored'
 
 export function broadcastSshState(

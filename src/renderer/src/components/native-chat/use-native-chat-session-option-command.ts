@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
   nativeChatComposerTargetIsRemote,
@@ -11,7 +11,7 @@ import {
   createClaudeModelSwitchConfirmationObserver,
   type ClaudeModelSwitchConfirmationObserver
 } from './claude-model-switch-confirmation'
-import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat-session-option-dispatch'
+import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat/input/native-chat-session-option-dispatch'
 import { translate } from '@/i18n/i18n'
 
 export function useNativeChatSessionOptionCommand(args: {

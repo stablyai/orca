@@ -3,7 +3,7 @@ import { resolveAgentMenuSelection } from './agent-menu-selection'
 
 const input = {
   agent: 'zcode',
-  settings: { experimentalNativeChat: false },
+  settings: { agentDefaultSurface: 'terminal' },
   executionHostId: 'local',
   inventoryReady: true,
   answer: 'yes',
@@ -11,7 +11,7 @@ const input = {
   plain: false
 } as const
 
-it('keeps an explicitly picked chat on the structured route while Chat UI is off', () => {
+it('keeps an explicitly picked chat on the structured route when terminal is the default', () => {
   expect(resolveAgentMenuSelection({ ...input, surface: 'chat' })).toMatchObject({
     ready: true,
     choice: {
@@ -23,7 +23,13 @@ it('keeps an explicitly picked chat on the structured route while Chat UI is off
 })
 
 it('keeps an explicitly picked terminal on the terminal route', () => {
-  expect(resolveAgentMenuSelection({ ...input, surface: 'terminal' })).toMatchObject({
+  expect(
+    resolveAgentMenuSelection({
+      ...input,
+      settings: { agentDefaultSurface: 'chat' },
+      surface: 'terminal'
+    })
+  ).toMatchObject({
     ready: true,
     choice: {
       agent: 'zcode',

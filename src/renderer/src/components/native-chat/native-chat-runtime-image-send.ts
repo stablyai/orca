@@ -1,14 +1,14 @@
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
 import { agentImagePasteWrites } from '../../../../shared/agent-image-paste'
 import { agentImagePastePath } from '../../../../shared/agent-image-paste-path'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../shared/native-chat/input/native-chat-answer-stepping'
 import {
   buildNativeChatImagePasteBytes,
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
-} from '../../../../shared/native-chat-paste-bytes'
+} from '../../../../shared/native-chat/input/native-chat-paste-bytes'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
 import {
   clearConfirmDurationMs,
@@ -53,38 +53,45 @@ export function sendNativeChatMessageWithImageAttachments(
   return enqueueNativeChatPtySend(
     ptyId,
     durationMs,
-    ({ isCancelled, delay, markSubmitted }) => {
+    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
       if (isCancelled()) {
         return
       }
-      clearThenWrite(ptyId, options, delay, () => {
-        if (isCancelled()) {
-          return
-        }
-        for (const payload of agentImagePasteWrites(
-          agent,
-          imagePaths.map((path) =>
-            buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
-          ),
-          trimmedText.length > 0
-        )) {
-          sendRuntimePtyInput(ptyId, payload, 'driving')
-        }
-        if (trimmedText.length > 0) {
-          delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
-            sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
-            delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-              sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-              markSubmitted()
+      clearThenWrite(
+        ptyId,
+        options,
+        delay,
+        () => {
+          if (isCancelled()) {
+            return
+          }
+          markWriteStarted()
+          for (const payload of agentImagePasteWrites(
+            agent,
+            imagePaths.map((path) =>
+              buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
+            ),
+            trimmedText.length > 0
+          )) {
+            sendRuntimePtyInput(ptyId, payload, 'driving')
+          }
+          if (trimmedText.length > 0) {
+            delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
+              sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
+              delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+                sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+                markSubmitted()
+              })
             })
+            return
+          }
+          delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+            sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+            markSubmitted()
           })
-          return
-        }
-        delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-          markSubmitted()
-        })
-      })
+        },
+        markSubmitted
+      )
     },
     {
       onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options)

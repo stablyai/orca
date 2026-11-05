@@ -1,21 +1,23 @@
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
-import { getDefaultWslDistro, parseWslPath, type WslPathInfo } from '../../wsl'
+import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
+import type { WslUncPathInfo as WslPathInfo } from '../../../shared/wsl-paths'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslLoginShellCommand,
   type WslCapturedLoginShellCommand
 } from '../../../shared/wsl-login-shell-command'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
-import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../shared/git-output-locale'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../shared/git/commands/git-output-locale'
 import type { WslGitReadEnvironment } from '../wsl-git-read-environment'
 import {
   createWslProcessGroupTermination,
   type WslProcessGroupTermination
 } from '../wsl-process-group-termination'
 import { translateArgForWsl, translateArgsForWsl } from './wsl-path-translation'
-import { resolveWslInteropSpawnCwd } from '../../wsl-interop-spawn-directory'
-import { noteWslDistroLaunched } from '../../wsl-background-distro-gate'
+import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
+import { noteWslDistroLaunched } from '../../wsl/discovery/wsl-background-distro-gate'
 
 // Carry Git locale pins in the WSL command; these assignment values are shell-safe.
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
@@ -49,7 +51,7 @@ export type ResolvedCommand = {
   cwd: string | undefined
   wsl: WslPathInfo | null
   wslMode: 'direct-git' | 'login-shell' | 'non-login-shell' | null
-  /** Present only when the caller opted into a fenced login-shell read. */
+  /** Present only for a fenced (buffered) login-shell read. */
   captured?: WslCapturedLoginShellCommand
   termination?: WslProcessGroupTermination
 }

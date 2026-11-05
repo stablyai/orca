@@ -1,3 +1,5 @@
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../session-tabs/structured-session-tab-restoration'
 import { DEFAULT_WORKTREE_LIST_LIMIT } from '../orca-runtime-postlude'
@@ -7,11 +9,11 @@ import type {
 } from '../../../shared/runtime-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../shared/worktree/types'
 import type { Repo } from '../../../shared/repo-types'
-import { stopMissingWorktreeTerminals } from '../missing-worktree-terminal-reconciliation'
+import { stopMissingWorktreeTerminals } from './removal/missing-worktree-terminal-reconciliation'
 import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility-sources'
 import type { RuntimeStore } from '../runtime-store-contract'
-import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type {
   WorkspacePortHostKillRequest,
   WorkspacePortHostScanResult,
@@ -30,22 +32,27 @@ import {
   scanWorkspacePortsOnExecutionHost,
   type WorkspacePortExecutionHostDeps
 } from '../../ports/workspace-port-execution-host'
-import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type {
   WorkspaceSleepNotice,
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
 } from '../../../shared/workspace-sleep'
-import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
+import { WorkspaceSleepCoordinator } from './sleep/workspace-sleep-runtime'
 import { dropStrandedSleepRecord } from '../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../terminal/recovery/restored-pane-start'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
-import { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
+import { WorkspaceLifecycleQueue } from './lifecycle/workspace-lifecycle-queue'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 
 export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
+  protected abstract resolveFolderWorkspaceSelector(
+    selector: string,
+    requiredHostId?: ExecutionHostId
+  ): FolderWorkspace | null
+
   protected abstract resolveTerminalWorkspaceLaunchTarget(
     ...args: Parameters<
       OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree['resolveTerminalWorkspaceLaunchTarget']
@@ -145,21 +152,57 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     )
   }
 
-  async showManagedWorktree(worktreeSelector: string) {
-    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
+  async showManagedWorktree(worktreeSelector: string, requiredHostId?: ExecutionHostId) {
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector, { requiredHostId })
     return { ...worktree, linkedItems: getWorkspaceAttachments(worktree) }
   }
 
-  /** Resolve a git record, refusing floating workspaces; use launch scope when only id/path is needed. */
-  async showManagedTerminalWorkspace(worktreeSelector: string) {
-    const target = await this.resolveTerminalWorkspaceLaunchTarget(worktreeSelector)
+  /**
+   * The git worktree record behind a terminal workspace. Refuses the floating sentinel, which has
+   * no such record — callers that only need to address the workspace want the scope below instead.
+   */
+  async showManagedTerminalWorkspace(worktreeSelector: string, requiredHostId?: ExecutionHostId) {
+    const target = await this.resolveManagedTerminalWorkspaceTarget(
+      worktreeSelector,
+      requiredHostId
+    )
     if (!target.managedWorktree) {
       throw new Error('selector_not_found')
     }
     return target.managedWorktree
   }
 
-  /** Resolve id/path uniformly for git, folder and floating workspaces; requiring a git record would reject floating targets. */
+  async resolveManagedTerminalWorkspaceTarget(
+    worktreeSelector: string,
+    requiredHostId?: ExecutionHostId,
+    checkPath = true
+  ) {
+    const key = worktreeSelector.startsWith('id:') ? worktreeSelector.slice(3) : worktreeSelector
+    const scope = parseWorkspaceKey(key)
+    const folder =
+      scope?.type === 'folder'
+        ? this.resolveFolderWorkspaceSelector(worktreeSelector, requiredHostId)
+        : undefined
+    const resolved =
+      requiredHostId && scope?.type !== 'folder'
+        ? await this.showManagedWorktree(worktreeSelector, requiredHostId)
+        : undefined
+    return this.resolveTerminalWorkspaceLaunchTarget(
+      worktreeSelector,
+      undefined,
+      {},
+      resolved,
+      folder ?? undefined,
+      checkPath
+    )
+  }
+
+  /**
+   * Where a terminal workspace is, for every kind one can be: a git worktree, a folder workspace,
+   * or the floating sentinel. This is the general answer — `id` and `path` are resolved the same
+   * way for all three — so a caller that reads only those must ask for this rather than demand a
+   * worktree record it never reads and lose the floating workspace to a `selector_not_found`.
+   */
   async showTerminalWorkspaceLaunchScope(
     worktreeSelector: string
   ): Promise<TerminalWorkspaceLaunchScope> {

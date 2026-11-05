@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveZcodeCliInvocation, zcodeDesktopTerminalRefusal } from './zcode-cli-invocation'
+import { resolveZcodeCliInvocation, assertZcodeTerminalInvocation } from './zcode-cli-invocation'
 
 const DESKTOP_FILES = new Set(['/opt/ZCode/zcode', '/opt/ZCode/resources/glm/zcode.cjs'])
 const officialRuntime = {
@@ -54,12 +54,14 @@ describe('resolveZcodeCliInvocation', () => {
   })
 
   it('refuses a Desktop bundle for terminal launches only', () => {
-    const desktop = resolveZcodeCliInvocation({ resolveCommand: () => 'zcode', officialRuntime })
-    const standalone = resolveZcodeCliInvocation({
-      resolveCommand: () => '/usr/local/bin/zcode',
-      officialRuntime: { ...officialRuntime, existsSync: () => false }
-    })
-    expect(zcodeDesktopTerminalRefusal(desktop)).toMatch(/terminal TUI/)
-    expect(zcodeDesktopTerminalRefusal(standalone)).toBeNull()
+    expect(() =>
+      assertZcodeTerminalInvocation({ resolveCommand: () => 'zcode', officialRuntime })
+    ).toThrow(/terminal TUI/)
+    expect(() =>
+      assertZcodeTerminalInvocation({
+        resolveCommand: () => '/usr/local/bin/zcode',
+        officialRuntime: { ...officialRuntime, existsSync: () => false }
+      })
+    ).not.toThrow()
   })
 })

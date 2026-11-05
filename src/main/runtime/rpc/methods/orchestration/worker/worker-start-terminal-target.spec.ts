@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LaunchedAgentForeground } from '../../../../launched-agent-foreground'
+import type { LaunchedAgentForeground } from '../../../../terminal/wait/launched-agent-foreground'
 import type { RuntimeTerminalWait } from '../../../../../../shared/runtime-terminal-contracts'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 

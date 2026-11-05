@@ -1,17 +1,17 @@
 import { join } from 'node:path'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
 } from '../native-chat/agent-session-wire/at-rest-command-catalog'
 import { resolveNativeChatVisualsSkillLocation } from '../native-chat/native-chat-visuals-skill-location'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { AgentCliVersionReader } from '../agent-cli-version-probe'
+import type { AgentCliVersionReader } from '../agent-launch/preflight/agent-cli-version-probe'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
@@ -212,7 +212,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                 }
               })
               try {
-                await awaitAcpDiscovery(connection.initialize(), signal)
+                options.adoptInitialize(await awaitAcpDiscovery(connection.initialize(), signal))
                 checkSession()
                 check()
                 const started = await awaitAcpDiscovery(

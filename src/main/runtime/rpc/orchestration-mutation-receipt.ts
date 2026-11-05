@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { isTerminalPromptMutation } from '../../../shared/orchestration-rpc-contract'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 
@@ -194,7 +194,8 @@ export function getPendingWorkerStartRecovery(
   method: string,
   receipt: string | null
 ): { dispatchId: string } | undefined {
-  if (method !== 'orchestration.workerStart' || !receipt) {
+  // A send to a finished worker accepts a follow-up worker-start the same way.
+  if ((method !== 'orchestration.workerStart' && method !== 'orchestration.send') || !receipt) {
     return undefined
   }
   try {

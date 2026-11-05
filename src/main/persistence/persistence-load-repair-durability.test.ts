@@ -1,14 +1,14 @@
-import { projectSourceControlActionLaunch } from '../../shared/source-control-action-launch-preferences'
-import { resolveSourceControlActionRecipe } from '../../shared/source-control-ai-operation-policy'
-import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import * as reconciliation from '../../shared/agent-choice-reconciliation'
+import { projectSourceControlActionLaunch } from '../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { resolveSourceControlActionRecipe } from '../../shared/source-control/ai/source-control-ai-operation-policy'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { resolveAgentLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import * as reconciliation from '../../shared/agent-launch/choices/agent-choice-reconciliation'
 import * as terminalPreparation from './loading-store/prepare-loaded-terminal-settings'
 import * as domainWrites from './profile-state/profile-state-domain-writes'
-import * as choiceArgs from '../../shared/agent-choice-args'
-import * as shell from '../../shared/tui-agent-startup-shell'
-import { agentPermissionChoices } from '../../shared/tui-agent-permission-choice'
+import * as choiceArgs from '../../shared/agent-launch/choices/agent-choice-args'
+import * as shell from '../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { agentPermissionChoices } from '../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import {
   closeTestStores,
   testState,
@@ -93,6 +93,36 @@ describe('load-time normalization durability', () => {
     await closeTestStores()
     vi.restoreAllMocks()
     rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('durably migrates Agents model and effort on an already typed permission profile', async () => {
+    const settled = await settledProfile()
+    await closeTestStores()
+    delete settled.settings.agentLaunchChoices
+    settled.settings.agentPermissionDefault = 'ask'
+    settled.settings.agentDefaultArgs = {
+      claude: '--model saved-unlisted-id --effort high --verbose',
+      codex: '-c model_reasoning_effort=low --search'
+    }
+    writeDataFile(settled)
+    const saved = await reloadAndSettleWrites()
+    expect(saved.settings.agentLaunchChoices).toEqual({
+      claude: { model: 'saved-unlisted-id', options: { effort: 'high' } },
+      codex: { options: { effort: 'low' } }
+    })
+    expect(saved.settings.agentDefaultArgs).toMatchObject({
+      claude: '--verbose',
+      codex: '--search'
+    })
+    await closeTestStores()
+    const reopened = await createStore()
+    expect(reopened.getSettings().agentLaunchChoices).toEqual(saved.settings.agentLaunchChoices)
+    reopened.updateSettings({ agentLaunchChoices: {} })
+    reopened.flush()
+    await closeTestStores()
+    const cleared = await createStore()
+    expect(cleared.getSettings().agentLaunchChoices).toEqual({})
+    expect(cleared.getSettings().agentDefaultArgs?.claude).toBe('--verbose')
   })
 
   it.each(['claude', 'codex'] as const)(

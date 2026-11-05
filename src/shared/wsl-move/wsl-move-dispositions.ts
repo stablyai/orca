@@ -1,7 +1,7 @@
 /** Exhaustive state dispositions for local WSL project moves. Typed stores are compile-checked; tests census localStorage/SQLite. Sibling tables cover UI, storage and out-of-store state.
  * Item numbers refer to docs/design/wsl-via-orcad-lossless-mover.md §2. */
 import type { PersistedState } from '../persisted-state-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 export type WslMoveDisposition =
   /** Carried in the migration manifest; the path stage rewrites UNC to Linux. */
@@ -77,6 +77,11 @@ export const PERSISTED_STATE_DISPOSITIONS = {
     item: 47,
     note: "Rebuilt from the host's first tab stream; the seeded workspaceSessionsByHostId gives first paint."
   },
+  hostRepoCatalogSnapshots: {
+    disposition: 'rederive',
+    item: 47,
+    note: "Rebuilt from the host's next project list; it caches only that answer."
+  },
   sshTargets: notApplicableDisposition(62),
   sshTargetGenerationCounter: notApplicableDisposition(62),
   deletedSshConfigAliases: notApplicableDisposition(62),
@@ -97,7 +102,7 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   onboarding: notApplicableDisposition(62),
   featureInteractionTelemetryBuckets: notApplicableDisposition(62),
   codexResetCreditAttemptLedger: notApplicableDisposition(62),
-  nativeChatUpgradeTipAudience: notApplicableDisposition(62)
+  chatUiLaunchTipAudience: notApplicableDisposition(62)
 } as const satisfies Record<keyof PersistedState, WslMoveFieldDisposition>
 
 export const WORKSPACE_SESSION_DISPOSITIONS = {

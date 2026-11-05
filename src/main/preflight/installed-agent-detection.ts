@@ -1,22 +1,22 @@
+import {
+  resolveZcodeCliInvocation,
+  zcodeDesktopTerminalRefusal
+} from '../zcode/zcode-cli-invocation'
 // orca skills loads detection outside Electron; exclude integration-client dependencies.
 import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds,
   type TuiAgentDetectionCommand
-} from '../../shared/tui-agent-detection-commands'
-import { hydrateShellPathForAgentDetection } from '../ipc/agent-detection-shell-path'
+} from '../../shared/agent-launch/catalog/tui-agent-detection-commands'
+import { hydrateShellPathForAgentDetection } from '../ipc/command-path/agent-detection-shell-path'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight-runtime-target'
 import { detectAgentCommandsOnHost } from './agent-command-detection'
-import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../shared/tui-agent'
-import {
-  resolveZcodeCliInvocation,
-  zcodeDesktopTerminalRefusal
-} from '../zcode/zcode-cli-invocation'
+import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 export type InstalledAgentDetectionOptions = {
   /** Agents disabled in Settings → Agents. Background callers skip probing them entirely. */

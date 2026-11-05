@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import {
-  ensureClaudeAgentViewPlugin,
   installClaudeAgentView,
   removeClaudeAgentView
-} from '../main/claude/agent-view-install'
+} from '../main/claude/agent-view/agent-view-install'
+import { ensureClaudeAgentViewPlugin } from '../main/claude/agent-view/agent-view-plugin'
 
 export class RelayClaudeAgentViewPlugin {
   private source = ''

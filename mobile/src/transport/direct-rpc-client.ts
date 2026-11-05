@@ -18,13 +18,14 @@ import {
 } from './rpc-client-stream-registry'
 import {
   DECISIVE_PROBE_TIMEOUT_MS,
+  livenessProbeFrame,
+  LIVENESS_REQUEST_ID_PREFIX,
   RpcSessionLivenessWatchdog
 } from './rpc-session-liveness-watchdog'
 import { isStaleForegroundDial } from './rpc-stale-dial'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from './types'
 import { negotiateMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 
-const LIVENESS_REQUEST_ID_PREFIX = 'mobile-liveness-'
 const DIRECT_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 
 export class DirectRpcClient implements RpcClient {
@@ -76,7 +77,7 @@ export class DirectRpcClient implements RpcClient {
     this.liveness = new RpcSessionLivenessWatchdog({
       transport: 'direct',
       voluntaryProbeMinIntervalMs: DIRECT_FOREGROUND_PROBE_MIN_INTERVAL_MS,
-      sendProbe: (identity) => identity === this.livenessSession && this.sendLivenessProbe(),
+      sendProbe: (identity, id) => identity === this.livenessSession && this.sendLivenessProbe(id),
       terminate: (identity) => {
         if (identity === this.livenessSession && this.socketSession === this.livenessSession) {
           this.socketClose.forceClose(this.livenessSession)
@@ -97,7 +98,7 @@ export class DirectRpcClient implements RpcClient {
       onHandshakeStarted: () => this.connectionState.publish('handshaking'),
       onAuthenticated: (session) => this.handleAuthenticated(session),
       onAuthRejected: (reason) => this.authenticationRetry.reject(reason),
-      onRpcResponse: (response) => this.handleRpcResponse(response),
+      onRpcResponse: (session, response) => this.handleRpcResponse(session, response),
       onBinary: (bytes) => this.streams.handleBinary(bytes),
       onAuthenticatedInbound: (session) => this.liveness.noteAuthenticatedInbound(session),
       onClosed: (session, closeCode) => this.socketClose.handle(session, closeCode),
@@ -253,8 +254,9 @@ export class DirectRpcClient implements RpcClient {
     })
   }
 
-  private handleRpcResponse(response: RpcResponse): void {
+  private handleRpcResponse(session: RpcClientSocketSession, response: RpcResponse): void {
     if (response.id.startsWith(LIVENESS_REQUEST_ID_PREFIX)) {
+      this.liveness.noteProbeReply(session, response.id)
       return
     }
     if (!response.ok && response.error.code === 'unauthorized') {
@@ -306,11 +308,9 @@ export class DirectRpcClient implements RpcClient {
     return false
   }
 
-  private sendLivenessProbe(): boolean {
-    return (
-      this.getState() === 'connected' &&
-      this.sendFrame({ id: `${LIVENESS_REQUEST_ID_PREFIX}${this.nextId()}`, method: 'status.get' })
-    )
+  private sendLivenessProbe(id: string): boolean {
+    const frame = livenessProbeFrame(id)
+    return this.getState() === 'connected' && this.sendFrame(frame)
   }
 
   private waitForConnected(timeoutMs?: number): Promise<void> {

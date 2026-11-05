@@ -2,8 +2,8 @@
 // The wire is schema-validated upstream; these read fields defensively, so a
 // newer server adding fields degrades to an ignored row, not a dropped frame.
 
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 
 export function agentKey(identity: AgentJournalItemIdentity): string {
   return agentJournalItemKey(identity)

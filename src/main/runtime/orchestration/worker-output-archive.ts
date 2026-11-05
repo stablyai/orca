@@ -1,4 +1,5 @@
-import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orchestration-worker-output'
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
 import { OrchestrationError } from './orchestration-error'
@@ -13,8 +14,8 @@ import { readWorkerTranscript } from './worker-transcript-read'
 import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import { captureStructuredWorkerArchive } from '../rpc/methods/orchestration-structured-worker-lifecycle'
 import type { WorkerStructuredJournalArchive } from './structured-worker-journal-archive'
-import { structuredWorkerAgent } from '../structured-worker-authority'
-import type { StructuredWorkerIdentity } from '../structured-worker-identity'
+import { structuredWorkerAgent } from './terminal-authority/structured-sessions/structured-worker-authority'
+import type { StructuredWorkerIdentity } from './terminal-authority/structured-sessions/structured-worker-identity'
 import { readWorkerTerminalArchive } from './worker-terminal-archive-read'
 
 // Bound the durable copy of raw terminal output; the tail end is the evidence that matters.
@@ -212,3 +213,20 @@ export type WorkerOutputArchiveCaptureKind = AssertAssignable<
   WorkerOutputArchiveCapture['kind'],
   WorkerTerminalArchiveKind
 >
+
+/** Archive fields a release commit records for an archive an earlier attempt already stored. */
+export function releaseCommitFieldsForStoredArchive(archive: WorkerTerminalArchiveRow) {
+  const stored = summarizeWorkerOutputArchive(archive)
+  return { archiveSource: stored.source, archiveStatus: stored.status }
+}
+
+/** Archive fields a release commit publishes for freshly captured output. */
+export function releaseCommitFieldsForCapturedArchive(captured: WorkerOutputArchiveCapture) {
+  return {
+    kind: captured.kind,
+    content: JSON.stringify(captured.content),
+    archiveSource:
+      captured.kind === 'terminal_tail' ? ('terminal' as const) : ('transcript' as const),
+    archiveStatus: captured.status
+  }
+}

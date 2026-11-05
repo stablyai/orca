@@ -1,8 +1,9 @@
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatVisualTheme } from '../../shared/native-chat/native-chat-visual-shell'
 import type {
-  AgentType,
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../shared/native-chat-types'
+} from '../../shared/native-chat/native-chat-types'
 
 // notFound marks a not-yet-on-disk miss (retry-worthy) vs a real read/parse error (#8401).
 export type NativeChatReadSessionResult =
@@ -50,15 +51,21 @@ export type NativeChatSubscribeArgs = {
   transcriptPath?: string
   /** First snapshot size; later readSession calls grow this for pagination. */
   limit?: number
+  /** The user opened this chat: may start its stopped local WSL distro (E9). */
+  wakeWslDistro?: boolean
 }
 
 export type NativeChatApi = {
+  /** Desktop-only appearance snapshot for ordinary chat-created HTML file guests. */
+  publishVisualGuestTheme?: (theme: NativeChatVisualTheme) => void
   /** Reads the latest limit turns; the hook-reported transcriptPath takes precedence over ID globbing. */
   readSession: (
     agent: AgentType,
     sessionId: string,
     limit?: number,
-    transcriptPath?: string
+    transcriptPath?: string,
+    /** The user opened or paged this chat: may start its stopped local WSL distro (E9). */
+    options?: { wakeWslDistro?: boolean }
   ) => Promise<NativeChatReadSessionResult>
   /** First frame is a bounded snapshot; later frames contain only appended messages. */
   subscribe: (

@@ -1,16 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  inspectPtyProviderProcess,
-  makePaneKey
-} from '../orca-runtime-test-mocks.spec'
-import type { IPtyProvider } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { inspectPtyProviderProcess } from '../../providers/pty-process-inspection'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import {
   TEST_WORKTREE_ID,
   createExplicitAgentStatusHarness,
   deferred,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('prefers newer explicit working state over older explicit permission state', async () => {

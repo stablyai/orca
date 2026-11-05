@@ -1,11 +1,11 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   attachFingerprintFields,
@@ -17,27 +17,33 @@ import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import * as legacyImport from '../agent-session-journal/journal-legacy-import'
 import { writeCodexHistoryFixture } from '../agent-session-journal/codex-history-test-fixture'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   NO_STRUCTURED_AGENTS,
   structuredAgentsDeclaringNothing
 } from './structured-agent-session-adapter-router-test-support'
-import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
-import { writeOpenCodeSqliteDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-fixture'
+import { structuredAgentRuntimeRegistration } from '../../runtime/agent-session/installation/structured-agent-runtime-registrations'
+import { writeOpenCodeSqliteDatabase } from '../../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 
-vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (importOriginal) => {
-  const query = await import('../transcript-opencode-sqlite-query')
-  return {
-    ...(await importOriginal<object>()),
-    readOpenCodeTranscriptPageViaWorker: async (
-      args: Parameters<typeof query.readOpenCodeTranscriptPage>[0]
-    ) => query.readOpenCodeTranscriptPage(args),
-    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
-      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+vi.mock(
+  '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (importOriginal) => {
+    const query = await import('../transcript-opencode-sqlite-query')
+    return {
+      ...(await importOriginal<object>()),
+      readOpenCodeTranscriptPageViaWorker: async (
+        args: Parameters<typeof query.readOpenCodeTranscriptPage>[0]
+      ) => query.readOpenCodeTranscriptPage(args),
+      readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+        query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+    }
   }
-})
+)
 
 const NOW = 1_800_000_000_000
 const SESSION = 'codex_adopting_session'
@@ -48,6 +54,7 @@ let store: AgentSessionRecordStore | null = null
 
 afterEach(async () => {
   if (root) {
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   }
   root = null

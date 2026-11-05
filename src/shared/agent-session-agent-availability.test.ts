@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { decodeAgentSessionAvailabilityFrame } from './agent-session-agent-availability'
+import { decodeAgentSessionAvailabilityFrame } from './agent-session/agent-session-agent-availability'
 
 it('keeps an independently reported chat program on an availability row', () => {
   expect(

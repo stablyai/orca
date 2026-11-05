@@ -2,7 +2,7 @@
 // reverse-RPC prompts it is waiting on. Split from the adapter class so the
 // acquire/close/prompt modules share one state shape.
 
-import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
+import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -13,7 +13,7 @@ import type { ZcodeStructuredLaunch } from './zcode-structured-launch-resolution
 import type {
   ComposedStructuredLaunch,
   StructuredAgentLaunchResolver
-} from '../runtime/structured-agent-launch-composition'
+} from '../runtime/agent-session/launch/structured-agent-launch-composition'
 
 /** One reverse-RPC approval/question the child asked and Orca has not answered. */
 export type ZcodeLivePrompt = {

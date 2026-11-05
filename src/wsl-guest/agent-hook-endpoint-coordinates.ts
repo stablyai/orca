@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import {
   ORCA_HOOK_PROTOCOL_VERSION,
   ORCA_HOOK_RAW_JSON_TRANSPORT
-} from '../shared/agent-hook-types'
+} from '../shared/agent-hook-listener/configuration/agent-hook-types'
 
 // Use a per-user relay directory so shared hosts isolate endpoint files with mode 0700.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'

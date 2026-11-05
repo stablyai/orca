@@ -2,17 +2,17 @@
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { agentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { agentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import {
   composeStructuredLaunch,
   structuredAgentLaunchSources
-} from '../runtime/structured-agent-launch-composition'
+} from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import type {
   StructuredAgentAdapterContext,
   StructuredAgentRuntimeAdapter,
   StructuredAgentRuntimeMetadata
-} from '../runtime/structured-agent-runtime-registration-types'
+} from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import { ZcodeStructuredSessionAdapter } from './zcode-structured-session-adapter'
 import { ZCODE_STRUCTURED_AGENT } from './zcode-structured-agent-definition'
 import {

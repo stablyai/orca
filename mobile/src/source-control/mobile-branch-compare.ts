@@ -30,38 +30,6 @@ export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchCh
   }
 }
 
-export function formatMobileBranchCompareSummary(
-  summary: MobileGitBranchCompareSummary
-): string | null {
-  if (summary.status !== 'ready') {
-    return summary.errorMessage ?? null
-  }
-  const files = branchCompareFiles(summary.changedFiles)
-  if (summary.commitsAhead === undefined) {
-    return translate('sourceControl.branchCompare.summary', '{{files}} - vs {{baseRef}}', {
-      files,
-      baseRef: summary.baseRef
-    })
-  }
-  return translate(
-    'sourceControl.branchCompare.summaryWithCommits',
-    '{{files}} - {{commits}} - vs {{baseRef}}',
-    { files, commits: branchCompareCommits(summary.commitsAhead), baseRef: summary.baseRef }
-  )
-}
-
-function branchCompareFiles(count: number): string {
-  return count === 1
-    ? translate('sourceControl.branchCompare.files_one', '{{count}} file', { count })
-    : translate('sourceControl.branchCompare.files_other', '{{count}} files', { count })
-}
-
-function branchCompareCommits(count: number): string {
-  return count === 1
-    ? translate('sourceControl.branchCompare.commits_one', '{{count}} commit', { count })
-    : translate('sourceControl.branchCompare.commits_other', '{{count}} commits', { count })
-}
-
 export function canOpenMobileBranchCompareDiff(summary: MobileGitBranchCompareSummary): boolean {
   return summary.status === 'ready' && Boolean(summary.headOid && summary.mergeBase)
 }

@@ -4,7 +4,7 @@
 // which events it forwards, and what status it reads alongside them. The runtime only says whether
 // the host has a phone to reach at all.
 
-import type { StructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
+import type { StructuredAttentionMobileDelivery } from './agent-session/structured-agent-session-mobile-attention'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 
 /** Subscribes the host's turn completions to phone delivery. Lives exactly as long as the host:

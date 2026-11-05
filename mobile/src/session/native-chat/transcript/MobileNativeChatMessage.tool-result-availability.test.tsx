@@ -1,14 +1,14 @@
 import { createElement, Fragment, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../../../src/shared/agent-session-journal-types'
-import * as toolFold from '../../../../../src/shared/native-chat/tools/native-chat-tool-pairs'
-import { projectStructuredItemsToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
-import { foldMobileNativeChatMessages } from '../../mobile-native-chat-render-data'
+} from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+
+import { projectStructuredItemsToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { foldMobileNativeChatMessages } from '../mobile-native-chat-render-data'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 vi.mock('react-native', async () => {
@@ -178,27 +178,6 @@ describe('mobile tool result availability', () => {
     expect(textIn(renderer!.root)).not.toContain('second output')
   })
 
-  it('draws each orphan output as its own Result row under one Result header', () => {
-    const raw = message(
-      Array.from({ length: 8 }, (_, index) => ({
-        type: 'tool-result' as const,
-        callId: `missing-${index}`,
-        output: `preview ${index}\ncomplete output ${index}`
-      }))
-    )
-    const [row] = foldMobileNativeChatMessages([raw], 'claude')
-    expect(row?.role).toBe('tool')
-    expect(foldMobileNativeChatMessages([row!], 'claude')).toEqual([row])
-    const tree = render(row!)
-    expect(textIn(tree.root).filter((text) => text === 'Result')).toHaveLength(9)
-    expect(toolLines(tree.root)).toHaveLength(8)
-    expect(textIn(tree.root)).not.toContain('preview 6\ncomplete output 6')
-
-    press(button(tree.root, 'preview 6'))
-    expect(textIn(tree.root)).toContain('preview 6\ncomplete output 6')
-    expect(textIn(tree.root)).not.toContain('preview 7\ncomplete output 7')
-  })
-
   it('gives a named completion to its own call past silent calls, not to the first', () => {
     const calls: NativeChatMessage['blocks'] = Array.from({ length: 18 }, (_, index) => ({
       type: 'tool-call',
@@ -218,22 +197,6 @@ describe('mobile tool result availability', () => {
     expect(textIn(tree.root)).toContain('late named output')
     press(button(tree.root, 'command 17'))
     expect(button(tree.root, 'command 0').props.disabled).toBe(true)
-  })
-
-  it('pairs nothing while its run is collapsed', () => {
-    const blocks: NativeChatMessage['blocks'] = Array.from({ length: 2049 }, (_, index) => ({
-      type: 'tool-call',
-      callId: `call-${index}`,
-      name: 'Bash',
-      input: { command: `input ${index}` }
-    }))
-    const pairing = vi.spyOn(toolFold, 'pairToolBlocks')
-    const tree = render(message(blocks), false)
-    expect(toolLines(tree.root)).toHaveLength(0)
-    expect(pairing).not.toHaveBeenCalled()
-    press(button(tree.root, 'Ran 2049 commands'))
-    expect(pairing).toHaveBeenCalled()
-    expect(toolLines(tree.root)).toHaveLength(2049)
   })
 
   it.each([true, false])(

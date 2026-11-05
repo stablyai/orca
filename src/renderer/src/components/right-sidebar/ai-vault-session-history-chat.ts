@@ -4,7 +4,7 @@
 // call it during render without widening their module graph; the store-touching opener lives in
 // ai-vault-session-history-chat-open.ts.
 
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 /** The tab id a history chat paints under; stable so reopening focuses the existing tab. */
 export function aiVaultSessionHistoryChatTabId(sessionId: string): string {

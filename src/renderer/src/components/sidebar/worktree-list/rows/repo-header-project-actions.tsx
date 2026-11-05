@@ -40,8 +40,8 @@ import {
 import {
   REPO_HEADER_ACTION_BUTTON_CLASS,
   REPO_HEADER_ACTION_REVEAL_CLASS
-} from '../../repo-header-action-button-class'
-import { getRepoHeaderCreateState } from '../../repo-header-create-state'
+} from './repo-header-action-button-class'
+import { getRepoHeaderCreateState } from './repo-header-create-state'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
@@ -76,7 +76,7 @@ export type RepoHeaderProjectActions = {
   onMoveProjectToGroup: (repo: Repo, groupId: string) => void
   onRemoveProjectFromGroup: (repo: Repo) => void
   onRemoveProject: (repo: Repo) => void
-  /** `pinHost`: the header heads one host section, so its repo is that host's own registration. */
+  /** `pinHost`: the header's rows all sit on its repo's host, so that registration names the host. */
   onCreateForRepo: (repo: Repo, options: { pinHost: boolean }) => void
 }
 

@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { PluginAutoUpdateEvent } from '../../../preload/api-types'
 import type { PluginAutoUpdateState } from '../../../shared/plugins/catalog/plugin-update-policy'
 import { translate } from '@/i18n/i18n'
+import { announcePluginUpdateReviews } from './plugin-update-review-toast'
 
 /** What automatic plugin updates last did, mirrored from main. */
 export const usePluginAutoUpdatesStore = create<PluginAutoUpdateState>(() => ({
@@ -29,6 +30,17 @@ export function announcePluginAutoUpdates(updated: PluginAutoUpdateEvent['update
 
 let watching = false
 
+/** Shows held updates main has not told yet; main marks them told, so each version shows once. */
+async function announceUntoldUpdateReviews(): Promise<void> {
+  const plugins = window.api?.plugins
+  if (!plugins?.takeUpdateReviewNotices) {
+    return
+  }
+  // Why ignored: an older host has no review notices to report.
+  const notices = await plugins.takeUpdateReviewNotices().catch(() => [])
+  announcePluginUpdateReviews(notices)
+}
+
 /** Starts mirroring automatic update results; safe to call repeatedly. */
 export function ensurePluginAutoUpdatesWatched(): void {
   const plugins = window.api?.plugins
@@ -39,10 +51,13 @@ export function ensurePluginAutoUpdatesWatched(): void {
   plugins.onAutoUpdateChanged((event) => {
     usePluginAutoUpdatesStore.setState(event.state)
     announcePluginAutoUpdates(event.updated)
+    void announceUntoldUpdateReviews()
   })
   void Promise.resolve()
     .then(() => plugins.getAutoUpdateState())
     .then((state) => usePluginAutoUpdatesStore.setState(state))
     // Why ignored: an older host has no automatic updates to report.
     .catch(() => undefined)
+    // Why on start too: a pass may have finished while no window was open.
+    .then(announceUntoldUpdateReviews)
 }

@@ -1,22 +1,34 @@
 import { useState } from 'react'
-import { View, Text, Pressable, Switch } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import {
+  colors,
+  concentricRadius,
+  radii,
+  spacing,
+  typography,
+  pressedStyle
+} from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { MessageBox } from '../components/composer-input/MessageBox'
 import { TextField } from '../components/composer-input/TextField'
+import { getQuickCommandAgentLabel } from '../terminal/quick-commands'
+import { getTerminalQuickCommandBodySize } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import {
-  getQuickCommandAgentLabel,
-  getTerminalQuickCommandBodySize,
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
-} from '../terminal/quick-commands'
-import type { QuickCommandDraft } from './quick-command-draft'
-import { isQuickCommandDraftPromptTooLong, isQuickCommandDraftValid } from './quick-command-draft'
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-commands'
+
+import {
+  type QuickCommandDraft,
+  isQuickCommandDraftPromptTooLong,
+  isQuickCommandDraftValid
+} from './quick-command-draft'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { MobileSwitch } from '../components/MobileSwitch'
 
 type Props = {
   draft: QuickCommandDraft
@@ -235,11 +247,13 @@ export function QuickCommandEditorForm({
                     )}
                   </Text>
                 </View>
-                <Switch
+                <MobileSwitch
+                  accessibilityLabel={t(
+                    'session.quickCommandEditorForm.appendEnter',
+                    'Append Enter'
+                  )}
                   value={draft.appendEnter}
                   onValueChange={(appendEnter) => onChange({ appendEnter })}
-                  trackColor={{ false: colors.bgRaised, true: colors.accentBlue }}
-                  thumbColor={colors.surfaceBright}
                 />
               </View>
             ) : null}
@@ -299,7 +313,12 @@ export function QuickCommandEditorForm({
           <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
         </Pressable>
         <Pressable
-          style={[styles.button, styles.saveButton, !canSave && styles.saveButtonDisabled]}
+          style={({ pressed }) => [
+            styles.button,
+            styles.saveButton,
+            !canSave && styles.saveButtonDisabled,
+            pressed && pressedStyle
+          ]}
           disabled={!canSave}
           onPress={onSave}
           accessibilityRole="button"
@@ -321,19 +340,19 @@ const styles = themedStyleSheet(() => ({
   label: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   hint: { fontSize: 12, color: colors.textMuted },
   error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.xs },
-  pressed: { backgroundColor: colors.bgRaised },
+  pressed: { backgroundColor: colors.borderSubtle },
   toggleGroup: { flexDirection: 'row', gap: spacing.sm },
   toggleItem: {
     flex: 1,
     height: 40,
-    borderRadius: 8,
+    borderRadius: concentricRadius(radii.control, 2),
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  toggleItemSelected: { backgroundColor: colors.bgRaised, borderColor: colors.textMuted },
+  toggleItemSelected: { backgroundColor: colors.translucentFill, borderColor: colors.textMuted },
   toggleItemDisabled: { opacity: 0.4 },
   toggleText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
   toggleTextSelected: { color: colors.textPrimary },
@@ -341,8 +360,8 @@ const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md,
@@ -370,11 +389,16 @@ const styles = themedStyleSheet(() => ({
   switchTitle: { fontSize: 14, color: colors.textPrimary },
   switchDesc: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
   footer: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  button: { flex: 1, borderRadius: 8, paddingVertical: spacing.md, alignItems: 'center' },
+  button: {
+    flex: 1,
+    borderRadius: radii.control,
+    paddingVertical: spacing.md,
+    alignItems: 'center'
+  },
   cancelButton: { borderWidth: 1, borderColor: colors.borderSubtle },
   cancelText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   saveButton: { backgroundColor: colors.textPrimary },
-  saveButtonDisabled: { backgroundColor: colors.bgRaised },
+  saveButtonDisabled: { backgroundColor: colors.borderSubtle },
   saveText: { fontSize: 14, fontWeight: '700', color: colors.bgBase },
   saveTextDisabled: { color: colors.textMuted }
 }))

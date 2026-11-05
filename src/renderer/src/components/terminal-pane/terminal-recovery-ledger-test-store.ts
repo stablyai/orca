@@ -3,7 +3,7 @@ import {
   createRemountTerminalTabForRecovery,
   createSettleTerminalTabRecovery
 } from '@/store/slices/worktrees/session/worktree-slice-lookups'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 // Drive real row-ledger actions over minimal state so suites cannot drift from durable budget writes. Do not import recovery here: the store mock factory imports this module and a back-edge deadlocks.
 

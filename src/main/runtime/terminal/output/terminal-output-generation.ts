@@ -1,9 +1,9 @@
 import { OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector } from './terminal-derived-agent-facts'
-import type { AgentStatus } from '../../../../shared/agent-detection'
-import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
+import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { findLastCompleteOscTitleRange } from '../../orca-runtime-core'
-import { extractLastOscTitle } from '../../../../shared/osc-title-extraction'
-import type { RuntimeTerminalDataMeta } from '../../runtime-terminal-stream-consumers'
+import { extractLastOscTitle } from '../../../../shared/agent-status/title/osc-title-extraction'
+import type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
@@ -109,8 +109,12 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
     this.legacyWorkerRecovery.deleteRecoveredPty(ptyId)
-    // Why: a respawn under the same session id needs its own subscriber-driven attach.
-    this.terminalViewSubscribers.resetGeneration(ptyId)
+    // Why: a respawn under the same session id needs its own main attach.
+    this.mainDaemonAttachments.forget(ptyId)
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      pty.outputObservedSince = null
+    }
     // Why: a provider response belongs to the process generation that issued
     // it; a respawn must neither reuse its frame nor join its in-flight call.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
@@ -156,7 +160,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
       this.terminalFileUriHostnameByPtyId.delete(ptyId)
       const pty = this.ptysById.get(ptyId)
       if (pty) {
-        pty.wslDistro = null
+        this.terminalIdentity.setPtyWslDistro(pty, null)
       }
       if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
         // The replaced process's live facet says nothing about its successor.
@@ -207,5 +211,9 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     listener: (data: string, meta?: RuntimeTerminalDataMeta) => void
   ): () => void {
     return this.terminalStreamConsumers.subscribe(ptyId, listener)
+  }
+
+  readRecentTerminalOutput(ptyId: string): string | undefined {
+    return this.recentPtyOutputById.get(ptyId)?.read()
   }
 }

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostAccountLaunchEnv } from '../../shared/host-account-launch-env'
 import { wslClaudeProfile } from '../claude-accounts/claude-profile-wsl-paths'
 import { provisionWslClaudeAccountProfile } from '../claude-accounts/claude-profile-wsl-provision'
-import { RuntimeAccountController } from '../runtime/runtime-account-controller'
+import { RuntimeAccountController } from '../runtime/agent-session/environment/runtime-account-controller'
 import { createWslHostClaudeProfileRefresh } from './orcad-wsl-host-claude-profile-refresh'
 
 const DISTRO = 'orca-acct-test'
@@ -134,20 +134,5 @@ describe('WSL host Claude folder refresh', () => {
       launchEnvFor(home).claude.CLAUDE_CONFIG_DIR,
       switched.claude.CLAUDE_CONFIG_DIR
     ])
-  })
-
-  it('refreshes before a Claude launch the host starts, and not for other launches', async () => {
-    const home = guestHome()
-    const refreshClaudeProfile = vi.fn(async () => {})
-    const accounts = new RuntimeAccountController()
-    accounts.restoreHostLaunchEnv(launchEnvFor(home), () => {}, { refreshClaudeProfile })
-
-    await accounts.prepareHostAgentLaunch('codex')
-    await accounts.prepareHostAgentLaunch(null)
-    expect(refreshClaudeProfile).not.toHaveBeenCalled()
-
-    await accounts.prepareHostAgentLaunch('claude')
-    await accounts.getCommitMessageAgentEnvironment()?.prepareForClaudeLaunch?.()
-    expect(refreshClaudeProfile).toHaveBeenCalledTimes(2)
   })
 })

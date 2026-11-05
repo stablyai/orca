@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  OrcaRuntimeService,
   addGitHubIssueCommentMock,
   countGitHubWorkItemsMock,
   createGitHubIssueMock,
@@ -19,8 +20,8 @@ import {
   requestGitHubPRReviewersMock,
   setPlatform,
   updateGitHubIssueMock
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
+} from '../orca-runtime-test-mocks/setup.spec'
+import { TEST_REPO_ID, TEST_REPO_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   describe('checkRepoHooks status', () => {
@@ -326,7 +327,9 @@ describe('OrcaRuntimeService', () => {
       'pr',
       null,
       {},
-      'origin'
+      'origin',
+      undefined,
+      false
     )
     expect(getGitHubWorkItemByOwnerRepoMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,

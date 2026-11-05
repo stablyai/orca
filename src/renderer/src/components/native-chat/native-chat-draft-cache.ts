@@ -1,3 +1,5 @@
+import type { Tab } from '../../../../shared/tab-types'
+import { retireNativeChatDraftPosition } from './native-chat-composer-draft-memory'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { JSONContent } from '@tiptap/react'
 import type {
@@ -10,6 +12,7 @@ import {
   appendToNativeChatComposerDraft,
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { clearNativeChatPendingAttachmentsForTests } from './native-chat-pending-attachment-cache'
@@ -51,6 +54,11 @@ export function appendNativeChatDraftCache(
 
 export function clearNativeChatDraftCacheForTests(): void {
   clearNativeChatComposerDraftsForTests()
+}
+
+export function readNativeChatDraftSnapshot(scopeKey: string | undefined, text: string) {
+  const draft = scopeKey ? readNativeChatComposerDraft(scopeKey) : undefined
+  return draft?.text === text ? draft : undefined
 }
 
 export function readNativeChatDraftDocument(
@@ -103,4 +111,29 @@ export function appendNativeChatAttachmentCache(
 export function clearNativeChatAttachmentCacheForTests(): void {
   clearNativeChatComposerDraftsForTests()
   clearNativeChatPendingAttachmentsForTests()
+}
+
+/** A destination's death retires only its unsatisfied UI position, never its ordinary content. */
+export function retireRemovedNativeChatDraftPositions(
+  before: readonly Tab[],
+  after: readonly Tab[]
+): void {
+  if (before === after) {
+    return
+  }
+  const remaining = new Map(after.map((tab) => [tab.id, tab]))
+  for (const tab of before) {
+    const next = remaining.get(tab.id)
+    if (
+      tab.contentType === 'agent-session' &&
+      (next?.contentType !== tab.contentType ||
+        next.entityId !== tab.entityId ||
+        next.executionHostId !== tab.executionHostId)
+    ) {
+      retireNativeChatDraftPosition(
+        readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(tab.entityId)),
+        tab.id
+      )
+    }
+  }
 }

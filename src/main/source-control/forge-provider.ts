@@ -4,7 +4,7 @@ import type {
   CreateHostedReviewResult,
   HostedReviewInfo,
   HostedReviewProvider
-} from '../../shared/hosted-review'
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   getAzureDevOpsPullRequest,
   getAzureDevOpsPullRequestForBranchOrThrow,
@@ -59,6 +59,7 @@ export type ForgeReviewForBranchInput = ForgeProviderRepositoryContext & {
   fallbackReviewNumber?: number | null
   // GitHub-only merged-at-head visibility; other providers ignore this inspected HEAD.
   githubCurrentHeadOid?: string | null
+  userRefresh?: boolean
 }
 
 export type ForgeReviewByNumberInput = ForgeProviderRepositoryContext & {
@@ -175,6 +176,7 @@ const gitHubForgeProvider = {
       fallbackReviewNumber,
       {
         ...executionArgs[0],
+        ...(input.userRefresh === true ? { userRefresh: true } : {}),
         ...(fallbackReviewNumber !== null ? { acceptMergedFallbackPR: true } : {}),
         currentHeadOid: input.githubCurrentHeadOid ?? null
       }
@@ -307,21 +309,4 @@ export const FORGE_PROVIDERS = [
 
 export function getForgeProviderById(id: ForgeProviderId): ForgeProvider {
   return FORGE_PROVIDERS.find((provider) => provider.id === id) ?? gitHubForgeProvider
-}
-
-export async function getForgeProviderForRepository(
-  context: ForgeProviderRepositoryContext
-): Promise<ForgeProvider | null> {
-  for (const provider of FORGE_PROVIDERS) {
-    if (await provider.resolveRepository(context)) {
-      return provider
-    }
-  }
-  return null
-}
-
-export async function detectHostedReviewProvider(
-  context: ForgeProviderRepositoryContext
-): Promise<HostedReviewProvider> {
-  return (await getForgeProviderForRepository(context))?.id ?? 'unsupported'
 }
