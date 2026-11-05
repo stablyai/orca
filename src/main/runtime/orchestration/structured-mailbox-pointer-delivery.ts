@@ -1,17 +1,15 @@
-/** Chat sessions get each orchestration message whole, as its own ordinary message: the chat's queue holds it
- *  behind running work or a question, and the agent is handed one per turn. Terminals keep the PTY pointer lane. */
+/** Chats queue whole mail one per turn behind work/questions; terminals keep the PTY pointer lane. */
 
 import type { MessageRow, OrchestrationDb } from './db'
-import type { OrchestrationCliCommand } from './cli-command'
+import type { SenderSnapshotResolver } from './agent-message-sender'
 import {
   selectOrchestrationPointerBatch,
   shouldReleaseOrchestrationPointer,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
-import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
+import type { StructuredPointerDeliveryDependencies } from './structured-mailbox-pointer-host-contract'
 import { structuredMailMessage } from './structured-mail-source'
-import type { SenderSnapshotResolver } from './agent-message-sender'
 import type { StructuredMailSendRow } from './db/messages/structured-mail-send-store'
 import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
 import {
@@ -20,35 +18,12 @@ import {
 } from '../../../shared/agent-session/agent-session-message-source'
 import { StructuredMailboxParking } from './structured-mailbox-parking'
 import { StructuredMailSettledState } from './structured-mail-settled-state'
-import {
-  hasStructuredMailSends,
-  settleStructuredMailSends,
-  StructuredMailAuthority,
-  type StructuredMailResend
-} from './structured-mail-custody'
+import * as mailCustody from './structured-mail-custody'
 
 export type StructuredPointerTarget = {
   sessionId: string
   /** Direct peer mail has no Dispatch; that absence must not prevent worker nudges. */
   dispatchId: string | null
-}
-
-type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
-  getDb: () => OrchestrationDb | null
-  getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
-  /** Resolve dispatch or direct-worker mail to its session; null delegates to the PTY lane. */
-  resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
-  /** The runtime's own delivery for a mailbox, whichever lane owns it: a terminal's included. */
-  redeliver?: (mailboxHandle: string) => void
-  /** Whether nothing can own the mailbox again; read from the database unless a test supplies it. */
-  mailboxEnded?: (mailboxHandle: string) => boolean
-  /** Why no chat resolves a mailbox; read from the database unless a test supplies it. */
-  unresolvedCustody?: (mailboxHandle: string) => 'elsewhere' | 'unverifiable'
-  /** The CLI name the recipient runs, for the reply line and the oversized-message pointer. */
-  getCliCommand: () => OrchestrationCliCommand
-  /** What Orca calls a sender now, snapshotted onto the message; null when it has no name. */
-  senderSnapshot: SenderSnapshotResolver
-  host: StructuredMailboxPointerHost
 }
 
 type AdmitStep = 'next' | 'park'
@@ -64,19 +39,21 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     onActivity: (sessionId) => this.onJournalActivity(sessionId)
   })
 
-  private readonly authority: StructuredMailAuthority
+  private readonly authority: mailCustody.StructuredMailAuthority
   private readonly settledState = new StructuredMailSettledState()
 
   constructor(private readonly deps: StructuredPointerDeliveryDependencies<TWaiter>) {
-    this.authority = new StructuredMailAuthority({ ...deps, resolve: deps.resolveStructuredTarget })
+    this.authority = new mailCustody.StructuredMailAuthority({
+      ...deps,
+      resolve: deps.resolveStructuredTarget
+    })
   }
 
   deliverForHandle(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): boolean {
     const target = this.deps.resolveStructuredTarget(mailboxHandle)
     // Earlier sends are settled even when no chat owns the mailbox now; only an owner is sent to.
-    if (!target && !hasStructuredMailSends(this.deps.getDb(), mailboxHandle)) {
-      // Nothing to settle or send: keep nothing for it. A pass still running forgets it itself, after
-      // it has seen what this cleanup marked.
+    if (!target && !mailCustody.hasStructuredMailSends(this.deps.getDb(), mailboxHandle)) {
+      // A still-running pass forgets itself after observing cleanup.
       if (!this.inFlight.has(mailboxHandle)) {
         this.settledState.forget(mailboxHandle)
       }
@@ -193,6 +170,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   }
 
   private async pass(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): Promise<void> {
+    const senderSnapshot = this.deps.senderSnapshotReader?.() ?? this.deps.senderSnapshot
     let currentReservedTypes = reservedTypes
     // Each message is offered to each owner once per pass; one it no longer owes waits for an edge.
     const offered = new Set<string>()
@@ -207,7 +185,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       const { outstanding, resend, released } =
         this.settledState.needsSettling(mailboxHandle, owner) || this.authority.ended(mailboxHandle)
           ? await this.settledState.settle(mailboxHandle, owner, () =>
-              settleStructuredMailSends({
+              mailCustody.settleStructuredMailSends({
                 db,
                 mailboxHandle,
                 host: this.deps.host,
@@ -219,7 +197,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           : { outstanding: new Set<string>(), resend: [], released: false }
       let target = this.deps.resolveStructuredTarget(mailboxHandle)
       if (!target || this.authority.ended(mailboxHandle)) {
-        if (!hasStructuredMailSends(db, mailboxHandle)) {
+        if (!mailCustody.hasStructuredMailSends(db, mailboxHandle)) {
           // Nothing of it is left in any chat: no edge is owed to it.
           this.parking.unpark(mailboxHandle)
           this.settledState.forget(mailboxHandle)
@@ -235,7 +213,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         if (!message || again.row.session_id !== target.sessionId) {
           continue
         }
-        if ((await this.admit(db, mailboxHandle, target, message, again)) === 'park') {
+        if (
+          (await this.admit(db, mailboxHandle, target, message, senderSnapshot, again)) === 'park'
+        ) {
           this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
           return
         }
@@ -250,7 +230,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           !outstanding.has(message.id) && !offered.has(`${message.id}:${target?.sessionId}`)
       )
       if (batch.length === 0) {
-        if (hasStructuredMailSends(db, mailboxHandle)) {
+        if (mailCustody.hasStructuredMailSends(db, mailboxHandle)) {
           // Cards still in the chat: their handover or deletion is read on this session's next edge.
           this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
         } else {
@@ -271,7 +251,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         offered.add(`${message.id}:${target.sessionId}`)
         // Parked first, so a send that throws is retried on this session's next journal edge.
         this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
-        if ((await this.admit(db, mailboxHandle, target, message)) === 'park') {
+        if ((await this.admit(db, mailboxHandle, target, message, senderSnapshot)) === 'park') {
           // An edge during the send may have taken the entry; the refusal still waits for the next one.
           this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
           return
@@ -288,7 +268,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     mailboxHandle: string,
     target: StructuredPointerTarget,
     message: MessageRow,
-    again?: StructuredMailResend
+    senderSnapshot: SenderSnapshotResolver,
+    again?: mailCustody.StructuredMailResend
   ): Promise<AdmitStep> {
     const sessionId = target.sessionId
     const fence = this.deps.host.currentFence(sessionId)
@@ -301,7 +282,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       dispatchId: target.dispatchId,
       message,
       cliCommand: this.deps.getCliCommand(),
-      senderSnapshot: this.deps.senderSnapshot
+      senderSnapshot
     })
     const attempt: StructuredMailSendRow = {
       mailbox_handle: mailboxHandle,

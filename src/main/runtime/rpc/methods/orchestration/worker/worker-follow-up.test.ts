@@ -37,6 +37,23 @@ describe('a follow-up to a finished terminal worker', () => {
       body
     })
 
+  it('records the current invocation hash when the existing worker is reused for a follow-up', async () => {
+    h.setup()
+    const authority = h.runtime.getOrchestrationDispatchAuthority('term_worker')!
+    vi.mocked(h.runtime.getOrchestrationDispatchAuthority).mockReturnValue({
+      ...authority,
+      launchTokenHash: 'bound-invocation-hash'
+    })
+    const { dispatchId } = await h.startSettledWorker()
+    await send(dispatchId, 'continue this same agent')
+    const next = getFollowUpDispatch(h.db, dispatchId)
+    expect(next).toBeDefined()
+    expect(next?.launch_token_hash).toBe('bound-invocation-hash')
+    expect(next?.process_incarnation).toBe(authority.processIncarnation)
+    expect(next?.assignee_pane_key).toBe(authority.paneKey)
+    expect(h.runtime.createTerminal).toHaveBeenCalledTimes(1)
+  })
+
   it('starts no second worker while it cannot tell whether the first still runs', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
