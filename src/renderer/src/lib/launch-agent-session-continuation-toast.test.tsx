@@ -10,7 +10,8 @@ import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import type { LaunchAgentInNewTabResult } from './launch-agent-in-new-tab-host-agents'
 
 const mocks = vi.hoisted(() => ({
-  launch: vi.fn<(args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult>()
+  launch: vi.fn<(args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult>(),
+  detectedAgents: ['codex'] as string[]
 }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launch }))
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
@@ -22,12 +23,16 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 vi.mock('./host-chat-program-acquisition', () => ({
-  acquireAgentLaunchChoices: async () => ({ detected: ['codex'], offered: ['codex'] })
+  acquireAgentLaunchChoices: async () => ({
+    detected: [...mocks.detectedAgents],
+    offered: [...mocks.detectedAgents]
+  })
 }))
 
 const initial = useAppStore.getState()
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  mocks.detectedAgents = ['codex']
   mocks.launch.mockReset()
   mocks.launch.mockImplementation(({ worktreeId, agentSessionLaunchPlan }) => {
     useAppStore.getState().createUnifiedTab(worktreeId, 'agent-session', {
@@ -157,3 +162,24 @@ it.each(['target', 'folder:local-folder'])(
     expect(useAppStore.getState().tabsByWorktree[worktreeId]).toHaveLength(1)
   }
 )
+
+it.each([
+  ['qoder', undefined],
+  ['qoder-cn', undefined],
+  ['codex', 'submit-after-ready'],
+  ['claude', 'draft']
+] as const)('routes %s prompt delivery as %s', async (agent, expected) => {
+  mocks.detectedAgents = [agent]
+  await act(async () => {
+    await expect(
+      launchAgentSessionContinuation({
+        agent,
+        prompt: 'Continue the saved task',
+        worktreeId: 'target',
+        launchSource: 'sidebar',
+        launchChoice: { agent, route: 'terminal-tui', executionHostId: 'local' }
+      })
+    ).resolves.toBe(true)
+  })
+  expect(mocks.launch.mock.calls[0]?.[0].promptDelivery).toBe(expected)
+})
