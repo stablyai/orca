@@ -91,9 +91,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       } = prepared
 
       const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
+      // Why: without an agent there is nothing to type a plugin task's prompt into.
+      const agentDraft = agent ? options?.agentDraft : null
 
       const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote, agentDraft)
 
       const startupPolicySettlement = await settleComposerSubmit(
         persistSetupAgentStartupPolicy(),
@@ -160,7 +162,9 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         isRemote: selectedRepoIsRemote,
         telemetrySource,
         route: agentLaunchRoute,
-        launchInputs: options?.launchInputs
+        launchInputs: options?.launchInputs,
+        agentDraft,
+        sessionOptionOverrides: options?.sessionOptions
       })
 
       if (isSubmissionCancelled()) {
@@ -173,6 +177,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           Boolean(activeEphemeralVmRecipeId) || selectedRepoTarget?.kind === 'environment',
         taskSourceContext,
         linkedWorkItem: submitLinkedWorkItem,
+        linkedPluginTask: options?.linkedPluginTask,
         workspaceRunContext,
         workspaceName,
         nameWasGenerated,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  appendAgentLaunchDraft,
   buildContainedLinkedContextBlock,
   LINKED_CONTEXT_BLOCK_MAX_CHARS
 } from './linked-work-item-context'
@@ -35,5 +36,21 @@ describe('contained linked context block', () => {
     expect(block?.length).toBeLessThanOrEqual(LINKED_CONTEXT_BLOCK_MAX_CHARS)
     expect(block).toContain('[linked context truncated]')
     expect(block?.endsWith('--- END LINKED WORK ITEM CONTEXT ---')).toBe(true)
+  })
+})
+
+describe('appendAgentLaunchDraft', () => {
+  it('leaves the linked draft alone without an agent draft', () => {
+    expect(appendAgentLaunchDraft('note\n\nhttps://example.com/1', '   ')).toBe(
+      'note\n\nhttps://example.com/1'
+    )
+    expect(appendAgentLaunchDraft(null, undefined)).toBeNull()
+  })
+
+  it('drafts the agent prompt alone or after the linked draft', () => {
+    expect(appendAgentLaunchDraft(null, '  Implement the plan.  ')).toBe('Implement the plan.\n')
+    expect(appendAgentLaunchDraft('note\n\nhttps://example.com/1\n', 'Implement the plan.')).toBe(
+      'note\n\nhttps://example.com/1\n\nImplement the plan.\n'
+    )
   })
 })

@@ -37,6 +37,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { usePluginTaskLaunch, type PluginTaskLaunch } from './new-workspace/use-plugin-task-launch'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
@@ -70,7 +71,7 @@ type ComposerModalData = {
   telemetrySource?: WorkspaceCreateTelemetrySource
   contextualTourSource?: string
   setupGuideTourRequestId?: string
-}
+} & PluginTaskLaunch
 
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
@@ -247,6 +248,7 @@ function QuickTabBody({
     [observation.contextKey]
   )
 
+  const pluginTask = usePluginTaskLaunch(modalData, quickAgent)
   const handleCreate = useCallback(async (): Promise<void> => {
     if (createDisabled) {
       return
@@ -270,9 +272,11 @@ function QuickTabBody({
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
       setupOnly: quickAgent === null,
       launchChoice: launchSelection.choice,
-      ...(launchInputs ? { launchInputs } : {})
+      ...(launchInputs ? { launchInputs } : {}),
+      ...pluginTask.submitOptions
     })
   }, [
+    pluginTask.submitOptions,
     createDisabled,
     quickAgent,
     launchSelection.choice,
@@ -384,6 +388,7 @@ function QuickTabBody({
           observation.model.pickerContext?.executionHostId !== 'local'
         }
         onQuickAgentChange={handleQuickAgentChange}
+        {...pluginTask.cardProps(isFolderWorkspaceTarget)}
         {...cardProps}
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}

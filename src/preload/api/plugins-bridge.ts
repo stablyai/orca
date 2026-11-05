@@ -56,6 +56,20 @@ export const pluginsApi = {
     args?: unknown
     timeoutMs?: number
   }) => ipcRenderer.invoke('plugins:invokeCommand', args),
+  listTaskSourceItems: (args: { pluginKey: string; sourceId: string; params: unknown }) =>
+    ipcRenderer.invoke('plugins:invokeTaskSource', {
+      pluginKey: args.pluginKey,
+      sourceId: args.sourceId,
+      operation: 'list',
+      params: args.params
+    }),
+  getTaskSourceItem: (args: { pluginKey: string; sourceId: string; itemId: string }) =>
+    ipcRenderer.invoke('plugins:invokeTaskSource', {
+      pluginKey: args.pluginKey,
+      sourceId: args.sourceId,
+      operation: 'get',
+      params: { itemId: args.itemId }
+    }),
   panelAction: (args: {
     sessionToken: string
     action: string

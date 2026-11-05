@@ -49,6 +49,7 @@ import { PLUGIN_METHODS } from './plugins'
 import { PLUGIN_VIEW_METHODS } from './plugin-view'
 import { PLUGIN_DEV_EMIT_METHODS } from './plugin-dev-emit'
 import { PLUGIN_DEV_REQUEST_METHODS } from './plugin-dev-request'
+import { PLUGIN_TASK_SOURCE_METHODS } from './plugin-task-sources'
 import { SKILL_METHODS } from './skills'
 import { CLIPBOARD_METHODS } from './clipboard'
 import { HOST_CAPABILITY_METHODS } from './host-capabilities'
@@ -141,6 +142,7 @@ export const ALL_RPC_METHODS = [
   ...PLUGIN_VIEW_METHODS,
   ...PLUGIN_DEV_EMIT_METHODS,
   ...PLUGIN_DEV_REQUEST_METHODS,
+  ...PLUGIN_TASK_SOURCE_METHODS,
   ...SKILL_METHODS,
   ...CLIPBOARD_METHODS,
   ...HOST_CAPABILITY_METHODS,

@@ -56,6 +56,8 @@ async function realService(answer: (payload: unknown) => unknown) {
   const factory = vi.fn<PluginWorkerFactory>(async (): Promise<PluginWorkerHandle> => ({
     commands: [],
     invokeCommand: vi.fn(async () => null),
+    taskSources: [],
+    invokeTaskSource: vi.fn(),
     requestFromPanel: vi.fn(),
     runHook,
     notifyDataChanged: vi.fn(),

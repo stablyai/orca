@@ -349,7 +349,7 @@
               "notifications:show"
             ]
           ],
-          "maxItems": 11,
+          "maxItems": 12,
           "type": "array",
           "items": {
             "type": "string",
@@ -364,7 +364,8 @@
               "storage:own",
               "secrets:own",
               "settings:own",
-              "appearance:write"
+              "appearance:write",
+              "tasks:provide"
             ]
           }
         },
@@ -569,7 +570,8 @@
             "customEditors",
             "newFiles",
             "settings",
-            "statusBarItems"
+            "statusBarItems",
+            "taskSources"
           ],
           "description": "Contribution point.",
           "x-orca-since": "1.4.245",

@@ -47,6 +47,11 @@ export type {
   PluginHostStatus
 } from '../../shared/plugins/plugin-list-entry'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
+import type {
+  PluginTaskDetail,
+  PluginTaskListParamsInput,
+  PluginTaskListResult
+} from '../../shared/plugins/tasks/plugin-task-source'
 import type { PluginStatusBarOverrides } from '../../shared/plugins/contributions/plugin-status-bar-state'
 import type { PluginDeclaredSettingsSnapshot } from '../../shared/plugins/contributions/plugin-settings-values'
 import type { PluginJsonValue } from '../../shared/plugins/workers/plugin-host-api'
@@ -183,6 +188,17 @@ export type PluginsApi = {
     /** Refused unless the worker can start it within this many ms; older hosts ignore it. */
     timeoutMs?: number
   }) => Promise<unknown>
+  /** Lists a plugin task source; main validates the worker's answer. */
+  listTaskSourceItems: (args: {
+    pluginKey: string
+    sourceId: string
+    params: PluginTaskListParamsInput
+  }) => Promise<PluginTaskListResult>
+  getTaskSourceItem: (args: {
+    pluginKey: string
+    sourceId: string
+    itemId: string
+  }) => Promise<PluginTaskDetail>
   /** One frame host call; main enforces consented capabilities and the frame's surface. */
   panelAction: (args: {
     sessionToken: string

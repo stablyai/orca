@@ -17,6 +17,8 @@ function worker(): PluginWorkerHandle & { exit: (code: number) => void } {
   return {
     commands: [],
     invokeCommand: vi.fn(async () => null),
+    taskSources: [],
+    invokeTaskSource: vi.fn(async () => null),
     deliverEvent: vi.fn(),
     requestFromPanel: vi.fn(),
     runHook: vi.fn(),
