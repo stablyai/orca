@@ -420,7 +420,7 @@ it('keeps an actual composing return through command acceptance, composition set
         snapshot: [],
         invokeAction: async () => true,
         setOption: async () => true,
-        setThreadGoalObjective: () => reply.promise
+        changeThreadGoal: () => reply.promise
       }),
     optionsSurface: {
       getSnapshot: () => [],

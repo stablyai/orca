@@ -3496,7 +3496,6 @@
             "e8b3741ff7": "Ignoré",
             "a9957007eb": "Ignorer {{value0}}",
             "bef0adef9b": "Branche",
-            "0b1766738a": "Dépôt",
             "bbb1ab6a6f": "Sélectionner {{value0}}",
             "b771c92598": "Supprimer la sélection",
             "7eee951968": "Analyse des espaces de travail",
@@ -3505,7 +3504,6 @@
             "b2c1331844": "Supprimer les espaces de travail inactifs",
             "7f451a3e2c": "Impossible d'ignorer la suggestion de nettoyage",
             "662b8ec3f8": "Échec du scan de nettoyage des espaces de travail",
-            "4d0b72481c": "Ignorer",
             "9cc26c019d": "Supprimer",
             "0e2d235c63": "Analyse des espaces de travail prête",
             "4a35c08764": "À examiner",
@@ -3513,9 +3511,6 @@
             "1d3503357d": "Vous pouvez fermer cette fenêtre et revenir pendant que la suppression continue.",
             "4c2990886e": "{{value0}}/{{value1}} supprimés",
             "86ba852118": "{{value0}}, {{value1}} en échec",
-            "deletingCount": "Suppression des espaces de travail : {{value0}}",
-            "deleteCount": "Supprimer les espaces de travail : {{value0}} ?",
-            "selectedForDeletionCount": "Sélectionnés pour suppression : {{value0}}",
             "deleteButtonCount": "Supprimer {{value0}}",
             "archivedStatus": "Archivé",
             "74f6c16279": "Retour"
@@ -3530,7 +3525,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Contexte",
             "flagsLabel": "Indicateurs",
             "collapseDetails": "Réduire les détails",
@@ -20167,9 +20161,7 @@
         "browse": {
           "noSizes": "Aucune taille d'espace de travail mesurée pour l'instant.",
           "noSizesDescription": "Les tailles apparaissent une fois l'utilisation disque mesurée.",
-          "measureSizes": "Analyser",
           "measureSizesTitle": "Analyser les tailles des espaces de travail",
-          "measureSizesDescription": "Analysez l'utilisation disque pour comparer, trier et filtrer les espaces de travail par taille.",
           "sizeOnDisk": "Taille sur disque : {{value0}}",
           "checkingGitRow": "Vérification de l'état git",
           "searchPlaceholder": "Rechercher par nom, dépôt, branche, chemin, hôte",

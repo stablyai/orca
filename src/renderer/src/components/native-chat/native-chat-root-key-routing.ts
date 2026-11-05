@@ -16,7 +16,7 @@ type NativeChatRootKeyEvent = KeyboardRedirectEvent & {
 export function routeNativeChatRootKeyToInput(
   event: NativeChatRootKeyEvent,
   composer: NativeChatComposerHandle | null,
-  questionAnswerInput: HTMLInputElement | null
+  questionAnswerInput: HTMLInputElement | HTMLTextAreaElement | null
 ): void {
   // A focused transcript or code box owns Space paging; typing elsewhere still reaches the composer.
   if (

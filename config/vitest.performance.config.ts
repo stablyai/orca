@@ -10,7 +10,6 @@ const contracts = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/runtime/hook-status-resume-sleep-ordering.test.ts',
   'src/shared/agent-launch/permissions/tui-agent-permission-choice.test.ts',
-  'src/renderer/src/components/settings/agents/permissions/agent-permission-conversion-persistence.test.tsx',
   'src/main/runtime/rpc/methods/repo.test.ts',
   'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx',
   'src/main/sqlite/sync-database.test.ts',
