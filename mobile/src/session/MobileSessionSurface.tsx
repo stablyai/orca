@@ -74,6 +74,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
             <AnchoredDetailCard
               {...details.visual}
               bounds={details.bounds}
+              layerHeight={details.layerHeight}
               contentRef={details.contentRef}
               boundaryRefs={details.boundaryRefs}
               active={details.active}

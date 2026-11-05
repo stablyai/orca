@@ -197,6 +197,11 @@
       "sendQueueHint": "Выполнится после текущего хода",
       "sendSteerHint": "Попадёт в то, что агент делает сейчас"
     },
+    "contextUsage": {
+      "label": "Контекст: {{used}} из {{window}} токенов, использовано {{percent}}%",
+      "title": "Контекст",
+      "estimated": "Оценка по последнему ответу."
+    },
     "composerAttachments": {
       "attachedImage": "Прикреплённое изображение",
       "file": "Файл",

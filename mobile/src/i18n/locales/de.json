@@ -189,6 +189,11 @@
       "sendQueueHint": "Läuft nach dem aktuellen Durchgang",
       "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },
+    "contextUsage": {
+      "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
+      "title": "Kontext",
+      "estimated": "Anhand der letzten Antwort geschätzt."
+    },
     "composerAttachments": {
       "attachedImage": "Angehängtes Bild",
       "file": "Datei",

@@ -189,6 +189,11 @@
       "sendQueueHint": "Geçerli tur bittikten sonra çalışır",
       "sendSteerHint": "Ajanın şu anda yaptığı işe katılır"
     },
+    "contextUsage": {
+      "label": "Bağlam: {{used}} / {{window}} token kullanıldı (%{{percent}})",
+      "title": "Bağlam",
+      "estimated": "Son yanıta göre tahmin edilmiştir."
+    },
     "composerAttachments": {
       "attachedImage": "Ekli görsel",
       "file": "Dosya",

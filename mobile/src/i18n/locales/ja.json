@@ -189,6 +189,11 @@
       "sendQueueHint": "現在のターンの後に実行します",
       "sendSteerHint": "Agent が今行っている作業に加えます"
     },
+    "contextUsage": {
+      "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
+      "title": "コンテキスト",
+      "estimated": "最後の応答から推定。"
+    },
     "composerAttachments": {
       "attachedImage": "添付画像",
       "file": "ファイル",

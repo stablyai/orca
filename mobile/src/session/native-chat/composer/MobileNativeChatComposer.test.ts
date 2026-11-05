@@ -27,6 +27,9 @@ function MobileNativeChatComposer({
 }
 
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('./MobileNativeChatContextUsageRing', () => ({
+  MobileNativeChatContextUsageRing: () => null
+}))
 // BottomDrawer also carries the option pager, which loads Reanimated at import.
 vi.mock('react-native-reanimated', async () =>
   (await import('../../../test-support/reanimated-pager-stub')).reanimatedPagerStub()

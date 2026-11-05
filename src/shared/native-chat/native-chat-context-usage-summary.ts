@@ -1,4 +1,4 @@
-import type { StructuredAgentContextUsage } from '../../../../shared/agent-session/structured-agent-session-context-usage'
+import type { StructuredAgentContextUsage } from '../agent-session/structured-agent-session-context-usage'
 
 /** Reduce provider context breakdowns to the rows shown by the composer ring. */
 export type NativeChatContextUsageSummary = {
@@ -31,6 +31,18 @@ export function summarizeContextUsage(
       }))
       .sort((left, right) => right.tokens - left.tokens)
   }
+}
+
+/** The CLI can repeat a category name, so a row's key counts which repeat it is. */
+export function keyContextUsageRows(
+  rows: NativeChatContextUsageSummary['rows']
+): { key: string; row: NativeChatContextUsageSummary['rows'][number] }[] {
+  const seen = new Map<string, number>()
+  return rows.map((row) => {
+    const repeat = seen.get(row.name) ?? 0
+    seen.set(row.name, repeat + 1)
+    return { key: `${repeat}:${row.name}`, row }
+  })
 }
 
 /** `18.6k`, `981.4k`, `1M`: capital M, since a lowercase one reads as minutes. */
