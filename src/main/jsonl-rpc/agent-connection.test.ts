@@ -146,6 +146,8 @@ describe('JSON-lines RPC process ownership', () => {
     const { connection, child } = fixture({ onExit, onClose }, { exitOnEnd: false })
     const pending = expect(connection.request('prompt')).rejects.toThrow('stream closed')
     child.stdout.emit('end')
+    // Output ending first waits the drain bound for the exit that says how the agent ended.
+    await vi.advanceTimersByTimeAsync(1_000)
     await pending
     expect(connection.closed).toBe(true)
     expect(connection.rootVerdict).toBe('live')

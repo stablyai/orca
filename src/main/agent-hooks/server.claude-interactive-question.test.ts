@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServer } from './server'
 
 const PANE_KEY = makePaneKey('tab-question', '11111111-1111-4111-8111-111111111111')

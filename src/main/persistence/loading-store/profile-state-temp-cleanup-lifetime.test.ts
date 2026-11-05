@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
-import * as durableFileWrite from '../../durable-file-write'
+import * as durableFileWrite from '../../filesystem/durable-file-write'
 import { STALE_DURABLE_WRITE_TEMP_AGE_MS } from '../tracking-repos/worktree-metadata-normalization'
 import {
   createWorkerMaintenanceFixture,

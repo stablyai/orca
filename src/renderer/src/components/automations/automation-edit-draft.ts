@@ -1,3 +1,4 @@
+import { automationCanonicalLaunchSetup } from '../../../../shared/automation-launch-setup'
 import type { Automation } from '../../../../shared/automations-types'
 import { translate } from '@/i18n/i18n'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
@@ -10,6 +11,7 @@ import { AUTOMATION_DEFAULT_TIME, formatTimeInput } from './automation-draft-mod
 import { getAutomationSetupDecisionDraftValue } from './automation-setup-decision'
 
 export function buildAutomationEditDraft(automation: Automation): AutomationDraft {
+  const setup = automationCanonicalLaunchSetup(automation)
   const schedule = tryParseAutomationRrule(automation.rrule)
   const hasCustomSchedule = !schedule && isRunnableAutomationSchedule(automation.rrule)
   return {
@@ -17,7 +19,11 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
     prompt: automation.prompt,
     agentId: automation.agentId,
     surface: automation.launchSetup?.surface ?? automation.surface ?? 'terminal',
-    extraAgentArgs: automation.extraAgentArgs ?? '',
+    extraAgentArgs: setup.extraAgentArgs ?? '',
+    ...(setup.launchPreferences !== undefined
+      ? { launchPreferences: setup.launchPreferences }
+      : {}),
+    ...(setup.agentArgs !== undefined ? { agentArgs: setup.agentArgs } : {}),
     projectId: getAutomationRunRepoId(automation),
     workspaceMode: automation.workspaceMode,
     workspaceId: automation.workspaceId ?? '',

@@ -1,5 +1,5 @@
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {

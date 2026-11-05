@@ -1,4 +1,4 @@
-import type { HostedReviewInfo } from '../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 // title is intentionally optional: rehydrated review/PR caches can hold entries without one.
 type SearchableReview = Pick<HostedReviewInfo, 'number' | 'provider'> & { title?: string }

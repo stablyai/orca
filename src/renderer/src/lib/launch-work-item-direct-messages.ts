@@ -1,8 +1,11 @@
 import { toast } from 'sonner'
-import { planAgentCliArgsSuffix } from './tui-agent-startup'
+import {
+  planAgentCliArgsSuffix,
+  type AgentStartupShell
+} from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { getAgentLabel } from './agent-catalog'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+
 import { isGitLabIssueUrl } from '@/lib/new-workspace'
 import { translate } from '@/i18n/i18n'
 

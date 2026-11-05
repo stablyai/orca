@@ -1,11 +1,11 @@
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
-import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
-import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../shared/workspace-attachment-legacy'
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
+import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../shared/workspace-attachments/workspace-attachment-legacy'
 import {
   WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY
-} from '../../../../shared/workspace-attachment-capabilities'
+} from '../../../../shared/workspace-attachments/workspace-attachment-capabilities'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   ForceDeleteWorktreeBranchResult,

@@ -1,6 +1,7 @@
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { HostProfileSchema } from './types'
 import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './types'
+
 import { getNextHostNameFromHosts } from './host-names'
 import { mergeHostNameIdentity, withPersonalName } from './host-name-identity'
 import * as hostListLoads from './host-list-load-sharing'

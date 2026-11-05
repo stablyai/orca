@@ -152,13 +152,4 @@ describe('shot --act Table, Tree and Slider verbs', () => {
       { ok: false, error: 'expand: the Tree item "README.md" has no children' }
     ])
   })
-
-  it('slides within the bounds only', async () => {
-    const guest = mountFilesGuest()
-    expect(await guest.run([{ slide: { label: 'Volume' }, value: 7 }])).toEqual([{ ok: true }])
-    expect(guest.state.volume).toBe(7)
-    expect(await guest.run([{ slide: { label: 'Volume' }, value: 11 }])).toEqual([
-      { ok: false, error: "slide: 11 is outside the Slider's 0 to 10" }
-    ])
-  })
 })

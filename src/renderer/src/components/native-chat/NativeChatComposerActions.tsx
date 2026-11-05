@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat-follow-up-behavior'
+import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -14,7 +14,7 @@ import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers
 import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
-import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
+import type { NativeChatContextUsageSummary } from '../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 
 export type NativeChatComposerActionsProps = {

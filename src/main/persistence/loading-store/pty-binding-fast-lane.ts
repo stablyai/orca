@@ -1,5 +1,5 @@
-import { isTerminalLeafId } from '../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { isTerminalLeafId } from '../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 

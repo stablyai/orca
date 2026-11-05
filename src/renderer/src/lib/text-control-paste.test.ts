@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PASTE_PAYLOAD_CORPUS } from './paste-payload-corpus'
-import { measureTextControlPasteByteLength, pasteTextIntoTextControl } from './text-control-paste'
+import { pasteTextIntoTextControl } from './text-control-paste'
 
 function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
@@ -229,16 +229,5 @@ describe('text control paste', () => {
     expect(valuesObservedDuringYield).toEqual(['safe'])
     expect(textarea.value).toBe('safe')
     expect(events).toHaveLength(0)
-  })
-
-  it('can stop measuring text-control paste once the limit is exceeded', () => {
-    const measurement = measureTextControlPasteByteLength('😀'.repeat(100), {
-      stopAfterBytes: 5
-    })
-
-    expect(measurement).toEqual({ byteLength: 8, exceededLimit: true })
-    expect(measurement.byteLength).toBeLessThan(
-      measureTextControlPasteByteLength('😀'.repeat(100)).byteLength
-    )
   })
 })

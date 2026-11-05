@@ -12,7 +12,7 @@ import {
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { grokBackgroundTaskStop } from './acp-dialects/grok-background-task-stop'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   openAcpAdapterRig,
   PROVIDER_SESSION,

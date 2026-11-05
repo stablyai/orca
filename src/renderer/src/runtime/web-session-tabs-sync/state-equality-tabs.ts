@@ -3,9 +3,12 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
-import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { sameRuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import {
+  type RuntimeBrowserPlacement,
+  sameRuntimeBrowserPlacement
+} from '../../../../shared/runtime-browser-placement'
 import { sameStringArray } from './state-equality-core'
 
 export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
@@ -21,6 +24,7 @@ export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.aiVaultTitle?.agent === b.aiVaultTitle?.agent &&
     a.aiVaultTitle?.sessionId === b.aiVaultTitle?.sessionId &&
     a.aiVaultTitle?.title === b.aiVaultTitle?.title &&
+    a.sessionTitleFromHost === b.sessionTitleFromHost &&
     a.customTitle === b.customTitle &&
     a.color === b.color &&
     a.sortOrder === b.sortOrder &&

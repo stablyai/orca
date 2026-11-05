@@ -3,9 +3,9 @@ import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
-import type { WorktreeDragGroup } from '../../worktree-manual-order'
-import type { WorktreeDragUnitGroup } from '../../worktree-drag-units'
-import type { WorktreeSidebarDropPreview } from '../../worktree-sidebar-drop-preview'
+import type { WorktreeDragGroup } from './worktree-manual-order'
+import type { WorktreeDragUnitGroup } from './worktree-drag-units'
+import type { WorktreeSidebarDropPreview } from './worktree-sidebar-drop-preview'
 import type { WorktreeStatusDropRequest } from './use-session'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 import type { DraggedWorktreeCopies } from './dragged-worktree-copies'

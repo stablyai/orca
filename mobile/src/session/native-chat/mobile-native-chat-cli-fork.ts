@@ -2,7 +2,7 @@ import { SquareTerminal } from 'lucide-react-native'
 import type { ActionSheetAction } from '../../components/ActionSheetModal'
 import { translate } from '../../i18n/mobile-i18n'
 import type { MobileSessionController } from '../use-mobile-session-controller'
-import { agentForksConversations } from '../../../../src/shared/agent-resume-argv'
+import { agentForksConversations } from '../../../../src/shared/agent-launch/startup/agent-resume-argv'
 import { SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY } from '../../../../src/shared/session-tabs-runtime-capabilities'
 
 export function canOfferMobileNativeChatCliFork(args: {

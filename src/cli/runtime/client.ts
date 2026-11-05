@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
-import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
+import { runtimeHostConnectionState } from '../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import {
   isDurableMutation,
   isOrchestrationMutation,
   isTerminalPromptMutation,
   orchestrationMigrationData
 } from '../../shared/orchestration-rpc-contract'
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { openLocalOrca } from './open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
 import {

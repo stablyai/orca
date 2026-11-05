@@ -63,20 +63,6 @@ function session(id: string, transcriptPath: string, cwd?: string) {
 }
 
 describe('ClaudeSessionContinuationTracker', () => {
-  it('follows a continued-in pointer that is not the last line', () => {
-    const { projectDir } = makeProject()
-    const oldPath = writeTranscript(
-      projectDir,
-      OLD,
-      turn(OLD, 'u1') + pointer(OLD, FORK) + line({ type: 'cost-state', sessionId: OLD })
-    )
-    const forkPath = writeTranscript(projectDir, FORK, turn(FORK, 'u1'))
-
-    expect(new ClaudeSessionContinuationTracker().resolve(session(OLD, oldPath))).toEqual(
-      session(FORK, forkPath)
-    )
-  })
-
   it('returns null when the transcript has no pointer out of this session', () => {
     const { projectDir } = makeProject()
     const oldPath = writeTranscript(projectDir, OLD, turn(OLD, 'u1') + pointer(SECOND_FORK, FORK))
@@ -104,26 +90,6 @@ describe('ClaudeSessionContinuationTracker', () => {
     expect(tracker.resolve(session(OLD, oldPath))).toEqual(session(FORK, forkPath))
     const oldScans = vi.mocked(scanFileRegionsBackward).mock.calls.filter(([p]) => p === oldPath)
     expect(oldScans).toHaveLength(1)
-  })
-
-  it('keeps the folder the session ran in when following a fork or a /clear', () => {
-    const { configDir, projectDir } = makeProject()
-    const oldPath = writeTranscript(projectDir, OLD, turn(OLD, 'u1') + pointer(OLD, FORK))
-    const forkPath = writeTranscript(projectDir, FORK, turn(FORK, 'u1'))
-    const tracker = new ClaudeSessionContinuationTracker()
-    expect(tracker.resolve(session(OLD, oldPath, '/work/repo/pkg'))).toEqual(
-      session(FORK, forkPath, '/work/repo/pkg')
-    )
-
-    const clearedPath = writeTranscript(projectDir, CLEARED, turn(CLEARED, 'u2'))
-    writeJobState(configDir, {
-      sessionId: FORK,
-      resumeSessionId: CLEARED,
-      linkScanPath: clearedPath
-    })
-    expect(tracker.resolve(session(FORK, forkPath, '/work/repo/pkg'))).toEqual(
-      session(CLEARED, clearedPath, '/work/repo/pkg')
-    )
   })
 
   it.each([

@@ -24,7 +24,7 @@ import {
   ORCAD_READINESS_FILENAME
 } from '../../managed-server/install/orcad-remote-host-support'
 import { decommissionRemoteOrcad } from '../../managed-server/install/orcad-remote-decommission'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   forbiddenToolActions,
   type HostileHostCellCore,

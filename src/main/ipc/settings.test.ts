@@ -55,15 +55,15 @@ vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
 }))
 
-vi.mock('../browser/browser-session-proxy', () => ({
+vi.mock('../browser/sessions/browser-session-proxy', () => ({
   applyBrowserSessionProxies: applyBrowserSessionProxiesMock
 }))
 
-vi.mock('../browser/browser-session-registry', () => ({
+vi.mock('../browser/sessions/browser-session-registry', () => ({
   browserSessionRegistry: { listProfiles: listProfilesMock }
 }))
 
-vi.mock('../app-icon', () => ({
+vi.mock('../window/desktop-integration/app-icon', () => ({
   applyAppIcon: applyAppIconMock
 }))
 
@@ -81,7 +81,7 @@ vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: reconcileClaudeAgentViewMock })
 }))
 
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootsForRepos: prepareLocalWorktreeRootsForReposMock
 }))
 
@@ -89,7 +89,7 @@ vi.mock('../menu/register-app-menu', () => ({
   rebuildAppMenu: rebuildAppMenuMock
 }))
 
-vi.mock('../../shared/runtime-environment-store', () => ({
+vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: resolveEnvironmentMock,
   listEnvironments: listEnvironmentsMock
 }))

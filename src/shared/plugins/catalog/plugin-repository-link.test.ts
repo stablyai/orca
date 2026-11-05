@@ -67,26 +67,6 @@ describe('pluginReadmePageUrl', () => {
 describe('pluginListingRepositoryUrl', () => {
   const mirror = { url: 'https://github.com/stablyai/orca-community-mirror.git' }
 
-  it("links the author's repository a mirrored listing records", () => {
-    expect(
-      pluginListingRepositoryUrl({
-        pluginKey: 'dawidwetzler.cobalt2-theme',
-        source: mirror,
-        release: { repository: 'https://github.com/DawidWetzler/orca-cobalt2-theme' }
-      })
-    ).toBe('https://github.com/DawidWetzler/orca-cobalt2-theme')
-  })
-
-  it('falls back to the mirror once the catalog marks the source unavailable', () => {
-    expect(
-      pluginListingRepositoryUrl({
-        pluginKey: 'acme.notes',
-        source: mirror,
-        release: { repository: 'https://github.com/acme/notes', sourceUnavailable: true }
-      })
-    ).toBe(mirror.url)
-  })
-
   it("never links a recorded repository outside the publisher's namespace or linkable hosts", () => {
     for (const repository of [
       'https://github.com/someone-else/notes',

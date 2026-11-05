@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
 import type { CliStatusResult } from '../../shared/runtime-types'
+import '../../shared/protocol-version'
 import {
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+} from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { parseArgs } from '../args'
 import { printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'

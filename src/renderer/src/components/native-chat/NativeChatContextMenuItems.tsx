@@ -1,4 +1,3 @@
-import type { RefObject } from 'react'
 import { Copy, ExternalLink, FileText, Globe, Quote, Search, Undo2 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -6,9 +5,7 @@ import { useAppStore } from '@/store'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { NativeChatContextMenuTarget } from './native-chat-context-menu-target'
-import { formatNativeChatQuote } from './native-chat-quote-selection'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 
 function copyText(text: string): void {
@@ -19,11 +16,11 @@ function copyText(text: string): void {
 /** The rows for what was right-clicked: each reuses the action its hover or click surface runs. */
 export function NativeChatContextMenuTargetItems({
   target,
-  composerRef,
+  onQuote,
   rewind
 }: {
   target: NativeChatContextMenuTarget
-  composerRef: RefObject<NativeChatComposerHandle | null>
+  onQuote: (text: string) => void
   rewind: NativeChatRewindSurface | undefined
 }): React.JSX.Element {
   const { quoteText, link, codeText, messageText, rewindItemId } = target
@@ -31,9 +28,7 @@ export function NativeChatContextMenuTargetItems({
   return (
     <>
       {quoteText ? (
-        <DropdownMenuItem
-          onSelect={() => composerRef.current?.appendText(formatNativeChatQuote(quoteText))}
-        >
+        <DropdownMenuItem onSelect={() => onQuote(quoteText)}>
           <Quote />
           {translate('components.native-chat.addSelectionToChat', 'Add to chat')}
         </DropdownMenuItem>

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { OrchestrationDb } from './db'
-import { AGENT_TYPE_MAX_LENGTH } from '../../../shared/agent-status-field-normalization'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { AGENT_TYPE_MAX_LENGTH } from '../../../shared/agent-status/contracts/agent-status-field-normalization'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { salvagedOptional } from '../../../shared/zod-salvage'
 
 const object = z.record(z.string(), z.unknown())

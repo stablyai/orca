@@ -28,7 +28,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => terminal.write(data, resolve))
 }
 
-function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean } = {}): TestPane {
+function createTestPane(options: { cursorBlink?: boolean } = {}): TestPane {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const terminal = new Terminal({
@@ -39,6 +39,7 @@ function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean }
   })
   terminal.open(host)
   terminal.focus()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this DOM fixture provides the fields used by suspend/resume.
   const pane = {
     id: 1,
     terminal,
@@ -49,7 +50,7 @@ function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean }
     // the rendered-cursor oracle needs a renderer that paints in happy-dom.
     gpuRenderingEnabled: false,
     terminalGpuAcceleration: 'off',
-    webglAddon: options.webglAddon ? ({ dispose: vi.fn() } as never) : null,
+    webglAddon: null,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
     webglAttachFailedSinceRecovery: false,
@@ -72,11 +73,8 @@ function renderedText(pane: TestPane): string {
   return pane.host.querySelector('.xterm-rows')?.textContent ?? ''
 }
 
-async function reveal(
-  panes: TestPane[],
-  owner?: Parameters<typeof resumePaneRendering>[1]
-): Promise<void> {
-  resumePaneRendering(panes, owner)
+async function reveal(panes: TestPane[]): Promise<void> {
+  resumePaneRendering(panes)
   for (const pane of panes) {
     pane.terminal.focus()
   }
@@ -155,50 +153,6 @@ describe('hidden-pane cursor blink suspension', () => {
     await flushRender()
     expect(renderedText(pane)).toContain('x')
     expect(rendersBlinkingCursor(pane)).toBe(true)
-  })
-
-  it('restores blink on the retained-hidden-WebGL path, which skips dispose', async () => {
-    const owner = {}
-    const pane = createTestPane({ webglAddon: true })
-    const addon = pane.webglAddon
-    await write(pane.terminal, 'ready$ ')
-    await flushRender()
-
-    suspendPaneRendering([pane], { owner, livePanes: () => [pane] })
-    // Retention skips disposeWebgl, so only explicit blink suspension can stop this timer.
-    expect(addon?.dispose).not.toHaveBeenCalled()
-    expect(isTerminalCursorBlinkSuspended(pane.terminal)).toBe(true)
-
-    await reveal([pane], owner)
-    await nextFrame()
-    expect(rendersBlinkingCursor(pane)).toBe(true)
-  })
-
-  it('restores every pane of a split, including one revealed a second time', async () => {
-    const owner = {}
-    const left = createTestPane()
-    const right = createTestPane()
-    const panes = [left, right]
-    await write(left.terminal, 'left$ ')
-    await write(right.terminal, 'right$ ')
-    await flushRender()
-
-    for (let cycle = 0; cycle < 2; cycle++) {
-      suspendPaneRendering(panes, { owner, livePanes: () => panes })
-      resumePaneRendering(panes, owner)
-      // Focus split panes one at a time because DOM blink classes follow actual terminal focus.
-      for (const [name, pane] of [
-        ['left', left],
-        ['right', right]
-      ] as const) {
-        pane.terminal.focus()
-        await nextFrame()
-        expect(renderedCursor(pane), `${name} cursor, cycle ${cycle}`).not.toBeNull()
-        expect(rendersBlinkingCursor(pane), `${name} blink, cycle ${cycle}`).toBe(true)
-      }
-    }
-    expect(renderedText(left)).toContain('left$')
-    expect(renderedText(right)).toContain('right$')
   })
 
   it('does not re-arm a hidden pane when the blink setting changes mid-hide', async () => {

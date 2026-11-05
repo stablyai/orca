@@ -10,8 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-launch-runtime-capability'
-import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+} from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import {
+  isAgentLaunchResult,
+  type AgentLaunchResult
+} from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'

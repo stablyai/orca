@@ -36,6 +36,7 @@ export type RuntimeFileReadArgs = {
 export type RuntimeFileOperationArgs = {
   /** The worktree owner's transport; never the focused server. */
   target: RuntimeClientTarget
+  expectedEnvironmentPairingRevision?: number
   worktreeId: string | null | undefined
   worktreePath: string | null | undefined
   connectionId?: string

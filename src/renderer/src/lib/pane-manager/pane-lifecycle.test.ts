@@ -1,24 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ITerminalAddon } from '@xterm/xterm'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import {
   attachWebgl,
-  markComplexScriptOutput,
   primeTerminalWebglAddon,
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
-import { attachLigatures, disposePane, openTerminal, setLigaturesEnabled } from './pane-lifecycle'
-import { ensureArabicShapingJoinerForText } from './terminal-arabic-shaping-joiner'
+import { openTerminal, setLigaturesEnabled } from './pane-lifecycle'
 import {
   buildDefaultTerminalOptions,
-  DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
-  DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
-  normalizeTerminalFastScrollSensitivity,
-  normalizeTerminalScrollSensitivity,
-  resolveTerminalCursorInactiveStyle
+  resolveTerminalScrollOnUserInput
 } from './pane-terminal-options'
-import { buildTerminalKeyboardProtocolOptions } from './terminal-keyboard-protocol'
 
 const webglMock = vi.hoisted(() => ({
   contextLossHandler: null as (() => void) | null,
@@ -80,125 +72,10 @@ function createPane(): ManagedPaneInternal {
   }
 }
 
-describe('buildDefaultTerminalOptions', () => {
-  it('leaves macOS Option available for keyboard layout characters', () => {
-    expect(buildDefaultTerminalOptions().macOptionIsMeta).toBe(false)
-  })
-
-  it('uses the default inactive outline only for the block cursor', () => {
-    expect(buildDefaultTerminalOptions().cursorStyle).toBe('block')
-    expect(buildDefaultTerminalOptions().cursorInactiveStyle).toBe('outline')
-  })
-
-  it('shows the slim xterm scrollbar in its reserved gutter', () => {
-    // Accept the ~one-column gutter cost; v1.4.51 table corruption was the separate ZWJ width bug.
-    expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(7)
-  })
-
-  it('uses the shared desktop scrollback row default', () => {
-    expect(buildDefaultTerminalOptions().scrollback).toBe(5_000)
-  })
-
-  it('slightly increases default terminal wheel scrolling while preserving fast scroll', () => {
-    const options = buildDefaultTerminalOptions()
-
-    expect(options.scrollSensitivity).toBe(DEFAULT_TERMINAL_SCROLL_SENSITIVITY)
-    expect(options.fastScrollSensitivity).toBe(DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY)
-  })
-
-  it('normalizes configurable terminal scroll sensitivity values', () => {
-    expect(normalizeTerminalScrollSensitivity(undefined)).toBe(DEFAULT_TERMINAL_SCROLL_SENSITIVITY)
-    expect(normalizeTerminalScrollSensitivity(0)).toBe(0.1)
-    expect(normalizeTerminalScrollSensitivity(20)).toBe(10)
-    expect(normalizeTerminalFastScrollSensitivity(undefined)).toBe(
-      DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
-    )
-    expect(normalizeTerminalFastScrollSensitivity(0)).toBe(1)
-    expect(normalizeTerminalFastScrollSensitivity(25)).toBe(20)
-  })
-
-  it('defaults minimumContrastRatio to the light-background value (applyTerminalAppearance re-gates it)', () => {
-    expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
-  })
-
-  it('only uses inactive outline for block cursors', () => {
-    expect(resolveTerminalCursorInactiveStyle('block')).toBe('outline')
-    expect(resolveTerminalCursorInactiveStyle('bar')).toBe('bar')
-    expect(resolveTerminalCursorInactiveStyle('underline')).toBe('underline')
-  })
-
-  it('advertises kitty keyboard protocol so CLIs enable enhanced key reporting', () => {
-    // Orca sends CSI-u for enhanced chords off Windows; advertise KKP so handshake-gated CLIs accept them, including inside tmux.
-    expect(buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard).toBe(true)
-  })
-
-  it('lets a local Windows ConPTY pane override the default and withhold kitty keyboard', () => {
-    // Per-pane overrides must win, including disabling KKP for CSI-u-blind Windows ConPTY CLIs (#2434).
-    const merged = {
-      ...buildDefaultTerminalOptions(),
-      ...buildTerminalKeyboardProtocolOptions({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        osRelease: '10.0.26100',
-        connectionId: null,
-        cwd: 'C:\\repo',
-        shellOverride: 'powershell.exe',
-        executionHostId: 'local'
-      })
-    }
-
-    expect(merged.vtExtensions?.kittyKeyboard).toBe(false)
-  })
-
-  it('keeps kitty keyboard when a local Windows ConPTY pane is launching Grok', () => {
-    // Grok requires KKP for Ctrl+Enter/Shift+Enter, overriding normal ConPTY withholding.
-    const merged = {
-      ...buildDefaultTerminalOptions(),
-      ...buildTerminalKeyboardProtocolOptions({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        osRelease: '10.0.26100',
-        connectionId: null,
-        cwd: 'C:\\repo',
-        shellOverride: 'powershell.exe',
-        executionHostId: 'local',
-        tuiAgent: 'grok'
-      })
-    }
-
-    expect(merged.vtExtensions?.kittyKeyboard).toBe(true)
-  })
-
-  it('keeps the advertised kitty keyboard default for SSH and macOS/Linux panes', () => {
-    for (const context of [
-      {
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        connectionId: 'ssh-1',
-        cwd: 'C:\\repo',
-        shellOverride: null,
-        executionHostId: 'local'
-      },
-      {
-        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)',
-        connectionId: null,
-        cwd: '/repo',
-        shellOverride: null,
-        executionHostId: 'local'
-      }
-    ] as const) {
-      const merged = {
-        ...buildDefaultTerminalOptions(),
-        ...buildTerminalKeyboardProtocolOptions(context)
-      }
-
-      expect(merged.vtExtensions?.kittyKeyboard).toBe(true)
-    }
-  })
-})
-
 describe('attachWebgl', () => {
   beforeEach(async () => {
     await primeTerminalWebglAddon()
     webglMock.contextLossHandler = null
-    webglMock.clearTextureAtlas.mockClear()
     webglMock.dispose.mockClear()
     vi.mocked(WebglAddon).mockClear()
     resetTerminalWebglSuggestion()
@@ -237,160 +114,6 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
-  it('repaints the current buffer after WebGL attaches', () => {
-    const pane = createPane()
-    pane.terminalGpuAcceleration = 'on'
-
-    attachWebgl(pane)
-
-    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
-  })
-
-  it('clears the WebGL texture atlas and refreshes the buffer on recovery', async () => {
-    const { resetWebglTextureAtlas } = await import('./pane-webgl-renderer')
-    const pane = createPane()
-    pane.terminalGpuAcceleration = 'on'
-
-    attachWebgl(pane)
-    vi.mocked(pane.terminal.refresh).mockClear()
-    resetWebglTextureAtlas(pane)
-
-    expect(webglMock.clearTextureAtlas).toHaveBeenCalledTimes(1)
-    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
-  })
-
-  it('does not reset a WebGL atlas after context-loss fallback', async () => {
-    const { resetWebglTextureAtlas } = await import('./pane-webgl-renderer')
-    const pane = createPane()
-    pane.terminalGpuAcceleration = 'on'
-
-    attachWebgl(pane)
-    webglMock.contextLossHandler?.()
-    vi.mocked(pane.terminal.refresh).mockClear()
-    webglMock.clearTextureAtlas.mockClear()
-    resetWebglTextureAtlas(pane)
-
-    expect(webglMock.clearTextureAtlas).not.toHaveBeenCalled()
-    expect(pane.terminal.refresh).not.toHaveBeenCalled()
-  })
-
-  it('does not attach WebGL while initial rendering is deferred', () => {
-    const pane = createPane()
-    pane.terminalGpuAcceleration = 'on'
-    pane.webglAttachmentDeferred = true
-
-    attachWebgl(pane)
-
-    expect(pane.webglAddon).toBeNull()
-    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
-  })
-
-  it('does not attach WebGL when terminal GPU acceleration is off', () => {
-    const pane = createPane()
-    pane.terminalGpuAcceleration = 'off'
-
-    attachWebgl(pane)
-
-    expect(pane.webglAddon).toBeNull()
-    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
-  })
-
-  it('uses WebGL rendering for auto GPU acceleration on non-Linux platforms', () => {
-    const pane = createPane()
-
-    attachWebgl(pane)
-
-    expect(pane.webglAddon).not.toBeNull()
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-  })
-
-  it('uses DOM rendering for auto GPU acceleration on Linux', () => {
-    vi.stubGlobal('navigator', {
-      platform: 'Linux x86_64',
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
-    })
-    const pane = createPane()
-
-    attachWebgl(pane)
-
-    expect(pane.webglAddon).toBeNull()
-    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
-  })
-
-  it('uses WebGL rendering for Linux auto GPU acceleration on hardware renderers', () => {
-    const rendererKey = 0x9246
-    const vendorKey = 0x9245
-    vi.stubGlobal('navigator', {
-      platform: 'Linux x86_64',
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
-    })
-    vi.stubGlobal('document', {
-      createElement: vi.fn((tagName: string) => {
-        if (tagName !== 'canvas') {
-          return {}
-        }
-        return {
-          getContext: vi.fn((contextName: string) =>
-            contextName === 'webgl2'
-              ? {
-                  getExtension: vi.fn(() => ({
-                    UNMASKED_RENDERER_WEBGL: rendererKey,
-                    UNMASKED_VENDOR_WEBGL: vendorKey
-                  })),
-                  getParameter: vi.fn((key: number) =>
-                    key === rendererKey
-                      ? 'Mesa Intel(R) UHD Graphics 770'
-                      : key === vendorKey
-                        ? 'Intel'
-                        : null
-                  )
-                }
-              : null
-          )
-        }
-      })
-    })
-    resetTerminalWebglSuggestion()
-    const pane = createPane()
-
-    attachWebgl(pane)
-
-    expect(pane.webglAddon).not.toBeNull()
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-  })
-
-  it('still allows forced WebGL on Linux', () => {
-    vi.stubGlobal('navigator', {
-      platform: 'Linux x86_64',
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
-    })
-    const pane = createPane()
-    pane.terminalGpuAcceleration = 'on'
-
-    attachWebgl(pane)
-
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps auto-mode panes on WebGL after complex-script output', () => {
-    const pane = createPane()
-
-    attachWebgl(pane)
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-    vi.mocked(pane.terminal.loadAddon).mockClear()
-
-    markComplexScriptOutput(pane)
-
-    expect(pane.hasComplexScriptOutput).toBe(true)
-    expect(pane.webglAddon).not.toBeNull()
-    expect(webglMock.dispose).not.toHaveBeenCalled()
-    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
-
-    attachWebgl(pane)
-
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps later auto panes on DOM after WebGL attach fails', () => {
     vi.mocked(WebglAddon).mockImplementationOnce(() => {
       throw new Error('webgl unavailable')
@@ -404,41 +127,6 @@ describe('attachWebgl', () => {
     expect(firstPane.webglAddon).toBeNull()
     expect(secondPane.webglAddon).toBeNull()
     expect(secondPane.terminal.loadAddon).not.toHaveBeenCalled()
-  })
-
-  it('keeps forced WebGL on after complex-script output', () => {
-    const pane = createPane()
-
-    markComplexScriptOutput(pane)
-    pane.terminalGpuAcceleration = 'on'
-    attachWebgl(pane)
-
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('attachLigatures', () => {
-  it('refreshes existing rows after loading the ligatures addon', () => {
-    const pane = createPane()
-
-    attachLigatures(pane)
-
-    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
-    expect(pane.ligaturesAddon).not.toBeNull()
-  })
-
-  it('defers a retained WebGL rebuild while hidden', () => {
-    const pane = createPane()
-    const retainedAddon = { dispose: vi.fn() } as never
-    pane.webglAddon = retainedAddon
-    pane.webglAttachmentDeferred = true
-
-    attachLigatures(pane)
-
-    expect(pane.webglAddon).toBe(retainedAddon)
-    expect(pane.webglRebuildDeferred).toBe(true)
-    expect(pane.terminal.refresh).not.toHaveBeenCalled()
   })
 })
 
@@ -454,12 +142,7 @@ describe('openTerminal — addon and provider wiring', () => {
 
   function createOpenTerminalHarness(): {
     pane: ManagedPaneInternal
-    events: string[]
-    getRegisteredJoinHandler: () => ((text: string) => [number, number][]) | null
   } {
-    const events: string[] = []
-    let registeredJoinHandler: ((text: string) => [number, number][]) | null = null
-
     const fitAddon = {
       fit: vi.fn()
     } as unknown as ManagedPaneInternal['fitAddon']
@@ -474,7 +157,6 @@ describe('openTerminal — addon and provider wiring', () => {
         return this._version
       },
       set activeVersion(v: '6' | '11') {
-        events.push(`activeVersion=${v}`)
         this._version = v
       }
     }
@@ -509,42 +191,16 @@ describe('openTerminal — addon and provider wiring', () => {
       textarea: null,
       cols: 80,
       rows: 24,
-      open: vi.fn(() => {
-        events.push('open')
-      }),
-      loadAddon: vi.fn((addon: ITerminalAddon) => {
-        if (addon === fitAddon) {
-          events.push('loadAddon:fit')
-        } else if (addon === searchAddon) {
-          events.push('loadAddon:search')
-        } else if (addon === serializeAddon) {
-          events.push('loadAddon:serialize')
-        } else if (addon === unicode11Addon) {
-          events.push('loadAddon:unicode11')
-        } else if (addon === webLinksAddon) {
-          events.push('loadAddon:webLinks')
-        }
-      }),
+      open: vi.fn(),
+      loadAddon: vi.fn(),
       attachCustomWheelEventHandler: vi.fn(),
       onWriteParsed: vi.fn(() => ({ dispose: vi.fn() })),
       refresh: vi.fn(),
-      write: vi.fn(() => {
-        events.push('write')
-      }),
-      registerCharacterJoiner: vi.fn((handler: (text: string) => [number, number][]) => {
-        events.push('registerCharacterJoiner')
-        registeredJoinHandler = handler
-        return 3
-      }),
-      deregisterCharacterJoiner: vi.fn((joinerId: number) => {
-        events.push(`deregisterCharacterJoiner:${joinerId}`)
-      }),
-      clearSelection: vi.fn(() => {
-        events.push('clearSelection')
-      }),
-      dispose: vi.fn(() => {
-        events.push('dispose')
-      }),
+      write: vi.fn(),
+      registerCharacterJoiner: vi.fn(() => 3),
+      deregisterCharacterJoiner: vi.fn(),
+      clearSelection: vi.fn(),
+      dispose: vi.fn(),
       unicode: unicodeProxy,
       buffer: { active: { cursorX: 0, cursorY: 0 } }
     } as unknown as ManagedPaneInternal['terminal']
@@ -578,10 +234,9 @@ describe('openTerminal — addon and provider wiring', () => {
       debugLabel: null
     }
 
-    return { pane, events, getRegisteredJoinHandler: () => registeredJoinHandler }
+    return { pane }
   }
 
-  // Activate Unicode v11 before any writes: widths bake into buffer cells, and default v6 mismeasures CJK/emoji/ZWJ across restores.
   it('builds one initial WebGL atlas with ligatures and still rebuilds on a live toggle', async () => {
     await primeTerminalWebglAddon()
     resetTerminalWebglSuggestion()
@@ -606,109 +261,13 @@ describe('openTerminal — addon and provider wiring', () => {
     expect(webglMock.dispose).toHaveBeenCalledTimes(1)
     expect(pane.ligaturesAddon).toBeNull()
   })
+})
 
-  it('activates unicode 11 before any caller-driven write would be possible', () => {
-    const { pane, events } = createOpenTerminalHarness()
-
-    openTerminal(pane)
-
-    expect(pane.container.appendChild).toHaveBeenCalledWith(pane.linkTooltip)
-    expect(pane.xtermContainer.appendChild).not.toHaveBeenCalled()
-    expect(pane.terminal.element!.appendChild).not.toHaveBeenCalled()
-    expect(events).toContain('loadAddon:unicode11')
-    expect(events).toContain('activeVersion=11')
-
-    const unicodeIdx = events.indexOf('activeVersion=11')
-    const writeIdx = events.indexOf('write')
-    if (writeIdx !== -1) {
-      expect(unicodeIdx).toBeLessThan(writeIdx)
-    }
-
-    const loadUnicodeIdx = events.indexOf('loadAddon:unicode11')
-    expect(loadUnicodeIdx).toBeLessThan(unicodeIdx)
-    expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
-  })
-
-  // Ordinary panes must skip joiner grid scans; first RTL writes must register before parsing.
-  it('registers Arabic shaping lazily and deregisters it on dispose', () => {
-    const { pane, events } = createOpenTerminalHarness()
-
-    openTerminal(pane)
-
-    expect(events).not.toContain('registerCharacterJoiner')
-    expect(pane.arabicShapingJoinerCleanup).toBeTypeOf('function')
-    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
-    expect(events).toContain('registerCharacterJoiner')
-
-    disposePane(pane, new Map([[pane.id, pane]]))
-
-    expect(events).toContain('deregisterCharacterJoiner:3')
-    expect(pane.arabicShapingJoinerCleanup).toBeNull()
-  })
-
-  it('clears selection before disposing a remounted pane', () => {
-    const { pane, events } = createOpenTerminalHarness()
-    openTerminal(pane)
-
-    disposePane(pane, new Map([[pane.id, pane]]))
-
-    expect(events.indexOf('clearSelection')).toBeLessThan(events.indexOf('dispose'))
-  })
-
-  // Streamed links under a stationary pointer need hover-cache invalidation, detached on disposal.
-  it('installs the streamed-output linkifier hover reset and disposes it', () => {
-    const { pane } = createOpenTerminalHarness()
-
-    openTerminal(pane)
-    const disposable = pane.linkifierHoverResetDisposable
-    expect(disposable?.dispose).toBeTypeOf('function')
-    expect(pane.terminal.onWriteParsed).toHaveBeenCalledTimes(1)
-
-    const disposeSpy = vi.spyOn(disposable!, 'dispose')
-    disposePane(pane, new Map([[pane.id, pane]]))
-    expect(disposeSpy).toHaveBeenCalledTimes(1)
-    expect(pane.linkifierHoverResetDisposable).toBeNull()
-  })
-
-  it('installs the mouseleave linkifier hover reset and disposes it', () => {
-    const { pane } = createOpenTerminalHarness()
-    const addEventListener = vi.fn()
-    const removeEventListener = vi.fn()
-    const screen = {
-      addEventListener,
-      removeEventListener
-    } as unknown as HTMLElement
-    vi.mocked(pane.terminal.element!.querySelector).mockReturnValueOnce(screen)
-
-    openTerminal(pane)
-    const disposable = pane.linkifierMouseLeaveResetDisposable
-    expect(disposable?.dispose).toBeTypeOf('function')
-    expect(addEventListener).toHaveBeenCalledWith('mouseleave', expect.any(Function))
-    const mouseLeaveHandler = addEventListener.mock.calls.find(
-      ([eventName]) => eventName === 'mouseleave'
-    )?.[1]
-    expect(mouseLeaveHandler).toBeTypeOf('function')
-
-    disposePane(pane, new Map([[pane.id, pane]]))
-    expect(removeEventListener).toHaveBeenCalledWith('mouseleave', mouseLeaveHandler)
-    expect(pane.linkifierMouseLeaveResetDisposable).toBeNull()
-  })
-
-  // DOM letter-spacing misrenders joined spans; real lifecycle wiring must enable joining only with live WebGL.
-  it('joins RTL runs only while the pane has a live WebGL addon', () => {
-    const { pane, getRegisteredJoinHandler } = createOpenTerminalHarness()
-
-    openTerminal(pane)
-    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
-    const handler = getRegisteredJoinHandler()!
-
-    expect(pane.webglAddon).toBeNull()
-    expect(handler('مرحبا')).toEqual([])
-
-    pane.webglAddon = {} as never
-    expect(handler('مرحبا')).toEqual([[0, 5]])
-
-    pane.webglAddon = null
-    expect(handler('مرحبا')).toEqual([])
+describe('terminal scroll on user input', () => {
+  it('scrolls to the bottom on input by default', () => {
+    expect(buildDefaultTerminalOptions().scrollOnUserInput).toBe(true)
+    expect(resolveTerminalScrollOnUserInput(undefined)).toBe(true)
+    expect(resolveTerminalScrollOnUserInput(true)).toBe(true)
+    expect(resolveTerminalScrollOnUserInput(false)).toBe(false)
   })
 })

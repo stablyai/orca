@@ -1,5 +1,5 @@
 import type { DirectSshAuthority, SshConnectionState } from '../../../shared/ssh-types'
-import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
+import { quitTeardownStartGate } from '../../startup/quit/quit-teardown-start-gate'
 import {
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority

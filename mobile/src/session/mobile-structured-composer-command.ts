@@ -1,6 +1,7 @@
-import type {
-  AgentSessionConversationCommand,
-  AgentSessionConversationCommandResult
+import {
+  agentSessionConversationCommandFields,
+  type AgentSessionConversationCommand,
+  type AgentSessionConversationCommandResult
 } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import {
@@ -68,7 +69,7 @@ export async function dispatchMobileStructuredCommand(input: {
   let unknown = false
   const outcome = await dispatchStructuredAgentSessionComposerCommand(input.text, {
     ...input.controller,
-    runConversationCommand: async (command) => {
+    runConversationCommand: async (command, instructions) => {
       const held = (hold: Parameters<typeof heldConversationCommandParts>[1]) =>
         mobileAgentSessionWriteNoticeText(heldConversationCommandParts(command, hold))
       // A command on its way is the agent's work in flight.
@@ -104,7 +105,10 @@ export async function dispatchMobileStructuredCommand(input: {
             expectedRuntimeFence: input.fence,
             method: 'agentSession.conversationCommand',
             fingerprintMethod: 'agentSession.conversationCommand',
-            fields: waitsInLine ? { command, delivery: 'queue-if-active' } : { command },
+            fields: agentSessionConversationCommandFields(command, {
+              instructions,
+              delivery: waitsInLine ? 'queue-if-active' : undefined
+            }),
             timeoutMs: Math.max(input.timeoutMs, 195_000)
           })
         if (

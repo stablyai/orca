@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
@@ -112,6 +112,8 @@ export function runNativeChatSplitTarget(
   }
   // Settlement cleanup preserves any pane that currently contains a tab.
   void result.structuredSettlement?.then(closePane, closePane)
+  // Every chat split path lands here, so this is the one place it counts (and advances the tour).
+  useAppStore.getState().recordFeatureInteraction('tab-splits')
   return true
 }
 

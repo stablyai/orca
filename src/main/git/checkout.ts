@@ -1,7 +1,7 @@
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
-import { runWithGitReadCacheInvalidation } from './status'
+import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
 /** Reject empty and option-like names here too: relay callers can bypass RPC schema validation. */
 export function assertValidBranchName(branch: string): void {

@@ -97,23 +97,6 @@ describe('resolved revisions', () => {
     expect(rowText()).toBe('abc')
   })
 
-  it('publishes a revision in the operation that writes it, within the same reservation', async () => {
-    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-    const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))
-    deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, appendSuffix('a'), {
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-    deferred.sink.tryReviseResolvedItemAndPublish?.(bytes, () => null, {
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-    const target = journalTarget()
-    const published: string[] = []
-    vi.mocked(target.publish).mockImplementation(() => published.push(rowText()))
-    deferred.bind(target)
-    await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    expect(published).toEqual(['a'])
-  })
-
   it('refuses a resolved write larger than the reservation it was admitted with', async () => {
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))

@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 import { createPackageWithOptions, statFile } from '@electron/asar'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { stagePackagedProcessHost } from '../../../config/scripts/packaged-process-host-fixture.mjs'
+import { stagePackagedProcessHost } from '../../../config/scripts/desktop-distribution/runtime-verification/packaged-process-host-fixture.mjs'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
@@ -81,7 +81,7 @@ describe('packaged CLI assets', () => {
       )
       await mkdir(dirname(archive), { recursive: true })
       await writeFile(join(source, 'out', 'package.json'), JSON.stringify({ type: 'commonjs' }))
-      for (const name of ['zod', 'tweetnacl']) {
+      for (const name of ['zod', 'tweetnacl', 'smol-toml']) {
         await cp(
           join(projectDir, 'node_modules', name),
           join(root, 'resources', 'node_modules', name),

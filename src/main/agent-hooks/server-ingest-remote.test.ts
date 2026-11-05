@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  parseAgentStatusPayload
-} from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
+import { parseAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import { PANE } from './server.test-fixtures'
-import { AGENT_STATUS_RUNS_RUNTIME_CAPABILITY } from '../../shared/agent-status-run-capability'
+import { AGENT_STATUS_RUNS_RUNTIME_CAPABILITY } from '../../shared/agent-status/contracts/agent-status-run-capability'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),

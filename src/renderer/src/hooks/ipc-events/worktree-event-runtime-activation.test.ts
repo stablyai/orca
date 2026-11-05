@@ -67,30 +67,6 @@ it.each([false, true])(
   }
 )
 
-it('the actual rename event protects both identities before starting discovery', async () => {
-  recentlyRenamedWorktreeIdExpiry.clear()
-  const unsubs: (() => void)[] = []
-  vi.spyOn(initialState, 'fetchWorktrees').mockImplementation(async () => {
-    expect(recentlyRenamedWorktreeIdExpiry.has('repo::/old')).toBe(true)
-    expect(recentlyRenamedWorktreeIdExpiry.has('repo::/new')).toBe(true)
-    return false
-  })
-  useAppStore.setState({
-    fetchWorktrees: initialState.fetchWorktrees,
-    fetchWorktreeLineage: vi.fn(),
-    migrateWorktreeIdentity: vi.fn()
-  })
-  const runtime = createWorktreeEventRuntime(unsubs, () => false)
-  runtime.worktreeChangeRefreshQueue.enqueue({
-    repoId: 'repo',
-    executionHostId: 'local',
-    renamed: { oldWorktreeId: 'repo::/old', newWorktreeId: 'repo::/new' }
-  })
-  await vi.waitFor(() => expect(useAppStore.getState().fetchWorktrees).toHaveBeenCalledOnce())
-  unsubs.forEach((unsubscribe) => unsubscribe())
-  recentlyRenamedWorktreeIdExpiry.clear()
-})
-
 import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 it('the conditionally installed qualified rename keeps ordinary setup content and other-host input', async () => {

@@ -4,7 +4,7 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 // Inspect stale-account state only after a concrete PTY attaches.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
-import { createTerminalGitHubPRLinkDetector } from '../../../../../shared/terminal-github-pr-link-detector'
+import { createTerminalGitHubPRLinkDetector } from '../../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import { setRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
 import { AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS } from '../agent-task-complete-policy'
 import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'

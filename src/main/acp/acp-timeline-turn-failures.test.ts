@@ -193,6 +193,61 @@ describe('a failed ACP turn says why', () => {
     expect((await f.rig.turns())[0]?.outcome).toBe('failure')
   })
 
+  it.each([null, 'Quota exhausted'])(
+    'reads an ordinary prompt_complete rate limit with result %s as one usage failure the RPC settles',
+    async (agentResult) => {
+      const f = await openAcpFixtureRig()
+      const lane = f.lane()
+      const prompt = lane.openPrompt('c1', 1000)
+      f.apply(lane.notification('_x.ai/queue/changed', queued(prompt.promptId), 1001))
+      f.apply(
+        lane.notification(
+          '_x.ai/session/prompt_complete',
+          promptComplete(prompt.promptId, 'rate_limit', agentResult),
+          1002
+        )
+      )
+      expect(statusRows(await f.rig.rows()).map(({ body }) => body.tone)).toEqual(['warning'])
+      expect((await f.rig.turns())[0]?.state).toBe('running')
+      f.apply(lane.promptFailed('c1', new AcpAgentError(-32603, 'Internal error'), 1003))
+      expect(statusRows(await f.rig.rows()).map(({ body }) => body)).toEqual([
+        {
+          kind: 'status',
+          tone: 'warning',
+          text: 'The agent hit its usage limit.',
+          failure: {
+            kind: 'usageLimitReached',
+            detail: { text: agentResult ?? 'Internal error', audience: 'person' }
+          }
+        }
+      ])
+      expect((await f.rig.turns())[0]).toMatchObject({ state: 'completed', outcome: 'failure' })
+    }
+  )
+
+  it("reads Grok's rate-limit RPC code as a usage failure on an ordinary turn", async () => {
+    const f = await openAcpFixtureRig()
+    const lane = f.lane()
+    const prompt = lane.openPrompt('c1', 1000)
+    f.apply(lane.notification('_x.ai/queue/changed', queued(prompt.promptId), 1001))
+    f.apply(
+      lane.promptFailed(
+        'c1',
+        new AcpAgentError(-32003, 'Internal error', { message: REASON }),
+        1002
+      )
+    )
+    expect(statusRows(await f.rig.rows()).map(({ body }) => body)).toEqual([
+      {
+        kind: 'status',
+        tone: 'warning',
+        text: 'The agent hit its usage limit.',
+        failure: { kind: 'usageLimitReached', detail: { text: REASON, audience: 'person' } }
+      }
+    ])
+    expect((await f.rig.turns())[0]).toMatchObject({ state: 'completed', outcome: 'failure' })
+  })
+
   it('writes no failure row for a turn the provider ended on purpose', async () => {
     const f = await openAcpFixtureRig()
     const lane = f.lane()
@@ -203,6 +258,8 @@ describe('a failed ACP turn says why', () => {
     )
     f.apply(lane.promptResult('c1', { stopReason: 'max_tokens' }, 1003))
     expect(statusRows(await f.rig.rows())).toEqual([])
+    // The failed outcome alone still holds the cards waiting behind it.
+    expect(f.rig.journal.inputOrder.newestTurn.failure()).toBeGreaterThan(0)
   })
 
   it('does not reopen or retarget an ended prompt for its late frame', async () => {

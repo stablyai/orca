@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { buildWorkspaceSessionPayload } from '../../lib/workspace-session'
 import { createStoreSessionMockApi } from './store-session-test-harness'

@@ -3,7 +3,7 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { ReplacementAuthenticationTimeoutError } from './replacement-session-authentication'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 // Retire a suspect session after failed replacement or stale connected state blocks the armed recovery retry.
 export function suspendRelayIfStillConnected(

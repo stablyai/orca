@@ -6,7 +6,7 @@ import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
-import { claudeProviderFrameActivity } from '../../../native-chat/agent-session-wire/provider-frame-activity'
+import { publishClaudeTurnActivity } from '../../claude-turn-activity'
 import {
   claudeProviderFrameKind,
   createClaudeProviderFrameFallback,
@@ -27,7 +27,7 @@ import {
   isRootClaudeFrame
 } from '../../claude-turn-opening'
 import { ClaudeOpenTurn } from '../../claude-open-turn'
-import { claudeCommandCurrentTurn, observeClaudeCommandFrame } from '../../claude-command-turn'
+import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../../claude-command-turn'
 import { ClaudeContextFacts } from '../../claude-context-facts'
 import { claudeSessionStateEndsTurn } from '../../claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
@@ -123,17 +123,6 @@ export function createClaudeJournalTranslator(
     streamedThinking.flush()
   }
 
-  const publishActivity = (kind: string, payload: unknown): void => {
-    const turnId = turn.id
-    if (turnId === null) {
-      return
-    }
-    const text = claudeProviderFrameActivity(kind, payload)
-    if (text !== undefined) {
-      deps.sink.setActivity?.(text ? { turnId, text } : null)
-    }
-  }
-
   const handleStream = (message: Record<string, unknown>, observedAt: number): boolean => {
     const delta = streamedBlocks.observe(message, observedAt)
     const thinking = streamedThinking.observe(message, observedAt)
@@ -205,7 +194,7 @@ export function createClaudeJournalTranslator(
           }
         }
       }
-      if (event.type === 'message' && observeClaudeCommandFrame(turn.command, event.message)) {
+      if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {
         return
       }
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
@@ -231,7 +220,7 @@ export function createClaudeJournalTranslator(
         journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
       } else if (event.type === 'message') {
         backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
-        messageContext.usageLimits.observe(event.message)
+        messageContext.usageLimits.observe(event.message, turn.command?.rejections)
         const kind = claudeProviderFrameKind(event.message)
         if (
           !journalClaudeMessage(
@@ -239,7 +228,8 @@ export function createClaudeJournalTranslator(
             event.message,
             event.startsTurn === true,
             event.observedAt ?? Date.now(),
-            event.requestedAt
+            event.requestedAt,
+            event.clientMessageId
           )
         ) {
           providerFallback.append(
@@ -252,7 +242,7 @@ export function createClaudeJournalTranslator(
           )
         }
         context.observeResponse(event.message, event.observedAt ?? Date.now())
-        publishActivity(kind, event.message)
+        publishClaudeTurnActivity(turn, deps.sink, event)
         // Idle also closes faults without a result; the live cause decides failed reopening.
         if (claudeSessionStateEndsTurn(event.message)) {
           corrections.abandon()
@@ -261,7 +251,7 @@ export function createClaudeJournalTranslator(
         }
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)
-        publishActivity(event.kind, event.payload)
+        publishClaudeTurnActivity(turn, deps.sink, event)
       }
     },
     journalPrompts: prompts,

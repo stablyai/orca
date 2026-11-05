@@ -2,10 +2,10 @@ import { prepareQueuedMessageEditText } from '../../../../../src/shared/queued-m
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   applyMentionSuggestion,
-  applyPickerSuggestion,
   deriveComposerAutocomplete,
   isSkillPickerTriggered
-} from '../../../../../src/shared/native-chat-composer-autocomplete'
+} from '../../../../../src/shared/native-chat/input/native-chat-composer-autocomplete'
+import { applyPickerSuggestion } from '../../../../../src/shared/native-chat/input/native-chat-picker-triggers'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import {
   boundedMenuItems,
@@ -114,11 +114,17 @@ export function useMobileNativeChatComposerMenu(input: {
   const { onNeedFiles, onNeedSkills, onSlashMenuOpen } = input
   // Scan disk skills only once a token needs them, as desktop does.
   const skillsTriggered = isSkillPickerTriggered(beforeCaret, catalog.profile)
+  // A restored draft's leading skill was never typed here, yet its chip needs the catalog too.
+  const leadingSkillTriggered = isSkillPickerTriggered(
+    value.split(' ', 1)[0] ?? '',
+    catalog.profile
+  )
+  // Each caret trigger still re-asks, so reopening the menu retries a failed scan.
   useEffect(() => {
-    if (skillsTriggered) {
+    if (skillsTriggered || leadingSkillTriggered) {
       onNeedSkills?.()
     }
-  }, [onNeedSkills, skillsTriggered])
+  }, [onNeedSkills, skillsTriggered, leadingSkillTriggered])
   const mentionQuery = autocomplete.mode === 'mention' ? autocomplete.query : null
   useEffect(() => {
     if (mentionQuery !== null) {

@@ -1,7 +1,7 @@
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { e2eDisableRemoteTerminalStallRecovery } from '@/lib/e2e-config'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { RemoteRuntimeTerminalBinaryController } from './remote-runtime-terminal-binary-controller'

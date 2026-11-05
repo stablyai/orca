@@ -1,18 +1,23 @@
 import { EventEmitter } from 'node:events'
 import { expect, vi } from 'vitest'
 import type { WebSocket } from 'ws'
-import { deriveSharedKey, decrypt, encrypt, generateKeyPair } from '../../../../shared/e2ee-crypto'
+import {
+  deriveSharedKey,
+  decrypt,
+  encrypt,
+  generateKeyPair
+} from '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import type { RuntimeCapability } from '../../../../shared/protocol-version'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   serializeRemoteRuntimeRpcRequest
 } from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
-import { DeviceRegistry } from '../../device-registry'
+import { DeviceRegistry } from '../server/pairing/device-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../server/runtime-rpc'
 import { MobileSocketWiring, type MobileSocketTransport } from '../mobile-socket-wiring'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'

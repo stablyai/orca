@@ -1,10 +1,7 @@
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser-annotation-viewport-bridge'
-import type {
-  BrowserAgentActivityEvent,
-  BrowserAgentCursorEvent
-} from '../../../shared/browser-agent-activity-contract'
+import type { BrowserAgentPresenceApi } from './browser-agent-presence-api'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser-profile-scope'
 import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
 import type { BrowserExtensionContextMenuApi } from './browser-extension-context-menu-api'
@@ -12,7 +9,7 @@ import type { BrowserExtensionWebStoreApi } from './browser-extension-webstore-a
 import type {
   BrowserExtensionActionResult,
   BrowserExtensionListResult
-} from '../../../shared/browser-extension-types'
+} from '../../../shared/browser/extensions/browser-extension-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
@@ -26,7 +23,7 @@ import type {
 import type {
   BrowserClientPageMetadataParams,
   BrowserClientPageMetadataPublishOutcome
-} from '../../../shared/browser-client-page-metadata-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
@@ -77,7 +74,7 @@ import type {
 import type {
   BrowserClientPageRendererOutcome,
   BrowserClientPageRendererRequest
-} from '../../../shared/browser-client-page-renderer-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
   /** Absent on clients that host no browser guests, including web clients. */
@@ -193,16 +190,6 @@ export type BrowserApi = {
   onCapturePaintHold: (
     callback: (data: { browserPageId: string; held: boolean }) => void
   ) => () => void
-  /** Main asks the pane to keep the user's focus through an agent press; `ready` answers it. */
-  onAgentInputFocusGuard: (
-    callback: (data: { browserPageId: string; token: string; active: boolean }) => void
-  ) => () => void
-  agentInputFocusGuardReady: (token: string, composing: boolean) => void
-  /** Main marks the pages an agent drives; the tab strip badges them. */
-  onAgentActivity: (callback: (data: BrowserAgentActivityEvent) => void) => () => void
-  /** Main shows the agent's pointer before its input; `agentCursorArrived` answers awaited moves. */
-  onAgentCursor: (callback: (data: BrowserAgentCursorEvent) => void) => () => void
-  agentCursorArrived: (sequence: number) => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
@@ -306,7 +293,8 @@ export type BrowserApi = {
 } & BrowserExtensionToolbarApi &
   BrowserExtensionWebStoreApi &
   BrowserExtensionContextMenuApi &
-  BrowserSessionCookieApi
+  BrowserSessionCookieApi &
+  BrowserAgentPresenceApi
 
 export type DetectedBrowserProfileInfo = {
   name: string

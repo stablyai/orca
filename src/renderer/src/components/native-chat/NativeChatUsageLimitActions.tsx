@@ -21,7 +21,7 @@ import {
 } from '@/lib/agent-session-continuation'
 import { ClaudeSwitcherMenu } from '@/components/status-bar/ClaudeSwitcherMenu'
 import { ProviderAccountChatButton } from '@/components/status-bar/ProviderAccountChatButton'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
@@ -32,7 +32,7 @@ import {
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
-import { nativeChatMessageCopyText } from '../../../../shared/native-chat-message-copy-text'
+import { nativeChatMessageCopyText } from '../../../../shared/native-chat/transcript/native-chat-message-copy-text'
 
 type UsageLimitActions = {
   account: ReactNode

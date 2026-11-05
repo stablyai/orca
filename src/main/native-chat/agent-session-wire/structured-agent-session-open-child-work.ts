@@ -1,7 +1,7 @@
 // Track provider-reported work even when display admission rejects its records.
 
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { isLiveChildWork } from '../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 
 export type ChildWorkLifetimeToken = { readonly childWorkLifetime: true }
 const newToken = (): ChildWorkLifetimeToken => ({ childWorkLifetime: true })

@@ -12,7 +12,7 @@ type OptionsFixtureMocks = {
   enqueue: Mock
   pick: Mock
   target: RuntimeClientTarget
-  agent: 'codex' | 'claude' | 'pi' | 'antigravity'
+  agent: 'codex' | 'claude' | 'pi' | 'antigravity' | 'opencode2'
   hold: Mock<
     (
       sessionId: string,
@@ -22,6 +22,7 @@ type OptionsFixtureMocks = {
     ) => Promise<SelectionOutcome> | null
   >
   toastError: Mock<(message: string) => void>
+  effortDiscovery: boolean
   coherentCatalog: boolean
   sendSelection: boolean
 }
@@ -29,7 +30,7 @@ type OptionsFixtureMocks = {
 const mocks: OptionsFixtureMocks = vi.hoisted(() => {
   const selection: {
     target: RuntimeClientTarget
-    agent: 'codex' | 'claude' | 'pi' | 'antigravity'
+    agent: 'codex' | 'claude' | 'pi' | 'antigravity' | 'opencode2'
   } = {
     target: { kind: 'local' },
     agent: 'codex'
@@ -48,6 +49,7 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
       ) => Promise<SelectionOutcome> | null
     >(),
     toastError: vi.fn<(message: string) => void>(),
+    effortDiscovery: false,
     coherentCatalog: false,
     sendSelection: false
   }
@@ -61,6 +63,15 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async () => {
   )
   return {
     ...actual,
+    useStructuredAgentSessionHostCapabilityState: (
+      target: RuntimeClientTarget | null,
+      capability: string
+    ) => {
+      const state = actual.useStructuredAgentSessionHostCapabilityState(target, capability)
+      return mocks.effortDiscovery && capability === 'agent-session.model-catalog.model-efforts.v1'
+        ? 'supported'
+        : state
+    },
     useStructuredAgentSessionHostCapability: (
       target: RuntimeClientTarget,
       capability: Parameters<typeof actual.useStructuredAgentSessionHostCapability>[1]
@@ -170,7 +181,7 @@ type RenderProps = {
   hidden?: boolean
   launchSeedOptions?: Record<string, string>
   worktree?: string
-  agent?: 'claude' | 'codex' | 'pi' | 'antigravity'
+  agent?: 'claude' | 'codex' | 'pi' | 'antigravity' | 'opencode2'
   providerStarting?: boolean
   paired?: boolean
   /** Pass the production presentation scope, which is closed while transport is disabled. */
@@ -250,7 +261,7 @@ function setOptionCalls(calls: ReturnType<typeof vi.fn<MutateCall>>): unknown[] 
 }
 
 const HOST_CATALOG = {
-  origin: 'live-session',
+  origin: 'live-session' as const,
   models: [
     {
       id: 'gpt-hosted',

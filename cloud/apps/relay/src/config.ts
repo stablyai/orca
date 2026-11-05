@@ -1,26 +1,18 @@
 import { z } from 'zod'
-import {
-  isRelayCellConnectionHardCap,
-  RELAY_CELL_CONNECTION_HARD_CAP,
-  RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND,
-  RELAY_DEFAULT_REGION,
-  RelayRegionSchema,
-  relayCellAdmissionBounds,
-  type RelayCellConnectionHardCap,
-  type RelayRegion
-} from '@orca-cloud/relay-contract'
+import { isRelayCellConnectionHardCap, RELAY_CELL_CONNECTION_HARD_CAP, RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND, relayCellAdmissionBounds, type RelayCellConnectionHardCap } from '@orca-cloud/relay-contract/admission-budgets'
+import { RELAY_DEFAULT_REGION, RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import {
   RELAY_MAX_READINESS_GRACE_MS,
   RELAY_READINESS_JWKS_GRACE_MS,
   RELAY_READINESS_SQL_GRACE_MS
-} from './relay-readiness.js'
+} from './process-lifecycle/relay-readiness.js'
 
 export const RELAY_MAX_CELL_CAPACITY_REQUESTS = 100_000
 export const RELAY_DATABASE_POOL_MAX = 10
 export const RELAY_DIRECTOR_DATABASE_POOL_MAX = 3
 export const RELAY_PUBLIC_RESOLVE_CONCURRENCY = 1
 export const RELAY_PUBLIC_RESOLVE_WAIT_MS = 5_000
-export { RELAY_CELL_CONNECTION_HARD_CAP }
+
 
 const RelayCellConnectionHardCapSchema = z.custom<RelayCellConnectionHardCap>(
   isRelayCellConnectionHardCap

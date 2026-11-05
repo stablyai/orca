@@ -7,7 +7,7 @@ import type {
 } from './agent-model-catalog-service-contract'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { catalogFolder, recordConfiguredDefault } from './agent-model-catalog-workspace'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 
 export function createAgentModelCatalogLiveListings(
   deps: AgentModelCatalogServiceDeps,

@@ -4,8 +4,8 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import type { FolderWorkspace } from '../folder-workspace-types'
-import { folderWorkspaceToWorktree } from '../folder-workspace-worktree'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
+import { folderWorkspaceToWorktree } from '../folder-workspaces/folder-workspace-worktree'
 import type { Repo } from '../repo-types'
 import {
   composeWorktreeHostIdentity,

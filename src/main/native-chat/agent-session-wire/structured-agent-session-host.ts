@@ -2,7 +2,7 @@ import * as usageLimit from './structured-agent-session-host-background'
 import { createStructuredAgentSessionConversationReads } from './structured-agent-session-conversation-reads'
 import { continuationContextReader as contextReader } from './structured-agent-session-continuation-context'
 import { structuredAgentStartJournal } from './structured-agent-start-journal'
-import { StructuredConversationCommandController } from './structured-conversation-command-controller'
+import { StructuredConversationCommandController as CommandController } from './structured-conversation-command-controller'
 // Serialize durable mutations per conversation; open at rest and start a child only when work needs it.
 
 import type { AgentSessionSubscribeInput } from './structured-agent-session-subscribers'
@@ -31,10 +31,7 @@ import { createStructuredAgentSessionWorkspaceSleeper } from './structured-agent
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
-  private readonly conversationCommands = new StructuredConversationCommandController(
-    () => this.mutationContext(),
-    this
-  )
+  private readonly conversationCommands = new CommandController(() => this.mutationContext(), this)
   private readonly sessions = createStructuredAgentSessionPublicationWiring({
     client: () => this.clientDelivery,
     delivery: () => this.conversationDelivery,
@@ -101,6 +98,7 @@ export class StructuredAgentSessionHost {
       readiness: (id, child) => this.runtimeState.startupAttempts.readiness(id, child),
       // Retire at rest; the next start refreshes login and permission mode.
       stopOutgrownAgent: (id) => this.lifetime.stopAgent(id, { cause: 'evict', resting: true }),
+      stopPermissionTransitionChild: (id) => this.lifetime.stopAgent(id, { cause: 'evict' }),
       clientDelivery: this.clientDelivery
     })
     this.startup = createStartupRecovery(deps, this.runtimeState.reconcileLeases, this.runtimeState)
@@ -115,7 +113,6 @@ export class StructuredAgentSessionHost {
       now: () => this.now(),
       runtimeState: this.runtimeState,
       wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
-      stopStartingChild: (...args) => this.lifetime.stopStartingChild(...args),
       failStartingChild: (...args) => this.lifetime.failStartingChild(...args),
       trackOpen: (open) => this.tasks.trackAttach(open)
     })
@@ -156,6 +153,7 @@ export class StructuredAgentSessionHost {
     conversation: (id) => this.lifetime.conversation(id)
   }))
   sessionAgent = this.reads.sessionAgent
+  attentionReads = this.reads.attentionReads
   readModelCatalog = this.reads.readModelCatalog
   childAccountHome = this.reads.childAccountHome
   prospectiveAccountHome = this.reads.prospectiveAccountHome
@@ -307,8 +305,11 @@ export class StructuredAgentSessionHost {
     ...args
   ) => this.sessions.observeConversationPublications(...args)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
-  queuedSendAnswer = (sessionId: string, messageId: string) =>
-    this.backgroundTasks.queuedSendAnswer(sessionId, messageId)
+  journalCurrentRead = this.reads.journalCurrentRead
+  queuedSendAnswer = this.reads.queuedSendAnswer
+  /** What became of one send, answered by key, for callers that follow many sends. */
+  sendAnswer = this.reads.sendAnswer
+  wakeQueuedMessages = (sessionId: string) => this.queued.refresh(sessionId)
 
   private readonly startJournal = structuredAgentStartJournal(
     () => this.deps,

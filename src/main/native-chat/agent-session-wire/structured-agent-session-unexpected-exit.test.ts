@@ -103,10 +103,14 @@ describe('provider-exit settlement', () => {
         snapshot: () => ({
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
+        statusRead: () => ({
+          items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
+        }),
         itemFence: () => 7,
         lastProviderActivityAt: () => undefined,
         stopMarks: { latest: () => null, personStopDecides: () => false },
         submissions: () => [],
+        inputOrder: { recoverableSubmissions: () => [] },
         appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
       }
     } as unknown as StructuredAgentSessionHostSession
@@ -179,7 +183,9 @@ describe('provider-exit settlement', () => {
         itemBody: () => null,
         itemFence: () => undefined,
         snapshot: () => ({ items }),
+        statusRead: () => ({ items }),
         submissions: () => [],
+        inputOrder: { recoverableSubmissions: () => [] },
         appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
       }
     } as unknown as StructuredAgentSessionHostSession

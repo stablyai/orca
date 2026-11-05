@@ -5,8 +5,8 @@ import {
   hasWorkspaceKanbanSidebarDropBoard,
   isWorkspaceKanbanSidebarDropPointInBoard,
   updateWorkspaceKanbanSidebarDropTargetVisual
-} from '../../workspace-kanban-sidebar-drop'
-import { updateSidebarDragPreviewPosition } from '../../worktree-sidebar-pointer-drag-dom'
+} from '../../workspace-board/drag/workspace-kanban-sidebar-drop'
+import { updateSidebarDragPreviewPosition } from './worktree-sidebar-pointer-drag-dom'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
 import type {
   ShouldShowWorkspaceBoardDropIndicator,

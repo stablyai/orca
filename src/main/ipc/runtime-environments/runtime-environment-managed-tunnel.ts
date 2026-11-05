@@ -1,9 +1,9 @@
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { classifyRuntimeEnvironmentHost } from '../../../shared/runtime-environment-host-kind'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { classifyRuntimeEnvironmentHost } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-kind'
 import type {
   SshManagedServerStatus,
   SshManagedServerUpdateNote,
@@ -16,6 +16,10 @@ import {
 } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../../managed-server/lifecycle/orcad-managed-serving-verify'
 import {
+  getManagedOrcadCrashLoopBrake,
+  OrcadCrashLoopError
+} from '../../managed-server/lifecycle/orcad-managed-crash-loop'
+import {
   MANAGED_ORCAD_NOT_ACTIVATED_DETAIL,
   setManagedOrcadStartListener,
   type OrcadManagedServing
@@ -27,9 +31,12 @@ import {
 import { getSshHostServerStatus, setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { connectionManager, getCurrentMainWindow } from '../ssh/ssh-ipc-context'
-import { getWslHostPhoneGate, getWslHostService } from '../../wsl/wsl-host-service-instance'
-import { assertWslHostReachable } from '../../wsl/wsl-host-gate'
-import { wslHostPhoneRefusal } from '../../wsl/wsl-host-phone-reach'
+import {
+  getWslHostPhoneGate,
+  getWslHostService
+} from '../../wsl/host-lifecycle/wsl-host-service-instance'
+import { assertWslHostReachable } from '../../wsl/host-lifecycle/wsl-host-gate'
+import { wslHostPhoneRefusal } from '../../wsl/host-lifecycle/wsl-host-phone-reach'
 import { broadcastSshState } from '../ssh/ssh-renderer-broadcast'
 import { restoreManagedHostPortForwards } from '../ssh/ssh-managed-port-forward-restore'
 
@@ -95,6 +102,12 @@ async function prepareNetworkServerForCall(
   restoreForwardsOverTunnel(environment)
   // Calls must restart managed servers stopped by idle timeout, kill or host reboot.
   const serving = await verifyOrcadManagedServing(userDataPath, environment.id)
+  const crashLoop =
+    serving.state === 'unverifiable' ? getManagedOrcadCrashLoopBrake().detail(environment.id) : null
+  if (crashLoop) {
+    // Fail with the reason instead of waiting out the status timeout against a stopped server.
+    throw new OrcadCrashLoopError(crashLoop)
+  }
   const createDeps = () => ({
     ...managedServerUpdateDeps(userDataPath),
     target: () => {

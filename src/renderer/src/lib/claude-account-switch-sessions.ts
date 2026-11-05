@@ -125,6 +125,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     return 'show-confirmation'
   }
   let uncheckedCount = 0
+  let sharedCount = 0
   const found = await findClaudeSwitchSessions({
     owner: args.owner,
     target: args.target,
@@ -137,6 +138,9 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
         '[claude-account-switch] could not read the foreground of',
         sessions.map((session) => session.ptyId)
       )
+    },
+    onShared: (sessions) => {
+      sharedCount = sessions.length
     }
   }).catch((error: unknown) => {
     console.warn('[claude-account-switch] session scan failed:', error)
@@ -158,6 +162,12 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   }
   // Why: other sessions are listed only alongside a move, so parallel-account users get no prompt.
   if (!found || found.onAccount.length === 0) {
+    if (sharedCount > 0) {
+      warnSharedSessions(
+        sharedCount,
+        getClaudeAccountLabel(args.before.state, args.before.accountId)
+      )
+    }
     return 'show-confirmation'
   }
   const nextAccountLabel = getClaudeAccountLabel(args.after.state, args.after.accountId)
@@ -238,6 +248,23 @@ function warnUncheckedSessions(count: number, previous: string): void {
       : translate(
           'accounts.claude.switchSessions.uncheckedOther',
           "Couldn't check {{count}} terminals for Claude. Any Claude running there stays on {{previous}} until restarted.",
+          { count, previous }
+        )
+  )
+}
+
+/** Why a toast: with nothing else to move, no dialog says why these sessions stayed. */
+function warnSharedSessions(count: number, previous: string): void {
+  toast.warning(
+    count === 1
+      ? translate(
+          'accounts.claude.switchSessions.sharedOne',
+          "1 Claude session stays on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
+          { previous }
+        )
+      : translate(
+          'accounts.claude.switchSessions.sharedOther',
+          "{{count}} Claude sessions stay on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
           { count, previous }
         )
   )

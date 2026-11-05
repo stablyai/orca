@@ -22,7 +22,7 @@ import {
 } from './orcad-state-snapshot'
 import { posixProcessGroupCommand } from './orcad-state-mutation-owner-record'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { wrapRemoteCommandForPosixShell } from '../../ssh/ssh-posix-command-wrapper'
 import {
   ORCAD_FENCE_OWNER_FILENAME,

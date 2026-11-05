@@ -1,9 +1,9 @@
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
-} from '../../../shared/terminal-quick-commands'
+} from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
 
 type RankedCommand = {
   command: TerminalQuickCommand

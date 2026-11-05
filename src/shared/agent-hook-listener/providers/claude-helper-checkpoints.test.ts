@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { ClaudeTranscriptDecoder } from './claude-transcript-decoder'
 import { readClaudeTranscriptChunk } from './claude-transcript-cursor'
-import type { ClaudeLaunchedBackgroundTasks } from '../../claude-owed-task-notifications'
+import type { ClaudeLaunchedBackgroundTasks } from './claude-owed-task-notifications'
 vi.mock('node:fs/promises', { spy: true })
 
 import { dir, now, stamp, kill, prompt, pane } from './claude-helper-kill.test-fixture'

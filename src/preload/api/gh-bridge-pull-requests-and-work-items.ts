@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import { ipcRenderer } from 'electron'
 import type { GitHubReactionContent } from '../../shared/github/comment-types'
 import type {
@@ -69,11 +70,14 @@ export const ghPullRequestsAndWorkItemsApi = {
     preview?: boolean
   }) => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
   workItemDetails: (args: {
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string | null
     sourceContext?: TaskSourceContext | null
     number: number
     type?: 'issue' | 'pr'
+    ownerRepo?: GitHubOwnerRepo
+    canonical?: boolean
   }) => ipcRenderer.invoke('gh:workItemDetails', args),
   notifyWorkItemMutated: (args: {
     repoPath: string
@@ -176,6 +180,7 @@ export const ghPullRequestsAndWorkItemsApi = {
     prRepo?: GitHubOwnerRepo | null
   }): Promise<boolean> => ipcRenderer.invoke('gh:resolveReviewThread', args),
   setPRFileViewed: (args: {
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string | null
     sourceContext?: TaskSourceContext | null

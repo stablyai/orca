@@ -1,5 +1,6 @@
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
+import type { StructuredAgentSessionIdleSweepDeps } from './structured-agent-session-idle-sweep'
 import type {
   OpenedStructuredAgentSessionConversation,
   StructuredAgentSessionConversationOpenOptions
@@ -35,6 +36,8 @@ import type { JournalHostDatabase } from '../agent-session-journal/journal-host-
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { JournalStopSettle } from '../agent-session-journal/queued-message-pause'
+import type { QueuedMessageOwed } from '../agent-session-journal/queued-message-consume-error'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionChildEndCause,
@@ -48,7 +51,7 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionSwitchResult } from '../../../shared/agent-session/requests/agent-session-switch-execution'
 
 export type StructuredAgentSessionCaller = {
@@ -172,7 +175,7 @@ export type StructuredAgentSessionHostDeps = {
   /** Execution-host path for a new floating session. */
   resolveWorkspacePath?: (workspaceId: string) => Promise<string>
   now?: () => number
-  idleSweep?: { intervalMs?: number; idleMs?: number }
+  idleSweep?: Pick<StructuredAgentSessionIdleSweepDeps, 'intervalMs' | 'idleMs'>
   usageLimitAutoContinue?: {
     isEnabled: () => boolean
     subscribe: (changed: () => void) => () => void
@@ -185,6 +188,13 @@ export type StructuredAgentSessionHostDeps = {
   ) => boolean
   /** Explicit switch admission also includes direct chat assignments, even at rest. */
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
+  /** Whether an agent's queued message is still owed to this session at handover; absent: always. */
+  queuedAgentMessageOwed?: (
+    sessionId: string,
+    from: AgentMessageSource,
+    /** Only read, as the queue does choosing its next card; a handover also settles a stale send. */
+    peek?: boolean
+  ) => QueuedMessageOwed
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string, tabId?: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */

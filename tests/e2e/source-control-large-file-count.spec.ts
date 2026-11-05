@@ -13,7 +13,7 @@ import {
   removeLargeFileCountRepo,
   removeLargeFileCountUntrackedTree
 } from './large-file-count-fixtures'
-import { DEFAULT_GIT_STATUS_LIMIT } from '../../src/shared/git-status-limit'
+import { DEFAULT_GIT_STATUS_LIMIT } from '../../src/shared/git/status/git-status-limit'
 import { RIGHT_SIDEBAR_MIN_WIDTH } from '../../src/renderer/src/components/right-sidebar/right-sidebar-width'
 
 // A blocking stall over 1s matches the reported unresponsive UI.

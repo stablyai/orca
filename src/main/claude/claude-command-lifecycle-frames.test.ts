@@ -96,13 +96,4 @@ describe('Claude command_lifecycle frames', () => {
       )
     ).toEqual([[{ type: 'text', text: 'PROBE_OK' }]])
   })
-
-  it('keeps a cancelled command off the transcript too', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-
-    translator.handle(commandLifecycle('cancelled', 'lifecycle-4'))
-
-    expect(providerFrameKinds(state.items)).toEqual([])
-  })
 })

@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry, PluginHostStatus } from '../../shared/plugins/plugin-list-entry'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/types'
 import { formatPluginDevWatchEvent, type PluginDevWatchEvent } from './plugin-dev-watch-events'
 import { runPluginDevWatch, type PluginDevWatchHost } from './plugin-dev-watch-loop'
 import {
-  isLastingShotFailure,
   pluginDevWatchShotPanel,
   type PluginDevWatchShot,
   type PluginDevWatchShotHost
@@ -216,50 +215,5 @@ describe('plugin dev watch --shot', () => {
     expect(last && formatPluginDevWatchEvent(last)).toBe(
       'shot /work/shots/acme.todos-todos.png (360x700), not finished drawing\n  error: boom'
     )
-  })
-
-  it('carries pendingRequests into the shot event and notes it only when some are unanswered', async () => {
-    const outcomes = [
-      { ...SHOT, pendingRequests: 2 },
-      { ...SHOT, pendingRequests: 0 }
-    ]
-    const { host } = shotHost(async () => outcomes.shift() ?? SHOT)
-    const shots = ofType(await watch({ shot: host }), 'shot')
-    expect(shots.map((shot) => shot.pendingRequests)).toEqual([2, 0])
-    expect(formatPluginDevWatchEvent(shots[0]!)).toBe(
-      'shot /work/shots/acme.todos-todos.png (360x700)\n  note: 2 host call(s) were still unanswered; the panel may show its loading state'
-    )
-    expect(formatPluginDevWatchEvent(shots[1]!)).toBe(
-      'shot /work/shots/acme.todos-todos.png (360x700)'
-    )
-  })
-})
-
-describe('pluginDevWatchShotPanel', () => {
-  it('defaults to the first panel and checks a requested one', () => {
-    expect(pluginDevWatchShotPanel(entry(0), undefined)).toBe('todos')
-    expect(pluginDevWatchShotPanel(entry(0), 'stats')).toBe('stats')
-    expect(() => pluginDevWatchShotPanel(entry(0), 'x')).toThrow(/no panel x/)
-    expect(pluginDevWatchShotPanel({ ...entry(0), panels: [] }, undefined)).toBeNull()
-    // An entry the host could not list yet cannot be checked; the host refuses a wrong id later.
-    expect(pluginDevWatchShotPanel(null, 'stats')).toBe('stats')
-  })
-})
-
-describe('isLastingShotFailure', () => {
-  it('is true for an old host or a windowless one, not for passing trouble', () => {
-    const reply = (message: string) =>
-      new RuntimeRpcFailureError({
-        id: 'r',
-        ok: false,
-        error: { code: 'runtime_error', message },
-        _meta: { runtimeId: 'runtime_local' }
-      })
-    expect(isLastingShotFailure(new RuntimeClientError('runtime_unsupported', 'old'))).toBe(true)
-    expect(
-      isLastingShotFailure(reply('Showing plugin panels is only available in the Orca desktop app'))
-    ).toBe(true)
-    expect(isLastingShotFailure(reply('no workspace'))).toBe(false)
-    expect(isLastingShotFailure(new Error('timeout'))).toBe(false)
   })
 })

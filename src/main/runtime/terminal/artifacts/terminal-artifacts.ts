@@ -30,7 +30,7 @@ export class RuntimeTerminalArtifacts {
   }): Promise<RuntimeTerminalPathResolution> {
     // Why: the grant binds the canonical path so later reads cannot be redirected through a symlink.
     const canonicalPath = await canonicalPathForArtifactComparison(args.absolutePath)
-    const { stats, contentDigest } = await statLocalTerminalArtifact(canonicalPath)
+    const { stats, contentDigest, binary } = await statLocalTerminalArtifact(canonicalPath)
     const isDirectory = stats.isDirectory()
     const grant = isDirectory
       ? null
@@ -52,7 +52,10 @@ export class RuntimeTerminalArtifacts {
             kind: 'absolute-file',
             provider: grant.provider,
             absolutePath: canonicalPath,
-            grantId: grant.id
+            grantId: grant.id,
+            byteLength: stats.size,
+            // Why: a grant serves text only; a binary file opens where its bytes editors page it.
+            ...(binary || isMobileBinaryPath(canonicalPath) ? { binary: true as const } : {})
           }
         : undefined
     }

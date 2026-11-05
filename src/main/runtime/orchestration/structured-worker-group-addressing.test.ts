@@ -24,7 +24,7 @@ const {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} = await import('../structured-worker-identity')
+} = await import('./terminal-authority/structured-sessions/structured-worker-identity')
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const RUNNING: RunningStructuredSession = {
@@ -97,7 +97,7 @@ function installHost(options: {
       present: true,
       sessionIds: options.tabListed ? [SESSION_ID] : []
     }),
-    journalSnapshot: async () => ({ items: options.items ?? [idleTurn()] }),
+    journalCurrentRead: async () => ({ items: options.items ?? [idleTurn()] }),
     currentWork: () => null
   }
 }

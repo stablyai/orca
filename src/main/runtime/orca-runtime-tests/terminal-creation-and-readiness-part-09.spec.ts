@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import type { PtyProviderBufferSnapshot } from '../../providers/pty-provider-contract'
-import { TerminalKittyKeyboardModeTracker } from '../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('reports a queued PTY focus as not navigated when its notifier disappears', async () => {

@@ -13,8 +13,10 @@ import type {
 } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { AgentSessionRestartActivity } from '../../../shared/agent-session/lifecycle/agent-session-restart-activity'
 import { isResumableStructuredAgentSessionRecord } from './structured-agent-session-resume-eligibility'
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
-import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
+import {
+  normalizeOptionalField,
+  AGENT_MODEL_MAX_LENGTH
+} from '../../../shared/agent-status/contracts/agent-status-field-normalization'
 
 export type StructuredAgentSessionResumeCandidate = {
   sessionId: string

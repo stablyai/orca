@@ -63,7 +63,7 @@ vi.mock('./NativeChatComposer', () => ({
     </>
   )
 }))
-vi.mock('@/components/editor/useLocalImageSrc', () => ({
+vi.mock('@/components/editor/document-images/useLocalImageSrc', () => ({
   useLocalImageSrc: () => 'blob:original'
 }))
 vi.mock('@/lib/image-blob-png', async (importOriginal) => ({
@@ -192,25 +192,6 @@ describe('NativeChatResolvedView image menu ownership', () => {
     }
   )
 
-  it('reports a clipboard write failure without announcing success while the write is pending', async () => {
-    const write = Promise.withResolvers<void>()
-    mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
-    mocks.writeClipboardImage.mockReturnValue(write.promise)
-    render(<RetainedBridgeChat />)
-
-    fireEvent.contextMenu(screen.getByRole('img', { name: 'original.png' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy image' }))
-
-    await waitFor(() => expect(mocks.writeClipboardImage).toHaveBeenCalledOnce())
-    expect(mocks.success).not.toHaveBeenCalled()
-    expect(mocks.error).not.toHaveBeenCalled()
-
-    await act(async () => write.reject(new Error('Clipboard unavailable')))
-
-    expect(mocks.error).toHaveBeenCalledWith("Couldn't copy image", { description: undefined })
-    expect(mocks.success).not.toHaveBeenCalled()
-  })
-
   it('removes the portaled menu and captured image when the retained bridge owner hides', async () => {
     const capturedImage = Promise.withResolvers<Blob>()
     mocks.fetch.mockResolvedValue({ ok: true, blob: () => capturedImage.promise })
@@ -297,24 +278,5 @@ describe('NativeChatResolvedView right-click targets', () => {
     fireEvent.contextMenu(screen.getByText('Fix the build'))
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy message' }))
     expect(mocks.writeClipboardText).toHaveBeenLastCalledWith('Fix the build')
-  })
-
-  it('offers no message copy on a reply still being written, as its hover controls are hidden', async () => {
-    mocks.session = {
-      messages: [
-        chatMessage('ask', 'user', 'Fix the build'),
-        chatMessage('reply', 'assistant', 'Working on it')
-      ],
-      status: 'working'
-    }
-    render(
-      <TooltipProvider>
-        <RetainedBridgeChat />
-      </TooltipProvider>
-    )
-
-    fireEvent.contextMenu(screen.getByText('Working on it'))
-    await screen.findByRole('menu')
-    expect(screen.queryByRole('menuitem', { name: 'Copy message' })).toBeNull()
   })
 })

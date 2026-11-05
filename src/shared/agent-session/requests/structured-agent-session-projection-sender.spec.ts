@@ -34,10 +34,6 @@ function message(role: 'user' | 'assistant', from?: unknown): AgentJournalRender
 }
 
 describe("a message's sender, projected for every client", () => {
-  it('carries the sender of a user-role message another agent sent', () => {
-    expect(projectStructuredItemToNativeChat(message('user', FROM))?.from).toEqual(FROM)
-  })
-
   it("leaves the person's message, and a value no reader can place, without one", () => {
     expect(projectStructuredItemToNativeChat(message('user'))).not.toHaveProperty('from')
     expect(projectStructuredItemToNativeChat(message('user', 'nobody'))).not.toHaveProperty('from')

@@ -6,9 +6,9 @@ import {
 } from './lifecycle/agent-session-resume'
 import type { RuntimeTerminalCreate } from '../runtime-terminal-create-contract'
 import type { RuntimeTerminalPresentation } from '../runtime-terminal-contracts'
-import { isTerminalLeafId } from '../stable-pane-id'
-import { isValidTerminalTabId } from '../terminal-tab-id'
-import type { TuiAgent } from '../tui-agent'
+import { isTerminalLeafId } from '../workspace-layout/stable-pane-id'
+import { isValidTerminalTabId } from '../workspace-layout/terminal-tab-id'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { SpawnIntent } from '../host-spawn-admission'
 
 export const AGENT_SESSION_RPC_ERROR_CODES = [
@@ -134,6 +134,8 @@ export type RuntimeCreateAgentSessionRequest = {
   promptDelivery?: AgentPromptDelivery
   /** Explicit client override. Omission keeps launch defaults host-owned. */
   agentArgs?: string | null
+  sessionOptions?: Record<string, string>
+  extraAgentArgs?: string
   launchPreferences?: AgentLaunchPreferences
   startupCwd?: string
   presentation?: RuntimeTerminalPresentation

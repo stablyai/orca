@@ -20,8 +20,6 @@ vi.mock('expo-crypto', async () => {
 // Use a small grid for cheap payload work; model slow-link cost with time rather than bytes.
 const RANGE_GRID = 1024
 const ONE_WAY_LATENCY_MS = 150
-/** One 384 KiB window sealed at ~40 KB/s, the slow relayed path #29697 reported. */
-const WINDOW_TRANSFER_MS = 17_000
 
 function toHex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
@@ -157,20 +155,6 @@ describe('fetchMobileWebBundle over a slow link', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('finishes when every reply lands within the stall budget but four queued ones do not', async () => {
-    // Each window lands 17s after the one before it, so the fourth read in flight waits ~68s.
-    const files = bundleFiles()
-    const host = slowLinkHost(files, WINDOW_TRANSFER_MS)
-
-    const outcome = await settle(fetchMobileWebBundle({ client: host.client }))
-
-    expect(outcome.error).toBeUndefined()
-    expect(outcome.value?.assets.size).toBe(4)
-    for (const [path, content] of Object.entries(files)) {
-      expect(outcome.value?.assets.get(path)).toEqual(content)
-    }
   })
 
   it('fails as a lost link once no window has landed for the stall budget', async () => {

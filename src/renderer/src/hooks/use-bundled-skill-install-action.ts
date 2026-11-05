@@ -1,9 +1,9 @@
 import type { BundledSkillPlan } from '../../../shared/bundled-skill-plan'
-import { bundledSkillSetupAttentionMessage } from '@/components/settings/bundled-skill-setup-result-copy'
+import { bundledSkillSetupAttentionMessage } from '@/components/skills/setup/bundled-skill-setup-result-copy'
 import {
   bundledSkillSetupChanges,
   type BundledSkillSetupChanges
-} from '@/components/settings/bundled-skill-setup-copy'
+} from '@/components/skills/setup/bundled-skill-setup-copy'
 import { useEffect, useState } from 'react'
 import {
   bundledSkillInstallAction,

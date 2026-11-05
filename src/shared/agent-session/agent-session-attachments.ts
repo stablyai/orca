@@ -50,6 +50,13 @@ export function isAgentSessionAttachmentStorePath(filePath: string): boolean {
   return filePath.split(/[\\/]/).includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
 }
 
+/** The upload a stored path belongs to, read from the segment after the store's directory. */
+export function agentSessionAttachmentUploadIdOfPath(filePath: string): string | undefined {
+  const segments = filePath.split(/[\\/]/)
+  const store = segments.lastIndexOf(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
+  return store === -1 ? undefined : segments[store + 1]?.toLowerCase()
+}
+
 // Windows refuses these as a file's name whatever its extension, and drops trailing dots and spaces.
 const WINDOWS_DEVICE_NAME =
   /^(con|prn|aux|nul|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])$/i
