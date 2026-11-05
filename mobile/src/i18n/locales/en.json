@@ -635,11 +635,19 @@
       "sleep": "Sleep",
       "unpin": "Unpin",
       "pin": "Pin",
+      "rename": "Rename",
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
       "deleteFailed": "Failed to delete \"{{name}}\"",
       "deleteAnyway": "Delete Anyway"
+    },
+    "workspaceRenameSheet": {
+      "title": "Rename Workspace",
+      "emptyUsesBranch": "Leave empty to use the branch name.",
+      "emptyUsesFolder": "Leave empty to use the folder name.",
+      "failed": "Couldn't rename the workspace.",
+      "failedWithReason": "Couldn't rename the workspace. {{reason}}"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
