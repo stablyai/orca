@@ -324,6 +324,8 @@ access mode is always read-only. It supplies no full document, accepts no edits,
 separate API from `get()`/`session()`:
 
 ```js
+const controller = new AbortController()
+const signal = controller.signal
 const doc = await orca.document.rangeSession()
 const { version, byteLength, maxReadBytes } = doc.value
 const chunk = await doc.readRange(

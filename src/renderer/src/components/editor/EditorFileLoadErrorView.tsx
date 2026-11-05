@@ -32,6 +32,7 @@ export function EditorFileLoadErrorView({
   code,
   worktreeId,
   onRetry,
+  onOpenSource,
   onHostStarted
 }: {
   message: string
@@ -39,19 +40,26 @@ export function EditorFileLoadErrorView({
   /** The file's workspace; a stopped WSL host there gets Start instead of this error. */
   worktreeId?: string
   onRetry: () => void
+  onOpenSource?: () => void
   /** Reloads after Start without asking to wake again: the click already booted the host. */
   onHostStarted?: () => void
 }): React.JSX.Element {
   const stoppedWslHost = useStoppedWslHost(worktreeId)
+  const sourceAction = onOpenSource ? (
+    <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onOpenSource}>
+      {translate('auto.components.editor.EditorViewToggle.4d6ccb7ba6', 'Source')}
+    </Button>
+  ) : null
   if (stoppedWslHost) {
     return (
-      <div className="flex h-full items-center justify-center bg-editor-surface p-6 text-sm">
+      <div className="flex h-full flex-col items-center justify-center bg-editor-surface p-6 text-sm">
         <WslHostStoppedNotice
           environmentId={stoppedWslHost.environmentId}
           distro={stoppedWslHost.distro}
           size="sm"
           onStarted={onHostStarted}
         />
+        {sourceAction}
       </div>
     )
   }
@@ -68,6 +76,7 @@ export function EditorFileLoadErrorView({
             <RefreshCw className="size-3.5" />
             {translate('auto.components.editor.EditorContent.2a512bb46a', 'Retry')}
           </Button>
+          {sourceAction}
         </div>
       </div>
     </div>

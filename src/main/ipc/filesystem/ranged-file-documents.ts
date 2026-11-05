@@ -305,9 +305,7 @@ export class RangedFileDocuments {
   private installWatcher(document: Document): void {
     document.watcher = watchRangedFileDocumentSource(
       document.path,
-      () => {
-        void this.validate(document)
-      },
+      () => this.invalidate(document),
       () => this.invalidate(document)
     )
   }

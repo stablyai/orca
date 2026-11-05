@@ -13,6 +13,8 @@ import { usePluginPanelsStore } from '@/store/plugin-panels'
 import { useCustomEditorViewStore } from '@/store/plugin-custom-editors'
 import type { PluginHostListEntry } from '../../../../shared/plugins/plugin-list-entry'
 import type { FileContent, EditorPanelFileContentLoader } from './editor-panel-content-types'
+import { openEditorRangeSource } from './editor-range-document'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { useEditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
 
 const mocks = vi.hoisted(() => ({ fullRead: vi.fn() }))
@@ -66,7 +68,7 @@ function install(priority: 'default' | 'option' = 'default', extension = '.bin')
   usePluginPanelsStore.setState({ plugins: [plugin] })
 }
 
-function loader() {
+function loader(openFiles: OpenFile[] = []) {
   const root = createRoot(document.createElement('div'))
   let load: EditorPanelFileContentLoader | undefined
   let contents: Record<string, FileContent> = {}
@@ -75,7 +77,7 @@ function loader() {
       fileLoadRetryAttemptsRef: { current: {} },
       fileReadGenerationCounterRef: { current: 0 },
       fileReadGenerationRef: { current: {} },
-      openFilesRef: { current: [] },
+      openFilesRef: { current: openFiles },
       outstandingFileReadsRef: { current: {} },
       fileContentsRef: {
         get current() {
@@ -353,6 +355,97 @@ it('keeps an invalidated range version when a watcher refresh omits the initial 
     await expect(current.read({ version: 1, offset: 0, length: 2 })).rejects.toThrow(
       'Reload explicitly'
     )
+  } finally {
+    view.dispose()
+  }
+})
+
+it('keeps an explicit Source route after a selected range acquisition fails without falling back automatically', async () => {
+  install()
+  Object.assign(window, {
+    api: {
+      fs: {
+        rangeDocumentOpen: async () => {
+          throw new RuntimeRpcCallError({
+            id: 'open-range',
+            ok: false,
+            error: { code: 'range_document_unsupported', message: '' }
+          })
+        }
+      }
+    }
+  })
+  mocks.fullRead.mockImplementation(async () => {
+    if (useCustomEditorViewStore.getState().choices.file !== 'source') {
+      throw new Error('Source must be explicitly selected')
+    }
+    return { content: 'saved Source', isBinary: false }
+  })
+  const view = loader()
+  const file: OpenFile = {
+    id: 'file',
+    filePath: '/repo/data.bin',
+    relativePath: 'data.bin',
+    worktreeId: '',
+    language: 'plaintext',
+    mode: 'edit',
+    isDirty: false
+  }
+  try {
+    await act(async () => {
+      await view.load()
+    })
+    expect(view.content()).toMatchObject({
+      rangeLoadError: true,
+      content: '',
+      loadErrorCode: 'range_document_unsupported'
+    })
+    expect(view.content().loadError).toBeTruthy()
+    let pending: Promise<void> | undefined
+    await act(async () => {
+      openEditorRangeSource(file, () => {
+        pending = view.load()
+      })
+      await pending
+    })
+    expect(view.content()).toMatchObject({ content: 'saved Source', isBinary: false })
+    expect(view.content().loadError).toBeUndefined()
+  } finally {
+    view.dispose()
+  }
+})
+
+it('retains Source escape for a selected grant-only range source', async () => {
+  install()
+  const file: OpenFile = {
+    id: 'file',
+    filePath: '/repo/data.bin',
+    relativePath: 'data.bin',
+    worktreeId: '',
+    runtimeEnvironmentId: 'remote',
+    terminalArtifactGrantId: 'grant',
+    language: 'plaintext',
+    mode: 'edit',
+    isDirty: false
+  }
+  Object.assign(window, {
+    api: {
+      fs: {
+        rangeDocumentOpen: async () => {
+          throw new Error('Grant cannot authorize a range backend')
+        }
+      }
+    }
+  })
+  const view = loader([file])
+  try {
+    await act(async () => {
+      await view.load()
+    })
+    expect(view.content()).toMatchObject({
+      rangeLoadError: true,
+      loadError: expect.stringContaining('range_document_unsupported')
+    })
   } finally {
     view.dispose()
   }

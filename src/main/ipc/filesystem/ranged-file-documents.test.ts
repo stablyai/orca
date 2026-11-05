@@ -1,4 +1,4 @@
-import { mkdtemp, open, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, open, rename, rm, writeFile, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -129,6 +129,7 @@ describe('ranged document owner', () => {
 
   it('refuses a revision changed while a read was validating its current authority', async () => {
     await writeFile(path, 'before')
+    await utimes(path, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'))
     let release: (() => void) | undefined
     let checking = false
     const barrier = new Promise<void>((resolve) => {
@@ -143,6 +144,7 @@ describe('ranged document owner', () => {
     checking = true
     const pending = read(document.id, document.version, 0, 6)
     await writeFile(path, 'after!')
+    await utimes(path, new Date('2021-01-01T00:00:00Z'), new Date('2021-01-01T00:00:00Z'))
     release!()
     await expect(pending).rejects.toThrow()
     expect((await documents.status(owner, document.id)).valid).toBe(false)

@@ -1,3 +1,4 @@
+import { RangedFileDocumentError } from '../../../../shared/ranged-file-document'
 import { pluginFramesIsolated } from '@/store/plugin-frame-isolation'
 import {
   collectActivePluginCustomEditors,
@@ -14,6 +15,23 @@ import type { AppState } from '@/store/types'
 import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
 import { openRuntimeRangeDocument } from '@/runtime/open-runtime-range-document'
 import { isEditorModelDirty } from './save/queue/editor-save-disk-precondition'
+
+export class EditorRangeLoadError extends Error {
+  constructor(cause: unknown) {
+    super('Unable to load the ranged document.', { cause })
+  }
+
+  markFailure(failure: FileContent): FileContent {
+    failure.rangeLoadError = true
+    failure.loadError ||= this.message
+    return failure
+  }
+}
+
+export function openEditorRangeSource(file: OpenFile, reload: (file: OpenFile) => void): void {
+  useCustomEditorViewStore.getState().setChoice(file.id, 'source')
+  reload(file)
+}
 
 export const EDITOR_RANGE_DIRTY_MESSAGE =
   'Save or discard unsaved changes before reading file ranges, then reload explicitly.'
@@ -100,8 +118,11 @@ export async function readEditorRangeFileContent({
   )
   const selected = chosen && ranges.includes(chosen) ? chosen : null
   if (selected && args.terminalArtifactGrantId) {
-    throw new Error(
-      'Ranged documents do not support terminal artifact grants. Open the file through its owning workspace.'
+    throw new EditorRangeLoadError(
+      new RangedFileDocumentError(
+        'range_document_unsupported',
+        'Ranged documents do not support terminal artifact grants. Open the file through its owning workspace.'
+      )
     )
   }
   const rangeSourceKey = JSON.stringify({ ...args, wakeWslDistro: undefined })
@@ -118,7 +139,7 @@ export async function readEditorRangeFileContent({
             ) {
               return null
             }
-            throw error
+            throw new EditorRangeLoadError(error)
           })
     if (source) {
       if (!isCurrent()) {

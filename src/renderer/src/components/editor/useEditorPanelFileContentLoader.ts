@@ -5,7 +5,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
-import { readEditorRangeFileContent } from './editor-range-document'
+import { readEditorRangeFileContent, EditorRangeLoadError } from './editor-range-document'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
@@ -270,18 +270,19 @@ export function useEditorPanelFileContentLoader({
         if (!requestCurrent()) {
           return
         }
+        const error = err instanceof EditorRangeLoadError ? err.cause : err
         const failure = getEditorFileLoadFailureContent(
           useAppStore.getState(),
           worktreeId,
           readConnectionId,
-          err
+          error
         )
         applyEditorFileLoadFailure({
-          error: err,
+          error,
           fileId: id,
           filePath,
           tabs: openFilesRef.current,
-          failure,
+          failure: err instanceof EditorRangeLoadError ? err.markFailure(failure) : failure,
           setFileContents: (update) =>
             setFileContents((prev) =>
               requestCurrent() ? (typeof update === 'function' ? update(prev) : update) : prev

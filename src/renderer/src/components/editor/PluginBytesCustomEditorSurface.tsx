@@ -1,6 +1,7 @@
 import type { RuntimeRangeDocument } from '@/runtime/runtime-range-document'
 import {
   openEditorRangeDocument,
+  openEditorRangeSource,
   isEditorRangeDocumentDirty,
   EDITOR_RANGE_DIRTY_MESSAGE
 } from './editor-range-document'
@@ -48,10 +49,12 @@ const noopContentChange = (_content: string): void => {}
 
 function SurfaceMessage({
   children,
-  onRetry
+  onRetry,
+  onOpenSource
 }: {
   children: React.ReactNode
   onRetry?: () => void
+  onOpenSource?: () => void
 }): React.JSX.Element {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
@@ -59,6 +62,11 @@ function SurfaceMessage({
       {onRetry ? (
         <Button type="button" size="sm" variant="outline" onClick={onRetry}>
           {translate('auto.components.editor.PluginBytesCustomEditorSurface.retry', 'Retry')}
+        </Button>
+      ) : null}
+      {onOpenSource ? (
+        <Button type="button" size="sm" variant="outline" onClick={onOpenSource}>
+          {translate('auto.components.editor.EditorViewToggle.4d6ccb7ba6', 'Source')}
         </Button>
       ) : null}
     </div>
@@ -70,13 +78,15 @@ function RangeSurface({
   file,
   fileContent,
   fileType,
-  onSave
+  onSave,
+  reloadContent
 }: {
   editor: ActivePluginCustomEditor
   file: OpenFile
   fileContent: FileContent
   fileType: string
   onSave: (content: string) => Promise<boolean>
+  reloadContent: (file: OpenFile) => void
 }): React.JSX.Element {
   const dirty = useAppStore((state) => isEditorRangeDocumentDirty(state, file.id, file))
   const fileRef = useRef(file)
@@ -90,6 +100,7 @@ function RangeSurface({
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     if (fileContent.rangeDocument) {
+      setError('')
       setSource(fileContent.rangeDocument)
       return
     }
@@ -112,7 +123,10 @@ function RangeSurface({
       },
       (failure: unknown) => {
         if (active) {
-          setError(failure instanceof Error ? failure.message : String(failure))
+          setError(
+            (failure instanceof Error ? failure.message : String(failure)) ||
+              'Unable to load the ranged document.'
+          )
         }
       }
     )
@@ -122,7 +136,14 @@ function RangeSurface({
     }
   }, [fileContent.rangeDocument, fileContent.byteSource, file.filePath, file.id, attempt])
   if (error) {
-    return <SurfaceMessage onRetry={() => setAttempt((value) => value + 1)}>{error}</SurfaceMessage>
+    return (
+      <SurfaceMessage
+        onRetry={() => setAttempt((value) => value + 1)}
+        onOpenSource={() => openEditorRangeSource(file, reloadContent)}
+      >
+        {error}
+      </SurfaceMessage>
+    )
   }
   if (!source) {
     return (
@@ -246,6 +267,7 @@ export default function PluginBytesCustomEditorSurface({
         fileContent={fileContent}
         fileType={fileType}
         onSave={onSave}
+        reloadContent={reloadContent}
       />
     )
   }

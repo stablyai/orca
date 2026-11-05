@@ -36,6 +36,8 @@ export type FileContent = {
   loadError?: string
   /** Machine code from a runtime RPC failure; `loadError` alone may be prose (#21041). */
   loadErrorCode?: string
+  /** A selected range source failed; Source remains an explicit user choice. */
+  rangeLoadError?: true
   /** Superseded by an external change; still rendered until the lazy reload lands. */
   isStale?: boolean
   /** How the loader reached the file, so a binary custom editor can page its bytes from the same host. */

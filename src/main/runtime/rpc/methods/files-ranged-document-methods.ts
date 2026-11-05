@@ -1,13 +1,22 @@
 import { defineMethod } from '../core'
 import {
   RANGED_FILE_DOCUMENT_METHODS,
+  RangedFileDocumentError,
   RangedDocumentCancel,
   RangedDocumentId,
   RangedDocumentOpen,
   RangedDocumentRead
 } from '../../../../shared/ranged-file-document'
 
-const owner = (connectionId: string | undefined) => connectionId ?? 'in-process'
+function owner(connectionId: string | undefined): string {
+  if (!connectionId) {
+    throw new RangedFileDocumentError(
+      'range_document_unsupported',
+      'Ranged documents require a stable runtime connection.'
+    )
+  }
+  return connectionId
+}
 
 export const FILE_RANGED_DOCUMENT_METHODS = [
   defineMethod({

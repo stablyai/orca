@@ -1,3 +1,4 @@
+import { openEditorRangeSource } from './editor-range-document'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
@@ -137,6 +138,11 @@ export function EditorEditFileSurface({
         code={fileContent.loadErrorCode}
         worktreeId={activeFile.worktreeId}
         onRetry={() => reloadContent(activeFile, USER_RETRY)}
+        onOpenSource={
+          fileContent.rangeLoadError
+            ? () => openEditorRangeSource(activeFile, reloadContent)
+            : undefined
+        }
         onHostStarted={() => reloadContent(activeFile)}
       />
     )
