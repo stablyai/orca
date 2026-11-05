@@ -23,7 +23,7 @@ import {
 } from '../agent-session/agent-session-wire'
 import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
-import { ResumeSource, ResumeWriterAdmission } from './structured-agent-session-resume-params'
+import { SOURCE_FIELDS, ResumeWriterAdmission } from './structured-agent-session-resume-params'
 
 export {
   SendBlock,
@@ -134,11 +134,7 @@ export const CreateIntentParams = z
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
-    resumeFrom: ResumeSource.optional(),
-    forkFrom: z
-      .object({ sessionId: SessionId, throughItemId: Identifier('Invalid fork item id') })
-      .strict()
-      .optional(),
+    ...SOURCE_FIELDS,
     ...CREATE_TAB_FIELDS,
     /** Both fields require `agentSession.create.message.v1` on the executing host. */
     firstMessage: z

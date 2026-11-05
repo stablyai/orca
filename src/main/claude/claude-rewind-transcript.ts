@@ -2,8 +2,8 @@ import { AgentConversationCopyError } from '../native-chat/agent-conversation-co
 import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { Worker } from 'node:worker_threads'
 import type { AgentSessionRewindFork } from '../../shared/agent-session/lifecycle/agent-session-rewind'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
@@ -52,7 +52,7 @@ export async function materializeClaudeConversationTranscript(input: {
     destinationDirectory,
     temporaryPath
   }
-  const worker = new Worker(entry, { workerData })
+  const worker = spawnWorkerThread(entry, { workerData })
   let abort: () => void = () => undefined
   try {
     return await new Promise<ConversationCopy | null>((resolve, reject) => {
