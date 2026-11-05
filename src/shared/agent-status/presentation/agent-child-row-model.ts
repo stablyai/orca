@@ -15,7 +15,7 @@ import {
 } from '../contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../contracts/agent-status-types'
 import type { AgentSubagentSnapshot } from '../contracts/agent-status-subagent-snapshot'
-import { childName, usableAgentChildLabel } from './agent-child-row-name'
+import { childName } from './agent-child-row-name'
 
 /** What a child row says beside its name. Surfaces format it; they never decide it. */
 export type AgentChildRowDetail =
@@ -188,12 +188,7 @@ function rowFromView(
     context
   )
   const settled = view.membership === 'settled'
-  const named = childName(
-    usableAgentChildLabel(view.description) ?? usableAgentChildLabel(view.name),
-    view.agentType,
-    view.kind,
-    view.providerId ?? view.id
-  )
+  const named = childName({ ...view, id: view.providerId ?? view.id })
   const nextPath = new Set(path).add(view.id)
   return {
     id: view.id,
@@ -257,12 +252,7 @@ export function buildLegacyAgentChildRowModels(
       deriveAgentChildDisplayState({ state: subagent.state, membership: 'live' }, null),
       context
     )
-    const named = childName(
-      usableAgentChildLabel(subagent.description),
-      subagent.agentType,
-      'agent',
-      subagent.id
-    )
+    const named = childName({ ...subagent, kind: 'agent' })
     const name = named.name
     return {
       id: subagent.id,
@@ -301,14 +291,15 @@ function legacyTaskDisplayState(
 // The host decided each row's state; the row keeps it.
 function legacyTaskRow(task: AgentSessionBackgroundTask, settled: boolean): AgentChildRowModel {
   const displayState = legacyTaskDisplayState(task, settled)
-  const name = usableAgentChildLabel(task.description) ?? usableAgentChildLabel(task.name) ?? ''
+  const named = childName(task)
+  const name = named.name
   const startedAt = task.startedAt ?? 0
   return {
     id: task.id,
     providerId: task.id,
     kind: task.kind,
     displayState,
-    name,
+    ...named,
     detail: agentChildRowDetail(
       { evidence: 'run-state', kind: task.kind, name, settled },
       displayState

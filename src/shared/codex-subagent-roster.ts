@@ -85,8 +85,11 @@ export function enrichCodexSubagentIdentity(
   if (!child || !transcriptPath || child.identityTranscriptPath === transcriptPath) {
     return false
   }
+  if (child.identityMissKey === transcriptPath) {
+    return false
+  }
   child.identityPendingPath = transcriptPath
-  if (child.identityMissKey === transcriptPath || (child.identityRetryAt ?? 0) > Date.now()) {
+  if ((child.identityRetryAt ?? 0) > Date.now()) {
     return false
   }
   const missKey = `${transcriptPath}:${transcriptFileSize(transcriptPath)}`
@@ -122,13 +125,21 @@ export function hasPendingCodexSubagentIdentity(roster: CodexSubagentRoster | un
   return [...(roster?.values() ?? [])].some((child) => child.identityPendingPath !== undefined)
 }
 
-/** Retry each unnamed child's own rollout; a relay restart can leave no parent transcript to drive this. */
+const IDENTITY_RETRIES_PER_POLL = 8
+const identityRetryCursors = new WeakMap<CodexSubagentRoster, number>()
+
+/** Retry unnamed children's own rollouts a few per poll, taking turns; a relay restart can leave no parent transcript to drive this. */
 export function retryPendingCodexSubagentIdentities(roster: CodexSubagentRoster): boolean {
+  const pending = [...roster].filter(([, child]) => child.identityPendingPath !== undefined)
+  const start = (identityRetryCursors.get(roster) ?? 0) % Math.max(pending.length, 1)
+  const turn = [...pending.slice(start), ...pending.slice(0, start)].slice(
+    0,
+    IDENTITY_RETRIES_PER_POLL
+  )
+  identityRetryCursors.set(roster, start + turn.length)
   let changed = false
-  for (const [id, child] of roster) {
-    if (child.identityPendingPath !== undefined) {
-      changed = enrichCodexSubagentIdentity(roster, id, child.identityPendingPath) || changed
-    }
+  for (const [id, child] of turn) {
+    changed = enrichCodexSubagentIdentity(roster, id, child.identityPendingPath) || changed
   }
   return changed
 }

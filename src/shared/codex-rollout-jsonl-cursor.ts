@@ -50,7 +50,9 @@ export function readJsonlFirstRecord(
     if (error instanceof SyntaxError) {
       return undefined
     }
-    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'pending' : 'unreadable'
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+      ? 'pending'
+      : 'unreadable'
   } finally {
     if (fd !== undefined) {
       closeSync(fd)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildLegacyAgentChildRowModels } from './agent-child-row-model'
 import { agentChildRowName } from './agent-child-row-lead-trail'
+import { childName } from './agent-child-row-name'
 
 const context = {
   parentEvidenceFresh: true,
@@ -41,5 +42,16 @@ describe('child row names', () => {
       'worker (0a1b2c3d4e5f)',
       'lifecycle_audit'
     ])
+  })
+
+  it('treats a role published as the name as no name', () => {
+    expect(
+      childName({
+        name: 'general-purpose',
+        agentType: 'general-purpose',
+        kind: 'agent',
+        id: 'toolu_01AbCdEfGhIjKlMnOp'
+      })
+    ).toEqual({ name: 'general-purpose', idSuffix: 'EfGhIjKlMnOp' })
   })
 })

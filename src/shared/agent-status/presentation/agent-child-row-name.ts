@@ -10,15 +10,21 @@ export function usableAgentChildLabel(value: string | undefined): string | undef
 }
 
 // Like Codex's own agent list, an agent with no task name or nickname is told apart by its id tail.
-export function childName(
-  label: string | undefined,
-  agentType: string | undefined,
-  kind: AgentChildWorkKind,
+export function childName(source: {
+  description?: string
+  name?: string
+  agentType?: string
+  kind: AgentChildWorkKind
   id: string
-): { name: string; idSuffix?: string } {
-  const idSuffix = label || kind !== 'agent' ? undefined : id.split('-').at(-1)?.trim().slice(-12)
+}): { name: string; idSuffix?: string } {
+  // Some hosts publish the role as the name (Claude's subagent_type); that names no one child.
+  const label =
+    usableAgentChildLabel(source.description) ??
+    (source.name === source.agentType ? undefined : usableAgentChildLabel(source.name))
+  const idSuffix =
+    label || source.kind !== 'agent' ? undefined : source.id.split('-').at(-1)?.trim().slice(-12)
   return {
-    name: label ?? usableAgentChildLabel(agentType) ?? '',
+    name: label ?? usableAgentChildLabel(source.agentType) ?? '',
     ...(idSuffix ? { idSuffix } : {})
   }
 }
