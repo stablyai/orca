@@ -87,16 +87,25 @@ describe('reflow distrust boundaries', () => {
 
   it('does not let an alternate-screen erase stand in for the normal buffer', async () => {
     const runtime = reflowed()
-    runtime.onPtyData(PTY_ID, `${ALT_ENTER}${ERASE}`, 2)
+    runtime.onPtyData(PTY_ID, ALT_ENTER, 2)
+    runtime.onPtyData(PTY_ID, ERASE, 3)
     await settle(runtime)
     // The alternate screen is repainted and readable; the normal buffer behind it is not.
     expect(runtime['readRuledScreen'](PTY_ID)).not.toBeNull()
-    runtime.onPtyData(PTY_ID, ALT_LEAVE, 3)
+    runtime.onPtyData(PTY_ID, ALT_LEAVE, 4)
     await settle(runtime)
     expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
-    runtime.onPtyData(PTY_ID, `${ERASE}frame`, 4)
+    runtime.onPtyData(PTY_ID, `${ERASE}frame`, 5)
     await settle(runtime)
     expect(runtime['readRuledScreen'](PTY_ID)).not.toBeNull()
+  })
+
+  it('credits an erase that shares a chunk with a buffer toggle to neither buffer', async () => {
+    // The erase ran on the alternate screen; reading the buffer after the write would say normal.
+    const runtime = reflowed()
+    runtime.onPtyData(PTY_ID, `${ALT_ENTER}${ERASE}${ALT_LEAVE}`, 2)
+    await settle(runtime)
+    expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
   })
 
   it('ignores output that was queued before the reflow boundary', async () => {

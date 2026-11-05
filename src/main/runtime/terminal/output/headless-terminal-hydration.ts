@@ -241,17 +241,21 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         }
       }
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
+        // Read before the write: an erase inside a chunk belongs to the buffer active when it ran.
+        const alternateAtStart = state.emulator.isAlternateScreen
         await state.emulator.write(chunk, { forwardQueryReplies })
         // The reflowed grid distrusts cells wrapped at an older width. Only a reliable signal of a
-        // fresh paint retires it: an explicit full-screen erase on the active buffer — byte counts
-        // prove nothing, since an OSC title or cursor moves can outrun a screen — or a whole-screen
-        // seed from the renderer/provider. Output queued before the reflow cannot retire it (#38418).
+        // fresh paint retires it: an explicit full-screen erase on the buffer that was active when it
+        // ran — byte counts prove nothing — or a whole-screen seed from the renderer/provider.
+        // Output queued before the reflow cannot retire it, and a chunk that both toggles the
+        // alternate screen and erases is ambiguous, so it retires nothing (#38418).
         const trust = state.reflowRepaintTrust
         if (trust && outputSequence > trust.boundarySequence) {
           const followed = `${trust.escapeCarry}${chunk}`
-          trust.escapeCarry = followed.slice(-3)
-          if (followed.includes('[2J')) {
-            if (state.emulator.isAlternateScreen) {
+          trust.escapeCarry = incompleteEraseCarry(followed)
+          const ambiguous = followed.includes('[?1049h') || followed.includes('[?1049l')
+          if (followed.includes('[2J') && !ambiguous) {
+            if (alternateAtStart) {
               trust.alternateRepainted = true
             } else {
               trust.normalRepainted = true
@@ -313,4 +317,16 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       this.paneOfPty(pty).paneKey
     return paneKey ? this.getAgentStatusSnapshotForPaneFn?.(paneKey)[0] : undefined
   }
+}
+
+const FULL_SCREEN_ERASE = '\u001b[2J'
+
+/** Suffix of `text` that is an incomplete full-screen erase, so a completed one is never re-detected. */
+function incompleteEraseCarry(text: string): string {
+  for (let length = Math.min(FULL_SCREEN_ERASE.length - 1, text.length); length > 0; length -= 1) {
+    if (FULL_SCREEN_ERASE.startsWith(text.slice(-length))) {
+      return text.slice(-length)
+    }
+  }
+  return ''
 }
