@@ -32,7 +32,7 @@ export type PendingPrompt =
   /** The agent is waiting on something only Orca's own views can answer. */
   | { kind: 'unsupported'; promptId: string }
 
-type PromptRow = Pick<
+export type PromptRow = Pick<
   AgentStatusIpcPayload,
   'state' | 'interrupted' | 'mainAgent' | 'interactivePrompt' | 'toolName'
 >

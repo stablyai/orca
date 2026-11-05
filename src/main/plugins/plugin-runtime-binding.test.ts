@@ -86,6 +86,45 @@ describe('agents.list projection', () => {
   })
 })
 
+describe('agents.list prompt kind', () => {
+  const QUESTION = JSON.stringify({
+    questions: [
+      {
+        question: 'Which database should the migration target?',
+        multiSelect: false,
+        options: [{ label: 'Postgres' }, { label: 'SQLite' }]
+      }
+    ]
+  })
+  it('marks a row waiting on an AskUserQuestion as `question`, without its text', () => {
+    const agents = projectPluginWorkspaceAgents(
+      'w1',
+      [],
+      [
+        {
+          paneKey: 'p',
+          worktreeId: 'w1',
+          stateStartedAt: 1,
+          state: 'waiting',
+          toolName: 'AskUserQuestion',
+          interactivePrompt: QUESTION
+        }
+      ]
+    )
+    expect(agents).toEqual([
+      {
+        terminalId: null,
+        title: null,
+        agent: null,
+        state: 'waiting',
+        prompt: 'question',
+        stateStartedAt: 1
+      }
+    ])
+    expect(JSON.stringify(agents)).not.toContain('migration')
+  })
+})
+
 describe('workspace.changed', () => {
   it('re-reads the context after session writes settle and emits only real changes', async () => {
     vi.useFakeTimers()

@@ -7,7 +7,8 @@ import {
   type pluginWorkspaceContextSchema
 } from '../../../shared/plugins/workers/plugin-host-api'
 import { PLUGIN_AGENT_LIST_LIMIT } from '../../../shared/plugins/workers/plugin-host-api-panel-methods'
-import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
+import type { PromptRow } from '../../../shared/agent-status/contracts/agent-pending-prompt'
+import { readPluginPromptKind } from '../../../shared/plugins/events/plugin-agent-prompt-kind'
 
 /** One terminal of a workspace, as main's runtime lists it. */
 export type PluginWorkspaceTerminal = {
@@ -19,11 +20,10 @@ export type PluginWorkspaceTerminal = {
 }
 
 /** One agent row from the hook server's status store (the fields plugins may see). */
-export type PluginAgentStatusRow = {
+export type PluginAgentStatusRow = PromptRow & {
   paneKey: string
   worktreeId?: string
   terminalHandle?: string
-  state: AgentStatusState
   agentType?: string
   stateStartedAt: number
   providerSessionOnly?: boolean
@@ -83,11 +83,13 @@ export function projectPluginWorkspaceAgents(
     .slice(0, PLUGIN_AGENT_LIST_LIMIT)
     .map((row) => {
       const terminal = terminalForPane(terminals, row)
+      const prompt = readPluginPromptKind(row)
       return {
         terminalId: terminal?.id ?? null,
         title: terminal?.title ?? null,
         agent: row.agentType?.slice(0, 128) ?? null,
         state: row.state,
+        ...(prompt ? { prompt } : {}),
         stateStartedAt: row.stateStartedAt
       }
     })
