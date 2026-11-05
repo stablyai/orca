@@ -44,8 +44,8 @@ export function orcadNodeSlotRuntimeCommand(host: RemoteHostPlatform, directory:
   )
 }
 
-/** undici's WASM memory otherwise reserves 4-9 GiB, so a `ulimit -v` host then fails the next
- * Worker's CodeRange reservation (#37538). Pinned Node only: older host Node rejects the flag. */
+/** Keeps address space small under RLIMIT_AS: undici's WASM memory otherwise reserves 4-9 GiB (#37538).
+ * Caps any WASM memory in orcad at 64 MiB. Pinned Node only: older host Node rejects the flag. */
 const ORCAD_PINNED_NODE_FLAGS = '--disable-wasm-trap-handler --wasm-max-mem-pages=1024'
 
 /** Also sets $orcad_runtime_flags. Legacy host Node fallback must never hide an incomplete Node or Bun slot. */
