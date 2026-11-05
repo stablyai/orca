@@ -33,6 +33,7 @@ import type {
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import type {
   PinnedWorktreeDisplayPolicy,
+  Row,
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
 
@@ -41,6 +42,8 @@ export type VirtualizedWorktreeViewportProps = {
   occurrencePlan?: WorktreeOccurrencePlan<Worktree>
   visibleProjectRepoIdsBySection?: ReadonlyMap<string, ReadonlySet<string>>
   rows: HostSectionRow[]
+  /** Filtered project rows before collapsed host sections hide their children. */
+  projectCollapseRows: readonly Row[]
   hostOptions?: readonly ExecutionHostRegistryEntry[]
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
