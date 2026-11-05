@@ -90,7 +90,8 @@ vi.mock('../git/worktrees/content-paths/worktree-symlink-detection', () => ({
 }))
 
 vi.mock('../git/remotes/remote-url-probe', () => ({
-  assertRemoteUrlReadable: assertRemoteUrlReadableMock
+  assertRemoteUrlReadable: assertRemoteUrlReadableMock,
+  withSharedRemoteUrlReads: <T>(work: () => Promise<T>) => work()
 }))
 
 vi.mock('../gitlab/client', () => ({
