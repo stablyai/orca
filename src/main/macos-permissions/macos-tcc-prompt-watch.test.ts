@@ -1,12 +1,19 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as BundleIdentifierModule from '../macos-bundle-identifier'
 import {
   MacosTccPromptWatch,
   type LogStreamChild,
   isOwnAttributedPrompt,
   parseTccPromptEvent
 } from './macos-tcc-prompt-watch'
+
+// The running bundle resolves to Orca, so tests can tell a fallback apart from an explicit override.
+vi.mock('../macos-bundle-identifier', async (importOriginal) => ({
+  ...(await importOriginal<typeof BundleIdentifierModule>()),
+  getMacBundleIdentifier: () => 'com.stablyai.orca'
+}))
 
 const OWN_ID = 'com.stablyai.orca'
 
@@ -75,6 +82,21 @@ describe('isOwnAttributedPrompt', () => {
     expect(
       isOwnAttributedPrompt({ ...event, responsibleIdentifier: 'com.stablyai.orca' }, null)
     ).toBe(false)
+  })
+
+  it('rejects the id every unpackaged Electron app shares, and its helper', () => {
+    for (const id of ['com.github.Electron', 'com.github.Electron.helper']) {
+      expect(
+        isOwnAttributedPrompt(
+          {
+            service: 'kTCCServiceSystemPolicyAppData',
+            accessingIdentifier: 'find',
+            responsibleIdentifier: id
+          },
+          'com.github.Electron'
+        )
+      ).toBe(false)
+    }
   })
 
   it('rejects dialogs another app is responsible for', () => {
@@ -166,6 +188,25 @@ describe('MacosTccPromptWatch', () => {
       service: 'kTCCServiceSystemPolicyAppData',
       responsibleIdentifier: 'com.stablyai.orca'
     })
+    watch.stop()
+  })
+
+  it('treats an explicit null identifier as unidentifiable instead of the running bundle', async () => {
+    const { child, stdout } = createFakeLogStream()
+    const onPrompt = vi.fn()
+    const watch = new MacosTccPromptWatch({
+      onPrompt,
+      spawnLogStream: () => child,
+      ownIdentifier: null
+    })
+    watch.start()
+
+    stdout.write(`${ORCA_APPDATA_LINE}\n`)
+    await new Promise((resolve) => {
+      setImmediate(resolve)
+    })
+
+    expect(onPrompt).not.toHaveBeenCalled()
     watch.stop()
   })
 

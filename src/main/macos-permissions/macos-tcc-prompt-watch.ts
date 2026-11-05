@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
 import type { Readable, Writable } from 'node:stream'
-import { getMacBundleIdentifier } from '../macos-bundle-identifier'
+import { getMacBundleIdentifier, isSharedElectronIdentifier } from '../macos-bundle-identifier'
 
 /** Stdin EOF tells the wrapper that Orca died. */
 export type LogStreamChild = ChildProcessByStdio<Writable, Readable, Readable>
@@ -12,6 +12,7 @@ export type LogStreamChild = ChildProcessByStdio<Writable, Readable, Readable>
 function isOwnResponsibleIdentifier(identifier: string, ownIdentifier: string | null): boolean {
   return (
     ownIdentifier !== null &&
+    !isSharedElectronIdentifier(ownIdentifier) &&
     (identifier === ownIdentifier || identifier === `${ownIdentifier}.helper`)
   )
 }
@@ -148,7 +149,11 @@ export class MacosTccPromptWatch {
 
   private handleLine(line: string): void {
     const event = parseTccPromptEvent(line)
-    const own = this.options.ownIdentifier ?? getMacBundleIdentifier()
+    // Explicit null means "unidentifiable" and must not fall back to the running bundle.
+    const own =
+      this.options.ownIdentifier === undefined
+        ? getMacBundleIdentifier()
+        : this.options.ownIdentifier
     if (!event || !isOwnAttributedPrompt(event, own)) {
       return
     }
