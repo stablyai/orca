@@ -40,13 +40,13 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     // Older shells cannot open PDFs; the preview asks for an app update instead.
     // Match preview grants for in-document navigation; older shells render inert HTML links.
-    optionalGrants: ['externalNavigation', 'native.pdf.view']
+    optionalGrants: ['externalNavigation', 'native.pdf.view', 'native.file.save']
   },
   // Preview itself uses Markdown externalLink and Source Copy clipboard; explorer inherits same grants for in-document hop.
   {
     pathname: '/h/[hostId]/files/preview/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
-    optionalGrants: ['externalNavigation', 'native.pdf.view']
+    optionalGrants: ['externalNavigation', 'native.pdf.view', 'native.file.save']
   },
   // Hub grants cover Back/review navigation, shared storage, PR link openers and conflict-command Copy.
   // Keep pr/history Redirects native: listing them would leave page session bound to pathname redirect already left; native replaces into hub once.

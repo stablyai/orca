@@ -3,7 +3,7 @@ import { MobileChatAttachmentPreview } from './MobileChatAttachmentPreview'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, Save } from 'lucide-react-native'
+import { ChevronLeft } from 'lucide-react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
@@ -41,6 +41,8 @@ import {
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { mobileMarkdownFileLink } from './mobile-markdown-file-link'
 import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
+import { useMobileFileDownload } from './use-mobile-file-download'
+import { MobileArtifactSaveButton } from './MobileArtifactSaveButton'
 
 type Props = {
   route: MobileFilePreviewRouteState
@@ -246,6 +248,7 @@ function MobileFilePreviewDocument({ route }: Props) {
     previewParams?.worktreeName,
     previewParams?.worktreeId ?? ''
   )
+  const download = useMobileFileDownload(previewSource, displayPath)
   const [markdownMode, setMarkdownMode] = useMarkdownPreviewMode(displayPath, lineColumn?.line)
   const isEditableTerminalArtifact =
     previewSource?.source === 'terminalArtifact' &&
@@ -333,16 +336,13 @@ function MobileFilePreviewDocument({ route }: Props) {
           subtitle={previewParams ? worktreeLabel : undefined}
           trailing={
             isEditableTerminalArtifact ? (
-              <NavBarButton
-                icon={Save}
+              <MobileArtifactSaveButton
                 onPress={() => void saveArtifact()}
                 disabled={!canSaveArtifact || saving}
-                accessibilityLabel={t(
-                  'files.filePreviewScreen.saveArtifact',
-                  'Save terminal artifact'
-                )}
               />
-            ) : null
+            ) : (
+              download.button
+            )
           }
           accessory={
             preview.status === 'ready' &&
@@ -359,6 +359,7 @@ function MobileFilePreviewDocument({ route }: Props) {
           }
         />
       </SafeAreaView>
+      {download.notice}
       <MobileFilePreviewBody
         preview={preview}
         client={client}

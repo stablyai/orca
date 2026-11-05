@@ -1836,7 +1836,11 @@
       "discardMessage": "Unsaved edits will be lost.",
       "discardMessageSaving": "The save in progress may not finish. Unsaved edits will be lost.",
       "discard": "Discard",
-      "stay": "Stay"
+      "stay": "Stay",
+      "download": "Download file",
+      "downloadSaved": "File saved",
+      "downloadFailed": "Unable to download this file",
+      "downloadHostOutdated": "Update Orca where this workspace runs to download files on mobile"
     },
     "filePreviewSourceText": {
       "previewLabel": "File preview",

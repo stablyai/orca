@@ -35,7 +35,8 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.read',
   'native.audio.stop',
   'native.storage.read',
-  'native.pdf.view'
+  'native.pdf.view',
+  'native.file.save'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -85,6 +86,24 @@ export type BridgePdfOpenParams = Omit<
   'action'
 >
 
+// Same shape as pdf.view: the shell picks the destination and streams the file there; page bytes would exceed the frame cap.
+// saved:false means the user dismissed the folder picker.
+export const fileSaveParamsSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('save'),
+    worktreeId: z.string().min(1),
+    relativePath: z.string().min(1),
+    executionHost: z.templateLiteral(['runtime:', z.string().min(1)]).optional()
+  }),
+  z.strictObject({ action: z.literal('cancel') })
+])
+export const fileSaveResultSchema = z.strictObject({ saved: z.boolean() })
+
+export type BridgeFileSaveParams = Omit<
+  Extract<z.infer<typeof fileSaveParamsSchema>, { action: 'save' }>,
+  'action'
+>
+
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
     params: clipboardWriteParamsSchema,
@@ -129,6 +148,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.pdf.view': {
     params: pdfViewParamsSchema,
     result: pdfViewResultSchema
+  },
+  'native.file.save': {
+    params: fileSaveParamsSchema,
+    result: fileSaveResultSchema
   }
 }
 
