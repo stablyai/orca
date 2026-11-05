@@ -36,7 +36,7 @@ import {
 const picker = vi.hoisted(() => ({ pickFiles: vi.fn(), pickImages: vi.fn() }))
 vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('./native-chat/composer/MobileNativeChatContextUsageRing', () => ({
-  MobileNativeChatContextUsageRing: () => null
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
 }))
 vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => picker }))
 vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))

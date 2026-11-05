@@ -37,7 +37,7 @@ import {
 } from './MobileNativeChatComposer'
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('./MobileNativeChatContextUsageRing', () => ({
-  MobileNativeChatContextUsageRing: () => null
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
 }))
 vi.mock('../../../platform/media-picker', () => ({
   useMediaPicker: () => ({ pickImages: async () => [] })

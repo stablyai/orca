@@ -23,7 +23,7 @@ vi.mock('../input/MobileNativeChatSessionOptionPickers', () => ({
 }))
 vi.mock('./MobileNativeChatComposerMic', () => ({ MobileNativeChatComposerMic: () => null }))
 vi.mock('./MobileNativeChatContextUsageRing', () => ({
-  MobileNativeChatContextUsageRing: () => null
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
 }))
 vi.mock('./MobileNativeChatSendButton', () => ({ MobileNativeChatSendButton: () => null }))
 vi.mock('./MobileNativeChatEditActions', () => ({ MobileNativeChatEditActions: () => null }))

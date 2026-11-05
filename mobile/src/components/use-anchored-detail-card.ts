@@ -13,6 +13,7 @@ type Action =
   | { type: 'toggle'; eligible: boolean }
   | { type: 'close'; request?: number }
   | { type: 'measured'; request: number; anchor: DetailCardAnchor }
+  | { type: 'moved'; anchor: DetailCardAnchor }
   | { type: 'settled'; motion: number }
 
 function reduce(state: State, action: Action): State {
@@ -46,6 +47,10 @@ function reduce(state: State, action: Action): State {
         visual: { anchor, target: 1, motion: serial + 1 }
       }
     }
+    case 'moved':
+      return visual?.target === 1
+        ? { ...state, visual: { ...visual, anchor: action.anchor } }
+        : state
     case 'settled':
       return visual?.target === 0 && visual.motion === action.motion
         ? { ...state, visual: null }
@@ -59,13 +64,16 @@ export type DetailCardMeasure = (
   place: (placement: DetailCardPlacement) => void
 ) => boolean
 
-/** Open, measure, animate and dismiss state for an AnchoredDetailCard; any change to `geometry` closes it. */
+/** Open, measure, animate and dismiss state for an AnchoredDetailCard; any change to `geometry`
+ *  closes it, while a change to `follow` moves an open card to its anchor's new place. */
 export function useAnchoredDetailCard({
   geometry: placementGeometry,
+  follow = '',
   obscured,
   measure
 }: {
   geometry: string
+  follow?: string
   obscured: boolean
   measure: DetailCardMeasure
 }) {
@@ -102,36 +110,55 @@ export function useAnchoredDetailCard({
       generation.current += 1
     }
   }, [dismiss, geometry, obscured])
+  // Calls back with null when the card's views are gone.
+  const measureAnchor = useCallback(
+    (done: (anchor: DetailCardAnchor | null) => void): (() => void) => {
+      const layer = layerRef.current
+      if (!layer) {
+        done(null)
+        return () => {}
+      }
+      let disposed = false
+      const current = generation.current
+      layer.measureInWindow((rootX, rootY) => {
+        const placed = measureRef.current({ x: rootX, y: rootY }, (placement) => {
+          if (!disposed && current === generation.current) {
+            done({ ...placement, origin: { x: rootX, y: rootY } })
+          }
+        })
+        if (!placed && !disposed) {
+          done(null)
+        }
+      })
+      return () => {
+        disposed = true
+      }
+    },
+    []
+  )
   const request = state.request
   useLayoutEffect(() => {
     if (request === null || obscured) {
       return
     }
-    const layer = layerRef.current
-    if (!layer) {
-      dispatch({ type: 'close', request })
+    return measureAnchor((anchor) =>
+      dispatch(anchor ? { type: 'measured', request, anchor } : { type: 'close', request })
+    )
+  }, [request, geometry, obscured, measureAnchor])
+  const shown = state.visual?.target === 1 && !obscured
+  const followed = useRef(follow)
+  useLayoutEffect(() => {
+    if (followed.current === follow) {
       return
     }
-    let disposed = false
-    const current = generation.current
-    layer.measureInWindow((rootX, rootY) => {
-      const placed = measureRef.current({ x: rootX, y: rootY }, (placement) => {
-        if (!disposed && current === generation.current) {
-          dispatch({
-            type: 'measured',
-            request,
-            anchor: { ...placement, origin: { x: rootX, y: rootY } }
-          })
-        }
-      })
-      if (!placed && !disposed) {
-        dispatch({ type: 'close', request })
-      }
-    })
-    return () => {
-      disposed = true
+    followed.current = follow
+    if (!shown) {
+      return
     }
-  }, [request, geometry, obscured])
+    return measureAnchor((anchor) =>
+      dispatch(anchor ? { type: 'moved', anchor } : { type: 'close' })
+    )
+  }, [follow, shown, measureAnchor])
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     setSize(event.nativeEvent.layout)
   }, [])

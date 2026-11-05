@@ -1,5 +1,5 @@
-import { StyleSheet, Pressable, Text, View } from 'react-native'
-import { useCallback } from 'react'
+import { StyleSheet, Pressable, Text, View, type LayoutChangeEvent } from 'react-native'
+import { useCallback, useRef, useState } from 'react'
 import Svg, { Circle } from 'react-native-svg'
 import {
   CONTEXT_USAGE_CRITICAL_PERCENTAGE,
@@ -30,15 +30,39 @@ const RING_STROKE = 2
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
 
+type ComposerAnchor = { ref: React.RefObject<View | null>; height: number; obscured: boolean }
+
+/** The composer box's props, which the card lines its trailing and bottom edges up with, and the
+ *  ring for the action row (null without usage). `obscured` is the composer's own menu, which sits
+ *  where the card would and closes it. */
+export function useMobileNativeChatContextRing(
+  usage: NativeChatContextUsageSummary | null,
+  obscured: boolean
+) {
+  const ref = useRef<View>(null)
+  const [height, setHeight] = useState(0)
+  const onLayout = useCallback(
+    (event: LayoutChangeEvent) => setHeight(event.nativeEvent.layout.height),
+    []
+  )
+  return {
+    barProps: { ref, onLayout },
+    ring: usage ? (
+      <MobileNativeChatContextUsageRing usage={usage} anchor={{ ref, height, obscured }} />
+    ) : null
+  }
+}
+
 /** Composer ring for context-window usage; a tap shows the provider's breakdown above the composer. */
-export function MobileNativeChatContextUsageRing({
+function MobileNativeChatContextUsageRing({
   usage,
-  composerRef
+  anchor
 }: {
   usage: NativeChatContextUsageSummary
-  /** The composer box; the card's trailing and bottom edges line up with it. */
-  composerRef: React.RefObject<View | null>
+  anchor: ComposerAnchor
 }): React.JSX.Element {
+  const composerRef = anchor.ref
+  const { obscured } = anchor
   useMobileColorScheme()
   const t = useMobileTranslation()
   const keyboard = useKeyboardOcclusion()
@@ -55,18 +79,31 @@ export function MobileNativeChatContextUsageRing({
     },
     [composerRef]
   )
-  // The composer rides the keyboard, so a keyboard change moves the anchor.
-  const card = useAnchoredDetailCard({ geometry: String(keyboard), obscured: false, measure })
-  useDetailCardScope({ ...card, obscured: false })
-  // Why: the card is a readout; opening it must keep the draft's keyboard up.
-  const keepsKeyboard = useKeyboardPersistingTaps('always')
-  const { openerRef } = card
+  // The composer rides the keyboard and grows with the draft; the open card moves with it.
+  const card = useAnchoredDetailCard({
+    geometry: '',
+    follow: `${keyboard}:${anchor.height}`,
+    obscured,
+    measure
+  })
+  useDetailCardScope({ ...card, obscured })
+  // Why: the card is a readout; opening or touching it must keep the draft's keyboard up.
+  const openerKeepsKeyboard = useKeyboardPersistingTaps('always')
+  const cardKeepsKeyboard = useKeyboardPersistingTaps('always')
+  const { openerRef, layerRef } = card
   const attachOpener = useCallback(
     (view: View | null) => {
       openerRef.current = view
-      keepsKeyboard(view)
+      openerKeepsKeyboard(view)
     },
-    [openerRef, keepsKeyboard]
+    [openerRef, openerKeepsKeyboard]
+  )
+  const attachLayer = useCallback(
+    (view: View | null) => {
+      layerRef.current = view
+      cardKeepsKeyboard(view)
+    },
+    [layerRef, cardKeepsKeyboard]
   )
   const filled = Math.min(Math.max(usage.percentage, 0), 100)
   const critical = usage.percentage >= CONTEXT_USAGE_CRITICAL_PERCENTAGE
@@ -124,7 +161,7 @@ export function MobileNativeChatContextUsageRing({
       <DetailCardFocusBoundary refs={card.boundaryRefs} index={1} active={card.active} />
       <DetailCardLayer>
         <View
-          ref={card.layerRef}
+          ref={attachLayer}
           collapsable={false}
           pointerEvents="box-none"
           onLayout={card.onLayout}
@@ -138,7 +175,7 @@ export function MobileNativeChatContextUsageRing({
               contentRef={card.contentRef}
               boundaryRefs={card.boundaryRefs}
               active={card.active}
-              obscured={false}
+              obscured={obscured}
               onSettled={card.onSettled}
               title={t('chat.contextUsage.title', 'Context')}
               titleTrailing={`${used}/${window}`}

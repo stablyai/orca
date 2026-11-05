@@ -41,7 +41,7 @@ import {
 } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
 import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
-import { MobileNativeChatContextUsageRing } from './MobileNativeChatContextUsageRing'
+import { useMobileNativeChatContextRing } from './MobileNativeChatContextUsageRing'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import {
   MobileNativeChatComposerMic,
@@ -146,7 +146,6 @@ export function MobileNativeChatComposer({
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef
-  const barRef = useRef<View>(null)
   const [focused, setFocused] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
   const [picker, setPicker] = useState<MobileNativeChatPickerPresentation | null>(null)
@@ -189,6 +188,7 @@ export function MobileNativeChatComposer({
     onSlashMenuDemand: structured?.onSlashMenuDemand,
     focusField: () => fieldRef.current?.focus()
   })
+  const contextRing = useMobileNativeChatContextRing(contextUsage, menu.rows.length > 0)
   const dictation = useMobileNativeChatComposerDictation({
     draftScopeKey,
     value,
@@ -287,7 +287,7 @@ export function MobileNativeChatComposer({
         />
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
-        <View ref={barRef} style={styles.bar} testID="native-chat-composer">
+        <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}
@@ -366,9 +366,7 @@ export function MobileNativeChatComposer({
               />
             ) : null}
             <View style={inputStyles.actionSpacer} />
-            {contextUsage ? (
-              <MobileNativeChatContextUsageRing usage={contextUsage} composerRef={barRef} />
-            ) : null}
+            {contextRing.ring}
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 onMicPress={onMicPress}
