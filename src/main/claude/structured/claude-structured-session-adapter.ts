@@ -45,6 +45,7 @@ import {
 } from './journal/claude-structured-prompt-ownership'
 import { claudePromptCancelRoute } from './journal/claude-structured-prompt-replies'
 import { claudeForkForRewind } from '../claude-rewind-fork'
+import { copyClaudeConversation } from '../claude-conversation-copy'
 import { ClaudeConversationNaming } from '../claude-conversation-naming'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
@@ -156,6 +157,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   forkForRewind = claudeForkForRewind
+  copyConversation = copyClaudeConversation
   stopProviderNaming = (): void => this.naming?.stop()
   nameProviderConversation: StructuredAgentSessionAdapter['nameProviderConversation'] = (input) =>
     this.naming?.accept(input)
@@ -194,9 +196,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     const state = session?.backgroundTasks.state
     return session && (state ? { ...state, supportsTaskStop: true } : null)
   }
-  backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
-    sessionId
-  ) =>
+  backgroundTaskStops = (sessionId: string) =>
     this.sessions.has(sessionId) ? { supportsTaskStop: true, supportsStopAll: true } : undefined
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.commands.commands

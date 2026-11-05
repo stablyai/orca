@@ -1,3 +1,4 @@
+import { isClaudeTranscriptRootPrompt } from './claude-transcript-root-prompt'
 import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
@@ -41,7 +42,6 @@ import {
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { createClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from './claude-session-state-turn-over'
-import { claudeEnvelopeStopHookFeedbackRow } from './claude-stop-hook-feedback'
 
 /** An isolated projection of final source items, compared with saved historical content. */
 export function createClaudeTranscriptImportPlan(input: {
@@ -195,11 +195,7 @@ export function createClaudeTranscriptImportPlan(input: {
           matchSource([claudeToolIdentity(envelope.sessionId, result.toolUseId)])
         }
       }
-      const prompt =
-        queued ||
-        (envelope?.role === 'user' &&
-          !claudeEnvelopeStopHookFeedbackRow(envelope) &&
-          envelope.content.some((part) => claudeRecord(part)?.type !== 'tool_result'))
+      const prompt = queued || isClaudeTranscriptRootPrompt(row)
       const decoded = prompt
         ? decodeClaudeTranscriptLine(JSON.stringify(row), `${input.providerSessionId}:${uuid}`)
         : null

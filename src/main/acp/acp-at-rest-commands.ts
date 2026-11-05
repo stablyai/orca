@@ -1,3 +1,4 @@
+import { observeAcpForkSupport } from './acp-fork-support'
 import { join } from 'node:path'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
@@ -212,7 +213,9 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                 }
               })
               try {
-                options.adoptInitialize(await awaitAcpDiscovery(connection.initialize(), signal))
+                const initialized = await awaitAcpDiscovery(connection.initialize(), signal)
+                observeAcpForkSupport(spec.agent, initialized)
+                options.adoptInitialize(initialized)
                 checkSession()
                 check()
                 const started = await awaitAcpDiscovery(

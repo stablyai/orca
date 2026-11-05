@@ -1,84 +1,107 @@
-import type { SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
-import { createReadStream } from 'node:fs'
+import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
+import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { Worker } from 'node:worker_threads'
 import type { AgentSessionRewindFork } from '../../shared/agent-session/lifecycle/agent-session-rewind'
 import {
-  durableWriteTempPath,
-  renameDurable,
-  writeTempFileDurable
-} from '../filesystem/durable-file-write'
-import { splitTranscriptStreamLines } from '../native-chat/transcript-stream-lines'
-import { loadClaudeAgentSdk } from './claude-stream-json-connection'
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../worker-threads/worker-thread-entry-path'
+import type { ClaudeConversationForkWork } from './claude-conversation-fork-worker-entry'
 
-function isTranscriptEntry(value: unknown): value is SessionStoreEntry {
-  return (
-    typeof value === 'object' && value !== null && 'type' in value && typeof value.type === 'string'
+type ConversationCopy = { sessionId: string; resumeCursor: string; filePath: string }
+
+/** The native materializer is CPU/memory heavy even when reached through rewind. */
+export async function materializeClaudeConversationTranscript(input: {
+  sourcePath: string
+  sourceSessionId: string
+  throughEntryId: string
+  destinationDirectory?: string
+  title?: string
+  signal?: AbortSignal
+}): Promise<ConversationCopy | null> {
+  input.signal?.throwIfAborted()
+  const destinationDirectory = input.destinationDirectory ?? dirname(input.sourcePath)
+  const temporaryPath = join(destinationDirectory, `.fork-${randomUUID()}.tmp`)
+  const compiled = resolveWorkerThreadEntryPath(
+    currentWorkerEntryLayout(import.meta.dirname),
+    'claude-conversation-fork-worker-entry.js'
   )
-}
-
-function parseTranscriptEntry(line: string): SessionStoreEntry | undefined {
+  const entry = existsSync(compiled)
+    ? compiled
+    : new URL('./claude-conversation-fork-worker-entry.ts', import.meta.url)
+  const signal = AbortSignal.any([
+    AbortSignal.timeout(60_000),
+    ...(input.signal ? [input.signal] : [])
+  ])
+  const workerData: ClaudeConversationForkWork = {
+    sourcePath: input.sourcePath,
+    sourceSessionId: input.sourceSessionId,
+    throughEntryId: input.throughEntryId,
+    title: input.title,
+    destinationDirectory,
+    temporaryPath
+  }
+  const worker = new Worker(entry, { workerData, resourceLimits: { maxOldGenerationSizeMb: 512 } })
+  let abort: () => void = () => undefined
   try {
-    const entry: unknown = JSON.parse(line)
-    return isTranscriptEntry(entry) ? entry : undefined
-  } catch {
-    return undefined
+    return await new Promise<ConversationCopy | null>((resolve, reject) => {
+      abort = () =>
+        reject(
+          new AgentConversationCopyError('Claude could not finish copying this chat. Try again.')
+        )
+      signal.addEventListener('abort', abort, { once: true })
+      worker.once('message', (message: { result?: ConversationCopy | null; error?: string }) => {
+        if (message.error) {
+          reject(new AgentConversationCopyError('Claude could not copy this chat. Try again.'))
+        } else {
+          resolve(message.result ?? null)
+        }
+      })
+      worker.once('error', (error) =>
+        reject(
+          new AgentConversationCopyError(
+            error.message.includes('memory')
+              ? 'Claude could not copy this chat because it is too large. Fork an earlier response.'
+              : 'Claude could not copy this chat. Try again.',
+            { cause: error }
+          )
+        )
+      )
+      worker.once('exit', (code) => {
+        if (code !== 0) {
+          reject(new AgentConversationCopyError('Claude could not copy this chat. Try again.'))
+        }
+      })
+      if (signal.aborted) {
+        abort()
+      }
+    })
+  } finally {
+    signal.removeEventListener('abort', abort)
+    await worker.terminate()
+    await rm(temporaryPath, { force: true })
   }
 }
 
-/** Use Claude's fork implementation for branch selection, compaction and UUID remapping. */
 export async function materializeClaudeRewindTranscript(
   sourcePath: string,
-  fork: AgentSessionRewindFork
+  fork: AgentSessionRewindFork,
+  destinationDirectory?: string
 ): Promise<AgentSessionRewindFork> {
   if (!fork.throughEntryId) {
     return { ...fork, materialized: true }
   }
-  const { forkSession } = await loadClaudeAgentSdk()
-  let resumeCursor: string | undefined
-  const result = await forkSession(fork.sourceSessionId, {
-    upToMessageId: fork.throughEntryId,
-    // Pin reads and writes to the resolved account without mutating process.env.
-    sessionStore: {
-      load: async () => {
-        const entries: SessionStoreEntry[] = []
-        for await (const { line } of splitTranscriptStreamLines(createReadStream(sourcePath))) {
-          if (!line.trim()) {
-            continue
-          }
-          const entry = parseTranscriptEntry(line)
-          // Tolerate crash-torn lines like the SDK reader.
-          if (entry) {
-            entries.push(entry)
-          }
-        }
-        return entries
-      },
-      append: async (key, entries) => {
-        resumeCursor = entries.findLast(
-          (entry) => entry.type === 'assistant' || entry.type === 'user'
-        )?.uuid
-        if (!resumeCursor) {
-          // Metadata alone uses the same fresh launch as a rewind with no parent.
-          return
-        }
-        const destination = join(dirname(sourcePath), `${key.sessionId}.jsonl`)
-        const temporary = durableWriteTempPath(destination)
-        try {
-          await writeTempFileDurable(
-            temporary,
-            `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`,
-            0o600
-          )
-          await renameDurable(temporary, destination)
-        } finally {
-          await rm(temporary, { force: true })
-        }
-      }
-    }
+  const copy = await materializeClaudeConversationTranscript({
+    sourcePath,
+    sourceSessionId: fork.sourceSessionId,
+    throughEntryId: fork.throughEntryId,
+    destinationDirectory
   })
-  return resumeCursor
-    ? { ...fork, sessionId: result.sessionId, resumeCursor, materialized: true }
+  return copy
+    ? { ...fork, sessionId: copy.sessionId, resumeCursor: copy.resumeCursor, materialized: true }
     : {
         sessionId: fork.sessionId,
         sourceSessionId: fork.sourceSessionId,

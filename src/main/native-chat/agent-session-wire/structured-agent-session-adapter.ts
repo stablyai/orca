@@ -328,6 +328,16 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   }): Promise<string | null>
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
   copyConversation?(input: {
+    record?: AgentSessionRecord
+    checkpoint?: {
+      selectedItemId: string
+      settled: boolean
+      beforeMessage?: { sessionId: string; uuid: string }
+      throughMessage?: { sessionId: string; uuid: string }
+      turnId?: string
+    }
+    title?: string
+    signal?: AbortSignal
     identity: AgentSessionJournalIdentity
     providerSessionId: string
     accountHome: AgentSessionAccountHome
