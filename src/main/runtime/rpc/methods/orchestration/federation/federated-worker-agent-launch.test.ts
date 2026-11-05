@@ -68,7 +68,11 @@ const PARAMS = FederationAttachStartParams.parse({
   agent: 'claude'
 })
 
-function launch(f: ReturnType<typeof fakes>, worktree?: { id: string }) {
+function launch(
+  f: ReturnType<typeof fakes>,
+  worktree?: { id: string },
+  params: typeof PARAMS = PARAMS
+) {
   const effects: FederationEffect[] = []
   const setups: WorkerSetupReceipt[] = []
   const stagesSeen: string[] = []
@@ -77,7 +81,7 @@ function launch(f: ReturnType<typeof fakes>, worktree?: { id: string }) {
     runtime: f.runtime as unknown as OrcaRuntimeService,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch records only attachment stages.
     db: f.db as unknown as OrchestrationDb,
-    params: PARAMS,
+    params,
     agent: 'claude',
     launchPreferences: { model: 'opus' },
     ...(worktree ? { worktree } : {}),
@@ -106,5 +110,26 @@ describe('a federated worker through the launch executor', () => {
       }
     ])
     expect(f.runtime.createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('nests a new-child worktree under the coordinator’s workspace on its machine', async () => {
+    const f = fakes({ startupTerminal: { handle: 'term_agent' } })
+    const crossStoreParent = {
+      installationId: 'install-home',
+      workspaceKey: 'worktree:home-repo::/home/wt' as const,
+      instanceId: 'instance-home'
+    }
+    const run = launch(f, undefined, { ...PARAMS, crossStoreParent })
+
+    await run.done
+    expect(f.runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ lineage: { crossStoreParent } })
+    )
+    expect(run.effects[0]).toEqual({
+      kind: 'worktree',
+      action: 'created_child',
+      id: 'repo::remote-wt',
+      name: undefined
+    })
   })
 })
