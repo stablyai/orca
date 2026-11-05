@@ -10,7 +10,7 @@ import type {
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { readStructuredSessionRecovery } from './structured-agent-session-recovery-read'
-import * as recoveryOptions from '../../runtime/structured-session-recovery-options'
+import * as recoveryOptions from '../../runtime/agent-session/lifecycle/structured-session-recovery-options'
 
 it('does no discovery on ordinary reads and drops preparation superseded by a send', async () => {
   const prepare = vi.spyOn(recoveryOptions, 'structuredSessionRecoveryOptions')

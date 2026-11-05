@@ -1,18 +1,20 @@
-import './orca-runtime-test-lifecycle.spec'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, electronMocks } from './orca-runtime-test-mocks.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import { electronMocks } from './orca-runtime-test-mocks/setup.spec'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   store
-} from './orca-runtime-test-fixtures.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type {
   BrowserTabInfo,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from './browser/client-pages/runtime-browser-page-registry'
 
 const rendererTab: RuntimeMobileSessionBrowserTab = {
   type: 'browser',

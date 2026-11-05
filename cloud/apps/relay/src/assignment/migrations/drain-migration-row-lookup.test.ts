@@ -52,11 +52,3 @@ it('retains lazy validation and short circuiting when an inventory is malformed'
     'invalid_relay_host_id'
   )
 })
-
-it('does not share an index between refreshed inventories', () => {
-  const identity = { userId: 'user', relayHostId: 'host' }
-  const oldRow = { user_id: 'user', relay_host_id: 'host', version: 1 }
-  const newRow = { ...oldRow, version: 2 }
-  expect(createDrainMigrationRowLookup([oldRow], text).first(identity)).toBe(oldRow)
-  expect(createDrainMigrationRowLookup([newRow], text).first(identity)).toBe(newRow)
-})

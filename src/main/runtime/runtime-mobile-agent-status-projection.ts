@@ -10,9 +10,9 @@ import {
 } from '../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import { terminalTitleBlocksExplicitAgentStatus } from './runtime-worktree-status-projection'
+import { terminalTitleBlocksExplicitAgentStatus } from './workspaces/process-listing/runtime-worktree-status-projection'
 import type { HookLiveAgentRow } from './runtime-terminal-contracts'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 
 type HookTurnFacts = Pick<
   AgentStatusEntry,

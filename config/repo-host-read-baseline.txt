@@ -39,9 +39,9 @@
 1 src/main/workspaces/catalog/provisioned-root-ssh-adoption.ts
 2 src/main/workspaces/catalog/repo-git-username-enrichment.ts
 1 src/main/runtime/rpc/methods/agent-launch-worktree-creation.ts
-1 src/main/runtime/runtime-managed-worktree-queries.ts
+1 src/main/runtime/workspaces/catalog/runtime-managed-worktree-queries.ts
 3 src/main/runtime/runtime-reference-agents.ts
-1 src/main/runtime/runtime-worktree-selection.ts
+1 src/main/runtime/workspaces/catalog/runtime-worktree-selection.ts
 1 src/main/ssh/targets/ssh-target-orcad-claims.ts
 1 src/main/workspaces/space-analysis/workspace-space-worktree-row.ts
 1 src/main/workspaces/creation/worktree-create-base-prefetch.ts

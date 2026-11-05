@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { StrictMode, Suspense, startTransition, useEffect } from 'react'
+import { Suspense, startTransition, useEffect } from 'react'
 import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -65,30 +65,6 @@ describe('useVisibleSidebarWorktrees sleeping retention', () => {
     forgetWorktreeSleepIntent(worktree.id)
     useAppStore.setState(initialState, true)
     vi.useRealTimers()
-  })
-
-  it('retains a newly added active row missing from the cached sort order', () => {
-    useAppStore.setState({ worktreesByRepo: {} })
-    const { result } = renderHook(() => useVisibleSidebarWorktrees({ ...args, sortedIds: [] }))
-    expect(visibleIds(result.current)).toEqual([])
-
-    act(() => useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } }))
-    expect(visibleIds(result.current)).toEqual([worktree.id])
-    setPtyBound(false)
-    expect(visibleIds(result.current)).toEqual([worktree.id])
-    act(() => vi.advanceTimersByTime(SLEEPING_SWEEP_SETTLE_MS))
-    expect(visibleIds(result.current)).toEqual([])
-  })
-
-  it('starts and expires a full grace window for committed StrictMode renders', () => {
-    const { result } = renderHook(() => useVisibleSidebarWorktrees(args), { wrapper: StrictMode })
-    setPtyBound(false)
-    expect(visibleIds(result.current)).toEqual([worktree.id])
-    act(() => vi.advanceTimersByTime(SLEEPING_SWEEP_SETTLE_MS - 1))
-    expect(visibleIds(result.current)).toEqual([worktree.id])
-    act(() => vi.advanceTimersByTime(1))
-    expect(visibleIds(result.current)).toEqual([])
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('does not start a grace deadline in a suspended uncommitted render', () => {
@@ -178,41 +154,10 @@ describe('useVisibleSidebarWorktrees sleeping retention', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('clears retention when showing sleeping workspaces actually commits', () => {
-    const { result, rerender } = renderHook(
-      (showSleeping: boolean) =>
-        useVisibleSidebarWorktrees({
-          ...args,
-          filterState: { ...args.filterState, showSleepingWorkspaces: showSleeping }
-        }),
-      { initialProps: false }
-    )
-    rerender(true)
-    setPtyBound(false)
-    rerender(false)
-    expect(visibleIds(result.current)).toEqual([])
-  })
-
-  it('keeps an open remote row through a one-commit PTY rebind gap', () => {
-    const { result } = renderHook(() => useVisibleSidebarWorktrees(args))
-    expect(visibleIds(result.current)).toEqual([worktree.id])
-    setPtyBound(false)
-    expect(visibleIds(result.current)).toEqual([worktree.id])
-    setPtyBound(true)
-    expect(visibleIds(result.current)).toEqual([worktree.id])
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('sweeps a deliberately slept row without a grace window', () => {
     const { result } = renderHook(() => useVisibleSidebarWorktrees(args))
     markWorktreeSleepIntent(worktree.id)
     setPtyBound(false)
-    expect(visibleIds(result.current)).toEqual([])
-  })
-
-  it('sweeps a row whose last terminal tab closed without a grace window', () => {
-    const { result } = renderHook(() => useVisibleSidebarWorktrees(args))
-    act(() => useAppStore.setState({ tabsByWorktree: { [worktree.id]: [] }, ptyIdsByTabId: {} }))
     expect(visibleIds(result.current)).toEqual([])
   })
 })

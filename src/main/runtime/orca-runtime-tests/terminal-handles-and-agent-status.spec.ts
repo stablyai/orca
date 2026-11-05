@@ -1,11 +1,10 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { registerLivePty } from '../bind-first-pane.test-fixture'
-import {
-  OrcaRuntimeService,
-  advertisedUrlWatcher,
-  getDefaultWorkspaceSession
-} from '../orca-runtime-test-mocks.spec'
+import { registerLivePty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { advertisedUrlWatcher } from '../../ports/advertised-url-watcher'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -14,7 +13,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('never lets an old handle adopt a replacement PTY incarnation', async () => {

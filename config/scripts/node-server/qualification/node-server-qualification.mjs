@@ -74,6 +74,7 @@ export function nodeServerQualification(changedFiles, scope, { fullQualification
       file === 'src/shared/node-runtime-pin.ts' ||
       file === '.github/workflows/node-server-tests.yml' ||
       file.startsWith('config/scripts/node-server-') ||
+      file.startsWith('config/scripts/ci/unit-selection/node-server-') ||
       file.startsWith('config/scripts/node-server/qualification/node-server-') ||
       /(?:^|[/.-])(?:bun|prebuilds?)(?:[/.-]|$)/i.test(file)
     ) {

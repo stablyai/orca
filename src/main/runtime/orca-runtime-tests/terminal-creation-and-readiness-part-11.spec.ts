@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  HeadlessEmulator,
-  MAX_OSC_TITLE_CHARS,
-  OrcaRuntimeService,
-  RecentPtyOutputBuffer,
-  appendNormalizedToTailBuffer,
-  buildPreview
-} from '../orca-runtime-test-mocks.spec'
-import { store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
+import { MAX_OSC_TITLE_CHARS } from '../../../shared/agent-status/title/osc-title-extraction'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
+import { appendNormalizedToTailBuffer } from '../terminal/output/tail/terminal-tail-buffer'
+import { buildPreview } from '../terminal/output/tail/terminal-tail-state'
+import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('trims oversized terminal output bursts without per-line array shifts', async () => {

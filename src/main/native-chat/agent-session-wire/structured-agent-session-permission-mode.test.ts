@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionRuntimeDeps } from '../../runtime/structured-agent-session-runtime-contract'
+import type { StructuredAgentSessionRuntimeDeps } from '../../runtime/agent-session/installation/structured-agent-session-runtime-contract'
 import { admitStructuredAgentSessionInput } from './structured-agent-session-input-admission'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
@@ -18,8 +18,8 @@ import {
   HOST_TEST_THREAD
 } from './structured-agent-session-host-test-data'
 import * as loginShell from '../../startup/login-shell-environment'
-import { createStructuredAgentEnvironmentResolvers } from '../../runtime/structured-agent-shell-environment'
-import { codexModelCatalogDiscovery } from '../../runtime/structured-agent-model-catalog-discovery'
+import { createStructuredAgentEnvironmentResolvers } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
+import { codexModelCatalogDiscovery } from '../../runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery'
 import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'
 import {

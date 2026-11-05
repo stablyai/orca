@@ -4,9 +4,9 @@ import type { OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs as Reconc
 import type { BrowserWindow } from 'electron'
 import { RuntimeSessionTabsInventoryPublication } from './session-tabs-inventory-publication'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { buildHeadlessMobileSessionTerminalTabs } from '../mobile-session-terminal-projection'
+import { buildHeadlessMobileSessionTerminalTabs } from '../terminal/surface/mobile-session-terminal-projection'
 import { buildHeadlessMobileSessionEditorTabs } from '../mobile-session-editor-projection'
 import type {
   RuntimeMobileSessionSnapshotTab,
@@ -20,7 +20,7 @@ import {
   getHeadlessMobileSessionGroupId,
   pickHeadlessActiveTerminalTab,
   pickRestoredActiveGroupId
-} from '../mobile-session-layout-projection'
+} from '../terminal/surface/mobile-session-layout-projection'
 import {
   appendChatTabOrder,
   keepSnapshotChatTabs,

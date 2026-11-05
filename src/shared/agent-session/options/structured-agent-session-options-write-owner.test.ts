@@ -45,6 +45,7 @@ function harness(agent = 'codex') {
       snapshot: structuredAgentSessionShownSnapshot(view),
       ready: true,
       providerStarting: starting,
+      existingChat: true,
       isCurrentContext: () => true,
       flush: () => controller.flush(sends),
       capturePresentation: () => {

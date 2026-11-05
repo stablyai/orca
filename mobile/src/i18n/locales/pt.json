@@ -379,7 +379,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Padrão",
-      "notReportedMarker": "Não informado"
+      "notReportedMarker": "Não informado",
+      "moreModels": "Mais modelos",
+      "fewerModels": "Menos modelos"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Enviado ao agente — não confirmado"

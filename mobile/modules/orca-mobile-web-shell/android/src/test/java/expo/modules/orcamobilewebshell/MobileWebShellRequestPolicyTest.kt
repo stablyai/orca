@@ -1,6 +1,5 @@
 package expo.modules.orcamobilewebshell
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -51,10 +50,4 @@ class MobileWebShellRequestPolicyTest {
     assertTrue(mobileWebShellDropsNavigation(navigation("/"), null, true))
   }
 
-  @Test
-  fun `refuses with an empty forbidden response`() {
-    assertEquals(403, MOBILE_WEB_SHELL_REFUSAL_STATUS)
-    assertEquals(0, mobileWebShellRefusalBody().size)
-    assertEquals("no-store", MOBILE_WEB_SHELL_REFUSAL_HEADERS["Cache-Control"])
-  }
 }

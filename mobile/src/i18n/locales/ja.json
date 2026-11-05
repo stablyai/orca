@@ -375,7 +375,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "既定",
-      "notReportedMarker": "未報告"
+      "notReportedMarker": "未報告",
+      "moreModels": "その他のモデル",
+      "fewerModels": "表示を減らす"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Agent に送信済み — 未確認"

@@ -56,6 +56,11 @@ export type BrowserPasswordGuestPageForms = {
   forms: BrowserPasswordFormSummary[]
 }
 
+export type BrowserPasswordGuestEnable = {
+  /** Only a document a login navigated to reports page forms; elsewhere main ignores them. */
+  reportPageForms: boolean
+}
+
 /** Values the user typed (trusted input only), keyed to the form they came from. */
 export type BrowserPasswordGuestCapture = BrowserPasswordFormSummary & {
   username: string | null

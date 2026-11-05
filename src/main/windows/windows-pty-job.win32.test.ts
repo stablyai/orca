@@ -78,7 +78,16 @@ describeOnWindows('ConPTY job ownership', () => {
   it('keeps the native table intact while shell cleanup overlaps new terminals', async () => {
     const result = await runProcess({
       program: process.execPath,
-      args: [join(process.cwd(), 'config', 'scripts', 'windows-pty-table-stress.cjs')],
+      args: [
+        join(
+          process.cwd(),
+          'config',
+          'scripts',
+          'diagnostics',
+          'windows-pty',
+          'windows-pty-table-stress.cjs'
+        )
+      ],
       env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
       timeoutMs: 90_000
     })

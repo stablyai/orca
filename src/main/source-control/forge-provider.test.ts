@@ -86,12 +86,11 @@ vi.mock('../gitea/pull-request-creation', () => ({
   createGiteaPullRequest: createGiteaPullRequestMock
 }))
 
+import { FORGE_PROVIDERS, getForgeProviderById } from './forge-provider'
 import {
-  FORGE_PROVIDERS,
   detectHostedReviewProvider,
-  getForgeProviderById,
   getForgeProviderForRepository
-} from './forge-provider'
+} from './forge-provider-detection'
 
 import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
 

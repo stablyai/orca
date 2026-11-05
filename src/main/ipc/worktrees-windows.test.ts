@@ -140,6 +140,10 @@ vi.mock('../github/client', () => ({
   getPRForBranch: getPRForBranchMock,
   createGitHubPullRequest: createGitHubPullRequestMock
 }))
+vi.mock('../github/client/lookup/get-pr-for-branch', () => ({
+  getPRForBranch: getPRForBranchMock,
+  createGitHubPullRequest: createGitHubPullRequestMock
+}))
 
 vi.mock('../workspace-hooks/hooks', () => ({
   getEffectiveHooks: getEffectiveHooksMock,
@@ -159,7 +163,7 @@ vi.mock('../workspace-hooks/effective-hook-config', () => ({
   shouldRunSetupForCreate: shouldRunSetupForCreateMock
 }))
 
-vi.mock('../runtime/worktree-teardown', () => ({
+vi.mock('../runtime/workspaces/removal/worktree-teardown', () => ({
   killAllProcessesForWorktree: killAllProcessesForWorktreeMock
 }))
 

@@ -375,7 +375,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "默认",
-      "notReportedMarker": "未上报"
+      "notReportedMarker": "未上报",
+      "moreModels": "更多模型",
+      "fewerModels": "较少模型"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "已发送给智能体 — 尚未确认"

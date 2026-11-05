@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { withPlatform } from './orca-runtime-test-fixtures.spec'
-import { createHydrationRuntime, PTY_ID } from './headless-hydration-ownership-test-fixture'
+import { withPlatform } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import {
+  createHydrationRuntime,
+  PTY_ID
+} from './orca-runtime-tests/headless-hydration-ownership-test-fixture'
 
 const HISTORY = Array.from({ length: 60 }, (_, i) => `H${i}`).join('\r\n')
 
