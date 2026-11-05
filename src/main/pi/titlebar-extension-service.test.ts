@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 import type * as osModule from 'node:os'
 import type * as fsModule from 'node:fs'
 import { join } from 'node:path'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 const userDataDir = mkdtempSync(join(tmpdir(), 'orca-pi-test-userdata-'))
 

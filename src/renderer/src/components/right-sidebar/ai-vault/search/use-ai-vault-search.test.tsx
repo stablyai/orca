@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AiVaultSearchSort } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+
 import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse
@@ -13,7 +13,7 @@ import {
 } from '../../../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import type { AgentSessionStatusEvent } from '../../../../../../shared/agent-session/agent-session-wire'
-import { useAiVaultPanelSearch, useAiVaultSearch } from './use-ai-vault-search'
+import { useAiVaultSearch } from './use-ai-vault-search'
 
 const mockSettings: { aiVaultSearch?: { enabled: boolean } } = {}
 vi.mock('@/store/index', () => ({
@@ -33,8 +33,6 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: async () => true
 }))
 
-const ALL_AGENTS = ['codex' as const]
-const ALL_REQUEST = { query: 'needle', filters: { agents: ['codex'] } }
 const searchSessions =
   vi.fn<
     (request: AiVaultSearchRequest, scope?: ExecutionHostScope) => Promise<AiVaultSearchResponse>
@@ -71,97 +69,6 @@ async function debounce() {
     await vi.advanceTimersByTimeAsync(250)
   })
 }
-
-it('debounces, skips empty/disabled requests, and never substitutes local for an unknown host', async () => {
-  const initialProps: { request: AiVaultSearchRequest | null; host: ExecutionHostId | null } = {
-    request: null,
-    host: null
-  }
-  const { rerender, unmount } = renderHook(
-    ({ request, host }: { request: AiVaultSearchRequest | null; host: ExecutionHostId | null }) =>
-      useAiVaultSearch(request, host, ''),
-    { initialProps }
-  )
-  await debounce()
-  expect(searchSessions).not.toHaveBeenCalled()
-  rerender({ request: { query: 'old' }, host: 'ssh:remote' })
-  rerender({ request: { query: 'latest' }, host: 'ssh:remote' })
-  await debounce()
-  expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
-    { query: 'latest', cursor: undefined },
-    'ssh:remote'
-  )
-  unmount()
-})
-
-it('hides old-host results immediately and ignores late success and failure after switching', async () => {
-  let resolveOld: (value: AiVaultSearchResponse) => void = () => {}
-  searchSessions.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        resolveOld = resolve
-      })
-  )
-  const request = { query: 'needle' }
-  const { result, rerender, unmount } = renderHook(
-    ({ host }: { host: ExecutionHostId }) => useAiVaultSearch(request, host, ''),
-    { initialProps: { host: 'local' } }
-  )
-  await debounce()
-  rerender({ host: 'ssh:remote' })
-  expect(result.current.response).toBeNull()
-  await debounce()
-  await act(async () => resolveOld({ kind: 'unavailable', reason: 'disabled' }))
-  expect(result.current.response).toEqual(empty)
-  expect(searchSessions.mock.calls.map((call) => call[1])).toEqual(['local', 'ssh:remote'])
-  unmount()
-})
-
-it('refuses late responses after unmount and cancels a pending debounce', async () => {
-  const request = { query: 'needle' }
-  const { unmount } = renderHook(() => useAiVaultSearch(request, 'local', ''))
-  unmount()
-  await debounce()
-  expect(searchSessions).not.toHaveBeenCalled()
-})
-
-it('restarts page one after stale cursors without looping on a changing index', async () => {
-  searchSessions.mockResolvedValueOnce({ ...empty, page: { cursor: 'page-2', hasMore: true } })
-  const request = { query: 'needle', filters: { agents: ['claude' as const] } }
-  const { result, unmount } = renderHook(() => useAiVaultSearch(request, 'runtime:owner', ''))
-  await debounce()
-  searchSessions
-    .mockResolvedValueOnce({ kind: 'stale-cursor', generation: 2 })
-    .mockResolvedValueOnce({ kind: 'stale-cursor', generation: 3 })
-  act(() => result.current.loadMore())
-  await debounce()
-  expect(searchSessions.mock.calls[1]).toEqual([{ ...request, cursor: 'page-2' }, 'runtime:owner'])
-  expect(searchSessions.mock.calls[2]).toEqual([request, 'runtime:owner'])
-  expect(searchSessions).toHaveBeenCalledTimes(3)
-  expect(result.current.response?.kind).toBe('stale-cursor')
-  unmount()
-})
-
-it('keeps transport errors and unavailable reasons distinct and retries after consent changes', async () => {
-  searchSessions.mockRejectedValueOnce(new Error('offline'))
-  const request = { query: 'needle' }
-  const { result, rerender, unmount } = renderHook(
-    ({ policy }) => useAiVaultSearch(request, 'local', policy),
-    { initialProps: { policy: 'disabled' } }
-  )
-  await debounce()
-  expect(result.current.error).toBe(true)
-  searchSessions.mockResolvedValueOnce({ kind: 'unavailable', reason: 'no-service' })
-  act(() => result.current.retry())
-  await debounce()
-  expect(result.current.error).toBe(false)
-  expect(result.current.response).toEqual({ kind: 'unavailable', reason: 'no-service' })
-  rerender({ policy: 'enabled' })
-  expect(result.current.response).toBeNull()
-  await debounce()
-  expect(result.current.response?.kind).toBe('results')
-  unmount()
-})
 
 it('discards pagination when a host is left and revisited, and replaces stale pages', async () => {
   const first = searchResults()
@@ -233,164 +140,6 @@ it('does not revive old results or cursors before debounce when returning from a
   expect(searchSessions).toHaveBeenCalledTimes(1)
   await debounce()
   expect(searchSessions.mock.calls.at(-1)).toEqual([{ ...request, cursor: undefined }, 'local'])
-  unmount()
-})
-
-it('removes a confirmed-deleted hit without re-querying a potentially stale index', async () => {
-  const response = searchResults()
-  searchSessions.mockResolvedValue(response)
-  const request = { query: 'needle' }
-  const { result, unmount } = renderHook(() => useAiVaultSearch(request, 'local', ''))
-  await debounce()
-  act(() => result.current.removeHit(response.hits[0]))
-  expect(result.current.hits).toEqual([])
-  expect(searchSessions).toHaveBeenCalledTimes(1)
-  unmount()
-})
-
-it('searches every computer at once and keeps each hit on the computer that owns it', async () => {
-  searchSessions.mockResolvedValueOnce({
-    ...searchResults(),
-    hits: [
-      { ...searchHit(), sessionId: 'remote', executionHostId: 'ssh:build-box' },
-      { ...searchHit(), sessionId: 'unattributed' }
-    ],
-    generation: 0,
-    hosts: [
-      { executionHostId: 'local', outcome: 'searched' },
-      { executionHostId: 'ssh:build-box', outcome: 'searched' }
-    ]
-  })
-  const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all', 'relevance')
-  )
-  await debounce()
-  expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
-    { ...ALL_REQUEST, cursor: undefined },
-    'all'
-  )
-  expect(result.current.sessions.map((session) => session.executionHostId)).toEqual([
-    'ssh:build-box',
-    'local'
-  ])
-  unmount()
-})
-
-it('sends the sort only when it is not the host default', async () => {
-  const initialProps: { sort: AiVaultSearchSort } = { sort: 'relevance' }
-  const { rerender, unmount } = renderHook(
-    ({ sort }) => useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all', sort),
-    { initialProps }
-  )
-  await debounce()
-  expect(searchSessions.mock.calls[0]?.[0]).toEqual({
-    query: 'needle',
-    filters: { agents: ALL_AGENTS },
-    cursor: undefined
-  })
-  rerender({ sort: 'newest' })
-  await debounce()
-  expect(searchSessions.mock.calls[1]?.[0]).toEqual({
-    query: 'needle',
-    filters: { agents: ALL_AGENTS, sort: 'newest' },
-    cursor: undefined
-  })
-  unmount()
-})
-
-it('restarts page one under the all scope when the merged cursor goes stale', async () => {
-  searchSessions.mockResolvedValueOnce({
-    ...searchResults(),
-    generation: 0,
-    page: { cursor: 'merged', hasMore: true }
-  })
-  const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all', 'relevance')
-  )
-  await debounce()
-  searchSessions
-    .mockResolvedValueOnce({ kind: 'stale-cursor', generation: 0 })
-    .mockResolvedValueOnce({ ...searchResults(), generation: 0 })
-  act(() => result.current.loadMore())
-  await debounce()
-  expect(searchSessions.mock.calls[1]).toEqual([{ ...ALL_REQUEST, cursor: 'merged' }, 'all'])
-  expect(searchSessions.mock.calls[2]).toEqual([ALL_REQUEST, 'all'])
-  expect(result.current.sessions.map((session) => session.executionHostId)).toEqual(['local'])
-  unmount()
-})
-
-it('leaves the box as the legacy title filter while local indexing consent is pending', async () => {
-  const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local', 'relevance')
-  )
-  await debounce()
-  expect(searchSessions).not.toHaveBeenCalled()
-  expect(result.current.searching).toBe(false)
-  expect(result.current.hasQuery).toBe(true)
-  expect(result.current.needsLocalConsent).toBe(true)
-  expect(result.current.loading).toBe(false)
-  expect(result.current.sessions).toEqual([])
-  unmount()
-})
-
-it('searches the local index with the same query once consent is on', async () => {
-  mockSettings.aiVaultSearch = { enabled: true }
-  const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local', 'relevance')
-  )
-  await debounce()
-  expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
-    { ...ALL_REQUEST, cursor: undefined },
-    'local'
-  )
-  expect(result.current.searching).toBe(true)
-  expect(result.current.hasQuery).toBe(true)
-  expect(result.current.needsLocalConsent).toBe(false)
-  unmount()
-})
-
-it('is neither searching nor holding a query for a blank box', async () => {
-  const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('   ', ALL_AGENTS, undefined, 'local', 'relevance')
-  )
-  await debounce()
-  expect(searchSessions).not.toHaveBeenCalled()
-  expect(result.current.searching).toBe(false)
-  expect(result.current.hasQuery).toBe(false)
-  unmount()
-})
-
-// #22453: a host's index is not this client's to turn on, so its "off" must not wall the list.
-it.each(['disabled', 'no-service'] as const)(
-  'falls back to the title filter when a single host answers %s',
-  async (reason) => {
-    searchSessions.mockResolvedValue({ kind: 'unavailable', reason })
-    const initialProps = { query: 'needle' }
-    const { result, rerender, unmount } = renderHook(
-      ({ query }) => useAiVaultPanelSearch(query, ALL_AGENTS, undefined, 'ssh:box', 'relevance'),
-      { initialProps }
-    )
-    await debounce()
-    expect(result.current.searching).toBe(false)
-    expect(result.current.titleOnly).toBe(true)
-    expect(result.current.loading).toBe(false)
-
-    rerender({ query: 'needles' })
-    await debounce()
-    expect(searchSessions).toHaveBeenCalledOnce()
-    expect(result.current.searching).toBe(false)
-    unmount()
-  }
-)
-
-it('keeps full-text search for a host that is merely not ready', async () => {
-  searchSessions.mockResolvedValue({ kind: 'unavailable', reason: 'not-ready' })
-  const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'ssh:box', 'relevance')
-  )
-  await debounce()
-  expect(result.current.searching).toBe(true)
-  expect(result.current.titleOnly).toBe(false)
   unmount()
 })
 

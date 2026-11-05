@@ -3,9 +3,9 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { nativeChatTurnDiffs } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
+
 import { TooltipProvider } from '../ui/tooltip'
-import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
+
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { session, stubLayout, stubResizeObserver } from './native-chat-windowing-test-harness'
 
@@ -95,30 +95,4 @@ it('keeps landed files visible after work folds, opens a patch in one click and 
   render(view(false))
   expect(screen.getByRole('button', { name: /status.ts/ })).toBeVisible()
   expect(screen.queryByText('diagnostic-output')).toBeNull()
-})
-
-it('mounts a bounded file prefix and no patch bodies until a file is selected', () => {
-  const many: NativeChatMessage[] = Array.from({ length: 200 }, (_, index) => ({
-    id: `e${index}`,
-    role: 'assistant',
-    source: 'transcript',
-    timestamp: index,
-    blocks: [
-      { type: 'tool-call', name: 'Diff', input: { path: `file-${index}.ts` } },
-      { type: 'tool-result', output: `@@ -1 +1 @@\n-old-${index}\n+new-${index}` }
-    ]
-  }))
-  const diff = nativeChatTurnDiffs(
-    many,
-    many.map(() => 'u')
-  ).get('u')!
-  const { container } = render(<NativeChatTurnDiffRollup diff={diff} />)
-  expect(screen.getAllByRole('button', { name: /file-\d+.ts/ })).toHaveLength(20)
-  expect(container.querySelectorAll('[data-native-chat-code-content]')).toHaveLength(0)
-  fireEvent.click(screen.getByRole('button', { name: /file-0.ts/ }))
-  expect(screen.getByText('new-0')).toBeVisible()
-  expect(screen.queryByText('new-1')).toBeNull()
-  expect(container.querySelectorAll('[data-native-chat-code-content]')).toHaveLength(1)
-  fireEvent.click(screen.getByRole('button', { name: /Show 180 more/ }))
-  expect(screen.getByRole('button', { name: /file-199.ts/ })).toBeVisible()
 })

@@ -26,7 +26,7 @@ import {
   makeSessionWithBrowserHistory
 } from '../persistence-session-fixtures'
 
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { Store } from '../loading-store/store'
 import { initDataPath } from '../loading-store/user-data-path'
 

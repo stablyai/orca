@@ -3,8 +3,8 @@ import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
-import { createAdapter } from '../daemon/daemon-pty-router-test-fixture'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
+import { createAdapter } from '../daemon/providers/routing/testing/daemon-pty-router-test-fixture'
+import { DaemonPtyRouter } from '../daemon/providers/routing/daemon-pty-router'
 
 function createProvider(sessionIds: string[]): IPtyProvider {
   return {

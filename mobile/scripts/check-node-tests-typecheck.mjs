@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { resolveProjectCompilerInfo } from '../../config/scripts/run-typecheck-projects-in-parallel.mjs'
+import { resolveProjectCompilerInfo } from '../../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
 
 // Phone tests that drive real desktop sources cannot join the RN test program: RN's global timers
 // and Expo's process.env augmentation break the desktop graph. Each source graph emits genuine
