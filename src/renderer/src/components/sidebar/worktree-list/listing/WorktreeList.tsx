@@ -250,6 +250,7 @@ const WorktreeList = React.memo(function WorktreeList({
         // Wake moves status headers; preserve viewport identity across those changes.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
         rows={rowModel.sectionRows}
+        projectCollapseRows={rowModel.rows}
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
         visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}

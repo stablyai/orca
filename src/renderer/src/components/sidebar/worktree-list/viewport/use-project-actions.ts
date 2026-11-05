@@ -11,7 +11,7 @@ export function useRepoHeaderProjectActions(
   const settings = useAppStore((s) => s.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const {
-    rows,
+    projectCollapseRows,
     handleOpenRepoSettings,
     handleOpenWorktreeVisibility,
     handleCreateGroupFromRepo,
@@ -22,10 +22,10 @@ export function useRepoHeaderProjectActions(
   } = props
   // Why a ref: rows rebuild on every collapse; the collapse-all items read them at click time,
   // so the memoized header menus don't re-render each time.
-  const rowsRef = useRef(rows)
+  const rowsRef = useRef(projectCollapseRows)
   useLayoutEffect(() => {
-    rowsRef.current = rows
-  }, [rows])
+    rowsRef.current = projectCollapseRows
+  }, [projectCollapseRows])
   // Why stable: a new object re-renders every project header's menu tree on each workspace switch.
   return useMemo<RepoHeaderProjectActions>(
     () => ({
