@@ -3929,6 +3929,7 @@
       "hostUnreachable": "Bu ana makineye ulaşılamadı. Yeniden bağlanıp mevcut durumunu kontrol etmek için yenileyin.",
       "actionFailed": "Bu işlem ana makinede tamamlanamadı. Yenileyip tekrar deneyin.",
       "dispatched": "Gönderildi",
+      "sent": "Gönderildi",
       "skippedPrecheck": "Atlandı · ön kontrol",
       "skippedMissedSchedule": "Atlandı · zamanlama kaçırıldı",
       "skippedHostUnavailable": "Atlandı · ana makine kullanılamıyor",

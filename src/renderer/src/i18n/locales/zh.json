@@ -17261,6 +17261,7 @@
           "runStatusPending": "已排队",
           "runStatusDispatching": "正在启动",
           "runStatusDispatched": "已启动",
+          "runStatusSent": "已发送",
           "runStatusCompleted": "完成",
           "runStatusSkippedPrecheck": "因预检查而跳过",
           "runStatusSkippedMissed": "已跳过",

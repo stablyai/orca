@@ -140,7 +140,8 @@ export async function applyWindowLayoutCommand(
   markAgentLaunchesClosedByUser(workspace, { kind: 'pane', tabId, leafId })
   return store.applyLayoutCommand(
     { type: 'closePane', workspace, tabId, leafId, userPaneClose: true },
-    holders
+    holders,
+    run
   )
 }
 

@@ -200,7 +200,7 @@ describe('mobile session cycle reentry', () => {
   )
 
   it.each(['getWorkspaceSession', 'setWorkspaceSession'] as const)(
-    'keeps a later missing %s on the original caught failure path',
+    'rejects when %s disappears before the mutation starts',
     async (method) => {
       const { runtime, harness } = mobileCycleRuntime()
       const runDurableMutation = harness.runtimeStore.runDurableMutation
@@ -214,11 +214,8 @@ describe('mobile session cycle reentry', () => {
           })
           return runDurableMutation(mutate)
         })
-        await expect(runtime.closeHostTab()).resolves.toEqual([])
-        expect(error).toHaveBeenCalledExactlyOnceWith(
-          '[runtime] failed to persist terminal close:',
-          expect.any(TypeError)
-        )
+        await expect(runtime.closeHostTab()).rejects.toBeInstanceOf(TypeError)
+        expect(error).not.toHaveBeenCalled()
       } finally {
         error.mockRestore()
       }

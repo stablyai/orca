@@ -1,3 +1,4 @@
+import type { AgentLaunchHostPolicy } from './agent-launch-surfaces'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 /** Terminal launches create agent-first worktrees; structured launches create the workspace without an agent and add chat afterwards.
  * The executor chooses; setup, default tabs, provenance and lineage use the normal create path. */
@@ -30,7 +31,8 @@ const STRUCTURED_SETUP_WAIT_TIMEOUT_MS = 60_000
 
 export function agentLaunchWorkspaceFactory(
   context: RpcContext,
-  agent: TuiAgent
+  agent: TuiAgent,
+  policy: AgentLaunchHostPolicy = {}
 ): AgentLaunchWorkspaceFactory {
   return {
     createFolderWorkspace: agentLaunchFolderWorkspaceCreator(context, agent),
@@ -72,7 +74,10 @@ export function agentLaunchWorkspaceFactory(
         })
       // Reserved before creation so a retry can recover; a failed attempt has to release it.
       try {
+        policy.assertCurrent?.()
         const result = await runtime.createManagedWorktree({
+          signal: policy.signal,
+          beforeTerminalSpawn: policy.assertCurrent,
           onStartupTerminalCreated: (terminal) => {
             startupTerminalCreation = terminal
           },

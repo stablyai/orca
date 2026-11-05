@@ -79,3 +79,38 @@ it('refuses a close once profile writes are frozen, and changes nothing', async 
   ).rejects.toThrow('finalized')
   expect(liveTabIds()).toContain(pane.tabId)
 })
+
+it('automatic close rechecks its action inside the durable queue after awaited preparation', async () => {
+  const { store, authority, liveTabIds } = await openWithTab()
+  const gate = authority.pause()
+  const blocking = store.runDurableMutation(() => ({ value: undefined }))
+  await gate.started.promise
+  let safe = true
+  const closing = store.applyLayoutCommand(
+    {
+      type: 'closeTabs',
+      workspace: pane.worktreeId,
+      tabIds: [pane.tabId]
+    },
+    [],
+    { beforeWrite: () => safe }
+  )
+  safe = false
+  gate.finish.resolve()
+  await blocking
+  await expect(closing).resolves.toMatchObject({ ok: false, code: 'pane_not_found' })
+  expect(liveTabIds()).toContain(pane.tabId)
+  safe = true
+  await expect(
+    store.applyLayoutCommand(
+      {
+        type: 'closeTabs',
+        workspace: pane.worktreeId,
+        tabIds: [pane.tabId]
+      },
+      [],
+      { beforeWrite: () => safe }
+    )
+  ).resolves.toMatchObject({ ok: true })
+  expect(liveTabIds()).not.toContain(pane.tabId)
+})

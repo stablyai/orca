@@ -1,3 +1,4 @@
+import type { WorktreeTerminalSleepOptions } from './worktree-terminal-stop-options'
 import { OrcaRuntimeWithAgentGeneratedTabTitles } from '../layout/agent-generated-tab-titles-runtime'
 import {
   includeTargetResolvedWorktree,
@@ -6,14 +7,14 @@ import {
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-types'
 import { WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS } from '../../orca-runtime-postlude'
 import { teardownRpcDeadline } from '../../worktree-teardown-deadline'
-import { sleptNothing } from './worktree-terminal-sleep-result'
+import { sleptNothing, verifiedWorktreeSleep } from './worktree-terminal-sleep-result'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
 
 export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWithAgentGeneratedTabTitles {
   protected async sleepResolvedWorktreeTerminals(
     worktree: ResolvedWorktree,
     scope: WorktreeSleepScope,
-    soleLivePtyId?: string
+    { soleLivePtyId, beforeAction }: WorktreeTerminalSleepOptions = {}
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
     const sleepDeadline = Date.now() + WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS
     const releaseMutation = await this.acquireWorktreeTerminalMutation(
@@ -83,6 +84,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       if (soleLivePtyId && [...livePtyIds].some((ptyId) => ptyId !== soleLivePtyId)) {
         return sleptNothing(livePtyIds)
       }
+      beforeAction?.()
       generation = ++this.terminalSleepGeneration
       for (const ptyId of livePtyIds) {
         pendingPtyIds.add(ptyId)
@@ -142,6 +144,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       }
       // Why before the stop: a PTY's exit clears its hook rows, and with them the session ids.
       const resumeCapture = await this.sleepResumeRecords.capture(worktree.id, livePtyIds)
+      beforeAction?.()
       const ptyController = this.ptyController
       if (!ptyController?.stopAndWait) {
         throw new Error('terminal_worktree_sleep_unavailable')
@@ -161,6 +164,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       }
       const stopResults = await Promise.allSettled(
         orderedLivePtyIds.map(async (ptyId) => {
+          beforeAction?.()
           const stopped = await stopAndWait(ptyId, {
             keepHistory: true,
             deadlineMs: teardownRpcDeadline(sleepDeadline)
@@ -257,12 +261,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         terminalHandlesByPtyId
       })
       fullyCommitted = true
-      return {
-        stopped: provenStoppedPtyIds.length,
-        stoppedPtyIds: provenStoppedPtyIds,
-        livePtyIds: [...livePtyIds].sort(),
-        postStopVerified: true
-      }
+      return verifiedWorktreeSleep(provenStoppedPtyIds, livePtyIds)
     } finally {
       for (const settleStop of settleReversibleStops.values()) {
         settleStop(false)

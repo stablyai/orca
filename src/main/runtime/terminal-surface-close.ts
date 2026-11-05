@@ -1,3 +1,4 @@
+import type { LayoutCommandRunOptions } from './runtime-layout-apply'
 import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import {
@@ -154,6 +155,7 @@ export function closeTerminalSurfaceInWorkspaceSession(
 
 /** How one close commits; `reason` is recorded only when the close resolves to the whole tab. */
 export type TerminalSurfaceCloseOptions = {
+  beforeAction?: () => void
   allowMissing?: boolean
   force?: boolean
   reason?: RuntimeSessionTabCloseReason
@@ -216,6 +218,14 @@ export function terminalSurfaceCloseMutation(
           `${target.tabId}:${target.leafId}`
         ]
       : undefined
+  const actionRefusal = (): Error | undefined => {
+    try {
+      commit.options.beforeAction?.()
+      return undefined
+    } catch (error) {
+      return error instanceof Error ? error : new Error('terminal_close_revoked')
+    }
+  }
   return () => {
     if (!commit.ownerMatches()) {
       return { value: new Error('terminal_pane_owner_changed'), persist: false }
@@ -263,19 +273,33 @@ export function terminalSurfaceCloseMutation(
         // An unroutable workspace (its folder record is gone) has nothing to close.
         return { value: undefined, persist: false }
       }
-      // Stamp missing tabs in the routed partition to reject late spawns; repeated close echoes need no second write.
-      if (
-        commit.options.allowMissing &&
+      const canCompleteMissingTab =
         target.kind === 'tab' &&
-        !hasClosedTerminalTabRecord(routed.session.closedTerminalTabTombstonesByTabId, target.tabId)
-      ) {
-        commit.setSession(routed.result.session, routed.hostId)
-        return { value: undefined }
+        (commit.options.allowMissing || requestedHolders?.get(routed.hostId) != null)
+      if (canCompleteMissingTab) {
+        const refusal = actionRefusal()
+        if (refusal) {
+          return { value: refusal, persist: false }
+        }
+        // Stamp missing tabs to reject late spawns; repeated close echoes need no second write.
+        const needsTombstone = !hasClosedTerminalTabRecord(
+          routed.session.closedTerminalTabTombstonesByTabId,
+          target.tabId
+        )
+        if (needsTombstone) {
+          commit.setSession(routed.result.session, routed.hostId)
+        }
+        commit.onClosed([])
+        return { value: undefined, persist: needsTombstone }
       }
       return {
         value: commit.options.allowMissing ? undefined : new Error('tab_not_found'),
         persist: false
       }
+    }
+    const refusal = actionRefusal()
+    if (refusal) {
+      return { value: refusal, persist: false }
     }
     // Why every holder: a legacy relay reattach can leave one tab in two partitions.
     for (const { hostId, result } of closed) {
@@ -285,4 +309,20 @@ export function terminalSurfaceCloseMutation(
     // Bookkeeping cannot undo user close or skip kill; failed persistence leaves the in-memory removal dirty for the next write.
     return { value: undefined }
   }
+}
+
+/** Automatic retirement may be revoked while asynchronous preparation runs. */
+export function terminalCloseActionCurrent(beforeAction?: () => void): boolean {
+  try {
+    beforeAction?.()
+    return true
+  } catch {
+    return false
+  }
+}
+
+export type TerminalCloseRunOptions = Pick<LayoutCommandRunOptions, 'admit'> | (() => void)
+
+export function terminalCloseRunOptions(run?: TerminalCloseRunOptions) {
+  return typeof run === 'function' ? { beforeWrite: () => terminalCloseActionCurrent(run) } : run
 }

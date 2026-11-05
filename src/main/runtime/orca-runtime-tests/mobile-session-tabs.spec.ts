@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { boundSessionOf, registerLivePty } from '../bind-first-pane.test-fixture'
+import { boundSessionOf, registerLivePty, withBoundPane } from '../bind-first-pane.test-fixture'
 import { expectDesktopDropsPane } from '../__fixtures__/main-layout-close-fixture'
 import {
   OrcaRuntimeService,
@@ -12,6 +12,7 @@ import {
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   makeWorktreeMeta,
+  makeRuntimeStoreWithWorkspaceSession,
   store
 } from '../orca-runtime-test-fixtures.spec'
 import {
@@ -243,7 +244,25 @@ describe('OrcaRuntimeService', () => {
     const closeTerminal = vi.fn()
     const closeTerminalPane = vi.fn()
     const kill = vi.fn(() => true)
-    const runtime = new OrcaRuntimeService(store)
+    const leftLeafId = '11111111-1111-4111-8111-111111111111'
+    const rightLeafId = '22222222-2222-4222-8222-222222222222'
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      withBoundPane(
+        withBoundPane(getDefaultWorkspaceSession(), {
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          leafId: leftLeafId,
+          ptyId: 'pty-left'
+        }),
+        {
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          leafId: rightLeafId,
+          ptyId: 'pty-right'
+        }
+      )
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn: vi.fn(),
       write: () => true,
@@ -264,8 +283,6 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
-    const leftLeafId = '11111111-1111-4111-8111-111111111111'
-    const rightLeafId = '22222222-2222-4222-8222-222222222222'
     for (const [leafId, ptyId] of [
       [leftLeafId, 'pty-left'],
       [rightLeafId, 'pty-right']
@@ -337,7 +354,15 @@ describe('OrcaRuntimeService', () => {
   it('closes the whole mobile terminal tab when addressed by parent tab id', async () => {
     const closeTerminal = vi.fn()
     const kill = vi.fn(() => true)
-    const runtime = new OrcaRuntimeService(store)
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      withBoundPane(getDefaultWorkspaceSession(), {
+        worktreeId: TEST_WORKTREE_ID,
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        ptyId: 'pty-1'
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn: vi.fn(),
       write: () => true,

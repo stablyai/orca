@@ -1,3 +1,4 @@
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type {
   AutomationRunCompletionObservation,
@@ -30,7 +31,14 @@ const HELD_DONE_SETTLE_MS = 30_000
 /** Bound re-arming per observation; startup reconciliation can attach again. */
 const OBSERVE_DEADLINE_MS = 6 * 60 * 60 * 1000
 
-export type AutomationRunTerminalHost = {
+export type AutomationRunTerminalHost = Partial<
+  Pick<
+    OrcaRuntimeService,
+    | 'getTerminalPromptRequestBinding'
+    | 'getAgentStatusRowsForPane'
+    | 'readObservedAgentStatusPaneIdentityFn'
+  >
+> & {
   getTerminalHandleForPaneKey(paneKey: string): string | null
   waitForTerminal(
     handle: string,
@@ -216,7 +224,10 @@ export function createRuntimeAutomationRunTerminalObserver(
   return {
     resolveRunTerminal: (run) =>
       run.terminalPaneKey ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey) : null,
-    observeCompletion: async (handle, { signal, run }) => {
+    observeCompletion: async (handle, { signal, run, recovery }) => {
+      if (recovery) {
+        return null
+      }
       const startedAt = Date.now()
       const judged = evidence && run?.terminalPaneKey ? { evidence, run } : null
       const runStartedAt = run?.startedAt ?? run?.dispatchedAt ?? startedAt

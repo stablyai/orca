@@ -1,3 +1,5 @@
+import { getAutomationRunOperations } from '../persistence/loading-store/automation-persistence'
+import { createAutomationRunWriter } from './automation-run-writer'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -12,6 +14,7 @@ import {
 } from '../runtime/agent-transcript-pane-test-harness'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
 import { AutomationService } from './service'
+import { AutomationRunCompletionWatcher } from './run-completion-watcher'
 import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
@@ -194,9 +197,8 @@ describe('authority-owned automation run completion', () => {
     service.setRendererReady()
     await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
 
-    expect(readRun(store, automation.id, dispatched.id).status).toBe('dispatch_failed')
+    expect(readRun(store, automation.id, dispatched.id).status).toBe('dispatched')
     expect(readRun(store, automation.id, dispatching.id).status).toBe('dispatch_failed')
-    expect(readRun(store, automation.id, dispatched.id).error).toContain('terminal')
     expect(readRun(store, automation.id, dispatching.id).error).toContain('agent started')
     expect(readRun(store, automation.id, pendingManual.id)).toMatchObject({
       status: 'dispatch_failed',
@@ -361,4 +363,169 @@ describe('automationsChanged publication', () => {
     expect(seen.every((entry) => entry.payload.selector?.kind === 'self')).toBe(true)
     service.stop()
   })
+  it.each(['delivered', 'delete', 'stop', 'replace'] as const)(
+    'keeps no-proof delivery detached through acknowledgement and recovery: %s',
+    async (outcome) => {
+      const store = await createStore()
+      const automation = createAutomation(store)
+      store.updateAutomation(automation.id, { reuseSession: true })
+      const runtime = {
+        getTerminalHandleForPaneKey: () => 'handle-1',
+        waitForTerminal: vi.fn(async () => ({ satisfied: true })),
+        readTerminal: vi.fn(async () => ({ tail: ['old answer'] }))
+      }
+      let reservation: ReturnType<AutomationService['reserveTerminalRun']>
+      let service: AutomationService
+      const options = {
+        allowRemoteHostScheduling: true,
+        terminalObserver: createRuntimeAutomationRunTerminalObserver(runtime)
+      }
+      service = new AutomationService(store, {
+        ...options,
+        headlessDispatcher: async ({ run }) => {
+          reservation = service.reserveTerminalRun(run)
+          let current = true
+          reservation!.bind(
+            { ...LAUNCH_TARGET, sessionKind: 'terminal' },
+            'handle-1',
+            () => current
+          )
+          if (outcome === 'replace') {
+            current = false
+            expect(() => reservation!.assertCurrent()).toThrow('request_aborted')
+          }
+          if (outcome === 'delete') {
+            store.deleteAutomation(automation.id)
+          }
+          if (outcome === 'stop') {
+            service.stop()
+          }
+          reservation!.deliverySettled()
+          return { ...LAUNCH_TARGET, sessionKind: 'terminal' }
+        }
+      })
+      try {
+        const result = await service.runNow(automation.id).catch(() => null)
+        if (result) {
+          expect(readRun(store, automation.id, result.id).status).toBe('dispatched')
+        }
+        expect(reservation!.signal.aborted).toBe(true)
+        expect(runtime.waitForTerminal).not.toHaveBeenCalled()
+        expect(runtime.readTerminal).not.toHaveBeenCalled()
+        service.stop()
+        if (outcome !== 'delete') {
+          // Today's definition must not turn retained terminal delivery into legacy idle completion.
+          store.updateAutomation(automation.id, { reuseSession: false })
+          service = new AutomationService(store, options)
+          service.start()
+          service.setRendererReady()
+          await Promise.resolve()
+          await Promise.resolve()
+          expect(runtime.waitForTerminal).not.toHaveBeenCalled()
+          expect(runtime.readTerminal).not.toHaveBeenCalled()
+          expect(
+            store.listAutomationRuns(automation.id).some((run) => run.status === 'completed')
+          ).toBe(false)
+        }
+      } finally {
+        service.stop()
+      }
+    }
+  )
+  it('revokes an evicted reservation before effects and never rearms a stale retained row', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store)
+    const run = store.createAutomationRun(automation, Date.now(), 'manual')
+    let retained: AutomationRun | null = run
+    const observe = vi.fn(async () => ({ status: 'completed' as const }))
+    const mark = vi.fn(async () => {})
+    const watcher = new AutomationRunCompletionWatcher({
+      readRun: () => retained,
+      markDispatchResult: mark,
+      observer: { resolveRunTerminal: () => 'handle-1', observeCompletion: observe }
+    })
+    const reservation = watcher.reserve(run)
+    reservation.bind(LAUNCH_TARGET, 'handle-1')
+    retained = null
+    watcher.retain([])
+    expect(reservation.signal.aborted).toBe(true)
+    expect(() => reservation.assertCurrent()).toThrow('request_aborted')
+    watcher.watch({ ...run, ...LAUNCH_TARGET, status: 'dispatched' }, true)
+    await Promise.resolve()
+    expect(observe).not.toHaveBeenCalled()
+    expect(mark).not.toHaveBeenCalled()
+    watcher.dispose()
+  })
+})
+
+it('reconciles certified watched IDs, source gaps and abort reentry without hiding a newer source', async () => {
+  testState.dir = mkdtempSync(join(tmpdir(), 'orca-watcher-source-'))
+  const store = await createStore()
+  const automation = createAutomation(store)
+  const a = store.createAutomationRun(automation, 1, 'manual')
+  const b = store.createAutomationRun(automation, 2, 'manual')
+  const c = store.createAutomationRun(automation, 3, 'manual')
+  const observed: AbortSignal[] = []
+  const watcher = new AutomationRunCompletionWatcher({
+    observer: createObserver((signal) => {
+      observed.push(signal)
+      return new Promise(() => {})
+    }),
+    readRun: (automationId, runId) =>
+      store.listAutomationRuns(automationId).find((run) => run.id === runId) ?? null,
+    markDispatchResult: async () => {}
+  })
+  const source = () => getAutomationRunOperations(store).state.automationRuns!
+  const writer = createAutomationRunWriter(store, null, (mutation) =>
+    watcher.retain(source(), mutation)
+  )
+  const ar = watcher.reserve(a),
+    br = watcher.reserve(b),
+    cr = watcher.reserve(c)
+  watcher.retain(source())
+  try {
+    await writer.updateRun({ runId: a.id, status: 'dispatching' })
+    expect(ar.signal.aborted).toBe(false)
+    expect(br.signal.aborted).toBe(false)
+    // A direct unnotified write must be reconciled at the next ordinary update.
+    store.updateAutomationRun({ runId: b.id, status: 'completed' })
+    let nested: Promise<unknown> | undefined
+    br.signal.addEventListener('abort', () => {
+      nested = writer.updateRun({ runId: c.id, status: 'completed' })
+    })
+    await writer.updateRun({ runId: a.id, status: 'dispatching' })
+    await nested
+    expect(br.signal.aborted).toBe(true)
+    expect(cr.signal.aborted).toBe(true)
+    expect(ar.signal.aborted).toBe(false)
+    // A nested newer stamp cannot be overwritten by the outer reconciliation.
+    const d = store.createAutomationRun(automation, 4, 'manual')
+    const dr = watcher.reserve(d)
+    watcher.retain(source())
+    await writer.updateRun({ runId: d.id, status: 'completed' })
+    expect(dr.signal.aborted).toBe(true)
+    const erow = store.createAutomationRun(automation, 5, 'manual')
+    const e = store.updateAutomationRun({ runId: erow.id, status: 'dispatched', ...LAUNCH_TARGET })
+    watcher.retain(source())
+    watcher.watch(e)
+    const signal = observed.at(-1)!
+    expect(signal.aborted).toBe(false)
+    await writer.updateRun({
+      runId: e.id,
+      status: 'dispatched',
+      ...LAUNCH_TARGET,
+      terminalPtyId: 'replacement-pty'
+    })
+    expect(signal.aborted).toBe(true)
+    expect(ar.signal.aborted).toBe(false)
+    getAutomationRunOperations(store).state.automationRuns = source().filter(
+      (run) => run.id !== a.id
+    )
+    watcher.retain(source())
+    expect(ar.signal.aborted).toBe(true)
+  } finally {
+    watcher.dispose()
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  }
 })

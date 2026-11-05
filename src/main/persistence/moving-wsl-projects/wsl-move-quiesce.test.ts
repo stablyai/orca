@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { AutomationRun } from '../../../shared/automations-types'
+import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
+import { collectWslMoveGateInputs } from './wsl-move-gate-facts'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
 import { wslMoveCutoverFixture as cutover } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import type { WslMoveExitProof } from './wsl-move-exit-proof'
@@ -278,3 +281,76 @@ describe('quiesceWslMove', () => {
     )
   })
 })
+
+it.each(['history', 'pending', 'dispatching', 'chat', 'process', 'dispatch'] as const)(
+  'derives outstanding work through collector, gate and quiesce: %s',
+  async (mode) => {
+    const run: AutomationRun = {
+      ...buildProfileStateCutoverFixture().automationRuns[0]!,
+      id: 'delivered',
+      automationId: 'auto',
+      workspaceId: WORKTREE,
+      status: mode === 'pending' || mode === 'dispatching' ? mode : 'dispatched',
+      sessionKind: mode === 'chat' ? 'chat' : 'terminal'
+    }
+    const { deps, journal } = harness({
+      gateInputs: () =>
+        collectWslMoveGateInputs(
+          {
+            listTerminals: () =>
+              mode === 'process'
+                ? [
+                    {
+                      ptyId: 'session-1',
+                      workspaceId: WORKTREE,
+                      paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+                      wslDistro: null,
+                      foregroundAgent: null
+                    }
+                  ]
+                : [],
+            inspect: async () => ({
+              foregroundProcess: 'node',
+              hasChildProcesses: true,
+              childProcessEvidence: 'children'
+            }),
+            agentRows: () => [],
+            scrollbackBytes: async () => 0,
+            automationRuns: () => [run],
+            dispatches: () =>
+              mode === 'dispatch'
+                ? [
+                    {
+                      dispatchId: 'active',
+                      worktreeId: WORKTREE,
+                      state: 'ready'
+                    }
+                  ]
+                : []
+          },
+          scope
+        )
+    })
+    const result = await quiesceWslMove(cutover(), scope, deps)
+    if (mode === 'history') {
+      expect(result.outcome).toBe('quiesced')
+      expect(journal).toEqual(['source-fenced', 'quiesced'])
+      expect(deps.sleepWorkspaces).toHaveBeenCalledOnce()
+      expect(run.status).toBe('dispatched')
+    } else {
+      const kind =
+        mode === 'process'
+          ? 'process-running'
+          : mode === 'dispatch'
+            ? 'dispatch-running'
+            : 'automation-running'
+      expect(result).toMatchObject({
+        outcome: 'refused',
+        reason: 'terminals-blocked',
+        blockers: [{ kind }]
+      })
+      expect(journal).toEqual([])
+      expect(deps.sleepWorkspaces).not.toHaveBeenCalled()
+    }
+  }
+)

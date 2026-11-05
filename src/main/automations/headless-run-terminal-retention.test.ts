@@ -33,6 +33,8 @@ function harness(runs: AutomationRun[]) {
   const use = new Map<string, 'used' | 'unused' | 'unknown'>()
   const idleShell = new Set<string>()
   const dead = new Set<string>()
+  const held = new Set<string>()
+  const incarnations = new Map<string, string>()
   const ownWorkspace = new Set<string>()
   const sleepDeclines = new Set<string>()
   const sleepAttempts: string[] = []
@@ -43,6 +45,8 @@ function harness(runs: AutomationRun[]) {
       runKeyedSerializedOperation(lanes, automationId, operation),
     listRuns: () => runs.filter((run) => !forgotten.some((gone) => gone.id === run.id)),
     terminalClientUse: (run) => use.get(run.id) ?? 'unused',
+    wholePaneClear: (run) => !held.has(run.id),
+    terminalIncarnation: (run) => incarnations.get(run.id) ?? 'original',
     runTerminalAlive: (run) => !dead.has(run.id) && !closed.includes(run.terminalPaneKey ?? ''),
     shellAloneAtPrompt: async (run) => idleShell.has(run.id),
     closeRunTerminal: async (run) => {
@@ -69,6 +73,8 @@ function harness(runs: AutomationRun[]) {
     forgotten,
     use,
     idleShell,
+    held,
+    incarnations,
     dead,
     ownWorkspace,
     sleepDeclines,
@@ -300,6 +306,8 @@ describe('headless run terminal retention', () => {
     const slow = createHeadlessRunTerminalRetention({
       listRuns: () => runs.filter((run) => !h.forgotten.some((gone) => gone.id === run.id)),
       terminalClientUse: () => 'unused',
+      wholePaneClear: (run) => !h.held.has(run.id),
+      terminalIncarnation: (run) => h.incarnations.get(run.id) ?? 'original',
       runTerminalAlive: () => true,
       shellAloneAtPrompt: async () => false,
       closeRunTerminal,
@@ -381,3 +389,55 @@ describe('headless run terminal retention', () => {
     expect(h.slept).toEqual(['r0'])
   })
 })
+
+it('retains a finished root while whole-pane work is active or unknown, then retires all-clear', async () => {
+  const runs = [makeRun('old', 0), ...[1, 2, 3].map((n) => makeRun(`new${n}`, n))]
+  const h = harness(runs)
+  h.held.add('old')
+  await h.retention.sweep()
+  vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
+  await h.retention.sweep()
+  expect(h.closed).toEqual([])
+  h.held.clear()
+  await h.retention.sweep()
+  expect(h.closed).toEqual(['tab-old:1'])
+})
+
+it.each(['new owner', 'incarnation', 'client', 'stop'] as const)(
+  'rechecks %s after shell evidence awaits',
+  async (change) => {
+    const rows = [makeRun('old', 0)]
+    const h = harness(rows)
+    const shell = Promise.withResolvers<boolean>()
+    // Use the actual asynchronous shell seam, not a replacement retention predicate.
+    const retention = createHeadlessRunTerminalRetention({
+      listRuns: () => rows,
+      terminalClientUse: () => (change === 'client' && changed ? 'used' : 'unused'),
+      terminalIncarnation: () => (change === 'incarnation' && changed ? 'replacement' : 'original'),
+      runTerminalAlive: () => true,
+      wholePaneClear: () => false,
+      shellAloneAtPrompt: () => shell.promise,
+      closeRunTerminal: async () => {
+        h.closed.push('closed')
+        return true
+      },
+      runOwnsWorkspace: () => false,
+      sleepRunWorkspace: async () => false,
+      forgetRunTerminal: async () => {},
+      inAutomationLane: (_id, work) => work()
+    })
+    let changed = false
+    const draining = retention.drain()
+    await Promise.resolve()
+    changed = true
+    if (change === 'new owner') {
+      rows.push({ ...rows[0]!, id: 'new', dispatchedAt: 2 })
+    }
+    if (change === 'stop') {
+      retention.stop()
+    }
+    shell.resolve(true)
+    await draining
+    expect(h.closed).toEqual([])
+  }
+)

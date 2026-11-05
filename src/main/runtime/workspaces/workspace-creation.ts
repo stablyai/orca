@@ -24,7 +24,11 @@ import { startRuntimeLocalWorktreeTerminals } from '../runtime-local-worktree-te
 import { trackRuntimeWorkspaceCreate } from '../../workspaces/creation/workspace-create-telemetry'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../opencode/opencode-model-startup-plan'
 import type { RuntimeWorkspaceCreateEvents } from '../../workspaces/creation/workspace-create-telemetry'
-import { createdWorkspaceActivationCallbacks, wslUserAct } from './workspace-create-activation'
+import {
+  createdWorkspaceActivationCallbacks,
+  wslUserAct,
+  workspaceCreateTerminalFactory
+} from './workspace-create-activation'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { resolveManagedWorktreeCreateStartup } from './managed-worktree-create-startup'
 import type { WorkspaceCreationHandle } from './workspace-lifecycle-creations'
@@ -39,9 +43,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     childRepo?: Repo
   ): Promise<WorktreeLineageResolution>
 
-  async createManagedWorktree(
-    args: RuntimeManagedWorktreeCreateArgs
-  ): Promise<CreateWorktreeResult> {
+  async createManagedWorktree(args: RuntimeManagedWorktreeCreateArgs) {
     // Re-arm a consumed checkout after terminal startup, including failed creates.
     const rearm: PreparationRearmHolder = { fire: () => {} }
     try {
@@ -128,8 +130,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           store,
           ptySpawnAvailable: Boolean(this.ptyController?.spawn),
           provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
-          createTerminal: (selector, options) =>
-            this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
+          createTerminal: workspaceCreateTerminalFactory(this, args),
           pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
           sendFollowup: (handle, followup, terminal) =>
             void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal }),
@@ -240,8 +241,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       ports: {
         canSpawn: Boolean(this.ptyController?.spawn),
         provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
-        createTerminal: (selector, options) =>
-          this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree),
+        createTerminal: workspaceCreateTerminalFactory(this, args, worktree),
         pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
         sendFollowup: (handle, followup, terminal) =>
           void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal }),

@@ -102,14 +102,20 @@ export function formatAutomationRemoved(result: { removed: boolean; id: string }
     : `Automation ${result.id} not removed.`
 }
 
-function formatAutomationRunAcknowledgement(run: { id: string; status: string }): string {
+function formatAutomationRunAcknowledgement(run: {
+  id: string
+  status: string
+  sessionKind?: AutomationRun['sessionKind']
+}): string {
   switch (run.status) {
     case 'pending':
       return `Queued run ${run.id} (pending).`
     case 'dispatching':
       return `Accepted run ${run.id}; launch is still in progress (dispatching).`
     case 'dispatched':
-      return `Started run ${run.id} (dispatched).`
+      return run.sessionKind === 'chat'
+        ? `Sent run ${run.id} (dispatched).`
+        : `Started run ${run.id} (dispatched).`
     case 'completed':
       return `Completed run ${run.id}.`
     case 'dispatch_failed':
@@ -200,7 +206,7 @@ export function formatAutomationRuns(result: { runs: AutomationRun[] }): string 
   return result.runs
     .map(
       (run) =>
-        `${run.id}  ${run.automationId}  ${run.status}  ${run.trigger}  ${new Date(run.scheduledFor).toISOString()}\n${run.title}${run.precheckResult ? `\nprecheck: ${formatAutomationRunPrecheck(run)}` : ''}${run.error ? `\nerror: ${run.error}` : ''}`
+        `${run.id}  ${run.automationId}  ${run.status === 'dispatched' && run.sessionKind === 'chat' ? 'Sent' : run.status}  ${run.trigger}  ${new Date(run.scheduledFor).toISOString()}\n${run.title}${run.precheckResult ? `\nprecheck: ${formatAutomationRunPrecheck(run)}` : ''}${run.error ? `\nerror: ${run.error}` : ''}`
     )
     .join('\n\n')
 }

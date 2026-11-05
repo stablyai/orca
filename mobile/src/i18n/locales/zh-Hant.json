@@ -3925,6 +3925,7 @@
       "hostUnreachable": "無法連線至此主機。請重新連線並重新整理以檢查其目前狀態。",
       "actionFailed": "無法在主機上完成此操作。請重新整理後再試。",
       "dispatched": "已派送",
+      "sent": "已傳送",
       "skippedPrecheck": "已略過 · 預先檢查",
       "skippedMissedSchedule": "已略過 · 錯過排程",
       "skippedHostUnavailable": "已略過 · 主機無法使用",

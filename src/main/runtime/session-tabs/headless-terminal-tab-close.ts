@@ -18,6 +18,15 @@ import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/te
 import type { RuntimeTerminalRename } from '../../../shared/runtime-terminal-contracts'
 import type { RuntimeSessionTabCloseReason } from '../../../shared/runtime-session-contracts'
 
+type HeadlessTerminalTabCloseOptions = {
+  allowMissingPersistedTab?: boolean
+  killPtys?: boolean
+  authorizedPty?: RuntimePtyWorktreeRecord
+  force?: boolean
+  reason?: RuntimeSessionTabCloseReason
+  beforeAction?: () => void
+}
+
 export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithMainLayoutTabMoves {
   protected abstract applyHeadlessTerminalPaneLayoutToSnapshot(
     ...args: Parameters<HeadlessTabPropertiesMethods['applyHeadlessTerminalPaneLayoutToSnapshot']>
@@ -43,14 +52,17 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
     tab: RuntimeMobileSessionTerminalTab,
-    options: {
-      allowMissingPersistedTab?: boolean
-      killPtys?: boolean
-      authorizedPty?: RuntimePtyWorktreeRecord
-      force?: boolean
-      reason?: RuntimeSessionTabCloseReason
-    } = {}
-  ): Promise<void> {
+    options: HeadlessTerminalTabCloseOptions = {}
+  ): Promise<boolean> {
+    return this.prepareHeadlessMobileTerminalTabClose(worktreeId, snapshot, tab, options)()
+  }
+
+  protected prepareHeadlessMobileTerminalTabClose(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionTerminalTab,
+    options: HeadlessTerminalTabCloseOptions = {}
+  ): () => Promise<boolean> {
     const closedParentTabId = tab.parentTabId
     const retirementProofs = snapshot.tabs.flatMap((candidate) => {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
@@ -65,85 +77,94 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     })
     const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, closedParentTabId)
     const liveTerminalOf = this.liveTerminalsOfClosedTab(worktreeId, snapshot, closedParentTabId)
-    const projectedPtyIds = await this.closeTerminalSurface(
+    const closeOwner = this.prepareTerminalSurfaceClose(
       worktreeId,
       { kind: 'tab', tabId: closedParentTabId },
       {
         allowMissing: options.allowMissingPersistedTab,
         force: options.force,
-        reason: options.reason
+        reason: options.reason,
+        beforeAction: options.beforeAction
       }
     )
-    if (!acknowledgeRetirement().matches) {
-      throw new Error('terminal_pane_owner_changed')
-    }
-    // Renderer frames may add other tabs while the durable close is in flight.
-    snapshot = this.mobileSessionTabsByWorktree.get(worktreeId) ?? snapshot
-    this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
-    if (options.authorizedPty) {
-      options.authorizedPty.runtimeSessionOwned = false
-      this.setPairedRendererSessionOwnership(options.authorizedPty.ptyId, false)
-    }
-    // Persisted local provider ids may be reused after restart; only dormant SSH relay ids remain exact stop authority.
-    const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
-    for (const candidate of snapshot.tabs) {
-      if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
-        continue
+    return async () => {
+      const projectedPtyIds = await closeOwner()
+      if (projectedPtyIds === null) {
+        return false
       }
-      const authorizedPty =
-        options.authorizedPty &&
-        this.getMobileTerminalLeafPtyIds(candidate).includes(options.authorizedPty.ptyId)
-          ? options.authorizedPty
-          : null
-      const livePty = liveTerminalOf(candidate) ?? authorizedPty
-      const ptyId = livePty?.ptyId ?? candidate.ptyId
-      const hasOtherOwner = snapshot.tabs.some(
-        (other) =>
-          other.type === 'terminal' &&
-          other.parentTabId !== closedParentTabId &&
-          other.ptyId === ptyId
-      )
-      if (ptyId && !hasOtherOwner && (livePty || parseAppSshPtyId(ptyId))) {
-        // Include live serve bindings from the authoritative snapshot before their debounced durable write, or split close leaks processes.
-        ptyIdsToKill.add(ptyId)
+      if (!acknowledgeRetirement().matches) {
+        throw new Error('terminal_pane_owner_changed')
       }
-    }
-    if (options.killPtys !== false) {
-      for (const ptyId of ptyIdsToKill) {
-        this.ptyController?.kill(ptyId)
+      // Renderer frames may add other tabs while the durable close is in flight.
+      snapshot = this.mobileSessionTabsByWorktree.get(worktreeId) ?? snapshot
+      this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
+      if (options.authorizedPty) {
+        options.authorizedPty.runtimeSessionOwned = false
+        this.setPairedRendererSessionOwnership(options.authorizedPty.ptyId, false)
       }
-    }
-    const nextTabs = snapshot.tabs.filter((candidate) => {
-      if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
-        return true
+      // Persisted local provider ids may be reused after restart; only dormant SSH relay ids remain exact stop authority.
+      const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
+      for (const candidate of snapshot.tabs) {
+        if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
+          continue
+        }
+        const authorizedPty =
+          options.authorizedPty &&
+          this.getMobileTerminalLeafPtyIds(candidate).includes(options.authorizedPty.ptyId)
+            ? options.authorizedPty
+            : null
+        const livePty = liveTerminalOf(candidate) ?? authorizedPty
+        const ptyId = livePty?.ptyId ?? candidate.ptyId
+        const hasOtherOwner = snapshot.tabs.some(
+          (other) =>
+            other.type === 'terminal' &&
+            other.parentTabId !== closedParentTabId &&
+            other.ptyId === ptyId
+        )
+        if (ptyId && !hasOtherOwner && (livePty || parseAppSshPtyId(ptyId))) {
+          // Include live serve bindings from the authoritative snapshot before their debounced durable write, or split close leaks processes.
+          ptyIdsToKill.add(ptyId)
+        }
       }
-      return false
-    })
-    const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
-    // Close is no handover: retain the publisher epoch or clients fence the renderer's next frame.
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      activeTabId: active?.id ?? null,
-      activeTabType: active?.type ?? null,
-      tabGroups: buildHeadlessMobileSessionTabGroups(
-        worktreeId,
-        nextTabs,
-        active,
-        snapshot.tabGroups
-      ),
-      ...(retirementProofs.length > 0
-        ? {
-            retiredTerminalSurfaces: appendRetiredTerminalSurfaceProofs(
-              snapshot.retiredTerminalSurfaces,
-              retirementProofs
-            )
-          }
-        : {}),
-      tabs: nextTabs
+      if (options.killPtys !== false) {
+        for (const ptyId of ptyIdsToKill) {
+          options.beforeAction?.()
+          this.ptyController?.kill(ptyId)
+        }
+      }
+      const nextTabs = snapshot.tabs.filter((candidate) => {
+        if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
+          return true
+        }
+        return false
+      })
+      const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
+      // Close is no handover: retain the publisher epoch or clients fence the renderer's next frame.
+      const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+        ...snapshot,
+        snapshotVersion: snapshot.snapshotVersion + 1,
+        activeTabId: active?.id ?? null,
+        activeTabType: active?.type ?? null,
+        tabGroups: buildHeadlessMobileSessionTabGroups(
+          worktreeId,
+          nextTabs,
+          active,
+          snapshot.tabGroups
+        ),
+        ...(retirementProofs.length > 0
+          ? {
+              retiredTerminalSurfaces: appendRetiredTerminalSurfaceProofs(
+                snapshot.retiredTerminalSurfaces,
+                retirementProofs
+              )
+            }
+          : {}),
+        tabs: nextTabs
+      }
+      this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
+      this.emitMobileSessionTabsSnapshot(nextSnapshot)
+      return true
     }
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
 
   async moveMobileSessionTab(

@@ -58,7 +58,7 @@ export function getDraftExtraAgentArgsError(
   return parsed.ok ? null : extraAgentArgsErrorText(parsed)
 }
 
-/** Reuse can't carry extras; the field offers a switch instead of flipping it silently. */
+/** Authored launch settings need a fresh session; legacy extras apply only on fresh launch. */
 export function draftExtraAgentArgsNeedFreshSession(
   draft: Pick<
     AutomationDraft,
@@ -75,8 +75,7 @@ export function draftExtraAgentArgsNeedFreshSession(
   const choices = draft.surface === 'chat' ? views.chatSessionOptions : views.sessionOptions
   const consumed =
     Object.keys(choices ?? {}).length > 0 ||
-    (draft.surface !== 'chat' &&
-      (draft.agentArgs !== undefined || hasExtraAgentArgs(draft.extraAgentArgs)))
+    (draft.surface !== 'chat' && draft.agentArgs !== undefined)
   return consumed && draft.workspaceMode === 'existing' && draft.reuseSession
 }
 

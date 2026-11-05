@@ -3925,6 +3925,7 @@
       "hostUnreachable": "无法连接此主机。请重新连接并刷新以检查其当前状态。",
       "actionFailed": "无法在主机上完成此操作。请刷新后重试。",
       "dispatched": "已调度",
+      "sent": "已发送",
       "skippedPrecheck": "已跳过 · 预检查",
       "skippedMissedSchedule": "已跳过 · 错过计划",
       "skippedHostUnavailable": "已跳过 · 主机不可用",

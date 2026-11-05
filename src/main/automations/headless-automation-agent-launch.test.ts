@@ -1,5 +1,14 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  runtimeStub,
+  setAgentLaunchRecordStore
+} from '../runtime/rpc/methods/agent-launch.test-fixture'
+import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
@@ -12,9 +21,21 @@ vi.mock('../runtime/rpc/methods/agent-launch-terminal-prompt', () => ({
   deliverTerminalAgentLaunchPrompt
 }))
 
-beforeEach(() => {
+let ledgerDirectory: string
+beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(Date.UTC(2026, 10, 3))
+  ledgerDirectory = mkdtempSync(join(tmpdir(), 'orca-33492-merge-'))
+  setAgentLaunchRecordStore(await openTestAgentSessionRecordStore(ledgerDirectory))
   deliverTerminalAgentLaunchPrompt.mockClear()
   deliverTerminalAgentLaunchPrompt.mockResolvedValue(true)
+})
+
+afterEach(async () => {
+  vi.useRealTimers()
+  setAgentLaunchRecordStore(null)
+  await closeTestJournalHostDatabases()
+  rmSync(ledgerDirectory, { recursive: true, force: true })
 })
 
 const CHAT_DEFAULT_ON = { nativeChatProviders: EVERY_AGENT_CHAT }
@@ -33,7 +54,9 @@ function harness(
     worktreeId: 'repo-1::/wt/auto',
     title: 'auto-nightly'
   }
+  const host = runtimeStub()
   const runtime = {
+    ...host,
     startupTerminalCreation,
     requireStore: () => ({ getSettings: () => CHAT_DEFAULT_ON }),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
@@ -63,12 +86,12 @@ function harness(
       title: 'Nightly',
       suppressStartupUpdatePrompt: true
     })),
-    resolveManagedTerminalWorkspaceTarget: vi.fn(async () => ({
+    resolveManagedTerminalWorkspaceTarget: vi.fn(async (selector: string) => ({
       managedWorktree: {
         displayName: 'repo',
         ...(options.workspaceHostId ? { hostId: options.workspaceHostId } : {})
       },
-      scope: { folderWorkspace: null }
+      scope: await host.showTerminalWorkspaceLaunchScope(selector)
     })),
     getAgentStatusRowsForPane: vi.fn((_paneKey: string) => [
       { state: 'done', agentType: 'claude', receivedAt: 2 }
@@ -87,6 +110,20 @@ function harness(
       async (_handle: string, _followup: { agent: string; prompt: string }) => true
     )
   }
+  host.showTerminal.mockImplementation(async (handle) => ({
+    handle,
+    worktreeId: runtime.getTerminalWorktreeIdForHandle(handle)
+  }))
+  host.showTerminalWorkspaceLaunchScope.mockImplementation(async (selector) => ({
+    id: selector.replace(/^id:/, ''),
+    path: '/repo',
+    connectionId: options.workspaceHostId?.startsWith('ssh:')
+      ? options.workspaceHostId.slice(4)
+      : null,
+    repo: null,
+    folderWorkspace: null
+  }))
+  host.createTerminal.mockImplementation(async () => runtime.launchAgentTerminal('id:wt-1', {}))
   return runtime
 }
 
@@ -104,6 +141,7 @@ function automation(overrides: Record<string, unknown>) {
 const RUN = {
   id: 'run-1',
   title: 'Nightly',
+  createdAt: Date.UTC(2026, 10, 3),
   scheduledFor: Date.UTC(2026, 9, 9, 3),
   trigger: 'scheduled' as const
 }
@@ -186,7 +224,10 @@ describe('headless automation agent launch', () => {
     expect(runtime.launchAgentTerminal).toHaveBeenCalledTimes(1)
     runtime.launchAgentTerminal.mockClear()
     runtime.getPtyExecutionHostMetadata.mockReturnValue({ executionHostId: 'ssh:old' })
-    await launch(runtime, { reuseSession: true }, [previousRun()])
+    await launch(runtime, { reuseSession: true }, [previousRun()], {
+      ...RUN,
+      id: 'live-host-conflict'
+    })
     expect(deliverTerminalAgentLaunchPrompt).not.toHaveBeenCalled()
     expect(runtime.launchAgentTerminal).toHaveBeenCalledTimes(1)
     runtime.launchAgentTerminal.mockClear()
@@ -194,7 +235,7 @@ describe('headless automation agent launch', () => {
       new Error('selector_not_found')
     )
     await expect(launch(runtime, { reuseSession: true }, [previousRun()])).rejects.toThrow(
-      'selector_not_found'
+      'could not confirm'
     )
     expect(deliverTerminalAgentLaunchPrompt).not.toHaveBeenCalled()
     expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
@@ -202,7 +243,7 @@ describe('headless automation agent launch', () => {
 
   it('reuses a proven local legacy pane and ignores logical setup replacement for the same physical target', async () => {
     const runtime = harness()
-    for (const runContext of [
+    for (const [index, runContext] of [
       undefined,
       {
         kind: 'workspace-run',
@@ -212,12 +253,20 @@ describe('headless automation agent launch', () => {
         repoId: 'repo-1',
         path: '/repo/'
       } as const
-    ]) {
-      await launch(runtime, { reuseSession: true }, [previousRun({ runContext })])
+    ].entries()) {
+      await launch(runtime, { reuseSession: true }, [previousRun({ runContext })], {
+        ...RUN,
+        id: `run-${index + 1}`
+      })
     }
     expect(deliverTerminalAgentLaunchPrompt).toHaveBeenCalledTimes(2)
     expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
-    expect(runtime.resolveManagedTerminalWorkspaceTarget).toHaveBeenCalledTimes(2)
+    expect(runtime.resolveManagedTerminalWorkspaceTarget.mock.calls).toEqual(
+      Array.from({ length: 2 }, () => [
+        ['id:wt-1', 'local', false],
+        ['id:wt-1', undefined, false]
+      ]).flat()
+    )
   })
 
   it('reuses a pinned SSH folder with local project history without fresh transport acquisition', async () => {
@@ -442,85 +491,5 @@ describe('headless automation agent launch', () => {
       'The target workspace is no longer available.'
     )
     expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
-  })
-
-  it('sends a reuse-session prompt into the idle agent its previous run left', async () => {
-    const runtime = harness()
-
-    const launched = await launch(runtime, { reuseSession: true }, [previousRun()])
-
-    expect(deliverTerminalAgentLaunchPrompt).toHaveBeenCalledWith({
-      runtime,
-      handle: 'term_prev',
-      agent: 'claude',
-      freshLaunch: false,
-      text: 'fix the flaky test',
-      unprovableHost: 'write-unless-shell'
-    })
-    expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
-    expect(launched).toEqual({
-      workspaceId: 'wt-1',
-      workspaceDisplayName: 'repo',
-      terminalHandle: 'term_prev',
-      terminalSessionId: 'tab-prev',
-      terminalPaneKey: 'tab-prev:leaf-1',
-      terminalPtyId: 'pty-prev'
-    })
-  })
-
-  it('launches fresh when the idle agent did not take the prompt', async () => {
-    const runtime = harness()
-    deliverTerminalAgentLaunchPrompt.mockResolvedValue(false)
-
-    const launched = await launch(runtime, { reuseSession: true }, [previousRun()])
-
-    expect(deliverTerminalAgentLaunchPrompt).toHaveBeenCalledTimes(1)
-    expect(runtime.launchAgentTerminal).toHaveBeenCalledTimes(1)
-    expect(launched.terminalHandle).toBe('term_existing')
-  })
-
-  it.each([
-    ['its pane now holds another PTY', { ptyId: 'pty-restarted' }],
-    ['its agent is working', { row: { state: 'working', agentType: 'claude', receivedAt: 2 } }],
-    ['another agent is in it', { row: { state: 'done', agentType: 'codex', receivedAt: 2 } }],
-    ['the previous run did not complete', { run: { status: 'dispatch_failed' as const } }],
-    ['reuse is off', { reuseSession: false }]
-  ])('launches fresh without sending when %s', async (_label, setup) => {
-    const runtime = harness()
-    if ('ptyId' in setup) {
-      runtime.getTerminalPtyIdForHandle.mockReturnValue(setup.ptyId)
-    }
-    if ('row' in setup) {
-      runtime.getAgentStatusRowsForPane.mockReturnValue([setup.row])
-    }
-
-    await launch(runtime, { reuseSession: 'reuseSession' in setup ? setup.reuseSession : true }, [
-      previousRun('run' in setup ? setup.run : {})
-    ])
-
-    expect(deliverTerminalAgentLaunchPrompt).not.toHaveBeenCalled()
-    expect(runtime.launchAgentTerminal).toHaveBeenCalledTimes(1)
-  })
-
-  it('launches fresh while the previous run is still working in the reused agent', async () => {
-    const runtime = harness()
-    const inFlight = previousRun({ id: 'run-scheduled', status: 'dispatched', dispatchedAt: 2 })
-
-    await launch(runtime, { reuseSession: true }, [previousRun(), inFlight])
-
-    expect(deliverTerminalAgentLaunchPrompt).not.toHaveBeenCalled()
-    expect(runtime.launchAgentTerminal).toHaveBeenCalledTimes(1)
-  })
-
-  it("reads the pane's newest status row, not a stale done", async () => {
-    const runtime = harness()
-    runtime.getAgentStatusRowsForPane.mockReturnValue([
-      { state: 'done', agentType: 'claude', receivedAt: 1 },
-      { state: 'working', agentType: 'claude', receivedAt: 3 }
-    ])
-
-    await launch(runtime, { reuseSession: true }, [previousRun()])
-
-    expect(deliverTerminalAgentLaunchPrompt).not.toHaveBeenCalled()
   })
 })

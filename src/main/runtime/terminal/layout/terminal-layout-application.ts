@@ -1,3 +1,4 @@
+import type { TerminalCloseRunOptions } from '../../terminal-surface-close'
 import { OrcaRuntimeWithPickMostRecentActor } from './terminal-layout-queue'
 import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from '../../orca-runtime-core'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -7,7 +8,10 @@ import { PaneGridRecorder } from './pane-grid-recording'
 
 export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentActor {
   protected abstract suppressResizesForMs(ms: number): void
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: TerminalCloseRunOptions
+  ): Promise<LayoutApplyReply>
   private paneGrids: PaneGridRecorder | null = null
 
   /** Layout-owner build: remembers a resized terminal's grid on the pane showing it. */

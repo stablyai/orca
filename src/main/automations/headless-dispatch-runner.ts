@@ -30,6 +30,7 @@ export type HeadlessAutomationDispatchContext = {
   runPrecheck: () => Promise<AutomationPrecheckResult | null>
   markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
   watchRun: (run: AutomationRun) => void
+  currentRun?: () => AutomationRun
 }
 
 /** Record dispatch refusals as skips. */
@@ -55,6 +56,9 @@ export async function runHeadlessAutomationDispatch(
   const { automation, run, target, runs } = ctx
   const precheckResult =
     run.trigger === 'scheduled' && automation.precheck ? await ctx.runPrecheck() : null
+  if (ctx.currentRun && ctx.currentRun().status !== 'dispatching') {
+    return ctx.currentRun()
+  }
   if (precheckResult && !didAutomationPrecheckPass(precheckResult)) {
     return runs.updateRun({
       runId: run.id,
@@ -74,6 +78,9 @@ export async function runHeadlessAutomationDispatch(
       error instanceof AutomationDispatchRefusedError
         ? error.failure
         : heldForStoppedWslDistro(error)
+    if (ctx.currentRun && ctx.currentRun().status !== 'dispatching') {
+      return ctx.currentRun()
+    }
     return runs.updateRun({
       runId: run.id,
       status: refusal ? 'skipped_unavailable' : 'dispatch_failed',
@@ -82,6 +89,9 @@ export async function runHeadlessAutomationDispatch(
       ...(automation.surface === 'chat' ? { dispatchedAt, precheckResult } : {}),
       ...(refusal ?? { error: describeDispatchError(error) })
     })
+  }
+  if (ctx.currentRun && ctx.currentRun().status !== 'dispatching') {
+    return ctx.currentRun()
   }
   const launchRunTarget = {
     sessionKind: launch.sessionKind ?? 'terminal',

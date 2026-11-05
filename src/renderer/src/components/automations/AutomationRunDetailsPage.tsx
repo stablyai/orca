@@ -60,7 +60,7 @@ export function AutomationRunDetailsPage({
               )
             : null
         }
-        statusLabel={getAutomationRunStatusLabel(run.status)}
+        statusLabel={getAutomationRunStatusLabel(run.status, run.sessionKind)}
         statusVariant={getAutomationRunStatusVariant(run.status)}
         actions={
           <>

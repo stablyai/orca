@@ -55,11 +55,17 @@ function createAutomation(store: TestStore): Automation {
   })
 }
 
-function retainDispatchedRun(store: TestStore, automation: Automation): AutomationRun {
+function retainDispatchedRun(
+  store: TestStore,
+  automation: Automation,
+  sessionKind: 'chat' | 'terminal' = 'chat'
+): AutomationRun {
   const run = store.createAutomationRun(automation, Date.now() - 60_000, 'manual')
   return store.updateAutomationRun({
     runId: run.id,
     status: 'dispatched',
+    sessionKind,
+    chatSessionId: sessionKind === 'chat' ? 'chat-1' : null,
     ...LAUNCH_TARGET,
     error: null
   })
@@ -100,7 +106,7 @@ function createPaneSurface(): {
   }
 }
 
-describe('reconciling retained runs against a graph that has not published yet', () => {
+describe('reconciling retained Chat obligations against a graph that has not published yet', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-retained-run-'))
     vi.useFakeTimers()
@@ -189,5 +195,27 @@ describe('reconciling retained runs against a graph that has not published yet',
       'Orca lost the terminal for this run before it reported completion.'
     )
     service.stop()
+  })
+
+  it('detaches terminal delivery history without failure or rearming when the pane appears later', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store)
+    const retained = retainDispatchedRun(store, automation, 'terminal')
+    const surface = createPaneSurface()
+    const service = new AutomationService(store, { terminalObserver: surface.observer })
+    try {
+      service.start()
+      service.setRendererReady()
+      await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
+      surface.mountPane()
+      await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
+      expect(surface.observedHandles).toEqual([])
+      expect(readRun(store, automation.id, retained.id)).toMatchObject({
+        status: 'dispatched',
+        error: null
+      })
+    } finally {
+      service.stop()
+    }
   })
 })

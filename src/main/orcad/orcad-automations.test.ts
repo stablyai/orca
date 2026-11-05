@@ -68,4 +68,26 @@ describe('orcad automations', () => {
       cleanups.forEach((cleanup) => cleanup())
     }
   })
+
+  it.each(['terminal', 'chat'] as const)(
+    'treats dispatched %s as history or a live obligation without changing terminal census',
+    (sessionKind) => {
+      const store = createStore()
+      store.addRepo(makeRepo())
+      const automation = store.createAutomation({
+        name: 'Test',
+        prompt: 'Test',
+        agentId: 'claude',
+        projectId: 'r1',
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY',
+        dtstart: 1
+      })
+      store.updateAutomation(automation.id, { enabled: false })
+      const run = store.createAutomationRun(automation, 1)
+      store.updateAutomationRun({ runId: run.id, status: 'dispatched', sessionKind })
+      expect(orcadAutomationsKeepHostBusy(store)).toBe(sessionKind === 'chat')
+    }
+  )
 })

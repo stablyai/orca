@@ -3925,6 +3925,7 @@
       "hostUnreachable": "이 호스트에 연결하지 못했습니다. 다시 연결한 후 새로 고쳐 현재 상태를 확인하세요.",
       "actionFailed": "호스트에서 이 작업을 완료하지 못했습니다. 새로 고친 후 다시 시도하세요.",
       "dispatched": "전송됨",
+      "sent": "전송됨",
       "skippedPrecheck": "건너뜀 · 사전 검사",
       "skippedMissedSchedule": "건너뜀 · 예약 시간 지남",
       "skippedHostUnavailable": "건너뜀 · 호스트 사용 불가",

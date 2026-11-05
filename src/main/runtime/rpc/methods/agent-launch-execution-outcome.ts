@@ -69,3 +69,12 @@ export async function settleLaunchWhoseTabWasClosed(
   await settleQuietly(admission.fail(AGENT_LAUNCH_TAB_CLOSED_CODE))
   throw new AgentLaunchExecutionError(new AgentLaunchTabClosedError(), AGENT_LAUNCH_TAB_CLOSED_CODE)
 }
+
+export function rethrowAgentLaunchCause(error: unknown, context: RpcContext): never {
+  if (error instanceof AgentLaunchExecutionError) {
+    throw error.cause instanceof AgentLaunchTabClosedError
+      ? agentLaunchTabClosedAnswer(context)
+      : error.cause
+  }
+  throw error
+}

@@ -26,6 +26,7 @@ import {
   agentLaunchTabClosedAnswer,
   settleLaunchWhoseTabWasClosed,
   settleQuietly,
+  rethrowAgentLaunchCause,
   withEarlyTab
 } from './agent-launch-execution-outcome'
 import {
@@ -33,7 +34,7 @@ import {
   AgentLaunchReplay,
   type AgentLaunchParams
 } from '../../../../shared/rpc-contract/agent-launch-params'
-import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
+import { agentLaunchSurfaceFactory, type AgentLaunchHostPolicy } from './agent-launch-surfaces'
 import { prepareAgentHandoffCard } from './agent-launch-handoff-card'
 import {
   agentLaunchFailureCode,
@@ -59,7 +60,7 @@ import {
 export { supportsAgentLaunch } from './agent-launch-target-authorization'
 
 type HostLaunchContext = RpcContext & {
-  agentLaunchPolicy?: { onSurfacePublished?: (surface: AgentLaunchResult) => void }
+  agentLaunchPolicy?: AgentLaunchHostPolicy
 }
 
 async function runAgentLaunch(
@@ -73,15 +74,17 @@ async function runAgentLaunch(
     runtime: context.runtime,
     intent,
     decidedMode,
+    signal: context.agentLaunchPolicy?.signal,
     surfaces: agentLaunchSurfaceFactory(
       context,
       replaySafe?.attachOperationId,
       replaySafe?.callerKey,
       callerNavigationId !== null,
       replaySafe?.terminalSpawn,
-      view
+      view,
+      context.agentLaunchPolicy
     ),
-    workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
+    workspaces: agentLaunchWorkspaceFactory(context, intent.agent, context.agentLaunchPolicy),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
     onSurfacePublished: (surface) => {
       try {
@@ -109,7 +112,8 @@ function runLegacyAgentLaunch(
   const execute = async () =>
     runAgentLaunch(
       await resolveUnlaunchedIntent(params, context.runtime, null, {
-        callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+        callerRendersStructured: callerRendersLaunchedChat(context, params.agent),
+        unprovableHost: context.agentLaunchPolicy?.unprovableHost
       }),
       context,
       {
@@ -195,7 +199,8 @@ async function executeAdmittedAgentLaunch(
   let resolved: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>
   try {
     resolved = await resolveUnlaunchedIntent(params, context.runtime, view.early, {
-      callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+      callerRendersStructured: callerRendersLaunchedChat(context, params.agent),
+      unprovableHost: context.agentLaunchPolicy?.unprovableHost
     })
   } catch (error) {
     await settleQuietly(admission.fail(agentLaunchFailureCode(error), error))
@@ -318,11 +323,6 @@ export async function launchAgentOnHost(
   }
   return runReplaySafeAgentLaunch({ ...params, operationId }, host).catch((error: unknown) => {
     // Preserve the original error contract for callers of the optional-identity method.
-    if (error instanceof AgentLaunchExecutionError) {
-      throw error.cause instanceof AgentLaunchTabClosedError
-        ? agentLaunchTabClosedAnswer(host)
-        : error.cause
-    }
-    throw error
+    rethrowAgentLaunchCause(error, host)
   })
 }

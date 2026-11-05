@@ -31,7 +31,7 @@ export type AutomationRunStatus =
 export type AutomationRunTrigger = 'scheduled' | 'manual'
 
 /** Statuses a run can never leave; only these are safe to evict from history. */
-export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean {
+export function isFinalAutomationRunStatus(status: string): boolean {
   return (
     status === 'completed' ||
     status === 'dispatch_failed' ||

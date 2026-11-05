@@ -66,6 +66,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   creationId?: string
   /** Main-internal launch registration before catalog notification or activation. */
   onWorkspaceCreated?: (worktreeId: string) => void
+  signal?: AbortSignal
+  beforeTerminalSpawn?: () => void
   startupAgent?: TuiAgent
   terminalImageViewerSupported?: boolean
   startupSessionOptions?: Readonly<Record<string, SessionOptionValue>>

@@ -41,10 +41,11 @@ describe('applyWindowLayoutCommand', () => {
 
     await applyWindowLayoutCommand(store, () => ['local', 'runtime:env-1', 'ssh:target-1'], CLOSE)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith({ ...CLOSE, userPaneClose: true }, [
-      'local',
-      'ssh:target-1'
-    ])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(
+      { ...CLOSE, userPaneClose: true },
+      ['local', 'ssh:target-1'],
+      undefined
+    )
     expect(mocks.markAgentLaunchesClosedByUser).toHaveBeenCalledWith('wt-1', {
       kind: 'pane',
       tabId: 'tab-1',

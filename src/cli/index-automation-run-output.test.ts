@@ -154,6 +154,43 @@ describe('automation run command output', () => {
     }
   )
 
+  it('presents accepted Chat as Sent in human output while keeping raw responses unchanged', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const chat = run({ status: 'dispatched', sessionKind: 'chat', chatSessionId: 'chat-1' })
+    queueRun(chat)
+    await main(['automations', 'run', AUTOMATION_ID], '/tmp/repo')
+    const acknowledgement = String(log.mock.calls[0]?.[0])
+    expect(acknowledgement.split('\n')[0]).toBe(`Sent run ${RUN_ID} (dispatched).`)
+    expect(acknowledgement).toContain('status: dispatched')
+
+    queueRun(chat)
+    await main(['automations', 'run', AUTOMATION_ID, '--json'], '/tmp/repo')
+    expect(JSON.parse(String(log.mock.calls[1]?.[0]))).toEqual(
+      okFixture('req_run', { run: chat, runId: RUN_ID })
+    )
+
+    const runs = [
+      chat,
+      run({ id: 'terminal', status: 'dispatched' }),
+      run({ id: 'done', status: 'completed', sessionKind: 'chat' })
+    ]
+    queueFixtures(callMock, okFixture('req_runs', { runs }))
+    await main(['automations', 'runs', '--id', AUTOMATION_ID], '/tmp/repo')
+    const history = String(log.mock.calls[2]?.[0])
+    expect(history).toContain(`${RUN_ID}  ${AUTOMATION_ID}  Sent  manual`)
+    expect(history).toContain(`terminal  ${AUTOMATION_ID}  dispatched  manual`)
+    expect(history).toContain(`done  ${AUTOMATION_ID}  completed  manual`)
+
+    queueFixtures(callMock, okFixture('req_page', { runs: [chat], nextCursor: 'next' }))
+    await main(['automations', 'runs', '--id', AUTOMATION_ID, '--limit', '1'], '/tmp/repo')
+    expect(String(log.mock.calls[3]?.[0])).toContain(`${RUN_ID}  ${AUTOMATION_ID}  Sent  manual`)
+    expect(String(log.mock.calls[3]?.[0])).toContain('Next page: --cursor next')
+
+    queueFixtures(callMock, okFixture('req_runs', { runs }))
+    await main(['automations', 'runs', '--id', AUTOMATION_ID, '--json'], '/tmp/repo')
+    expect(JSON.parse(String(log.mock.calls[4]?.[0]))).toEqual(okFixture('req_runs', { runs }))
+  })
+
   it('prints workspace and terminal identities only when supplied by the host', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     queueRun(

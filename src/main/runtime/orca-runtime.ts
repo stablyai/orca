@@ -1,3 +1,4 @@
+import { terminalCloseRunOptions, type TerminalCloseRunOptions } from './terminal-surface-close'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
@@ -36,13 +37,9 @@ import { findWorkspaceReferences } from './runtime-reference-find'
 import { createReferenceAgentIndex, referenceConnectionHosts } from './runtime-reference-agents'
 import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-contracts'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
-import {
-  applyWindowLayoutCommand,
-  type WindowLayoutCommand,
-  type LayoutCommandRunOptions
-} from './runtime-layout-apply'
+import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
+import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import {
   installStructuredAgentAvailability,
@@ -264,7 +261,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Apply a window command to the partitions that hold its tab. */
   async applyLayoutCommand(
     command: WindowLayoutCommand,
-    run?: Pick<LayoutCommandRunOptions, 'admit'>
+    run?: TerminalCloseRunOptions
   ): Promise<LayoutApplyReply> {
     // Wait for live terminal placement before creating the first workspace surface.
     const placing = this.livePlacementSettledFor(command)
@@ -277,7 +274,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
             : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
         command,
         (move) => rekeyMovedPaneOwners(this, move),
-        { ...this.layoutCommandRun(command), ...run }
+        { ...this.layoutCommandRun(command), ...terminalCloseRunOptions(run) }
       )
     // Order sleep/wake after previously accepted hook statuses.
     const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)

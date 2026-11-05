@@ -1,3 +1,4 @@
+import { sshCredentialPromptAllowed } from './ssh-connection-attribution'
 /* eslint-disable max-lines -- Why: the connect attempt (transport choice, the system-ssh ControlMaster retry, the ssh2 proxy and credential prompts) and teardown all read and write one generation, proxy, transport flags and cached sign-in; splitting them would spread each guard across files. Reconnect and channel opening live in their own modules. */
 import {
   createSshFileUploadSession,
@@ -116,6 +117,7 @@ export class SshConnection {
   private signInVerified = false
   private keyboardInteractiveCancelled = false
   private openCredentialPrompts = 0
+  private readonly allowCredentialPrompt = sshCredentialPromptAllowed()
   // A rejected cached password must reach the user on the next round.
   private keyboardInteractivePasswordState = { passwordAutoAnswered: false }
   private hostKeyFingerprint: string | undefined
@@ -354,7 +356,7 @@ export class SshConnection {
     connectGeneration: number,
     echo?: boolean
   ): Promise<string | null | undefined> {
-    if (!this.isCurrentConnectAttempt(connectGeneration)) {
+    if (!this.isCurrentConnectAttempt(connectGeneration) || !this.allowCredentialPrompt) {
       return undefined
     }
     this.openCredentialPrompts += 1

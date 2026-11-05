@@ -1,3 +1,4 @@
+import type { TerminalCloseRunOptions } from '../../terminal-surface-close'
 import { OrcaRuntimeWithWorktreeSleepResumeRecording } from '../stop/worktree-sleep-resume-recording'
 import { AgentGeneratedTabTitles, type GeneratedTitleTarget } from './agent-generated-tab-titles'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -10,7 +11,10 @@ import type { LayoutApplyReply } from '../../../../shared/workspace-layout/works
 import type { WindowLayoutCommand } from '../../runtime-layout-apply'
 
 export abstract class OrcaRuntimeWithAgentGeneratedTabTitles extends OrcaRuntimeWithWorktreeSleepResumeRecording {
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: TerminalCloseRunOptions
+  ): Promise<LayoutApplyReply>
 
   private readonly agentGeneratedTabTitles = new AgentGeneratedTabTitles({
     enabled: () => this.store?.getSettings?.()?.tabAutoGenerateTitle === true,

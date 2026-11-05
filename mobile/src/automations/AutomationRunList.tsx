@@ -61,7 +61,7 @@ export function AutomationRunList(props: {
             '{{title}}, {{status}}, {{date}}',
             {
               title: run.title,
-              status: automationRunStatusLabel(run.status),
+              status: automationRunStatusLabel(run.status, run.sessionKind),
               date: automationDate(run.scheduledFor)
             }
           )}
@@ -72,7 +72,7 @@ export function AutomationRunList(props: {
             <Text style={[styles.heading, styles.grow]}>{run.title}</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </View>
-          <Text style={styles.text}>{automationRunStatusLabel(run.status)}</Text>
+          <Text style={styles.text}>{automationRunStatusLabel(run.status, run.sessionKind)}</Text>
           <Text style={styles.meta}>
             {automationDate(run.scheduledFor)} ·{' '}
             {run.trigger === 'manual'

@@ -17933,6 +17933,7 @@
           "runStatusPending": "Kuyrukta",
           "runStatusDispatching": "Başlatılıyor",
           "runStatusDispatched": "Başlatıldı",
+          "runStatusSent": "Gönderildi",
           "runStatusCompleted": "Tamamlandı",
           "runStatusSkippedPrecheck": "Ön kontrol nedeniyle atlandı",
           "runStatusSkippedMissed": "Atlandı",

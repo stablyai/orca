@@ -1,5 +1,5 @@
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
-import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
+import { OrcaRuntimeWithTerminalSurfaceCloseOwner } from '../../session-tabs/terminal-surface-close-owner'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsResult,
@@ -10,13 +10,7 @@ import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
-import {
-  captureTerminalCloseRequest,
-  resolveTerminalCloseTarget,
-  type PaneCloseResolution,
-  type RendererTerminalClose,
-  type TerminalSurfaceCloseOptions
-} from '../../terminal-surface-close'
+import { resolveTerminalCloseTarget, type PaneCloseResolution } from '../../terminal-surface-close'
 import type {
   TerminalPaneCloseTarget,
   TerminalSurfaceCloseTarget
@@ -24,11 +18,9 @@ import type {
 import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { captureAcknowledgedTerminalTabRetirement } from '../../workspace-session-terminal-tab-retirement-identity'
-import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
 
-export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
+export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithTerminalSurfaceCloseOwner {
   protected abstract getRendererOwnedBrowserPageIds(
     ...args: Parameters<BrowserOwnership['getRendererOwnedBrowserPageIds']>
   ): ReturnType<BrowserOwnership['getRendererOwnedBrowserPageIds']>
@@ -101,80 +93,6 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         (candidate) => candidate.id === tabId || candidate.entityId === tabId
       ) ?? null
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
-  }
-
-  protected captureTerminalTabRetirement(worktreeId: string, tabId: string) {
-    const originalHostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
-    return captureAcknowledgedTerminalTabRetirement(worktreeId, tabId, () => {
-      const resolvedHostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
-      const resolvedSession = this.store?.getWorkspaceSession?.(resolvedHostId)
-      // Emptying the last tab may reroute the worktree to its catalog host.
-      const hostId = resolvedSession?.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)
-        ? resolvedHostId
-        : originalHostId
-      return {
-        hostId,
-        session: this.store?.getWorkspaceSession?.(hostId) ?? null,
-        snapshot: this.mobileSessionTabsByWorktree.get(worktreeId),
-        incarnationOf: (ptyId) => this.ptysById.get(ptyId)?.incarnationId
-      }
-    })
-  }
-
-  /** Commit explicit-close membership removal durably in the owning host partition before callers publish and kill. */
-  protected async closeTerminalSurface(
-    worktreeId: string,
-    target: TerminalSurfaceCloseTarget,
-    options: TerminalSurfaceCloseOptions = {}
-  ): Promise<string[]> {
-    const store = this.store
-    if (!store?.getWorkspaceSession || !store.setWorkspaceSession || !store.runDurableMutation) {
-      throw new Error('workspace_session_unavailable')
-    }
-    // Already-removed layout tabs have no newer owner to protect; refusing would strand them.
-    const acknowledgeTabRetirement =
-      target.kind === 'tab' && !options.closedByLayoutOwner
-        ? this.captureTerminalTabRetirement(worktreeId, target.tabId)
-        : null
-    let ptyIdsToKill: string[] = []
-    let refusal: Error | undefined
-    const hostIds = () => this.getWorkspaceSessionHostIdsForTab(worktreeId, target.tabId)
-    const fenced = acknowledgeTabRetirement !== null
-    try {
-      refusal = await store.runDurableMutation(
-        closeLeafOrTab({
-          worktreeId,
-          target,
-          options,
-          ...captureTerminalCloseRequest(
-            worktreeId,
-            target,
-            hostIds(),
-            { getWorkspaceSession: (hostId) => store.getWorkspaceSession!(hostId) },
-            fenced
-          ),
-          ownerMatches: () => !acknowledgeTabRetirement || acknowledgeTabRetirement().matches,
-          hostIds,
-          getSession: (hostId) => store.getWorkspaceSession!(hostId),
-          setSession: (session, hostId) => store.setWorkspaceSession!(session, hostId),
-          onClosed: (closedPtyIds) => {
-            ptyIdsToKill = closedPtyIds
-          }
-        })
-      )
-    } catch (error) {
-      console.error('[runtime] failed to persist terminal close:', error)
-    }
-    if (refusal) {
-      throw refusal
-    }
-    return ptyIdsToKill
-  }
-
-  /** The desktop renderer's close intent: it already guarded, removed and killed; this only reports. */
-  async closeTerminalSurfaceFromRenderer({ worktreeId, target, reason }: RendererTerminalClose) {
-    const options = { allowMissing: true, force: true, closedByLayoutOwner: true, reason }
-    await this.closeTerminalSurface(worktreeId, target, options)
   }
 
   /** Resolves a close main started against the copy of the tab's panes its layout owner holds. */

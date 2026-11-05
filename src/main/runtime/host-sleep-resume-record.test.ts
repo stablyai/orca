@@ -30,6 +30,7 @@ function hookRow(
 }
 
 function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
+  let beforePresence: (() => Promise<void>) | undefined
   let verdict = initialVerdict
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
@@ -54,8 +55,10 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
   let rows: AgentStatusIpcPayload[] = []
   const runtime = new OrcaRuntimeService(partialRuntimeStore(runtimeStore), undefined, {
     getAgentProviderSessionSnapshot: () => rows,
-    checkHookAgentPresence: async (paneKey: string) =>
-      paneKey === HOLDER_PANE_KEY ? holderVerdict : verdict
+    checkHookAgentPresence: async (paneKey: string) => {
+      await beforePresence?.()
+      return paneKey === HOLDER_PANE_KEY ? holderVerdict : verdict
+    }
   })
   runtime.setPtyController({
     spawn: committingSpawn(runtime, spawn),
@@ -83,7 +86,16 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
   const setVerdict = (next: Verdict): void => {
     verdict = next
   }
-  return { runtime, spawn, reportAgent, reportHolder, setVerdict }
+  return {
+    runtime,
+    spawn,
+    reportAgent,
+    reportHolder,
+    setVerdict,
+    pausePresence: (pause: () => Promise<void>) => {
+      beforePresence = pause
+    }
+  }
 }
 
 function userActivate(runtime: InstanceType<typeof OrcaRuntimeService>) {
@@ -266,4 +278,41 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
       launchConfig
     })
   })
+})
+
+it('automatic sleep rechecks retention after resume capture and can later sleep when safe', async () => {
+  const { runtime, reportAgent, pausePresence } = makeRuntime(null)
+  await userActivate(runtime)
+  reportAgent()
+  const capture = Promise.withResolvers<void>()
+  const entered = Promise.withResolvers<void>()
+  pausePresence(async () => {
+    entered.resolve()
+    await capture.promise
+  })
+  const stop = vi.spyOn(runtime['ptyController']!, 'stopAndWait')
+  let safe = true
+  const sleeping = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`, {
+    beforeAction: () => {
+      if (!safe) {
+        throw new Error('retention_revoked')
+      }
+    }
+  })
+  const settled = sleeping.catch((error: unknown) => error)
+  await entered.promise
+  safe = false
+  capture.resolve()
+  expect(await settled).toMatchObject({ message: 'retention_revoked' })
+  expect(stop).not.toHaveBeenCalled()
+  safe = true
+  await expect(
+    runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`, {
+      beforeAction: () => {
+        if (!safe) {
+          throw new Error('retention_revoked')
+        }
+      }
+    })
+  ).resolves.toMatchObject({ stopped: 1 })
 })

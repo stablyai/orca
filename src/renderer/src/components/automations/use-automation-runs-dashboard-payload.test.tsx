@@ -167,6 +167,7 @@ describe('automation dashboard run payload ownership', () => {
     expect(Object.keys(entries()[0]?.run ?? {}).sort()).toEqual([
       'id',
       'scheduledFor',
+      'sessionKind',
       'status',
       'title',
       'trigger'

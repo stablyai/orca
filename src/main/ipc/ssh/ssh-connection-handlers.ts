@@ -1,7 +1,8 @@
 import { ipcMain } from 'electron'
 import {
   setSshTargetRegistryHandlers,
-  getSshTargetRegistryStore
+  getSshTargetRegistryStore,
+  registeredSshTargetNeedsCredentialPrompt
 } from '../../ssh/targets/ssh-target-registry'
 import {
   assertSshConnectsNotFenced,
@@ -13,10 +14,7 @@ import { connectionManager } from './ssh-ipc-context'
 import { getPublicSshState } from './ssh-renderer-broadcast'
 import { disconnectSshHostForUser } from './ssh-host-user-disconnect'
 import { errorMessage } from '../../../shared/error-message'
-import {
-  clearSshCredentialDeclined,
-  isSshCredentialDeclined
-} from '../../ssh/ssh-credential-decline'
+import { clearSshCredentialDeclined } from '../../ssh/ssh-credential-decline'
 
 export function registerSshConnectionHandlers(): void {
   setSshTargetRegistryHandlers({
@@ -37,16 +35,9 @@ export function registerSshConnectionHandlers(): void {
   })
 
   // Auto-connect callers need to avoid prompts when credentials were declined or are no longer cached.
-  ipcMain.handle('ssh:needsPassphrasePrompt', (_event, args: { targetId: string }) => {
-    if (isSshCredentialDeclined(args.targetId)) {
-      return true
-    }
-    const target = getSshTargetRegistryStore()!.getTarget(args.targetId)
-    if (!target?.lastRequiredPassphrase) {
-      return false
-    }
-    return !connectionManager!.hasCachedCredential(target)
-  })
+  ipcMain.handle('ssh:needsPassphrasePrompt', (_event, args: { targetId: string }) =>
+    registeredSshTargetNeedsCredentialPrompt(args.targetId)
+  )
 
   ipcMain.handle('ssh:testConnection', async (_event, args: { targetId: string }) => {
     const target = getSshTargetRegistryStore()!.getTarget(args.targetId)

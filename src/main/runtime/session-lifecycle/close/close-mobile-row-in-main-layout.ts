@@ -1,3 +1,5 @@
+import type { TerminalCloseRunOptions } from '../../terminal-surface-close'
+import type { MobileSessionLifecycleCloseHost } from '../../mobile-session-lifecycle-close-adjudication'
 // In main-owned layouts, phone row closes use main's pane/tab close with or without a window.
 import { OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose } from './refuse-unattributed-mobile-session-tab-close'
 import type {
@@ -11,8 +13,15 @@ import {
 } from '../../session-tabs/main-layout-close-command'
 import type { ExplicitCloseStop } from '../../session-tabs/explicit-terminal-close-pty-stops'
 import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
+import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
 export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: TerminalCloseRunOptions
+  ): Promise<LayoutApplyReply>
+
   protected abstract stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string
@@ -25,6 +34,7 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
     row: RuntimeMobileSessionTerminalTab,
     options: {
       force?: boolean
+      beforeAction?: () => void
       reason?: RuntimeSessionTabCloseReason
       localPtyTeardownOwnedExternally?: boolean
     }
@@ -36,7 +46,7 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
     const close = await closeInMainLayout(
       {
         panesOfTab: (id) => surfaces.panesOfTab(id),
-        applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+        applyLayoutCommand: (command) => this.applyLayoutCommand(command, options.beforeAction),
         stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
         remoteSessionIdOf: (id) =>
           this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[id]
@@ -84,6 +94,15 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
     if (snapshot && rows.length > 0) {
       this.storeMobileSessionSnapshot(worktreeId, snapshot)
       this.notifyMobileSessionTabsChanged(worktreeId)
+    }
+  }
+  protected getMobileSessionLifecycleCloseHost(): MobileSessionLifecycleCloseHost {
+    return {
+      tabs: this.tabs,
+      leaves: this.leaves,
+      ptysById: this.ptysById,
+      findPtyForMobileTerminalTab: this.findPtyForMobileTerminalTab.bind(this),
+      republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId)
     }
   }
 }

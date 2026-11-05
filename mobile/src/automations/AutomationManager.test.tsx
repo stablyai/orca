@@ -200,7 +200,7 @@ async function mount(
 }
 
 describe('mobile automation navigation and setup', () => {
-  registerAutomationRunHistoryTests({ mount, root, press })
+  registerAutomationRunHistoryTests({ mount, root, press, setTree })
   registerAutomationPresentationTests({ inventory, root, press, setTree, mount })
   registerAutomationHostReselectionTests({
     inventory,

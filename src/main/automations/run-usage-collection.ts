@@ -1,3 +1,4 @@
+import type { AutomationRunsChanged } from '../persistence/scheduling-automations/automation-run-operations'
 import type { Automation, AutomationRun, AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './automation-run-writer'
@@ -104,6 +105,7 @@ export async function writeAutomationRunUsage(input: {
   store: Store
   runs: AutomationRunWriter
   run: AutomationRun
+  changed?: AutomationRunsChanged
   claudeUsage: ClaudeUsageStore | null
   codexUsage: CodexUsageStore | null
 }): Promise<AutomationRun> {
@@ -118,12 +120,15 @@ export async function writeAutomationRunUsage(input: {
   if (!store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
     return run
   }
-  return input.runs.updateRun({
-    runId: run.id,
-    status: run.status,
-    workspaceId: run.workspaceId,
-    terminalSessionId: run.terminalSessionId,
-    usage,
-    error: run.error
-  })
+  return input.runs.updateRun(
+    {
+      runId: run.id,
+      status: run.status,
+      workspaceId: run.workspaceId,
+      terminalSessionId: run.terminalSessionId,
+      usage,
+      error: run.error
+    },
+    input.changed
+  )
 }

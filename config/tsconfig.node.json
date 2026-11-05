@@ -35,7 +35,12 @@
     "../src/wsl-guest/**/*",
     "../src/types/**/*"
   ],
-  "exclude": ["../src/main/runtime/structured-chat-coordinator-mail.test.ts"],
+  "exclude": [
+    "../src/main/runtime/structured-chat-coordinator-mail.test.ts",
+    "../src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
+    "../src/main/runtime/__fixtures__/orca-runtime-acknowledged-terminal-close.test-fixture.ts",
+    "../src/main/runtime/__fixtures__/orca-runtime-terminal-close-relay.test-fixture.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node"]

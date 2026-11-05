@@ -6,6 +6,7 @@ import {
   resetAgentLaunchPanesForTests,
   trackRunningAgentLaunchPane
 } from '../agent-launch/agent-launch-pane-attachment'
+import { createAcknowledgedCloseHarness } from './__fixtures__/orca-runtime-acknowledged-terminal-close.test-fixture'
 import {
   CANARY_INCARNATION_ID,
   CANARY_LEAF_ID,
@@ -367,7 +368,10 @@ describe('terminal close and handle incarnation continuity', () => {
     } else {
       expect(closeMobileSessionTab).toHaveBeenCalledTimes(1)
       expect(closeMobileSessionTab).toHaveBeenCalledWith(`id:${WORKTREE_ID}`, TAB_ID, {
-        localPtyTeardownOwnedExternally: true
+        localPtyTeardownOwnedExternally: true,
+        reason: 'user',
+        expectedPtyCloseAuthority: expect.objectContaining({ ptyId: PTY_ID }),
+        beforeAction: expect.any(Function)
       })
       expect(harness.closeTerminalTab).toHaveBeenCalledTimes(1)
     }
@@ -506,37 +510,39 @@ describe('terminal close and handle incarnation continuity', () => {
   })
 
   it('finishes PTY teardown when the session store disappears after retirement', async () => {
-    const harness = createPtyBackedPublishedSurfaceHarness()
-    const closeMobileSessionTab = vi.spyOn(harness.runtime, 'closeMobileSessionTab')
-    const [terminal] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
-    expect(terminal).toMatchObject({ ptyId: RUNTIME_OWNED_PTY_ID })
-    const { handle } = terminal
-
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      harness.setStopAndWaitAction(() => harness.makeSessionUnavailable())
-      await expect(harness.runtime.closeTerminal(handle)).resolves.toMatchObject({
-        handle,
+    const harness = await createAcknowledgedCloseHarness('after-owner')
+    try {
+      expect(harness.terminal).toMatchObject({ ptyId: RUNTIME_OWNED_PTY_ID })
+      await expect(harness.runtime.closeTerminal(harness.terminal.handle)).resolves.toMatchObject({
+        handle: harness.terminal.handle,
         tabId: TAB_ID,
-        ptyKilled: false
+        ptyKilled: true
       })
-      expect(closeMobileSessionTab).not.toHaveBeenCalled()
-      expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-    } else {
-      const closing = harness.runtime.closeTerminal(handle)
-      await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalled())
-      expect(closeMobileSessionTab).toHaveBeenCalled()
+      expect(harness.sessionUnavailable()).toBe(true)
+      expect(harness.order).toEqual(['renderer-ack', 'runtime-owner-completed', 'captured-stop'])
+      expect(harness.stopState).toEqual([
+        { saved: false, raw: false, renderer: false, completed: true }
+      ])
+      expect(harness.stop).toHaveBeenCalledExactlyOnceWith(RUNTIME_OWNED_PTY_ID)
       expect(harness.kill).not.toHaveBeenCalled()
-
-      harness.retirePersistedTab()
-      harness.makeSessionUnavailable()
-      harness.acknowledged.resolve()
-
-      await expect(closing).resolves.toMatchObject({ handle, tabId: TAB_ID, ptyKilled: false })
-      expect(harness.closeTerminal).toHaveBeenCalledWith(TAB_ID)
+    } finally {
+      await harness.dispose()
     }
-    expect(harness.stopAndWait).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID, {
-      deadlineMs: expect.any(Number)
-    })
+  })
+
+  it('does not stop after ACK when the saved owner is unavailable before admission', async () => {
+    const harness = await createAcknowledgedCloseHarness('before-owner')
+    try {
+      await expect(harness.runtime.closeTerminal(harness.terminal.handle)).rejects.toThrow(
+        'workspace_session_unavailable'
+      )
+      expect(harness.order).toEqual(['renderer-ack'])
+      expect(harness.ownerCompleted()).toBe(false)
+      expect(harness.stop).not.toHaveBeenCalled()
+      expect(harness.kill).not.toHaveBeenCalled()
+    } finally {
+      await harness.dispose()
+    }
   })
 
   it('does not tear down a published PTY when retirement fails before acknowledgement', async () => {

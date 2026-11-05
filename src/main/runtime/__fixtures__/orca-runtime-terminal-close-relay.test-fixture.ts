@@ -1,0 +1,175 @@
+import { EventEmitter } from 'node:events'
+import { vi } from 'vitest'
+import type {
+  BrowserWindow,
+  IpcMainEvent,
+  IpcMainInvokeEvent,
+  WebContents,
+  ipcMain
+} from 'electron'
+import { testState } from '../../persistence/persistence-test-harness'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import type { OrcaRuntimeService } from '../orca-runtime'
+import type { Store } from '../../persistence/loading-store/store'
+import type { FanoutEventSource } from '../events/event-listener-fanout'
+
+type InvokeHandler = Parameters<typeof ipcMain.handle>[1]
+type IpcListener = Parameters<typeof ipcMain.on>[1]
+
+const closeIpc = vi.hoisted(() => ({
+  handlers: new Map<string, InvokeHandler>(),
+  listeners: new Map<string, Set<IpcListener>>()
+}))
+export { closeIpc }
+
+vi.mock('electron', () => ({
+  app: { getPath: () => testState.dir },
+  safeStorage: {
+    isEncryptionAvailable: () => true,
+    encryptString: (text: string) => Buffer.from(text),
+    decryptString: (bytes: Buffer) => bytes.toString()
+  },
+  ipcMain: {
+    handle: (name: string, callback: InvokeHandler) => closeIpc.handlers.set(name, callback),
+    on: (name: string, callback: IpcListener) => {
+      const listeners = closeIpc.listeners.get(name) ?? new Set()
+      listeners.add(callback)
+      closeIpc.listeners.set(name, listeners)
+    },
+    removeListener: (name: string, callback: IpcListener) =>
+      closeIpc.listeners.get(name)?.delete(callback)
+  }
+}))
+
+export async function installAcknowledgedCloseRelay(
+  store: Store,
+  runtime: OrcaRuntimeService,
+  onAck: () => void = () => {}
+) {
+  const { registerSessionHandlers } = await import('../../ipc/session')
+  const { requestTerminalTabCloseFromRenderer } =
+    await import('../../window/terminal-tab-close-request-relay')
+  const { setRuntimeDesktopSurface } = await import('../runtime-desktop-surface')
+  const { registerMobileAndTerminalCloseIpcBridge } =
+    await import('../../../renderer/src/hooks/ipc-events/mobile-terminal-close-ipc-bridge')
+  const unsubs: (() => void)[] = []
+  type Request = Parameters<Parameters<typeof window.api.ui.onTerminalTabCloseRequest>[0]>[0]
+  let requestConsumer: ((request: Request) => void) | undefined
+  const webContentsView: Pick<
+    WebContents,
+    'id' | 'isDestroyed' | 'send' | 'setBackgroundThrottling'
+  > &
+    FanoutEventSource = Object.assign(new EventEmitter(), {
+    id: 1,
+    isDestroyed: (): boolean => false,
+    setBackgroundThrottling: () => {},
+    send: (channel: string, request: Request) => {
+      if (channel !== 'ui:terminalTabCloseRequest' || !requestConsumer) {
+        throw new Error('close request consumer missing')
+      }
+      queueMicrotask(() => requestConsumer?.(request))
+    }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The relay consumes only this native value view and the real EventEmitter listener methods.
+  const webContents = webContentsView as WebContents
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The close relay uses only isDestroyed and this EventEmitter webContents' send/lifecycle methods.
+  const win = {
+    isDestroyed: (): boolean => false,
+    webContents
+  } satisfies Pick<BrowserWindow, 'isDestroyed' | 'webContents'> as BrowserWindow
+  registerSessionHandlers(store, runtime)
+  const invoke = async (channel: string, ...args: unknown[]) => {
+    const handler = closeIpc.handlers.get(channel)
+    if (!handler) {
+      throw new Error('session handler missing')
+    }
+    return handler(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Session handlers use only sender identity; this is the relay's exact webContents.
+      { sender: webContents } satisfies Pick<
+        IpcMainInvokeEvent,
+        'sender'
+      > as Parameters<InvokeHandler>[0],
+      ...args
+    )
+  }
+  Object.assign(window.api, {
+    session: {
+      set: (value: WorkspaceSessionState, hostId?: string | null) =>
+        invoke('session:set', value, hostId),
+      patch: (value: unknown, hostId?: string | null) => invoke('session:patch', value, hostId),
+      get: (hostId?: string | null) => invoke('session:get', hostId),
+      flush: () => invoke('session:flush'),
+      closeTerminalSurface: (args: unknown) => invoke('session:close-terminal-surface', args)
+    }
+  })
+  Object.assign(window.api.ui, {
+    onOpenFileFromMobile: () => () => {},
+    onOpenDiffFromMobile: () => () => {},
+    onCloseTerminal: () => () => {},
+    onWorkspaceSleep: () => () => {},
+    onResumeSleepingAgents: () => () => {},
+    onTerminalTabCloseRequest: (listener: typeof requestConsumer) => {
+      requestConsumer = listener
+      return () => {
+        requestConsumer = undefined
+      }
+    },
+    respondTerminalTabClose: (response: { requestId: string; error?: string }) => {
+      queueMicrotask(() => {
+        const listeners = closeIpc.listeners.get('ui:terminalTabCloseResponse') ?? []
+        for (const listener of listeners) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The response consumer compares only sender identity; this unrelated object exercises refusal.
+          listener({ sender: {} } as Parameters<IpcListener>[0], {
+            ...response,
+            error: 'wrong-sender'
+          })
+          listener(
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The response consumer reads only sender identity before checking this mismatched request ID.
+            { sender: webContents } satisfies Pick<
+              IpcMainEvent,
+              'sender'
+            > as Parameters<IpcListener>[0],
+            {
+              ...response,
+              requestId: 'other-request',
+              error: 'wrong-request'
+            }
+          )
+        }
+        onAck()
+        for (const listener of listeners) {
+          listener(
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The response consumer reads only sender identity; the selected window owns these webContents.
+            { sender: webContents } satisfies Pick<
+              IpcMainEvent,
+              'sender'
+            > as Parameters<IpcListener>[0],
+            response
+          )
+        }
+      })
+    }
+  })
+  registerMobileAndTerminalCloseIpcBridge(unsubs, () => {})
+  setRuntimeDesktopSurface({
+    showNotification: () => false,
+    findWindowById: () => win,
+    onIpc: () => {},
+    removeIpcListener: () => {}
+  })
+  return {
+    sender: webContents,
+    invoke,
+    closeTerminalTab: (
+      tabId: string,
+      options: Parameters<typeof requestTerminalTabCloseFromRenderer>[2]
+    ) => requestTerminalTabCloseFromRenderer(win, tabId, options),
+    dispose: () => {
+      for (const unsubscribe of unsubs) {
+        unsubscribe()
+      }
+      closeIpc.handlers.clear()
+      closeIpc.listeners.clear()
+    }
+  }
+}

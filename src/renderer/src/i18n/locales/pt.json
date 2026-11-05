@@ -14652,6 +14652,7 @@
           "runStatusPending": "Na fila",
           "runStatusDispatching": "Iniciando",
           "runStatusDispatched": "Iniciada",
+          "runStatusSent": "Enviado",
           "runStatusCompleted": "Concluída",
           "runStatusSkippedPrecheck": "Ignorada pela pré-verificação",
           "runStatusSkippedMissed": "Ignorada",

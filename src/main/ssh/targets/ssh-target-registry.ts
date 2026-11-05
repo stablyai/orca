@@ -1,3 +1,4 @@
+import { isSshCredentialDeclined } from '../ssh-credential-decline'
 import type { SshConnectionStore } from '../connection/ssh-connection-store'
 import type { SshConnectionManager } from '../connection/ssh-connection-manager'
 import type {
@@ -24,7 +25,7 @@ export class SshTargetManagementUnservedError extends Error {
 let sshStore: SshConnectionStore | null = null
 type ConnectSshTarget = (
   targetId: string,
-  options?: { automatic?: boolean }
+  options?: { automatic?: boolean; interactive?: boolean }
 ) => Promise<SshConnectionState>
 
 let registeredConnectSshTarget: ConnectSshTarget | null = null
@@ -49,7 +50,7 @@ export function setSshTargetRegistryHandlers(handlers: {
 /** `automatic`: no user asked for this connect, so a cancelled sign-in stays cancelled. */
 export async function connectRegisteredSshTarget(
   targetId: string,
-  options?: { automatic?: boolean }
+  options?: { automatic?: boolean; interactive?: boolean }
 ): Promise<SshConnectionState> {
   if (!registeredConnectSshTarget) {
     // No SSH stack must report unserved, never masquerade as an unreachable/exited target.
@@ -102,4 +103,16 @@ export function setSshConnectionManagerResolver(
 /** Null means no registered SSH stack, never a connection exit (docs/reference/ssh-execution-boundary.md). Resolve each call because handlers may replace the manager. */
 export function getSshConnectionManager(): SshConnectionManager | null {
   return registeredGetSshConnectionManager?.() ?? null
+}
+
+/** Share desktop auto-connect's exact no-prompt predicate with scheduled host work. */
+export function registeredSshTargetNeedsCredentialPrompt(targetId: string): boolean {
+  if (isSshCredentialDeclined(targetId)) {
+    return true
+  }
+  const target = sshStore?.getTarget(targetId)
+  if (!target?.lastRequiredPassphrase) {
+    return false
+  }
+  return !getSshConnectionManager()?.hasCachedCredential(target)
 }

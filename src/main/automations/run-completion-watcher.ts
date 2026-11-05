@@ -1,49 +1,34 @@
+import type { AutomationRunMutation } from '../persistence/scheduling-automations/automation-run-operations'
+import {
+  describeStrandedAutomationRun,
+  describeObservationError,
+  sameTerminal,
+  type AutomationRunCompletionObservation,
+  type AutomationRunTerminalObserver,
+  type AutomationRunWatchEntry,
+  type AutomationRunWatchReservation
+} from './automation-run-completion-contract'
+export type {
+  AutomationRunCompletionObservation,
+  AutomationRunTerminalObserver,
+  AutomationRunWatchReservation
+} from './automation-run-completion-contract'
+export { describeStrandedAutomationRun } from './automation-run-completion-contract'
 import {
   isFinalAutomationRunStatus,
   type AutomationDispatchResult,
-  type AutomationRun,
-  type AutomationRunOutputSnapshot
+  type AutomationRun
 } from '../../shared/automations-types'
-import type { AutomationRunFailureCodeFields } from '../../shared/automation-run-failure-copy'
 import { RetainedRunReconciler } from './retained-run-reconciliation'
-
-export type AutomationRunCompletionObservation = {
-  status: 'completed' | 'dispatch_failed'
-  outputSnapshot?: AutomationRunOutputSnapshot | null
-  error?: string | null
-} & AutomationRunFailureCodeFields
-
-export type AutomationRunTerminalObserver = {
-  /** Null also covers terminals that have not reattached yet. */
-  resolveRunTerminal: (run: AutomationRun) => string | null
-  observeCompletion: (
-    handle: string,
-    options: { signal: AbortSignal; run?: AutomationRun }
-  ) => Promise<AutomationRunCompletionObservation>
-}
-
-export function describeStrandedAutomationRun(run: AutomationRun): string {
-  if (run.status === 'pending') {
-    return 'Orca stopped before this manual run could launch.'
-  }
-  if (run.status === 'dispatching') {
-    return 'Orca stopped before this run reported that its agent started.'
-  }
-  return 'Orca lost the terminal for this run before it reported completion.'
-}
-
-// Log transport tokens while keeping run history readable.
-function describeObservationError(error: unknown): string {
-  console.error('[automations] run completion observation failed:', error)
-  return 'Orca stopped watching this run before it reported completion.'
-}
+import { isAutomationRunHistory } from '../../shared/automation-run-retention'
 
 export class AutomationRunCompletionWatcher {
   private readonly observer: AutomationRunTerminalObserver
   private readonly readRun: (automationId: string, runId: string) => AutomationRun | null
   private readonly markDispatchResult: (result: AutomationDispatchResult) => Promise<unknown>
-  private readonly watching = new Map<string, AbortController>()
+  private readonly watching = new Map<string, AutomationRunWatchEntry>()
   private readonly reconciler: RetainedRunReconciler
+  private retainedSource: readonly AutomationRun[] | undefined
   private disposed = false
 
   constructor(opts: {
@@ -61,6 +46,9 @@ export class AutomationRunCompletionWatcher {
         return Boolean(current && !isFinalAutomationRunStatus(current.status))
       },
       strand: (run) => {
+        if (isAutomationRunHistory(run)) {
+          return
+        }
         void this.finalize(run, {
           status: 'dispatch_failed',
           error: describeStrandedAutomationRun(run)
@@ -71,15 +59,129 @@ export class AutomationRunCompletionWatcher {
     })
   }
 
-  /** Leave unresolved terminals for startup reconciliation. */
-  watch(run: AutomationRun): void {
-    if (this.disposed || this.watching.has(run.id)) {
+  /** Reserve delivery cancellation before invoking the launch owner. */
+  reserve(run: AutomationRun): AutomationRunWatchReservation {
+    this.forget(run.id)
+    const entry: AutomationRunWatchEntry = {
+      controller: new AbortController(),
+      run,
+      adopted: false,
+      result: null
+    }
+    this.watching.set(run.id, entry)
+    if (this.disposed) {
+      this.forget(run.id)
+    }
+    return {
+      signal: entry.controller.signal,
+      assertCurrent: () => {
+        if (!this.current(entry)) {
+          entry.controller.abort()
+          throw new Error('request_aborted')
+        }
+      },
+      bind: (bound, handle, current) => {
+        if (!this.current(entry)) {
+          return
+        }
+        entry.observationController?.abort()
+        entry.run = { ...entry.run, ...bound }
+        entry.handle = handle
+        entry.targetCurrent = current
+        entry.result = null
+      },
+      deliverySettled: () => {
+        if (!this.current(entry)) {
+          this.forget(run.id)
+          return
+        }
+        entry.observationController?.abort()
+        entry.result = null
+        if (entry.adopted) {
+          void this.finish(entry)
+        }
+      },
+      release: () => {
+        if (this.watching.get(run.id) === entry) {
+          this.forget(run.id)
+        }
+      }
+    }
+  }
+
+  watch(run: AutomationRun, recovery = false): void {
+    if (this.disposed) {
+      return
+    }
+    const entry = this.watching.get(run.id)
+    if (entry) {
+      entry.run = run
+      entry.adopted = true
+      if (entry.result !== undefined) {
+        void this.finish(entry)
+      }
       return
     }
     const handle = this.observer.resolveRunTerminal(run)
     if (handle) {
-      this.startWatch(run, handle)
+      const attached: AutomationRunWatchEntry = {
+        controller: new AbortController(),
+        run,
+        adopted: true,
+        recovery
+      }
+      this.watching.set(run.id, attached)
+      this.startWatch(attached, handle)
     }
+  }
+
+  /** Called by existing Store publication: eviction/finality revokes before an acknowledgement. */
+  retain(runs: readonly AutomationRun[], mutation?: AutomationRunMutation): void {
+    if (this.disposed) {
+      return
+    }
+    const keyed = mutation && mutation.before === this.retainedSource && mutation.after === runs
+    // Abort listeners can reenter; never overwrite a newer nested reconciliation stamp.
+    this.retainedSource = runs
+    if (this.watching.size === 0) {
+      return
+    }
+    const reconcile = (id: string, run: AutomationRun | undefined): void => {
+      const entry = this.watching.get(id)
+      if (
+        entry &&
+        (!run ||
+          isFinalAutomationRunStatus(run.status) ||
+          (entry.adopted && !sameTerminal(entry.run, run)))
+      ) {
+        this.forget(id)
+      }
+    }
+    if (keyed) {
+      return reconcile(mutation.updated.id, mutation.updated)
+    }
+    const current = new Map(runs.map((run) => [run.id, run]))
+    for (const [id] of this.watching) {
+      if (this.retainedSource !== runs) {
+        return
+      }
+      reconcile(id, current.get(id))
+    }
+  }
+
+  private current(entry: AutomationRunWatchEntry): boolean {
+    const run = this.readRun(entry.run.automationId, entry.run.id)
+    return (
+      !this.disposed &&
+      this.watching.get(entry.run.id) === entry &&
+      !entry.controller.signal.aborted &&
+      entry.targetCurrent?.() !== false &&
+      Boolean(
+        run &&
+        !isFinalAutomationRunStatus(run.status) &&
+        (!entry.adopted || sameTerminal(entry.run, run))
+      )
+    )
   }
 
   private attachRetainedRun(run: AutomationRun): boolean {
@@ -91,49 +193,80 @@ export class AutomationRunCompletionWatcher {
     }
     const handle = this.observer.resolveRunTerminal(run)
     if (!handle) {
-      return false
+      return isAutomationRunHistory(run)
     }
-    this.startWatch(run, handle)
+    this.watch(run, true)
     return true
   }
 
-  private startWatch(run: AutomationRun, handle: string): void {
+  private startWatch(entry: AutomationRunWatchEntry, handle: string): void {
+    if (!this.current(entry)) {
+      this.forget(entry.run.id)
+      return
+    }
     const controller = new AbortController()
-    this.watching.set(run.id, controller)
-    void this.observeUntilTerminal(run, handle, controller).finally(() => {
-      if (this.watching.get(run.id) === controller) {
-        this.watching.delete(run.id)
-      }
-    })
+    entry.observationController = controller
+    const abort = () => controller.abort()
+    entry.controller.signal.addEventListener('abort', abort, { once: true })
+    void this.observer
+      .observeCompletion(handle, {
+        signal: controller.signal,
+        run: entry.run,
+        recovery: entry.recovery
+      })
+      .then(
+        (result) => {
+          if (
+            !this.current(entry) ||
+            controller.signal.aborted ||
+            entry.observationController !== controller
+          ) {
+            return
+          }
+          entry.result = result
+          return entry.adopted ? this.finish(entry) : undefined
+        },
+        (error) => {
+          if (!this.current(entry) || controller.signal.aborted) {
+            return
+          }
+          entry.result =
+            entry.recovery && entry.run.sessionKind !== 'chat'
+              ? null
+              : { status: 'dispatch_failed', error: describeObservationError(error) }
+          return entry.adopted ? this.finish(entry) : undefined
+        }
+      )
+      .catch((error) => console.error('[automations] failed to persist watched completion:', error))
+      .finally(() => {
+        entry.controller.signal.removeEventListener('abort', abort)
+        if (this.watching.get(entry.run.id) === entry && !this.current(entry)) {
+          this.forget(entry.run.id)
+        }
+      })
   }
 
-  private async observeUntilTerminal(
-    run: AutomationRun,
-    handle: string,
-    controller: AbortController
-  ): Promise<void> {
-    let observation: AutomationRunCompletionObservation
-    try {
-      observation = await this.observer.observeCompletion(handle, {
-        signal: controller.signal,
-        run
-      })
-    } catch (error) {
-      if (controller.signal.aborted) {
-        return
-      }
-      observation = { status: 'dispatch_failed', error: describeObservationError(error) }
+  private async finish(entry: AutomationRunWatchEntry): Promise<void> {
+    if (!this.current(entry) || entry.result === undefined) {
+      return
     }
+    const result = entry.result
     try {
-      await this.finalize(run, observation)
-    } catch (error) {
-      console.error('[automations] failed to persist watched run completion:', error)
+      if (result) {
+        await this.finalize(entry.run, result)
+      }
+    } finally {
+      if (this.watching.get(entry.run.id) === entry) {
+        this.forget(entry.run.id)
+      }
     }
   }
 
   forget(runId: string): void {
-    this.watching.get(runId)?.abort()
+    const entry = this.watching.get(runId)
     this.watching.delete(runId)
+    entry?.controller.abort()
+    entry?.observationController?.abort()
   }
 
   /** Reattach surviving sessions; defer unresolved runs until the ready-surface grace expires. */
@@ -154,12 +287,10 @@ export class AutomationRunCompletionWatcher {
   }
 
   dispose(): void {
+    this.retainedSource = undefined
     this.disposed = true
     this.reconciler.dispose()
-    for (const controller of this.watching.values()) {
-      controller.abort()
-    }
-    this.watching.clear()
+    this.watching.forEach((_, id) => this.forget(id))
   }
 
   private async finalize(

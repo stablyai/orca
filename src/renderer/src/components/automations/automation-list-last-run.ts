@@ -92,7 +92,7 @@ export function getLocalAutomationLastRunSnapshot(
     return {
       at: getAutomationRunLastRunAt(lastRun),
       tone: getToneForAutomationRunStatus(lastRun.status),
-      statusLabel: getAutomationRunStatusLabel(lastRun.status)
+      statusLabel: getAutomationRunStatusLabel(lastRun.status, lastRun.sessionKind)
     }
   }
   if (automation.lastRunAt) {

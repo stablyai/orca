@@ -1,11 +1,12 @@
-import type { AutomationRun, AutomationRunStatus } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations-types'
+import { isAutomationRunHistory } from '../../../../shared/automation-run-retention'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationListRow } from './automation-list-row-identity'
 
 export type AutomationRunsDashboardRun = Pick<
   AutomationRun,
-  'id' | 'title' | 'scheduledFor' | 'status' | 'trigger'
+  'id' | 'title' | 'scheduledFor' | 'status' | 'trigger' | 'sessionKind'
 >
 
 export function projectAutomationRunsDashboardRun(run: AutomationRun): AutomationRunsDashboardRun {
@@ -14,6 +15,7 @@ export function projectAutomationRunsDashboardRun(run: AutomationRun): Automatio
     title: run.title,
     scheduledFor: run.scheduledFor,
     status: run.status,
+    sessionKind: run.sessionKind,
     trigger: run.trigger
   }
 }
@@ -83,7 +85,11 @@ export function buildAutomationRunsDashboardEntries(
     .sort((left, right) => right.run.scheduledFor - left.run.scheduledFor)
 }
 
-function matchesStatus(status: AutomationRunStatus, filter: AutomationRunsStatusFilter): boolean {
+function matchesStatus(
+  run: AutomationRunsDashboardRun,
+  filter: AutomationRunsStatusFilter
+): boolean {
+  const { status } = run
   if (filter === 'all') {
     return true
   }
@@ -96,7 +102,7 @@ function matchesStatus(status: AutomationRunStatus, filter: AutomationRunsStatus
   if (filter === 'skipped') {
     return status.startsWith('skipped')
   }
-  return status === 'pending' || status === 'dispatching' || status === 'dispatched'
+  return !isAutomationRunHistory(run)
 }
 
 export function filterAutomationRunsDashboardEntries({
@@ -114,7 +120,7 @@ export function filterAutomationRunsDashboardEntries({
   const selectedHosts = new Set(hostKeys)
   return entries.filter((entry) => {
     if (
-      !matchesStatus(entry.run.status, status) ||
+      !matchesStatus(entry.run, status) ||
       (selectedHosts.size > 0 && !selectedHosts.has(entry.hostKey))
     ) {
       return false

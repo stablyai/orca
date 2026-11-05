@@ -12,3 +12,8 @@ export type WorktreeTerminalStopOptions = {
   resolvedConnectionId?: string | null
   resolvedRuntimeEnvironmentId?: string
 }
+
+export type WorktreeTerminalSleepOptions = {
+  soleLivePtyId?: string
+  beforeAction?: () => void
+}

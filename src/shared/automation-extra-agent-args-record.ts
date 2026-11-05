@@ -2,7 +2,6 @@ import { automationCanonicalLaunchSetup } from './automation-launch-setup'
 import { automationLaunchInputs } from './automation-launch-setup-source'
 import type { Automation } from './automations-types'
 import {
-  EXTRA_AGENT_ARGS_REQUIRE_FRESH_SESSION,
   hasExtraAgentArgs,
   parseExtraAgentArgs
 } from './agent-launch/startup/automation-extra-agent-args'
@@ -18,7 +17,7 @@ export function storedExtraAgentArgs(value: unknown): string | undefined {
   return hasExtraAgentArgs(value) ? value : undefined
 }
 
-/** Validates a whole record, so a patch that only enables Reuse still sees stored extras. */
+/** Validates launch arguments even when a patch leaves stored extras unchanged. */
 export function assertAutomationExtraAgentArgs(
   automation: Pick<
     Automation,
@@ -42,9 +41,6 @@ export function assertAutomationExtraAgentArgs(
   }
   if (setup.surface === 'chat' || !hasExtraAgentArgs(setup.extraAgentArgs)) {
     return
-  }
-  if (automation.reuseSession) {
-    throw new Error(EXTRA_AGENT_ARGS_REQUIRE_FRESH_SESSION)
   }
   const parsed = parseExtraAgentArgs({
     agent: automation.agentId,

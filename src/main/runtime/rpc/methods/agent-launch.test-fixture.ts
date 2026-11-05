@@ -73,6 +73,15 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
   const worktreeCreateResults = new Map<string, Promise<unknown>>()
   // Only the panes this runtime created or adopted, under the handle it issued them.
   const handlesByPaneKey = new Map(Object.entries(options.adoptedPanes ?? {}))
+  const showTerminalWorkspaceLaunchScope = vi.fn(
+    async (selector: string): Promise<TerminalWorkspaceLaunchScope> => ({
+      id: selector.replace(/^id:/, ''),
+      path: '/tmp/wt-7',
+      connectionId: null,
+      repo: null,
+      folderWorkspace: null
+    })
+  )
   const waitForSetupTerminalCompletion = vi.fn(
     async (_handle: string, _signal?: AbortSignal): Promise<{ exitCode: number | null }> => ({
       exitCode: 0
@@ -147,13 +156,10 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       id: selector.replace(/^id:/, '')
     })),
     // Launch scope supports floating workspaces even though the Git worktree record does not.
-    showTerminalWorkspaceLaunchScope: vi.fn(
-      async (selector: string): Promise<TerminalWorkspaceLaunchScope> => ({
-        id: selector.replace(/^id:/, ''),
-        path: '/tmp/wt-7',
-        connectionId: null,
-        repo: null,
-        folderWorkspace: null
+    showTerminalWorkspaceLaunchScope,
+    resolveManagedTerminalWorkspaceTarget: vi.fn(
+      async (selector: string, _executionHostId?: string, _checkPath?: boolean) => ({
+        scope: await showTerminalWorkspaceLaunchScope(selector)
       })
     ),
     ensureStructuredAgentSessionHost: vi.fn(async () => {}),

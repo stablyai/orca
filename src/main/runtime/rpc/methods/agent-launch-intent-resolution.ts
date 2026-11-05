@@ -11,6 +11,7 @@ import { assertTerminalLaunchAdmissible } from '../../../agent-launch/agent-laun
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { resolveAgentLaunchModeOnHost } from '../../../agent-launch/agent-launch-mode'
 
+import type { AgentLaunchHostPolicy } from './agent-launch-surfaces'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 
 type ResolvedAgentLaunchIntent = Omit<AgentLaunchIntent, 'sessionOptions'> & {
@@ -21,12 +22,23 @@ type ResolvedAgentLaunchIntent = Omit<AgentLaunchIntent, 'sessionOptions'> & {
  * Use launch scope: floating workspaces have no Git worktree record, and folder rows are synthetic. */
 async function agentLaunchTarget(
   params: AgentLaunchParams,
-  runtime: Pick<OrcaRuntimeService, 'showTerminalWorkspaceLaunchScope'>
+  runtime: Pick<
+    OrcaRuntimeService,
+    'showTerminalWorkspaceLaunchScope' | 'resolveManagedTerminalWorkspaceTarget'
+  >
 ): Promise<AgentLaunchTarget> {
   if (params.target.kind !== 'existing') {
     return { kind: params.target.kind, create: { ...params.target.create } }
   }
-  const workspace = await runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)
+  const workspace = params.reuseTerminal
+    ? (
+        await runtime.resolveManagedTerminalWorkspaceTarget(
+          params.target.worktree,
+          undefined,
+          false
+        )
+      ).scope
+    : await runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)
   return {
     kind: 'existing',
     worktree: workspace.id,
@@ -65,7 +77,8 @@ async function agentLaunchIntent(
 
 async function validateReusedTerminal(
   intent: AgentLaunchIntent,
-  runtime: Pick<OrcaRuntimeService, 'showTerminal' | 'isTerminalRunningAgent'>
+  runtime: Pick<OrcaRuntimeService, 'showTerminal' | 'isTerminalRunningAgent'>,
+  unprovableHost: AgentLaunchHostPolicy['unprovableHost']
 ): Promise<void> {
   if (!intent.reuseTerminal) {
     return
@@ -77,7 +90,17 @@ async function validateReusedTerminal(
   if (terminal.worktreeId !== intent.target.worktree) {
     throw new Error('agent_launch_terminal_worktree_mismatch')
   }
-  if (!(await runtime.isTerminalRunningAgent(intent.reuseTerminal.handle))) {
+  if (
+    unprovableHost === 'write-unless-shell' &&
+    !terminal.connected &&
+    (terminal.exitCause?.kind === 'exited' || terminal.exitCause?.kind === 'signaled')
+  ) {
+    throw new Error('agent_launch_terminal_not_running_agent')
+  }
+  if (
+    unprovableHost !== 'write-unless-shell' &&
+    !(await runtime.isTerminalRunningAgent(intent.reuseTerminal.handle))
+  ) {
     throw new Error('agent_launch_terminal_not_running_agent')
   }
 }
@@ -87,10 +110,16 @@ export async function resolveUnlaunchedIntent(
   params: AgentLaunchParams,
   runtime: OrcaRuntimeService,
   early: EarlyAgentLaunchTab | null,
-  modeOptions: { terminalOnly?: boolean; callerRendersStructured?: boolean } = {}
+  {
+    unprovableHost,
+    ...modeOptions
+  }: {
+    terminalOnly?: boolean
+    callerRendersStructured?: boolean
+  } & Pick<AgentLaunchHostPolicy, 'unprovableHost'> = {}
 ): Promise<{ intent: ResolvedAgentLaunchIntent; decidedMode: AgentLaunchModeReceipt }> {
   const intent = await agentLaunchIntent(params, runtime, early?.paneKey)
-  await validateReusedTerminal(intent, runtime)
+  await validateReusedTerminal(intent, runtime, unprovableHost)
   const preflight = decideAgentLaunchIntentMode({ intent, runtime, ...modeOptions })
   const decidedMode =
     intent.target.kind === 'existing'

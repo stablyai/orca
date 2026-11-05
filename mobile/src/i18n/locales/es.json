@@ -4027,6 +4027,7 @@
       "hostUnreachable": "No se pudo contactar con este host. Vuelve a conectarte y actualiza para comprobar su estado actual.",
       "actionFailed": "No se pudo completar esta acción en el host. Actualiza e inténtalo de nuevo.",
       "dispatched": "Enviada",
+      "sent": "Enviado",
       "skippedPrecheck": "Omitida · comprobación previa",
       "skippedMissedSchedule": "Omitida · horario perdido",
       "skippedHostUnavailable": "Omitida · host no disponible",

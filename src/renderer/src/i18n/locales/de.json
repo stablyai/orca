@@ -17947,6 +17947,7 @@
           "runStatusPending": "In der Warteschlange",
           "runStatusDispatching": "Wird gestartet",
           "runStatusDispatched": "Gestartet",
+          "runStatusSent": "Gesendet",
           "runStatusCompleted": "Erledigt",
           "runStatusSkippedPrecheck": "Durch Vorabprüfung übersprungen",
           "runStatusSkippedMissed": "Übersprungen",

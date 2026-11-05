@@ -91,3 +91,18 @@ export async function automationRunAcceptedTarget(
   }
   throw error
 }
+
+/** A pane may have been reused by a later process. */
+export function runOwnHandle(
+  runtime: Pick<OrcaRuntimeService, 'getTerminalHandleForPaneKey' | 'getTerminalPtyIdForHandle'>,
+  run: AutomationRun
+): string | null {
+  const handle = run.terminalPaneKey
+    ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
+    : null
+  return handle &&
+    run.terminalPtyId &&
+    runtime.getTerminalPtyIdForHandle(handle) === run.terminalPtyId
+    ? handle
+    : null
+}
