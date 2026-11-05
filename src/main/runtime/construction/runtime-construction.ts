@@ -29,7 +29,7 @@ import {
 import {
   type RuntimeGitCommandSurface,
   installRuntimeGitCommandSurface
-} from '../runtime-git-command-surface'
+} from '../integrations/git/runtime-git-command-surface'
 import {
   type RuntimeRepositoryCommandSurface,
   installRuntimeRepositoryCommandSurface
@@ -42,11 +42,11 @@ import {
   type RuntimeServiceCommandSurface,
   installRuntimeServiceCommandSurface
 } from '../runtime-service-command-surface'
-import { RuntimeSkillCommands } from '../runtime-skill-command-surface'
+import { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
 import {
   type RuntimeSkillCommandSurface,
   installRuntimeSkillCommandSurface
-} from '../runtime-skill-command-contract'
+} from '../integrations/skill/runtime-skill-command-contract'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
 import { RuntimeSessionSearchSettingsController } from '../runtime-session-search-settings'
