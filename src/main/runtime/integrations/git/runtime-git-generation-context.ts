@@ -9,7 +9,10 @@ import type {
 import type { SourceControlAiOperation } from '../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type { CommitMessageAgentRuntimeTarget } from '../../../text-generation/commit-message-agent-environment'
 import type { CommitMessageGenerationTarget } from '../../../text-generation/source-control-text-generation-types'
-import type { PullRequestLinkedIssueMeta } from '../../../source-control/pull-request-linked-issue'
+import {
+  linkedIssueNumberForTemplate,
+  type PullRequestLinkedIssueMeta
+} from '../../../source-control/linked-issue-provider'
 import {
   localGitOptionsForTarget,
   type RuntimeGitCommandHost,
@@ -84,10 +87,8 @@ export function localTextGenerationTargetForTarget(
 export function linkedIssueForTarget(
   host: RuntimeGitCommandHost,
   target: RuntimeGitTarget
-): number | null | undefined {
-  const live = host.getWorktreeLinkedIssue?.(target.worktree.id)
-  // Why: `undefined` means the host could not answer, not "unlinked".
-  return live === undefined ? target.worktree.linkedIssue : live
+): number | null {
+  return linkedIssueNumberForTemplate(linkedIssueMetaForTarget(host, target))
 }
 
 export function linkedIssueMetaForTarget(

@@ -199,7 +199,8 @@ export function RepositoryPane({
       'Archive Script',
       'Advanced',
       'When to Run Setup',
-      'Custom GitHub Issue Command'
+      // Must use the search entry's own key: it can translate differently from the section title.
+      translate('auto.components.settings.repository.search.d86ea12d16', 'Custom Issue Command')
     ].includes(entry.title)
   )
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')

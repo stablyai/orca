@@ -9,6 +9,7 @@ import { withLinkedIssueDraftContext } from '../../../../shared/source-control/a
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { getStagedCommitContext } from '../../../git/source-control/staged-commit-context'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../../providers/ssh-host-not-served-error'
+import { linkedIssueNumberForTemplate } from '../../../source-control/linked-issue-provider'
 import { loadPullRequestLinkedIssue } from '../../../source-control/pull-request-linked-issue'
 import { resolveHostedReviewBodyForGeneration } from '../../../source-control/pull-request-template'
 import { prepareLocalCommitMessageAgentEnv } from '../../../text-generation/commit-message-agent-environment'
@@ -202,7 +203,10 @@ export class RuntimeGitGenerationCommands {
     }
     const linkedIssueDetails = await linkedIssueDetailsPromise
     context = {
-      ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+      ...withLinkedIssueDraftContext(
+        context,
+        linkedIssueNumberForTemplate(issueMeta, input.provider)
+      ),
       ...(input.provider ? { provider: input.provider } : {}),
       ...(linkedIssueDetails ? { linkedIssueDetails } : {})
     }

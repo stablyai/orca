@@ -135,7 +135,7 @@ export function getRepositoryGitHooksSearchEntries(repo: Repo): SettingsSearchEn
     {
       title: translate(
         'auto.components.settings.repository.search.d86ea12d16',
-        'Custom GitHub Issue Command'
+        'Custom Issue Command'
       ),
       description: translate(
         'auto.components.settings.repository.search.d42d1e49c0',
@@ -159,6 +159,7 @@ export function getRepositoryGitHooksSearchEntries(repo: Repo): SettingsSearchEn
           'auto.components.settings.repository.search.9dc60d7f6d',
           'github'
         ),
+        ...translateSearchKeyword('auto.components.settings.repository.search.gitlab', 'gitlab'),
         ...translateSearchKeyword(
           'auto.components.settings.repository.search.603c68b68c',
           'orca.yaml'

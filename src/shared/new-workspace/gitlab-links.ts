@@ -85,6 +85,27 @@ export function parseGitLabIssueOrMRLink(input: string): {
   }
 }
 
+function decodePathSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return segment
+  }
+}
+
+/** Issue web URL on the slug's own host; self-hosted is the normal case, so never default it. */
+export function buildGitLabIssueUrl(slug: ProjectSlug, number: number): string | null {
+  if (!slug.host || !slug.path) {
+    return null
+  }
+  // Parsed slugs keep URL.pathname's encoding; decode first so `%73` is not re-encoded to `%2573`.
+  const path = slug.path
+    .split('/')
+    .map((segment) => encodeURIComponent(decodePathSegment(segment)))
+    .join('/')
+  return `https://${slug.host}/${path}/-/issues/${number}`
+}
+
 /** Resolve issue/MR numbers or GitLab URLs into search query and direct-number lookup. */
 export function normalizeGitLabLinkQuery(raw: string): GitLabLinkQuery {
   if (isWorkItemLinkQueryTooLarge(raw)) {

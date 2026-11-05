@@ -25,6 +25,7 @@ import { WorktreeCardTaskDetailSection } from '../review/WorktreeCardTaskDetailS
 import { getWorktreeCardTaskActions } from '../review/worktree-card-task-actions'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
 import { CommentMarkdownAsync, preloadCommentMarkdown } from '../../comment-markdown-lazy'
+import { resolveWorkspaceIssueReferenceProps } from './workspace-issue-reference-target'
 
 const COMMENT_MARKDOWN_CLASS_NAME =
   'text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1'
@@ -78,6 +79,10 @@ export function WorktreeCardDetailsHover({
   const { linkActionPopoverProps, onOpenLink, onAuxClickCapture } =
     useWorkspaceReferenceLinkActions(workspace?.id, detailsHoverControl)
   const [workspaceTitleEditing, setWorkspaceTitleEditing] = React.useState(false)
+  const issueReferenceProps = React.useMemo(
+    () => resolveWorkspaceIssueReferenceProps(workspace, review),
+    [workspace, review]
+  )
   const pendingWorkspaceTitleCloseRef = React.useRef(false)
   const handleWorkspaceTitleEditingChange = React.useCallback(
     (editing: boolean): void => {
@@ -258,6 +263,7 @@ export function WorktreeCardDetailsHover({
                 <CommentMarkdownAsync
                   content={comment ?? ''}
                   className={COMMENT_MARKDOWN_CLASS_NAME}
+                  {...issueReferenceProps}
                   // Mirrors remark-breaks so the fallback keeps the note's line count.
                   fallbackClassName="whitespace-pre-wrap"
                 />

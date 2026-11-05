@@ -34,7 +34,7 @@ Use **Generate pull request details with AI** in the create-review dialog when y
 
 Templates can include variables such as `{basePrompt}`, `{branch}`, `{stagedFiles}`, `{stagedPatch}`, and **`{linkedIssue}`** for commit messages; PR details also support `{baseBranch}`, `{currentTitle}`, `{currentBody}`, `{commitSummary}`, `{changedFiles}`, and `{patch}`.
 
-`{linkedIssue}` expands to the workspace-linked **GitHub issue number**, or empty when none is linked (including pure Linear/GitLab workspaces). Prefer instructional phrasing — a bare `Fixes #{linkedIssue}` becomes `Fixes #` when unlinked.
+`{linkedIssue}` expands to the workspace-linked **GitHub or GitLab issue number**, or empty when none is linked (including Linear-only workspaces). When both are linked, PR details use the one on the PR's host; otherwise it stays empty unless the workspace was created from one of them. Prefer instructional phrasing — a bare `Fixes #{linkedIssue}` becomes `Fixes #` when unlinked.
 
 When a repository has its own recipe for an action, saving changes to the global default won't touch it — the settings pane surfaces a **Repository overrides** note listing which repos diverge and what they override (agent, CLI arguments, or command template), with a **Review** link that jumps to that repository's settings so you can update or remove the override.
 

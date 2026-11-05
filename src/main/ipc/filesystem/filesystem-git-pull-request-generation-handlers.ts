@@ -22,6 +22,7 @@ import { gitExecFileAsync } from '../../git/runner'
 import { withLinkedIssueDraftContext } from '../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import { resolveSourceControlAiLinkedIssueMeta } from '../source-control/source-control-ai-linked-issue'
 import { resolveHostedReviewBodyForGeneration } from '../../source-control/pull-request-template'
+import { linkedIssueNumberForTemplate } from '../../source-control/linked-issue-provider'
 import { loadPullRequestLinkedIssue } from '../../source-control/pull-request-linked-issue'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import {
@@ -134,7 +135,10 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
       }
       const linkedIssueDetails = await linkedIssueDetailsPromise
       context = {
-        ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+        ...withLinkedIssueDraftContext(
+          context,
+          linkedIssueNumberForTemplate(issueMeta, args.provider)
+        ),
         ...(args.provider ? { provider: args.provider } : {}),
         ...(linkedIssueDetails ? { linkedIssueDetails } : {})
       }
