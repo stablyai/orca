@@ -11,7 +11,7 @@ export const getSinglePaneWidthEntries = createLocalizedCatalog((): SettingsSear
     ),
     description: translate(
       'auto.components.settings.appearance.search.singlePaneWidthSummary',
-      'Maximum width for a tab with no splits — terminal, browser, editor or preview — centered in the window.'
+      'Maximum width for a tab with no splits — terminal, editor or preview — centered in the window.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.appearance.search.kwWidth', 'width'),
