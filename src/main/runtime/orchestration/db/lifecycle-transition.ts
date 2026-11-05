@@ -28,6 +28,7 @@ export function commitLifecycleWriteTransaction(
   db.exec(transaction.savepoint ? `RELEASE ${transaction.savepoint}` : 'COMMIT')
 }
 
+/** Roll back a lifecycle write, unless a failed statement already ended its transaction. */
 export function rollbackLifecycleWriteTransaction(
   db: Database.Database,
   transaction: LifecycleWriteTransaction

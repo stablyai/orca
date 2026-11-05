@@ -67,6 +67,7 @@ export function settleWorkerReport(
   )
 }
 
+/** Apply a worker report inside the caller's savepoint, rejecting an inactive dispatch. */
 export function settleWorkerReportInTransaction(
   this: OrchestrationDb,
   params: WorkerReportSettlementParams
