@@ -10,7 +10,8 @@ import {
   type HostServerOnConnectDeps
 } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
-import { unservedHostServerMessage, unservedServerStatus } from './ssh-host-unserved-status'
+import { unservedServerStatus } from './ssh-host-unserved-status'
+import { sshHostServerSetupRemedy } from '../../shared/ssh-host-server-setup-remedy'
 import { admitSshManagedServerStatus } from '../../shared/ssh-managed-server-status-admission'
 
 // Read the final callback because retry eligibility is decided under lifecycle lock.
@@ -402,9 +403,9 @@ describe('which server an SSH host runs on connect', () => {
     warn.mockRestore()
   })
 
-  it('says what to fix when setup stops on a cause a retry cannot clear', async () => {
+  it('publishes the code setup stopped on, so only a cause a retry clears says to retry', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const deferredOn = async (code: string) => {
+    const remedyFor = async (code: string) => {
       const decision = await resolveHostServerOnConnect(
         target,
         deps({
@@ -417,29 +418,19 @@ describe('which server an SSH host runs on connect', () => {
           })
         })
       )
-      if (decision.route !== 'unserved') {
-        throw new Error('expected an unserved host')
-      }
-      // Older renderers and mobile read the published status and main's message.
-      const { managedServer } = admitSshManagedServerStatus(unservedServerStatus(decision))
-      return { status: managedServer, message: unservedHostServerMessage(decision) }
+      const { managedServer } = admitSshManagedServerStatus(
+        decision.route === 'unserved' ? unservedServerStatus(decision) : null
+      )
+      expect(managedServer).toMatchObject({ reason: 'deferred', code, detail: `host said ${code}` })
+      return sshHostServerSetupRemedy(managedServer?.kind === 'relay' ? managedServer.code : '')
     }
 
-    const full = await deferredOn('orcad_snapshot_space_insufficient')
-    expect(full.status).toMatchObject({
-      reason: 'deferred',
-      code: 'orcad_snapshot_space_insufficient',
-      detail: 'host said orcad_snapshot_space_insufficient'
-    })
-    expect(full.message).toContain('Free up space on the host')
-    expect((await deferredOn('orcad_activation_recovery_required')).message).toContain('Recover')
-    expect((await deferredOn('orcad_initial_runtime_live')).message).toContain(
-      'Stop it on the host'
-    )
-    expect((await deferredOn('orcad_activation_no_readiness')).message).not.toContain(
-      'Try connecting'
-    )
-    expect((await deferredOn('orcad_activation_fence_busy')).message).toContain('Try connecting')
+    expect(await remedyFor('orcad_activation_fence_busy')).toBe('retry')
+    expect(await remedyFor('orcad_snapshot_space_insufficient')).toBe('free-host-space')
+    expect(await remedyFor('orcad_initial_runtime_live')).toBe('stop-unmanaged-runtime')
+    expect(await remedyFor('orcad_activation_daemon_absent')).toBe('see-details')
+    // Thrown errors and older hosts publish no code.
+    expect(sshHostServerSetupRemedy(undefined)).toBe('retry')
     warn.mockRestore()
   })
 

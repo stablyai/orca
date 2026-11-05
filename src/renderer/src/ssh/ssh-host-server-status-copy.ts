@@ -201,7 +201,8 @@ function tunnelUnavailableLine(): SshHostServerStatusLine {
 function setupStoppedLine(code: string | undefined): SshHostServerStatusLine {
   const remedy = sshHostServerSetupRemedy(code)
   return {
-    tone: remedy === 'retry' ? 'warning' : 'destructive',
+    // Only a host-side fix the user must make reads as an error.
+    tone: remedy === 'retry' || remedy === 'see-details' ? 'warning' : 'destructive',
     text: sshHostSetupRemedyText(remedy)
   }
 }

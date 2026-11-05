@@ -9,11 +9,6 @@ export function sshHostSetupRemedyText(remedy: SshHostServerSetupRemedy): string
         'auto.components.settings.sshHostServer.setupRetry',
         'Orca couldn’t start its server on this host. Try connecting again.'
       )
-    case 'recover':
-      return translate(
-        'auto.components.settings.sshHostServer.setupRecover',
-        'An interrupted update or stop of Orca’s server on this host needs recovering before it can start. Use Recover in Settings > Orca on your SSH hosts, then connect again.'
-      )
     case 'free-host-space':
       return translate(
         'auto.components.settings.sshHostServer.setupFreeHostSpace',
@@ -22,7 +17,7 @@ export function sshHostSetupRemedyText(remedy: SshHostServerSetupRemedy): string
     case 'stop-unmanaged-runtime':
       return translate(
         'auto.components.settings.sshHostServer.setupStopUnmanagedRuntime',
-        'An Orca server this app didn’t start is still using this host’s Orca data. Stop it on the host, then connect again. This host’s Details, in Settings > SSH Hosts, names its process.'
+        'An Orca server this app didn’t start still appears to be using this host’s Orca data. Stop it on the host, then connect again. This host’s Details, in Settings > SSH Hosts, names its process.'
       )
     case 'see-details':
       return translate(
