@@ -129,6 +129,18 @@ export function getPublishedHostDescriptor(runtimeId: string): RuntimeHostDescri
   return publishedByRuntimeId.get(runtimeId) ?? null
 }
 
+/** The installationId a caller's parent ref names; desktops without a paired transport publish no
+ * descriptor, so the file is read, never created. */
+export function readCallerStoreInstallationId(
+  runtimeId: string,
+  userDataPath: string
+): string | undefined {
+  return (
+    getPublishedHostDescriptor(runtimeId)?.installationId ??
+    readExistingHostInstallationId(userDataPath)
+  )
+}
+
 /** This store's lineage identity: the published descriptor's installationId, else the profile's own file. */
 export async function readStoreInstallationId(
   runtimeId: string | null,

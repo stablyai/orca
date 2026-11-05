@@ -1,14 +1,15 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { isWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { readCallerStoreInstallationId } from '../../../../host-descriptor'
+import { getCanonicalUserDataPath } from '../../../../../persistence/loading-store/user-data-path'
 import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import { supportsCrossStoreLineage } from '../../../../../../shared/worktree-runtime-capabilities'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 
 /**
  * `--on <server> --worktree new-child`: the server's new worktree nests under the coordinator's
- * workspace on this machine, by the same verified ref the CLI's caller auto-nest sends. A server
+ * workspace on this machine, by the same verified ref the CLI's caller auto-nest builds. A server
  * without cross-machine parents still gets the worker, as a top-level worktree with a warning.
  */
 export async function resolveFederatedChildParent(args: {
@@ -17,7 +18,8 @@ export async function resolveFederatedChildParent(args: {
     | 'showTerminal'
     | 'getOrchestrationDispatchAuthority'
     | 'showManagedWorktree'
-    | 'readStoreInstallationId'
+    | 'resolveCallerParentForAnotherStore'
+    | 'getRuntimeId'
   >
   from: string
   callerSession: OrchestrationSessionCaller | undefined
@@ -25,36 +27,26 @@ export async function resolveFederatedChildParent(args: {
   serverName: string
 }): Promise<{ crossStoreParent: CrossStoreParentRef } | { warning: string }> {
   const { runtime } = args
+  // Orchestration's caller authority picks the workspace; the shared builder verifies and names it.
   const callerId = await resolveDispatchCallerWorktreeId(runtime, args.from, args.callerSession)
-  if (isWorkspaceKey(callerId)) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      "A folder workspace can't parent a worktree on another machine yet; use --worktree new-top-level."
-    )
-  }
-  const caller = await runtime.showManagedWorktree(`id:${callerId}`).catch(() => {
-    throw new OrchestrationError(
-      'invalid_argument',
-      "The dispatching terminal's workspace could not be resolved to a git worktree Orca manages, which --worktree new-child needs; run from one, or pass --worktree new-top-level."
-    )
-  })
   if (!supportsCrossStoreLineage(args.serverCapabilities)) {
+    const name = await runtime
+      .showManagedWorktree(`id:${callerId}`)
+      .then((worktree) => worktree.displayName || worktree.id)
+      .catch(() => callerId)
     return {
-      warning: `Not nested under ${caller.displayName || caller.id}: ${args.serverName} needs an Orca update to nest across machines, so the worktree was created top-level.`
+      warning: `Not nested under ${name}: ${args.serverName} needs an Orca update to nest across machines, so the worktree was created top-level.`
     }
   }
-  const installationId = await runtime.readStoreInstallationId()
-  if (!installationId || !caller.instanceId) {
+  const resolved = await runtime.resolveCallerParentForAnotherStore(
+    { envParentWorkspace: `id:${callerId}` },
+    readCallerStoreInstallationId(runtime.getRuntimeId(), getCanonicalUserDataPath())
+  )
+  if ('reason' in resolved) {
     throw new OrchestrationError(
       'invalid_argument',
-      "Couldn't confirm this workspace's machine or identity for new-child; use --worktree new-top-level."
+      `--worktree new-child can't nest under this workspace: ${resolved.reason} Use --worktree new-top-level.`
     )
   }
-  return {
-    crossStoreParent: {
-      installationId,
-      workspaceKey: worktreeWorkspaceKey(caller.id),
-      instanceId: caller.instanceId
-    }
-  }
+  return { crossStoreParent: resolved.parent }
 }
