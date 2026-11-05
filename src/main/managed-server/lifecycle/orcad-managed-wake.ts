@@ -124,6 +124,10 @@ async function wakeAfterPrior(
   if (!(await orcadActivationFenceExists(options))) {
     interruptedWakes.delete(host)
   } else if (!(await releaseOwnInterruptedWakeFence(options, host))) {
+    // Recovery can relaunch the slot, so a refused launch skips it too.
+    if (!mayLaunch()) {
+      return { outcome: 'launch-refused' }
+    }
     const recovered = await recoverAbandonedFence(options, onStarting)
     if (recovered) {
       return recovered
