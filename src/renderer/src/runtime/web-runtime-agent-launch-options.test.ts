@@ -80,6 +80,7 @@ import { beforeEach } from 'vitest'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
@@ -390,6 +391,73 @@ it('leaves chat-only permission out of an OpenCode terminal action request', asy
   expect(request).not.toHaveProperty('launchPreferences')
   expect(request).not.toHaveProperty('agentArgs')
 })
+
+it.each([undefined, ''])(
+  'keeps a no-flag Ask pick structured with action Arguments %j on a create-options host',
+  async (agentArgs) => {
+    const projection = projectSourceControlActionLaunch(
+      {
+        agentId: 'antigravity',
+        surface: 'terminal',
+        ...(agentArgs !== undefined ? { agentArgs } : {}),
+        launchPreferences: { agentId: 'antigravity', permissionMode: 'ask' }
+      },
+      'antigravity',
+      { basePrompt: '' }
+    )
+    await launch({
+      agent: 'antigravity',
+      sessionOptions: projection.sessionOptions,
+      actionAgentArgs: projection.actionAgentArgs
+    })
+    const request = params('terminal.createAgentSession')
+    expect(request.sessionOptions).toEqual({ permissionMode: 'ask' })
+    if (agentArgs === undefined) {
+      expect(request).not.toHaveProperty('agentArgs')
+    } else {
+      expect(request).toHaveProperty('agentArgs', '')
+    }
+    const inputs = resolveAgentStartupPlanInputs({
+      agent: 'antigravity',
+      settings: { agentPermissionDefault: 'full-access' },
+      platform: 'linux',
+      isRemote: false,
+      shell: 'posix',
+      agentArgs: request.agentArgs as string | undefined,
+      sessionOptions: request.sessionOptions as Record<string, string>
+    })
+    expect(inputs.agentArgs).toBe('')
+    expect(
+      buildAgentStartupPlan({ ...inputs, prompt: '', allowEmptyPromptLaunch: true })?.launchCommand
+    ).toBe('agy')
+  }
+)
+
+it.each([false, true])(
+  'compiles a no-flag Ask action pick to empty Arguments on an older host (choices=%s)',
+  async (choices) => {
+    capabilities = [
+      'agent-session.host-authority.v1',
+      ...(choices ? ['settings.agent-launch.choices.v1'] : [])
+    ]
+    const projection = projectSourceControlActionLaunch(
+      {
+        agentId: 'antigravity',
+        surface: 'terminal',
+        launchPreferences: { agentId: 'antigravity', permissionMode: 'ask' }
+      },
+      'antigravity',
+      { basePrompt: '' }
+    )
+    await launch({ agent: 'antigravity', sessionOptions: projection.sessionOptions })
+    const request = params('terminal.createAgentSession')
+    expect(request).toHaveProperty('agentArgs', '')
+    expect(request).not.toHaveProperty('launchPreferences')
+    expect(request).not.toHaveProperty('sessionOptions')
+    expect(request).not.toHaveProperty('command')
+    expect(request).not.toHaveProperty('env')
+  }
+)
 
 it('preserves empty action text and inherits permission from text-only host snapshots', async () => {
   await launch({ actionAgentArgs: '' })

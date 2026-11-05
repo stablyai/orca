@@ -11,7 +11,10 @@ import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/star
 import { sourceControlActionAgentArgs } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { agentArgsSetPermission } from '../../../shared/agent-launch/permissions/agent-permission-args'
 import { liftAgentPermissionArgs } from '../../../shared/agent-launch/permissions/tui-agent-permission-lift'
-import { readLaunchPermissionChoice } from '../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import {
+  agentPermissionHasTerminalChoice,
+  readLaunchPermissionChoice
+} from '../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { YOLO_TUI_AGENT_ENV } from '../../../shared/agent-launch/permissions/tui-agent-permissions'
 import {
   resolveStartupShell,
@@ -40,7 +43,7 @@ export async function pairedAgentLaunchInputs(args: {
     Object.fromEntries(
       Object.entries(args.sessionOptions).filter(([key]) =>
         key === 'permissionMode' || key === 'mode'
-          ? launchPreferences?.mode !== undefined
+          ? agentPermissionHasTerminalChoice(agent, 'own')
           : key !== 'effort' || launchPreferences?.effort !== undefined
       )
     )
@@ -56,7 +59,9 @@ export async function pairedAgentLaunchInputs(args: {
   const permissionMode = readLaunchPermissionChoice(sessionOptions)
   const needsArguments =
     agentLaunchNeedsPreparedCommand(agent, sessionOptions) ||
-    (!args.capable && permissionMode !== undefined)
+    (!args.complete &&
+      permissionMode !== undefined &&
+      (!args.capable || launchPreferences?.mode === undefined))
   if (!needsArguments && !hasActionArgs) {
     return { ...explicitArgs, launchPreferences }
   }
