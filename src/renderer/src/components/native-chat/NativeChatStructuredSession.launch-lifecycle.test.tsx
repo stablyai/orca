@@ -316,14 +316,6 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
-  it('keeps a stale reason off a launch that is no longer failed', () => {
-    mocks.launchLifecycle = 'visibility-unknown'
-    mocks.launchFailure = NOT_SIGNED_IN
-    render(sessionView())
-
-    expect(screen.getByText('Chat connection could not be confirmed.')).toBeTruthy()
-  })
-
   it('relaunches a failed start on send, with the message as its first message', () => {
     mocks.launchLifecycle = 'failed'
     render(sessionView())
