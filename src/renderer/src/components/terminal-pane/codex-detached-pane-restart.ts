@@ -1,5 +1,5 @@
 /** Execute accepted Codex/Claude account restarts for unmounted local panes so input cannot stay blocked until reveal. */
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { LocatedCodexPane } from './located-codex-pane'
 
@@ -10,7 +10,7 @@ import {
   buildCodexAccountRestartStartup,
   buildPaneAccountRestartStartup
 } from '@/lib/agent-account-restart-startup'
-import { isClaudePaneMidTurn } from '@/lib/claude-session-account-move'
+import { isAccountRestartReady } from './pane-account-restart-readiness'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -82,7 +82,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     if (
       state.pendingPaneAccountRestarts[ptyId] === 'claude' &&
       located.leafId &&
-      isClaudePaneMidTurn(state, makePaneKey(located.tab.id, located.leafId))
+      !isAccountRestartReady(state, located.tab.id, located.leafId, ptyId)
     ) {
       return
     }

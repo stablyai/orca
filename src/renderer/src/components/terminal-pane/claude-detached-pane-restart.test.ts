@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
+import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { sweepUnclaimedCodexPaneRestarts } from './codex-detached-pane-restart'
@@ -15,7 +16,9 @@ const NEW_PTY = 'wt1@@new'
 const SESSION_ID = '01a006a6-1d07-70a1-bad5-f9110d5845c0'
 
 function seedClaudePane(
-  overrides: Partial<Pick<AgentStatusEntry, 'state' | 'providerSession'>> = {}
+  overrides: Partial<
+    Pick<AgentStatusEntry, 'state' | 'providerSession' | 'workingMode' | 'mainAgent'>
+  > = {}
 ): void {
   const paneKey = makePaneKey('tab-1', LEAF_ID)
   useAppStore.setState({
@@ -65,16 +68,11 @@ function setPaneState(state: AgentStatusEntry['state']): void {
   useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: { ...entry, state } } })
 }
 
-async function settle(): Promise<void> {
-  for (let i = 0; i < 5; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  }
-}
-
 describe('detached Claude account-move restart', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
 
   beforeEach(() => {
+    vi.useFakeTimers()
     resetCodexDetachedPaneRestartExecutorForTests()
     useAppStore.setState(useAppStore.getInitialState(), true)
     // Why: switch on, a restart binds only into a pane main's layout holds.
@@ -112,6 +110,11 @@ describe('detached Claude account-move restart', () => {
 
   afterEach(() => {
     resetCodexDetachedPaneRestartExecutorForTests()
+    provideLayoutFrameTerminalPanes({
+      holdsTerminalPane: () => false,
+      terminalTab: () => undefined
+    })
+    vi.useRealTimers()
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {
@@ -119,8 +122,12 @@ describe('detached Claude account-move restart', () => {
     }
   })
 
-  it('respawns an unmounted Claude pane with a resume of its own session', async () => {
-    seedClaudePane()
+  it('resumes an unmounted failed Claude turn while a background shell keeps it working', async () => {
+    seedClaudePane({
+      state: 'working',
+      workingMode: 'monitoring',
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1 }
+    })
     useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
 
     await sweepUnclaimedCodexPaneRestarts()
@@ -145,18 +152,49 @@ describe('detached Claude account-move restart', () => {
     try {
       seedClaudePane({ state: 'working' })
       useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
-      await settle()
+      await vi.advanceTimersByTimeAsync(0)
       // Why waiting: Claude's hooks report a permission prompt or question as waiting, mid-turn.
       setPaneState('waiting')
-      await settle()
-      expect(window.api.pty.spawn).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([OLD_PTY])
       expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [OLD_PTY]: 'claude' })
 
       setPaneState('done')
 
-      await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
-      await vi.waitFor(() => expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({}))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+      expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([NEW_PTY])
     } finally {
+      uninstall()
+    }
+  })
+
+  it('takes over a queued restart when its tab unmounts without another status update', async () => {
+    seedClaudePane()
+    const unregister = registerRuntimeTerminalTab({
+      tabId: 'tab-1',
+      worktreeId: 'wt1',
+      getManager: () => null,
+      getContainer: () => null,
+      getPtyIdForPane: () => OLD_PTY,
+      getTabWideAgentHintLeafId: () => null
+    })
+    const uninstall = installCodexDetachedPaneRestartExecutor()
+    try {
+      useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [OLD_PTY]: 'claude' })
+
+      unregister()
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+      expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([NEW_PTY])
+      expect(useAppStore.getState().terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({
+        [LEAF_ID]: NEW_PTY
+      })
+    } finally {
+      unregister()
       uninstall()
     }
   })

@@ -76,7 +76,15 @@ async function isClaudeInForeground(
 /** Whether the pane's Claude is mid-turn; a restart during a permission prompt or question drops it. */
 export function isClaudePaneMidTurn(state: AppState, paneKey: string): boolean {
   const entry = state.agentStatusByPaneKey[paneKey]
-  return entry?.agentType === 'claude' && entry.state !== 'done'
+  if (entry?.agentType !== 'claude' || entry.state === 'done') {
+    return false
+  }
+  // Shells can keep the combined row working after Stop/StopFailure ended the main turn.
+  return !(
+    entry.state === 'working' &&
+    entry.workingMode === 'monitoring' &&
+    entry.mainAgent?.state === 'done'
+  )
 }
 
 /** Resolve the account actually used at launch; an account without its own login may use System default (null). */
