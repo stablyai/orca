@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Copy } from 'lucide-react-native'
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -16,9 +16,14 @@ export function MobileFileExplorerRowActionsSheet({
 }) {
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
-  // Held with its row so a refusal shown for one file never labels the next.
-  const [failure, setFailure] = useState<{ node: TreeNode; actionId: string } | null>(null)
-  const failedActionId = failure?.node === node ? failure.actionId : null
+  const [failedActionId, setFailedActionId] = useState<string | null>(null)
+  // Bumped on every close so a slow write cannot close or label a later row's sheet.
+  const presentation = useRef(0)
+  const close = () => {
+    presentation.current += 1
+    setFailedActionId(null)
+    onClose()
+  }
 
   // Close only once the text landed; Alert is a no-op in the page, so a refusal stays in the sheet.
   const copyAction = (id: string, label: string, text: string): ActionSheetAction => ({
@@ -31,15 +36,19 @@ export function MobileFileExplorerRowActionsSheet({
         : undefined,
     skipAutoClose: true,
     onPress: () => {
-      const target = node
+      const pressedIn = presentation.current
       void clipboard.writeText(text).then(
         () => {
           triggerSuccess()
-          onClose()
+          if (presentation.current === pressedIn) {
+            close()
+          }
         },
         () => {
           triggerError()
-          setFailure(target ? { node: target, actionId: id } : null)
+          if (presentation.current === pressedIn) {
+            setFailedActionId(id)
+          }
         }
       )
     }
@@ -65,7 +74,7 @@ export function MobileFileExplorerRowActionsSheet({
             ]
           : []
       }
-      onClose={onClose}
+      onClose={close}
     />
   )
 }
