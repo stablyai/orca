@@ -287,7 +287,9 @@
       "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
       "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
       "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
-      "modelFallback": "Claude 已切换模型：{{from}} → {{to}}。"
+      "modelFallback": "Claude 已切换模型：{{from}} → {{to}}。",
+      "signIn": "登录",
+      "signInHint": "在运行此聊天的电脑上打开终端"
     },
     "orcaStop": {
       "canContinue": "您可以在此对话中继续。",
@@ -559,6 +561,12 @@
       "byteSize": "{{size}} 字节",
       "saveUpdate": "保存功能将在手机更新中提供。",
       "fullCopySaveUpdate": "完整复制和保存此附件的功能将在手机更新中提供。"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} 正在重新连接…",
+      "stopped": "{{hostName}} 已停止。请在你的电脑上启动它。",
+      "server": "服务器",
+      "unavailable": "无法从手机访问 {{hostName}}。请在你的电脑上打开它的一个项目。"
     }
   },
   "common": {

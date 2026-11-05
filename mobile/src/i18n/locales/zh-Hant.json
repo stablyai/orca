@@ -287,7 +287,9 @@
       "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
       "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
       "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
-      "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。"
+      "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。",
+      "signIn": "登入",
+      "signInHint": "在執行此聊天的電腦上開啟終端機"
     },
     "orcaStop": {
       "canContinue": "您可以在此對話中繼續。",
@@ -559,6 +561,12 @@
       "byteSize": "{{size}} 位元組",
       "saveUpdate": "儲存功能將在手機更新中提供。",
       "fullCopySaveUpdate": "完整複製和儲存此附件的功能將在手機更新中提供。"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} 正在重新連線…",
+      "stopped": "{{hostName}} 已停止。請在你的電腦上啟動它。",
+      "server": "伺服器",
+      "unavailable": "無法從手機存取 {{hostName}}。請在你的電腦上開啟它的一個專案。"
     }
   },
   "common": {

@@ -2958,7 +2958,9 @@
       "permissionDenied": "{{agent}} denied permission. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
-      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+      "modelFallback": "Claude switched models: {{from}} → {{to}}.",
+      "signIn": "Sign in",
+      "signInHint": "Opens a terminal on the computer running this chat"
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
@@ -3182,6 +3184,12 @@
       "messageFromCoordinator": "Message from coordinator",
       "updateFromWorker": "Update from worker",
       "messageFrom": "Message from"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} is reconnecting…",
+      "stopped": "{{hostName}} is stopped. Start it on your computer.",
+      "server": "The server",
+      "unavailable": "{{hostName}} isn't available from your phone. Open one of its projects on your computer."
     }
   },
   "sourceControl": {
