@@ -58,7 +58,8 @@ export function useNativeChatImageSave({
       pendingId: string | null,
       besideText: boolean,
       ready?: () => void,
-      imageDataUrl?: string
+      imageDataUrl?: string,
+      retainAfterUnmount = true
     ): Promise<boolean> => {
       const saved = await saveNativeChatPastedClipboardImage(owner, {
         pendingId,
@@ -68,6 +69,10 @@ export function useNativeChatImageSave({
         canNotify: canComplete,
         setNotice
       })
+      if (!retainAfterUnmount && !lifetime.active) {
+        dropImagePaste(pendingId)
+        return false
+      }
       if (keepStoreUploadAfterUnmount(pendingId, saved)) {
         return false
       }
@@ -77,7 +82,14 @@ export function useNativeChatImageSave({
       }
       return settleImagePaste(pendingId, saved.tempPath, owner)
     },
-    [canComplete, dropImagePaste, keepStoreUploadAfterUnmount, setNotice, settleImagePaste]
+    [
+      canComplete,
+      dropImagePaste,
+      keepStoreUploadAfterUnmount,
+      lifetime,
+      setNotice,
+      settleImagePaste
+    ]
   )
 
   return saveClipboardImage

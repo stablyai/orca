@@ -21,7 +21,8 @@ export function useNativeChatCommentedImageAttachment({
     id: string | null,
     besideText: boolean,
     ready?: () => void,
-    dataUrl?: string
+    dataUrl?: string,
+    retainAfterUnmount?: boolean
   ) => Promise<boolean>
   insertCapturedText: (text: string) => boolean
   removeImageAttachment?: (id: string) => void
@@ -44,7 +45,7 @@ export function useNativeChatCommentedImageAttachment({
       if (!id) {
         return false
       }
-      const saved = await saveClipboardImage(owner, id, false, reveal, dataUrl)
+      const saved = await saveClipboardImage(owner, id, false, reveal, dataUrl, false)
       if (!saved) {
         return false
       }

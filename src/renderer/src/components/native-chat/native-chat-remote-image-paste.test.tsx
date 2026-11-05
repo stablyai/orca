@@ -285,3 +285,33 @@ it('rolls back a saved commented image if its text cannot enter the draft', asyn
   expect(latest().attachments.imageAttachments).toEqual([])
   expect(latest().draft).toBe('')
 })
+
+it('drops a commented image when its composer unmounts before the save finishes', async () => {
+  let finishSave!: (path: string) => void
+  let saveStarted!: () => void
+  const started = new Promise<void>((resolve) => {
+    saveStarted = resolve
+  })
+  mocks.saveClipboardImageAsTempFile.mockImplementation(() => {
+    saveStarted()
+    return new Promise<string>((resolve) => {
+      finishSave = resolve
+    })
+  })
+  const latest = await render(() => SERVER_OWNER)
+  let result!: Promise<boolean>
+  await act(async () => {
+    result = latest().paste.attachCommentedImage('data:image/png;base64,cG5n', 'Feedback')
+    await started
+  })
+  act(() => root?.unmount())
+  root = null
+  await act(async () => {
+    finishSave('/tmp/annotated.png')
+    await result
+  })
+  expect(await result).toBe(false)
+  const remounted = await render(() => SERVER_OWNER)
+  expect(remounted().attachments.imageAttachments).toEqual([])
+  expect(remounted().draft).toBe('')
+})
