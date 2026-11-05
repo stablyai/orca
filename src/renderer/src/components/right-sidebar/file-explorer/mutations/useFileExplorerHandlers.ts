@@ -5,7 +5,6 @@ import { detectLanguage } from '@/lib/language-detect'
 import { toast } from 'sonner'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { FILE_EXPLORER_DRAGGABLE_SELECTOR } from './file-explorer-drag-scroll-marker'
-import type { DirToggleTiming } from '../tree/file-explorer-dir-toggle-timing'
 import { translate } from '@/i18n/i18n'
 import {
   getFileExplorerOwnerUnresolvedMessage,
@@ -52,11 +51,7 @@ type UseFileExplorerHandlersParams = {
 export type FileExplorerRowClick = { repeated: boolean }
 
 type UseFileExplorerHandlersReturn = {
-  handleClick: (
-    node: TreeNode,
-    dirToggle?: DirToggleTiming,
-    rowClick?: FileExplorerRowClick
-  ) => void
+  handleClick: (node: TreeNode, rowClick?: FileExplorerRowClick) => void
   handleDoubleClick: (node: TreeNode) => void
   handleWheelCapture: (e: React.WheelEvent<HTMLDivElement>) => void
 }
@@ -181,12 +176,7 @@ export function useFileExplorerHandlers({
   scrollRef
 }: UseFileExplorerHandlersParams): UseFileExplorerHandlersReturn {
   const handleClick = useCallback(
-    (node: TreeNode, dirToggle: DirToggleTiming = 'immediate', rowClick?: FileExplorerRowClick) => {
-      if (dirToggle === 'skip' && (node.isDirectory || node.isSymlink)) {
-        // Rename owns this click; symlinks remain file-shaped until activation, so isDirectory alone would retoggle.
-        setSelectedPath(node.path)
-        return
-      }
+    (node: TreeNode, rowClick?: FileExplorerRowClick) => {
       void activateFileExplorerNode({
         node,
         activeWorktreeId,

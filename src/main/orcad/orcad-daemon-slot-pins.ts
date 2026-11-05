@@ -1,8 +1,8 @@
 // Daemons outlive instance locks; pin their entry/runtime slots separately.
 import { readdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { parseDaemonPidFile } from '../daemon/daemon-pid-file-parse'
-import { hasErrorCode, isProcessAlive } from '../daemon/daemon-process-inspection'
+import { parseDaemonPidFile } from '../daemon/endpoint/identity/daemon-pid-file-parse'
+import { hasErrorCode, isProcessAlive } from '../daemon/endpoint/identity/daemon-process-inspection'
 import {
   currentOrcadPeerMachine,
   orcadPeerPidIsJudgeableHere,

@@ -8,7 +8,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../shared/runtime-types'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { getMobileSessionTabOrderIds } from '../mobile-session-tab-merge'
 import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'
 import type { AgentSenderRevision } from '../../../shared/agent-sender-associations'
@@ -68,6 +68,9 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       clientNavigationId?: string
     ): void => {
       const { agentSenderAssociations: _senders, ...tabsOnly } = result
+      // A frame for one client is already its projection; projecting again stacks the epoch suffix and revision, so the client fences it.
+      const project = (frame: RuntimeMobileSessionTabsResult, id: string | undefined) =>
+        clientNavigationId === undefined ? this.projectMobileSessionTabsForClient(frame, id) : frame
       let desktopFrame: RuntimeMobileSessionTabsResult | undefined
       try {
         for (const subscription of this.mobileSessionTabListeners) {
@@ -89,10 +92,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
             }
             frame = desktopFrame
           }
-          subscription.listener(
-            this.projectMobileSessionTabsForClient(frame, subscription.clientNavigationId),
-            changeSequence
-          )
+          subscription.listener(project(frame, subscription.clientNavigationId), changeSequence)
         }
         if (clientNavigationId === undefined && desktopFrame?.agentSenderAssociations) {
           this.agentProjections.senders.acknowledgeFrame(

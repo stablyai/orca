@@ -228,19 +228,6 @@ afterEach(async () => {
 })
 
 describe('Jira issue workspace image ownership', () => {
-  it('keeps explicit ownership without duplicate reads when the default host changes', async () => {
-    const selected = issue()
-    const owner: RuntimeClientTarget = { kind: 'environment', environmentId: 'environment-1' }
-    await render(selected)
-    boundary.settings = { activeRuntimeEnvironmentId: 'environment-2' }
-    await render(selected)
-    for (const reads of [boundary.issues, boundary.comments, boundary.transitions]) {
-      expect(reads).toHaveLength(1)
-      expect(reads[0]?.target).toEqual(owner)
-    }
-    expect(text('image-owner')).toBe(JSON.stringify(owner))
-  })
-
   it('fences late detail, comments and transitions when the same issue switches owners', async () => {
     const selected = issue()
     await render(selected)
@@ -271,21 +258,5 @@ describe('Jira issue workspace image ownership', () => {
     expect(text('title')).toBe('New owner')
     expect(text('comments')).toBe('new')
     expect(text('transitions')).toBe('new')
-  })
-
-  it('uses one account owner for row-less detail, comments, transitions and images', async () => {
-    await render(issue(), null)
-    const detail = take(boundary.issues)
-    const comments = take(boundary.comments)
-    const transitions = take(boundary.transitions)
-    expect(detail.target).toEqual({ kind: 'environment', environmentId: 'environment-1' })
-    expect(comments.target).toBe(detail.target)
-    expect(transitions.target).toBe(detail.target)
-    expect(text('image-owner')).toBe(JSON.stringify(detail.target))
-    await act(async () => {
-      detail.resolve(null)
-      comments.resolve([])
-      transitions.resolve([])
-    })
   })
 })

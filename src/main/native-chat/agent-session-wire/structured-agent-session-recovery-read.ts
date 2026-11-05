@@ -2,7 +2,7 @@ import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/nativ
 import {
   structuredSessionRecoveryOptions,
   type RecoveryContextCache
-} from '../../runtime/structured-session-recovery-options'
+} from '../../runtime/agent-session/lifecycle/structured-session-recovery-options'
 import { withoutInheritedClaudeConfigDir } from '../../claude/claude-config-dir-pin'
 import type {
   StructuredAgentSessionHostDeps,

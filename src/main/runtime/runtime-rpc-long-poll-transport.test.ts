@@ -19,7 +19,10 @@ import {
   seedSupervisedAskWorkers
 } from './runtime-rpc-test-harness'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeScanCacheModule>()),

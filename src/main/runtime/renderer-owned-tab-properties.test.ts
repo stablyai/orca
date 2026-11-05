@@ -1,4 +1,4 @@
-import './orca-runtime-test-lifecycle.spec'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -19,12 +19,14 @@ import {
   stopStructuredAgentSessionRuntime
 } from './agent-session/structured-agent-session-runtime'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
-import { OrcaRuntimeService, electronMocks } from './orca-runtime-test-mocks.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import { electronMocks } from './orca-runtime-test-mocks/setup.spec'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from './orca-runtime-test-fixtures.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { SESSION_TAB_MUTATION_METHODS } from './rpc/methods/session-tab-mutation-methods'

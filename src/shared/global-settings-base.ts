@@ -1,6 +1,7 @@
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
+import type { BrowserPasswordsGlobalSettings } from './browser-passwords-types'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
@@ -37,4 +38,5 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   TerminalScrollSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
-  EditorSaveSettings
+  EditorSaveSettings &
+  BrowserPasswordsGlobalSettings

@@ -15,7 +15,7 @@ on:
       - 'src/main/window/main-window-state-lifecycle*'
       - 'src/main/window/dashboard-popout-window*'
       - 'src/packages/process-host/**'
-      - 'src/main/runtime/structured-agent-cli-writers*'
+      - 'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers*'
       - 'src/main/providers/macos-tcc-login-shell*'
       - 'src/shared/process-table-snapshot*'
       - 'src/shared/darwin-process-table-capture*'
@@ -44,13 +44,13 @@ jobs:
           native-runtime: node
           cache-electron-package: 'true'
       - name: Install the pinned Electron binary for native updater probes
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
       - name: Exercise native application registry and update shutdown
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
-          config/scripts/macos-shipit-scheduling.test.mjs
+          config/scripts/desktop-distribution/macos/macos-shipit-scheduling.test.mjs
           src/main/updater/mac-install/macos-update-running-instances.integration.test.ts
           src/main/updater/mac-install/updater.mac-install.test.ts
           src/main/updater/updater.headless-serve-install.test.ts
@@ -62,4 +62,4 @@ jobs:
         env:
           ORCA_MACOS_LOGIN_CENSUS_CI: '1'
           ORCA_BACKGROUND_LAUNCH: '1'
-        run: pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/structured-agent-cli-writers.test.ts
+        run: pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts

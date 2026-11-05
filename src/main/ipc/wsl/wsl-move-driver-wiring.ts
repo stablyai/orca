@@ -14,12 +14,12 @@ import {
   type WslMoveProgressEvent
 } from '../../../shared/wsl-move/wsl-move-driver-types'
 import { agentHookServer } from '../../agent-hooks/server'
-import { getDaemonHistoryDir } from '../../daemon/daemon-launch-paths'
+import { getDaemonHistoryDir } from '../../daemon/launch/daemon-launch-paths'
 import {
   countInProcessFallbackTerminals,
   listLiveDaemonSessions
-} from '../../daemon/daemon-provider-state'
-import { HistoryReader } from '../../daemon/history-reader'
+} from '../../daemon/providers/lifecycle/daemon-provider-state'
+import { HistoryReader } from '../../daemon/history/restoration/history-reader'
 import { orcadMigrationDestinationFor } from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
 import type { Store } from '../../persistence/loading-store/store'
 import { exportWslMoveManifest } from '../../persistence/moving-wsl-projects/wsl-move-manifest-export'

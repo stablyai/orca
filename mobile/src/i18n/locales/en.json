@@ -1377,6 +1377,14 @@
       "noMatches": "No files match",
       "current": "current",
       "viewedFile": "{{path}} viewed"
+    },
+    "native-chat": {
+      "turnDiff": {
+        "changedFiles_one": "{{count}} changed file",
+        "changedFiles_other": "{{count}} changed files",
+        "partial": "Partial diff",
+        "showMoreFiles": "Show {{count}} more"
+      }
     }
   },
   "pullRequest": {
@@ -2844,7 +2852,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Default",
-      "notReportedMarker": "Not reported"
+      "notReportedMarker": "Not reported",
+      "moreModels": "More models",
+      "fewerModels": "Fewer models"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Sent to the agent — not confirmed"

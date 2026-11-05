@@ -8,14 +8,14 @@ import {
 } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { SSH_EXIT_UNCONFIRMED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import type { RetiredTerminalSurface } from '../../mobile-session-terminal-retirement'
+import type { RetiredTerminalSurface } from '../surface/mobile-session-terminal-retirement'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-exited-pty'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
   protected abstract pruneDisconnectedPtyRecords(): void

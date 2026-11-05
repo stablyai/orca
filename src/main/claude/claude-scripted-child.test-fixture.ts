@@ -11,8 +11,8 @@ import type {
 import type {
   ScriptedAgentChild,
   ScriptedAgentChildFactory
-} from '../runtime/structured-agent-scripted-child.test-fixture'
-import { scriptedClaudeExitError } from '../runtime/structured-claude-scripted-runtime-test-support'
+} from '../runtime/agent-session/installation/structured-agent-scripted-child.test-fixture'
+import { scriptedClaudeExitError } from '../runtime/agent-session/installation/structured-claude-scripted-runtime-test-support'
 import { result, says } from './claude-captured-frame-builders.test-fixture'
 
 type Spawned = {

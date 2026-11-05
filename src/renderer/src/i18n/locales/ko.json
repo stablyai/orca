@@ -3214,7 +3214,6 @@
             "e8b3741ff7": "무시됨",
             "a9957007eb": "{{value0}} 무시",
             "bef0adef9b": "브랜치",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}}을(를) 선택하세요",
             "b771c92598": "선택 항목 삭제",
             "7eee951968": "워크스페이스 안전성 확인 중",
@@ -3223,7 +3222,6 @@
             "b2c1331844": "비활성 워크스페이스 삭제",
             "7f451a3e2c": "정리 제안을 무시할 수 없습니다.",
             "662b8ec3f8": "워크스페이스 정리 검사 실패",
-            "4d0b72481c": "무시",
             "9cc26c019d": "제거",
             "0e2d235c63": "비활성 워크스페이스 스캔 준비됨",
             "4a35c08764": "리뷰",
@@ -3231,9 +3229,6 @@
             "1d3503357d": "삭제가 계속되는 동안 이 창을 닫고 나중에 돌아올 수 있습니다.",
             "4c2990886e": "{{value0}}/{{value1}}개 삭제됨",
             "86ba852118": "{{value0}}, {{value1}}개 실패",
-            "deletingCount": "삭제 중인 워크스페이스: {{value0}}",
-            "deleteCount": "워크스페이스 삭제: {{value0}}?",
-            "selectedForDeletionCount": "삭제 대상으로 선택됨: {{value0}}",
             "deleteButtonCount": "{{value0}}개 삭제",
             "archivedStatus": "보관됨",
             "74f6c16279": "뒤로"
@@ -3248,7 +3243,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "커밋",
             "contextLabel": "문맥",
             "flagsLabel": "플래그",
             "collapseDetails": "세부 정보 접기",
@@ -14855,8 +14849,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "예: ollama run llama3.1 {{value0}}",
             "9ee54037a4": "사용자 지정 명령",
-            "4b2fc4b80c": "사고 강도",
-            "be8917699e": "모델",
             "560d4feb00": "사용자 정의",
             "29d119fe95": "에이전트",
             "f9382b48a1": "AI author 활성화",
@@ -18950,8 +18942,6 @@
       },
       "turnDiff": {
         "partial": "부분적인 차이점",
-        "showDiff": "차이 보기",
-        "hideDiff": "차이 숨기기",
         "changedFiles_other": "변경된 파일 {{count}}개"
       },
       "receipt": {
@@ -19481,9 +19471,7 @@
           },
           "noSizes": "아직 측정된 워크스페이스 크기가 없습니다.",
           "noSizesDescription": "디스크 사용량을 측정한 후 크기가 나타납니다.",
-          "measureSizes": "주사",
           "measureSizesTitle": "스캔 워크스페이스 크기",
-          "measureSizesDescription": "디스크 사용량을 검사하여 워크스페이스를 크기별로 비교, 정렬 및 필터링합니다.",
           "sizeOnDisk": "디스크 크기: {{value0}}",
           "checkingGitRow": "자식 상태 확인 중",
           "searchPlaceholder": "이름, 저장소, 브랜치, 경로, 호스트 검색",
@@ -19953,7 +19941,10 @@
       "workerAutoClose": {
         "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힘",
         "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
-        "keepOpen": "열어 두기"
+        "keepOpen": "열어 두기",
+        "bannerRunning": "오케스트레이션 워커 · 완료 2분 후 닫힘",
+        "bannerFinished": "오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
+        "temporaryBadge": "임시"
       }
     },
     "wslHostMark": {

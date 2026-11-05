@@ -14,7 +14,7 @@ import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-na
 import {
   runtimeBrowserUnavailableCause,
   setRuntimeBrowserUnavailableCause
-} from '../runtime/runtime-browser-commands-factory'
+} from '../runtime/browser/installation/runtime-browser-commands-factory'
 
 vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),

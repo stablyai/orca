@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
-import { sealStructuredSessionChild } from '../../../runtime/structured-session-child-env'
-import { createCodexStructuredLaunchResolver } from '../../../runtime/structured-agent-launch-composition.test-support'
+import { sealStructuredSessionChild } from '../../../runtime/agent-session/environment/structured-session-child-env'
+import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
@@ -13,7 +13,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../../../runtime/structured-worker-identity'
+} from '../../../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 const DEV_CLI_BIN_FIRST = /^[^:;]*[\\/]cli[\\/]bin[:;]/
 const DEV_CLI_BIN_DIR = /^[^:;]*[\\/]cli[\\/]bin$/

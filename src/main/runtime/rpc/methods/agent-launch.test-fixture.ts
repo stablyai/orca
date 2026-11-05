@@ -8,7 +8,7 @@ import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch
 import type { RpcContext } from '../core'
 import { resolveRpcCallerIdentity } from '../rpc-caller-identity'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest

@@ -1,29 +1,25 @@
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
 import {
   MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  assertWorktreeCleanForRemoval,
   closeLocalWatcherForWorktreePathMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
-  getEffectiveHooks,
-  join,
-  listWorktrees,
-  listWorktreesStrict,
-  lstat,
-  localWorktreeFilesystem,
-  mkdir,
-  mkdtemp,
   restoreLocalWatcherAfterFailedRemovalMock,
-  removeWorktree,
-  removeWorktreeLinkedPathsMock,
-  rm,
-  runHook,
-  tmpdir,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+  removeWorktreeLinkedPathsMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
+import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
+import { join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import * as localWorktreeFilesystem from '../../workspaces/removal/local-worktree-filesystem'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
+import { tmpdir } from 'node:os'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
@@ -37,14 +33,14 @@ import {
   makeWorktreeMeta,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import {
   createReconcileRuntime,
   createWorktreeRemovalRuntime,
   mockReconcileGit,
   reconcileWithToken,
   remoteTrackingBase
-} from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('does not inspect or delete a local path for an SSH runtime orphan this process does not serve', async () => {

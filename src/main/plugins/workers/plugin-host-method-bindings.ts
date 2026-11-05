@@ -27,6 +27,8 @@ import {
   PLUGIN_WORKSPACE_ACTION_HANDLERS,
   type PluginRuntimeRpc
 } from './plugin-host-workspace-method-bindings'
+import type { PluginAppearanceService } from '../appearance/plugin-appearance-service'
+import { PluginHostCallError } from './plugin-host-call-scope'
 
 export type { PluginHostCallScope } from './plugin-host-call-scope'
 
@@ -52,6 +54,7 @@ export type PluginDesktopFrameServices = {
 }
 
 export type PluginHostServices = {
+  appearance?: PluginAppearanceService | null
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
   listWorktreeTerminals(worktreeId: string): Promise<PluginWorkspaceTerminal[]>
   listAgentStatuses(): readonly PluginAgentStatusRow[]
@@ -112,6 +115,21 @@ const api = PLUGIN_HOST_API
 const OK = { ok: true } as const
 
 const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
+  'appearance.read': bind(api['appearance.read'], async (_params, { services }) => {
+    if (!services.appearance) {
+      throw new PluginHostCallError('unavailable', 'desktop appearance service is unavailable')
+    }
+    return services.appearance.read()
+  }),
+  'appearance.apply': bind(
+    api['appearance.apply'],
+    async (params, { pluginId, services, scope }) => {
+      if (!services.appearance) {
+        throw new PluginHostCallError('unavailable', 'desktop appearance service is unavailable')
+      }
+      return services.appearance.apply(pluginId, params, scope)
+    }
+  ),
   'workspace.readContext': bind(api['workspace.readContext'], async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
     const terminals = context ? await services.listWorktreeTerminals(context.worktreeId) : []

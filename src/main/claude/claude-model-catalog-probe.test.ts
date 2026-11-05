@@ -138,7 +138,9 @@ describe('claude model catalog probe', () => {
     expect(
       models.map(({ id, isDefault, supportsAutoMode }) => ({ id, isDefault, supportsAutoMode }))
     ).toEqual([
-      { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
+      { id: 'claude-opus-5-5[1m]', isDefault: true, supportsAutoMode: true },
+      { id: 'claude-haiku-4-5-20251001', isDefault: false, supportsAutoMode: undefined },
+      { id: 'opus[1m]', isDefault: false, supportsAutoMode: true },
       { id: 'haiku', isDefault: false, supportsAutoMode: undefined }
     ])
   })

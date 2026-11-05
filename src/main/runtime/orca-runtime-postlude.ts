@@ -1,4 +1,4 @@
-import { RESOLVED_WORKTREE_REPO_TIMEOUT_MS } from './repo-worktree-row-resolution'
+import { RESOLVED_WORKTREE_REPO_TIMEOUT_MS } from './workspaces/catalog/repo-worktree-row-resolution'
 import { REPO_SEARCH_REFS_DEFAULT_LIMIT } from '../../shared/repo-search-limits'
 
 export const WAIT_BLOCKED_CHECK_MIN_INTERVAL_MS = 50
