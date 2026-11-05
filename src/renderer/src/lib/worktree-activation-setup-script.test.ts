@@ -36,7 +36,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       ensureWorktreeHasInitialTerminal(newTabStore, 'wt-1', undefined, setup)
       expect(createdTabStartups(newTabStore)['tab-2']).toEqual({
         command:
-          'cmd.exe /c "C:\\repo\\.git\\orca\\setup-runner.cmd"; if ($LASTEXITCODE -eq 0) { exit }',
+          'cmd.exe /c "C:\\repo\\.git\\orca\\setup-runner.cmd"; if ($LASTEXITCODE -eq 0) { exit 79 }',
         env: {}
       })
 
@@ -49,7 +49,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
         envVars: {}
       })
       expect(createdTabStartups(posixStore)['tab-2']).toEqual({
-        command: 'bash /tmp/repo/.git/orca/setup-runner.sh && exit',
+        command: 'bash /tmp/repo/.git/orca/setup-runner.sh && exit 79',
         env: {}
       })
     } finally {
