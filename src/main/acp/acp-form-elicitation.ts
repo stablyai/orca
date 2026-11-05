@@ -11,7 +11,7 @@ import { pendingAcpResolution } from './acp-timeline-requests'
 
 export const ACP_FORM_ELICITATION_METHOD = 'elicitation/create'
 // The card shows at most four questions; this tells the agent why the rest went unanswered.
-const NOT_SHOWN_ANSWER = 'Not shown to the user: Orca shows at most 4 questions at once. Ask again.'
+const NOT_SHOWN_ANSWER = `Not shown to the user: Orca shows at most ${MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS} questions at once. Ask again.`
 
 const choiceSchema = z.looseObject({
   const: z.string(),
@@ -107,10 +107,14 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
     return { key, ...(otherKey ? { otherKey } : {}), ...(choices ? { choices } : {}), question }
   })
   const questions = fields.map((field) => field.question)
+  // Clients without `questions` read the top-level fields, which can carry only one single-choice question.
+  const first = questions.length === 1 && !questions[0]!.multiSelect ? questions[0]! : undefined
   const body = {
     kind: 'question' as const,
     question: message,
-    options: questions[0]!.options,
+    options: first?.options ?? [],
+    ...(first?.freeTextQuestionId ? { freeTextQuestionId: first.freeTextQuestionId } : {}),
+    ...(first?.freeTextInput ? { freeTextInput: first.freeTextInput } : {}),
     questions,
     resolution: pendingAcpResolution
   }
