@@ -65,6 +65,62 @@ export function measurePluginFrameMessageBytes(
   return total
 }
 
+type RangeWireRequest = {
+  orca: 1
+  kind: 'req'
+  id: number
+  method: 'editor.readRange'
+  params: { version: number; offset: number; length: number }
+}
+
+function isPlainRangeObject(value: unknown): value is Record<PropertyKey, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+  )
+}
+
+function isRangeWireRequest(value: unknown): value is RangeWireRequest {
+  if (
+    !isPlainRangeObject(value) ||
+    value.orca !== 1 ||
+    value.kind !== 'req' ||
+    value.method !== 'editor.readRange' ||
+    typeof value.id !== 'number' ||
+    !Number.isSafeInteger(value.id) ||
+    value.id < 0
+  )
+    return false
+  const keys = Reflect.ownKeys(value)
+  if (
+    keys.length !== 5 ||
+    !keys.every(
+      (key) => typeof key === 'string' && ['orca', 'kind', 'id', 'method', 'params'].includes(key)
+    )
+  )
+    return false
+  const params = value.params
+  if (!isPlainRangeObject(params)) return false
+  const fields = Reflect.ownKeys(params)
+  return (
+    fields.length === 3 &&
+    fields.every(
+      (key) => typeof key === 'string' && ['version', 'offset', 'length'].includes(key)
+    ) &&
+    typeof params.version === 'number' &&
+    Number.isSafeInteger(params.version) &&
+    params.version >= 0 &&
+    typeof params.offset === 'number' &&
+    Number.isSafeInteger(params.offset) &&
+    params.offset >= 0 &&
+    typeof params.length === 'number' &&
+    Number.isSafeInteger(params.length) &&
+    params.length >= 1 &&
+    params.length <= 256 * 1024
+  )
+}
+
 function laneCap(message: unknown): { maxBytes: number; walk?: typeof DEFAULT_WALK } {
   const method =
     typeof message === 'object' && message !== null && 'method' in message ? message.method : null
@@ -89,13 +145,18 @@ export type PluginFrameSendRefusal =
   | { code: 'rate_limited'; retryAfterMs: number }
 
 /** Returns null to send, or why not; held in the isolated world so page script cannot reset it. */
+export type PluginFrameSendBudget = ((message: unknown) => PluginFrameSendRefusal | null) & {
+  settle(message: unknown): void
+}
+
 export function createPluginFrameSendBudget(
   now: () => number = () => Date.now(),
   rate = PRELOAD_PLUGIN_FRAME_RATE
-): (message: unknown) => PluginFrameSendRefusal | null {
+): PluginFrameSendBudget {
   const sent: { at: number; bytes: number }[] = []
   let windowBytes = 0
-  return (message) => {
+  const pendingReads = new Set<number>()
+  const admit = (message: unknown): PluginFrameSendRefusal | null => {
     const at = now()
     for (let oldest = sent[0]; oldest && oldest.at <= at - rate.perMs; oldest = sent[0]) {
       sent.shift()
@@ -105,6 +166,12 @@ export function createPluginFrameSendBudget(
     const bytes = measurePluginFrameMessageBytes(message, lane.maxBytes, lane.walk)
     if (bytes > lane.maxBytes) {
       return { code: 'too_large' }
+    }
+    if (bytes <= 1024 && isRangeWireRequest(message)) {
+      if (pendingReads.size >= 2 || pendingReads.has(message.id))
+        return { code: 'rate_limited', retryAfterMs: 0 }
+      pendingReads.add(message.id)
+      return null
     }
     if (sent.length >= rate.maxMessages || windowBytes + bytes > rate.maxBytes) {
       return {
@@ -116,6 +183,17 @@ export function createPluginFrameSendBudget(
     windowBytes += bytes
     return null
   }
+  return Object.assign(admit, {
+    settle(message: unknown): void {
+      if (
+        isPlainRangeObject(message) &&
+        message.orca === 1 &&
+        message.kind === 'res' &&
+        typeof message.id === 'number'
+      )
+        pendingReads.delete(message.id)
+    }
+  })
 }
 
 /**

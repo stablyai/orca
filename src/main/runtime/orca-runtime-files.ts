@@ -1,3 +1,4 @@
+import { RuntimeRangedFileDocuments } from './files/ranged-file-document-commands'
 import { RuntimeFileSearch } from './files/search/file-search'
 import { RuntimeTerminalArtifacts } from './terminal/artifacts/terminal-artifacts'
 import { RuntimeFileAccess } from './files/file-access'
@@ -47,6 +48,7 @@ export class RuntimeFileCommands {
   readonly forgetFileExplorerWatchersAfterRemoval: RuntimeFileWatches['forgetFileExplorerWatchersAfterRemoval']
   readonly resolveTerminalPath: RuntimeTerminalPathResolver['resolveTerminalPath']
   readonly stagedFileSaves: RuntimeStagedFileSaves
+  readonly rangedFileDocuments: RuntimeRangedFileDocuments
 
   constructor(host: RuntimeFileCommandHost) {
     this.search = new RuntimeFileSearch(host)
@@ -55,6 +57,7 @@ export class RuntimeFileCommands {
     this.reads = new RuntimeFileReads(host)
     this.mutations = new RuntimeFileMutations(host)
     this.stagedFileSaves = new RuntimeStagedFileSaves(host)
+    this.rangedFileDocuments = new RuntimeRangedFileDocuments(host)
     this.watches = new RuntimeFileWatches(host)
     this.terminalPaths = new RuntimeTerminalPathResolver(host, this.artifacts)
     this.openMobileFile = this.access.openMobileFile.bind(this.access)

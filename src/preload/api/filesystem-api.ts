@@ -1,3 +1,9 @@
+import type {
+  RangedFileDocumentLocalOpen,
+  RangedFileDocumentDescriptor,
+  RangedFileDocumentRead,
+  RangedFileDocumentChunk
+} from '../../shared/ranged-file-document'
 import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { RuntimeFileReadChunkResult } from '../../shared/runtime-types'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
@@ -49,6 +55,13 @@ export type ExportApi = {
 
 export type FilesystemApi = {
   fs: {
+    rangeDocumentOpen: (args: RangedFileDocumentLocalOpen) => Promise<RangedFileDocumentDescriptor>
+    rangeDocumentRead: (args: RangedFileDocumentRead) => Promise<RangedFileDocumentChunk>
+    rangeDocumentStatus: (args: { id: string }) => Promise<RangedFileDocumentDescriptor>
+    rangeDocumentReload: (args: { id: string }) => Promise<RangedFileDocumentDescriptor>
+    rangeDocumentClose: (args: { id: string }) => Promise<void>
+    rangeDocumentCancel: (args: { id: string; requestToken: string }) => Promise<void>
+
     getPathForFile?: (file: File) => string
     prepareDroppedPaths: (args: PrepareDroppedPathsRequest) => Promise<PreparedDroppedPaths>
     readFileChunk: (args: {

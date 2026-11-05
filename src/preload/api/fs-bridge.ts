@@ -1,3 +1,9 @@
+import type {
+  RangedFileDocumentLocalOpen,
+  RangedFileDocumentDescriptor,
+  RangedFileDocumentRead,
+  RangedFileDocumentChunk
+} from '../../shared/ranged-file-document'
 import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import { ipcRenderer, webUtils } from 'electron'
 import type {
@@ -33,6 +39,19 @@ import type {
 import type { PreloadApi } from '../api-types'
 
 export const fsApi = {
+  rangeDocumentOpen: (args: RangedFileDocumentLocalOpen): Promise<RangedFileDocumentDescriptor> =>
+    ipcRenderer.invoke('fs:rangeDocumentOpen', args),
+  rangeDocumentRead: (args: RangedFileDocumentRead): Promise<RangedFileDocumentChunk> =>
+    ipcRenderer.invoke('fs:rangeDocumentRead', args),
+  rangeDocumentStatus: (args: { id: string }): Promise<RangedFileDocumentDescriptor> =>
+    ipcRenderer.invoke('fs:rangeDocumentStatus', args),
+  rangeDocumentReload: (args: { id: string }): Promise<RangedFileDocumentDescriptor> =>
+    ipcRenderer.invoke('fs:rangeDocumentReload', args),
+  rangeDocumentClose: (args: { id: string }): Promise<void> =>
+    ipcRenderer.invoke('fs:rangeDocumentClose', args),
+  rangeDocumentCancel: (args: { id: string; requestToken: string }): Promise<void> =>
+    ipcRenderer.invoke('fs:rangeDocumentCancel', args),
+
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
   prepareDroppedPaths: (args: PrepareDroppedPathsRequest): Promise<PreparedDroppedPaths> =>
     ipcRenderer.invoke('fs:prepareDroppedPaths', args),

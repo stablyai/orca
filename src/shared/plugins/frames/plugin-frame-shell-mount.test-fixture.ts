@@ -24,6 +24,16 @@ export type FrameOrca = {
     get: () => Promise<unknown>
     onDidChange: (handler: (document: unknown) => void) => { dispose: () => void }
     applyEdit: (edit: unknown) => Promise<unknown>
+    rangeSession: () => Promise<{
+      readonly value: { version: number; byteLength: number; maxReadBytes: number; readOnly: true }
+      readRange: (
+        range: { version: number; offset: number; length: number },
+        options?: { signal?: AbortSignal }
+      ) => Promise<{ version: number; bytes: ArrayBuffer; eof: boolean }>
+      onInvalidate: (handler: (value: unknown) => void) => { dispose: () => void }
+      reload: () => Promise<{ version: number; byteLength: number }>
+      dispose: () => void
+    }>
     session: (options?: FrameDocumentSessionOptions) => Promise<FrameDocumentSession>
   }
 }

@@ -1,3 +1,10 @@
+import type { RuntimeRangeDocument } from '@/runtime/runtime-range-document'
+import {
+  openEditorRangeDocument,
+  isEditorRangeDocumentDirty,
+  EDITOR_RANGE_DIRTY_MESSAGE
+} from './editor-range-document'
+import { useAppStore } from '@/store'
 import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
@@ -51,6 +58,87 @@ function SurfaceMessage({
   )
 }
 
+function RangeSurface({
+  editor,
+  file,
+  fileContent,
+  fileType,
+  onSave
+}: {
+  editor: ActivePluginCustomEditor
+  file: OpenFile
+  fileContent: FileContent
+  fileType: string
+  onSave: (content: string) => Promise<boolean>
+}): React.JSX.Element {
+  const dirty = useAppStore((state) => isEditorRangeDocumentDirty(state, file.id, file))
+  const [source, setSource] = useState<RuntimeRangeDocument | null>(
+    fileContent.rangeDocument ?? null
+  )
+  const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    if (fileContent.rangeDocument) {
+      setSource(fileContent.rangeDocument)
+      return
+    }
+    const args = fileContent.byteSource
+    if (!args || args.filePath !== file.filePath) {
+      setError('This document has no current authorized byte source.')
+      return
+    }
+    let active = true
+    let owned: RuntimeRangeDocument | undefined
+    setError('')
+    void openEditorRangeDocument(args, file.id, file).then(
+      (next) => {
+        if (!active) {
+          next.dispose()
+          return
+        }
+        owned = next
+        setSource(next)
+      },
+      (failure: unknown) => {
+        if (active) setError(failure instanceof Error ? failure.message : String(failure))
+      }
+    )
+    return () => {
+      active = false
+      owned?.dispose()
+    }
+  }, [fileContent.rangeDocument, fileContent.byteSource, file.filePath, file.id, attempt])
+  if (error)
+    return <SurfaceMessage onRetry={() => setAttempt((value) => value + 1)}>{error}</SurfaceMessage>
+  if (!source)
+    return (
+      <SurfaceMessage>
+        {translate('auto.components.editor.PluginCustomEditorFrame.loading', 'Loading editor…')}
+      </SurfaceMessage>
+    )
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {dirty ? (
+        <div className="border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
+          {EDITOR_RANGE_DIRTY_MESSAGE}
+        </div>
+      ) : null}
+      <div className="min-h-0 flex-1">
+        <PluginCustomEditorFrame
+          editor={editor}
+          fileId={file.id}
+          content=""
+          readOnly
+          onContentChange={noopContentChange}
+          onSave={onSave}
+          rangeDocument={source}
+          rangeFileType={fileType}
+        />
+      </div>
+    </div>
+  )
+}
+
 /**
  * A bytes editor: Orca pages the file from the host that owns it (local, SSH or a paired runtime),
  * caps its size, and hands the frame only the bytes, never a path. Its edits replace the whole
@@ -69,6 +157,7 @@ export default function PluginBytesCustomEditorSurface({
   onSave: (content: string) => Promise<boolean>
   reloadContent: (file: OpenFile) => void
 }): React.JSX.Element {
+  const isRange = editor.documentAccess === 'ranges'
   const [state, setState] = useState<BytesState>({ status: 'ok' })
   const [attempt, setAttempt] = useState(0)
   const { id: fileId, filePath } = file
@@ -86,11 +175,13 @@ export default function PluginBytesCustomEditorSurface({
     [fileId]
   )
   useEffect(() => {
+    if (isRange) return
     retainEditorBytes(fileId)
     return () => releaseEditorBytes(fileId)
-  }, [fileId])
+  }, [fileId, isRange])
 
   useEffect(() => {
+    if (isRange) return
     // Unsaved bytes keep the baseline they were made against; rereading would hide a conflict.
     if (!loadKey || hasEditorBytesDraft(fileId)) {
       return
@@ -126,8 +217,19 @@ export default function PluginBytesCustomEditorSurface({
     return () => {
       cancelled = true
     }
-  }, [loadKey, source, fileType, attempt, fileId])
+  }, [loadKey, source, fileType, attempt, fileId, isRange])
 
+  if (isRange) {
+    return (
+      <RangeSurface
+        editor={editor}
+        file={file}
+        fileContent={fileContent}
+        fileType={fileType}
+        onSave={onSave}
+      />
+    )
+  }
   const name = basename(filePath)
   if (state.status === 'too_large') {
     return (

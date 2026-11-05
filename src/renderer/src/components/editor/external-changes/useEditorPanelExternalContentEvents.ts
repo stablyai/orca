@@ -24,6 +24,8 @@ type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewM
 
 export type EditorPanelContentLoadOptions = {
   force?: boolean
+  /** Explicit panel Reload retires its range owner; watcher refreshes retain invalidated versions. */
+  replaceRangeDocument?: true
   externalEventGeneration?: number
   /** The active tab's load or its Retry: a user act that may start a stopped WSL distro. */
   wakeWslDistro?: boolean

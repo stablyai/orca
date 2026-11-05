@@ -29,7 +29,8 @@ type ContributionValidationManifest = {
     terminalThemes: IdentifiedContribution[]
     iconThemes: IdentifiedContribution[]
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
-    customEditors: (IdentifiedContribution & PluginFileMatch)[]
+    customEditors: (IdentifiedContribution &
+      PluginFileMatch & { contentKind?: string; documentAccess?: string })[]
     newFiles: IdentifiedContribution[]
     settings: { key: string }[]
     statusBarItems: { id: string; command?: string }[]
@@ -102,6 +103,13 @@ export function validatePluginManifestContributions(
     }
   }
   for (const [index, editor] of manifest.contributes.customEditors.entries()) {
+    if (editor.documentAccess === 'ranges' && editor.contentKind !== 'bytes') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'customEditors', index, 'documentAccess'],
+        message: 'ranges requires contentKind: bytes'
+      })
+    }
     if (editor.extensions.length === 0 && editor.filenames.length === 0) {
       ctx.addIssue({
         code: 'custom',

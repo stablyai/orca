@@ -38,6 +38,12 @@ import {
 } from '../orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
 import { CrewSubscribeParams } from '../orchestration-crew'
+import {
+  RangedDocumentCancel,
+  RangedDocumentId,
+  RangedDocumentOpen,
+  RangedDocumentRead
+} from '../ranged-file-document'
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import {
   PairingGetEndpointsParamsSchema,
@@ -1013,6 +1019,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.open': FileOpenTab,
   'files.openDiff': FileOpenDiff,
   'files.pathsExist': FilePathsExist,
+  'files.rangeDocumentCancel': RangedDocumentCancel,
+  'files.rangeDocumentClose': RangedDocumentId,
+  'files.rangeDocumentOpen': RangedDocumentOpen,
+  'files.rangeDocumentRead': RangedDocumentRead,
+  'files.rangeDocumentReload': RangedDocumentId,
+  'files.rangeDocumentStatus': RangedDocumentId,
   'files.read': FileOpen,
   'files.readChatImage': ChatImageRead,
   'files.readChunk': FileReadChunk,

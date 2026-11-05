@@ -1,3 +1,4 @@
+import { RANGED_FILE_DOCUMENT_METHODS } from '../../../shared/ranged-file-document'
 import {
   subscribeDedicatedWebRuntime,
   observeCrewSubscriptionSetup,
@@ -130,6 +131,9 @@ export class WebRuntimeClient {
   ): Promise<WebRuntimeSubscriptionHandle> {
     try {
       throwIfSignalAborted(options?.signal)
+      if (Object.values(RANGED_FILE_DOCUMENT_METHODS).some((name) => name === method)) {
+        return this.subscribeOnCurrentConnection(method, params, callbacks, options)
+      }
       return SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(method)
         ? this.subscribeFileWatch(params, callbacks, options)
         : this.subscribeDedicated(method, params, callbacks, options)

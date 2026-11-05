@@ -25,6 +25,8 @@ export const FRAME_EVENTS = {
   editorKeydown: 'editor.keydown',
   /** host → frame: the document, on ready and whenever it changes outside the frame. */
   editorDocument: 'editor.document',
+  editorRangeInvalidated: 'editor.rangeInvalidated',
+  editorRangeDocument: 'editor.rangeDocument',
   /** frame → host, once: the editor asked for its document, so `plugin shot` knows it is wired. */
   editorSubscribed: 'editor.subscribed',
   /** frame → host, once: its document session merges outside changes into unsaved work. */
@@ -37,6 +39,10 @@ export const FRAME_EVENTS = {
 export const EDITOR_METHODS = {
   /** frame → host: replace the document, `{ baseVersion, content }`. */
   applyEdit: 'editor.applyEdit',
+  rangeSession: 'editor.rangeSession',
+  readRange: 'editor.readRange',
+  reloadRanges: 'editor.reloadRanges',
+  closeRanges: 'editor.closeRanges',
   /** host → frame: post any debounced edit before a save. */
   flush: 'editor.flush'
 } as const

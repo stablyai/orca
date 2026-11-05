@@ -153,7 +153,7 @@ export function EditorEditFileSurface({
       />
     )
   }
-  if (fileContent.isBinary) {
+  if (fileContent.isBinary || fileContent.rangeDocument) {
     if (fileContent.mediaUrl && !fileContent.isImage) {
       return (
         <MediaViewer

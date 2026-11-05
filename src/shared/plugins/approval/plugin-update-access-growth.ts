@@ -57,6 +57,7 @@ type CustomEditorReach = {
   files: string[]
   takesDefault: boolean
   contentKind: string
+  documentAccess: string
 }
 
 function customEditorReach(entry: unknown): [string, CustomEditorReach] | null {
@@ -73,7 +74,8 @@ function customEditorReach(entry: unknown): [string, CustomEditorReach] | null {
           : []
       }),
       takesDefault: entry.priority !== 'option',
-      contentKind: typeof entry.contentKind === 'string' ? entry.contentKind : 'text'
+      contentKind: typeof entry.contentKind === 'string' ? entry.contentKind : 'text',
+      documentAccess: typeof entry.documentAccess === 'string' ? entry.documentAccess : 'buffer'
     }
   ]
 }
@@ -92,7 +94,8 @@ function customEditorsGrow(installed: readonly unknown[], next: readonly unknown
     return (
       after.files.some((file) => !before.files.includes(file)) ||
       (after.takesDefault && !before.takesDefault) ||
-      after.contentKind !== before.contentKind
+      after.contentKind !== before.contentKind ||
+      after.documentAccess !== before.documentAccess
     )
   })
 }

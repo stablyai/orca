@@ -44,7 +44,26 @@ declare module 'orca/frame' {
     mimeType?: string
     data: string | ArrayBuffer | ArrayBufferView
   }
+  export type EditorRangeDescriptor = {
+    readonly version: number
+    readonly byteLength: number
+    readonly maxReadBytes: number
+    readonly readOnly: true
+    readonly fileType?: string
+  }
+  export type EditorRangeSession = {
+    readonly value: EditorRangeDescriptor
+    readRange(
+      range: { version: number; offset: number; length: number },
+      options?: { signal?: AbortSignal }
+    ): Promise<{ version: number; bytes: ArrayBuffer; eof: boolean }>
+    onInvalidate(handler: (descriptor: EditorRangeDescriptor) => void): Disposable
+    reload(): Promise<EditorRangeDescriptor>
+    dispose(): void
+  }
   export type EditorDocumentApi = {
+    /** Read-only bounded bytes, available only to a bytes editor with documentAccess: ranges. */
+    rangeSession(): Promise<EditorRangeSession>
     /** The latest document, with your accepted edits' content at the same version. */
     get(): Promise<EditorDocument>
     /** Replays the current document, then each one Orca sends when the file changes outside. */

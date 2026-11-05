@@ -37,6 +37,7 @@ type RuntimeFileCommandName =
   | 'pathsExistRuntimeFiles'
   | 'statRuntimeFile'
   | 'stagedFileSaves'
+  | 'rangedFileDocuments'
 
 export type RuntimeFileCommandSurface = Pick<RuntimeFileCommands, RuntimeFileCommandName>
 
@@ -80,6 +81,7 @@ export function installRuntimeFileCommandSurface(
     listRuntimeMarkdownDocuments: commands.listRuntimeMarkdownDocuments.bind(commands),
     pathsExistRuntimeFiles: commands.pathsExistRuntimeFiles.bind(commands),
     statRuntimeFile: commands.statRuntimeFile.bind(commands),
-    stagedFileSaves: commands.stagedFileSaves
+    stagedFileSaves: commands.stagedFileSaves,
+    rangedFileDocuments: commands.rangedFileDocuments
   } satisfies RuntimeFileCommandSurface)
 }

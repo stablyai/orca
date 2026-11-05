@@ -1,3 +1,4 @@
+import { RangedFileDocumentError } from '../../../shared/ranged-file-document'
 import { mapBrowserError } from './browser-error-response'
 import { InvalidArgumentError, ZodError, formatZodError } from './core'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
@@ -28,6 +29,9 @@ export function mapDispatcherError(
   }
   if (error instanceof InvalidArgumentError) {
     return invalidArgumentResponse(request, meta, error.message)
+  }
+  if (error instanceof RangedFileDocumentError) {
+    return errorResponse(request.id, meta, error.code, error.message)
   }
   if (error instanceof PluginHookDeniedError) {
     // Final, not transient: a retry sends the same refused action.

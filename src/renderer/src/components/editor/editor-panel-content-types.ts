@@ -39,6 +39,8 @@ export type FileContent = {
   isStale?: boolean
   /** How the loader reached the file, so a binary custom editor can page its bytes from the same host. */
   byteSource?: RuntimeFileReadArgs
+  rangeDocument?: import('@/runtime/runtime-range-document').RuntimeRangeDocument
+  rangeSourceKey?: string
 }
 
 export type DiffContent = GitDiffResult & {
@@ -65,5 +67,6 @@ export type UseEditorPanelFileContentLoaderParams = {
   fileReadGenerationRef: MutableRefObject<Record<string, number>>
   openFilesRef: MutableRefObject<OpenFile[]>
   outstandingFileReadsRef: MutableRefObject<Record<string, number>>
+  fileContentsRef?: MutableRefObject<Record<string, FileContent>>
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
 }

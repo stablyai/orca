@@ -9,11 +9,11 @@
  */
 export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
   function start() {
-    if (helloSeen && latest) starting.splice(0).forEach(function (resolve) { resolve(latest) })
+    if (helloSeen && (latest || latestRange)) starting.splice(0).forEach(function (resolve) { resolve(latest || latestRange) })
   }
   // Resolves with the latest document once hello brought theme and locale.
   function whenStarted() {
-    return helloSeen && latest ? Promise.resolve(latest) : new Promise(function (resolve) { starting.push(resolve) })
+    return helloSeen && (latest || latestRange) ? Promise.resolve(latest || latestRange) : new Promise(function (resolve) { starting.push(resolve) })
   }
   function applyEdit(edit) {
     var base = edit && edit.baseVersion
@@ -37,7 +37,10 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
     orca.document = Object.freeze({
       get: function () {
         markDocumentSubscribed()
-        return latest ? Promise.resolve(latest) : new Promise(function (resolve) { waiting.push(resolve) })
+        return (latest || latestRange ? Promise.resolve(latest || latestRange) : new Promise(function (resolve) { waiting.push(resolve) })).then(function (doc) {
+          if (!doc.content) throw failure({ code: 'not_permitted', message: 'Use document.rangeSession() for this read-only ranged document' })
+          return doc
+        })
       },
       // Why replay: editors often subscribe after their bundle loads, when the first document is in.
       onDidChange: function (fn) {
@@ -49,7 +52,58 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
         return Object.freeze({ dispose: function () { live = false; subscription.dispose() } })
       },
       applyEdit: applyEdit,
-      session: documentSession
+      session: documentSession,
+      rangeSession: rangeSession
+    })
+  }
+  function rangeSession() {
+    markDocumentSubscribed()
+    return call(C.editor.rangeSession).then(function (first) {
+      var value = Object.freeze(first)
+      var disposed = false
+      var invalidated = new Set()
+      var invalidation = latestRangeInvalidation && latestRangeInvalidation.version === value.version ? latestRangeInvalidation : null
+      var reads = new Set()
+      var subscription = on(E.editorRangeInvalidated, function (next) {
+        invalidation = next
+        reads.forEach(function (controller) { controller.abort() })
+        invalidated.forEach(function (fn) { try { fn(next) } catch (e) { console.error(e) } })
+      })
+      return Object.freeze({
+        get value() { return value },
+        readRange: function (range, options) {
+          if (disposed) return Promise.reject(failure({ code: 'cancelled', message: 'range session disposed' }))
+          var controller = new AbortController()
+          var signal = options && options.signal
+          function abort() { controller.abort() }
+          if (signal && signal.aborted) controller.abort()
+          else if (signal) signal.addEventListener('abort', abort, { once: true })
+          reads.add(controller)
+          return call(C.editor.readRange, range, { signal: controller.signal }).finally(function () {
+            reads.delete(controller)
+            if (signal) signal.removeEventListener('abort', abort)
+          })
+        },
+        onInvalidate: function (fn) {
+          if (typeof fn !== 'function') throw new TypeError('onInvalidate needs a handler')
+          invalidated.add(fn)
+          if (invalidation) Promise.resolve().then(function () { if (!disposed && invalidated.has(fn) && invalidation) fn(invalidation) })
+          return Object.freeze({ dispose: function () { invalidated.delete(fn) } })
+        },
+        reload: function () {
+          if (disposed) return Promise.reject(failure({ code: 'cancelled', message: 'range session disposed' }))
+          reads.forEach(function (controller) { controller.abort() })
+          return call(C.editor.reloadRanges).then(function (next) { value = Object.freeze(next); invalidation = null; latestRangeInvalidation = null; return value })
+        },
+        dispose: function () {
+          if (disposed) return
+          disposed = true
+          reads.forEach(function (controller) { controller.abort() })
+          subscription.dispose()
+          invalidated.clear()
+          call(C.editor.closeRanges).catch(function () {})
+        }
+      })
     })
   }
   function sameContent(a, b) {
@@ -75,6 +129,7 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
     var debounceMs = typeof o.debounceMs === 'number' && o.debounceMs >= 0 ? o.debounceMs : 250
     markDocumentSubscribed()
     return whenStarted().then(function (first) {
+      if (!first.content) throw failure({ code: 'not_permitted', message: 'Use document.rangeSession() for this read-only ranged document' })
       var doc = first
       var base = decode(first.content)
       var baseContent = first.content

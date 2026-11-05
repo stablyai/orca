@@ -4,7 +4,6 @@ import {
   PLUGIN_EDITOR_FRAME_SINCE,
   PLUGIN_MANIFEST_V2_SINCE
 } from '../manifest/plugin-schema-field-docs'
-import { PLUGIN_SCHEMA_NEWEST_SINCE } from '../installation/plugin-host-version'
 import { matchPluginFile, pluginFileMatchRank } from './plugin-file-match'
 import { requiresPluginContentApproval } from '../approval/plugin-consent-fingerprint'
 import { pluginUpdateAccessGrowth } from '../approval/plugin-update-access-growth'
@@ -71,8 +70,6 @@ describe('contributes.customEditors', () => {
       parsed({ ...floor, contributes: { customEditors: [isolated] } }).contributes.customEditors[0]
         ?.frame
     ).toBe('isolated')
-    expect(PLUGIN_EDITOR_FRAME_SINCE).toBe('1.4.248')
-    expect(PLUGIN_SCHEMA_NEWEST_SINCE).toBe(PLUGIN_EDITOR_FRAME_SINCE)
     const tooOld = parsePluginManifest(manifest({ contributes: { customEditors: [isolated] } }))
     expect(tooOld).toMatchObject({ ok: false })
     expect(tooOld.ok ? '' : tooOld.error).toContain(PLUGIN_EDITOR_FRAME_SINCE)
@@ -84,6 +81,31 @@ describe('contributes.customEditors', () => {
         })
       )
     ).toMatchObject({ ok: false })
+  })
+
+  it('admits ranged bytes only with their engine floor and requests approval for widened access', () => {
+    const ranged = { ...excalidraw, contentKind: 'bytes', documentAccess: 'ranges' }
+    const accepted = parsed({
+      engines: { orca: '>=1.4.250' },
+      contributes: { customEditors: [ranged] }
+    })
+    expect(accepted.contributes.customEditors[0]?.documentAccess).toBe('ranges')
+    expect(
+      parsePluginManifest(manifest({ contributes: { customEditors: [ranged] } }))
+    ).toMatchObject({ ok: false })
+    expect(
+      parsePluginManifest(
+        manifest({
+          engines: { orca: '>=1.4.250' },
+          contributes: { customEditors: [{ ...ranged, contentKind: 'text' }] }
+        })
+      )
+    ).toMatchObject({ ok: false })
+    const before = parsed({
+      engines: { orca: '>=1.4.250' },
+      contributes: { customEditors: [{ ...ranged, documentAccess: 'buffer' }] }
+    })
+    expect(pluginUpdateAccessGrowth(before, accepted).contributions).toEqual(['customEditors'])
   })
 
   it('refuses an unknown content kind', () => {

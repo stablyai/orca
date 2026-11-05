@@ -27,7 +27,7 @@ export function collectActivePluginCustomEditors(
   plugins: readonly PluginHostListEntry[]
 ): ActivePluginCustomEditor[] {
   return plugins
-    .filter(isLivePlugin)
+    .filter((plugin) => isLivePlugin(plugin) && !plugin.needsReconsent)
     .flatMap((plugin) =>
       (plugin.customEditors ?? []).map((editor) => keyedPluginContribution(plugin, editor))
     )

@@ -1141,6 +1141,18 @@
             "bytes"
           ]
         },
+        "documentAccess": {
+          "description": "`buffer` (the default) supplies the whole document, up to 64 MiB. `ranges` requires `contentKind: bytes` and supplies read-only, versioned ranges up to 256 KiB from files up to 1 GiB, through `orca.document.rangeSession()`. It never supplies a full buffer or accepts edits.",
+          "x-orca-since": "1.4.250",
+          "examples": [
+            "ranges"
+          ],
+          "type": "string",
+          "enum": [
+            "buffer",
+            "ranges"
+          ]
+        },
         "frame": {
           "description": "`any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app.",
           "x-orca-since": "1.4.248",

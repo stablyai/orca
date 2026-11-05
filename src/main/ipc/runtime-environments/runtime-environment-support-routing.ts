@@ -1,3 +1,5 @@
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { isRangedFileDocumentMethod } from '../../../shared/ranged-file-document'
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
@@ -73,6 +75,7 @@ export function shouldRouteSubscriptionBySupport(method: string): boolean {
     return false
   }
   return (
+    isRangedFileDocumentMethod(method) ||
     method === 'runtime.clientEvents.subscribe' ||
     method === 'session.tabs.subscribe' ||
     method === 'session.tabs.subscribeAll' ||
@@ -114,17 +117,24 @@ export function executeSupportRoutedCall(args: {
             args.signal
           ),
     unsupported: (route) =>
-      args.expectedRuntimeId !== undefined
-        ? sendSupportRoutedCallOnRuntime(route, args, args.expectedRuntimeId, 'one-shot')
-        : sendRemoteRuntimeRequestAbortable(
-            route.connection,
-            args.method,
-            args.params,
-            args.timeoutMs,
-            args.envelope,
-            args.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-          ),
+      isRangedFileDocumentMethod(args.method)
+        ? Promise.reject(
+            new RemoteRuntimeClientError(
+              'range_document_unsupported',
+              'Ranged documents require an updated Orca server with shared control.'
+            )
+          )
+        : args.expectedRuntimeId !== undefined
+          ? sendSupportRoutedCallOnRuntime(route, args, args.expectedRuntimeId, 'one-shot')
+          : sendRemoteRuntimeRequestAbortable(
+              route.connection,
+              args.method,
+              args.params,
+              args.timeoutMs,
+              args.envelope,
+              args.signal,
+              ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            ),
     markUsed: (environmentId, response) => {
       if (response.ok) {
         markEnvironmentUsed(args.userDataPath, environmentId, {
@@ -177,6 +187,11 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
       )
     },
     unsupported: (route) => {
+      if (isRangedFileDocumentMethod(args.method))
+        throw new RemoteRuntimeClientError(
+          'range_document_unsupported',
+          'Ranged documents require an updated Orca server with shared control.'
+        )
       supportOutcome = route.outcome
       return subscribeRemoteRuntimeRequest(
         route.connection,

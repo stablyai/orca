@@ -1,4 +1,5 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCustomEditorViewStore } from '@/store/plugin-custom-editors'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import type { useAppStore } from '@/store'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
@@ -41,6 +42,23 @@ export function useEditorPanelContentState({
 }: UseEditorPanelContentStateParams): UseEditorPanelContentStateResult {
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
   const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
+  const fileContentsRef = useRef(fileContents)
+  const retainedRangeDocuments = useRef(new Set<NonNullable<FileContent['rangeDocument']>>())
+  useEffect(() => {
+    const next = new Set(
+      Object.values(fileContents).flatMap((content) =>
+        content.rangeDocument ? [content.rangeDocument] : []
+      )
+    )
+    for (const source of retainedRangeDocuments.current) if (!next.has(source)) source.dispose()
+    retainedRangeDocuments.current = next
+  }, [fileContents])
+  useEffect(
+    () => () => {
+      for (const source of retainedRangeDocuments.current) source.dispose()
+    },
+    []
+  )
   const diffContentsRef = useRef(diffContents)
   const fileLoadRetryAttemptsRef = useRef<Record<string, number>>({})
   // Generation fences keep slow superseded reads from overwriting newer content.
@@ -58,16 +76,20 @@ export function useEditorPanelContentState({
       ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
       : null
   const activeContentFileId = selectedConflictReviewFile?.id ?? activeFile?.id ?? null
+  const customEditorChoice = useCustomEditorViewStore((state) =>
+    activeContentFileId ? state.choices[activeContentFileId] : undefined
+  )
   const activeContentFileIdRef = useRef(activeContentFileId)
 
   useLayoutEffect(() => {
     // Why: event-driven readers must only observe state from committed renders.
+    fileContentsRef.current = fileContents
     diffContentsRef.current = diffContents
     openFilesRef.current = openFiles
     editorViewModeRef.current = editorViewMode
     isVisibleRef.current = isVisible
     activeContentFileIdRef.current = activeContentFileId
-  }, [activeContentFileId, diffContents, editorViewMode, isVisible, openFiles])
+  }, [activeContentFileId, fileContents, diffContents, editorViewMode, isVisible, openFiles])
 
   const invalidateFileContent = useCallback((fileIds: string[]): void => {
     const uniqueIds = new Set(fileIds)
@@ -82,6 +104,7 @@ export function useEditorPanelContentState({
         const existing = next[fileId]
         // Keep last-known text until lazy reload lands to avoid Loading flashes on reveal.
         if (existing && existing.isStale !== true) {
+          existing.rangeDocument?.invalidate()
           next[fileId] = { ...existing, isStale: true }
           changed = true
         }
@@ -119,6 +142,7 @@ export function useEditorPanelContentState({
   )
 
   const loadFileContent = useEditorPanelFileContentLoader({
+    fileContentsRef,
     fileLoadRetryAttemptsRef,
     fileReadGenerationCounterRef,
     fileReadGenerationRef,
@@ -163,11 +187,22 @@ export function useEditorPanelContentState({
       })
       void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
         force: true,
+        replaceRangeDocument: true,
         ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
       })
     },
     [loadDiffContent, loadFileContent]
   )
+
+  useEffect(() => {
+    if (
+      customEditorChoice === 'source' &&
+      activeFile &&
+      fileContents[activeFile.id]?.rangeDocument
+    ) {
+      reloadContent(activeFile)
+    }
+  }, [customEditorChoice, activeFile, fileContents, reloadContent])
 
   useLocalLogTail({ openFiles, fileContents, setFileContents, reloadContent })
 

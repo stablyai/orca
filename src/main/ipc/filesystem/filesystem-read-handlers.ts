@@ -1,3 +1,4 @@
+import { registerFilesystemRangedDocumentHandlers } from './filesystem-ranged-document-handler'
 import { classifyFilesystemDirectoryEntries } from './filesystem-symlink-directory-entries'
 import { markdownDocumentsFromRelativePaths } from '../../../shared/markdown-document-paths'
 import {
@@ -40,6 +41,7 @@ import {
 
 export function registerFilesystemReadHandlers(context: FilesystemHandlerContext): void {
   registerFilesystemChunkReadHandler(context)
+  registerFilesystemRangedDocumentHandlers(context)
   const { store } = context
 
   ipcMain.handle(

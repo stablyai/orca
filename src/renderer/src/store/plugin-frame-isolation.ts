@@ -38,3 +38,11 @@ export function usePluginFramesIsolated(): boolean {
   )
   return !isWebClientLocation() && known !== false
 }
+
+/** Same isolation decision for preloading a document before mounting its editor frame. */
+export function pluginFramesIsolated(): boolean {
+  const setting = isolatedFramesSetting(useAppStore.getState().settings)
+  const state = usePluginFrameIsolationStore.getState()
+  const known = state.learnedUnder === setting ? state.isolated : null
+  return !isWebClientLocation() && known !== false
+}
