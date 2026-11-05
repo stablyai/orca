@@ -36,10 +36,11 @@ export async function antigravityGenerationCompatibilityError(
       params = resolved.value.params
     }
   }
-  if (params?.agentId !== 'antigravity' || params.model !== 'default') {
+  if (!params || params.agentId !== 'antigravity' || params.model !== 'default') {
     return null
   }
-  const planned = planCommitMessageGeneration(params, '')
+  const { agentId, ...cliParams } = params
+  const planned = planCommitMessageGeneration({ ...cliParams, agentId }, '')
   // A recipe or command override can already supply a model that older planners understand.
   if (planned.ok && hasFlag(planned.plan.args, ['--model'])) {
     return null

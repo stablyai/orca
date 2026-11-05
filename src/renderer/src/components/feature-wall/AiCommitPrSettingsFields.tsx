@@ -51,7 +51,7 @@ export function AiCommitPrSettingsFields({
         <AgentLaunchPicker
           model={model}
           entries={pickerEntries}
-          agent={activeCapability?.id ?? null}
+          agent={(activeCapability?.id ?? null) as never}
           draftForEntry={aiCommitPrPickerDraft}
           portalContainer={selectPortalRoot}
           onPick={onPick}

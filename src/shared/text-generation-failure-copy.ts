@@ -62,6 +62,14 @@ export const TEXT_GENERATION_FAILURE_COPY = {
   planModelUnavailable: 'Model "{{model}}" is not available for {{label}}.',
   planModelWithoutThinking: 'Model "{{model}}" does not support a thinking effort level.',
   planThinkingLevelInvalid: 'Thinking level "{{level}}" is not valid for {{model}}.',
+  onDeviceModelUnavailable:
+    'The on-device model is not available. Turn on Apple Intelligence in System Settings, or pick another agent.',
+  onDeviceModelContextExceeded:
+    'This request is too large for the on-device model. Stage fewer changes, or pick another agent.',
+  onDeviceModelRefused: 'The on-device model declined this request.',
+  onDeviceModelLocale: 'The on-device model does not support this language.',
+  onDeviceModelBusy: 'The on-device model is busy. Try again in a moment.',
+  onDeviceModelFailed: 'The on-device model failed: {{detail}}',
   ...AGENT_OUTPUT_FAILURE_COPY
 } as const
 

@@ -1,3 +1,4 @@
+import { isOnDeviceTextGenerationId } from '../../on-device-text-generation'
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../constants'
 import { resolveSourceControlAiForOperation } from './source-control-ai-operation-resolution'
@@ -30,7 +31,14 @@ describe('Antigravity source-control model selection', () => {
           throw new Error(result.error)
         }
         expect(result.value.params.model).toBe('default')
-        const plan = planCommitMessageGeneration(result.value.params, 'Write Git text')
+        const { agentId, ...cliParams } = result.value.params
+        if (isOnDeviceTextGenerationId(agentId)) {
+          throw new Error('antigravity is not the on-device provider')
+        }
+        const plan = planCommitMessageGeneration(
+          { ...cliParams, agentId: agentId as never },
+          'Write Git text'
+        )
         expect(plan.ok).toBe(true)
         if (!plan.ok) {
           throw new Error(plan.error)

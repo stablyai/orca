@@ -1,3 +1,4 @@
+import { isOnDeviceTextGenerationId } from '../../../../../shared/on-device-text-generation'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
@@ -177,7 +178,10 @@ export function ChatNamingSetting({
         operation: 'conversationName'
       })
     : null
-  const cliAgent = cliRecipe?.ok ? cliRecipe.value.params.agentId : null
+  const cliAgentId = cliRecipe?.ok ? cliRecipe.value.params.agentId : null
+  const cliAgent = cliAgentId && !isOnDeviceTextGenerationId(cliAgentId) ? cliAgentId : null
+  const isOnDeviceCliRecipe =
+    cliRecipe?.ok === true && isOnDeviceTextGenerationId(cliRecipe.value.params.agentId)
   const defaultAgentLabel = cliAgent
     ? translate('settings.chat.names.configuredCliAgent', 'Use configured CLI agent ({{agent}})', {
         agent:
@@ -188,9 +192,11 @@ export function ChatNamingSetting({
               )
             : getAgentLabel(cliAgent)
       })
-    : cliRecipe
-      ? translate('settings.chat.names.configuredCliAgentUnknown', 'Use configured CLI agent')
-      : translate('settings.chat.names.useChatAgent', 'Use chat agent')
+    : isOnDeviceCliRecipe
+      ? translate('settings.chat.names.onDeviceAgent', 'Use on-device model')
+      : cliRecipe
+        ? translate('settings.chat.names.configuredCliAgentUnknown', 'Use configured CLI agent')
+        : translate('settings.chat.names.useChatAgent', 'Use chat agent')
   const searchEntry = getChatNamingSearchEntry()
   return (
     <SearchableSetting

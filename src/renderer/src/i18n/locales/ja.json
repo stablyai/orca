@@ -54,6 +54,7 @@
         "recipe": "チャット名",
         "useChatAgent": "チャットの Agent を使用",
         "configuredCliAgent": "設定済みのCLIエージェントを使用（{{agent}}）",
+        "onDeviceAgent": "Use on-device model",
         "configuredCliAgentUnknown": "設定済みの CLI Agent を使用",
         "clearCliArguments": "CLI引数を消去すると各チャットの Agent を使用します。",
         "cliArgumentsPlaceholder": "名前生成用のCLIエージェントの追加引数",
