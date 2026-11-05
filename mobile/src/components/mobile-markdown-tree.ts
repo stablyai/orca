@@ -226,11 +226,12 @@ function toTree(tokens: readonly Token[], source: string): Root {
       }
       case 'inline':
         parent.children.push(...phrasing(token.children ?? [], 0).nodes)
-        for (const child of token.children ?? []) {
-          if (child.type === 'html_inline') {
-            noteInlineHtml(child.content, stack)
-          }
-        }
+        noteInlineHtml(
+          (token.children ?? []).flatMap((child) =>
+            child.type === 'html_inline' ? [child.content] : []
+          ),
+          stack
+        )
         break
       case 'fence':
       case 'code_block':

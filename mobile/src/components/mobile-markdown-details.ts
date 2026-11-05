@@ -21,11 +21,15 @@ const DETAILS_MARKUP =
   /<!--(?:(?!-->)[\s\S])*(?:-->|$)|<details(?=[\s/>])([^<>]*)>|<summary(?=[\s/>])[^<>]*>((?:(?!<\/?summary\b)[\s\S])*)<\/summary\s*>|<\/details\s*>/gi
 /** Deeper sections stay text, so hostile nesting cannot exhaust the tree walk's stack. */
 const MAX_SECTION_DEPTH = 8
-/** Sections whose `</details>` came inside a list or quote; each closes when that container does. */
-const closedInside = new WeakSet<Parent>()
 
-/** One HTML block cut around its `<details>` markup, or null when it has none. */
-function detailsPieces(html: string): DetailsPiece[] | null {
+const DETAILS_TAG = /<\/?(?:details|summary)[\s/>]/i
+const DETAILS_CLOSE = /^<\/details\s*>$/i
+
+/** One HTML block cut around its `<details>` markup. */
+function detailsPieces(html: string): DetailsPiece[] {
+  if (!DETAILS_TAG.test(html)) {
+    return [{ kind: 'html', value: html }]
+  }
   const pieces: DetailsPiece[] = []
   let from = 0
   for (const match of html.matchAll(DETAILS_MARKUP)) {
@@ -48,9 +52,6 @@ function detailsPieces(html: string): DetailsPiece[] | null {
     }
     from = match.index + markup.length
   }
-  if (pieces.length === 0) {
-    return null
-  }
   const rest = html.slice(from)
   if (rest.trim()) {
     pieces.push({ kind: 'html', value: rest })
@@ -69,7 +70,7 @@ export function popContainer(stack: Parent[]): Parent | undefined {
     stack.pop()
   }
   const closed = stack.pop()
-  while (isDetails(stack.at(-1)) && closedInside.has(stack.at(-1)!)) {
+  for (let top = stack.at(-1); isDetails(top) && top.closesWithContainer; top = stack.at(-1)) {
     stack.pop()
   }
   return closed
@@ -80,13 +81,13 @@ export function popContainer(stack: Parent[]): Parent | undefined {
 function closeSectionWithContainer(stack: Parent[]): void {
   const section = stack.findLast(isDetails)
   if (section) {
-    closedInside.add(section)
+    section.closesWithContainer = true
   }
 }
 
-/** Inline HTML in a paragraph: a `</details>` there closes the section with the paragraph. */
-export function noteInlineHtml(html: string, stack: Parent[]): void {
-  if (/^<\/details\s*>$/i.test(html)) {
+/** A `</details>` among a paragraph's inline HTML closes the section with the paragraph. */
+export function noteInlineHtml(htmls: readonly string[], stack: Parent[]): void {
+  if (htmls.some((html) => DETAILS_CLOSE.test(html))) {
     closeSectionWithContainer(stack)
   }
 }
@@ -98,12 +99,11 @@ export function appendHtmlBlock(
   open: (node: Parent & RootContent) => void,
   summaryPhrasing: (html: string) => PhrasingContent[]
 ): void {
-  for (const piece of detailsPieces(html) ?? [{ kind: 'html', value: html }]) {
+  for (const piece of detailsPieces(html)) {
     const current = stack.at(-1)!
     const details = isDetails(current) ? current : null
-    const sections = stack.filter(isDetails)
     if (piece.kind === 'open') {
-      if (sections.length < MAX_SECTION_DEPTH) {
+      if (stack.filter(isDetails).length < MAX_SECTION_DEPTH) {
         open({ type: 'details', open: piece.open, summary: [], children: [] })
       }
     } else if (piece.kind === 'close') {
@@ -126,6 +126,8 @@ declare module 'mdast' {
     /** Authored `open`: the section starts expanded. */
     open: boolean
     summary: PhrasingContent[]
+    /** Its `</details>` came inside a paragraph, list or quote: it closes when that does. */
+    closesWithContainer?: boolean
     children: (BlockContent | DefinitionContent)[]
   }
   interface RootContentMap {
