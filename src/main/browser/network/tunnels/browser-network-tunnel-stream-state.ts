@@ -1,3 +1,5 @@
+import { BROWSER_NETWORK_TUNNEL_MIN_WINDOW_BYTES } from '../../../../shared/browser-network-tunnel-protocol'
+
 // Legacy per-stream flow-control window. It also caps per-stream throughput to window/RTT:
 // invisible on a LAN, but a hard ceiling on a high-latency paired link (e.g. ~2.9 MB/s at 90ms).
 // Peers that advertise support negotiate up to BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES instead;
@@ -15,14 +17,19 @@ export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES =
 export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS =
   BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES / 1024
 
-/** The effective window is each side's own maximum capped by what the peer advertises (legacy floor). */
+/**
+ * The effective window is min(own maximum, peer's advertisement) — commutative, so both ends
+ * land on the same value. A peer's maximum below its own may be enforced by its validation,
+ * so any schema-valid advertisement is honored, including ones below the legacy window. Only
+ * an absent or malformed advertisement (an older or broken peer) falls back to the legacy window.
+ */
 export function negotiateBrowserNetworkTunnelWindowBytes(
   peerMaxWindowBytes: number | undefined
 ): number {
   if (
     typeof peerMaxWindowBytes !== 'number' ||
     !Number.isSafeInteger(peerMaxWindowBytes) ||
-    peerMaxWindowBytes < BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
+    peerMaxWindowBytes < BROWSER_NETWORK_TUNNEL_MIN_WINDOW_BYTES
   ) {
     return BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
   }

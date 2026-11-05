@@ -225,6 +225,7 @@ export class BrowserNetworkTunnelClient {
     beginBrowserNetworkSourceRead(stream)
   }
 
+  /** Settles bytes the local socket consumed and replenishes that much peer credit. */
   private consumeStreamBytes(streamId: number, bytes: number): void {
     const stream = this.streams.get(streamId)
     if (stream && settleBrowserNetworkSourceData(stream, bytes)) {
@@ -234,6 +235,7 @@ export class BrowserNetworkTunnelClient {
     }
   }
 
+  /** Grants consumed bytes back to the peer, never exceeding the negotiated window. */
   private replenishStreamCredit(stream: BrowserNetworkTunnelClientStream, bytes: number): void {
     if (!this.isCurrent(stream) || stream.remoteClosed || bytes === 0) {
       return

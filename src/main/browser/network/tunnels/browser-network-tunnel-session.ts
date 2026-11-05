@@ -138,6 +138,7 @@ export class BrowserNetworkTunnelSession {
     socket.on('error', () => this.failStream(stream, 'destination_error'))
   }
 
+  /** Reports the destination open and grants the negotiated window, keeping tracked credit equal to the announcement. */
   private onDestinationConnected(stream: BrowserNetworkTunnelStream): void {
     if (!this.isCurrent(stream) || stream.connected) {
       return

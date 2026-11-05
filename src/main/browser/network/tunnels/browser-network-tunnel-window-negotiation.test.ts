@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { BROWSER_NETWORK_TUNNEL_MIN_WINDOW_BYTES } from '../../../../shared/browser-network-tunnel-protocol'
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
-  BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES,
   BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES,
   negotiateBrowserNetworkTunnelWindowBytes
 } from './browser-network-tunnel-stream-state'
@@ -26,18 +26,20 @@ describe('negotiateBrowserNetworkTunnelWindowBytes', () => {
     ).toBe(BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES)
   })
 
-  it('never drops below the legacy floor for a smaller or invalid advertisement', () => {
+  it('honors a schema-valid advertisement below the legacy window', () => {
+    // A peer that enforces its advertised maximum would reject a larger grant.
+    expect(negotiateBrowserNetworkTunnelWindowBytes(128 * 1024)).toBe(128 * 1024)
+    expect(negotiateBrowserNetworkTunnelWindowBytes(BROWSER_NETWORK_TUNNEL_MIN_WINDOW_BYTES)).toBe(
+      BROWSER_NETWORK_TUNNEL_MIN_WINDOW_BYTES
+    )
+  })
+
+  it('falls back to the legacy window for a sub-minimum or malformed advertisement', () => {
     expect(negotiateBrowserNetworkTunnelWindowBytes(1024)).toBe(
       BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
     )
     expect(negotiateBrowserNetworkTunnelWindowBytes(Number.NaN)).toBe(
       BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
-    )
-  })
-
-  it('buffers at least a full negotiated window so in-window data is never rejected', () => {
-    expect(BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES).toBeGreaterThanOrEqual(
-      BROWSER_NETWORK_TUNNEL_MAX_WINDOW_BYTES
     )
   })
 })

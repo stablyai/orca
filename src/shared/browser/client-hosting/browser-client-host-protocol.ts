@@ -4,6 +4,7 @@ import {
 } from './browser-client-profile-switch-protocol'
 import { z } from 'zod'
 import { BrowserNetworkExecutionHost } from './browser-network-execution-host'
+import { BROWSER_NETWORK_TUNNEL_MIN_WINDOW_BYTES } from '../../browser-network-tunnel-protocol'
 import {
   BrowserClientAutomationCommand,
   BrowserClientAutomationResult as BrowserClientHostCommandResult
@@ -307,11 +308,12 @@ export const BrowserClientHostEvent = z.union([
 ])
 
 // Per-stream flow-control window the client can buffer. Optional: older hosts omit it and both
-// sides fall back to the legacy window. Bounded so a peer cannot force oversized server buffers.
+// sides fall back to the legacy window. Floored at one data frame so every parsed advertisement
+// is honorable; capped so a peer cannot force oversized server buffers.
 const TunnelWindowBytes = z
   .number()
   .int()
-  .min(1)
+  .min(BROWSER_NETWORK_TUNNEL_MIN_WINDOW_BYTES)
   .max(64 * 1024 * 1024)
 
 export const BrowserNetworkTunnelAttachParams = BrowserHostLeaseAuthority.extend({

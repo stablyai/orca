@@ -61,6 +61,7 @@ export class BrowserNetworkTunnelResourceBudget {
     return true
   }
 
+  /** Admits retained bytes under the window-scaled session limit and the shared aggregate budget. */
   reserveRetainedBytes(bytes: number): boolean {
     if (bytes < 0 || bytes > this.maxRetainedBytes - this.retainedBytes) {
       return false

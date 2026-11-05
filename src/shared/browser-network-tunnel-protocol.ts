@@ -6,6 +6,9 @@ const MAX_CONTROL_PAYLOAD_BYTES = 1024
 const MAX_UINT32 = 0xffff_ffff
 
 export const BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES = 64 * 1024
+// Smallest advertisable per-stream window: one full data frame. The attach/ready schemas
+// enforce it, so any parsed advertisement can be honored as-is.
+export const BROWSER_NETWORK_TUNNEL_MIN_WINDOW_BYTES = BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES
 export const BROWSER_NETWORK_TUNNEL_MAX_WINDOW_UPDATE_BYTES = 16 * 1024 * 1024
 
 export enum BrowserNetworkTunnelOpcode {

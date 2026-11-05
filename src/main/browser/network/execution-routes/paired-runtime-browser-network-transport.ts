@@ -24,6 +24,9 @@ import {
 
 const BROWSER_TUNNEL_WS_SOFT_CAP_BYTES = 1024 * 1024
 const BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES = 7 * 1024 * 1024
+// Covers the byte cap at 1 KiB frames, matching the tunnel's pending-chunk pairing: one parked
+// 2 MiB window of small frames must not overflow the queue by frame count alone.
+const BROWSER_TUNNEL_WS_MAX_QUEUED_FRAMES = BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES / 1024
 
 type PairedRuntimeBrowserNetworkTransportOptions = {
   connection: PairedRuntimeConnection
@@ -170,7 +173,7 @@ export class PairedRuntimeBrowserNetworkTransport {
           outboundQueue: {
             softCapBytes: BROWSER_TUNNEL_WS_SOFT_CAP_BYTES,
             maxQueuedBytes: BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES,
-            maxQueuedFrames: 2_048,
+            maxQueuedFrames: BROWSER_TUNNEL_WS_MAX_QUEUED_FRAMES,
             maxDrainFramesPerTurn: 4
           },
           outboundMemoryBudget: this.options.outboundMemory,
