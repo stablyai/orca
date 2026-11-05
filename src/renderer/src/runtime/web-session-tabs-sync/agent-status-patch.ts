@@ -81,9 +81,13 @@ export function buildMirroredAgentStatusPatch(
     const existing =
       nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey[hostEntry.paneKey]
     const entry = withMirroredEvidenceReceipt(
-      hostEntry.connectionId === undefined
-        ? { ...hostEntry, connectionId: environmentId }
-        : hostEntry,
+      {
+        ...hostEntry,
+        ...(hostEntry.connectionId === undefined ? { connectionId: environmentId } : {}),
+        // Why: a host publishes agents it restored after a restart without their worktree; unowned,
+        // the row survives its tab's retraction as a retained ghost.
+        ...(hostEntry.worktreeId ? {} : { worktreeId })
+      },
       existing,
       now
     )
