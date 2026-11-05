@@ -266,6 +266,7 @@ export function NativeChatMessageList({
   const readerInput = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll: beginNavigation,
     onTakeScroll: transcriptWindow.cancelAlign,
+    onReaderAct: transcriptWindow.releaseEndPin,
     onLeaveEnd: readerLeavesEnd,
     onScrollGesture: transcriptScroll.forwardedGesture
   })

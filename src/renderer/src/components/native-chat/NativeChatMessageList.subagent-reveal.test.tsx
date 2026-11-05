@@ -456,12 +456,22 @@ describe('where a strip reveal lands', () => {
     const above = screen.getByText('Opening lane b.').closest<HTMLElement>('[data-index]')!
     const heights: number[] = []
     heights[Number(above.dataset.index)] = above.offsetHeight + 120
-    layout.measuredRowHeights = Array.from(heights, (height) => height ?? row!.offsetHeight)
+    layout.measuredRowHeights = heights
     paint()
     const settledBottom = scroller().scrollTop + scroller().clientHeight
     const settledRowBottom = transcriptRowOffset(row!) + row!.offsetHeight
     expect(settledRowBottom).toBeLessThanOrEqual(settledBottom + 1)
     expect(settledRowBottom).toBeGreaterThan(settledBottom - row!.offsetHeight)
+
+    // Once the reader acts on the content (Enter on a disclosure above), the view is theirs: nothing moves it.
+    fireEvent.keyDown(screen.getByRole('button', { name: /lane a/, expanded: true }), {
+      key: 'Enter'
+    })
+    const readerTop = scroller().scrollTop
+    heights[Number(above.dataset.index)] = above.offsetHeight + 200
+    layout.measuredRowHeights = [...heights]
+    paint()
+    expect(scroller().scrollTop).toBe(readerTop)
     layout.measuredRowHeights = []
   })
 })

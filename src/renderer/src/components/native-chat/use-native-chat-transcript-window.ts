@@ -37,6 +37,7 @@ export type NativeChatTranscriptWindow = {
   isAlignPending: () => boolean
   /** A reader gesture releases the jump's target. */
   cancelAlign: () => void
+  releaseEndPin: () => void
   /** Pin through the virtualizer’s scroll owner to avoid competing writes; its last-row end includes trailing chrome. */
   scrollToEnd: () => void
   /** Restore a detached reader offset through the virtualizer's scroll owner. */
@@ -322,6 +323,13 @@ export function useNativeChatTranscriptWindow({
     }
   }, [isAlignHeld, reconcileReaderScroll])
 
+  // A reader acting on the content owns what it moves: an end-aligned reveal stops holding its row.
+  const releaseEndPin = useCallback(() => {
+    if (heldEndIndex() !== null) {
+      endAlign()
+    }
+  }, [endAlign, heldEndIndex])
+
   return {
     virtualItems: virtualizer.getVirtualItems(),
     totalSize: virtualizer.getTotalSize(),
@@ -331,6 +339,7 @@ export function useNativeChatTranscriptWindow({
     alignToViewportTop,
     isAlignPending,
     cancelAlign,
+    releaseEndPin,
     scrollToEnd,
     restoreScrollOffset,
     consumeProgrammaticScroll,
