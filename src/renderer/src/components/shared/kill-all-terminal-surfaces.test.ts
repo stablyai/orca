@@ -1,17 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-
 import type { AppState } from '@/store'
 import { runKillAllTerminalSurfaces } from './kill-all-terminal-surfaces'
-
 import {
   snapshotKillAllTerminalSurfaceIds,
   type KillAllTerminalSurfaceState
 } from './kill-all-terminal-targets'
 
 type TerminalRow = AppState['tabsByWorktree'][string][number]
+type UnifiedRow = AppState['unifiedTabsByWorktree'][string][number]
 
 function terminal(id: string, worktreeId: string): TerminalRow {
   return { id, worktreeId } as TerminalRow
+}
+
+function unified(id: string, entityId: string, worktreeId: string): UnifiedRow {
+  return { id, entityId, worktreeId, contentType: 'terminal' } as UnifiedRow
 }
 
 function state(overrides: Partial<KillAllTerminalSurfaceState> = {}): KillAllTerminalSurfaceState {
@@ -147,6 +150,24 @@ describe('runKillAllTerminalSurfaces', () => {
 
     expect(closeSurface.mock.calls.map(([targetId]) => targetId)).toEqual(['local-tab'])
     expect(killPty.mock.calls).toEqual([['pty-local']])
+  })
+
+  it('leaves a tab open when its PTY proves only that it runs off this computer', async () => {
+    const current = state({
+      tabsByWorktree: {
+        'wt-local': [terminal('local-tab', 'wt-local')],
+        'wt-unlisted': [terminal('foreign-tab', 'wt-unlisted')]
+      },
+      ptyIdsByTabId: {
+        'local-tab': ['pty-local'],
+        'foreign-tab': ['remote:env-forgotten@@terminal-1', 'ssh:other-host@@pty-2']
+      }
+    })
+    current.worktreesByRepo = {
+      'fixture-repo': [{ id: 'wt-local', repoId: 'fixture-repo', hostId: 'local' }]
+    } as never
+
+    expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['local-tab'])
   })
 
   it('revalidates remaining ownership after a yield before killing an exact PTY', async () => {

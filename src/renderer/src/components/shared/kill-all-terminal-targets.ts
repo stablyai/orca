@@ -5,13 +5,14 @@ import type { TerminalTabRetirementState } from '@/store/slices/terminal-tab-ret
 export type KillAllTerminalSurfaceState = TerminalTabRetirementState &
   Pick<AppState, 'activeWorktreeId'>
 
-// Why: a tab routed to a runtime host is that host's to close; forcing it there stops a paired machine's work (#38135).
+// Why: a runtime host's tab is that host's to close; closing it here stops a paired machine's work (#38135).
+// A tab whose owner is not proven stays open: Kill All must never guess another machine's sessions are ours.
 function isOwnedByThisDesktop(
   state: KillAllTerminalSurfaceState,
   worktreeId: string,
   terminalId: string
 ): boolean {
-  return !resolveTerminalCloseRoute(state, worktreeId, terminalId)?.runtimeEnvironmentId
+  return resolveTerminalCloseRoute(state, worktreeId, terminalId)?.runtimeEnvironmentId === null
 }
 
 export function snapshotKillAllTerminalSurfaceIds(
