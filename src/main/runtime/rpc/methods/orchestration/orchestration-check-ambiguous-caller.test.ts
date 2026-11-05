@@ -77,6 +77,7 @@ it('checks its own Run with A identity but refuses ambiguous identity before cho
     })
   vi.stubEnv('ORCA_AGENT_SESSION_ID', undefined)
   vi.stubEnv('ORCA_STRUCTURED_SESSION', '')
+  vi.stubEnv('CODEX_THREAD_ID', '')
   vi.stubEnv('ORCA_TERMINAL_HANDLE', 'term_coord')
   vi.stubEnv('ORCA_PANE_KEY', h.coordinatorPaneKey)
   await check()
