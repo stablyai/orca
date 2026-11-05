@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalInputSourceBody } from './journal-input-source'
 import { readFileSync } from 'node:fs'
@@ -102,7 +103,7 @@ it("keeps an existing chat's rows byte for byte, starts its records after one ap
   // Shipped readers refuse the marker wherever it sits; it was never written over a row.
   expect(rows.at(-1)?.seq).toBe(original.length + 1)
   expect(parseJournalRow(rows.at(-1)!.rowJson)).toEqual({ ok: false, unreadable: true })
-  expect([...rig.state().items.keys()]).toEqual(['b', 'd', 'c', 'e'])
+  expect([...memoryJournalMap(rig.state().items).keys()]).toEqual(['b', 'd', 'c', 'e'])
   expectProjectionMatches(database, rig.state())
 
   // Catch-up pages the prefix rows, then the record groups, each sequence once.
@@ -129,7 +130,7 @@ it('keeps a record that updated a prefix key when a later prefix fold no longer 
   const restored = restoreJournal(database.db, sessionId)
   expect(restored).toMatchObject({ newer: null, damage: null })
   // b keeps its newest value, appended after the prefix and before the tail's own keys.
-  expect([...restored!.state.items.keys()]).toEqual(['a', 'renamed', 'b', 'c'])
+  expect([...memoryJournalMap(restored!.state.items).keys()]).toEqual(['a', 'renamed', 'b', 'c'])
   expect(restored!.state.items.get('b')).toEqual(rig.state().items.get('b'))
 })
 
@@ -298,9 +299,9 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
   expect(renderJournalState(current.state)).toEqual(historicalFixture.publicSnapshot)
   expect(journalInputSourceBody(current.state.inputs.sources.get('U'))).toEqual(words('original U'))
   expect(journalInputSourceBody(current.state.inputs.sources.get('V'))).toEqual(words('edited Q'))
-  expect([...current.state.submissions]).toEqual([])
-  expect([...current.state.inputs.candidates]).toEqual([])
-  expect([...current.state.items.keys()]).toEqual(['survivor-a', 'survivor-b'])
+  expect([...memoryJournalMap(current.state.submissions)]).toEqual([])
+  expect([...memoryJournalMap(current.state.inputs.candidates)]).toEqual([])
+  expect([...memoryJournalMap(current.state.items).keys()]).toEqual(['survivor-a', 'survivor-b'])
   expect(current.state.queue.cards.get('Q')).toMatchObject({
     state: 'withdrawn',
     body: words('final edit')
@@ -314,7 +315,7 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
   seedFrozen(rawDb, historicalFixture.raw)
   const raw = readJournalHistoricalInputs(rawDb.db, sessionId)!.load
   expect(raw).toMatchObject({ newer: null, damage: null })
-  expect([...raw.state.inputs.sources]).toEqual(historicalFixture.rawSources)
+  expect([...memoryJournalMap(raw.state.inputs.sources)]).toEqual(historicalFixture.rawSources)
   expect(raw.state.queue.cards.get('raw-Q')?.recovers).toBe('raw-U')
   const unsupported = liveTestJournalRows(rawDb.db, sessionId)
     .at(-1)!
@@ -338,7 +339,9 @@ it('main-outcome-old-prefix-source-roundtrip', async () => {
   expect(liveTestJournalRows(rawDb.db, sessionId).slice(0, rawPrefix.length)).toEqual(rawPrefix)
   const dispatchedRaw = readJournalHistoricalInputs(rawDb.db, sessionId)!.load
   expect(dispatchedRaw).toMatchObject({ newer: null, damage: null })
-  expect([...dispatchedRaw.state.inputs.sources]).toEqual(historicalFixture.rawSources)
+  expect([...memoryJournalMap(dispatchedRaw.state.inputs.sources)]).toEqual(
+    historicalFixture.rawSources
+  )
   expect(dispatchedRaw.state.queue.cards.get('raw-Q')?.recovers).toBe('raw-U')
   expect(restoreJournal(rawDb.db, sessionId)?.newer).toBeNull()
 

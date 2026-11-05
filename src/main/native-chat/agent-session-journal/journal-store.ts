@@ -1,3 +1,4 @@
+import { memoryJournalMap as memoryMap } from './journal-memory-collections'
 import { journalInputSourceBody } from './journal-input-source'
 import { journalInputOrder } from './journal-input-order'
 import { JournalWriteProjection } from './journal-write-projection'
@@ -10,8 +11,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnLifecycle
+  AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentJournalItemIdentity,
@@ -210,7 +210,7 @@ export class AgentSessionJournal {
 
   /** Host-only stopped-history IDs carried by each send. */
   stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
-    this.state.stoppedHistoryCarried
+    memoryMap(this.state.stoppedHistoryCarried)
 
   submissionBody = (clientMessageId: string): AgentJournalMessageItem | null =>
     journalInputSourceBody(this.state.inputs.sources.get(clientMessageId))
@@ -230,20 +230,19 @@ export class AgentSessionJournal {
 
   /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
   runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
-    runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
+    runningStructuredAgentSessionTurnItemBySequence(memoryMap(this.state.items).values())
 
-  newestTurn = (): AgentJournalTurnLifecycle | null =>
-    readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
+  newestTurn = () => readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
 
   threadGoalSource = (): JournalThreadGoalSource =>
-    journalThreadGoalSource(this.state.items.values())
+    journalThreadGoalSource(memoryMap(this.state.items).values())
 
   /** Read across the journal, beyond any client's loaded page. */
   threadGoal = () => this.threadGoalSource().goal
 
   /** Read across the journal, beyond any client's loaded page. */
   contextUsage = (): AgentSessionContextUsage =>
-    latestStructuredAgentContextFacts(this.state.items.values())
+    latestStructuredAgentContextFacts(memoryMap(this.state.items).values())
 
   /** Includes activity from revisions/tombstones absent from rendered items. */
   lastActivityAt = (): number => this.state.lastActivityAt
@@ -257,7 +256,7 @@ export class AgentSessionJournal {
   /** Excludes client actions and recovery bookkeeping. */
   lastProviderActivityAt = (fence: number) => this.state.providerActivityAt.get(fence)
 
-  submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
+  submissions = (): AgentJournalSubmission[] => [...memoryMap(this.state.submissions).values()]
 
   historyOrigin = () => this.state.historyOrigin
 

@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../agent-session-journal/journal-memory-collections'
 import * as transitions from '../agent-session-journal/journal-reducer-transition'
 import * as outcomes from '../agent-session-journal/journal-outcome-codec'
 import { journalInputOrder, JournalInputOrder } from '../agent-session-journal/journal-input-order'
@@ -300,14 +301,18 @@ it.each([10, 30])(
       row
     ) {
       metric().rows++
-      const values = state.queue.cards.values.bind(state.queue.cards)
-      const visits = vi.spyOn(state.queue.cards, 'values').mockImplementation(function* () {
-        for (const card of values()) {
-          metric().queueVisits++
-          yield card
-        }
-        return undefined
-      })
+      const values = memoryJournalMap(state.queue.cards).values.bind(
+        memoryJournalMap(state.queue.cards)
+      )
+      const visits = vi
+        .spyOn(memoryJournalMap(state.queue.cards), 'values')
+        .mockImplementation(function* () {
+          for (const card of values()) {
+            metric().queueVisits++
+            yield card
+          }
+          return undefined
+        })
       try {
         return before.call(this, state, row)
       } finally {
@@ -320,14 +325,18 @@ it.each([10, 30])(
       state,
       row
     ) {
-      const values = state.submissions.values.bind(state.submissions)
-      const visits = vi.spyOn(state.submissions, 'values').mockImplementation(function* () {
-        for (const input of values()) {
-          metric().inputVisits++
-          yield input
-        }
-        return undefined
-      })
+      const values = memoryJournalMap(state.submissions).values.bind(
+        memoryJournalMap(state.submissions)
+      )
+      const visits = vi
+        .spyOn(memoryJournalMap(state.submissions), 'values')
+        .mockImplementation(function* () {
+          for (const input of values()) {
+            metric().inputVisits++
+            yield input
+          }
+          return undefined
+        })
       try {
         return after.call(this, state, row)
       } finally {
@@ -468,7 +477,7 @@ it.each([10, 30])(
         expect(metric().rows).toBe(pass === 0 ? 3 : 1) // Logical boundary removes the two foreground rows once; queued admissions are retained.
         expect(metric().receipts).toBe(0) // No physical restatement or new original-acceptance lookup.
         expect(
-          [...journal.queuedMessages.displayState().inputCards.values()].filter(
+          [...memoryJournalMap(journal.queuedMessages.displayState().inputCards).values()].filter(
             (card) => card.baseline !== undefined
           ).length
         ).toBeLessThanOrEqual(2 * n + 4)

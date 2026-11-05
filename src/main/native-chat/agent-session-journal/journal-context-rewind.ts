@@ -67,7 +67,7 @@ export async function rewindJournalContext(input: {
           .map((entry) => agentJournalSubmissionKey(entry.clientMessageId))
       )
       const removed = new Set<string>()
-      for (const item of state.items.values()) {
+      for (const item of state.queries.itemsAfterSequence(state, floor?.sequence ?? 0)) {
         if (item.sequence > (floor?.sequence ?? 0) && !queued.has(item.itemId)) {
           removed.add(item.itemId)
         }

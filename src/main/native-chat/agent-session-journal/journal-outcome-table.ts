@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
 import { isNativeOutcomeField } from './journal-outcome-format-2'
 import { journalInputOrder } from './journal-input-order'
@@ -31,8 +32,8 @@ export function readJournalOutcomes(
   baseline?: JournalReducerState
 ): JournalReducerState {
   const newest = db.prepare(JOURNAL_NEWEST_OUTCOME_SQL)
-  const recoveries = [...(baseline?.queue.cards.values() ?? [])].flatMap((card) =>
-    card.recovers ? [{ id: card.messageId, recovers: card.recovers }] : []
+  const recoveries = [...(baseline ? memoryJournalMap(baseline.queue.cards).values() : [])].flatMap(
+    (card) => (card.recovers ? [{ id: card.messageId, recovers: card.recovers }] : [])
   )
   const prefix = detachJournalNativePrefix(baseline)
   const fold = new JournalOutcomeFold()
@@ -95,7 +96,11 @@ export function persistJournalOutcomeRows(
         const changed = new Set(
           changes.filter((change) => change.path === path).map((change) => change.key)
         )
-        for (const [key, value] of transition.state[path]) {
+        const nativeEntries =
+          path === 'inputEntries'
+            ? transition.state.queries.nativeInputEntries(transition.state)
+            : transition.state.queries.nativeInputCards(transition.state)
+        for (const [key, value] of nativeEntries) {
           if (!changed.has(key)) {
             changes.push({ path, key, value, deleted: false, reinsert: true })
           }

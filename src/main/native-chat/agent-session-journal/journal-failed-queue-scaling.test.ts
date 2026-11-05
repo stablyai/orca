@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -145,7 +146,7 @@ it.each([100, 1_000])(
     expect(order.newestTurn.read()?.itemId).toBe('turn')
     // Drafts read the live map through keys(), so count every way of walking it.
     const walks = (['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const).map(
-      (method) => vi.spyOn(state.items, method)
+      (method) => vi.spyOn(memoryJournalMap(state.items), method)
     )
     const failed: JournalRow = {
       ...turn,
@@ -248,7 +249,7 @@ it.each([100, 1_000])(
       vi.spyOn(journal.inputOrder, 'enteredSubmissions').mockReturnValue([])
       // Count every read of a recovered send's state, however publication reaches it.
       let reads = 0
-      for (const entry of state.submissions.values()) {
+      for (const entry of memoryJournalMap(state.submissions).values()) {
         const dispatchState = entry.dispatchState
         Object.defineProperty(entry, 'dispatchState', {
           get: () => (reads++, dispatchState),
@@ -334,7 +335,10 @@ function sourceIndexFold(size: number) {
   const walks: { mock: { calls: readonly unknown[] } }[] = []
   let derived = 0
   const watch = () => {
-    const maps = [state.items, ...Object.values(owner).filter((value) => value instanceof Map)]
+    const maps = [
+      memoryJournalMap(state.items),
+      ...Object.values(owner).filter((value) => value instanceof Map)
+    ]
     for (const map of maps) {
       for (const method of ['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const) {
         walks.push(vi.spyOn(map, method))
@@ -549,7 +553,7 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
     // Count every walk of the canonical cards and of each Map the card index owns, place and
     // domain collections included, as plain call counts.
     const methods = ['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const
-    const canonical = methods.map((method) => vi.spyOn(state.queue.cards, method))
+    const canonical = methods.map((method) => vi.spyOn(memoryJournalMap(state.queue.cards), method))
     const watched = new Set<object>([state.queue.cards])
     const owned: { mock: { calls: unknown[] } }[] = []
     const attach = () => {
@@ -581,7 +585,7 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
       index['index'],
       index['currentCoordinates'],
       index['domains'],
-      index['indexed']
+      index['facts'].indexed
     ]
     const ensure = JournalInputCardIndex.prototype.ensure
     let rebuilding = false

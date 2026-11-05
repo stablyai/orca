@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -595,8 +596,12 @@ it.each([100, 1000])(
     const gate = () => ({ work: work(), record: records.agentSessionRecordFixture(lease) })
     readQueuePublication(journal, gate)
     let visits = 0
-    const sends = state.submissions.values.bind(state.submissions)
-    const cards = state.queue.cards.values.bind(state.queue.cards)
+    const sends = memoryJournalMap(state.submissions).values.bind(
+      memoryJournalMap(state.submissions)
+    )
+    const cards = memoryJournalMap(state.queue.cards).values.bind(
+      memoryJournalMap(state.queue.cards)
+    )
     function* counted<T>(values: Iterable<T>) {
       for (const value of values) {
         visits++
@@ -604,8 +609,12 @@ it.each([100, 1000])(
       }
       return undefined
     }
-    vi.spyOn(state.submissions, 'values').mockImplementation(() => counted(sends()))
-    vi.spyOn(state.queue.cards, 'values').mockImplementation(() => counted(cards()))
+    vi.spyOn(memoryJournalMap(state.submissions), 'values').mockImplementation(() =>
+      counted(sends())
+    )
+    vi.spyOn(memoryJournalMap(state.queue.cards), 'values').mockImplementation(() =>
+      counted(cards())
+    )
     const key = journal.queuedMessages.revision()
     for (let i = 0; i < 10; i++) {
       await journal.appendItem(

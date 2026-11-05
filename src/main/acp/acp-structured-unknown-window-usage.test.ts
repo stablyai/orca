@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../native-chat/agent-session-journal/journal-memory-collections'
 import { afterEach, describe, expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
@@ -40,7 +41,7 @@ describe('an ACP usage report with an unknown window', () => {
     const loaded = restoreJournal(rig.journalDatabase.db, SESSION)
     expect(loaded?.damage).toBeFalsy()
     expect(loaded?.newer).toBeFalsy()
-    const saved = [...(loaded?.state.items.values() ?? [])].flatMap(
+    const saved = [...(loaded ? memoryJournalMap(loaded.state.items).values() : [])].flatMap(
       (item) => readAgentJournalTurn(item.body) ?? []
     )
     expect(saved).toEqual(await rig.turns())

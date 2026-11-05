@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../agent-session-journal/journal-memory-collections'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -121,12 +122,12 @@ it.each([10, 100])(
       expect(journal.physicalCursor().epoch).toBe(physical)
       const raw = journal.queuedMessages.displayState()
       expect(
-        [...raw.queue.cards.values()].filter(
+        [...memoryJournalMap(raw.queue.cards).values()].filter(
           (card) => card.messageId.startsWith('archive-withdrawn-') && card.state === 'withdrawn'
         )
       ).toHaveLength(h)
       expect(
-        [...raw.queue.cards.values()].filter(
+        [...memoryJournalMap(raw.queue.cards).values()].filter(
           (card) => card.messageId.startsWith('archive-sent-') && card.state === 'dispatched'
         )
       ).toHaveLength(h)

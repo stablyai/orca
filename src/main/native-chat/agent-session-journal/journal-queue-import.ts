@@ -1,3 +1,4 @@
+import { memoryJournalMap, memoryJournalSet } from './journal-memory-collections'
 import { JournalDraftMap, JournalDraftSet } from './journal-transition-collections'
 import { journalInputOrder } from './journal-input-order'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -102,10 +103,13 @@ export class LegacyQueuedCards {
     }
     const display: JournalReducerState = {
       ...state,
-      items: new JournalDraftMap(state.items),
-      submissions: new JournalDraftMap(state.submissions),
-      normalizedHandOffs: new JournalDraftSet(state.normalizedHandOffs),
-      inputs: { ...state.inputs, presentations: new JournalDraftMap(state.inputs.presentations) }
+      items: new JournalDraftMap(memoryJournalMap(state.items)),
+      submissions: new JournalDraftMap(memoryJournalMap(state.submissions)),
+      normalizedHandOffs: new JournalDraftSet(memoryJournalSet(state.normalizedHandOffs)),
+      inputs: {
+        ...state.inputs,
+        presentations: new JournalDraftMap(memoryJournalMap(state.inputs.presentations))
+      }
     }
     for (const { card, submission: entry } of handedOff) {
       const send = { ...entry }

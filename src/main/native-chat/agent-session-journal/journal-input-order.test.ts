@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import './journal-input-order-recovery.spec'
 import { journalInputOrder } from './journal-input-order'
 import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
@@ -38,7 +39,7 @@ function knownPredecessors(owner: AgentSessionJournal | JournalReducerState, id:
   const state = 'queuedMessages' in owner ? owner.queuedMessages.displayState() : owner
   const submission = state.submissions.get(id)
   return submission
-    ? [...state.queue.cards.values()]
+    ? [...memoryJournalMap(state.queue.cards).values()]
         .filter((card) => journalInputOrder(state).precedes(card, submission))
         .map((card) => card.messageId)
     : []

@@ -4,7 +4,17 @@ import type { JournalInputReleasedPositions } from './journal-input-released-pos
 import type { JournalInputCandidates } from './journal-input-candidates'
 import type { JournalSubmissionIndex } from './journal-submission-index'
 import type { TurnSource } from './journal-newest-turn-tree'
-import type { JournalKeyedMap } from './journal-keyed-storage'
+import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
+import type {
+  JournalInputOrderFacts,
+  JournalInputCardFacts,
+  JournalInputObservationFacts,
+  JournalInputEvidenceFacts,
+  JournalSubmissionLinkFacts,
+  JournalInputLineageFacts
+} from './journal-input-facts-storage'
+import type { JournalInputCard } from './journal-input-lineage'
+import type { JournalStateQueries } from './journal-state-queries'
 
 // Expose named queries, so a SQL implementation cannot accidentally become a collection scan.
 export type JournalInputPlaceStorage = Pick<
@@ -20,6 +30,8 @@ export type JournalInputPlaceStorage = Pick<
   | 'idsAfter'
   | 'firstPosition'
   | 'allPlaces'
+  | 'queryCommand'
+  | 'allCommand'
 >
 
 export type JournalInputDomainStorage = Pick<
@@ -49,6 +61,7 @@ export type JournalTurnSourceStorage = {
 }
 
 export type JournalNewestTurnStorage = {
+  initializeFromItems: boolean
   sources: JournalTurnSourceStorage
   evidence: JournalKeyedMap<string, string>
   reports: JournalKeyedMap<string, number>
@@ -57,6 +70,15 @@ export type JournalNewestTurnStorage = {
 }
 
 export type JournalIndexStorageFactory = {
+  stateQueries: () => JournalStateQueries
+  map: <K, V>(name: string, key?: string | number) => JournalKeyedMap<K, V>
+  set: <T>(name: string, key?: string | number) => JournalKeyedSet<T>
+  orderFacts: () => JournalInputOrderFacts
+  cardFacts: () => JournalInputCardFacts
+  observationFacts: () => JournalInputObservationFacts
+  evidenceFacts: () => JournalInputEvidenceFacts
+  linkFacts: () => JournalSubmissionLinkFacts
+  lineageFacts: (cards: JournalKeyedMap<string, JournalInputCard>) => JournalInputLineageFacts
   place: (name: string, key?: string | number) => JournalInputPlaceStorage
   domain: (name: string) => JournalInputDomainStorage
   released: (name: string) => JournalInputReleasedStorage

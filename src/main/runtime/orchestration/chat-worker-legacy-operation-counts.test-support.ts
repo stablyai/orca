@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../../native-chat/agent-session-journal/journal-memory-collections'
 import { vi } from 'vitest'
 import { JournalInputCardIndex } from '../../native-chat/agent-session-journal/journal-input-card-index'
 import * as legacy from '../../native-chat/agent-session-journal/journal-queue-import'
@@ -155,7 +156,7 @@ export function countLegacyFailureDisplay() {
     state,
     rows
   ) {
-    watchIndexMap(this['overlays'])
+    watchIndexMap(memoryJournalMap(this['facts'].overlays))
     if (!overlays.has(rows)) {
       overlays.add(rows)
       countMap(rows, () => {
@@ -198,8 +199,8 @@ export function countLegacyFailureDisplay() {
     state,
     floor
   ) {
-    watchIndexMap(this['overlays'])
-    watchIndexMap(state.queue.cards)
+    watchIndexMap(memoryJournalMap(this['facts'].overlays))
+    watchIndexMap(memoryJournalMap(state.queue.cards))
     const before = this['index']
     ensuring = true
     try {
@@ -256,12 +257,12 @@ export function countLegacyFailureDisplay() {
         measured.displays++
         const state = this.source.state()
         const items = countMapCopies(
-          state.items,
+          memoryJournalMap(state.items),
           () => measured.itemCopies++,
           () => measured.itemEntries++
         )
         const submissions = countMapCopies(
-          state.submissions,
+          memoryJournalMap(state.submissions),
           () => measured.submissionCopies++,
           () => measured.submissionEntries++
         )

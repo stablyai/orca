@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../native-chat/agent-session-journal/journal-memory-collections'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
@@ -277,7 +278,7 @@ function nothingExchangedOn(
   if (load.damage || load.newer) {
     return false
   }
-  for (const item of load.state.items.values()) {
+  for (const item of memoryJournalMap(load.state.items).values()) {
     const turn = readAgentJournalTurn(item.body)
     if (turn && isProviderTimelineTurnInNamespace(turn.turnId, nativeId)) {
       return false
@@ -311,7 +312,7 @@ function unannouncedLosses(
     return []
   }
   const written = new Set<string>()
-  for (const itemId of load.state.items.keys()) {
+  for (const itemId of memoryJournalMap(load.state.items).keys()) {
     const identity = parseAgentJournalItemKey(itemId)
     const spelled =
       identity?.provider === 'legacy' ? spelledProviderTimelineItemKey(identity.recordId) : null

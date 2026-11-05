@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../../../native-chat/agent-session-journal/journal-memory-collections'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -97,7 +98,7 @@ export function createQueuedImageWireRecord(
       )
     }
     const rawCards = [
-      ...state.queuedMessages.inputState().queue.cards.values(),
+      ...memoryJournalMap(state.queuedMessages.inputState().queue.cards).values(),
       ...state.queuedMessages['legacy'].cards()
     ].sort((a, b) => a.position - b.position)
     for (const card of rawCards) {

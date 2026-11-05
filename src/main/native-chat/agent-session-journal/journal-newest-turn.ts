@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { isDeepStrictEqual } from 'node:util'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -21,10 +22,13 @@ export class JournalNewestTurn {
     state: JournalReducerState,
     private readonly storage: JournalNewestTurnStorage = memoryJournalIndexStorage.newestTurn()
   ) {
+    if (!storage.initializeFromItems) {
+      return
+    }
     this.storage.boundary = state.lastSequence
     const turns: AgentJournalRenderItem[] = []
     const reported = new Set<string>()
-    for (const item of state.items.values()) {
+    for (const item of memoryJournalMap(state.items).values()) {
       this.index(state, item.itemId, item, reported)
       if (isTurnOrClear(item)) {
         turns.push(item)

@@ -1,4 +1,8 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
+import type { JournalStateQueries } from './journal-state-queries'
+import type { JournalIndexStorageFactory } from './journal-index-storage'
+import { memoryJournalIndexStorage } from './journal-memory-index-storage'
 import { journalContextCursor } from './journal-context-cursor'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import {
@@ -57,6 +61,7 @@ export {
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
 export type JournalReducerState = {
+  queries: JournalStateQueries
   sessionId: string
   epoch: string
   contextBoundary: number
@@ -65,7 +70,7 @@ export type JournalReducerState = {
   /** Earliest individually replayable sequence. */
   oldestSequence: number
   highestFence: number
-  items: Map<string, AgentJournalRenderItem>
+  items: JournalKeyedMap<string, AgentJournalRenderItem>
   /** Creation provenance determines whether an item belongs to current execution. */
   itemFences: JournalKeyedMap<string, number>
   /** Later runs may explicitly assume execution of reusable child items. */
@@ -76,37 +81,39 @@ export type JournalReducerState = {
   /** Rewound turns remain ended even after their visible records disappear. */
   removedTurnIds: JournalKeyedSet<string>
   inputs: ReturnType<typeof createJournalInputObligations>
-  submissions: Map<string, AgentJournalSubmission>
+  submissions: JournalKeyedMap<string, AgentJournalSubmission>
   receipts: JournalKeyedMap<string, AgentJournalAcceptanceReceipt>
   /** Alias provider echoes to existing optimistic submissions to prevent duplicate bubbles. */
-  aliases: Map<string, string>
+  aliases: JournalKeyedMap<string, string>
   /** Preserve the first declared echo contract through tombstones. */
   itemEchoes: JournalKeyedMap<string, unknown>
-  appliedSettlementIds: Set<string>
+  appliedSettlementIds: JournalKeyedSet<string>
   derivedTurnScope: JournalDerivedTurnScope
   /** Acceptance survives visible-message rewind; zero means none in this epoch. */
   latestAcceptedTurnSequence: number
   queuePauseMarks: JournalQueuePauseMarks
-  stoppedHistoryCarried: Map<string, readonly string[]>
+  stoppedHistoryCarried: JournalKeyedMap<string, readonly string[]>
   queuedHandOffPlaces: JournalKeyedMap<
     string,
     Pick<AgentJournalRenderItem, 'sequence' | 'observedAt' | 'turnScope'>
   >
   /** Historical display corrections, rebuilt by the hand-off fold on replay. */
-  normalizedHandOffs: Set<string>
+  normalizedHandOffs: JournalKeyedSet<string>
   /** The queued messages, folded from their own rows and their hand-offs (`journal-queue-fold.ts`). */
   queue: JournalQueueState
-  inputEntries: Map<string, JournalInputEntry>
-  inputCards: Map<string, JournalInputCard>
+  inputEntries: JournalKeyedMap<string, JournalInputEntry>
+  inputCards: JournalKeyedMap<string, JournalInputCard>
   historyOrigin: JournalHistoryOrigin | null
 }
 
 export function createJournalReducerState(
   sessionId: string,
   epoch: string,
-  originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[1]
+  originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[1],
+  storage: JournalIndexStorageFactory = memoryJournalIndexStorage
 ): JournalReducerState {
   const state: JournalReducerState = {
+    queries: storage.stateQueries(),
     sessionId,
     epoch,
     contextBoundary: 1,
@@ -114,30 +121,30 @@ export function createJournalReducerState(
     lastActivityAt: 0,
     oldestSequence: 1,
     highestFence: 0,
-    items: new Map(),
-    itemFences: new Map(),
-    itemExecutionOwners: new Map(),
-    providerActivityAt: new Map(),
-    tombstones: new Map(),
-    removedTurnIds: new Set(),
-    inputs: createJournalInputObligations(),
-    submissions: new Map(),
-    receipts: new Map(),
-    aliases: new Map(),
-    itemEchoes: new Map(),
-    appliedSettlementIds: new Set(),
+    items: storage.map('items'),
+    itemFences: storage.map('itemFences'),
+    itemExecutionOwners: storage.map('itemExecutionOwners'),
+    providerActivityAt: storage.map('providerActivityAt'),
+    tombstones: storage.map('tombstones'),
+    removedTurnIds: storage.set('removedTurnIds'),
+    inputs: createJournalInputObligations(storage),
+    submissions: storage.map('submissions'),
+    receipts: storage.map('receipts'),
+    aliases: storage.map('aliases'),
+    itemEchoes: storage.map('itemEchoes'),
+    appliedSettlementIds: storage.set('appliedSettlementIds'),
     derivedTurnScope: new JournalDerivedTurnScope(),
     latestAcceptedTurnSequence: 0,
     queuePauseMarks: createJournalQueuePauseMarks(),
-    stoppedHistoryCarried: new Map(),
-    queuedHandOffPlaces: new Map(),
-    normalizedHandOffs: new Set(),
-    queue: createJournalQueueState(),
-    inputEntries: new Map(),
-    inputCards: new Map(),
+    stoppedHistoryCarried: storage.map('stoppedHistoryCarried'),
+    queuedHandOffPlaces: storage.map('queuedHandOffPlaces'),
+    normalizedHandOffs: storage.set('normalizedHandOffs'),
+    queue: createJournalQueueState(storage),
+    inputEntries: storage.map('inputEntries'),
+    inputCards: storage.map('inputCards'),
     historyOrigin: null
   }
-  initializeJournalInputOrder(state, originalAcceptance)
+  initializeJournalInputOrder(state, originalAcceptance, storage)
   return state
 }
 
@@ -273,7 +280,7 @@ export function rememberAppliedSettlementId(
 ): void {
   state.appliedSettlementIds.add(settlementId)
   while (state.appliedSettlementIds.size > MAX_JOURNAL_APPLIED_SETTLEMENT_IDS) {
-    const oldest = state.appliedSettlementIds.values().next().value
+    const oldest = state.queries.oldestAppliedSettlementId(state)
     if (oldest === undefined) {
       return
     }
@@ -283,7 +290,7 @@ export function rememberAppliedSettlementId(
 
 export function renderJournalItems(state: JournalReducerState): AgentJournalSnapshot['items'] {
   // Map insertion order changes on recreation; journal position alone orders the timeline.
-  return [...state.items.values()]
+  return [...memoryJournalMap(state.items).values()]
     .filter((item) => journalInputPresentationMember(state, item.itemId))
     .map((item) => projectJournalStopNote(item, state.items))
     .sort(compareAgentJournalItems)
@@ -294,7 +301,9 @@ export function renderJournalState(state: JournalReducerState): AgentJournalSnap
     sessionId: state.sessionId,
     cursor: journalContextCursor(state),
     items: renderJournalItems(state),
-    submissions: [...state.submissions.values()].sort((a, b) => a.submittedAt - b.submittedAt)
+    submissions: [...memoryJournalMap(state.submissions).values()].sort(
+      (a, b) => a.submittedAt - b.submittedAt
+    )
   }
 }
 

@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../agent-session-journal/journal-memory-collections'
 import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import { writeLegacyGapFixture } from './structured-agent-session-legacy-gap.test-support'
 import type { JournalReducerState } from '../agent-session-journal/journal-reducer'
@@ -289,7 +290,9 @@ it.each([10, 100])(
       expect(reopened.queuedMessages.list().filter((c) => c.state === 'waiting')).toEqual([])
       expect(reopened.queuedMessages.displayState().inputEntries.size).toBe(0)
       expect(loadTestJournal(rig.root, SESSION)!.state.inputEntries.size).toBe(0)
-      expect([...reopened.inputOrder.lineage.cards.values()].every((c) => !c.baseline)).toBe(true)
+      expect(
+        [...memoryJournalMap(reopened.inputOrder.lineage.cards).values()].every((c) => !c.baseline)
+      ).toBe(true)
     } finally {
       await rig.dispose()
     }

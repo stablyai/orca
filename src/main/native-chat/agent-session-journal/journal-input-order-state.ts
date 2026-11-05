@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import type { JournalKeyedMap } from './journal-keyed-storage'
 import type { JournalInputPlaceStorage } from './journal-index-storage'
 import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
@@ -62,7 +63,7 @@ export function currentJournalInputIdentity(
 
 export function restoreJournalInputPlaces(state: JournalReducerState): number {
   let legacyPlaces = 0
-  for (const [id, own] of state.inputEntries) {
+  for (const [id, own] of memoryJournalMap(state.inputEntries)) {
     if (state.submissions.get(id)?.dispatchState !== 'pending') {
       state.inputEntries.delete(id)
     } else if (own.context.basis === 'legacy') {
@@ -166,13 +167,15 @@ export function releaseJournalInputHistory(
 export function queryJournalInputCurrent(
   place: JournalInputPlace,
   coordinates: JournalInputPlaceStorage
-): InputPlaceQuery {
+): QueuedMessageRow | undefined {
   return queryInputContext(
     place.context,
     place.original,
-    (coordinate) => coordinates.query(coordinate.epoch, coordinate.sequence),
-    () => coordinates.allPlaces(),
-    mergeInputPlaces
+    (coordinate) => coordinates.queryCommand(coordinate.epoch, coordinate.sequence),
+    () => coordinates.allCommand(),
+    (command, next) =>
+      mergeInputPlaces({ command, position: -Infinity }, { command: next, position: -Infinity })
+        .command
   )
 }
 

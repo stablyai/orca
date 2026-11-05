@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalInputOrder } from './journal-input-order'
@@ -108,7 +109,7 @@ function journalNormalizationKey(
   state: JournalReducerState,
   inputForItem: (id: string) => AgentJournalSnapshot['submissions'][number] | undefined
 ): string {
-  const ids = [...state.items.keys()].flatMap((itemId) => {
+  const ids = [...memoryJournalMap(state.items).keys()].flatMap((itemId) => {
     const id = inputForItem(itemId)?.clientMessageId
     return id !== undefined &&
       itemId === agentJournalSubmissionKey(id) &&

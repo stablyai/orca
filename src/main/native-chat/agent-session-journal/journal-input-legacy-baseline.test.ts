@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { journalInputOrder } from './journal-input-order'
 import {
   journalInputIndexProbe,
@@ -207,9 +208,9 @@ it.each([10, 40])(
           const outcomes = readTestJournalOutcomes(database.db, identity.sessionId)
           const rows = [...new Set(outcomes.map((value) => value.seq))]
           expect(rows.length).toBeLessThanOrEqual(2 * n + 12)
-          const baseline = [...journal.queuedMessages.displayState().inputCards.values()].filter(
-            (card) => card.baseline !== undefined
-          ).length
+          const baseline = [
+            ...memoryJournalMap(journal.queuedMessages.displayState().inputCards).values()
+          ].filter((card) => card.baseline !== undefined).length
           expect(baseline).toBeLessThanOrEqual(n + 6)
           for (const id of ids) {
             journal.inputOrder.predecessors(journal.queuedMessages.displayState(), id)
@@ -275,7 +276,7 @@ it.each([10, 40])(
       expect(release.spy).toHaveBeenCalledTimes(2)
       expect(release.visits()).toBe(2 * (2 * n + 5))
       expect(
-        [...journalInputOrder(finished.state).lineage.cards.values()].every(
+        [...memoryJournalMap(journalInputOrder(finished.state).lineage.cards).values()].every(
           (card) => !card.baseline
         )
       ).toBe(true)
@@ -285,7 +286,9 @@ it.each([10, 40])(
       expect(journal.queuedMessages.displayState().inputEntries.size).toBe(0)
       expect(finished.state.inputEntries.size).toBe(0)
       expect(
-        [...journal.inputOrder.lineage.cards.values()].every((card) => card.baseline === undefined)
+        [...memoryJournalMap(journal.inputOrder.lineage.cards).values()].every(
+          (card) => card.baseline === undefined
+        )
       ).toBe(true)
     } finally {
       inspect.restore()

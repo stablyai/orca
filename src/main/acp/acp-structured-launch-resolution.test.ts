@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../native-chat/agent-session-journal/journal-memory-collections'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -123,7 +124,7 @@ describe('ACP launch resolution', () => {
         reason: 'session_created',
         providerHandle: { kind: 'opaque', agent: 'grok', value: 'acp-1' }
       })
-      const turn = [...journalWithTurns('acp-1').state.items.values()][0]!
+      const turn = [...memoryJournalMap(journalWithTurns('acp-1').state.items).values()][0]!
       const turnIdentity = createLegacyProviderTimelineIdentityScheme({
         agent: 'grok',
         sessionId: identity.sessionId
@@ -186,7 +187,7 @@ describe('ACP launch resolution', () => {
           }
         ]
       })
-      const turn = [...journalWithTurns('acp-1').state.items.values()][0]!
+      const turn = [...memoryJournalMap(journalWithTurns('acp-1').state.items).values()][0]!
       const rows: JournalRow[] = [
         {
           v: 4,

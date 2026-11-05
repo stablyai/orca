@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -844,7 +845,9 @@ it('folds a streamed revision with constant draft work and bounds the actual acc
       items: state.items.size,
       submissions: state.submissions.size,
       cards: state.queue.cards.size,
-      returned: [...state.queue.cards.values()].filter((card) => card.state === 'returned').length,
+      returned: [...memoryJournalMap(state.queue.cards).values()].filter(
+        (card) => card.state === 'returned'
+      ).length,
       streamed: trackedJournalDraftNodes(
         state,
         revision('answer', message('y'.repeat(4_096), 'assistant'), 2)(next, 10_000)

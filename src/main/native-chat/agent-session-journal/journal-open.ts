@@ -79,7 +79,7 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
     const prefixRevisions =
       baseline &&
       new Map(
-        [...baseline.submissions.keys()].map((id) => {
+        [...memoryJournalMap(baseline.submissions).keys()].map((id) => {
           const key = agentJournalSubmissionKey(id)
           return [
             key,
@@ -206,10 +206,7 @@ export function startJournalRowFold(
   const finish = (): JournalLoad => {
     if (!input.deferNativeCleanup) {
       journalInputOrder(state).finishReconstruction(state)
-      journalInputOrder(state).lineage.restoreFrontier(
-        state.lastSequence,
-        state.inputEntries.values()
-      )
+      journalInputOrder(state).lineage.restoreFrontier(state.lastSequence, state.inputEntries)
     }
     state.oldestSequence = FIRST_JOURNAL_SEQUENCE
     // Empty epochs contain no recoverable history; founding a fresh epoch loses nothing.
@@ -224,3 +221,4 @@ export function startJournalRowFold(
 }
 
 export { journalRowsAfterReader, readJournalRowsAfterCursor } from './journal-read-row'
+import { memoryJournalMap } from './journal-memory-collections'

@@ -5,7 +5,6 @@ import { readAgentSessionFailureFact } from '../../../shared/agent-session/failu
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { newestStructuredAgentSessionTurnBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { JournalReducerState } from './journal-reducer'
 import { renderJournalStatus } from './journal-public-read'
@@ -53,9 +52,7 @@ export function journalStoppedUsageLimitCut(
     stop.settle?.settling === true ||
     (turnId !== undefined && (turnId === stop.settle?.turnId || turnId === stop.event.turnId))
   if (!accepting) {
-    const newest = rows.some(mayRevealCut)
-      ? newestStructuredAgentSessionTurnBySequence(state.items.values())
-      : null
+    const newest = rows.some(mayRevealCut) ? state.queries.newestTurnBySequence(state) : null
     if (!newest || newest.state === 'running' || !owns(newest.turnId)) {
       return undefined
     }

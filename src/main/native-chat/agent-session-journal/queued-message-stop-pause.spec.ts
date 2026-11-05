@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import type { createFixture } from './queued-message-pause-contract-test-fixture'
 import { describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
@@ -249,11 +250,11 @@ export function registerQueuedMessageStopPauseTests(
           applyJournalRow(state, earlier.row)
         }
       }
-      const items = [...state.items.keys()]
-      const submissions = [...state.submissions.keys()]
+      const items = [...memoryJournalMap(state.items).keys()]
+      const submissions = [...memoryJournalMap(state.submissions).keys()]
       applyJournalRow(state, asOlderBuildReadsIt)
-      expect([...state.items.keys()]).toEqual(items)
-      expect([...state.submissions.keys()]).toEqual(submissions)
+      expect([...memoryJournalMap(state.items).keys()]).toEqual(items)
+      expect([...memoryJournalMap(state.submissions).keys()]).toEqual(submissions)
     })
 
     it('a Stop or Resume row holding a value no build writes is ignored on read, never trusted', async () => {

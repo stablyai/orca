@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { admitOutcomeFormat2 } from './journal-outcome-format-2'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -219,10 +220,17 @@ const prefix = z
   )
 
 function plain(state: JournalReducerState): unknown {
-  const { inputEntries, inputCards, contextBoundary, inputs: _inputs, ...ordinary } = state
+  const {
+    inputEntries,
+    inputCards,
+    contextBoundary,
+    inputs: _inputs,
+    queries: _queries,
+    ...ordinary
+  } = state
   expect(contextBoundary).toBe(1)
-  expect([...inputEntries]).toEqual([])
-  expect([...inputCards]).toEqual([['card-2', { introduced: 11 }]])
+  expect([...memoryJournalMap(inputEntries)]).toEqual([])
+  expect([...memoryJournalMap(inputCards)]).toEqual([['card-2', { introduced: 11 }]])
   const fields: Record<string, unknown> = ordinary
   return JSON.parse(
     JSON.stringify({
@@ -233,7 +241,7 @@ function plain(state: JournalReducerState): unknown {
         ])
       ),
       derivedTurnScope: state.derivedTurnScope.snapshot(),
-      queue: { revision: state.queue.revision, cards: [...state.queue.cards] }
+      queue: { revision: state.queue.revision, cards: [...memoryJournalMap(state.queue.cards)] }
     })
   )
 }
@@ -264,7 +272,7 @@ it('folds the checked-in input rows into the same chat, every value of which sto
       key: JSON.stringify(key),
       json: JSON.stringify(value)
     })),
-    ...[...loaded.state.items].map(([key, value]) => ({
+    ...[...memoryJournalMap(loaded.state.items)].map(([key, value]) => ({
       field: 'items',
       key: JSON.stringify(key),
       json: JSON.stringify(value)

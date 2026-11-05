@@ -1,3 +1,4 @@
+import { memoryJournalMap, memoryJournalSet } from './journal-memory-collections'
 import { journalInputOrder } from './journal-input-order'
 import {
   journalInputSourceBody,
@@ -94,11 +95,13 @@ function expectSameState(actual: JournalReducerState, expected: JournalReducerSt
     ) {
       expect([...left]).toStrictEqual([...right])
     } else if (field === 'queue') {
-      expect([...actual.queue.cards]).toStrictEqual([...expected.queue.cards])
+      expect([...memoryJournalMap(actual.queue.cards)]).toStrictEqual([
+        ...memoryJournalMap(expected.queue.cards)
+      ])
       expect(actual.queue.revision).toBe(expected.queue.revision)
     } else if (field === 'inputs') {
       const sourceValues = (state: JournalReducerState) =>
-        [...state.inputs.sources].map(([id, source]) => ({
+        [...memoryJournalMap(state.inputs.sources)].map(([id, source]) => ({
           id,
           originalId: journalInputSourceId(source),
           body: journalInputSourceBody(source),
@@ -111,7 +114,7 @@ function expectSameState(actual: JournalReducerState, expected: JournalReducerSt
       const familyValues = (state: JournalReducerState) =>
         [
           ...new Set(
-            [...state.inputs.sources.values()]
+            [...memoryJournalMap(state.inputs.sources).values()]
               .map(journalInputSourceFamily)
               .filter((id) => id !== undefined)
           )
@@ -120,14 +123,16 @@ function expectSameState(actual: JournalReducerState, expected: JournalReducerSt
           journalInputOrder(state).familyOriginal(family)?.clientMessageId
         ])
       expect(familyValues(actual)).toStrictEqual(familyValues(expected))
-      expect([...actual.inputs.presentations.keys()]).toStrictEqual([
-        ...expected.inputs.presentations.keys()
+      expect([...memoryJournalMap(actual.inputs.presentations).keys()]).toStrictEqual([
+        ...memoryJournalMap(expected.inputs.presentations).keys()
       ])
-      expect([...actual.inputs.echoes]).toStrictEqual([...expected.inputs.echoes])
-      expect([...actual.inputs.candidates.keys()]).toStrictEqual([
-        ...expected.inputs.candidates.keys()
+      expect([...memoryJournalSet(actual.inputs.echoes)]).toStrictEqual([
+        ...memoryJournalSet(expected.inputs.echoes)
       ])
-      for (const [id, candidate] of actual.inputs.candidates) {
+      expect([...memoryJournalMap(actual.inputs.candidates).keys()]).toStrictEqual([
+        ...memoryJournalMap(expected.inputs.candidates).keys()
+      ])
+      for (const [id, candidate] of memoryJournalMap(actual.inputs.candidates)) {
         expect(candidate).toBe(actual.submissions.get(id))
       }
     } else if (field === 'derivedTurnScope') {
@@ -274,7 +279,7 @@ it('round trips the complete replayed reducer, including insertion order and val
   expect(state.items.has(agentJournalSubmissionKey('send-1'))).toBe(true)
   expect(state.itemEchoes.has(itemId(2))).toBe(true)
   expect(state.itemEchoes.get(itemId(2))).toBeNull()
-  expect([...state.appliedSettlementIds][0]).toBe('settlement-2')
+  expect([...memoryJournalSet(state.appliedSettlementIds)][0]).toBe('settlement-2')
   expect(state.derivedTurnScope.snapshot()).toBe(itemId(5))
   const restored = requireState(restoreJournal(database.db, identity.sessionId)?.state)
   expectSameState(restored, state)

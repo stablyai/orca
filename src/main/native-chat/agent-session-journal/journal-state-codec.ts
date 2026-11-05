@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { journalStateCollections } from './journal-state-layout'
 import type { JournalReducerState } from './journal-reducer'
 import { durableQueuePauseMarks } from './journal-outcome-format-1-decode'
@@ -30,30 +31,30 @@ export function encodeJournalState(state: JournalReducerState): {
     providerActivityAt: entries('providerActivityAt'),
     tombstones: entries('tombstones'),
     removedTurnIds: entries('removedTurnIds').map(([id]) => id),
-    submissions: [...state.submissions],
-    inputEntries: [...state.inputEntries],
-    inputCards: [...state.inputCards],
+    submissions: entries('submissions'),
+    inputEntries: entries('inputEntries'),
+    inputCards: entries('inputCards'),
     receipts: entries('receipts'),
-    aliases: [...state.aliases],
+    aliases: entries('aliases'),
     itemEchoes: entries('itemEchoes').map(([key, value]) =>
       value === undefined ? [key] : [key, value]
     ),
-    appliedSettlementIds: [...state.appliedSettlementIds],
+    appliedSettlementIds: entries('appliedSettlementIds').map(([id]) => id),
     derivedTurnScope: state.derivedTurnScope.snapshot(),
     latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
     queuePauseMarks: durableQueuePauseMarks(state.queuePauseMarks),
-    stoppedHistoryCarried: [...state.stoppedHistoryCarried],
+    stoppedHistoryCarried: entries('stoppedHistoryCarried'),
     queuedHandOffPlaces: entries('queuedHandOffPlaces'),
-    normalizedHandOffs: [...state.normalizedHandOffs],
-    queue: { revision: state.queue.revision, cards: [...state.queue.cards] },
+    normalizedHandOffs: entries('normalizedHandOffs').map(([id]) => id),
+    queue: { revision: state.queue.revision, cards: entries('queue.cards') },
     historyOrigin: state.historyOrigin
   } satisfies Record<
-    Exclude<keyof JournalReducerState, 'items' | 'inputs' | 'contextBoundary'>,
+    Exclude<keyof JournalReducerState, 'items' | 'inputs' | 'queries' | 'contextBoundary'>,
     unknown
   > & { contextBoundary?: number }
   return {
     stateJson: JSON.stringify(stored),
-    items: [...state.items].map(([itemId, item], ordinal) => ({
+    items: [...memoryJournalMap(state.items)].map(([itemId, item], ordinal) => ({
       itemId,
       itemJson: JSON.stringify(item),
       ordinal

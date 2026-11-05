@@ -1,3 +1,4 @@
+import type { JournalKeyedRead } from './journal-keyed-storage'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isStructuredAgentSessionStopNote } from '../agent-session-wire/structured-agent-session-command-turn'
@@ -6,7 +7,7 @@ import { STOP_NOTE_CANCELLATION_REQUESTED } from '../agent-session-wire/structur
 /** The recorded turn end supersedes the earlier unconfirmed Stop for display only. */
 export function projectJournalStopNote(
   item: AgentJournalRenderItem,
-  items: ReadonlyMap<string, AgentJournalRenderItem>
+  items: JournalKeyedRead<string, AgentJournalRenderItem>
 ): AgentJournalRenderItem {
   // Avoid key parsing for unrelated snapshot items.
   if (

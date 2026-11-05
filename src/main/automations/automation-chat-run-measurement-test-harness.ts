@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../native-chat/agent-session-journal/journal-memory-collections'
 import { vi, type Mock, type MockInstance } from 'vitest'
 import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
@@ -179,8 +180,8 @@ export function measureAutomationChatRun(
   })
   // Count actual folded history iterators, without replacing their algorithms.
   const folded = journal['state']
-  const values = folded.items.values.bind(folded.items)
-  vi.spyOn(folded.items, 'values').mockImplementation(function* () {
+  const values = memoryJournalMap(folded.items).values.bind(memoryJournalMap(folded.items))
+  vi.spyOn(memoryJournalMap(folded.items), 'values').mockImplementation(function* () {
     for (const item of values()) {
       iteratorYields++
       if (renderingOutput) {

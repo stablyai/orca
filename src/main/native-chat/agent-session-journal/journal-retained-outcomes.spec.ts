@@ -1,3 +1,4 @@
+import { memoryJournalSet } from './journal-memory-collections'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -227,7 +228,9 @@ export function registerRetainedOutcomeContract() {
         turnScope: thread,
         fence: 1
       })
-      const normalization = [...journal.queuedMessages.displayState().normalizedHandOffs]
+      const normalization = [
+        ...memoryJournalSet(journal.queuedMessages.displayState().normalizedHandOffs)
+      ]
       const before = {
         snapshot: queuedImageReaderSnapshot(journal),
         sources: queuedImageSourceIds(journal, 'Q'),
@@ -300,7 +303,9 @@ export function registerRetainedOutcomeContract() {
       expect(journal.queuedMessages.displayState().inputs.candidates.get('P')).toBe(
         journal.queuedMessages.displayState().submissions.get('P')
       )
-      expect([...journal.queuedMessages.displayState().normalizedHandOffs]).toEqual(normalization)
+      expect([
+        ...memoryJournalSet(journal.queuedMessages.displayState().normalizedHandOffs)
+      ]).toEqual(normalization)
       expect(journal.submissionBody('U')).toEqual(original)
       expect(journal.submissionBody('V')).toEqual(edited)
       expect(journal.queuedMessages.get('Q')).toEqual(returned)

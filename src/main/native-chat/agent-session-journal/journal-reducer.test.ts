@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { journalInputOrder } from './journal-input-order'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -55,7 +56,7 @@ function fold(rows: JournalRow[]): JournalReducerState {
         .map((entry) => entry.clientMessageId)
         .sort()
     ).toEqual(
-      [...state.submissions.values()]
+      [...memoryJournalMap(state.submissions).values()]
         .filter((entry) => entry.dispatchState === 'pending' || entry.dispatchState === 'unknown')
         .map((entry) => entry.clientMessageId)
         .sort()
@@ -66,12 +67,12 @@ function fold(rows: JournalRow[]): JournalReducerState {
         .map((entry) => entry.clientMessageId)
         .sort()
     ).toEqual(
-      [...state.submissions.values()]
+      [...memoryJournalMap(state.submissions).values()]
         .filter((entry) => entry.dispatchState === 'pending')
         .map((entry) => entry.clientMessageId)
         .sort()
     )
-    for (const entry of state.submissions.values()) {
+    for (const entry of memoryJournalMap(state.submissions).values()) {
       if (entry.dispatchState !== 'pending') {
         expect(journalInputOrder(state).forced(entry.clientMessageId)).toBe(false)
         expect(journalInputOrder(state).place(entry.clientMessageId)).toBeUndefined()

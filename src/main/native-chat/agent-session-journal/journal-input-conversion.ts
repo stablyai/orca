@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { readJournalLegacyCards } from './journal-queue-import'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
@@ -16,8 +17,8 @@ export type JournalNativePrefix = {
 /** Marker-5 ordinary keys remain frozen; native evidence is lifted only after tail overrides. */
 export function detachJournalNativePrefix(state?: JournalReducerState): JournalNativePrefix {
   const prefix = {
-    entries: new Map(state?.inputEntries),
-    cards: new Map(state?.inputCards),
+    entries: new Map(state ? memoryJournalMap(state.inputEntries) : undefined),
+    cards: new Map(state ? memoryJournalMap(state.inputCards) : undefined),
     base: state ? journalInputOrder(state).lineage.at(0) : 0
   }
   state?.inputEntries.clear()
@@ -48,7 +49,7 @@ export function restoreJournalNativeState(
         state.inputCards.set(id, card)
       }
     }
-    for (const [id, card] of state.queue.cards) {
+    for (const [id, card] of memoryJournalMap(state.queue.cards)) {
       const known = !fold.replaced('queue.cards', id) ? prefix.cards.get(id) : undefined
       const introducedAt = fold.introduction('queue.cards', id)
       if (known) {
@@ -60,7 +61,7 @@ export function restoreJournalNativeState(
         })
       }
     }
-    for (const [id, entry] of state.submissions) {
+    for (const [id, entry] of memoryJournalMap(state.submissions)) {
       const sequence = entry.acceptedSequence ?? entry.submittedSequence
       if (
         !state.inputEntries.has(id) &&

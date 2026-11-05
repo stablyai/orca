@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { describe, expect, it } from 'vitest'
 import { projectStructuredAgentStartItem } from '../../../shared/structured-agent-start-projection'
 import {
@@ -492,7 +493,7 @@ it('preserves stored keys and reducer aliases across an item revision and a tomb
   expect(row).toMatchObject({ itemId: 'provider:opaque%ZZ', revision: 8 })
   expect(parseJournalRow(JSON.stringify(row)).ok).toBe(true)
   applyJournalRow(state, row)
-  expect([...state.items.keys()]).toEqual(['canonical'])
+  expect([...memoryJournalMap(state.items).keys()]).toEqual(['canonical'])
   const removed = journalLifecycleBatchRowBuilder(
     () => state,
     'remove',

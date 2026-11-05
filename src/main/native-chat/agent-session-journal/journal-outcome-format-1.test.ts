@@ -1,3 +1,4 @@
+import { memoryJournalMap } from './journal-memory-collections'
 import { journalStateCollections } from './journal-state-layout'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -75,7 +76,8 @@ afterEach(async () => {
 function plain(state: JournalReducerState): unknown {
   const fields: Record<string, unknown> = Object.fromEntries(
     Object.entries(state).filter(
-      ([key]) => !['inputEntries', 'inputCards', 'inputs', 'contextBoundary'].includes(key)
+      ([key]) =>
+        !['inputEntries', 'inputCards', 'inputs', 'queries', 'contextBoundary'].includes(key)
     )
   )
   return JSON.parse(
@@ -87,7 +89,7 @@ function plain(state: JournalReducerState): unknown {
         ])
       ),
       derivedTurnScope: state.derivedTurnScope.snapshot(),
-      queue: { revision: state.queue.revision, cards: [...state.queue.cards] }
+      queue: { revision: state.queue.revision, cards: [...memoryJournalMap(state.queue.cards)] }
     })
   )
 }
@@ -149,7 +151,7 @@ it('reads the checked-in format-1 outcomes into the same chat, every field and s
 
   const state = restored()
   expect(state.contextBoundary).toBe(1)
-  expect([...state.inputs.sources.keys()]).toEqual(['send-1', 'send-3', 'send-2'])
+  expect([...memoryJournalMap(state.inputs.sources).keys()]).toEqual(['send-1', 'send-3', 'send-2'])
   expect(plain(state)).toEqual(fixture.expected)
   // An echo declared undefined stays present without a value.
   const echoes = [
