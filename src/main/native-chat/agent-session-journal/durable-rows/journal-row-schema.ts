@@ -1,3 +1,4 @@
+import type { AgentSessionChatAction } from '../../../../shared/agent-session/journal/agent-session-chat-action'
 import type { JournalInputContext, JournalInputLineage } from '../input-order/journal-input-lineage'
 import type { JournalItemEcho } from '../projection/journal-item-echo'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
@@ -119,6 +120,7 @@ export function isJournalStopOrResumeRow(row: JournalRow): row is JournalStopOrR
 /** Persist before dispatch; the optimistic bubble gives provider echoes a slot without duplication. */
 export type JournalSubmissionRow = JournalRowBase & {
   kind: 'submission'
+  chatAction?: AgentSessionChatAction
   inputOrderContext?: JournalInputContext
   clientMessageId: string
   payloadFingerprint: string

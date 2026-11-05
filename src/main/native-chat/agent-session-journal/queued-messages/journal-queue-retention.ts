@@ -8,11 +8,19 @@ import type { QueuedMessageRow } from './queued-message-table'
 export function queuedChangeOf(
   card: Pick<
     QueuedMessageRow,
-    'body' | 'position' | 'queuedAt' | 'options' | 'recovers' | 'deliveryMode' | 'unattended'
+    | 'body'
+    | 'position'
+    | 'queuedAt'
+    | 'options'
+    | 'recovers'
+    | 'deliveryMode'
+    | 'unattended'
+    | 'chatAction'
   >
 ): JournalQueuedChange {
   return {
     op: 'queued',
+    ...(card.chatAction ? { chatAction: card.chatAction } : {}),
     body: card.body,
     position: card.position,
     queuedAt: card.queuedAt,

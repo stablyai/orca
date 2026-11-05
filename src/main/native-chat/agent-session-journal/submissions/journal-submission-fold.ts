@@ -1,3 +1,4 @@
+import { readAgentSessionChatAction } from '../../../../shared/agent-session/journal/agent-session-chat-action'
 import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
 import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 import {
@@ -24,6 +25,9 @@ export function applyJournalSubmission(
 ): void {
   const options = readAgentSessionExecutionOptions(row.options)
   state.submissions.set(row.clientMessageId, {
+    ...(readAgentSessionChatAction(row.chatAction)
+      ? { chatAction: readAgentSessionChatAction(row.chatAction) }
+      : {}),
     clientMessageId: row.clientMessageId,
     fence: row.fence,
     payloadFingerprint: row.payloadFingerprint,

@@ -1,5 +1,6 @@
 // Share native-chat event names and agent-kind mapping across tab toggles and composer sends.
 
+import type { EventProps } from '../../../../../shared/telemetry-events'
 import { track } from '../../../lib/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../shared/agent-kind'
 import type { NativeChatRuntime } from '../../../../../shared/telemetry-native-feature-event-schemas'
@@ -31,11 +32,18 @@ export function emitNativeChatToggled(args: {
 export function emitNativeChatMessageSent(args: {
   agent: NativeChatTelemetryAgent
   runtime: NativeChatRuntime
+  action: NonNullable<EventProps<'native_chat_message_sent'>['action']>
+  outcome: NonNullable<EventProps<'native_chat_message_sent'>['outcome']>
+  backend: NonNullable<EventProps<'native_chat_message_sent'>['backend']>
 }): void {
   track('native_chat_message_sent', {
     agent_kind: resolveAgentKind(args.agent),
     runtime: args.runtime,
-    client: 'desktop'
+    client: 'desktop',
+    semantics_version: 2,
+    action: args.action,
+    outcome: args.outcome,
+    backend: args.backend
   })
 }
 

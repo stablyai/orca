@@ -1,3 +1,4 @@
+import type { AgentSessionChatAction } from '../../../shared/agent-session/journal/agent-session-chat-action'
 import type { JournalRow } from './durable-rows/journal-row-schema'
 import type Database from '../../sqlite/sync-database'
 import type { JournalItemEcho } from './projection/journal-item-echo'
@@ -134,6 +135,7 @@ export type JournalResolvedLifecycleBatchInput = Omit<
 }
 
 export type JournalSubmissionInput = {
+  chatAction?: AgentSessionChatAction
   clientMessageId: string
   payloadFingerprint: string
   body: AgentJournalMessageItem

@@ -92,7 +92,10 @@ export function useNativeChatPickerCommandDispatch(args: {
       sessionOptionsSurface?.recordOutgoingCommand(text)
       emitNativeChatMessageSent({
         agent,
-        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
+        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local',
+        action: 'command',
+        outcome: 'unconfirmed',
+        backend: 'pty'
       })
       onSubmitted?.()
       setDraft('')

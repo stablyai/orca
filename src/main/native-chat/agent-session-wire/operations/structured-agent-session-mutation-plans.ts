@@ -1,15 +1,11 @@
+import { structuredChatAction, structuredSendSource } from '../structured-agent-session-chat-action'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
 import { readNoChoiceOptionResult } from '../options/structured-agent-session-option-observation'
 import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  AGENT_MESSAGE_SOURCE,
-  USER_MESSAGE_SOURCE,
-  type AgentSessionMessageSource
-} from '../../../../shared/agent-session/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../../shared/agent-session/agent-session-message-source'
 import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type {
   AgentSessionCancelResult,
@@ -112,17 +108,6 @@ function submissionOrDraftReceipt<TValue>(clientMessageId: string): MutationComm
   }
 }
 
-function sendSource(params: {
-  body: AgentJournalMessageItem
-  userSend?: true
-  personsMessage?: true
-}): AgentSessionMessageSource | undefined {
-  if (params.userSend || params.personsMessage) {
-    return USER_MESSAGE_SOURCE
-  }
-  return params.body.from ? AGENT_MESSAGE_SOURCE : undefined
-}
-
 export function sendPlan(
   params: StructuredAgentSessionSendMutation & {
     retryUnknown?: true
@@ -144,9 +129,10 @@ export function sendPlan(
     recoverUnknownFromDurableState: true,
     // retryUnknown is compatibility-only; recorded sends replay without redelivery.
     run: async (ctx) => {
-      const source = sendSource(params)
+      const source = structuredSendSource(params)
       return performSend(ctx, {
         origin: params.userSend ? 'client' : 'host',
+        chatAction: structuredChatAction(params),
         ...(source ? { source } : {}),
         clientMessageId,
         ...(params.options ? { options: params.options } : {}),

@@ -1,3 +1,4 @@
+import type { AgentSessionChatAction } from '../../../../shared/agent-session/journal/agent-session-chat-action'
 import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -20,6 +21,7 @@ export function isUnsettledQueuedMessage(row: Pick<QueuedMessageRow, 'state'>): 
 }
 
 export type QueuedMessageRow = {
+  chatAction?: AgentSessionChatAction
   messageId: string
   position: number
   body: AgentJournalMessageItem
@@ -40,4 +42,12 @@ export type QueuedMessageRow = {
   deliveryMode?: 'queue' | 'steer'
   /** Absent only on rows admitted before the single-list format. */
   unattended?: boolean
+}
+
+export type QueuedMessageInsertInput = Pick<
+  QueuedMessageRow,
+  'messageId' | 'body' | 'chatAction' | 'options' | 'deliveryMode' | 'unattended'
+> & {
+  requireAttachments?: true
+  holdReason?: QueuedMessageHoldReason
 }

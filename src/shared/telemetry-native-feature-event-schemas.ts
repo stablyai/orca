@@ -28,7 +28,11 @@ export const nativeChatMessageSentSchema = z
   .object({
     agent_kind: agentKindSchema,
     runtime: nativeChatRuntimeSchema,
-    client: nativeChatClientSchema
+    client: nativeChatClientSchema,
+    semantics_version: z.literal(2).optional(),
+    action: z.enum(['message', 'command', 'continue']).optional(),
+    outcome: z.enum(['unconfirmed', 'rejected', 'transport_acknowledged']).optional(),
+    backend: z.enum(['pty', 'structured']).optional()
   })
   .strict()
 // A phone opening a chat transcript or a full terminal stream, once per phone, view, surface and

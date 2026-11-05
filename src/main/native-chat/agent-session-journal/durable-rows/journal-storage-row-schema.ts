@@ -55,6 +55,7 @@ const queuedChange = z.object({
   queuedAt: z.object({ epoch: value, sequence: value }).nullable(),
   holdReason: value,
   options: legacyOptions,
+  chatAction: value,
   attempt: value,
   deliveryMode: value,
   unattended: value,
@@ -114,6 +115,7 @@ const commonRows = [
     handoverRecorded: value,
     queuedMessageId: value,
     origin: value,
+    chatAction: value,
     source: z.object({ kind: value }).optional(),
     options: legacyOptions
   }),

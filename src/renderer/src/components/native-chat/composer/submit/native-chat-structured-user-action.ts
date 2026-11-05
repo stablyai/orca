@@ -6,8 +6,17 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-struct
 export function completeNativeChatStructuredUserAction(
   agent: AgentType,
   transport: NativeChatStructuredComposerTransport,
-  reveal: (() => void) | undefined
+  reveal: (() => void) | undefined,
+  action: 'message' | 'command' | 'continue'
 ): void {
-  emitNativeChatMessageSent({ agent, runtime: transport.runtime })
+  if (action !== 'message') {
+    emitNativeChatMessageSent({
+      agent,
+      runtime: transport.runtime,
+      action,
+      outcome: 'unconfirmed',
+      backend: 'structured'
+    })
+  }
   reveal?.()
 }

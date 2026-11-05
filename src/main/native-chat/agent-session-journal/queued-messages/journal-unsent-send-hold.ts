@@ -148,7 +148,8 @@ export async function holdUnsentSends(
                       unattended: !journal.inputOrder.personalSubmission(submission)
                     }
                   : {}),
-                ...(submission.options ? { options: submission.options } : {})
+                ...(submission.options ? { options: submission.options } : {}),
+                ...(submission.chatAction ? { chatAction: submission.chatAction } : {})
               }
               changes.push({ messageId: clientMessageId, change })
             }
