@@ -1,6 +1,7 @@
+import { installIndependentCheckFixtures } from './client-test-harness'
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
 
@@ -40,16 +41,16 @@ vi.mock('./github-api-repository', async (importOriginal) =>
 import { getPRForBranch } from './client/lookup/get-pr-for-branch'
 import { resetPRForBranchMocks } from './client-test-harness'
 
-const {
-  ghExecFileAsyncMock,
-  getOwnerRepoMock,
-  resolvePRRepositoryCandidatesMock,
-  gitExecFileAsyncMock
-} = clientMocks
+const { getOwnerRepoMock, resolvePRRepositoryCandidatesMock, gitExecFileAsyncMock } = clientMocks
+
+const metadataRequests = vi.fn()
+const unexpectedChecks: string[][] = []
+afterEach(() => expect(unexpectedChecks).toEqual([]))
 
 describe('getPRForBranch', () => {
   beforeEach(() => {
     resetPRForBranchMocks(clientMocks)
+    installIndependentCheckFixtures(clientMocks, metadataRequests, unexpectedChecks)
   })
 
   it('looks up a linked PR number across PR repo candidates', async () => {
@@ -61,28 +62,26 @@ describe('getPRForBranch', () => {
       headRepo: { owner: 'fork', repo: 'orca' }
     })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'linked-head-oid\n', stderr: '' })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 99,
-          title: 'Linked fork PR',
-          state: 'OPEN',
-          url: 'https://github.com/fork/orca/pull/99',
-          statusCheckRollup: [],
-          updatedAt: '2026-03-28T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'feature/test',
-          baseRefOid: 'base-oid',
-          headRefOid: 'linked-head-oid'
-        })
+    metadataRequests.mockRejectedValueOnce(new Error('HTTP 404: Not Found')).mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 99,
+        title: 'Linked fork PR',
+        state: 'OPEN',
+        url: 'https://github.com/fork/orca/pull/99',
+        statusCheckRollup: [],
+        updatedAt: '2026-03-28T00:00:00Z',
+        isDraft: false,
+        mergeable: 'MERGEABLE',
+        baseRefName: 'main',
+        headRefName: 'feature/test',
+        baseRefOid: 'base-oid',
+        headRefOid: 'linked-head-oid'
       })
+    })
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       1,
       [
         'pr',
@@ -91,11 +90,11 @@ describe('getPRForBranch', () => {
         '--repo',
         'stablyai/orca',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       2,
       [
         'pr',
@@ -104,7 +103,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'fork/orca',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
@@ -114,7 +113,7 @@ describe('getPRForBranch', () => {
   it('prefers exact linked PR lookup when the repo identity is known', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'linked-head-oid\n', stderr: '' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify({
         number: 99,
         title: 'Linked PR',
@@ -133,9 +132,9 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'feature/local-worktree', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(metadataRequests).toHaveBeenCalledTimes(2)
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(metadataRequests).toHaveBeenCalledWith(
       [
         'pr',
         'view',
@@ -143,7 +142,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
@@ -157,7 +156,7 @@ describe('getPRForBranch', () => {
 
   it('caches exact REST stack probes across linked PR refreshes', async () => {
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    metadataRequests.mockImplementation(async (args: string[]) => {
       if (args[0] === 'pr') {
         return {
           stdout: JSON.stringify({
@@ -190,16 +189,14 @@ describe('getPRForBranch', () => {
     await getPRForBranch('/repo-root', 'feature', 99, 'ssh-1')
 
     expect(
-      ghExecFileAsyncMock.mock.calls.filter(
-        ([args]) => args[0] === 'api' && args[1]?.includes('/99')
-      )
+      metadataRequests.mock.calls.filter(([args]) => args[0] === 'api' && args[1]?.includes('/99'))
     ).toHaveLength(2)
-    expect(ghExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'pr')).toHaveLength(3)
+    expect(metadataRequests.mock.calls.filter(([args]) => args[0] === 'pr')).toHaveLength(3)
   })
 
   it('caches failed REST stack probes across linked PR refreshes', async () => {
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    metadataRequests.mockImplementation(async (args: string[]) => {
       if (args[0] === 'pr') {
         return {
           stdout: JSON.stringify({
@@ -224,15 +221,13 @@ describe('getPRForBranch', () => {
     await getPRForBranch('/repo-root', 'feature', 99)
 
     expect(
-      ghExecFileAsyncMock.mock.calls.filter(
-        ([args]) => args[0] === 'api' && args[1]?.includes('/99')
-      )
+      metadataRequests.mock.calls.filter(([args]) => args[0] === 'api' && args[1]?.includes('/99'))
     ).toHaveLength(1)
   })
 
   it('hydrates repository merge method settings for exact PR lookups', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
           number: 99,
@@ -279,7 +274,7 @@ describe('getPRForBranch', () => {
     })
     expect(pr?.mergeQueueRequired).toBe(false)
     expect(pr?.autoMergeAllowed).toBe(true)
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       2,
       expect.arrayContaining([
         'api',
@@ -298,7 +293,7 @@ describe('getPRForBranch', () => {
   it('isolates viewer-dependent merge metadata across SSH connections', async () => {
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     let metadataProbe = 0
-    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    metadataRequests.mockImplementation(async (args: string[]) => {
       if (args.includes('graphql')) {
         metadataProbe += 1
         return {
@@ -346,7 +341,7 @@ describe('getPRForBranch', () => {
   it('treats linked PR metadata as authoritative even when the branch head differs', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'current-worktree-head\n', stderr: '' })
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
           number: 99,
@@ -384,36 +379,34 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(metadataRequests).toHaveBeenCalledTimes(2)
     expect(pr?.number).toBe(99)
   })
 
   it('does not fall back to branch discovery when linked PR metadata is stale', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            number: 42,
-            title: 'Branch PR',
-            state: 'OPEN',
-            url: 'https://github.com/acme/widgets/pull/42',
-            statusCheckRollup: [],
-            updatedAt: '2026-03-28T00:00:00Z',
-            isDraft: false,
-            mergeable: 'MERGEABLE',
-            baseRefName: 'main',
-            headRefName: 'feature/test',
-            baseRefOid: 'base-oid',
-            headRefOid: 'head-oid'
-          }
-        ])
-      })
+    metadataRequests.mockRejectedValueOnce(new Error('HTTP 404: Not Found')).mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 42,
+          title: 'Branch PR',
+          state: 'OPEN',
+          url: 'https://github.com/acme/widgets/pull/42',
+          statusCheckRollup: [],
+          updatedAt: '2026-03-28T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        }
+      ])
+    })
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       1,
       [
         'pr',
@@ -422,17 +415,17 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(metadataRequests).toHaveBeenCalledTimes(1)
     expect(pr).toBeNull()
   })
 
   it('returns no PR when linked PR REST fallback also misses', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
+    metadataRequests
       .mockRejectedValueOnce(new Error('GraphQL: could not resolve to PullRequest'))
       .mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
       .mockResolvedValueOnce({
@@ -456,20 +449,20 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       2,
       ['api', 'repos/acme/widgets/pulls/99', '--include'],
       {
         cwd: '/repo-root'
       }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(metadataRequests).toHaveBeenCalledTimes(2)
     expect(pr).toBeNull()
   })
 
   it('returns no PR when linked PR REST fallback has an unclassified failure', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
+    metadataRequests
       .mockRejectedValueOnce(new Error('GraphQL: server exploded'))
       .mockRejectedValueOnce(new Error('HTTP 500: server error'))
       .mockResolvedValueOnce({
@@ -493,26 +486,26 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       2,
       ['api', 'repos/acme/widgets/pulls/99', '--include'],
       {
         cwd: '/repo-root'
       }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(metadataRequests).toHaveBeenCalledTimes(2)
     expect(pr).toBeNull()
   })
 
   it('does not continue to branch discovery when linked PR REST fallback is rate limited', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
+    metadataRequests
       .mockRejectedValueOnce(new Error('GraphQL: API rate limit already exceeded'))
       .mockRejectedValueOnce(new Error('REST API rate limit already exceeded'))
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       1,
       [
         'pr',
@@ -521,24 +514,24 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       2,
       ['api', 'repos/acme/widgets/pulls/99', '--include'],
       {
         cwd: '/repo-root'
       }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(metadataRequests).toHaveBeenCalledTimes(2)
     expect(pr).toBeNull()
   })
 
   it('uses linked PR number as the source of truth when provided', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify({
         number: 77,
         title: 'Linked PR lookup',
@@ -557,8 +550,8 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'refs/heads/local-created-from-pr', 77)
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(metadataRequests).toHaveBeenCalledTimes(2)
+    expect(metadataRequests).toHaveBeenCalledWith(
       [
         'pr',
         'view',
@@ -566,7 +559,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
@@ -575,7 +568,7 @@ describe('getPRForBranch', () => {
 
   it('normalizes exact linked PR fallback metadata when no GitHub remote is resolved', async () => {
     getOwnerRepoMock.mockResolvedValueOnce(null)
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify({
         number: 77,
         title: 'Linked fallback PR',
@@ -596,13 +589,13 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/non-github-repo', 'feature/test', 77)
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(metadataRequests).toHaveBeenCalledWith(
       [
         'pr',
         'view',
         '77',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/non-github-repo' }
     )
@@ -617,7 +610,7 @@ describe('getPRForBranch', () => {
   it('falls back to gh pr view when the remote cannot be resolved to GitHub', async () => {
     getOwnerRepoMock.mockResolvedValueOnce(null)
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify({
         number: 7,
         title: 'Fallback lookup',
@@ -636,13 +629,13 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/non-github-repo', 'feature/test')
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(metadataRequests).toHaveBeenCalledWith(
       [
         'pr',
         'view',
         'feature/test',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/non-github-repo' }
     )
@@ -654,7 +647,7 @@ describe('getPRForBranch', () => {
   it('falls back to REST number lookup when linked PR GraphQL lookup is rate limited', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'linked-head-oid\n', stderr: '' })
-    ghExecFileAsyncMock
+    metadataRequests
       .mockRejectedValueOnce(new Error('GraphQL: API rate limit already exceeded'))
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -673,7 +666,7 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       1,
       [
         'pr',
@@ -682,18 +675,18 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+    expect(metadataRequests).toHaveBeenNthCalledWith(
       2,
       ['api', 'repos/acme/widgets/pulls/99', '--include'],
       {
         cwd: '/repo-root'
       }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(metadataRequests).toHaveBeenCalledTimes(2)
     expect(pr).toMatchObject({
       number: 99,
       state: 'merged',
