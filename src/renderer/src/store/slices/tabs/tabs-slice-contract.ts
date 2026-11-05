@@ -145,8 +145,7 @@ export type TabsSlice = {
       precedingTabIds: readonly string[]
     }
   ) => string
-  /** `recordFocus`: the user worked in the group's pane, so its active tab counts as just used. */
-  focusGroup: (worktreeId: string, groupId: string, opts?: { recordFocus?: boolean }) => void
+  focusGroup: (worktreeId: string, groupId: string) => void
   closeEmptyGroup: (worktreeId: string, groupId: string) => boolean
   createEmptySplitGroup: (
     worktreeId: string,

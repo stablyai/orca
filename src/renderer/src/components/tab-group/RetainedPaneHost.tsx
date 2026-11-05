@@ -26,8 +26,9 @@ type RetainedPaneHostProps = {
   fitTerminal?: boolean
   /** Unfocused side of a split: overlays sit outside the group's DOM, so they take its dim here. */
   dimmed?: boolean
-  /** `recordFocus` is true for a pointer press, which is the user working in the pane. */
-  onFocusOwningGroup?: (groupId: string, recordFocus?: boolean) => void
+  onFocusOwningGroup?: (groupId: string) => void
+  /** The user clicked or typed in this pane: it counts as used, unlike focus a restore moves here. */
+  onUse?: () => void
   children: React.ReactNode
   'data-terminal-overlay-tab-id'?: string
   'data-structured-agent-session-overlay-tab-id'?: string
@@ -40,6 +41,7 @@ export function RetainedPaneHost({
   fitTerminal = false,
   dimmed = false,
   onFocusOwningGroup,
+  onUse,
   children,
   ...identity
 }: RetainedPaneHostProps): React.JSX.Element {
@@ -135,14 +137,11 @@ export function RetainedPaneHost({
             },
     [anchorName, isVisible, measuredFallbackRect, measureWhileHidden, visibleOpacity]
   )
-  const focusGroup = useCallback(
-    (recordFocus: boolean) => {
-      if (groupId !== undefined && onFocusOwningGroup) {
-        onFocusOwningGroup(groupId, recordFocus)
-      }
-    },
-    [groupId, onFocusOwningGroup]
-  )
+  const focusGroup = useCallback(() => {
+    if (groupId !== undefined && onFocusOwningGroup) {
+      onFocusOwningGroup(groupId)
+    }
+  }, [groupId, onFocusOwningGroup])
 
   return (
     <div
@@ -154,9 +153,10 @@ export function RetainedPaneHost({
       {...identity}
       inert={!isVisible}
       aria-hidden={!isVisible}
-      onPointerDown={() => focusGroup(true)}
-      // Focus can arrive from a restore after a close or dialog, which is not the user's use.
-      onFocusCapture={() => focusGroup(false)}
+      onPointerDown={focusGroup}
+      onFocusCapture={focusGroup}
+      onPointerDownCapture={onUse}
+      onKeyDownCapture={onUse}
     >
       {awaitsFirstFallbackRect ? null : children}
     </div>

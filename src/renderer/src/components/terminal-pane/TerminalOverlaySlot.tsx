@@ -1,8 +1,9 @@
-import { memo, useLayoutEffect, useState } from 'react'
+import { memo, useCallback, useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
 import { isProvenProcessExit } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
+import { recordPaneUse } from '../native-chat/chat-pane-use'
 import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
 import type { HiddenTerminalPrewarm } from './terminal-pane-types'
@@ -55,6 +56,12 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       setShouldMeasureHiddenStartup(false)
     }
   }, [isVisible, shouldMeasureHiddenStartup])
+
+  const recordUse = useCallback(
+    () =>
+      recordPaneUse(worktreeId, terminalTabId, () => useAppStore.getState().unifiedTabsByWorktree),
+    [terminalTabId, worktreeId]
+  )
 
   // Drop with the reveal in one render, or a later lease release re-runs resume and steals focus.
   const prewarm = isVisible || activityTerminalPortal !== null ? null : hiddenPrewarm
@@ -114,6 +121,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       dimmed={dimmed}
       data-terminal-overlay-tab-id={terminalTabId}
       onFocusOwningGroup={onFocusOwningGroup}
+      onUse={recordUse}
     >
       {terminalPane}
     </RetainedPaneHost>

@@ -145,35 +145,5 @@ describe('TabsSlice', () => {
         surfaceKind: 'terminal'
       })
     })
-
-    // Why: Add to chat targets the chat used last, and working in an already-active tab is use.
-    it('records a pointer return to a group as use of its active tab, and only that', () => {
-      const now = vi.spyOn(Date, 'now').mockReturnValue(10)
-      const tabA = store.getState().createUnifiedTab(WT, 'terminal')
-      const groupAId = store.getState().groupsByWorktree[WT][0].id
-      const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
-      if (!groupBId) {
-        throw new Error('createEmptySplitGroup returned null')
-      }
-      now.mockReturnValue(20)
-      const tabB = store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
-      store.setState({ activeWorktreeId: WT })
-      const focusedAt = (id: string) =>
-        store.getState().unifiedTabsByWorktree[WT].find((tab) => tab.id === id)?.lastFocusedAt
-
-      now.mockReturnValue(30)
-      store.getState().focusGroup(WT, groupAId)
-      expect(focusedAt(tabA.id)).toBe(10)
-
-      store.getState().focusGroup(WT, groupAId, { recordFocus: true })
-      expect(focusedAt(tabA.id)).toBe(30)
-      expect(focusedAt(tabB.id)).toBe(20)
-
-      const tabs = store.getState().unifiedTabsByWorktree
-      now.mockReturnValue(40)
-      store.getState().focusGroup(WT, groupAId, { recordFocus: true })
-      expect(store.getState().unifiedTabsByWorktree).toBe(tabs)
-      now.mockRestore()
-    })
   })
 })

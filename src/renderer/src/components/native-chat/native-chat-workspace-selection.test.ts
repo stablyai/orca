@@ -18,7 +18,7 @@ function tab(partial: Partial<Tab> & Pick<Tab, 'id' | 'contentType'>): Tab {
   }
 }
 
-function target(tabs: Tab[]) {
+function target(tabs: Tab[], used: Record<string, number> = {}) {
   return findWorkspaceChatTarget(
     {
       unifiedTabsByWorktree: { 'wt-1': tabs },
@@ -26,7 +26,8 @@ function target(tabs: Tab[]) {
         'term-chat': { root: null, activeLeafId: null, expandedLeafId: null, chatLeafId: CHAT_LEAF }
       }
     },
-    'wt-1'
+    'wt-1',
+    (_worktreeId, entityId) => used[entityId]
   )
 }
 
@@ -58,6 +59,14 @@ describe('findWorkspaceChatTarget', () => {
       tab: { ...structured, lastFocusedAt: 30 },
       scopeKey: 'agent-session:session-1'
     })
+  })
+
+  // A click into a chat that is already showing activates nothing, so only its use time says it was used.
+  it('counts use of a chat that is already showing, until a later activation', () => {
+    expect(target([structured, terminalChat], { 'session-1': 25 })?.tab).toBe(structured)
+    expect(
+      target([structured, { ...terminalChat, lastFocusedAt: 30 }], { 'session-1': 25 })?.tab
+    ).toEqual({ ...terminalChat, lastFocusedAt: 30 })
   })
 
   it('finds no chat in a workspace of terminals and files', () => {

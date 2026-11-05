@@ -245,9 +245,9 @@ export function useMarkdownPreviewAnnotationRenderers({
         getMarkdownPreviewAnnotationQuote(rendered)
       )
       if (!controls) {
-        // Without review controls there is no wrapper, so the block itself names its source lines.
-        return isValidElement<Record<string, unknown>>(rendered) &&
-          typeof rendered.type === 'string'
+        // Without review controls there is no wrapper, so the block itself names its source lines;
+        // a component that doesn't forward them (a callout) falls back to path and text.
+        return isValidElement<Record<string, unknown>>(rendered)
           ? cloneElement(rendered, {
               'data-source-line': range.startLine,
               'data-source-end-line': range.endLine

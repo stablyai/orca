@@ -78,7 +78,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
 
   const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   const focusOwningGroup = useCallback(
-    (groupId: string, recordFocus?: boolean) => focusGroup(worktreeId, groupId, { recordFocus }),
+    (groupId: string) => focusGroup(worktreeId, groupId),
     [focusGroup, worktreeId]
   )
 

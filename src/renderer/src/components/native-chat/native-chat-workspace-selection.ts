@@ -9,11 +9,13 @@ import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
-import {
-  appendToNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from './native-chat-composer-draft-store'
+import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { requestNativeChatComposerFocus } from './use-native-chat-composer-reveal-focus'
+import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
+import { appendQuoteToChatDraft } from './native-chat-selection-quote-draft'
 import { formatNativeChatQuote } from './native-chat-quote-selection'
+import { paneUseAt } from './chat-pane-use'
 
 type WorkspaceChatState = Pick<AppState, 'unifiedTabsByWorktree' | 'terminalLayoutsByTabId'>
 
@@ -33,23 +35,31 @@ function chatTarget(state: WorkspaceChatState, tab: Tab): WorkspaceChatTarget | 
     : null
 }
 
+/** The chat used last: the later of its last activation and a click or keystroke in it this session. */
 export function findWorkspaceChatTarget(
   state: WorkspaceChatState,
-  worktreeId: string
+  worktreeId: string,
+  usedAt: (worktreeId: string, entityId: string) => number | undefined = paneUseAt
 ): WorkspaceChatTarget | null {
   let best: WorkspaceChatTarget | null = null
+  let bestAt = -1
   for (const tab of state.unifiedTabsByWorktree[worktreeId] ?? []) {
     const candidate = chatTarget(state, tab)
-    if (candidate && (!best || (tab.lastFocusedAt ?? 0) > (best.tab.lastFocusedAt ?? 0))) {
+    const at = Math.max(tab.lastFocusedAt ?? 0, usedAt(worktreeId, tab.entityId) ?? 0)
+    if (candidate && at > bestAt) {
       best = candidate
+      bestAt = at
     }
   }
   return best
 }
 
-/** Appends to the chat's draft, which holds it even while the chat is hidden, then shows that chat. */
-export function addSelectionToWorkspaceChatOrExplain(worktreeId: string, reference: string): void {
+/** Appends to the chat's draft, then shows that chat. */
+export function addSelectionToWorkspaceChatOrExplain(sourceId: string, reference: string): void {
   const state = useAppStore.getState()
+  // The floating terminal belongs to no workspace; it floats over the one on screen.
+  const worktreeId =
+    sourceId === FLOATING_TERMINAL_WORKTREE_ID ? (state.activeWorktreeId ?? sourceId) : sourceId
   const target = findWorkspaceChatTarget(state, worktreeId)
   if (!target) {
     toast.error(
@@ -60,14 +70,7 @@ export function addSelectionToWorkspaceChatOrExplain(worktreeId: string, referen
     )
     return
   }
-  // Independent like a typed addition: adding the same lines twice adds them twice.
-  appendToNativeChatComposerDraft(
-    target.scopeKey,
-    { text: formatNativeChatQuote(reference) },
-    undefined,
-    undefined,
-    true
-  )
+  appendQuoteToChatDraft(target.scopeKey, formatNativeChatQuote(reference))
   const { tab, chatLeafId } = target
   if (!chatLeafId) {
     activateStructuredAgentSessionTab({ worktreeId, tabId: tab.id })
@@ -75,7 +78,15 @@ export function addSelectionToWorkspaceChatOrExplain(worktreeId: string, referen
   }
   state.focusGroup(worktreeId, tab.groupId)
   state.activateTab(tab.id, { worktreeId })
+  const expandedLeafId = state.terminalLayoutsByTabId[tab.entityId]?.expandedLeafId
+  if (expandedLeafId && expandedLeafId !== chatLeafId) {
+    // An expanded shell beside the chat hides it; collapse it as moving to another pane does.
+    window.dispatchEvent(
+      new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, { detail: { tabId: tab.entityId } })
+    )
+  }
   // Activating the chat leaf, not the tab, is what hands focus to the chat's composer.
   activateTabAndFocusPane(tab.entityId, chatLeafId)
   activateTerminalTabOnOwner(worktreeId, tab.entityId, chatLeafId)
+  requestNativeChatComposerFocus(tab.entityId)
 }
