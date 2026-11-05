@@ -182,7 +182,7 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     expect(await picker(host)).toEqual({
       model: 'sonnet',
       effort: 'high',
-      confirmed: undefined
+      confirmed: []
     })
     expect(record(host)?.options).toEqual({ model: 'sonnet' })
 
