@@ -25,20 +25,21 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   ): BrowserTabIdentity {
     const processIdentity = getBrowserProcessUserAgentIdentity()
     const googleAuth = googleAuthTabIdentity()
-    // Only a UA distinct from the process UA can mark a request as part of sign-in.
-    if (
-      googleAuth.userAgent !== processIdentity.userAgent &&
-      request.webContentsId !== undefined &&
-      (request.currentUserAgent === googleAuth.userAgent ||
-        request.effectiveUserAgent === googleAuth.userAgent) &&
-      this.tabIsOnGoogleAuthHost(request.webContentsId)
-    ) {
-      return googleAuth
-    }
     const standingOverride =
       request.webContentsId === undefined
         ? undefined
         : this.standingCdpUserAgentOverride(request.webContentsId)
+    // Only a UA distinct from the process UA can mark a request as part of sign-in. A standing
+    // override outranks the WebContents UA, which getUserAgent reports without it.
+    if (
+      googleAuth.userAgent !== processIdentity.userAgent &&
+      request.webContentsId !== undefined &&
+      (request.currentUserAgent === googleAuth.userAgent ||
+        (!standingOverride && request.effectiveUserAgent === googleAuth.userAgent)) &&
+      this.tabIsOnGoogleAuthHost(request.webContentsId)
+    ) {
+      return googleAuth
+    }
     // Shared/service workers lack a guest ID and retain the process identity.
     // Derive mobile identity from the standing override, never an unapplied preset.
     return resolveBrowserTabIdentity({

@@ -707,6 +707,21 @@ describe('browserManager', () => {
       )
       await flushViewportOps()
 
+      // A clear that fails on the way onto sign-in leaves the mobile identity standing; requests
+      // must keep presenting it rather than the WebContents UA under it.
+      didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
+      await flushViewportOps()
+      expect(
+        browserManager.resolveBrowserGuestRequestUserAgent({
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads no Session member.
+          session: guest.session as Electron.Session,
+          url: 'https://example.com/api',
+          webContentsId: guest.id as number,
+          currentUserAgent: presentedUserAgent(),
+          effectiveUserAgent: googleAuthUserAgent()
+        }).kind
+      ).toBe('mobile')
+
       debuggerSendCommand.mockImplementation(() => Promise.resolve(undefined))
       debuggerSendCommand.mockClear()
       didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
