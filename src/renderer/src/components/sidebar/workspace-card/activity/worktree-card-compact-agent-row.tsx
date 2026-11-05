@@ -292,7 +292,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       ) : (
         timestamp
       )}
-      {!sendTargetStatus && <SidebarAgentActions agent={agent} />}
+      {!sendTargetStatus && <SidebarAgentActions agent={agent} onActivate={onActivate} />}
     </>
   )
 

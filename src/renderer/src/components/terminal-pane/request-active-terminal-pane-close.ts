@@ -21,15 +21,22 @@ export function onActiveTerminalPaneCloseRequest(
   const onRequest = (event: Event): void => {
     if (event instanceof CustomEvent && isCloseRequestFor(event.detail, tabId)) {
       event.preventDefault()
-      closeActivePane((event.detail as RequestActiveTerminalPaneCloseDetail).leafId)
+      closeActivePane(event.detail.leafId)
     }
   }
   window.addEventListener(REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT, onRequest)
   return () => window.removeEventListener(REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT, onRequest)
 }
 
-function isCloseRequestFor(detail: unknown, tabId: string): boolean {
+function isCloseRequestFor(
+  detail: unknown,
+  tabId: string
+): detail is RequestActiveTerminalPaneCloseDetail {
   return (
-    typeof detail === 'object' && detail !== null && 'tabId' in detail && detail.tabId === tabId
+    typeof detail === 'object' &&
+    detail !== null &&
+    'tabId' in detail &&
+    detail.tabId === tabId &&
+    (!('leafId' in detail) || detail.leafId === undefined || typeof detail.leafId === 'string')
   )
 }

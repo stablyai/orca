@@ -1,5 +1,8 @@
-import { MoreHorizontal, X } from 'lucide-react'
-import { toast } from 'sonner'
+import { closeSidebarAgent } from './sidebar-agent-close'
+import { NativeChatCliForkMenuItems } from '@/components/tab-bar/NativeChatCliForkMenuItems'
+import { SidebarAgentRenameDialog } from './SidebarAgentRenameDialog'
+import { useState } from 'react'
+import { MoreHorizontal, Pencil, SquareTerminal, X } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
@@ -11,56 +14,21 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { NativeChatProviderSessionIdMenuItem } from '@/components/native-chat/NativeChatProviderSessionIdMenuItem'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
-import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
-import { closeSidebarAgentPane } from './sidebar-agent-pane-close'
-import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-
-export function closeSidebarAgent(agent: DashboardAgentRow): void {
-  if (agent.rowSource === 'subagent') {
-    return
-  }
-  const state = useAppStore.getState()
-  const { worktreeId, id: tabId } = agent.tab
-  const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
-    (candidate) => candidate.id === tabId || candidate.entityId === tabId
-  )
-  const terminalId = tab?.contentType === 'terminal' ? tab.entityId : tabId
-  const layout = state.terminalLayoutsByTabId[terminalId]
-  if (layout?.root?.type === 'split') {
-    const pane = parsePaneKey(agent.paneKey)
-    if (pane) {
-      void closeSidebarAgentPane(worktreeId, terminalId, pane.leafId).then((handled) => {
-        if (!handled) {
-          toast.error(
-            translate(
-              'sidebar.agentActions.paneUnavailable',
-              'This agent could not be closed. Try again.'
-            )
-          )
-        }
-      })
-    }
-    return
-  }
-  if (tab) {
-    dispatchWorkspaceTabCommand({
-      type: 'close',
-      target: { kind: 'tab', worktreeId, tabId: tab.id }
-    })
-  } else if (state.tabsByWorktree[worktreeId]?.some((candidate) => candidate.id === tabId)) {
-    closeTerminalTab(tabId)
-  } else {
-    state.dropAgentStatus(agent.paneKey)
-    state.dismissRetainedAgent(agent.paneKey)
-  }
-}
 
 export function SidebarAgentActions({
-  agent
+  agent,
+  onActivate
 }: {
   agent: DashboardAgentRow
+  onActivate: (tabId: string, paneKey: string) => void
 }): React.JSX.Element | null {
+  const [open, setOpen] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const liveTab = useAppStore((state) =>
+    state.unifiedTabsByWorktree[agent.tab.worktreeId]?.find(
+      (tab) => tab.id === agent.tab.id || tab.entityId === agent.tab.id
+    )
+  )
   if (agent.rowSource === 'subagent') {
     return null
   }
@@ -72,13 +40,13 @@ export function SidebarAgentActions({
       onPointerDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      <DropdownMenu modal={false}>
+      <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="size-5 opacity-0 group-hover/compact-agent-row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100"
+            className="size-5"
             aria-label={translate('sidebar.agentActions.menu', 'Agent actions')}
           >
             <MoreHorizontal className="size-3.5" />
@@ -89,6 +57,35 @@ export function SidebarAgentActions({
           onClick={(event) => event.stopPropagation()}
           onCloseAutoFocus={(event) => event.preventDefault()}
         >
+          {liveTab ? (
+            <DropdownMenuItem onSelect={() => setRenaming(true)}>
+              <Pencil />
+              {translate('sidebar.agentActions.rename', 'Rename…')}
+            </DropdownMenuItem>
+          ) : null}
+          {liveTab?.contentType === 'agent-session' ? (
+            <NativeChatCliForkMenuItems
+              tab={{ id: liveTab.id, worktreeId: agent.tab.worktreeId }}
+              nativeChat={{ sessionId: liveTab.entityId, agent: liveTab.agentSessionAgent }}
+              leadingSeparator={false}
+              menuKind="dropdown"
+              onComplete={() => setOpen(false)}
+            />
+          ) : null}
+          {liveTab?.contentType === 'terminal' && liveTab.viewMode === 'chat' ? (
+            <DropdownMenuItem
+              onSelect={() => {
+                useAppStore.getState().setTabViewMode(liveTab.id, 'terminal')
+                onActivate(agent.tab.id, agent.paneKey)
+              }}
+            >
+              <SquareTerminal />
+              {translate(
+                'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
+                'Continue with Terminal Agent'
+              )}
+            </DropdownMenuItem>
+          ) : null}
           {sessionId ? <NativeChatProviderSessionIdMenuItem sessionId={sessionId} /> : null}
           <DropdownMenuItem onSelect={() => closeSidebarAgent(agent)}>
             <X />
@@ -96,6 +93,9 @@ export function SidebarAgentActions({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {renaming ? (
+        <SidebarAgentRenameDialog agent={agent} onClose={() => setRenaming(false)} />
+      ) : null}
     </span>
   )
 }

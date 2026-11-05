@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { onActiveTerminalPaneCloseRequest } from './request-active-terminal-pane-close'
+import { useCallback, useRef } from 'react'
+import { useTerminalPaneCloseRequest } from './use-terminal-pane-close-request'
 import { useAppStore } from '../../store'
 import { retireUnboundRuntimeTerminalPane } from './retire-unbound-runtime-terminal-pane'
 import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager'
@@ -210,22 +210,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     [executeClosePane, getCloseDialogCopyKind]
   )
 
-  const closeActivePane = useCallback(
-    (leafId?: string): void => {
-      const manager = managerRef.current
-      const pane = leafId
-        ? manager?.getPanes().find((candidate) => manager.getLeafId(candidate.id) === leafId)
-        : (manager?.getActivePane() ?? manager?.getPanes()[0])
-      if (pane) {
-        handleRequestClosePane(pane.id)
-      }
-    },
-    [handleRequestClosePane, managerRef]
-  )
-  useEffect(
-    () => onActiveTerminalPaneCloseRequest(tabId, closeActivePane),
-    [closeActivePane, tabId]
-  )
+  useTerminalPaneCloseRequest({ tabId, managerRef }, handleRequestClosePane)
   const handleSearchSelectedText = useCallback((selectedText: string): void => {
     useAppStore.getState().showRightSidebarSearch({ query: selectedText })
   }, [])
