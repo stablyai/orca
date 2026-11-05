@@ -39,4 +39,12 @@ describe('orca file open --preview', () => {
       { worktree: 'id:wt-1', relativePath: 'a.html', navigation: 'caller' }
     ])
   })
+
+  it('rejects --preview with --line before resolving a workspace', async () => {
+    await main(['file', 'open', 'a.ts', '--preview', '--line', '2'], '/tmp/repo')
+    expect(process.exitCode).toBe(1)
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0]?.[0]).toMatch(/--(?:line|column)/)
+    process.exitCode = undefined
+  })
 })
