@@ -338,15 +338,6 @@ export function NativeChatQuestionCard({
                         }
                         setOther(index, oneLine)
                       }}
-                      // Insert a multi-line paste as one undoable edit, after the event so Undo keeps the draft.
-                      onPaste={(e) => {
-                        const text = e.clipboardData.getData('text/plain')
-                        const oneLine = text.replace(LINE_BREAKS, ' ')
-                        if (oneLine !== text) {
-                          e.preventDefault()
-                          queueMicrotask(() => document.execCommand('insertText', false, oneLine))
-                        }
-                      }}
                       // Select typed text on click; tabbing toward Submit must not replace a picked option.
                       onClick={() => {
                         autoAdvance.cancel()

@@ -191,7 +191,7 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'four spaces' }])
   })
 
-  it('keeps a pasted multi-line answer on one line and still submits on Enter', async () => {
+  it('keeps a multi-line answer on one line and still submits on Enter', () => {
     const onAnswer = vi.fn()
     render(tabsOrSpaces, onAnswer)
 
@@ -206,17 +206,6 @@ describe('NativeChatQuestionCard', () => {
     })
     expect(field.value).toBe('two spaces please')
     expect(field.selectionStart).toBe(4)
-    const insertText = vi.fn(() => true)
-    Object.defineProperty(document, 'execCommand', { value: insertText, configurable: true })
-    const clipboardData = new DataTransfer()
-    clipboardData.setData('text/plain', 'one\ntwo')
-    const paste = new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true })
-    await act(async () => {
-      field.dispatchEvent(paste)
-    })
-    Reflect.deleteProperty(document, 'execCommand')
-    expect(paste.defaultPrevented).toBe(true)
-    expect(insertText).toHaveBeenCalledExactlyOnceWith('insertText', false, 'one two')
     act(() => {
       field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     })
