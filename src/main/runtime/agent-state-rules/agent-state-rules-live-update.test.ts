@@ -66,6 +66,7 @@ type Harness = {
 
 let userData: string
 let warn: ReturnType<typeof vi.spyOn>
+let debug: ReturnType<typeof vi.spyOn>
 
 function status(): { version: number; source: string } {
   const { version, source } = getActiveAgentStateRules()
@@ -107,11 +108,13 @@ function writeCache(text: string, channel: 'next' | 'stable' = 'stable'): void {
 beforeEach(() => {
   userData = mkdtempSync(join(tmpdir(), 'agent-state-rules-live-update-'))
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
 })
 
 afterEach(() => {
   activateAgentStateRules(BUNDLED_AGENT_STATE_RULES)
   warn.mockRestore()
+  debug.mockRestore()
   rmSync(userData, { recursive: true, force: true })
 })
 
@@ -138,7 +141,16 @@ describe('agent state rules live updates', () => {
     await h.updater.start()
     expect(h.fetch).toHaveBeenCalledWith(agentStateRulesDownloadUrl('stable'), expect.anything())
     expect(status()).toEqual({ version: BUNDLED_AGENT_STATE_RULES_VERSION, source: 'bundled' })
-    expect(warnings()).toEqual(['[agent-state-rules] download failed: HTTP 404'])
+    // Nothing published yet is the normal state, not a failure.
+    expect(warnings()).toEqual([])
+    h.updater.stop()
+  })
+
+  it('warns when the download fails with a server error', async () => {
+    const h = harness()
+    h.fetch.mockImplementation(async () => new Response('Bad Gateway', { status: 502 }))
+    await h.updater.start()
+    expect(warnings()).toEqual(['[agent-state-rules] download failed: HTTP 502'])
     h.updater.stop()
   })
 
