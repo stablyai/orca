@@ -35,6 +35,10 @@ export async function prepareAcpLaunch<
   closedBeforeSpawn: () => void
 ): Promise<Launch> {
   const { spec } = deps
+  const preparationFailure = (error: unknown): never => {
+    closedBeforeSpawn()
+    throw launchPreparationFailure(error)
+  }
   const launch = await resolve().catch(preparationFailure)
   closedBeforeSpawn()
   // Only a missed lookup returns the bare command; explicit Command settings resolve or fail.
@@ -52,8 +56,4 @@ export async function prepareAcpLaunch<
     closedBeforeSpawn()
   }
   return launch
-}
-
-function preparationFailure(error: unknown): never {
-  throw launchPreparationFailure(error)
 }

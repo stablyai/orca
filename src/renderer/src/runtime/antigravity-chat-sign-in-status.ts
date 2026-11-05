@@ -187,3 +187,8 @@ export function subscribeAntigravityChatSignIns(listener: () => void): () => voi
     unsubscribe()
   }
 }
+
+export function readAntigravityChatSignInRevision(owner: RuntimeClientTarget): number | null {
+  const snapshot = signIns.read(owner)
+  return snapshot.kind === 'known' ? snapshot.state.revision : null
+}

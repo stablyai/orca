@@ -33,8 +33,9 @@ export function applyAntigravityChatAuthConfig(
   let unchanged: boolean
   try {
     // A malformed saved choice must still be repairable from Account settings.
+    const value = store.getSettings().antigravityChatAuth
     const previous = AntigravityChatAuthConfigSchema.safeParse(
-      store.getSettings().antigravityChatAuth ?? { method: 'oauth-personal' }
+      value === undefined ? { method: 'oauth-personal' } : value
     )
     unchanged = previous.success && JSON.stringify(previous.data) === JSON.stringify(next)
   } finally {

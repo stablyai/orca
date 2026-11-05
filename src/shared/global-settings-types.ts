@@ -1,4 +1,3 @@
-import type { AntigravityChatAuthConfig } from './antigravity-chat-auth-config'
 import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser-profile-scope'
@@ -52,7 +51,6 @@ export type { WorktreeVisibilityDefaults } from './repo-types'
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
 export type GlobalSettings = GlobalSettingsBase & {
-  antigravityChatAuth?: AntigravityChatAuthConfig
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults

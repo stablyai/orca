@@ -81,7 +81,7 @@ export async function setupAcpSession(
     const required = acpAuthRequiredError(error, initialized.authMethods)
     const method = initialized.authMethods?.find((method) => method.id === options.authMethodId)
     if (!method) {
-      if (options.authMethodId && options.authMethodUnavailableMessage) {
+      if (initialized.authMethods && options.authMethodId && options.authMethodUnavailableMessage) {
         throw withProviderDiagnostic(
           new AcpRpcError(-32602, options.authMethodUnavailableMessage),
           providerDiagnostic(options.authMethodUnavailableMessage, 'person')

@@ -73,11 +73,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     const peer = resolveAcpPeerOptions({ ...options.peer, closeOnInputEnd: false })
     const { signIn } = options
     const lifecycle: AcpConnectionLifecycle = { closing: false }
-    const answerAuth = (signedIn: boolean): void => {
-      if (!lifecycle.closing && managed.rootVerdict !== 'exited') {
-        signIn?.answered?.(signedIn)
-      }
-    }
+    let answerAuth = (_signedIn: boolean): void => {}
     let signedOut = (): void => {}
     let unreadable = (): void => {}
     // Never retain sign-in links in diagnostics.
@@ -119,7 +115,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       ...options,
       peer,
       onOtherLine: (line, cut) => signInLine(line, 'stdout', cut),
-      onAuthAnswered: answerAuth,
+      onAuthAnswered: (signedIn) => answerAuth(signedIn),
       // A closed stdin usually means the agent is exiting; its exit settles calls once its output
       // drained, so the bound only covers an agent that stopped reading without exiting.
       onOutputEnd: (_error, finish) => {
@@ -150,6 +146,11 @@ export class AcpAgentConnection extends AcpSessionRuntime {
         options.onClose?.(error)
       }
     })
+    answerAuth = (signedIn) => {
+      if (!lifecycle.closing && !this.closed) {
+        signIn?.answered?.(signedIn)
+      }
+    }
     this.managed = managed
     this.lifecycle = lifecycle
     this.diagnoseLifecycle = diagnose

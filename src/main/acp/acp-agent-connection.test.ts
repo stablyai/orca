@@ -538,6 +538,12 @@ it('ignores late sign-in output from a credential writer stopped before applying
 
 it('keeps cached startup usable without advertising the configured method, but refuses unsupported required authentication', async () => {
   const { connection, agent } = fixture()
+  agent.on('initialize', (frame) =>
+    agent.reply(frame, {
+      protocolVersion: 1,
+      authMethods: [{ id: 'oauth-personal', name: 'Google account' }]
+    })
+  )
   const configured = {
     ...start,
     authMethodId: 'oauth-business',
@@ -545,9 +551,36 @@ it('keeps cached startup usable without advertising the configured method, but r
       'Antigravity account type is unavailable. Update Antigravity or change account settings.'
   }
   await expect(connection.start(configured)).resolves.toMatchObject({ sessionId: 'session-1' })
-  agent.on('session/new', (frame) => agent.fail(frame, -32000, 'Authentication required'))
-  await expect(connection.start(configured)).rejects.toThrow(
+  const required = fixture()
+  required.agent.on('initialize', (frame) =>
+    required.agent.reply(frame, {
+      protocolVersion: 1,
+      authMethods: [{ id: 'oauth-personal', name: 'Google account' }]
+    })
+  )
+  required.agent.on('session/new', (frame) =>
+    required.agent.fail(frame, -32000, 'Authentication required')
+  )
+  await expect(required.connection.start(configured)).rejects.toThrow(
     'Antigravity account type is unavailable'
   )
-  expect(agent.frames.filter((frame) => frame.method === 'authenticate')).toEqual([])
+  expect(required.agent.frames.filter((frame) => frame.method === 'authenticate')).toEqual([])
+})
+
+it('keeps a genuine auth answer drained after spontaneous exit while rejecting later stopped-owner output', async () => {
+  const answered = vi.fn()
+  const { connection, agent, child } = fixture({
+    signIn: { read: (line) => (line === 'SIGN IN' ? 'link' : undefined), answered }
+  })
+  agent.on('session/new', (frame) => {
+    child.emit('exit', 0, null)
+    agent.reply(frame, { sessionId: 'final-session' })
+  })
+  await expect(connection.start(start)).resolves.toMatchObject({ sessionId: 'final-session' })
+  expect(answered).toHaveBeenCalledWith(true)
+  await connection.close()
+  answered.mockClear()
+  child.stderr.write('SIGN IN\n')
+  await tick()
+  expect(answered).not.toHaveBeenCalled()
 })

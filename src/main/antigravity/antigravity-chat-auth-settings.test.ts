@@ -122,3 +122,41 @@ it('rejects incomplete and unknown configured methods rather than selecting pers
     'account settings'
   )
 })
+
+it('repairs a persisted null to Personal instead of accepting a false no-op', async () => {
+  const settings = { ...getDefaultSettings('/fixture'), antigravityChatAuth: null }
+  const store = {
+    getSettings: () => settings,
+    updateSettingsAndFlush: vi.fn(async (updates: Partial<GlobalSettings>) => {
+      Object.assign(settings, updates)
+      return getDefaultSettings('/fixture')
+    })
+  }
+  // The file can contain an invalid value even though the in-memory contract is typed.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exercising a malformed persisted file at the runtime boundary.
+  const malformed = store as unknown as Parameters<typeof applyAntigravityChatAuthConfig>[0]
+  await applyAntigravityChatAuthConfig(malformed, { method: 'oauth-personal' }, async () => {})
+  expect(store.updateSettingsAndFlush).toHaveBeenCalledOnce()
+  expect(readAntigravityChatAuthConfig(malformed)).toEqual({ method: 'oauth-personal' })
+})
+
+it('retains remembered Enterprise project and location while Personal is selected', async () => {
+  const settings = { ...getDefaultSettings('/fixture'), antigravityChatAuth: enterprise }
+  const store = {
+    getSettings: () => settings,
+    updateSettingsAndFlush: async (updates: Partial<GlobalSettings>) => {
+      Object.assign(settings, updates)
+      return settings
+    }
+  }
+  await applyAntigravityChatAuthConfig(
+    store,
+    { method: 'oauth-personal', gcpProject: 'enterprise-project', gcpLocation: 'us-central1' },
+    async () => {}
+  )
+  expect(readAntigravityChatAuthConfig(store)).toEqual({
+    method: 'oauth-personal',
+    gcpProject: 'enterprise-project',
+    gcpLocation: 'us-central1'
+  })
+})

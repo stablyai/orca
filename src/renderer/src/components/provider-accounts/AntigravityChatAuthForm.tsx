@@ -1,4 +1,8 @@
-import { useEffect, useId, useState } from 'react'
+import {
+  readAntigravityChatSignInRevision,
+  subscribeAntigravityChatSignIns
+} from '@/runtime/antigravity-chat-sign-in-status'
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
 import { callAntigravityChatAuthConfig } from '@/runtime/runtime-antigravity-accounts-client'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
@@ -43,6 +47,11 @@ function AuthForm({
   supported: boolean
 }): React.JSX.Element {
   const id = useId()
+  const edited = useRef(false)
+  const reads = useRef(0)
+  const revision = useSyncExternalStore(subscribeAntigravityChatSignIns, () =>
+    readAntigravityChatSignInRevision(owner)
+  )
   const [loaded, setLoaded] = useState(false)
   const [saved, setSaved] = useState<AntigravityChatAuthConfig | null>(null)
   const [method, setMethod] = useState('oauth-personal')
@@ -57,16 +66,19 @@ function AuthForm({
       return
     }
     let current = true
+    const read = reads.current
     const target: RuntimeClientTarget =
       environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId }
     void callAntigravityChatAuthConfig(target).then(
       (config) => {
-        if (current) {
+        if (current && read === reads.current) {
           setSaved(config)
           setLoaded(true)
-          setMethod(config?.method ?? '')
-          setProject(config?.method === 'oauth-business' ? config.gcpProject : '')
-          setLocation(config?.method === 'oauth-business' ? config.gcpLocation : '')
+          if (!edited.current) {
+            setMethod(config?.method ?? '')
+            setProject(config?.gcpProject ?? '')
+            setLocation(config?.gcpLocation ?? '')
+          }
           setError(
             config
               ? null
@@ -75,7 +87,7 @@ function AuthForm({
         }
       },
       (cause: unknown) => {
-        if (current) {
+        if (current && read === reads.current) {
           setError(
             cause instanceof Error
               ? cause.message
@@ -87,11 +99,15 @@ function AuthForm({
     return () => {
       current = false
     }
-  }, [environmentId, supported, attempt])
+  }, [environmentId, supported, attempt, revision])
   const draft =
     method === 'oauth-business'
       ? { method, gcpProject: project, gcpLocation: location }
-      : { method }
+      : {
+          method,
+          ...(project ? { gcpProject: project } : {}),
+          ...(location ? { gcpLocation: location } : {})
+        }
   const changed = loaded && JSON.stringify(draft) !== JSON.stringify(saved)
   const blocked = disabled || pending || !loaded
   async function apply(): Promise<void> {
@@ -105,15 +121,18 @@ function AuthForm({
       )
       return
     }
+    reads.current++
     setPending(true)
     try {
       const next = resolveAntigravityChatAuthConfig(
         await callAntigravityChatAuthConfig(owner, config)
       )
+      reads.current++
+      edited.current = false
       setSaved(next)
       setMethod(next.method)
-      setProject(next.method === 'oauth-business' ? next.gcpProject : '')
-      setLocation(next.method === 'oauth-business' ? next.gcpLocation : '')
+      setProject(next.gcpProject ?? '')
+      setLocation(next.gcpLocation ?? '')
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : 'Antigravity account settings could not be saved.'
@@ -128,7 +147,14 @@ function AuthForm({
         <Label htmlFor={`${id}-method`} className="text-xs">
           {translate('accounts.antigravity.authMethod', 'Sign-in method')}
         </Label>
-        <Select value={method} disabled={blocked} onValueChange={setMethod}>
+        <Select
+          value={method}
+          disabled={blocked}
+          onValueChange={(value) => {
+            edited.current = true
+            setMethod(value)
+          }}
+        >
           <SelectTrigger id={`${id}-method`} className="h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
@@ -153,7 +179,10 @@ function AuthForm({
             value={project}
             disabled={blocked || method !== 'oauth-business'}
             placeholder="my-project-id"
-            onChange={(event) => setProject(event.target.value)}
+            onChange={(event) => {
+              edited.current = true
+              setProject(event.target.value)
+            }}
           />
         </div>
         <div className="space-y-1">
@@ -166,7 +195,10 @@ function AuthForm({
             value={location}
             disabled={blocked || method !== 'oauth-business'}
             placeholder="us-central1"
-            onChange={(event) => setLocation(event.target.value)}
+            onChange={(event) => {
+              edited.current = true
+              setLocation(event.target.value)
+            }}
           />
         </div>
       </div>

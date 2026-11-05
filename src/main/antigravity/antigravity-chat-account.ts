@@ -104,6 +104,7 @@ export const antigravityChatAccount = {
         0o600
       )
     } catch (cause) {
+      assertCurrent?.()
       throw new AntigravitySignInSentence(
         'Antigravity account settings could not be prepared. Check that Orca can write its data folder and try again.',
         { cause }

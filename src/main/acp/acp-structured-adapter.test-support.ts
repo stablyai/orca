@@ -2,8 +2,9 @@ import { FakeAcpChild } from './acp-scripted-connection.test-fixture'
 export { FakeAcpChild, PID } from './acp-scripted-connection.test-fixture'
 
 import { tmpdir } from 'node:os'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { vi } from 'vitest'
+import { vi, onTestFinished } from 'vitest'
 import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -96,7 +97,11 @@ export async function openAcpAdapterRig(
   const spec = options.spec ?? GROK
   // Use a scratch account folder for agents that prepare one.
   const { prepare, resolve, environment } = spec.account
-  const scratch = { launchEnv: {}, stateDirectory: tmpdir() }
+  const stateDirectory = prepare ? await mkdtemp(join(tmpdir(), 'orca-acp-account-')) : tmpdir()
+  if (prepare) {
+    onTestFinished(() => rm(stateDirectory, { recursive: true, force: true }))
+  }
+  const scratch = { launchEnv: {}, stateDirectory }
   const account = prepare ? environment(await resolve(scratch), {}) : {}
   const resolveLaunch: AcpStructuredSessionAdapterDeps['resolveLaunch'] =
     options.deps?.resolveLaunch ??

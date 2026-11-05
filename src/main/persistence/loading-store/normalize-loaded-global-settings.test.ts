@@ -1,3 +1,4 @@
+import { resolveAntigravityChatAuthConfig } from '../../../shared/antigravity-chat-auth-config'
 import { newChatPermissionModeForSettings } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { homedir } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
@@ -329,4 +330,21 @@ it('loads an existing profile without a terminal policy mirror and preserves its
   expect(loaded.terminalFocusFollowsMouse).toBe(true)
   expect(loaded.machineName).toBe('Build server')
   expect(loaded).not.toHaveProperty('maxTerminals')
+})
+
+it('keeps existing Antigravity profiles personal and preserves explicit or malformed saved choices for their owner', () => {
+  expect(resolveAntigravityChatAuthConfig(normalizeLegacyProfile({}).antigravityChatAuth)).toEqual({
+    method: 'oauth-personal'
+  })
+  const enterprise = {
+    method: 'oauth-business',
+    gcpProject: 'enterprise-project',
+    gcpLocation: 'us-central1'
+  }
+  expect(normalizeLegacyProfile({ antigravityChatAuth: enterprise }).antigravityChatAuth).toEqual(
+    enterprise
+  )
+  const malformed = normalizeLegacyProfile({ antigravityChatAuth: null }).antigravityChatAuth
+  expect(malformed).toBeNull()
+  expect(() => resolveAntigravityChatAuthConfig(malformed)).toThrow('account settings')
 })

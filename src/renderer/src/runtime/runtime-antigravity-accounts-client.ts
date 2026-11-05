@@ -22,7 +22,6 @@ export async function callAntigravityAccounts(
     await assertRuntimeEnvironmentCapability(
       owner.environmentId,
       ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
-      ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
       'This execution host does not support native Antigravity Accounts yet. Update Orca on that host.'
     )
   }
