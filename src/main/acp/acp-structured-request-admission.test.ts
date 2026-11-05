@@ -149,9 +149,9 @@ describe('Grok requests and the turn they belong to', () => {
     await rig.frame('session/prompt')
     void agent.request(10, 'session/request_permission', permission('call-10'))
     await waitFor(async () =>
-      expect((await cards()).map((row) => row.body.resolution.state)).toEqual([
-        'cancelled',
-        'pending'
+      expect((await cards()).map((row) => row.body)).toMatchObject([
+        { resolution: { state: 'cancelled' } },
+        { resolution: { state: 'pending' } }
       ])
     )
 
