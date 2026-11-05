@@ -185,7 +185,7 @@ export function ReviewNotesSendMenuContent({
             toast.info(
               activeAgentNotesSendFailureMessage(result.status, {
                 explicitTarget: true,
-                code: result.code
+                subject: 'selection'
               })
             )
           }
