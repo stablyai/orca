@@ -19,7 +19,6 @@ import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/list
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
-import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
 import { respondAfterAgentToolPluginHooks } from '../agent-tool-plugin-hooks'
 
 import type { HookServerStartOptions } from './server-types'
@@ -103,9 +102,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           res.end()
           return
         }
-        if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+        const claudePluginReply = this.receiveClaudePlugin(pathname, body)
+        if (claudePluginReply) {
           res.writeHead(200, { 'content-type': 'application/json' })
-          res.end(JSON.stringify(this.claudeAgentViews.receive(body)))
+          res.end(JSON.stringify(claudePluginReply))
           return
         }
         await this.initializeStatusHookOwner()
@@ -247,7 +247,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   /** Quit retains status until chat teardown reads resumable child and background work. */
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
-    this.claudeAgentViews.clear()
+    this.clearClaudePlugins()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {
       this.flushStatusPersistSync()

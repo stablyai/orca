@@ -4,6 +4,7 @@ import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxOwner, OrchestrationMailboxTerminal } from './mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
 import type { OrchestrationCliCommand } from './cli-command'
+import type { AgentPromptChannel } from './mailbox-pointer-channel-submit'
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export type OrchestrationMailboxPointerMessage = {
@@ -31,4 +32,6 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+  /** The agent's own prompt channel; with one, mail is never typed into the terminal. */
+  resolvePromptChannel?: (terminal: OrchestrationMailboxTerminal) => AgentPromptChannel | null
 }

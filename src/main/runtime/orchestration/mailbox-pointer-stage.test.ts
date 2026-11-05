@@ -261,3 +261,51 @@ describe('retiring a pty mid-delivery', () => {
     }
   })
 })
+
+describe('mailbox pointer through the agent prompt channel', () => {
+  function stageThroughChannel(outcome: 'submitted' | 'refused') {
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 's'
+    })
+    const state = new OrchestrationMailboxPointerState()
+    const writePty = vi.fn(() => WRITE_ACCEPTED)
+    const channel = vi.fn(async () => outcome)
+    const args = stageArgs(db, state)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub deps cover every member staging reads, as the other staging tests here rely on.
+    stageOrchestrationMailboxPointer({
+      ...args,
+      deps: { ...pointerDeps(db, writePty), resolvePromptChannel: () => channel },
+      messages: [{ id: message.id, type: 'status', sequence: 1 }]
+    } as never)
+    return { db, message, state, writePty, channel }
+  }
+
+  it('submits the pointer as a prompt of its own and never writes to the terminal', async () => {
+    const { db, message, state, writePty, channel } = stageThroughChannel('submitted')
+
+    await vi.waitFor(() => expect(state.hasFlight('pty-1')).toBe(false))
+    expect(channel).toHaveBeenCalledWith(expect.stringContaining('orchestration'))
+    expect(writePty).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({ pointer_enter_pending: 0 })
+    expect(db.getMessageById(message.id)?.delivered_at).not.toBeNull()
+    expect(state.hasActiveWatermark('run:run-1')).toBe(false)
+    db.close()
+  })
+
+  it('hands mail the agent declined back undelivered, still without writing to the terminal', async () => {
+    const { db, message, state, writePty } = stageThroughChannel('refused')
+
+    await vi.waitFor(() => expect(state.hasFlight('pty-1')).toBe(false))
+    expect(writePty).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({
+      delivered_at: null,
+      pointer_enter_pending: 0,
+      pointer_pty_id: null
+    })
+    db.close()
+  })
+})

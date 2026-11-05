@@ -18,6 +18,7 @@ import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
 import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
+import { claudeTerminalPromptChannel } from '../../claude-terminal-prompt-channel'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
 
@@ -150,6 +151,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   private isPtyHoldingDelivery(ptyId: string): boolean {
     if (this.isPtyAwaitingUserInput(ptyId)) {
       return true
+    }
+    // Mail sent through the agent's own prompt channel is never typed, so no draft is at risk.
+    if (claudeTerminalPromptChannel(this.getOrchestrationMailboxTerminal(ptyId))) {
+      return false
     }
     const lastInputAt = this.terminalRunFacts.readLastDrivingInputAt(ptyId)
     if (lastInputAt !== null && Date.now() - lastInputAt < TYPING_PAUSE_HOLD_MS) {

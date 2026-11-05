@@ -38,8 +38,8 @@ import { OrchestrationMailboxOwner } from '../orchestration/mailbox-owner'
 import { OrchestrationMailboxDeliveryTarget } from '../orchestration/mailbox-delivery-target'
 import { OrchestrationMailboxPointerDelivery } from '../orchestration/mailbox-pointer-delivery'
 import { OrchestrationMailboxNotificationCoordinator } from '../orchestration/mailbox-notification-coordinator'
-import type { RuntimeMessageWaiter } from '../runtime-message-waiters'
-import { RuntimeMessageWaiters } from '../runtime-message-waiters'
+import { RuntimeMessageWaiters, type RuntimeMessageWaiter } from '../runtime-message-waiters'
+import { orchestrationPointerInputDeps } from '../orchestration-pointer-input-deps'
 import type { WorkerTurnStopReportDeps } from '../orchestration/worker-turn-stop-report'
 import type { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../runtime-terminal-stream-consumers'
@@ -271,13 +271,13 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
     isAgentSettledForDelivery: (ptyId) => this.checkDeliverySettledAndArmRecheck(ptyId),
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
-    readLastDrivingInputAt: (ptyId) => this.terminalRunFacts.readLastDrivingInputAt(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
     resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (handle, types) => this.deliverPendingMessagesForHandle(handle, types),
-    writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
+    writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data),
+    ...orchestrationPointerInputDeps(this.terminalRunFacts)
   })
 
   protected readonly orchestrationStructuredMailboxPointerDelivery =

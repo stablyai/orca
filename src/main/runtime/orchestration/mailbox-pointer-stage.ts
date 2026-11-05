@@ -12,6 +12,7 @@ import type {
   OrchestrationMailboxDeliveryFlight,
   OrchestrationMailboxPointerState
 } from './mailbox-pointer-state'
+import { submitPointerThroughChannel } from './mailbox-pointer-channel-submit'
 import {
   submitOrchestrationMailboxPointer,
   type OrchestrationMailboxPointerSubmitTarget
@@ -94,17 +95,32 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     args.state.deactivateWatermark(args.mailboxHandle, args.newestSequence, ptyId)
     args.settle(ptyId, flight)
   }
+  const pointer = formatMessagePointer(
+    args.messages.length,
+    args.mailboxHandle,
+    args.deps.getCliCommand(expectedTarget.terminal.handle),
+    args.heldDeliveryId
+  )
+  const channel = args.deps.resolvePromptChannel?.(args.terminal) ?? null
+  if (channel) {
+    submitPointerThroughChannel({
+      channel,
+      text: pointer,
+      ptyId,
+      processIncarnation: expectedTarget.processIncarnation,
+      mailboxHandle: args.mailboxHandle,
+      newestSequence: args.newestSequence,
+      flight,
+      state: args.state,
+      getDb: args.deps.getDb,
+      settle: args.settle,
+      redrive: args.redrive
+    })
+    return
+  }
   try {
     flight.pointerWriteStartedAt = Date.now()
-    const writeResult = args.deps.writePty(
-      ptyId,
-      formatMessagePointer(
-        args.messages.length,
-        args.mailboxHandle,
-        args.deps.getCliCommand(expectedTarget.terminal.handle),
-        args.heldDeliveryId
-      )
-    )
+    const writeResult = args.deps.writePty(ptyId, pointer)
     if (isSettledWrite(writeResult)) {
       settlePointerWrite(writeResult)
       return
