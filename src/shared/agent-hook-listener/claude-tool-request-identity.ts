@@ -61,6 +61,10 @@ export function withClaudeToolRequestId(
     ended === 'all'
       ? []
       : (state.claudeOpenToolUsesByPaneKey.get(paneKey) ?? []).filter((call) => !ended(call))
+  if (eventName === 'Elicitation') {
+    // An MCP dialog waits on the user too; batches never list it, so only its result or a boundary ends it.
+    open.push({ ...fields, toolUseId: claudeElicitationKey(hookPayload), awaitingUser: true })
+  }
   if (eventName === 'PreToolUse' && toolUseId) {
     // A question waits on the user from its PreToolUse, with or without a PermissionRequest.
     open.push({
@@ -79,6 +83,14 @@ export function withClaudeToolRequestId(
   for (const call of asked) {
     // An ambiguous request marks every call it could be, so none is cleared while it may still be on screen.
     call.awaitingUser = true
+  }
+  if (eventName === 'PermissionRequest' && asked.length === 0) {
+    // A request with no observed call (a restarted relay, an evicted call) still waits; only its owner's stop or turn end retires it.
+    open.push({
+      ...fields,
+      toolUseId: toolUseId ?? `unnamed:${JSON.stringify([fields.toolName, fields.toolInput])}`,
+      awaitingUser: true
+    })
   }
   const kept = boundOpenToolUses(open)
   if (kept.length > 0) {
@@ -122,6 +134,10 @@ function endedToolUseIds(
   if (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') {
     return (call) => call.toolUseId === toolUseId
   }
+  if (eventName === 'ElicitationResult') {
+    const key = claudeElicitationKey(hookPayload)
+    return (call) => call.toolUseId === key && call.toolAgentId === toolAgentId
+  }
   // A stopped subagent can no longer be asked anything.
   if ((eventName === 'SubagentStop' || eventName === 'StopFailure') && toolAgentId !== undefined) {
     return (call) => call.toolAgentId === toolAgentId
@@ -135,4 +151,12 @@ function endedToolUseIds(
     toolAgentId === undefined &&
     (eventName === 'UserPromptSubmit' || eventName === 'Stop' || eventName === 'StopFailure')
   return (call) => leadTurnBoundary && call.toolAgentId === undefined
+}
+
+function claudeElicitationKey(hookPayload: Record<string, unknown>): string {
+  // Claude pairs a dialog with its result by elicitation_id; the server name covers builds that omit it.
+  const id =
+    readString(hookPayload, 'elicitation_id') ??
+    `server:${readString(hookPayload, 'mcp_server_name') ?? ''}`
+  return `elicitation:${id}`
 }
