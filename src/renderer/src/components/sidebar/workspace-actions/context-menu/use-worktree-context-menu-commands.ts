@@ -25,6 +25,16 @@ import {
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
 
+function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktree): Repo | null {
+  return resolveReviewRepository(repos, {
+    ...worktree,
+    // Unstamped clicked rows are local, regardless of the active workspace's owner.
+    hostId:
+      worktree.hostId ??
+      (worktree.runtimeOwnerEnvironmentId?.trim() ? undefined : LOCAL_EXECUTION_HOST_ID)
+  })
+}
+
 export function useWorktreeContextMenuCommands(args: {
   activeContextWorktrees: readonly Worktree[]
   batchDeleteWorktrees: readonly Worktree[]
@@ -154,13 +164,7 @@ export function useWorktreeContextMenuCommands(args: {
   }, [args])
   const handleNewChildWorktree = useCallback(() => {
     const state = args.getState()
-    const repo = resolveReviewRepository(state.repos, {
-      ...args.worktree,
-      // Unstamped clicked rows are local, regardless of the active workspace's owner.
-      hostId:
-        args.worktree.hostId ??
-        (args.worktree.runtimeOwnerEnvironmentId?.trim() ? undefined : LOCAL_EXECUTION_HOST_ID)
-    })
+    const repo = resolveChildWorktreeRepository(state.repos, args.worktree)
     if (!repo || !canCreateChildWorktree({ ...args, repo })) {
       return
     }
@@ -212,7 +216,10 @@ export function useWorktreeContextMenuCommands(args: {
     }
   }, [args.validParentWorktreeId])
   return {
-    canCreateChildWorktree: canCreateChildWorktree(args),
+    canCreateChildWorktree: canCreateChildWorktree({
+      ...args,
+      repo: resolveChildWorktreeRepository(args.getState().repos, args.worktree)
+    }),
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
     handleCopyName,

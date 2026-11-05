@@ -37,12 +37,7 @@ export function resolveWorktreeCreateParent(
   const picked = requestedParentWorktreeId
     ? getIndexedWorktreesById(selectWorktreesByRepo(state), requestedParentWorktreeId).find(
         (candidate) => {
-          const repo = resolveReviewRepository(state.repos, {
-            ...candidate,
-            hostId:
-              candidate.hostId ??
-              (candidate.runtimeOwnerEnvironmentId?.trim() ? undefined : executionHostId)
-          })
+          const repo = resolveReviewRepository(state.repos, candidate)
           return Boolean(repo && getRepoExecutionHostId(repo) === executionHostId)
         }
       )

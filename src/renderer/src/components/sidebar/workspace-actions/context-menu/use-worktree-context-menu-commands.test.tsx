@@ -63,7 +63,7 @@ function runNewChildWorktree(args: {
   )
   act(() => result.current.handleNewChildWorktree())
   const { activeModal, modalData } = useAppStore.getState()
-  return { activeModal, modalData }
+  return { activeModal, modalData, canCreateChildWorktree: result.current.canCreateChildWorktree }
 }
 
 describe('New Child Worktree ownership', () => {
@@ -74,6 +74,7 @@ describe('New Child Worktree ownership', () => {
     })
 
     expect(modal).toEqual({
+      canCreateChildWorktree: true,
       activeModal: 'new-workspace-composer',
       modalData: {
         initialRepoId: 'project',
@@ -106,6 +107,7 @@ describe('New Child Worktree ownership', () => {
     })
 
     expect(modal).toEqual({
+      canCreateChildWorktree: true,
       activeModal: 'new-workspace-composer',
       modalData: {
         initialRepoId: 'project',
@@ -138,7 +140,11 @@ describe('New Child Worktree ownership', () => {
     ({ worktree, repo }) => {
       const modal = runNewChildWorktree({ worktree, repos: [repo], activeRepo: repo })
 
-      expect(modal).toEqual({ activeModal: 'none', modalData: {} })
+      expect(modal).toEqual({
+        canCreateChildWorktree: false,
+        activeModal: 'none',
+        modalData: {}
+      })
     }
   )
 })
