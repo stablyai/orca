@@ -8,19 +8,20 @@ import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent
 import { ANTIGRAVITY_LAUNCH_GATE, antigravityChatSignIn } from './antigravity-chat-account'
 
 type AuthStore = Pick<RuntimeStore, 'getSettings' | 'updateSettingsAndFlush'>
+let flushing = false
 
 export function readAntigravityChatAuthConfig(store: AuthStore): AntigravityChatAuthConfig | null {
-  const read = ANTIGRAVITY_LAUNCH_GATE.enter(undefined)
-  try {
-    const value = store.getSettings().antigravityChatAuth
-    if (value === undefined) {
-      return { method: 'oauth-personal' }
-    }
-    const parsed = AntigravityChatAuthConfigSchema.safeParse(value)
-    return parsed.success ? parsed.data : null
-  } finally {
-    read.leave()
+  if (flushing) {
+    throw new Error(
+      'Antigravity account settings are being saved on this host. Try again after it finishes.'
+    )
   }
+  const value = store.getSettings().antigravityChatAuth
+  if (value === undefined) {
+    return { method: 'oauth-personal' }
+  }
+  const parsed = AntigravityChatAuthConfigSchema.safeParse(value)
+  return parsed.success ? parsed.data : null
 }
 
 export function applyAntigravityChatAuthConfig(
@@ -51,9 +52,14 @@ export function applyAntigravityChatAuthConfig(
   }
   const flush = store.updateSettingsAndFlush.bind(store)
   return ANTIGRAVITY_LAUNCH_GATE.run(stopLiveChats, async () => {
-    await flush({ antigravityChatAuth: next }, { notifyListeners: true })
-    antigravityChatSignIn.set({ auth: 'unknown', flow: null })
-    agentModelCatalogStore.expireAgent('antigravity')
-    return next
+    flushing = true
+    try {
+      await flush({ antigravityChatAuth: next }, { notifyListeners: true })
+      antigravityChatSignIn.set({ auth: 'unknown', flow: null })
+      agentModelCatalogStore.expireAgent('antigravity')
+      return next
+    } finally {
+      flushing = false
+    }
   })
 }

@@ -78,7 +78,7 @@ it('commits only after stopping old writers and retires account observations onl
   }
   const pending = applyAntigravityChatAuthConfig(store, enterprise, stopped)
   await vi.waitFor(() => expect(store.updateSettingsAndFlush).toHaveBeenCalledOnce())
-  expect(() => readAntigravityChatAuthConfig(store)).toThrow('setup is changing')
+  expect(() => readAntigravityChatAuthConfig(store)).toThrow('account settings are being saved')
   expect(() => ANTIGRAVITY_LAUNCH_GATE.enter(undefined)).toThrow('setup is changing')
   expect(antigravityChatSignIn.get().value.auth).toBe('signedIn')
   expect(expired).not.toHaveBeenCalled()
@@ -105,6 +105,7 @@ it('keeps the saved choice and account observations when saving or stopping fail
     'disk full'
   )
   expect(settings.antigravityChatAuth).toBeUndefined()
+  expect(readAntigravityChatAuthConfig(store)).toEqual({ method: 'oauth-personal' })
   expect(antigravityChatSignIn.get().value.auth).toBe('signedIn')
   expect(expired).not.toHaveBeenCalled()
   store.updateSettingsAndFlush.mockClear()
@@ -161,4 +162,18 @@ it('retains remembered Enterprise project and location while Personal is selecte
     gcpProject: 'enterprise-project',
     gcpLocation: 'us-central1'
   })
+})
+
+it('keeps committed account settings readable while sign-in holds the launch gate', async () => {
+  const store = { getSettings: () => getDefaultSettings('/fixture') }
+  await ANTIGRAVITY_LAUNCH_GATE.run(
+    async () => {},
+    async () => {
+      antigravityChatSignIn.set({
+        auth: 'unknown',
+        flow: { flowId: 'signing-in', phase: 'waiting' }
+      })
+      expect(readAntigravityChatAuthConfig(store)).toEqual({ method: 'oauth-personal' })
+    }
+  )
 })
