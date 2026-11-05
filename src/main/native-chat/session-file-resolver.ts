@@ -77,7 +77,7 @@ export async function resolveSessionFilePath(
 ): Promise<string | null> {
   signal?.throwIfAborted()
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  if (!transcriptAgent || transcriptAgent === 'opencode') {
+  if (!transcriptAgent || transcriptAgent === 'opencode' || transcriptAgent === 'hermes') {
     return null
   }
   let unavailable: WslTranscriptFsError | undefined
@@ -141,7 +141,7 @@ async function resolveSessionFileById(
   wslTier: boolean,
   signal?: AbortSignal
 ): Promise<string | null> {
-  if (transcriptAgent === 'opencode') {
+  if (transcriptAgent === 'opencode' || transcriptAgent === 'hermes') {
     return null
   }
   const trimmedId = sessionId.trim()

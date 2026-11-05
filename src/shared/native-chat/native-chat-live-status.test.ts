@@ -18,6 +18,37 @@ function user(id: string, text: string): NativeChatMessage {
 }
 
 describe('mergeNativeChatLiveSession', () => {
+  it.each(
+    [[], [user('u', 'use tools')], [user('u', 'go'), assistant('a', 'done')]].map((messages) => ({
+      messages
+    }))
+  )(
+    'settles Hermes from live terminal idle independently of transcript completion',
+    ({ messages }) => {
+      expect(
+        mergeNativeChatLiveSession({
+          messages,
+          sessionId: 'hermes',
+          agent: 'hermes',
+          hookState: 'working',
+          stateStartedAt: 3,
+          terminalActivity: { state: 'idle', workingSequence: 1 }
+        }).status
+      ).not.toBe('working')
+    }
+  )
+
+  it('keeps Hermes working through streamed prose and an early end hook until native idle', () => {
+    expect(
+      mergeNativeChatLiveSession({
+        messages: [user('u', 'go'), assistant('a', 'partial')],
+        sessionId: 'hermes',
+        agent: 'hermes',
+        hookState: 'done',
+        terminalActivity: { state: 'working', workingSequence: 1 }
+      }).status
+    ).toBe('working')
+  })
   it('does not treat assistant prose as turn completion while lifecycle is mid-generation', () => {
     const session = mergeNativeChatLiveSession({
       messages: [user('u-1', 'go'), assistant('a-1', 'done')],
