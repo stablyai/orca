@@ -1,0 +1,173 @@
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import { matchesGitHubWorkItemTarget } from '../../../src/shared/github/work-item-target'
+import { acceptPRCheckObservation } from '../../../src/shared/github/complete-pr-check-owner'
+import { captureMobilePRCheckContract } from '../transport/pr-check-observation-contract'
+import { githubWorkItemBySlugRead } from './mobile-task-source-search-operations'
+import { githubTaskKey, sameGitHubTask, requireGitHubTaskTarget } from './github-task-identity'
+import { buildGitHubCheckSummary } from './github-check-summary'
+import type { TaskItem } from './mobile-tasks-project-workspace-types'
+import { githubPullRequestChecksRead } from './mobile-task-item-state-operations'
+import type { HostedCommentReviewActionsInput } from './use-mobile-tasks-hosted-comment-review-actions'
+
+type RefreshModel = Pick<
+  HostedCommentReviewActionsInput,
+  | 'client'
+  | 'detailPayload'
+  | 'tryBeginMutation'
+  | 'setError'
+  | 'claimPublication'
+  | 'setDetailPayload'
+  | 'setActionItem'
+  | 'setItems'
+>
+
+export async function refreshMobileTaskPRChecks(
+  model: RefreshModel,
+  item: Extract<TaskItem, { provider: 'github' }>
+): Promise<void> {
+  const {
+    client,
+    detailPayload,
+    tryBeginMutation,
+    setError,
+    claimPublication,
+    setDetailPayload,
+    setActionItem,
+    setItems
+  } = model
+  if (!client || item.source.type !== 'pr') {
+    return
+  }
+  const finish = tryBeginMutation()
+  if (!finish) {
+    return
+  }
+  setError('')
+  const selected = claimPublication(item, detailPayload)
+  const requestedHead = detailPayload?.provider === 'github' ? detailPayload.headSha : undefined
+  const contract = await captureMobilePRCheckContract(
+    client,
+    { repo: `id:${item.source.repoId}` },
+    true
+  )
+  const current = () => selected() && contract.current()
+  const publish = (owner: GitHubWorkItem | null) => {
+    const update = (source: typeof item.source) =>
+      acceptPRCheckObservation(
+        {
+          ...source,
+          headSha: owner?.headSha ?? source.headSha,
+          checksSummary: owner?.checksSummary
+        },
+        source,
+        { scope: contract.scope!, complete: true, current: current(), trusted: owner !== null }
+      ) ?? source
+    setActionItem((prior) =>
+      sameGitHubTask(prior, item) ? { ...prior, source: update(prior.source) } : prior
+    )
+    setItems((prior) =>
+      prior.map((candidate) =>
+        sameGitHubTask(candidate, item)
+          ? { ...candidate, source: update(candidate.source) }
+          : candidate
+      )
+    )
+    if (owner) {
+      setDetailPayload((prior) =>
+        prior?.provider === 'github' && prior.targetKey === githubTaskKey(item.source)
+          ? {
+              ...prior,
+              headSha: owner.headSha,
+              checks: prior.headSha === owner.headSha ? prior.checks : []
+            }
+          : prior
+      )
+    }
+  }
+  try {
+    const repository = requireGitHubTaskTarget(item.source).repository
+    let owner: GitHubWorkItem | null = null
+    if (contract.complete) {
+      try {
+        const reply = await githubWorkItemBySlugRead.request(
+          contract.client ?? client,
+          {
+            repo: `id:${item.source.repoId}`,
+            owner: repository.owner,
+            ownerRepo: repository.repo,
+            host: repository.host,
+            number: item.source.number,
+            type: 'pr'
+          },
+          contract.options
+        )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this existing lookup parser preserves provider fields; exact identity is validated below before acceptance.
+        const observed = githubWorkItemBySlugRead.interpret(reply) as GitHubWorkItem | null
+        if (
+          matchesGitHubWorkItemTarget(observed, {
+            repository,
+            type: 'pr',
+            number: item.source.number
+          })
+        ) {
+          owner = observed
+        }
+      } catch {
+        /* Rows remain independently useful when the complete owner is unavailable. */
+      }
+      if (!current()) {
+        return
+      }
+      publish(owner)
+    }
+    const reply = await githubPullRequestChecksRead.request(
+      contract.client ?? client,
+      {
+        repo: `id:${item.source.repoId}`,
+        prNumber: item.source.number,
+        prRepo: repository,
+        headSha: owner?.headSha ?? requestedHead,
+        noCache: true
+      },
+      { timeoutMs: 30_000, ...contract.options }
+    )
+    const checks = githubPullRequestChecksRead.interpret(reply)
+    if (!selected() || !contract.routeCurrent()) {
+      return
+    }
+    setDetailPayload((prior) =>
+      prior?.provider === 'github' && prior.targetKey === githubTaskKey(item.source)
+        ? { ...prior, checks }
+        : prior
+    )
+    if (!contract.complete && current()) {
+      const summary = buildGitHubCheckSummary(checks)
+      const update = (source: typeof item.source) => ({
+        ...source,
+        checksSummary:
+          requestedHead !== undefined &&
+          source.headSha === requestedHead &&
+          source.checksSummary?.state === summary.state
+            ? source.checksSummary
+            : summary
+      })
+      setActionItem((prior) =>
+        sameGitHubTask(prior, item) ? { ...prior, source: update(prior.source) } : prior
+      )
+      setItems((prior) =>
+        prior.map((candidate) =>
+          sameGitHubTask(candidate, item)
+            ? { ...candidate, source: update(candidate.source) }
+            : candidate
+        )
+      )
+    }
+  } catch (error) {
+    if (current()) {
+      setError(error instanceof Error ? error.message : 'Failed to refresh checks')
+    }
+  } finally {
+    contract.retire()
+    finish()
+  }
+}

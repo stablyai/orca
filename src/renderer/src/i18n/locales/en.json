@@ -19244,6 +19244,7 @@
         "promptCopyFailed": "Failed to copy prompt"
       },
       "prCheckCounts": {
+        "noCheckDetails": "No check details available",
         "noChecksFound": "No checks found",
         "checksFailing_one": "{{count}} check failing",
         "checksFailing_other": "{{count}} checks failing",

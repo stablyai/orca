@@ -451,6 +451,7 @@ describe('getPRChecks', () => {
       .mockRejectedValueOnce(new Error('GraphQL rollup failed'))
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
+          total_count: 1,
           check_runs: [
             {
               id: 88,
@@ -465,6 +466,7 @@ describe('getPRChecks', () => {
       })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
+          total_count: 1,
           statuses: [
             {
               context: 'continuous-integration/jenkins/pr-merge',
@@ -474,19 +476,24 @@ describe('getPRChecks', () => {
           ]
         })
       })
-      .mockResolvedValueOnce({ stdout: JSON.stringify({ check_suites: [] }) })
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ total_count: 0, check_suites: [] }) })
 
     const checks = await getPRChecks('/repo-root', 42, 'head-oid')
 
     expectGraphQLRollupCall()
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['api', '--cache', '60s', 'repos/acme/widgets/commits/head-oid/check-runs?per_page=100'],
+      [
+        'api',
+        '--cache',
+        '60s',
+        'repos/acme/widgets/commits/head-oid/check-runs?per_page=100&page=1'
+      ],
       { cwd: '/repo-root', host: 'github.com' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
-      ['api', '--cache', '60s', 'repos/acme/widgets/commits/head-oid/status?per_page=100'],
+      ['api', '--cache', '60s', 'repos/acme/widgets/commits/head-oid/status?per_page=100&page=1'],
       { cwd: '/repo-root', host: 'github.com' }
     )
     expect(checks).toEqual([

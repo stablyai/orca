@@ -1,3 +1,4 @@
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
 
 export type CheckDetailsLoadState = {
@@ -16,6 +17,7 @@ export type GitHubChecksTabState = {
   contextKey: string
   contextOwner: GitHubChecksContextOwner
   sourceChecks: GitHubChecksSource
+  checkObservationOwner?: GitHubWorkItem
   localChecks: PRCheckDetail[] | null
   expandedCheckKey: string | null
   detailsByCheckKey: Record<string, CheckDetailsLoadState>
@@ -66,11 +68,13 @@ export function resetGitHubChecksTabForSource(
 
 export function updateGitHubChecksTabLocalChecks(
   state: GitHubChecksTabState,
-  localChecks: PRCheckDetail[]
+  localChecks: PRCheckDetail[],
+  checkObservationOwner?: GitHubWorkItem
 ): GitHubChecksTabState {
   return {
     ...state,
-    localChecks
+    localChecks,
+    checkObservationOwner
   }
 }
 

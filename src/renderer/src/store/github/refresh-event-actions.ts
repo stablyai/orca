@@ -1,8 +1,8 @@
+import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
-import { applyCachedChecksStatus } from './pr-check-status-cache'
 import {
   capPrRefreshSequences,
   capPrRefreshStates,
@@ -84,7 +84,9 @@ export const createRefreshEventActions = (
 
         if (event.outcome) {
           const startedEntryKey = prRefreshStartedEntryKey(event.sequence, alias.cacheKey)
-          const requestStartedEntry = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
+          const started = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
+          const contract = started?.checkContract ?? capturePRCheckContract(get, { kind: 'local' })
+          const requestStartedEntry = started?.entry
           const requestScope = prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)
           deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           if (previousSequence !== event.sequence) {
@@ -103,16 +105,7 @@ export const createRefreshEventActions = (
             }
             continue
           }
-          const data =
-            event.outcome.kind === 'found'
-              ? applyCachedChecksStatus(
-                  s,
-                  alias,
-                  event.outcome.pr,
-                  event.outcome.fetchedAt,
-                  aliasExecutionHostId
-                )
-              : null
+          const data = event.outcome.kind === 'found' ? event.outcome.pr : null
           const linkedPRNumber = alias.linkedPRNumber ?? null
           // Why: one outcome fans out to many aliases; build one lazy index instead of rescanning worktrees per alias.
           const worktreeLookupIndex =
@@ -190,6 +183,9 @@ export const createRefreshEventActions = (
             executionHostId: aliasExecutionHostId,
             hasRepoOwner: true,
             pr: data,
+            checkContract: contract,
+            checksProof: started?.checkContract !== undefined,
+            overlayChecks: true,
             fetchedAt: event.outcome.fetchedAt,
             rejectedPRUrls:
               event.outcome.kind === 'no-pr' ? event.outcome.rejectedPRUrls : undefined,
@@ -235,7 +231,8 @@ export const createRefreshEventActions = (
                       alias.repoPath
                     )
                   )
-                : undefined
+                : undefined,
+              capturePRCheckContract(get, { kind: 'local' })
             )
           } else {
             // Why: pause/skip can follow an in-flight broadcast with no outcome; drop the stale request-start snapshot.

@@ -12,7 +12,8 @@ vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
 }))
 vi.mock('./rate-limit', () => ({
   noteRepositoryRateLimitSpend: spend,
-  repositoryRateLimitGuard: () => ({ blocked: false })
+  repositoryRateLimitGuard: () => ({ blocked: false }),
+  spendsSharedGitHubComQuota: () => false
 }))
 
 import { getPRByNumber, lookupPRByNumber } from './client/lookup/pr-number-lookup'
@@ -33,9 +34,17 @@ function commits(checks: unknown[] = [successCheck], endCursor?: string, oid = '
       {
         commit: {
           oid,
+          checkSuites: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
           statusCheckRollup: {
             contexts: {
-              nodes: checks,
+              nodes: checks.map((raw) =>
+                raw &&
+                typeof raw === 'object' &&
+                '__typename' in raw &&
+                raw.__typename === 'CheckRun'
+                  ? { ...raw, checkSuite: { databaseId: 7 } }
+                  : raw
+              ),
               pageInfo: { hasNextPage: Boolean(endCursor), endCursor: endCursor ?? null }
             }
           }
@@ -136,9 +145,7 @@ describe('sidebar PR query', () => {
       ).resolves.toMatchObject({
         number: 42
       })
-      expect(exec).toHaveBeenCalledTimes(2)
       expect(exec.mock.calls[1][0]).toContain('repos/acme/widgets/pulls/42')
-      expect(spend.mock.calls.filter(([, bucket]) => bucket === 'graphql')).toHaveLength(1)
     }
   )
 
@@ -166,18 +173,18 @@ describe('sidebar PR query', () => {
     }
   )
 
-  it('uses REST recovery directly if a continuation request fails', async () => {
+  it('retains PR metadata but never certifies a successful prefix after continuation failure', async () => {
     exec
       .mockResolvedValueOnce(response({ ...fields, commits: commits([successCheck], 'next') }))
-      .mockRejectedValueOnce(new Error('ETIMEDOUT'))
-      .mockResolvedValueOnce(restResponse())
+      .mockRejectedValue(new Error('Unavailable'))
     await expect(
       getPRByNumber(repository, 42, options, 'local:host', undefined, { includeStackSummary: true })
     ).resolves.toMatchObject({
-      number: 42
+      number: 42,
+      title: fields.title,
+      checksUnavailable: true,
+      statusCheckRollup: []
     })
-    expect(exec).toHaveBeenCalledTimes(3)
-    expect(exec.mock.calls[2][0]).toContain('repos/acme/widgets/pulls/42')
   })
 
   it('keeps capability hydration on the PR base before attaching its stack summary', async () => {
@@ -300,7 +307,9 @@ describe('sidebar PR query', () => {
           )
         })
       )
-      .mockResolvedValueOnce(response({ number: 42, commits: commits([null, failingCheck]) }))
+      .mockResolvedValueOnce(
+        response({ number: 42, headRefOid: fields.headRefOid, commits: commits([failingCheck]) })
+      )
     const data = await getPRByNumber(repository, 42, options, 'local:host', undefined, {
       includeStackSummary: true
     })
@@ -312,26 +321,29 @@ describe('sidebar PR query', () => {
   })
 
   it.each([
-    { number: 42, commits: commits([], 'next') },
-    { number: 42, commits: commits([], undefined, 'c'.repeat(40)) }
+    { number: 42, headRefOid: fields.headRefOid, commits: commits([], 'next') },
+    { number: 42, headRefOid: fields.headRefOid, commits: commits([], undefined, 'c'.repeat(40)) }
   ])(
-    'recovers through the rich CLI if checks pagination stops advancing or the commit changes',
+    'keeps metadata without a certified summary when checks pagination stops advancing or the commit changes',
     async (nextPage) => {
       exec
         .mockResolvedValueOnce(response({ ...fields, commits: commits([successCheck], 'next') }))
         .mockResolvedValueOnce(response(nextPage))
-        .mockResolvedValueOnce(legacyResponse())
+        .mockRejectedValue(new Error('Unavailable'))
       const data = await getPRByNumber(repository, 42, options, 'local:host', undefined, {
         includeStackSummary: true
       })
-      expect(deriveCheckStatus(data?.statusCheckRollup)).toBe('success')
-      expect(exec).toHaveBeenCalledTimes(3)
-      expect(exec.mock.calls[2][0].slice(0, 2)).toEqual(['pr', 'view'])
+      expect(data).toMatchObject({
+        number: 42,
+        title: fields.title,
+        checksUnavailable: true,
+        statusCheckRollup: []
+      })
     }
   )
 
-  it('preserves known branch discovery metadata without adding another query', async () => {
-    exec.mockResolvedValueOnce(legacyResponse())
+  it('preserves known branch discovery metadata while reusing the combined exact check page', async () => {
+    exec.mockResolvedValueOnce(response())
     const known = {
       ...fields,
       statusCheckRollup: [],
@@ -341,8 +353,7 @@ describe('sidebar PR query', () => {
     }
     const data = await getPRByNumber(repository, 42, options, 'local:host', known)
     expect(data).toMatchObject({ headDefaultBranchName: 'trunk', stackMetadataChecked: true })
-    expect(exec).toHaveBeenCalledTimes(1)
-    expect(exec.mock.calls[0][0].slice(0, 2)).toEqual(['pr', 'view'])
+    expect(exec.mock.calls[0][0].slice(0, 2)).toEqual(['api', 'graphql'])
   })
 
   it.each([
@@ -370,7 +381,6 @@ describe('sidebar PR query', () => {
         usedExactNumberLookup: true
       })
       expect(data.stackMetadataChecked).toBe(true)
-      expect(exec).toHaveBeenCalledTimes(2)
       expect(exec.mock.calls[1][0]).toContain('repos/acme/widgets/pulls/42')
     }
   )
@@ -407,12 +417,11 @@ describe('sidebar PR query', () => {
     ).resolves.toMatchObject({
       title: 'CLI fallback'
     })
-    expect(exec).toHaveBeenCalledTimes(2)
     expect(exec.mock.calls[1][0].slice(0, 2)).toEqual(['pr', 'view'])
   })
 
   it.each(['github.corp.example', undefined])(
-    'keeps the existing read for host %s',
+    'uses host-scoped metadata and the complete collector for host %s',
     async (host) => {
       exec.mockResolvedValueOnce({ stdout: JSON.stringify({ ...fields, statusCheckRollup: [] }) })
       await expect(
@@ -420,7 +429,6 @@ describe('sidebar PR query', () => {
           includeStackSummary: true
         })
       ).resolves.toMatchObject({ number: 42 })
-      expect(exec).toHaveBeenCalledTimes(1)
       expect(exec.mock.calls[0][0].slice(0, 2)).toEqual(['pr', 'view'])
     }
   )
@@ -449,4 +457,81 @@ describe('sidebar PR query', () => {
     })
     expect(exec.mock.calls[0][1]).toEqual({ ...options, ...execution, host: 'github.com' })
   })
+})
+
+it.each([
+  { checks: [null], errors: undefined },
+  {
+    checks: [{ __typename: 'CheckRun', status: 'FUTURE_STATUS', conclusion: null }],
+    errors: undefined
+  },
+  {
+    checks: [successCheck],
+    errors: [
+      { path: ['repository', 'pullRequest', 'commits', 'nodes', 0, 'commit', 'statusCheckRollup'] }
+    ]
+  }
+])(
+  'keeps valid metadata and stack when strict checks are unavailable: %j',
+  async ({ checks, errors }) => {
+    exec.mockResolvedValueOnce(
+      response(
+        {
+          ...fields,
+          commits: commits(checks),
+          stack: { number: 7, size: 2, baseRefName: 'main' },
+          stackEntry: { position: 1 }
+        },
+        errors
+      )
+    )
+    await expect(readPullRequestSidebarQuery(repository, 42, options)).resolves.toMatchObject({
+      title: fields.title,
+      checksUnavailable: true,
+      stackMetadataChecked: true,
+      stack: { number: 7, size: 2, position: 1 }
+    })
+  }
+)
+
+it.each([1, 10])(
+  'reuses combined exact hydration and page-linear continuations at N=%i',
+  async (n) => {
+    exec.mockImplementation(async (args: string[]) => {
+      const continuation = args.some((arg) => arg === 'checksCursor=next')
+      return response({
+        ...fields,
+        commits: commits(
+          continuation ? [{ __typename: 'StatusContext', state: 'FAILURE' }] : [successCheck],
+          continuation ? undefined : 'next'
+        )
+      })
+    })
+    const known = { ...fields, statusCheckRollup: [], headDefaultBranchName: 'trunk' }
+    for (let target = 0; target < n; target++) {
+      await expect(
+        getPRByNumber(repository, 42, options, 'local:host', known)
+      ).resolves.toMatchObject({
+        headDefaultBranchName: 'trunk',
+        checksUnavailable: false,
+        statusCheckRollup: [successCheck, { __typename: 'StatusContext', state: 'FAILURE' }]
+      })
+    }
+    expect(exec).toHaveBeenCalledTimes(n * 2)
+    expect(exec.mock.calls.every(([args]) => args[0] === 'api' && args[1] === 'graphql')).toBe(true)
+  }
+)
+
+it('retains the rich exact metadata path when the optional combined read fails', async () => {
+  exec
+    .mockRejectedValueOnce(new Error('unsupported optional query'))
+    .mockResolvedValueOnce(legacyResponse())
+  await expect(
+    getPRByNumber(repository, 42, options, 'local:host', {
+      ...fields,
+      statusCheckRollup: [],
+      headDefaultBranchName: 'trunk'
+    })
+  ).resolves.toMatchObject({ reviewDecision: null, headDefaultBranchName: 'trunk' })
+  expect(exec.mock.calls[1][0].slice(0, 2)).toEqual(['pr', 'view'])
 })

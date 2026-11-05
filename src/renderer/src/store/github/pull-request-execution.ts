@@ -1,3 +1,4 @@
+import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AppState } from '../types'
@@ -16,11 +17,10 @@ import {
   normalizeGitHubPRForBranchOutcome,
   githubPRTransportFailureOutcome
 } from '../../../../shared/github/pull-request-for-branch-outcome'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
 import { getRuntimeRepoTarget } from './repository-routing'
-import { applyCachedChecksStatus } from './pr-check-status-cache'
 import { isWslHostOffForForge, withForgeHostOffSkip } from './wsl-host-off-forge'
 import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
 import { lookupPRForBranchOverIpc } from './pr-for-branch-ipc-fallback'
@@ -72,7 +72,6 @@ export function startPullRequestLookup(args: {
     requestStartedPRRefreshToken
   } = args
   const executionHostId = repo ? getRepoExecutionHostId(repo) : undefined
-  const ownerHostId = executionHostId ?? LOCAL_EXECUTION_HOST_ID
   const request = (async () => {
     try {
       const runtimeRepo = getRuntimeRepoTarget(get(), { repoId, repoPath }, requestTarget)
@@ -82,6 +81,7 @@ export function startPullRequestLookup(args: {
         }
         return cached?.data ?? null
       }
+      const checkContract = capturePRCheckContract(get, runtimeRepo?.target ?? { kind: 'local' })
       const candidateWorktree = options?.worktreeId
         ? findWorktreeById(get(), options.worktreeId, executionHostId)
         : null
@@ -106,7 +106,7 @@ export function startPullRequestLookup(args: {
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                 : {})
             },
-            { timeoutMs: 30_000 }
+            { timeoutMs: 30_000, ...checkContract.rpcOptions }
           ).then((result) => normalizeGitHubPRForBranchOutcome(result))
         : (async () => {
             const candidate: GitHubPRRefreshCandidate = {
@@ -139,7 +139,11 @@ export function startPullRequestLookup(args: {
         transportFailed = true
         return githubPRTransportFailureOutcome()
       })
+      if (!checkContract.current()) {
+        return cached?.data ?? null
+      }
       const pr = outcome.kind === 'found' ? outcome.pr : null
+      let acceptedPR = pr
       // RPC and lost IPC replies get no coordinator settlement; a lost reply is reported only to the click that asked, so polls stay silent.
       if (
         prRequestGenerations.get(cacheKey) === generation &&
@@ -168,16 +172,9 @@ export function startPullRequestLookup(args: {
             connectionId: repo?.connectionId,
             executionHostId: repo?.executionHostId,
             hasRepoOwner: repo !== undefined,
-            pr:
-              pr && !runtimeRepo
-                ? applyCachedChecksStatus(
-                    s,
-                    { cacheKey, repoPath, branch, repoId, connectionId: repo?.connectionId },
-                    pr,
-                    outcome.fetchedAt,
-                    ownerHostId
-                  )
-                : pr,
+            pr,
+            checkContract,
+            overlayChecks: !runtimeRepo,
             fetchedAt: outcome.fetchedAt,
             rejectedPRUrls: outcome.kind === 'no-pr' ? outcome.rejectedPRUrls : undefined,
             fetchedHeadOid: requestHeadOid,
@@ -188,6 +185,7 @@ export function startPullRequestLookup(args: {
             requestStartedAt,
             requestStartedEntry: requestStartedHostedReviewEntry
           })
+          acceptedPR = (updates.prCache ?? s.prCache)[cacheKey]?.data ?? pr
           return updates.prCache || updates.hostedReviewCache ? updates : s
         })
         if (skippedStaleLinkedPRLookup) {
@@ -249,7 +247,7 @@ export function startPullRequestLookup(args: {
       ) {
         return get().prCache[cacheKey]?.data ?? null
       }
-      return pr ?? null
+      return acceptedPR ?? null
     } catch (err) {
       console.error('Failed to fetch PR:', err)
       return null

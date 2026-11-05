@@ -107,6 +107,12 @@ export function mapGraphQLPendingApprovalCheckSuite(
   }
 }
 
+export function isPendingApprovalSuiteWithoutRuns(conclusion: unknown, hasRuns: boolean): boolean {
+  return (
+    typeof conclusion === 'string' && conclusion.toLowerCase() === 'action_required' && !hasRuns
+  )
+}
+
 export function mapGraphQLPRChecksResponse(
   ownerRepo: GitHubApiRepository,
   response: GraphQLPRChecksResponse
@@ -137,10 +143,12 @@ export function mapGraphQLPRChecksResponse(
     .map(mapGraphQLStatusContext)
     .filter((check): check is PRCheckDetail => check !== null && !checkRunNames.has(check.name))
   const pendingApprovalChecks = (commit.checkSuites?.nodes ?? [])
-    .filter((suite) => suite.conclusion?.toLowerCase() === 'action_required')
     .filter((suite) => {
       const suiteId = nullableNumber(suite.databaseId)
-      return suiteId === null || !checkSuiteIdsWithRuns.has(suiteId)
+      return isPendingApprovalSuiteWithoutRuns(
+        suite.conclusion,
+        suiteId !== null && checkSuiteIdsWithRuns.has(suiteId)
+      )
     })
     .map((suite, index) =>
       mapGraphQLPendingApprovalCheckSuite(ownerRepo, suite, pullRequest.headRefOid, index)

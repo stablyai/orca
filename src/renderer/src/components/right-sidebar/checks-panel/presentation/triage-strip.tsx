@@ -1,3 +1,4 @@
+import { isCompletePRCheckOwner } from '../../../../../../shared/github/complete-pr-check-owner'
 import React from 'react'
 import {
   AlertTriangle,
@@ -52,14 +53,28 @@ export function PRTriageStrip({
   onFixChecksWithAI: () => void
   fixChecksDisabled?: boolean
   fixChecksDisabledReason?: string
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const resolvedReview = review ?? pr
   // Share the pill's classifier so completed checks without conclusions remain unresolved rather than spinning.
-  const summary = summarizeProviderChecks(checks)
-  const failingCount = summary.failed - (summary.cancelled ?? 0)
-  const outcome = getProviderChecksOutcome(summary)
+  const complete = reviewKind === 'PR' && resolvedReview && isCompletePRCheckOwner(resolvedReview)
+  const summary = complete ? resolvedReview.checksSummary : summarizeProviderChecks(checks)
   const brokenCheckCount = getBrokenChecks(checks).length
-  const pendingCount = summary.pending
+  if (!summary && brokenCheckCount === 0) {
+    return resolvedReview?.mergeable === 'CONFLICTING' ? (
+      <ConflictTriageStrip
+        reviewKind={reviewKind}
+        isResolvingConflictsWithAI={isResolvingConflictsWithAI}
+        onResolveConflictsWithAI={onResolveConflictsWithAI}
+        resolveConflictsDisabled={resolveConflictsDisabled}
+        resolveConflictsDisabledReason={resolveConflictsDisabledReason}
+      />
+    ) : null
+  }
+  const rowSummary = summarizeProviderChecks(checks)
+  const displaySummary = summary ?? rowSummary
+  const failingCount = displaySummary.failed - (displaySummary.cancelled ?? 0)
+  const outcome = getProviderChecksOutcome(displaySummary)
+  const pendingCount = displaySummary.pending
   const pipelineFailed = pipelineCheck ? isBrokenCheck(pipelineCheck) : false
 
   const conflictStrip =
@@ -73,7 +88,7 @@ export function PRTriageStrip({
       />
     ) : null
 
-  if (brokenCheckCount > 0 || pipelineFailed) {
+  if (brokenCheckCount > 0 || (complete && (summary?.failed ?? 0) > 0) || pipelineFailed) {
     return (
       <>
         {conflictStrip}
@@ -91,28 +106,33 @@ export function PRTriageStrip({
             />
             <div className="min-w-0 flex-1">
               <div className="truncate text-[11px] font-medium text-foreground">
-                {pipelineCheck && pipelineFailed
+                {!summary
                   ? translate(
-                      'auto.components.right.sidebar.checks.panel.content.pipelineFailed',
-                      '{{name}} failed',
-                      { name: pipelineCheck.name }
+                      'auto.components.right.sidebar.ChecksPanel.976cefd02f',
+                      'Checks unavailable'
                     )
-                  : outcome === 'cancelled'
+                  : pipelineCheck && pipelineFailed
                     ? translate(
-                        'auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0',
-                        'Cancelled'
+                        'auto.components.right.sidebar.checks.panel.content.pipelineFailed',
+                        '{{name}} failed',
+                        { name: pipelineCheck.name }
                       )
-                    : outcome === 'pending'
+                    : outcome === 'cancelled'
                       ? translate(
-                          'auto.components.right.sidebar.checks.panel.content.pendingChecks',
-                          '{{count}} checks pending',
-                          { count: pendingCount, defaultValue_one: '{{count}} check pending' }
+                          'auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0',
+                          'Cancelled'
                         )
-                      : translate(
-                          'auto.components.right.sidebar.checks.panel.content.failingChecks',
-                          '{{count}} failing checks',
-                          { count: failingCount, defaultValue_one: '{{count}} failing check' }
-                        )}
+                      : outcome === 'pending'
+                        ? translate(
+                            'auto.components.right.sidebar.checks.panel.content.pendingChecks',
+                            '{{count}} checks pending',
+                            { count: pendingCount, defaultValue_one: '{{count}} check pending' }
+                          )
+                        : translate(
+                            'auto.components.right.sidebar.checks.panel.content.failingChecks',
+                            '{{count}} failing checks',
+                            { count: failingCount, defaultValue_one: '{{count}} failing check' }
+                          )}
               </div>
               <div className="truncate text-[10px] text-muted-foreground">
                 {translate(
@@ -125,7 +145,7 @@ export function PRTriageStrip({
               type="button"
               variant="outline"
               size="xs"
-              disabled={isFixingChecksWithAI || fixChecksDisabled}
+              disabled={isFixingChecksWithAI || fixChecksDisabled || brokenCheckCount === 0}
               title={fixChecksDisabled ? fixChecksDisabledReason : undefined}
               onClick={onFixChecksWithAI}
             >
@@ -177,7 +197,7 @@ export function PRTriageStrip({
   }
 
   // An all-unresolved list must match the grey pill, not show a green tick.
-  if (summary.state === 'neutral') {
+  if (displaySummary.state === 'neutral') {
     return (
       <div className="border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -187,7 +207,7 @@ export function PRTriageStrip({
               {translate(
                 'auto.components.right.sidebar.checks.panel.content.unresolvedChecks',
                 '{{count}} checks unresolved',
-                { count: summary.neutral, defaultValue_one: '{{count}} check unresolved' }
+                { count: displaySummary.neutral, defaultValue_one: '{{count}} check unresolved' }
               )}
             </div>
             <div className="truncate text-[10px] text-muted-foreground">
