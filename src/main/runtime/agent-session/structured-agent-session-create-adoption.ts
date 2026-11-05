@@ -39,6 +39,7 @@ export type StructuredAgentSessionCreateIntentInput = {
   worktree: string
   agent: StructuredAgentId
   callerKey?: string
+  forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
 }
@@ -48,16 +49,17 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
   envelope: { sessionId: string; clientOperationId: string }
   agent: StructuredAgentId
   callerKey?: string
+  forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: { providerSessionId: string }
   location: AgentSessionExecutionLocation
   options?: Readonly<Record<string, string>>
 }): AgentSessionAttachParams | null {
   const history = structuredAgentRuntimeMetadata(input.agent)?.sessionHistory
   const replay =
-    input.resumeFrom && input.callerKey && input.host && history
+    (input.resumeFrom || input.forkFrom) && input.callerKey && input.host && history
       ? findCommittedStructuredAgentSessionAdoptionReplay({
           agent: input.agent,
-          providerSessionId: input.resumeFrom.providerSessionId,
+          providerSessionId: input.resumeFrom?.providerSessionId,
           rowSessionId: history.rowSessionId,
           selfSessionId: input.envelope.sessionId,
           callerKey: input.callerKey,
@@ -80,8 +82,20 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
     provider: input.agent,
     agent: input.agent,
     accountHome: replay.record.accountHome,
-    ...(input.options ? { options: input.options } : {}),
-    adopt: { providerHandle: replay.providerHandle },
+    ...(input.forkFrom
+      ? {
+          options: {
+            ...replay.record.options,
+            ...(replay.record.permissionMode
+              ? { permissionMode: replay.record.permissionMode }
+              : {})
+          },
+          ...(replay.record.launchArgs ? { launchArgs: replay.record.launchArgs } : {})
+        }
+      : input.options
+        ? { options: input.options }
+        : {}),
+    ...(replay.providerHandle ? { adopt: { providerHandle: replay.providerHandle } } : {}),
     runtimeKind: 'native'
   }
 }

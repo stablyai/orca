@@ -1,3 +1,4 @@
+import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session/failures/agent-session-definitive-refusal'
@@ -31,7 +32,6 @@ import {
 import { performSend } from './structured-agent-session-turns'
 import { observedReceipt } from './structured-agent-session-operation-settlement'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
-import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { openingMessageOptions } from './structured-agent-session-execution-options'
 
@@ -168,6 +168,9 @@ async function foundConversation(
         : refusal
     }
   }
+  if (!replayed) {
+    await prepareForkFounding(params, request, prepared.items)
+  }
   const existing = context.sessions.get(sessionId)
   const opened = existing
     ? { session: existing }
@@ -194,6 +197,7 @@ async function foundConversation(
         prepared.items,
         { uncommittedCreate: true }
       )
+      await params.fork?.revalidate()
       const first = options.firstMessage
       if (first) {
         const sent = await performSend(
@@ -266,7 +270,7 @@ async function foundConversation(
       value: {
         sessionId,
         fence,
-        page: readAgentSessionHydrationPage(session.journal, fence),
+        page: readForkHydration(session.journal, fence, store),
         unconfirmedClientMessageIds: [],
         ...(firstMessage ? { firstMessage } : {}),
         ...(tabId ? { tabId } : {})

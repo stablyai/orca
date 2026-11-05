@@ -1,3 +1,4 @@
+import { readForkMarker } from './agent-session-fork-marker'
 import { StructuredAgentSessionJournalObservers } from './structured-agent-session-journal-observers'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from './structured-agent-session-saved-status'
@@ -27,14 +28,14 @@ import { heldStructuredAgentSessionCurrentWork } from './structured-agent-sessio
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type {
   StructuredAgentSessionStatusFeed,
-  StructuredAgentSessionStatusSubscriber
+  StructuredAgentSessionStatusSubscriber as StatusSubscriber
 } from './structured-agent-session-status-feed'
 import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
 import { createStructuredAgentSessionHostStatusFeed } from './structured-agent-session-host-status-feed'
 import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
 import {
   StructuredAgentSessionTurnCompletionFeed,
-  type StructuredAgentSessionTurnCompletionSubscriber
+  type StructuredAgentSessionTurnCompletionSubscriber as TurnCompletionSubscriber
 } from './structured-agent-session-turn-completion-feed'
 
 export class StructuredAgentSessionClientDelivery {
@@ -99,6 +100,8 @@ export class StructuredAgentSessionClientDelivery {
     )
     this.waitForSendSettlement = this.sendSettlement.wait
     this.subscribers = new AgentSessionSubscribers({
+      readForkJournal: (id) => this.sessions.get(id)?.journal,
+      readForkMarker: (sessionId) => readForkMarker(this.deps().store, sessionId),
       readCommands: (sessionId, commandsOnRequest) =>
         this.readCommands(sessionId, commandsOnRequest),
       readQueuePublication: (sessionId) =>
@@ -275,16 +278,14 @@ export class StructuredAgentSessionClientDelivery {
     return unsubscribe
   }
 
-  subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
-    this.statusFeed.subscribe(subscriber)
+  subscribeStatus = (subscriber: StatusSubscriber) => this.statusFeed.subscribe(subscriber)
   forgetStatus = (sessionId: string): void => this.statusFeed.forget(sessionId)
 
   readStatusSummary = (sessionId: string): AgentSessionStatusSummary | undefined =>
     this.statusFeed.readPublished(sessionId)
 
-  subscribeTurnCompletions = (
-    subscriber: StructuredAgentSessionTurnCompletionSubscriber
-  ): (() => void) => this.turnCompletionFeed.subscribe(subscriber)
+  subscribeTurnCompletions = (subscriber: TurnCompletionSubscriber): (() => void) =>
+    this.turnCompletionFeed.subscribe(subscriber)
 
   /** Closing handles retains session-list rows; agent-status retains them only while tabs need them. */
   closeSession(sessionId: string, options: { listed: boolean }): void {

@@ -1,3 +1,4 @@
+import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStoreTransactions } from './records/agent-session-store-transactions'
 import {
   commitConversationClearRecord,
@@ -10,6 +11,14 @@ export function createAgentSessionConversationReceipts(
   transactions: Pick<AgentSessionStoreTransactions, 'receipt'>
 ) {
   return {
+    forkBoundary: (sessionId: string, forkedFrom: AgentSessionForkedFrom, title: string) =>
+      transactions.receipt((draft) => {
+        const record = draft.records.get(sessionId)
+        if (!record) {
+          throw new Error('agent_session_fork:record-missing')
+        }
+        draft.records.set(sessionId, { ...record, forkedFrom, conversationName: title })
+      }),
     clear: (
       clear: () => AgentSessionConversationClear,
       operation: { callerKey: string; operationId: string }

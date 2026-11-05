@@ -17,6 +17,8 @@ export type AgentSessionRecordIdentity = Pick<
   | 'options'
   | 'launchArgs'
   | 'launchDirectory'
+  | 'forkedFrom'
+  | 'conversationName'
 >
 
 export function agentSessionRecordIdentityFields(
@@ -32,6 +34,8 @@ export function agentSessionRecordIdentityFields(
     location: identity.location,
     provider: identity.provider,
     accountHome: identity.accountHome,
+    ...(identity.forkedFrom ? { forkedFrom: identity.forkedFrom } : {}),
+    ...(identity.conversationName ? { conversationName: identity.conversationName } : {}),
     ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
