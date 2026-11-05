@@ -189,7 +189,8 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_workspaceStatusesDefaultVisualsMigrated',
   '_workspaceStatusesDefaultWorkflowMigrated',
   '_workspaceStatusesReorderedDefaultRepaired',
-  '_zcodeStatusBarDefaultAdded'
+  '_zcodeStatusBarDefaultAdded',
+  '_ollamaStatusBarDefaultAdded'
 ] as const satisfies readonly (keyof PersistedUIState)[]
 
 // Exhaustiveness prevents moves stranding newly added workspace state.
