@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../../../transport/types'
-import { uploadMobileNativeChatImages } from './mobile-native-chat-image-attachment'
+import {
+  uploadMobileNativeChatImages,
+  uploadPreparedNativeChatImages
+} from './mobile-native-chat-image-attachment'
 
 function ok(id: string, result: unknown): RpcSuccess {
   return { id, ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -38,6 +41,26 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
 }
 
 describe('uploadMobileNativeChatImages', () => {
+  it('uploads images that were already read, without asking a picker', async () => {
+    const client = clientWithResponses([methodNotFound('start'), ok('save', '/tmp/paste.png')])
+
+    const result = await uploadPreparedNativeChatImages(
+      [{ base64: 'DDDD', uri: 'data:image/png;base64,DDDD' }],
+      {
+        client,
+        getConnectionId: async () => 'conn-7'
+      }
+    )
+
+    expect(result).toEqual([
+      {
+        path: '/tmp/paste.png',
+        previewUri: 'data:image/png;base64,DDDD'
+      }
+    ])
+    expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
+  })
+
   it('uploads the picked image and returns its host path + local preview uri, without any terminal.send', async () => {
     const client = clientWithResponses([
       methodNotFound('start'),

@@ -347,6 +347,7 @@ export function MobileSessionActiveContent({
                 keyboardInset={keyboardLift}
                 // A workspace routed to another server stops with that server, whose name the phone lacks.
                 hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+                showToast={showToast}
               />
             </MobileAgentMessageProvider>
           </MobileDictationMeterContext.Provider>

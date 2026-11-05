@@ -28,6 +28,8 @@ import {
   type MobileNativeChatSessionOptionPickersProps
 } from '../input/MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { MobileComposerImagePasteHandler } from './mobile-native-chat-composer-image-paste'
+import { useMobileNativeChatComposerImagePaste } from './use-mobile-native-chat-composer-image-paste'
 import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
@@ -83,6 +85,7 @@ type Props = MobileNativeChatMicProps & {
   agent?: string | null
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   onAttachImage?: () => void
+  onPasteImages?: MobileComposerImagePasteHandler
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
@@ -118,6 +121,7 @@ export function MobileNativeChatComposer({
   structured = null,
   sessionOptions,
   onAttachImage,
+  onPasteImages,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
   isAttaching = false,
@@ -140,6 +144,7 @@ export function MobileNativeChatComposer({
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const imagePaste = useMobileNativeChatComposerImagePaste(onPasteImages, editSession)
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef
   const [focused, setFocused] = useState(false)
@@ -274,6 +279,7 @@ export function MobileNativeChatComposer({
 
   return (
     <View>
+      {imagePaste.host}
       {menu.rows.length > 0 ? (
         <MobileNativeChatComposerMenu
           rows={menu.rows}
@@ -323,6 +329,8 @@ export function MobileNativeChatComposer({
             }
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}
+            onPasteImages={imagePaste.onPasteImages}
+            readClipboardImage={imagePaste.readClipboardImage}
             multiline
             editable={!editSession?.locked}
             // Why: never revoke `editable` — iOS resigns first responder on a focused

@@ -14,6 +14,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { createUuidV4 } from '../../../src/shared/uuid-v4'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { prepareMobileComposerPastedImages } from './native-chat/composer/prepare-mobile-composer-pasted-image'
 
 export function MobileQueuedMessageComposer({
   editor,
@@ -123,6 +124,13 @@ export function MobileQueuedMessageComposer({
           editor.imagesCapable
             ? () => {
                 void images.attachImage('library')
+              }
+            : undefined
+        }
+        onPasteImages={
+          editor.imagesCapable
+            ? (pasted) => {
+                void images.attachPickedImages(prepareMobileComposerPastedImages(pasted))
               }
             : undefined
         }

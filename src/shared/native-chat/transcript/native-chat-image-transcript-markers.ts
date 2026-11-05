@@ -3,7 +3,12 @@ import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
 } from '../../ansi-escape-sequences'
-import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from '../native-chat-types'
+import {
+  isImageRefBlock,
+  isTextBlock,
+  type NativeChatBlock,
+  type NativeChatMessage
+} from '../native-chat-types'
 import { imageReferenceToken, replaceImageReferences } from '../native-chat-image-reference'
 import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../../agent-image-paste'
 
@@ -164,8 +169,50 @@ export function hasImagePromptMarker(message: NativeChatMessage): boolean {
   return message.blocks.some((block) => isTextBlock(block) && IMAGE_PROMPT_MARKER.test(block.text))
 }
 
-/** Claude records image paths as source turns followed by a prompt carrying
- *  image markers. Merge the whole run back into one native user turn. */
+/** Companions Claude writes after the prompt share its clock. A missing clock is not that clock. */
+function equalTimestampImageSourceRun(
+  messages: readonly NativeChatMessage[],
+  start: number,
+  prompt: NativeChatMessage
+): { end: number; paths: string[] } | null {
+  const paths: string[] = []
+  let end = start
+  while (end < messages.length) {
+    const candidate = messages[end]!
+    const candidatePaths = imageSourcePathsFromMessage(candidate)
+    if (
+      candidate.source !== prompt.source ||
+      prompt.timestamp == null ||
+      candidate.timestamp !== prompt.timestamp ||
+      candidatePaths.length === 0
+    ) {
+      break
+    }
+    paths.push(...candidatePaths)
+    end += 1
+  }
+  return end === start ? null : { end, paths }
+}
+
+// Insert each new companion beside the reference it follows. A path already on the prompt stays once.
+function insertImageRefsInCompanionOrder(
+  blocks: NativeChatBlock[],
+  paths: readonly string[]
+): void {
+  let cursor = 0
+  for (const path of paths) {
+    const existing = blocks.findIndex((block) => isImageRefBlock(block) && block.path === path)
+    if (existing !== -1) {
+      cursor = existing + 1
+      continue
+    }
+    blocks.splice(cursor, 0, { type: 'image-ref', path })
+    cursor += 1
+  }
+}
+
+/** Claude records image paths as source turns around a prompt carrying image
+ * markers. Merge that run into the prompt so one paste renders once. */
 export function normalizeImageTranscriptMessages(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
@@ -200,14 +247,14 @@ export function normalizeImageTranscriptMessages(
         prompt.source === message.source &&
         hasImagePromptMarker(prompt)
       ) {
+        const blocks = [...stripImagePromptMarkersFromTextBlocks(prompt.blocks)]
+        insertImageRefsInCompanionOrder(
+          blocks,
+          sourceTurns.flatMap(({ paths }) => paths)
+        )
         normalized.push({
           ...prompt,
-          blocks: [
-            ...sourceTurns.flatMap(({ paths }) =>
-              paths.map((path) => ({ type: 'image-ref' as const, path }))
-            ),
-            ...stripImagePromptMarkersFromTextBlocks(prompt.blocks)
-          ]
+          blocks
         })
         index = nextIndex
         continue
@@ -219,6 +266,17 @@ export function normalizeImageTranscriptMessages(
         })
       }
       index = nextIndex - 1
+      continue
+    }
+    const following = hasImagePromptMarker(message)
+      ? equalTimestampImageSourceRun(messages, index + 1, message)
+      : null
+    if (following) {
+      normalized ??= messages.slice(0, index)
+      const blocks = [...stripImagePromptMarkersFromTextBlocks(message.blocks)]
+      insertImageRefsInCompanionOrder(blocks, following.paths)
+      normalized.push({ ...message, blocks })
+      index = following.end - 1
       continue
     }
     const blocks = stripImagePromptMarkersFromTextBlocks(message.blocks)

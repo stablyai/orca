@@ -161,6 +161,7 @@ function Harness(props: HarnessProps) {
       attachments: [],
       isAttaching: false,
       attachImage: async () => {},
+      attachPickedImages: async () => {},
       removeAttachment: () => {}
     },
     onMicPress: vi.fn(),

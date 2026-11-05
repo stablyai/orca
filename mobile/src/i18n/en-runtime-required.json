@@ -57,6 +57,10 @@
     }
   },
   "chat": {
+    "composer": {
+      "skippedUnsupportedPaste_one": "Skipped {{count}} unsupported file",
+      "skippedUnsupportedPaste_other": "Skipped {{count}} unsupported files"
+    },
     "notice": {
       "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },

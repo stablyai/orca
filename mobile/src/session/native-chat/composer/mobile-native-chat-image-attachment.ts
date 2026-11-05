@@ -39,25 +39,23 @@ export type UploadNativeChatImagesDeps = {
   readonly onImageUploaded?: (image: Omit<PendingNativeChatImage, 'id'>) => void
 }
 
-// Upload without pasting: chat holds composer chips until submit so visible attachments cannot diverge from agent input.
-export async function uploadMobileNativeChatImages(
-  source: MobileImageSource,
+// Chat holds composer chips until submit so visible attachments cannot diverge from agent input.
+export async function uploadPreparedNativeChatImages(
+  images: Iterable<PickedMobileImage> | AsyncIterable<PickedMobileImage>,
   {
     client,
     canContinue,
     getConnectionId,
-    pickImages,
     onUploadStart,
     onImageUploaded
-  }: UploadNativeChatImagesDeps
+  }: Omit<UploadNativeChatImagesDeps, 'pickImages'>
 ): Promise<Omit<PendingNativeChatImage, 'id'>[]> {
-  const picked = await pickImages(source)
   const uploaded: Omit<PendingNativeChatImage, 'id'>[] = []
   let connectionId: string | null = null
   if (canContinue?.() === false) {
     return uploaded
   }
-  for await (const image of picked) {
+  for await (const image of images) {
     if (canContinue?.() === false) {
       break
     }
@@ -81,4 +79,12 @@ export async function uploadMobileNativeChatImages(
     }
   }
   return uploaded
+}
+
+export async function uploadMobileNativeChatImages(
+  source: MobileImageSource,
+  deps: UploadNativeChatImagesDeps
+): Promise<Omit<PendingNativeChatImage, 'id'>[]> {
+  const picked = await deps.pickImages(source)
+  return uploadPreparedNativeChatImages(picked, deps)
 }

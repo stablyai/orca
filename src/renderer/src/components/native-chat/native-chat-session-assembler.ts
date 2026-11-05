@@ -157,6 +157,7 @@ export function sortForImageNormalization(
         message.role === 'user' &&
         hasImagePromptMarker(message) &&
         candidate?.source === message.source &&
+        candidate.timestamp != null &&
         candidate.timestamp === message.timestamp &&
         isImageSourceUserTurn(candidate)
       ) {
@@ -164,6 +165,7 @@ export function sortForImageNormalization(
         while (
           nextIndex < sourceOrdered.length &&
           sourceOrdered[nextIndex]?.source === message.source &&
+          sourceOrdered[nextIndex]?.timestamp != null &&
           sourceOrdered[nextIndex]?.timestamp === message.timestamp &&
           isImageSourceUserTurn(sourceOrdered[nextIndex]!)
         ) {

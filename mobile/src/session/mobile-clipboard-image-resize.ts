@@ -5,12 +5,30 @@ import type { MobileClipboardImageResizer } from './mobile-clipboard-image-downs
 const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 const RESIZED_MIME = 'image/png'
 
+const CLIPBOARD_IMAGE_DECODE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
+
+async function decodeClipboardImage(source: string): Promise<HTMLImageElement> {
+  const prefixed = CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE.test(source)
+  const candidates = prefixed
+    ? [source]
+    : CLIPBOARD_IMAGE_DECODE_MIMES.map((mime) => `data:${mime};base64,${source}`)
+  let failure: unknown = null
+  for (const src of candidates) {
+    const image = new Image()
+    image.src = src
+    try {
+      // decode rejects unreadable sources; an onload-only promise could remain pending forever.
+      await image.decode()
+      return image
+    } catch (error) {
+      failure = error
+    }
+  }
+  throw failure instanceof Error ? failure : new Error('Failed to encode resized clipboard image')
+}
+
 export const resizeMobileClipboardImage: MobileClipboardImageResizer = async (source, target) => {
-  const base64 = source.replace(CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE, '')
-  const image = new Image()
-  image.src = `data:${RESIZED_MIME};base64,${base64}`
-  // decode rejects unreadable sources; an onload-only promise could remain pending forever.
-  await image.decode()
+  const image = await decodeClipboardImage(source)
   const canvas = document.createElement('canvas')
   canvas.width = target.width
   canvas.height = target.height

@@ -14,6 +14,8 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileComposerClipboardImageReader } from './native-chat/composer/use-mobile-composer-clipboard-image'
+import { useMobileTerminalComposerImagePaste } from './use-mobile-terminal-composer-image-paste'
 
 // The key row above one live field: every letter typed goes straight to the terminal, shell or agent.
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
@@ -42,7 +44,16 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     attachImage,
     keyboardLift
   } = controller
-  if (!sessionCommandDockShown(controller)) {
+  const dockShown = sessionCommandDockShown(controller)
+  const clipboardImage = useMobileComposerClipboardImageReader()
+  const imagePastePending = useMobileTerminalComposerImagePaste({
+    enabled: dockShown,
+    fieldRefs: [liveInputRef],
+    onImagePaste: (mode) =>
+      controller.handlePaste(mode === 'image' ? { preferImage: true } : undefined),
+    readClipboardImage: clipboardImage.read
+  })
+  if (!dockShown) {
     return null
   }
   return (
@@ -52,6 +63,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
       ]}
     >
+      {clipboardImage.host}
       {rail.keysInRail ? (
         <MobileTerminalMoreKeysSheet
           controller={controller}
@@ -91,7 +103,11 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             }
           }}
           onKeyPress={handleLiveInputKeyPress}
-          onSubmitEditing={submitLiveInput}
+          onSubmitEditing={() => {
+            if (!imagePastePending) {
+              submitLiveInput()
+            }
+          }}
           placeholder={t('session.commandDock.tapToShowKeyboard', 'Tap to show keyboard')}
           accessibilityLabel={t('session.commandDock.liveInputLabel', 'Live terminal input')}
           accessibilityHint={t(
@@ -113,7 +129,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           importantForAutofill="no"
         />
         <MobileTerminalInputActions
-          canSend={canSend}
+          canSend={canSend && !imagePastePending}
           isAttaching={isAttaching}
           dictation={dictation}
           dictationMode={dictationMode}
