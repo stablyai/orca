@@ -178,9 +178,8 @@ function buildSubDispatchSection(cli: string, workerHandle: string): string {
   return `
 
 === SUB-DISPATCH ===
-If the task asks for helper workers, start them here. They report to you: their
-questions, escalations, and worker_done arrive in your own \`check\`, next to
-your coordinator's mail.
+If the task asks for helper workers, start them here. Their questions and
+worker_done reach you like your coordinator's mail.
 
 \`\`\`sh
   ${cli} orchestration worker-start --from ${workerHandle} --spec "<sub-task>" --worktree current --agent <agent> --json
@@ -188,9 +187,8 @@ your coordinator's mail.
   ${cli} orchestration reply --from ${workerHandle} --id <message_id> --body "<answer>"
 \`\`\`
 
-Wait until every helper has settled (worker_done, a failed start, stop, or
-abandon) before reporting your own, and name any that failed. Nesting is
-capped; your helpers may not be able to start helpers of their own.
+Wait until every helper has settled before reporting your own, and name any
+that failed.
 
 ---`
 }
@@ -207,9 +205,8 @@ If the task asks for sub-workers, create your own Run first, then:
   ${cli} orchestration worker-start --task <task_id> --worktree current --agent <agent> --json
 \`\`\`
 
-Wait until every sub-worker has settled (worker_done, a failed start, stop, or
-abandon) before reporting your own, and name any that failed. Nesting is
-capped; your sub-workers may not be able to dispatch further.
+Wait until every sub-worker has settled before reporting your own, and name
+any that failed.
 
 ---`
 }
