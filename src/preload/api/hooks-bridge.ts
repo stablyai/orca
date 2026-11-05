@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { RepoCommandKind } from '../../shared/repo-command-kind'
 import type { PreloadApi } from '../api-types'
 
 export const hooksApi = {
@@ -13,6 +14,7 @@ export const hooksApi = {
     repoId: string
     hostId?: ExecutionHostId
     wakeWslDistro?: boolean
+    kind?: RepoCommandKind
   }): Promise<{
     status?: 'ok' | 'error'
     localContent: string | null
@@ -28,5 +30,6 @@ export const hooksApi = {
     content: string
     hostId?: ExecutionHostId
     wakeWslDistro?: boolean
+    kind?: RepoCommandKind
   }): Promise<void> => ipcRenderer.invoke('hooks:writeIssueCommand', args)
 } satisfies PreloadApi['hooks']

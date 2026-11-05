@@ -4,9 +4,11 @@ import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../share
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { joinWorktreeRelativePath } from '../../runtime/files/paths/runtime-relative-paths'
 import {
+  getRepoCommandRelativePath,
   readIssueCommandUnlessWslStopped,
   writeIssueCommandUnlessWslStopped
 } from '../../workspace-hooks/issue-command-file'
+import { isRepoCommandKind, type RepoCommandKind } from '../../../shared/repo-command-kind'
 import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
@@ -18,7 +20,16 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
 
   ipcMain.handle(
     'hooks:readIssueCommand',
-    async (_event, args: { repoId: string; hostId?: ExecutionHostId; wakeWslDistro?: boolean }) => {
+    async (
+      _event,
+      args: {
+        repoId: string
+        hostId?: ExecutionHostId
+        wakeWslDistro?: boolean
+        kind?: RepoCommandKind
+      }
+    ) => {
+      const kind = isRepoCommandKind(args.kind) ? args.kind : 'issue'
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         return {
@@ -37,17 +48,19 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           localContent: null,
           sharedContent: null,
           effectiveContent: null,
-          localFilePath: joinWorktreeRelativePath(repo.path, '.orca/issue-command'),
+          localFilePath: joinWorktreeRelativePath(repo.path, getRepoCommandRelativePath(kind)),
           source: 'none' as const
         }
       }
       // Settings renders read this; only a launch (`wakeWslDistro`) may start a stopped distro.
-      const result = await readIssueCommandUnlessWslStopped(repo.path, {
-        wakeWslDistro: args.wakeWslDistro
-      })
+      const result = await readIssueCommandUnlessWslStopped(
+        repo.path,
+        { wakeWslDistro: args.wakeWslDistro },
+        kind
+      )
       if (result.refusedWslDistro) {
         // The Settings editor re-reads on this signal instead of staying read-only (#35778's pattern).
-        broadcastWhenWslDistroRunning(result.refusedWslDistro, `issue-command:${repo.id}`)
+        broadcastWhenWslDistroRunning(result.refusedWslDistro, `${kind}-command:${repo.id}`)
       }
       return result
     }
@@ -57,8 +70,15 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
     'hooks:writeIssueCommand',
     async (
       _event,
-      args: { repoId: string; content: string; hostId?: ExecutionHostId; wakeWslDistro?: boolean }
+      args: {
+        repoId: string
+        content: string
+        hostId?: ExecutionHostId
+        wakeWslDistro?: boolean
+        kind?: RepoCommandKind
+      }
     ) => {
+      const kind = isRepoCommandKind(args.kind) ? args.kind : 'issue'
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         return
@@ -71,7 +91,8 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
         repo.path,
         args.content,
         () => getLocalProjectWorktreeGitOptions(store, repo),
-        { wakeWslDistro: args.wakeWslDistro }
+        { wakeWslDistro: args.wakeWslDistro },
+        kind
       )
     }
   )

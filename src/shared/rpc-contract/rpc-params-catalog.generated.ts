@@ -1393,6 +1393,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.issueCommandWrite': RepoIssueCommandWrite,
   'repo.list': RepoList,
   'repo.reorder': RepoReorder,
+  'repo.reviewCommandRead': RepoIssueCommandRead,
+  'repo.reviewCommandWrite': RepoIssueCommandWrite,
   'repo.rm': RepoSelector,
   'repo.saveSparsePreset': RepoSparsePresetSave,
   'repo.searchRefs': RepoSearchRefs,

@@ -9,18 +9,29 @@ import {
   WslDistroStoppedError,
   WslDistroUnverifiableError
 } from '../wsl/filesystem/wsl-unc-access-gate'
+import { REPO_COMMAND_YAML_KEY, type RepoCommandKind } from '../../shared/repo-command-kind'
 
 type IssueCommandGitOptions = GitRuntimeOptions | (() => GitRuntimeOptions)
 
 const ORCA_DIR = '.orca'
-const ISSUE_COMMAND_FILENAME = 'issue-command'
-
-export function getIssueCommandFilePath(repoPath: string): string {
-  return join(repoPath, ORCA_DIR, ISSUE_COMMAND_FILENAME)
+const REPO_COMMAND_FILENAME: Record<RepoCommandKind, string> = {
+  issue: 'issue-command',
+  review: 'review-command'
 }
 
-export function getSharedIssueCommand(repoPath: string): string | null {
-  return loadHooks(repoPath)?.issueCommand?.trim() || null
+export function getRepoCommandRelativePath(kind: RepoCommandKind): string {
+  return `${ORCA_DIR}/${REPO_COMMAND_FILENAME[kind]}`
+}
+
+export function getIssueCommandFilePath(repoPath: string, kind: RepoCommandKind = 'issue'): string {
+  return join(repoPath, ORCA_DIR, REPO_COMMAND_FILENAME[kind])
+}
+
+export function getSharedIssueCommand(
+  repoPath: string,
+  kind: RepoCommandKind = 'issue'
+): string | null {
+  return loadHooks(repoPath)?.[REPO_COMMAND_YAML_KEY[kind]]?.trim() || null
 }
 
 export type ResolvedIssueCommand = {
@@ -31,8 +42,11 @@ export type ResolvedIssueCommand = {
   source: 'local' | 'shared' | 'none'
 }
 
-export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
-  const filePath = getIssueCommandFilePath(repoPath)
+export function readIssueCommand(
+  repoPath: string,
+  kind: RepoCommandKind = 'issue'
+): ResolvedIssueCommand {
+  const filePath = getIssueCommandFilePath(repoPath, kind)
   let localContent: string | null = null
 
   if (existsSync(filePath)) {
@@ -44,7 +58,7 @@ export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
     }
   }
 
-  const sharedContent = getSharedIssueCommand(repoPath)
+  const sharedContent = getSharedIssueCommand(repoPath, kind)
   const effectiveContent = localContent ?? sharedContent
 
   return {
@@ -63,10 +77,11 @@ export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
  */
 export async function readIssueCommandUnlessWslStopped(
   repoPath: string,
-  options: { wakeWslDistro?: boolean } = {}
+  options: { wakeWslDistro?: boolean } = {},
+  kind: RepoCommandKind = 'issue'
 ): Promise<ResolvedIssueCommand & { status?: 'error'; refusedWslDistro?: string }> {
   try {
-    return await guardWslUncPathAccess(repoPath, async () => readIssueCommand(repoPath), {
+    return await guardWslUncPathAccess(repoPath, async () => readIssueCommand(repoPath, kind), {
       wake: options.wakeWslDistro === true
     })
   } catch (error) {
@@ -76,7 +91,7 @@ export async function readIssueCommandUnlessWslStopped(
         localContent: null,
         sharedContent: null,
         effectiveContent: null,
-        localFilePath: getIssueCommandFilePath(repoPath),
+        localFilePath: getIssueCommandFilePath(repoPath, kind),
         source: 'none',
         // Names the distro so the editor can stay read-only and re-read once it runs.
         refusedWslDistro: error.distro
@@ -94,14 +109,19 @@ export async function writeIssueCommandUnlessWslStopped(
   repoPath: string,
   content: string,
   gitOptions: IssueCommandGitOptions,
-  options: { wakeWslDistro?: boolean } = {}
+  options: { wakeWslDistro?: boolean } = {},
+  kind: RepoCommandKind = 'issue'
 ): Promise<void> {
-  await guardWslUncPathAccess(repoPath, () => writeIssueCommand(repoPath, content, gitOptions), {
-    wake: options.wakeWslDistro === true,
-    // A host-path repo whose Git runs in WSL starts the distro through the ignore check a save
-    // runs; clearing runs no Git, so it leaves the options unresolved.
-    wslDistro: content.trim() ? gitWslDistro(gitOptions) : undefined
-  })
+  await guardWslUncPathAccess(
+    repoPath,
+    () => writeIssueCommand(repoPath, content, gitOptions, kind),
+    {
+      wake: options.wakeWslDistro === true,
+      // A host-path repo whose Git runs in WSL starts the distro through the ignore check a save
+      // runs; clearing runs no Git, so it leaves the options unresolved.
+      wslDistro: content.trim() ? gitWslDistro(gitOptions) : undefined
+    }
+  )
 }
 
 function gitWslDistro(gitOptions: IssueCommandGitOptions): string | undefined {
@@ -117,9 +137,10 @@ function gitWslDistro(gitOptions: IssueCommandGitOptions): string | undefined {
 export async function writeIssueCommand(
   repoPath: string,
   content: string,
-  options: IssueCommandGitOptions = {}
+  options: IssueCommandGitOptions = {},
+  kind: RepoCommandKind = 'issue'
 ): Promise<void> {
-  const filePath = getIssueCommandFilePath(repoPath)
+  const filePath = getIssueCommandFilePath(repoPath, kind)
   const trimmed = content.trim()
 
   try {
@@ -132,12 +153,12 @@ export async function writeIssueCommand(
     if (!existsSync(orcaDir)) {
       mkdirSync(orcaDir, { recursive: true })
     }
-    if (!(await isIssueCommandIgnoredByGit(repoPath, options))) {
+    if (!(await isIssueCommandIgnoredByGit(repoPath, options, kind))) {
       ensureOrcaDirIgnored(repoPath)
     }
     writeFileSync(filePath, `${trimmed}\n`, 'utf-8')
   } catch (err) {
-    console.error('[hooks] Failed to write issue command:', err)
+    console.error(`[hooks] Failed to write ${kind} command:`, err)
     throw err
   }
 }
@@ -145,10 +166,11 @@ export async function writeIssueCommand(
 /** Consult Git before changing shared ignore rules for a private override. */
 async function isIssueCommandIgnoredByGit(
   repoPath: string,
-  options: IssueCommandGitOptions = {}
+  options: IssueCommandGitOptions = {},
+  kind: RepoCommandKind = 'issue'
 ): Promise<boolean> {
   try {
-    const issueCommandPath = `${ORCA_DIR}/${ISSUE_COMMAND_FILENAME}`
+    const issueCommandPath = getRepoCommandRelativePath(kind)
     const ignored = await checkIgnoredPaths(
       repoPath,
       [issueCommandPath],

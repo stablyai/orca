@@ -7832,7 +7832,6 @@
           "a867a0889f": "最近或标签栏。"
         },
         "RepositoryHooksSection": {
-          "af49e2a19e": "该文件存在，但 Orca 找不到有效的“scripts”或“issueCommand”定义。",
           "39da2ae12f": "orca.yaml",
           "32fec28f5b": "命令源",
           "bbbd6e0bc4": "命令源 & orca.yaml",
@@ -7868,7 +7867,6 @@
           "623e0c9f31": "无法解析 `orca.yaml`",
           "5a67e4793d": "未检测到 `orca.yaml`",
           "07ba35bc68": "检查 `scripts:` 下的缩进。钩子键应使用两个空格，命令行应使用四个空格。",
-          "787ca433ef": "仅定义支持的键：`scripts`、`setup`、`archive` 和 `issueCommand`。",
           "ecc73d9125": "将你的文件与下面可用的模板进行比较，并在需要时复制该结构。",
           "0cc712b823": "核心配置文件存在于仓库根目录中，但 Orca 尚无法解析支持的钩子定义。",
           "aba825233f": "该文件包含此版本的 Orca 无法识别的配置密钥。您可能需要更新 Orca，或检查文件是否有拼写错误。",

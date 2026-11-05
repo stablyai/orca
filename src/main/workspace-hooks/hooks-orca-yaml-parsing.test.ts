@@ -139,6 +139,30 @@ describe('parseOrcaYaml', () => {
     })
   })
 
+  it('parses reviewCommand alongside issueCommand', () => {
+    const yaml = [
+      'issueCommand: Complete {{artifact_url}}',
+      'reviewCommand: |',
+      '  Review {{artifact_url}}'
+    ].join('\n')
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      issueCommand: 'Complete {{artifact_url}}',
+      reviewCommand: 'Review {{artifact_url}}'
+    })
+  })
+
+  it('treats a file with only reviewCommand as hooks, not null', () => {
+    expect(parseOrcaYaml('reviewCommand: Review {{artifact_url}}\n')).toEqual({
+      scripts: {},
+      reviewCommand: 'Review {{artifact_url}}'
+    })
+  })
+
+  it('returns null when reviewCommand is blank', () => {
+    expect(parseOrcaYaml('reviewCommand: "   "')).toBeNull()
+  })
+
   it('parses default terminal tabs from orca.yaml', () => {
     const yaml = [
       'defaultTabs:',

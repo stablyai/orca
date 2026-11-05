@@ -16,6 +16,10 @@ import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
+import { readAndConfirmRuntimeIssueCommand } from '@/lib/ensure-hooks-confirmed'
+import { resolveLinkedOnlyTemplatePrompt } from '@/lib/composer-issue-command'
+import { useAppStore } from '@/store'
+import { getRepoCommandKindForLinkedItemType } from '../../../../shared/repo-command-kind'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 
@@ -110,10 +114,54 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       const submitLinkedWorkItemProvider = submitLinkedWorkItem
         ? getLinkedWorkItemProvider(submitLinkedWorkItem)
         : null
+      const submitCommandKind = getRepoCommandKindForLinkedItemType(submitLinkedWorkItem?.type)
+      // Issues key off the typed/parsed issue number; PRs and MRs off the linked item.
+      const submitLinkedTemplateNumber =
+        submitCommandKind === 'issue'
+          ? submitLinkedIssueNumber
+          : (submitLinkedWorkItem?.number ?? null)
+      // With no note, the repo template becomes the agent's draft, so it is read and trusted
+      // here: the draft is baked into the launch before deferred hook preparation runs.
+      const usesLinkedOnlyTemplate =
+        enableIssueAutomation &&
+        selectedRepoIsGit &&
+        agent !== null &&
+        !note.trim() &&
+        Boolean(submitLinkedWorkItem?.url) &&
+        submitLinkedTemplateNumber !== null &&
+        canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider) &&
+        Boolean(selectedRepoExecutionHostId)
+      let linkedOnlyTemplatePrompt = ''
+      if (usesLinkedOnlyTemplate && selectedRepoExecutionHostId) {
+        const templateSettlement = await settleComposerSubmit(
+          readAndConfirmRuntimeIssueCommand(
+            useAppStore.getState(),
+            repoId,
+            selectedRepoExecutionHostId,
+            isSubmissionCancelled,
+            { kind: submitCommandKind, usage: 'prompt' }
+          ),
+          isSubmissionCancelled
+        )
+        if (templateSettlement.status === 'cancelled') {
+          return null
+        }
+        linkedOnlyTemplatePrompt = resolveLinkedOnlyTemplatePrompt({
+          trustDecision: templateSettlement.value.trustDecision,
+          note,
+          kind: submitCommandKind,
+          number: submitLinkedTemplateNumber,
+          artifactUrl: submitLinkedWorkItem?.url ?? null,
+          template: templateSettlement.value.template
+        })
+      }
+
       const hookPreparation: WorktreeCreationRequest['hookPreparation'] = selectedRepoIsGit
         ? {
             executionHostId: selectedRepoExecutionHostId ?? undefined,
             issueCommand:
+              // The template was already decided as the prompt; it must not also run as a shell command.
+              !usesLinkedOnlyTemplate &&
               enableIssueAutomation &&
               submitLinkedIssueNumber !== null &&
               canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider) &&
@@ -198,7 +246,8 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
-        trimmedNote
+        trimmedNote,
+        linkedOnlyTemplatePrompt
       })
     },
     [

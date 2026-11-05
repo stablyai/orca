@@ -3,6 +3,7 @@ import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { getSetupTrustContent } from '../../../shared/orca-hook-setup-config'
 import { canUseRepoWideTrust } from '../../../shared/orca-hook-trust-entries'
+import { REPO_COMMAND_YAML_KEY, type RepoCommandKind } from '../../../shared/repo-command-kind'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
 import {
   checkRuntimeHooks,
@@ -17,6 +18,9 @@ import {
 } from '../../../shared/execution-host'
 
 export type HookScriptKind = OrcaHookScriptKind
+
+// `usage`: how the dialog describes the template; review templates are always prompts.
+type RepoCommandTrustOptions = { kind?: RepoCommandKind; usage?: 'shell' | 'prompt' }
 
 const NEVER_CANCEL_TRUST_CHECK = (): boolean => false
 
@@ -92,7 +96,8 @@ async function confirmScriptContent(
   scriptContent: string,
   hostId?: ExecutionHostId,
   isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  usage: RepoCommandTrustOptions['usage'] = 'shell'
 ): Promise<'run' | 'skip'> {
   if (isCancelled() || signal?.aborted) {
     return 'skip'
@@ -140,6 +145,7 @@ async function confirmScriptContent(
       scriptContent,
       contentHash,
       previouslyApproved,
+      usage,
       onResolve: settle,
       // Why: eviction must fail closed without stranding the singleton trust queue.
       [MODAL_DISMISSED_KEY]: () => settle('skip')
@@ -162,7 +168,8 @@ async function confirmIssueCommandReadResult(
   repoId: string,
   hostId: ExecutionHostId,
   result: IssueCommandReadResult,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  { kind = 'issue', usage = 'shell' }: RepoCommandTrustOptions = {}
 ): Promise<'run' | 'skip'> {
   if (isCancelled()) {
     return 'skip'
@@ -176,10 +183,13 @@ async function confirmIssueCommandReadResult(
   return confirmScriptContent(
     state,
     repoId,
-    'issueCommand',
+    REPO_COMMAND_YAML_KEY[kind],
     getIssueCommandTrustContent(result),
     hostId,
-    isCancelled
+    isCancelled,
+    undefined,
+    // A review template is never run, only sent to the agent.
+    kind === 'review' ? 'prompt' : usage
   )
 }
 
@@ -194,12 +204,20 @@ function confirmRuntimeIssueCommandRead(
   repoId: string,
   hostId: ExecutionHostId,
   result: IssueCommandReadResult,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  options: RepoCommandTrustOptions = {}
 ): Promise<ConfirmedRuntimeIssueCommand> {
   return enqueueTrustPrompt(async () => ({
     result,
     template: getIssueCommandTrustContent(result),
-    trustDecision: await confirmIssueCommandReadResult(state, repoId, hostId, result, isCancelled)
+    trustDecision: await confirmIssueCommandReadResult(
+      state,
+      repoId,
+      hostId,
+      result,
+      isCancelled,
+      options
+    )
   }))
 }
 
@@ -207,13 +225,15 @@ export async function readAndConfirmRuntimeIssueCommand(
   state: AppState,
   repoId: string,
   hostId: ExecutionHostId,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  options: RepoCommandTrustOptions = {}
 ): Promise<ConfirmedRuntimeIssueCommand> {
   let result: IssueCommandReadResult
   try {
     // Creating a workspace is a user act: it may start the repo's stopped WSL distro.
     result = await readRuntimeIssueCommand(hookRepoOwnerHostId(state, repoId, hostId), repoId, {
-      wakeWslDistro: true
+      wakeWslDistro: true,
+      kind: options.kind
     })
   } catch {
     result = {
@@ -225,7 +245,7 @@ export async function readAndConfirmRuntimeIssueCommand(
       source: 'none'
     }
   }
-  return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled)
+  return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled, options)
 }
 
 export async function ensureHooksConfirmed(
@@ -249,13 +269,13 @@ export async function ensureHooksConfirmed(
 
     let scriptContent = ''
     try {
-      if (scriptKind === 'issueCommand') {
+      if (scriptKind === 'issueCommand' || scriptKind === 'reviewCommand') {
         // Only shared orca.yaml needs repo trust; user-owned overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
         // A launch is a user act: it may start the repo's stopped WSL distro.
         const result = await readRuntimeIssueCommand(
           hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
-          { wakeWslDistro: true }
+          { wakeWslDistro: true, kind: scriptKind === 'reviewCommand' ? 'review' : 'issue' }
         )
         if (result.source === 'local') {
           return 'run'

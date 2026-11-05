@@ -41,6 +41,8 @@ export type PreparedQuickSubmit = QuickSubmitSource & {
   createDisplayName: string | undefined
   pendingFirstAgentMessageRename: boolean
   trimmedNote: string
+  /** Rendered repo template used as the agent draft when the user typed no note; empty otherwise. */
+  linkedOnlyTemplatePrompt: string
 }
 
 export type ComposerSubmitModel = {

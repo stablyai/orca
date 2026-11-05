@@ -8392,7 +8392,6 @@
           "a867a0889f": "Récents ou barre d'onglets."
         },
         "RepositoryHooksSection": {
-          "af49e2a19e": "Le fichier est présent, mais Orca n'a pas trouvé de définitions valides de `scripts` ou d'`issueCommand`.",
           "39da2ae12f": "orca.yaml",
           "32fec28f5b": "Source des commandes",
           "bbbd6e0bc4": "Source des commandes et orca.yaml",
@@ -8428,7 +8427,6 @@
           "623e0c9f31": "`orca.yaml` n'a pas pu être analysé",
           "5a67e4793d": "Aucun `orca.yaml` détecté",
           "07ba35bc68": "Vérifiez l'indentation sous `scripts:`. Les clés de hook doivent être indentées de deux espaces, et les lignes de commande de quatre.",
-          "787ca433ef": "Définissez uniquement les clés prises en charge : `scripts`, `setup`, `archive` et `issueCommand`.",
           "ecc73d9125": "Comparez votre fichier au modèle fonctionnel ci-dessous et recopiez cette structure si besoin.",
           "0cc712b823": "Le fichier de configuration principal existe à la racine du dépôt, mais Orca n'a pas encore pu analyser les définitions de hooks prises en charge.",
           "aba825233f": "Le fichier contient des clés de configuration que cette version d'Orca ne reconnaît pas. Vous devrez peut-être mettre à jour Orca, ou vérifier le fichier pour écarter une faute de frappe.",

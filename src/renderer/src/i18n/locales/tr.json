@@ -8507,7 +8507,6 @@
           "a867a0889f": "Son kullanılan veya sekme şeridi sırası."
         },
         "RepositoryHooksSection": {
-          "af49e2a19e": "Dosya mevcut, ancak Orca geçerli `scripts` veya `issueCommand` tanımları bulamadı.",
           "39da2ae12f": "orca.yaml",
           "32fec28f5b": "Komut Kaynağı",
           "bbbd6e0bc4": "Komut kaynağı ve orca.yaml",
@@ -8543,7 +8542,6 @@
           "623e0c9f31": "`orca.yaml` ayrıştırılamadı",
           "5a67e4793d": "`orca.yaml` algılanmadı",
           "07ba35bc68": "`scripts:` altındaki girintiyi kontrol edin. Hook anahtarları iki boşluk, komut satırları ise dört boşluk kullanmalıdır.",
-          "787ca433ef": "Yalnızca desteklenen anahtarları tanımlayın: `scripts`, `setup`, `archive` ve `issueCommand`.",
           "ecc73d9125": "Dosyanızı aşağıdaki çalışan şablonla karşılaştırın ve gerekirse aynı yapıyı kopyalayın.",
           "0cc712b823": "Temel yapılandırma dosyası repo kökünde mevcut, ancak Orca desteklenen hook tanımlarını henüz ayrıştıramadı.",
           "aba825233f": "Dosya, Orca'nın bu sürümünün tanımadığı yapılandırma anahtarları içeriyor. Orca'yı güncellemeniz veya dosyada yazım hatası olup olmadığını kontrol etmeniz gerekebilir.",

@@ -2,9 +2,11 @@ import { getRepoDialableSshTargetId } from '../../../shared/execution-host'
 import type { GitRuntimeOptions } from '../../git/git-runtime-options'
 import type { Repo } from '../../../shared/repo-types'
 import {
+  getRepoCommandRelativePath,
   readIssueCommandUnlessWslStopped,
   writeIssueCommandUnlessWslStopped
 } from '../../workspace-hooks/issue-command-file'
+import type { RepoCommandKind } from '../../../shared/repo-command-kind'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import type { RuntimeStore } from '../runtime-store-contract'
@@ -19,7 +21,11 @@ type RuntimeRepositoryIssueCommandDeps = {
 export class RuntimeRepositoryIssueCommand {
   constructor(private readonly deps: RuntimeRepositoryIssueCommandDeps) {}
 
-  async read(repoSelector: string, options: { wakeWslDistro?: boolean } = {}) {
+  async read(
+    repoSelector: string,
+    options: { wakeWslDistro?: boolean } = {},
+    kind: RepoCommandKind = 'issue'
+  ) {
     const repo = await this.deps.resolveRepo(repoSelector)
     if (isFolderRepo(repo)) {
       return {
@@ -33,14 +39,14 @@ export class RuntimeRepositoryIssueCommand {
     const connectionId = getRepoDialableSshTargetId(repo)
     if (!connectionId) {
       // A paired client's Settings render must not start this host's stopped distro (E9).
-      return readIssueCommandUnlessWslStopped(repo.path, options)
+      return readIssueCommandUnlessWslStopped(repo.path, options, kind)
     }
     // Why: an `ssh:` repo is not served here; it reads as having no command.
     return {
       localContent: null,
       sharedContent: null,
       effectiveContent: null,
-      localFilePath: joinWorktreeRelativePath(repo.path, '.orca/issue-command'),
+      localFilePath: joinWorktreeRelativePath(repo.path, getRepoCommandRelativePath(kind)),
       source: 'none' as const
     }
   }
@@ -49,7 +55,8 @@ export class RuntimeRepositoryIssueCommand {
   async write(
     repoSelector: string,
     content: string,
-    options: { wakeWslDistro?: boolean } = {}
+    options: { wakeWslDistro?: boolean } = {},
+    kind: RepoCommandKind = 'issue'
   ): Promise<{ ok: true }> {
     const repo = await this.deps.resolveRepo(repoSelector)
     assertWslMoveRepoWritable(this.deps.getStore?.() ?? undefined, repo)
@@ -62,7 +69,8 @@ export class RuntimeRepositoryIssueCommand {
         repo.path,
         content,
         () => this.deps.getLocalGitArgs(repo)[0] ?? {},
-        options
+        options,
+        kind
       )
     }
     return { ok: true }

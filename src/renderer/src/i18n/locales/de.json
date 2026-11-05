@@ -8521,7 +8521,6 @@
           "a867a0889f": "Nach letzter Verwendung oder Reihenfolge in der Tab-Leiste."
         },
         "RepositoryHooksSection": {
-          "af49e2a19e": "Die Datei ist vorhanden, aber Orca konnte keine gültigen Definitionen für `scripts` oder `issueCommand` finden.",
           "39da2ae12f": "orca.yaml",
           "32fec28f5b": "Befehlsquelle",
           "bbbd6e0bc4": "Befehlsquelle & orca.yaml",
@@ -8557,7 +8556,6 @@
           "623e0c9f31": "`orca.yaml` konnte nicht geparst werden",
           "5a67e4793d": "Keine `orca.yaml` erkannt",
           "07ba35bc68": "Die Einrückung unter `scripts:` prüfen. Hook-Schlüssel sollten mit zwei Leerzeichen und Befehlszeilen mit vier Leerzeichen eingerückt sein.",
-          "787ca433ef": "Nur die unterstützten Schlüssel definieren: `scripts`, `setup`, `archive` und `issueCommand`.",
           "ecc73d9125": "Die Datei mit der funktionierenden Vorlage unten vergleichen und bei Bedarf deren Struktur übernehmen.",
           "0cc712b823": "Die zentrale Konfigurationsdatei ist im Repository-Stammverzeichnis vorhanden, aber Orca konnte die unterstützten Hook-Definitionen noch nicht parsen.",
           "aba825233f": "Die Datei enthält Konfigurationsschlüssel, die diese Version von Orca nicht erkennt. Möglicherweise muss Orca aktualisiert oder die Datei auf Tippfehler geprüft werden.",

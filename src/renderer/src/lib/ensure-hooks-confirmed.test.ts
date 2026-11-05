@@ -446,3 +446,83 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 })
+
+describe('review command trust', () => {
+  beforeEach(() => {
+    readIssueCommandMock.mockReset()
+    __resetTrustPromptChainForTests()
+    clearRuntimeCompatibilityCacheForTests()
+    installHooksApiMock()
+  })
+
+  it('prompts for a shared review command under the reviewCommand trust key', async () => {
+    readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
+      localContent: null,
+      sharedContent: 'Review {{artifact_url}}',
+      effectiveContent: 'Review {{artifact_url}}',
+      localFilePath: '',
+      source: 'shared'
+    })
+    const { state, pending } = createTestState()
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'local', undefined, {
+      kind: 'review'
+    })
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(readIssueCommandMock).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      hostId: 'local',
+      wakeWslDistro: true,
+      kind: 'review'
+    })
+    expect(pending[0].data.scriptKind).toBe('reviewCommand')
+    expect(pending[0].data.usage).toBe('prompt')
+    expect(pending[0].data.scriptContent).toBe('Review {{artifact_url}}')
+    pending[0].resolve('run')
+    await expect(promise).resolves.toMatchObject({
+      template: 'Review {{artifact_url}}',
+      trustDecision: 'run'
+    })
+  })
+
+  it('labels a linked-only issue template as a prompt, not a shell command', async () => {
+    readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
+      localContent: null,
+      sharedContent: 'Complete {{artifact_url}}',
+      effectiveContent: 'Complete {{artifact_url}}',
+      localFilePath: '',
+      source: 'shared'
+    })
+    const { state, pending } = createTestState()
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'local', undefined, {
+      usage: 'prompt'
+    })
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptKind).toBe('issueCommand')
+    expect(pending[0].data.usage).toBe('prompt')
+    pending[0].resolve('skip')
+    await promise
+  })
+
+  it('does not reuse an issueCommand approval for the review command', async () => {
+    const hash = await hashOrcaHookScript('Review {{artifact_url}}')
+    readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
+      localContent: null,
+      sharedContent: 'Review {{artifact_url}}',
+      effectiveContent: 'Review {{artifact_url}}',
+      localFilePath: '',
+      source: 'shared'
+    })
+    const { state, pending } = createTestState({
+      trustedOrcaHooks: { 'repo-1': { issueCommand: { contentHash: hash, approvedAt: 1 } } }
+    })
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'local', undefined, {
+      kind: 'review'
+    })
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toMatchObject({ trustDecision: 'skip' })
+  })
+})

@@ -4909,7 +4909,6 @@
           "5a5eac2f44": "Shell não encontrado: {{value0}}"
         },
         "RepositoryHooksSection": {
-          "af49e2a19e": "O arquivo está presente, mas o Orca não conseguiu encontrar definições válidas de `scripts` ou `issueCommand`.",
           "39da2ae12f": "orca.yaml",
           "32fec28f5b": "Origem do Comando",
           "bbbd6e0bc4": "Origem do comando e orca.yaml",
@@ -4945,7 +4944,6 @@
           "623e0c9f31": "Não foi possível interpretar o `orca.yaml`",
           "5a67e4793d": "Nenhum `orca.yaml` detectado",
           "07ba35bc68": "Verifique a indentação sob `scripts:`. As chaves de hook devem usar dois espaços, e as linhas de comando devem usar quatro.",
-          "787ca433ef": "Defina somente as chaves suportadas: `scripts`, `setup`, `archive` e `issueCommand`.",
           "ecc73d9125": "Compare seu arquivo com o modelo funcional abaixo e copie essa estrutura se necessário.",
           "0cc712b823": "O arquivo de configuração principal existe na raiz do repositório, mas o Orca ainda não conseguiu interpretar as definições de hook suportadas.",
           "aba825233f": "O arquivo contém chaves de configuração que esta versão do Orca não reconhece. Talvez seja necessário atualizar o Orca, ou verificar o arquivo em busca de erros de digitação.",

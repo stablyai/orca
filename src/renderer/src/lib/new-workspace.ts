@@ -11,6 +11,7 @@ import {
   resolveAgentStartupTabId
 } from '@/lib/agent-startup-delayed-delivery'
 import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../../../shared/worktree/types'
+import { DEFAULT_REPO_COMMAND_TEMPLATE } from '../../../shared/repo-command-kind'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
@@ -42,9 +43,9 @@ export function canUseIssueCommandForLinkedItemProvider(
 }
 
 // Linked work items without user prompt or issueCommand still need an actionable default task.
-export const DEFAULT_ISSUE_COMMAND_TEMPLATE = 'Complete {{artifact_url}}'
+export const DEFAULT_ISSUE_COMMAND_TEMPLATE = DEFAULT_REPO_COMMAND_TEMPLATE.issue
 
-/** Prefer artifact_url while retaining issue substitutions for unmigrated orca.yaml/.orca/issue-command templates. */
+/** `{{issue}}` is the linked issue, pull or merge request number; kept for unmigrated templates. */
 export function renderIssueCommandTemplate(
   template: string,
   vars: { issueNumber: number | null; artifactUrl: string | null }

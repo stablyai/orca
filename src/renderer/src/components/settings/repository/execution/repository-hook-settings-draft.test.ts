@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { areHookSettingsDraftsEqual, getHookSettingsDraft } from './repository-hook-settings-draft'
+import {
+  areHookSettingsDraftsEqual,
+  getHookSettingsDraft,
+  renderYamlScriptPreview
+} from './repository-hook-settings-draft'
 
 describe('repository hook settings draft', () => {
   it('includes every persisted field in dirty-draft equality', () => {
@@ -17,5 +21,15 @@ describe('repository hook settings draft', () => {
         scripts: { ...baseline.scripts, archive: 'cleanup' }
       })
     ).toBe(false)
+  })
+
+  it('previews reviewCommand alongside issueCommand', () => {
+    expect(
+      renderYamlScriptPreview({
+        scripts: { setup: 'echo hi' },
+        issueCommand: 'Complete {{artifact_url}}',
+        reviewCommand: 'Review {{artifact_url}}'
+      })
+    ).toContain('reviewCommand: |\n  Review {{artifact_url}}')
   })
 })
