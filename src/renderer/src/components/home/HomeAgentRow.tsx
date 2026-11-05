@@ -1,4 +1,6 @@
 import React from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { formatRelativeTime } from '../activity/activity-thread-presentation'
 import { revealDashboardAgent } from '../dashboard/reveal-dashboard-agent'
@@ -22,15 +24,24 @@ export function HomeAgentRow({
   return (
     <button
       type="button"
-      onClick={() =>
-        revealDashboardAgent({
+      onClick={() => {
+        const revealed = revealDashboardAgent({
           repoId: card.repoId,
           worktreeId: card.worktreeId,
           executionHostId: card.executionHostId,
           tabId: card.tabId,
           leafId: card.leafId
         })
-      }
+        // Why: a card can outlive its pane or workspace; never fail silently.
+        if (!revealed) {
+          toast.info(
+            translate(
+              'auto.components.home.HomeAgentRow.revealFailed',
+              'This agent is no longer available.'
+            )
+          )
+        }
+      }}
       className="flex w-full min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none"
     >
       <span className="flex w-full min-w-0 items-center gap-2">

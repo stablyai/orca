@@ -19277,6 +19277,9 @@
           "title": "Usage & limits",
           "details": "Details",
           "empty": "No usage providers set up. Open Details to connect one."
+        },
+        "HomeAgentRow": {
+          "revealFailed": "This agent is no longer available."
         }
       }
     },

@@ -25,7 +25,10 @@ export default function HomePage({
   return (
     // Why: rest mode sits outside the scroller so it always covers the visible page.
     <div className="relative flex h-full min-h-0 flex-1">
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-sleek bg-background pt-5 text-foreground md:pt-6">
+      <main
+        inert={resting}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-sleek bg-background pt-5 text-foreground md:pt-6"
+      >
         <header
           className="flex shrink-0 items-center gap-3 px-3 pb-3 md:px-5"
           style={{ paddingRight: 'max(0.75rem, var(--window-controls-width, 0px))' }}
