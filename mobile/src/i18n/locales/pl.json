@@ -202,6 +202,7 @@
       "loadFailed": "Nie udało się wczytać hosta.",
       "saveFailed": "Nie udało się zapisać hosta.",
       "title": "Edytuj hosta",
+      "removeHost": "Usuń hosta",
       "saveHost": "Zapisz hosta",
       "goBack": "Wróć",
       "help": "Zmień wyświetlaną nazwę lub adres połączenia. Zostaw nazwę pustą, aby używać nazwy zgłaszanej przez komputer. Zmiana adresu zmienia tylko to, z czym łączy się ten telefon – nie powoduje ponownego parowania. Przydaje się, gdy ten sam komputer jest dostępny pod innym adresem IP (np. w sieci domowej i przez Tailscale).",
@@ -282,11 +283,6 @@
       "textSizeHeading": "ROZMIAR TEKSTU",
       "textSizeDescription": "Skaluje tekst terminala. Mniejsze rozmiary mieszczą więcej kolumn z marginesami po bokach, większe – mniej kolumn (przeciągnij w bok, aby przesunąć widok). Możesz też powiększać gestem szczypania w samym terminalu, co zmienia to ustawienie. Dotyczy tylko wyświetlania na tym urządzeniu; nie zmienia terminala na komputerze.",
       "textSize": "Rozmiar tekstu",
-      "keyboardInputHeading": "WPROWADZANIE Z KLAWIATURY",
-      "keyboardInputDescription": "Autouzupełnianie, autokorekta i podpowiedzi pisowni działają tylko przy buforowanym wprowadzaniu poleceń. Przyciskiem z podwójną strzałką nad klawiaturą przełącz się z wprowadzania na żywo, a potem popraw polecenie przed dotknięciem „Wyślij”. Domyślnie wyłączone, aby nie zmieniać poleceń, flag ani ścieżek.",
-      "autocomplete": "Autouzupełnianie i autokorekta",
-      "autocompleteOn": "Włączone",
-      "autocompleteOff": "Wyłączone",
       "restoreHost": "Przywracanie rozmiaru: {{name}}",
       "textSizePickerTitle": "Rozmiar tekstu terminala"
     }
@@ -307,7 +303,10 @@
       "loadingAccounts": "Wczytywanie kont…",
       "manageAccountsHint": "Konta dodasz lub uwierzytelnisz ponownie w aplikacji na komputerze: Ustawienia → Konta.",
       "useReset": "Użyj resetu",
-      "pairingInvalidMessage": "Aby zobaczyć konta z komputera, sparuj z nim ten telefon ponownie."
+      "pairingInvalidMessage": "Aby zobaczyć konta z komputera, sparuj z nim ten telefon ponownie.",
+      "otherAgents": "Pozostali agenci",
+      "fableWindow": "Fable",
+      "mcpWindow": "MCP"
     }
   },
   "agentHistory": {
@@ -538,9 +537,7 @@
       "scanCodeBelowDescription": "Dotknij „Sparuj komputer” poniżej, a potem skieruj aparat na kod QR na ekranie komputera."
     },
     "listFooter": {
-      "hostPickerTitle": "Otwórz zadania na hoście",
-      "automationsHeading": "Automatyzacje",
-      "automationsHostPickerTitle": "Otwórz automatyzacje na hoście"
+      "hostPickerTitle": "Otwórz zadania na hoście"
     },
     "listHeader": {
       "desktopsHeading": "Komputery"
@@ -560,13 +557,59 @@
       "pairDesktop": "Sparuj komputer"
     },
     "jumpBackIn": {
-      "heading": "Wróć do pracy",
       "lastOpened": "Ostatnio otwarte",
       "connectToOpen": "Połącz się z komputerem {{desktop}}, aby otworzyć"
     },
     "sections": {
       "tasks": "Zadania",
       "tasksSubtitle": "Twoje zgłoszenia i przeglądy"
+    },
+    "stats": {
+      "heading": "Twoje statystyki",
+      "agentsSpawned": "Uruchomieni agenci",
+      "agentTime": "Czas pracy agentów",
+      "prsCreated": "Utworzone PR-y",
+      "days": "{{days}} d",
+      "hours": "{{hours}} godz.",
+      "minutes": "{{minutes}} min"
+    },
+    "agents": {
+      "heading": "Agenci",
+      "activeCount": "Aktywni: {{count}}",
+      "showFewer": "Pokaż mniej",
+      "showAll": "Pokaż wszystkich ({{count}})"
+    },
+    "automationsTab": {
+      "newAutomation": "Nowa automatyzacja",
+      "lastStatus": "Ostatnio: {{status}}",
+      "paused": "Wstrzymana",
+      "showFor": "Pokaż automatyzacje z komputera",
+      "emptyTitle": "Zaplanuj pracę agentów",
+      "pairDesktop": "Sparuj komputer, aby przeglądać i uruchamiać automatyzacje.",
+      "updateDesktop": "Zaktualizuj Orca na komputerze {{desktop}}, aby korzystać z automatyzacji.",
+      "connectDesktop": "Połącz się z komputerem {{desktop}}, aby przeglądać i uruchamiać automatyzacje.",
+      "noAutomations": "Brak automatyzacji",
+      "createHint": "Dotknij +, aby zaplanować pracę agenta.",
+      "scheduled": "Zaplanowane",
+      "toggleFailed": "Nie udało się zaktualizować automatyzacji „{{name}}”"
+    },
+    "tabs": {
+      "automations": "Automatyzacje",
+      "feed": "Aktualności",
+      "chooseDesktop": "{{desktop}}, wybierz inny komputer",
+      "usage": "Użycie"
+    },
+    "usage": {
+      "refresh": "Odśwież użycie",
+      "showUsageFor": "Pokaż użycie z komputera",
+      "pairDesktop": "Sparuj komputer, aby zobaczyć użycie kont agentów.",
+      "connectDesktop": "Połącz się z komputerem {{desktop}}, aby zobaczyć użycie kont agentów.",
+      "addAccounts": "Konta dodasz w aplikacji na komputerze: Ustawienia → Konta.",
+      "updatedJustNow": "Zaktualizowano przed chwilą",
+      "updatedAgo": "Zaktualizowano {{time}} temu",
+      "active": "Aktywne",
+      "openAccountsHint": "Otwiera konta tego komputera",
+      "emptyTitle": "Brak danych o użyciu"
     }
   },
   "hooks": {
@@ -759,7 +802,7 @@
     "onboardingPage": {
       "sessionViewTitle": "Jak otwierać sesje?",
       "notificationsTitle": "Nie przegap, gdy agent Cię potrzebuje",
-      "sessionViewDescription": "Wybierz, czy obsługiwane sesje agentów mają się otwierać na tym urządzeniu w terminalu, czy w widoku czatu. Przytrzymaj kartę sesji, aby przełączyć jej widok, albo zmień domyślne ustawienie później w Ustawieniach.",
+      "sessionViewDescription": "Wybierz, czy obsługiwane sesje agentów mają się otwierać na tym urządzeniu w terminalu, czy w interfejsie czatu. Przytrzymaj kartę sesji, aby przełączyć jej widok. Domyślne ustawienie zmienisz w każdej chwili w Ustawienia → Interfejs czatu.",
       "notificationsDescription": "Otrzymuj na tym telefonie powiadomienie, gdy agent skończy pracę lub czeka – nawet gdy nie korzystasz z aplikacji.",
       "notificationsDisclosure": "Dostarczane przez usługę push Orca po 3 minutach bezczynności komputera. Możesz to zmienić w dowolnej chwili w Ustawieniach.",
       "useChatUi": "Użyj widoku czatu",
@@ -1082,7 +1125,11 @@
       "repairHint": "Dotknij, aby ponownie sparować z komputerem",
       "unlockHint": "Odblokuj telefon, a potem dotknij, aby ponowić",
       "openHost": "Otwórz: {{title}}",
-      "hostActions": "Akcje: {{title}}"
+      "hostActions": "Akcje: {{title}}",
+      "needsYou_one": "{{count}} czeka na Ciebie",
+      "needsYou_other": "{{count}} czeka na Ciebie",
+      "needsYou_few": "{{count}} czekają na Ciebie",
+      "needsYou_many": "{{count}} czeka na Ciebie"
     },
     "htmlPreview": {
       "previewRenderedHtml": "Podgląd wyrenderowanego HTML",
@@ -1093,7 +1140,8 @@
     },
     "prSidebar": {
       "loading": "Wczytywanie pull requesta…",
-      "notPermitted": "Brak uprawnień – konto GitHub nie jest połączone."
+      "notPermitted": "Brak uprawnień – konto GitHub nie jest połączone.",
+      "retryLoading": "Ponów wczytywanie pull requesta"
     },
     "richMarkdownEditor": {
       "linkUrl": "Adres URL linku",
@@ -1373,6 +1421,16 @@
       "noMatches": "Brak pasujących plików",
       "current": "bieżący",
       "viewedFile": "Przejrzany: {{path}}"
+    },
+    "native-chat": {
+      "turnDiff": {
+        "changedFiles_one": "{{count}} zmieniony plik",
+        "changedFiles_other": "{{count}} zmienionego pliku",
+        "changedFiles_few": "{{count}} zmienione pliki",
+        "changedFiles_many": "{{count}} zmienionych plików",
+        "partial": "Częściowy diff",
+        "showMoreFiles": "Pokaż więcej ({{count}})"
+      }
     }
   },
   "pullRequest": {
@@ -1384,7 +1442,7 @@
       "linkButton": "Połącz pull request"
     },
     "prViewPanel": {
-      "providerUnavailable": "Panel przeglądu nie jest dostępny dla tego dostawcy.",
+      "githubRemoteRequired": "Ta karta potrzebuje remote GitHub, aby pokazać szczegóły pull requesta. Przy innych obsługiwanych hostach utwórz przegląd w sekcji „Zmiany” i otwórz go w przeglądarce.",
       "branchUnavailable": "Bieżąca gałąź jest niedostępna."
     },
     "prActionsSection": {
@@ -1766,6 +1824,9 @@
       "conflictsChecking": "Sprawdzanie konfliktów",
       "noConflictsWithBase": "Brak konfliktów z gałęzią {{base}}",
       "noConflicts": "Brak konfliktów"
+    },
+    "checkStatus": {
+      "cancelled": "anulowane"
     }
   },
   "workspace": {
@@ -1982,22 +2043,21 @@
     "accessoryKeys": {
       "dismissKeyboard": "Schowaj klawiaturę",
       "sendKey": "Wyślij {{label}}",
-      "modifierHint": "Działa na następny klawisz. Stuknij dwukrotnie, aby zostawić włączony.",
       "typeCharacter": "Wpisz {{character}}",
       "control": "Control",
-      "escape": "Escape",
-      "shiftTab": "Shift Tab",
-      "enter": "Enter",
       "interrupt": "Przerwij w terminalu",
-      "tab": "Tab",
       "alt": "Alt",
       "shift": "Shift",
       "keysModeLabel": "Tryb klawiszy: wpisywany tekst trafia prosto do terminala. Przełącz na tryb wiadomości",
       "messageModeLabel": "Tryb wiadomości: napisz, a potem wyślij. Przełącz na tryb klawiszy",
-      "keysMode": "Klawisze",
-      "messageMode": "Wiadomość",
       "moreKeys": "Więcej klawiszy i akcji",
-      "showKeyboard": "Pokaż klawiaturę"
+      "showKeyboard": "Pokaż klawiaturę",
+      "dismissKeyboardHint": "Chowa klawiaturę ekranową, a bieżąca sesja terminala pozostaje otwarta.",
+      "switchToDesktopMode": "Przełącz na tryb komputera",
+      "switchToPhoneMode": "Przełącz na tryb telefonu",
+      "pasteFromClipboard": "Wklej ze schowka",
+      "paste": "Wklej",
+      "addCustomShortcut": "Dodaj własny skrót"
     },
     "activeContent": {
       "noTabs": "Brak kart w tej sesji",
@@ -2011,10 +2071,7 @@
     "commandDock": {
       "liveInputLabel": "Wpisywanie do terminala na żywo",
       "liveInputHint": "Wpisywany tekst trafia bezpośrednio do aktywnego terminala",
-      "sendCommand": "Wyślij polecenie",
-      "messageAgentPlaceholder": "Napisz do: {{agent}}",
-      "theAgent": "agent",
-      "writeCommandPlaceholder": "Wpisz polecenie i wyślij"
+      "tapToShowKeyboard": "Dotknij, aby pokazać klawiaturę"
     },
     "contentRow": {
       "dismissCreationWarning": "Zamknij ostrzeżenie o tworzeniu przestrzeni roboczej"
@@ -2407,9 +2464,6 @@
     "terminalRecords": {
       "defaultTitle": "Terminal"
     },
-    "tabCard": {
-      "editor": "Edytor"
-    },
     "terminalTabAgent": {
       "newBrowser": "Nowa przeglądarka",
       "browser": "Przeglądarka",
@@ -2428,7 +2482,8 @@
       "notesSent": "Wysłano notatki"
     },
     "prActionsEngine": {
-      "mergeFailed": "Nie udało się scalić pull requesta."
+      "mergeFailed": "Nie udało się scalić pull requesta.",
+      "refreshFailed": "Nie udało się odświeżyć pull requesta."
     },
     "prAiTriageLaunch": {
       "promptNotSent": "Uruchomiono agenta, ale prompt nie został wysłany.",
@@ -2682,7 +2737,8 @@
       "conversationOpenInTerminal": "{{agent}} prowadzi już tę rozmowę w innym terminalu. Zakończ tam proces {{agent}} lub zamknij ten terminal, aby kontynuować tutaj.",
       "chooseClaudeAccount": "Wybierz lub dodaj konto w ustawieniach kont Claude.",
       "chooseClaudeAccountThenRunCommand": "Wybierz lub dodaj konto w ustawieniach kont Claude, a następnie uruchom /{{command}} ponownie.",
-      "chooseClaudeAccountThenSend": "Wybierz lub dodaj konto w ustawieniach kont Claude, a następnie wyślij wiadomość ponownie."
+      "chooseClaudeAccountThenSend": "Wybierz lub dodaj konto w ustawieniach kont Claude, a następnie wyślij wiadomość ponownie.",
+      "unconfirmed": "Nie udało się potwierdzić wysłania. Nie wysłano ponownie."
     },
     "writeNotice": {
       "notDoneReadHistory": "Nie udało się wczytać historii tego czatu.",
@@ -2767,14 +2823,6 @@
       "running": "Tymczasowy wykonawca orkiestracji · Zamknie się 2 minuty po zakończeniu pracy",
       "finished": "Tymczasowy wykonawca orkiestracji zakończył pracę · Zamknięcie za {{countdown}}",
       "keepOpen": "Nie zamykaj"
-    },
-    "terminalArrowPad": {
-      "label": "Klawisze strzałek",
-      "hint": "Stuknij krawędź, aby nacisnąć strzałkę raz, albo przytrzymaj i przeciągnij, aby powtarzać",
-      "up": "W górę",
-      "down": "W dół",
-      "left": "W lewo",
-      "right": "W prawo"
     },
     "terminalMoreKeys": {
       "sendKey": "Wyślij {{label}}",
@@ -2934,7 +2982,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Domyślne",
-      "notReportedMarker": "Nie zgłoszono"
+      "notReportedMarker": "Nie zgłoszono",
+      "moreModels": "Więcej modeli",
+      "fewerModels": "Mniej modeli"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Wysłano do agenta — bez potwierdzenia"
@@ -2961,6 +3011,7 @@
       "showAll": "Pełna lista zadań"
     },
     "sessionOptionCopy": {
+      "ultracode": "Ultracode",
       "on": "Włączone",
       "off": "Wyłączone",
       "permissions": "Uprawnienia",
@@ -3027,7 +3078,8 @@
       "plan": "Plan",
       "permissionDenied": "{{agent}}: odmowa uprawnień. Zobacz szczegóły.",
       "safetyReview": "{{agent}}: ostrzeżenie z kontroli bezpieczeństwa. Zobacz szczegóły.",
-      "truncatedResponse": "Odpowiedź dostawcy została obcięta (pierwotny rozmiar: {{bytes}} B)."
+      "truncatedResponse": "Odpowiedź dostawcy została obcięta (pierwotny rozmiar: {{bytes}} B).",
+      "modelFallback": "Claude zmienił model: {{from}} → {{to}}."
     },
     "nativeChatProse": {
       "attachedImage": "Załączony obraz",
@@ -3239,8 +3291,11 @@
       "unavailable": "Wybrana odpowiedź jest niedostępna",
       "resolved": "Rozstrzygnięto",
       "cancelled": "Anulowano",
-      "resolver": "Odpowiedziano na urządzeniu {{device}}",
-      "cancelledBy": "Anulowano na urządzeniu {{device}}"
+      "resolver": "Odpowiedziano na {{device}}",
+      "cancelledBy": "Anulowano na {{device}}",
+      "thisPhone": "tym telefonie",
+      "computer": "komputerze",
+      "otherDevice": "innym urządzeniu"
     },
     "subagentGroup": {
       "stateCompleted": "ukończono",
@@ -4056,7 +4111,6 @@
       "pipelineJobs_many": "{{count}} zadań",
       "description": "Opis",
       "checks": "Kontrole",
-      "rerunFailed": "Uruchom ponownie nieudane",
       "rerunAll": "Uruchom ponownie wszystkie",
       "noChecks": "Nie znaleziono kontroli.",
       "pipeline": "Pipeline",
@@ -4258,7 +4312,6 @@
       "requestReviewers": "Dodaj recenzentów",
       "requestReview": "Poproś o przegląd",
       "checks": "Kontrole",
-      "rerunFailed": "Uruchom ponownie nieudane",
       "rerunAll": "Uruchom ponownie wszystkie",
       "noChecks": "Nie znaleziono kontroli.",
       "changedFiles": "Zmienione pliki",
@@ -4522,7 +4575,8 @@
     },
     "runtimeHydration": {
       "loadFailed": "Nie udało się wczytać ustawień Zadań"
-    }
+    },
+    "rerunUnsuccessful": "Ponów kontrole"
   },
   "terminal": {
     "webView": {
@@ -4691,6 +4745,7 @@
       "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Uruchamia się na wybranym hoście. Zadbaj, aby był on dostępny w zaplanowanym czasie.",
       "host": "Host",
       "pairedHost": "Sparowany host",
+      "chooseHost": "Automatyzacje na hoście {{host}}, wybierz inny host",
       "selectedServerUnavailable": "Wybrany serwer (niedostępny)",
       "addANameInstructionsAndAnAgent": "Dodaj nazwę, instrukcje i agenta.",
       "chooseAnExistingWorkspace": "Wybierz istniejącą przestrzeń roboczą.",
@@ -4719,7 +4774,6 @@
       "unknownResult": "Nieznany wynik",
       "notReported": "Brak danych",
       "searchOptions": "Szukaj opcji",
-      "scheduleAgentWorkAndViewRuns": "Planuj pracę agentów i przeglądaj uruchomienia",
       "task": "Zadanie",
       "review": "Przegląd"
     },
@@ -4756,6 +4810,7 @@
       "hooksReviewBlocked": "Agent czeka, aż ktoś sprawdzi nowe lub zmienione hooki („Hooks need review”). Otwórz to uruchomienie i oznacz je jako zaufane albo je usuń. Zaplanowane uruchomienia trwają dalej i zakończą się powodzeniem, gdy nic nie będzie wymagało sprawdzenia.",
       "agentNeverStarted": "Agent automatyzacji nie uruchomił się po wysłaniu promptu.",
       "agentNoCompletion": "Agent automatyzacji nie zgłosił zakończenia.",
+      "agentInterrupted": "Agent został przerwany przed zakończeniem tego uruchomienia.",
       "watchTimedOut": "Orca przestała obserwować to uruchomienie po 6 h bez sygnału zakończenia.",
       "projectSetupState": {
         "notSetUp": "Projekt nie jest skonfigurowany na wybranym hoście automatyzacji.",

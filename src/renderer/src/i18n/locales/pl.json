@@ -520,6 +520,24 @@
         "imported_many": "Zaimportowano {{count}} plików cookie dla: {{domains}}. Odśwież stronę, aby z nich skorzystać.",
         "failed": "Nie udało się zaimportować plików cookie: {{reason}}"
       }
+    },
+    "passwords": {
+      "savePrompt": {
+        "open": "Propozycja zapisania hasła",
+        "updateTitle": "Zaktualizować hasło?",
+        "saveTitle": "Zapisać hasło?",
+        "username": "Nazwa użytkownika",
+        "password": "Hasło",
+        "never": "Nigdy dla tej witryny",
+        "notNow": "Nie teraz",
+        "update": "Zaktualizuj",
+        "save": "Zapisz"
+      },
+      "fill": {
+        "noUsername": "(bez nazwy użytkownika)",
+        "title": "Zapisane dane logowania",
+        "otherLogins": "Inne dane logowania w tej witrynie"
+      }
     }
   },
   "editor": {
@@ -873,6 +891,87 @@
           "browse": "Przeglądaj Chrome Web Store",
           "openFailed": "Otwórz przestrzeń roboczą, aby przeglądać Chrome Web Store."
         }
+      },
+      "passwords": {
+        "searchKeywords": {
+          "passwords": "hasła",
+          "autofill": "autouzupełnianie",
+          "vault": "sejf",
+          "logins": "dane logowania",
+          "import": "importuj",
+          "csv": "csv",
+          "touchId": "touch id"
+        },
+        "authFailed": "Nie udało się potwierdzić tożsamości",
+        "copied": "Skopiowano hasło. Orca usunie je ze schowka za 2 minuty.",
+        "search": "Szukaj wśród haseł ({{count}})",
+        "add": "Dodaj",
+        "noMatches": "Brak pasujących zapisanych haseł.",
+        "noUsername": "(bez nazwy użytkownika)",
+        "edit": "Edytuj",
+        "copy": "Kopiuj hasło",
+        "delete": "Usuń…",
+        "neverHeading": "Witryny, dla których hasła nie są zapisywane ({{count}})",
+        "removeNever": "Usuń",
+        "importFailed": "Nie udało się zaimportować haseł",
+        "importDuplicates": "Już zapisane: {{count}}",
+        "importConflicts": "Pozostawione bez zmian, bo zapisano inne hasło: {{count}}",
+        "importInvalid": "Nieczytelne wiersze: {{count}}",
+        "importUndecryptable": "Chronione przez przeglądarkę: {{count}}; zamiast tego wyeksportuj z niej plik CSV",
+        "imported": "Zaimportowano hasła: {{count}}",
+        "deleteAllConfirmTitle": "Usunąć wszystkie dane haseł?",
+        "deleteAllConfirmDescription": "Wszystkie zapisane hasła w profilu {{profile}} zostaną trwale usunięte. Tej operacji nie można cofnąć.",
+        "deleteAll": "Usuń dane",
+        "deletedAll": "Usunięto dane haseł",
+        "form": {
+          "invalidSite": "Wpisz adres witryny, np. example.com.",
+          "invalidPassword": "Wpisz hasło.",
+          "duplicate": "Hasło dla tej nazwy użytkownika jest już zapisane dla tej witryny.",
+          "unavailable": "Nie udało się zapisać tego hasła.",
+          "editTitle": "Edytuj hasło",
+          "addTitle": "Dodaj hasło",
+          "site": "Witryna",
+          "sitePlaceholder": "example.com",
+          "username": "Nazwa użytkownika",
+          "password": "Hasło",
+          "currentHint": "Zapisz hasło, którego obecnie używasz w tej witrynie.",
+          "note": "Notatka",
+          "cancel": "Anuluj",
+          "save": "Zapisz",
+          "description": "Orca wpisze to hasło, gdy wybierzesz je pod polem logowania w tej witrynie.",
+          "usernamePlaceholder": "E-mail lub nazwa użytkownika",
+          "addNote": "Dodaj notatkę"
+        },
+        "hide": "Ukryj hasło",
+        "show": "Pokaż hasło",
+        "offerToSave": "Proponuj zapisywanie haseł",
+        "offerToSaveDescription": "Po zalogowaniu się w witrynie w przeglądarce Orca proponuj zapisanie danych logowania.",
+        "fillReauth": "Pytaj o Touch ID przed wpisaniem hasła",
+        "fillReauthDescription": "Przydatne na współdzielonym komputerze. Pokazanie lub skopiowanie hasła zawsze wymaga potwierdzenia.",
+        "noReauth": "Ten komputer nie może potwierdzić tożsamości za pomocą Touch ID, więc hasła są pokazywane i wpisywane bez weryfikacji.",
+        "reauthUnavailable": "Touch ID jest teraz niedostępny, więc Orca nie pokaże, nie skopiuje ani nie wpisze hasła, które tego wymaga.",
+        "import": "Importuj",
+        "importCsv": "Z pliku CSV…",
+        "deleteAllTitle": "Usuń wszystkie dane haseł",
+        "deleteAllDescription": "Wszystkie zapisane hasła, notatki i witryny wykluczone z zapisywania haseł w profilu {{profile}}.",
+        "empty": "Orca proponuje zapisanie danych logowania po zalogowaniu się. Możesz je też przenieść z innej przeglądarki lub pliku CSV.",
+        "account": "{{username}} w witrynie {{site}}",
+        "lastUsed": "Ostatnio użyto {{when}}",
+        "copyFor": "Kopiuj hasło: {{account}}",
+        "editFor": "Edytuj: {{account}}",
+        "moreActions": "Więcej akcji: {{account}}",
+        "accountCount": "Konta: {{count}}",
+        "deleteConfirmTitle": "Usunąć hasło użytkownika {{username}} do witryny {{site}}?",
+        "deleteConfirmDescription": "Orca przestanie wpisywać to hasło. Tej operacji nie można cofnąć.",
+        "deleteConfirm": "Usuń",
+        "profileDescription": "Zapisane dane logowania w profilu {{profile}}. Orca wpisuje je tylko wtedy, gdy wybierzesz je pod polem logowania.",
+        "unavailableTitle": "Zapisywanie haseł jest wyłączone na tym komputerze",
+        "emptyTitle": "Brak zapisanych haseł",
+        "searchLabel": "Szukaj haseł",
+        "deleteAllAction": "Usuń…",
+        "title": "Hasła",
+        "description": "Zapisane dane logowania przeglądarki Orca: dodawaj, importuj, edytuj i usuwaj je.",
+        "httpSuffix": " · http"
       }
     },
     "agents": {
@@ -1160,6 +1259,29 @@
       "keywordDelay": "opóźnienie",
       "keywordCooldown": "karencja",
       "keywordSecurity": "bezpieczeństwo"
+    },
+    "editorFormatOnSave": {
+      "title": "Formatuj przy zapisie",
+      "description": "Formatuje tekst przed ręcznym i automatycznym zapisem. Polecenie formatera skonfiguruj w Ustawienia > Projekty. Domyślnie wyłączone.",
+      "keywords": "formater formatowanie formatuj przy zapisie prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "Wstawiaj znak nowego wiersza na końcu",
+      "description": "Przy zapisie dodaje znak nowego wiersza na końcu niepustego pliku z kodem, który się nim nie kończy. Domyślnie wyłączone.",
+      "keywordNewline": "nowy wiersz",
+      "keywordEndOfFile": "koniec pliku"
+    },
+    "repositoryFormatter": {
+      "title": "Polecenie formatera",
+      "description": "Używaj formatera tego projektu w funkcji „Formatuj przy zapisie”.",
+      "saveFailed": "Nie udało się zapisać ustawień formatera.",
+      "command": "Polecenie",
+      "commandHelp": "Uruchamiane na hoście pliku, w katalogu głównym przestrzeni roboczej. Odczytuje bufor ze stdin i musi wypisywać na stdout wyłącznie sformatowany tekst. Ścieżkę podaj jako ${file} lub ${relativeFile}. Argumenty są przekazywane bezpośrednio, bez powłoki. Nie używaj --write. Pozostaw puste, aby wyłączyć formatowanie w tym projekcie.",
+      "include": "Uwzględniane globy (jeden na wiersz)",
+      "includeHelp": "Dopasowuje ścieżki względem katalogu głównego przestrzeni roboczej. Plik, do którego nie pasuje żaden glob, nie jest formatowany. * i ** pomijają nazwy zaczynające się od kropki; wymień je jawnie, np. .github/**/*.yml. Aby używać tego polecenia, włącz „Formatuj przy zapisie” w Ogólne > Edytor.",
+      "saving": "Zapisywanie…",
+      "save": "Zapisz formater",
+      "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
     }
   },
   "menu": {
@@ -2306,7 +2428,6 @@
         "9c3ba11a05": "Stan:",
         "934d87ab96": "Wczytywanie szczegółów kontroli…",
         "71c11aff84": "Uruchom ponownie wszystkie kontrole",
-        "e31651a224": "Uruchom ponownie nieudane kontrole",
         "1b56e28faa": "Uruchom ponownie",
         "f4b1292569": "Uruchom domyślnego agenta AI dla tych kontroli",
         "9a1004fc76": "Odśwież kontrole",
@@ -2819,7 +2940,6 @@
         "662bc2998d": "Stan:",
         "d8e82b7f15": "Wczytywanie szczegółów kontroli…",
         "54cddd1858": "Uruchom ponownie wszystkie kontrole",
-        "68605516dd": "Uruchom ponownie nieudane kontrole",
         "522d9353e1": "Uruchom ponownie",
         "0fa8b8faec": "Uruchom domyślnego agenta AI dla tych kontroli",
         "5d0f42766d": "Odśwież kontrole",
@@ -3973,7 +4093,6 @@
             "e8b3741ff7": "Ignorowane",
             "a9957007eb": "Ignoruj {{value0}}",
             "bef0adef9b": "Gałąź",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "Wybierz {{value0}}",
             "b771c92598": "Usuń zaznaczone",
             "7eee951968": "Skanowanie przestrzeni roboczych",
@@ -3982,7 +4101,6 @@
             "b2c1331844": "Usuń nieaktywne przestrzenie robocze",
             "7f451a3e2c": "Nie udało się zignorować sugestii usunięcia",
             "662b8ec3f8": "Nie udało się przeskanować przestrzeni roboczych do usunięcia",
-            "4d0b72481c": "Ignoruj",
             "9cc26c019d": "Usuń",
             "0e2d235c63": "Skanowanie przestrzeni roboczych gotowe",
             "4a35c08764": "Sprawdź",
@@ -3990,9 +4108,6 @@
             "1d3503357d": "Możesz zamknąć ten widok i wrócić później, gdy usuwanie trwa w tle.",
             "4c2990886e": "Usunięto: {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}, niepowodzenia: {{value1}}",
-            "deletingCount": "Usuwanie przestrzeni roboczych: {{value0}}",
-            "deleteCount": "Usunąć przestrzenie robocze ({{value0}})?",
-            "selectedForDeletionCount": "Wybrane do usunięcia: {{value0}}",
             "deleteButtonCount": "Usuń {{value0}}",
             "archivedStatus": "Zarchiwizowane",
             "74f6c16279": "Wstecz"
@@ -4007,7 +4122,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commity",
             "contextLabel": "Kontekst",
             "flagsLabel": "Flagi",
             "collapseDetails": "Zwiń szczegóły",
@@ -4248,7 +4362,7 @@
             "copyFilePathFailed": "Nie udało się skopiować ścieżki pliku",
             "downloadOpenWithDefaultApp": "Pobierz i otwórz w domyślnej aplikacji",
             "downloadOpenFailed": "Nie udało się pobrać „{{value0}}”.",
-            "openInThisGroup": "Otwórz w tej grupie",
+            "openInNewTab": "Otwórz w nowej karcie",
             "openInThisGroupRefused": "Nie udało się otworzyć {{value0}} w tej grupie"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -4838,7 +4952,6 @@
             "5c938d39ac": "tydz.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Brak innych kont",
             "d450654fa2": "Konto Claude",
             "11e2354daf": "Środowisko uruchomieniowe (użycie Claude)",
             "3dd7ddfae1": "Otwórz szczegóły Claude i przełącznik kont",
@@ -4870,6 +4983,8 @@
             "rateLimitResetsAvailable_other": "Dostępne resety limitu zapytań: {{count}}",
             "rateLimitResetsAvailable_few": "Dostępne {{count}} resety limitu zapytań",
             "rateLimitResetsAvailable_many": "Dostępnych {{count}} resetów limitu zapytań",
+            "signedOutAccounts": "Wylogowane",
+            "addAnotherAccount": "Dodaj kolejne konto…",
             "staleCodexSessions_one": "{{count}} sesja Codex nadal używa starego konta.",
             "staleCodexSessions_other": "{{count}} sesji Codex nadal używa starego konta.",
             "staleCodexSessions_few": "{{count}} sesje Codex nadal używają starego konta.",
@@ -6463,10 +6578,6 @@
           "hiding_other": "Ukryto {{count}} wykrytego worktree",
           "hiding_few": "Ukryto {{count}} wykryte worktree",
           "hiding_many": "Ukryto {{count}} wykrytych worktree",
-          "hidingInRepo_one": "Ukryto {{count}} wykryte worktree – {{repo}}",
-          "hidingInRepo_other": "Ukryto {{count}} wykrytego worktree – {{repo}}",
-          "hidingInRepo_few": "Ukryto {{count}} wykryte worktree – {{repo}}",
-          "hidingInRepo_many": "Ukryto {{count}} wykrytych worktree – {{repo}}",
           "keepHiddenAriaLabel_one": "Nadal ukrywaj {{count}} wykryte worktree – {{repo}}; możesz go przywrócić z menu projektu",
           "keepHiddenAriaLabel_other": "Nadal ukrywaj {{count}} wykrytego worktree – {{repo}}; możesz je przywrócić z menu projektu",
           "keepHiddenAriaLabel_few": "Nadal ukrywaj {{count}} wykryte worktree – {{repo}}; możesz je przywrócić z menu projektu",
@@ -8206,7 +8317,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Otwórz Computer Use",
-          "79209b37b9": "Jeśli import plików cookie nie wystarcza, Computer Use może sterować lokalnymi aplikacjami i korzystać z zalogowanych sesji przeglądarki, gdy jest to możliwe. Zainstaluj umiejętność Computer Use; macOS wymaga też uprawnień prywatności.",
+          "79209b37b9": "Jeśli import plików cookie nie jest dobrym rozwiązaniem, Computer Use może sterować lokalnymi aplikacjami i w razie potrzeby korzystać z istniejących, zalogowanych sesji przeglądarki. Zainstaluj umiejętność Orca Computer Use; macOS wymaga też uprawnień prywatności.",
           "333984cf90": "Użyj istniejącej sesji przeglądarki"
         },
         "BrowserUseEnableSwitch": {
@@ -8326,7 +8437,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Pozwala agentom sprawdzać i obsługiwać lokalne aplikacje desktopowe.",
-          "93255aaf18": "Umiejętność Computer Use",
+          "93255aaf18": "Umiejętność Orca Computer Use",
           "45f8e22c2e": "Otwórz",
           "d95d1cfab8": "Odśwież",
           "0c29da5805": "Gotowe",
@@ -8462,9 +8573,6 @@
           "browserExtensions": {
             "copy": "Dodaje sekcję Ustawienia › Przeglądarka › Rozszerzenia dla lokalnych profili przeglądarki.",
             "toggleLabel": "Włącz lub wyłącz rozszerzenia przeglądarki"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Przełącz panel orkiestracji"
           }
         },
         "FloatingWorkspacePane": {
@@ -8526,7 +8634,9 @@
           "7ddd66fede": "Zawijanie wierszy w edytorze",
           "9b18de6eea": "Zawijaj długie wiersze w edytorach plików zamiast wymagać przewijania w poziomie.",
           "collapseUnchangedTitle": "Zwijaj niezmienione fragmenty",
-          "collapseUnchangedDescription": "Pokazuj w diff pliku tylko zmienione wiersze z niewielkim kontekstem, ukrywając resztę za rozwijanymi paskami. Widok wszystkich zmian zawsze używa tego zwijania."
+          "collapseUnchangedDescription": "Pokazuj w diff pliku tylko zmienione wiersze z niewielkim kontekstem, ukrywając resztę za rozwijanymi paskami. Widok wszystkich zmian zawsze używa tego zwijania.",
+          "markdownDefaultView": "Domyślny widok Markdown",
+          "markdownDefaultViewDesc": "Widok, w którym otwierają się pliki Markdown. Aby zmienić go w konkretnej karcie Markdown, kliknij prawym przyciskiem przełącznik widoku."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -9231,8 +9341,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Szablon polecenia",
-          "2b2f38652b": "Własne polecenie",
-          "0ffb081b3a": "Użyj domyślnego agenta",
           "f4310cf63f": "Agent",
           "1cd88d470a": "Dostosuj",
           "403876bb48": "Użyj ustawienia globalnego",
@@ -9780,7 +9888,7 @@
           "902f5dee1f": "Kopiuj przy zaznaczaniu",
           "9129b7e805": "Najechanie kursorem na panel terminala aktywuje go bez klikania.",
           "8eefeaa3da": "Aktywuj panel pod kursorem",
-          "96fe15def8": "Zachowanie myszy i schowka w panelach terminala.",
+          "96fe15def8": "Przewijanie, mysz i schowek w panelach terminala.",
           "45721f3e67": "Interakcja z terminalem",
           "9c0b1c1792": "Włączone",
           "c1fc9e9444": "Akceleracja GPU",
@@ -10689,14 +10797,6 @@
               "extension": "rozszerzenie",
               "chrome": "chrome",
               "password": "menedżer haseł"
-            },
-            "orchestrationPanel": {
-              "title": "Panel orkiestracji",
-              "description": "Pokazuje obok czatu lub terminala agenta, z którymi agentami współpracuje.",
-              "orchestration": "orkiestracja",
-              "agents": "agenci",
-              "workers": "wykonawcy",
-              "manager": "menedżer"
             }
           }
         },
@@ -10885,7 +10985,11 @@
             "command": "polecenie",
             "confirm": "potwierdź",
             "close": "zamknij",
-            "omp": "OMP"
+            "omp": "OMP",
+            "markdownDefaultView": "Domyślny widok Markdown",
+            "markdownDefaultViewDesc": "Widok, w którym otwierają się pliki Markdown. Aby zmienić go w konkretnej karcie Markdown, kliknij prawym przyciskiem przełącznik widoku.",
+            "markdownSourceKw": "źródło",
+            "markdownRichKw": "formatowany"
           }
         },
         "git": {
@@ -11821,6 +11925,7 @@
               "recipe": {
                 "options": {
                   "commitMessage": "Generuj opis commita na podstawie zmian w poczekalni.",
+                  "commitMessageSharedModel": "„Szczegóły pull requesta”, „Nazwa gałęzi” i „Nazwa czatu” też mogą używać tego modelu, jeśli nie mają wybranego własnego; ich opcja „Jak domyślny” pokazuje, którego modelu używają.",
                   "pullRequest": "Generuj tytuł i opis PR/MR.",
                   "branchName": "Zmieniaj nazwy gałęzi utworzonych przez Orca na podstawie pierwszego zadania agenta.",
                   "fixCommitFailure": "Uruchom agenta, gdy hook commita lub git commit zakończy się błędem.",
@@ -14895,7 +15000,8 @@
             "9fffaf17c1": "Pokaż/ukryj prawy panel boczny ({{value0}})",
             "aiVaultSessionHistory": "Agenci",
             "folderWorkspaces": "Dołączone worktree",
-            "parentPrChecks": "Kontrole PR"
+            "parentPrChecks": "Kontrole PR",
+            "creatingWorkspace": "Dostępne, gdy przestrzeń robocza będzie gotowa"
           },
           "right": {
             "panel": {
@@ -15776,9 +15882,7 @@
           "ae3b00ca82": "Skonfiguruj zadania GitHub",
           "ff92d15436": "Orca powiadomi Cię, gdy agenci skończą pracę lub będą potrzebować pomocy.",
           "b054332836": "Skonfiguruj powiadomienia",
-          "04ae28d8ca": "Wybierz wygląd, z którym spędzisz wiele godzin.",
           "f396db9f20": "Poczuj się jak u siebie",
-          "322fc50a18": "Orca współpracuje z każdym agentem CLI. Wybierz tego, którego będziesz używać najczęściej. Możesz go zmienić w dowolnej chwili.",
           "198b148b3c": "Wybierz domyślnego agenta",
           "windowsTerminalTitle": "Ustaw domyślne opcje terminala Windows",
           "windowsTerminalSubtitle": "Wybierz domyślną powłokę dla nowych paneli i działanie prawego przycisku myszy w terminalu.",
@@ -16246,8 +16350,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "np. ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Własne polecenie",
-            "4b2fc4b80c": "Poziom rozumowania",
-            "be8917699e": "Model",
             "560d4feb00": "Własny",
             "29d119fe95": "Agent",
             "f9382b48a1": "Włącz autora AI",
@@ -17642,6 +17744,9 @@
           "isolationOff": "{{value0}} działa tylko w izolowanej ramce, a izolowane ramki pluginów są wyłączone.",
           "heading": "Ten edytor wymaga aplikacji desktopowej Orca",
           "openSource": "Otwórz źródło"
+        },
+        "MarkdownDefaultViewContextMenu": {
+          "label": "Domyślny widok Markdown"
         }
       },
       "diff": {
@@ -18808,6 +18913,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "Zapisany host uruchamiania nie pasuje już do konfiguracji tego projektu."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Ustawienia uruchamiania agenta wymagają nowej sesji przy każdym uruchomieniu."
         }
       },
       "agent": {
@@ -19938,12 +20046,23 @@
           "theme": "Wygląd",
           "windowsTerminal": "Terminal Windows",
           "notifications": "Powiadomienia",
-          "integrations": "Integracje"
+          "integrations": "Integracje",
+          "agentSurface": "Czat czy terminal"
         },
         "actions": {
           "addFirstProject": "Dodaj pierwszy projekt",
           "continue": "Kontynuuj",
           "openingAddProject": "Otwieranie okna dodawania projektu..."
+        },
+        "agentSurface": {
+          "title": "Jak chcesz pracować z agentami?",
+          "pickWhereAgentsOpen": "Wybierz, gdzie mają się otwierać nowi agenci."
+        },
+        "agentChat": {
+          "subtitle": "Wybierz agenta z interfejsem czatu. Agenci bez obsługi czatu otworzą się w terminalu."
+        },
+        "agentTerminal": {
+          "subtitle": "Orca działa z każdym agentem CLI. Wybierz tego, z którego będziesz korzystać najczęściej."
         }
       },
       "skipConfirmation": {
@@ -19955,7 +20074,32 @@
           "system": "Zgodny z systemem",
           "dark": "Przyjazny dla oczu",
           "light": "Jasny i wyraźny"
-        }
+        },
+        "looks": {
+          "activeNow": "teraz",
+          "browsePlugins": "Przeglądaj pluginy",
+          "browseThemePlugins": "Przeglądaj pluginy z motywami",
+          "colorMode": "Tryb kolorów",
+          "colorModeCaption": "Jasny, ciemny lub zgodny z systemem.",
+          "darkLook": "Ciemny styl",
+          "darkLooks": "Ciemne style",
+          "lightLook": "Jasny styl",
+          "lightLooks": "Jasne style",
+          "moreThemes": "Więcej motywów",
+          "next": "Więcej stylów",
+          "orcaDark": "Orca Dark",
+          "orcaLight": "Orca Light",
+          "pluginsHint": "Więcej motywów jest dostępnych jako pluginy.",
+          "previous": "Poprzednie style",
+          "showsWhenDark": "Używany, gdy system ma ciemny motyw",
+          "showsWhenLight": "Używany, gdy system ma jasny motyw",
+          "slotLabel": "Styl do edycji",
+          "sourceBuiltIn": "Wbudowany",
+          "sourceCommunity": "Paleta terminala",
+          "themes": "Motyw",
+          "themesCaption": "Opcjonalnie. Więcej możliwości dają motywy aplikacji i palety terminala."
+        },
+        "subtitle": "Wybierz tryb jasny lub ciemny, a opcjonalnie także motyw. Oba ustawienia zmienisz w każdej chwili w Ustawieniach."
       },
       "integrations": {
         "capabilities": {
@@ -19964,6 +20108,56 @@
           "reviewStatus": "Sprawdzaj stan zgłoszeń, przeglądów i testów CI w każdym worktree",
           "managePullRequests": "Czytaj, komentuj i scalaj pull requesty bez wychodzenia z Orca"
         }
+      },
+      "yoloPermissions": {
+        "overrideDescription": "Ci agenci nadal mogą uruchamiać polecenia i edytować pliki bez pytania. Ich indywidualne ustawienia mają pierwszeństwo przed trybem Yolo.",
+        "fullAccessOverride": "{{agent}} nadal ma pełny dostęp",
+        "useAgentOwnSettings": "Użyj własnych ustawień agenta {{agent}}",
+        "useOwnSettings": "Użyj własnych ustawień",
+        "saveError": "Nie udało się zmienić uprawnień. Spróbuj ponownie.",
+        "ownSettingsDescription": "Po wyłączeniu każdy agent korzysta z własnych ustawień. Uprawnienia poszczególnych agentów mogą mieć pierwszeństwo przed tym przełącznikiem."
+      },
+      "agentStep": {
+        "worksInChat": "Działa w interfejsie czatu",
+        "chatAgents": "Agenci z interfejsem czatu",
+        "terminalAgents": "Dostępni jako agenci terminalowi",
+        "terminalAgentsHint": "Nie obsługują interfejsu czatu, więc otworzą się w terminalu.",
+        "chatAvailable": "Czat dostępny",
+        "agentsOpenIn": "Miejsce otwierania agentów",
+        "terminalUi": "Interfejs terminala",
+        "noAgentsForChat": "<em>Nie znaleziono agentów w PATH.</em> Interfejs czatu działa z: {{agents}}. Zainstaluj jednego z nich albo kontynuuj i dodaj agenta później.",
+        "noChatAgentsDetected": "<em>Żaden z wykrytych agentów nie działa w interfejsie czatu.</em> Wszyscy otwieraliby się w terminalu, więc lepszym wyborem jest „Terminal”.",
+        "opensInTerminalFit": "<em>Agent {{agent}} otwiera się w terminalu</em>, więc lepszym wyborem jest „Terminal”.",
+        "useTerminalInstead": "Użyj terminala",
+        "terminalTipHow": "Pokaż, jak uruchomić agenta w terminalu",
+        "terminalTip": "Możesz to zmienić w każdej chwili w <em>Ustawienia → Interfejs czatu</em>. Każdego agenta możesz też uruchomić w terminalu z menu <em>+</em>.",
+        "terminalTipWeb": "Możesz to zmienić w każdej chwili w <em>Ustawienia → Lista kroków wprowadzenia</em>. Każdego agenta możesz też uruchomić w terminalu z menu <em>+</em>.",
+        "terminalTipCaption": "Kliknij <em>+</em> na pasku kart, a potem wybierz agenta oznaczonego <em>(CLI)</em>. Jeśli CLI agenta czatu jest zainstalowane, najedź na jego wiersz i kliknij ikonę terminala, aby użyć CLI.",
+        "chatTip": "Chcesz też czat? Włączysz go w każdej chwili w <em>Ustawienia → Interfejs czatu</em>.",
+        "turnOnChat": "Włącz teraz"
+      },
+      "agentSurface": {
+        "chat": {
+          "label": "Interfejs czatu",
+          "description": "Agenci odpowiadają w czacie, a wiadomości i diffy są czytelnie sformatowane.",
+          "terminalFallback": "Agenci bez obsługi czatu oraz projekty SSH i WSL nadal otwierają się w terminalu.",
+          "noneDetected": "Żaden z wykrytych agentów nie działa w interfejsie czatu."
+        },
+        "terminal": {
+          "label": "Terminal",
+          "description": "Oryginalne CLI każdego agenta, bez żadnych zmian. Działa z każdym agentem CLI."
+        },
+        "switchNote": "To nie jest ostateczny wybór. Zmienisz go w każdej chwili w <em>Ustawienia → Interfejs czatu</em>.",
+        "preview": {
+          "userMessage": "Dodaj ponawianie do fetchUser",
+          "agentMessage": "Nieudane żądania są teraz ponawiane do 3 razy.",
+          "composerPlaceholder": "Zadaj kolejne pytanie…"
+        }
+      },
+      "launchDemo": {
+        "userMessage": "Napraw niestabilny test przesyłania",
+        "agentMessage": "Mam to. Timer ponawiania nie był zamockowany.",
+        "cliReady": "CLI agenta {{agent}} jest gotowe."
       }
     },
     "jiraIssueAssigneeField": {
@@ -20066,6 +20260,7 @@
         "cancelled": "Ta wiadomość została wycofana, zanim agent zaczął ją przetwarzać.",
         "chatClosed": "Czat został zamknięty, zanim ta wiadomość została wysłana.",
         "hostRestarted": "Orca uruchomiła się ponownie, zanim ta wiadomość została wysłana.",
+        "unconfirmed": "Nie udało się potwierdzić, czy wiadomość została wysłana. Nie wysłano jej ponownie.",
         "notDelivered": "Ta wiadomość nie została dostarczona.",
         "notDeliveredSendAgain": "Ta wiadomość nie została dostarczona. Wyślij ją ponownie, aby kontynuować.",
         "commandRefused": "To polecenie nie zostało uruchomione.",
@@ -20213,20 +20408,22 @@
       },
       "turnDiff": {
         "partial": "Częściowy diff",
-        "showDiff": "Pokaż diff",
-        "hideDiff": "Ukryj diff",
         "changedFiles_one": "{{count}} zmieniony plik",
         "changedFiles_other": "{{count}} zmienionego pliku",
         "changedFiles_few": "{{count}} zmienione pliki",
-        "changedFiles_many": "{{count}} zmienionych plików"
+        "changedFiles_many": "{{count}} zmienionych plików",
+        "showMoreFiles": "Pokaż więcej ({{count}})"
       },
       "receipt": {
         "unavailable": "Wybrana odpowiedź jest niedostępna",
         "emptyAnswer": "Pusta odpowiedź",
         "cancelled": "Anulowano",
         "resolved": "Rozstrzygnięto",
-        "resolver": "Odpowiedziano na urządzeniu {{device}}",
-        "cancelledBy": "Anulowano na urządzeniu {{device}}"
+        "resolver": "Odpowiedziano na {{device}}",
+        "cancelledBy": "Anulowano na {{device}}",
+        "thisComputer": "tym komputerze",
+        "computer": "komputerze",
+        "otherDevice": "innym urządzeniu"
       },
       "notices": {
         "contextCleared": "Wyczyszczono kontekst",
@@ -20248,7 +20445,8 @@
         "orcaStopUnnamedServer": "serwer zdalny",
         "permissionDenied": "{{agent}} odmówił zgody. Pokaż szczegóły.",
         "safetyReview": "{{agent}}: ostrzeżenie z kontroli bezpieczeństwa. Pokaż szczegóły.",
-        "truncatedResponse": "Odpowiedź dostawcy została obcięta (pierwotny rozmiar: {{bytes}} B)."
+        "truncatedResponse": "Odpowiedź dostawcy została obcięta (pierwotny rozmiar: {{bytes}} B).",
+        "modelFallback": "Claude zmienił model: {{from}} → {{to}}."
       },
       "composer": {
         "send": "Wyślij",
@@ -20321,6 +20519,7 @@
         "availableAfterSessionStarts": "Dostępne po rozpoczęciu sesji.",
         "optionUpdateFailed": "Nie udało się zmienić opcji",
         "optionValue": {
+          "ultracode": "Ultracode",
           "fast": "Szybki",
           "minimal": "Minimalny",
           "low": "Niski",
@@ -20607,8 +20806,6 @@
         "stateUnverifiableCount_many": "Status niedostępny: {{value0}}"
       },
       "jumpToLatest": "Przejdź do najnowszych",
-      "newRowsAnnouncement": "Podczas Twojej nieobecności pojawiły się nowe wiadomości",
-      "newRowsMarker": "Nowe",
       "find": {
         "label": "Znajdź w czacie",
         "noResults": "Brak wyników",
@@ -20827,9 +21024,9 @@
         "orcaSessionIdTooltip": "Identyfikator tego czatu w Orca, niezależny od ID sesji w CLI agenta. Agenci używają go, aby odwoływać się do siebie nawzajem przez Orca."
       },
       "dismissDeliveryNotice": "Zamknij",
+      "editDeliveryNotice": "Edytuj",
       "addSelectionToChat": "Dodaj do czatu",
       "messageNotSent": "Wiadomość nie została wysłana",
-      "deliveryUnconfirmed": "Dostarczenie niepotwierdzone — sprawdź czat przed ponowieniem",
       "messageSending": "Wysyłanie…",
       "userMessage": {
         "showFull": "Pokaż całą wiadomość",
@@ -20905,7 +21102,6 @@
         "continue": "Kontynuuj",
         "failed": "Nie udało się kontynuować tego czatu. Spróbuj ponownie albo wyślij wiadomość.",
         "explanation": "Po kliknięciu Kontynuuj agent najpierw sprawdzi, czy jego ostatni krok się zakończył.",
-        "unconfirmed": "Nie udało się potwierdzić, czy {{agent}} otrzymał polecenie Kontynuuj. Sprawdź czat, zanim spróbujesz ponownie.",
         "usageLimitExplanation": "Prosi agenta o kontynuowanie od miejsca, w którym przerwał. Użyj po odnowieniu limitu."
       },
       "antigravitySignIn": {
@@ -20937,7 +21133,8 @@
         "settingsRejected": "Codex nie mógł zastosować wybranego modelu i poziomu rozumowania. Ta zmiana celu nie została wysłana. Sprawdź wybór i spróbuj ponownie.",
         "settingsUnconfirmed": "Codex nie potwierdził wybranego modelu i poziomu rozumowania. Ta zmiana celu nie została wysłana. Sprawdź czat i spróbuj ponownie.",
         "pauseUnconfirmed": "Codex przestał działać, ale wstrzymanie celu nie zostało potwierdzone. Sprawdź cel przed kontynuowaniem.",
-        "stopUnconfirmed": "Codex nie potwierdził zatrzymania. Sprawdź czat przed kontynuowaniem."
+        "stopUnconfirmed": "Codex nie potwierdził zatrzymania. Sprawdź czat przed kontynuowaniem.",
+        "noGoal": "Codex nie ma w tym czacie celu do zmiany. Ustaw go poleceniem /goal, podając po nim cel."
       },
       "slashCommandDescriptions": {
         "clearConversation": "Wyczyść rozmowę",
@@ -21084,7 +21281,9 @@
         "cancelled": "Orca nie będzie automatycznie kontynuować tego czatu.",
         "scheduled": "Orca będzie kontynuować ten czat o {{time}}.",
         "cancel": "Nie kontynuuj"
-      }
+      },
+      "settings": "Ustawienia czatu",
+      "creationChatNotOpened": "Worktree jest gotowe, ale nie udało się otworzyć czatu. Spróbuj ponownie, aby otworzyć go z wpisaną wiadomością."
     },
     "tab": {
       "bar": {
@@ -21132,9 +21331,7 @@
         "browse": {
           "noSizes": "Nie zmierzono jeszcze rozmiarów przestrzeni roboczych.",
           "noSizesDescription": "Rozmiary pojawią się po zmierzeniu użycia dysku.",
-          "measureSizes": "Skanuj",
           "measureSizesTitle": "Skanuj rozmiary przestrzeni roboczych",
-          "measureSizesDescription": "Przeskanuj użycie dysku, aby porównywać, sortować i filtrować przestrzenie robocze według rozmiaru.",
           "sizeOnDisk": "Rozmiar na dysku: {{value0}}",
           "checkingGitRow": "Sprawdzanie stanu Git",
           "searchPlaceholder": "Szukaj po nazwie, repo, gałęzi, ścieżce, hoście",
@@ -21324,7 +21521,20 @@
           "selectAllSafetyChecked_other": "Zaznacz wszystkie {{count}} przestrzeni roboczych sprawdzonych pod kątem bezpieczeństwa",
           "selectAllSafetyChecked_few": "Zaznacz wszystkie {{count}} przestrzenie robocze sprawdzone pod kątem bezpieczeństwa",
           "selectAllSafetyChecked_many": "Zaznacz wszystkie {{count}} przestrzeni roboczych sprawdzonych pod kątem bezpieczeństwa",
-          "lastActive": "Ostatnia aktywność: {{value0}}"
+          "lastActive": "Ostatnia aktywność: {{value0}}",
+          "projectNamed": "Projekt: {{value0}}",
+          "moreFlags": "Pokaż więcej flag ({{value0}})",
+          "pathLabel": "Ścieżka",
+          "copyPath": "Kopiuj ścieżkę",
+          "gitNotChecked": "Niesprawdzone",
+          "workspaceCount_one": "{{count}} przestrzeń robocza",
+          "workspaceCount_other": "{{count}} przestrzeni roboczej",
+          "workspaceCount_few": "{{count}} przestrzenie robocze",
+          "workspaceCount_many": "{{count}} przestrzeni roboczych",
+          "restoreFailed": "Nie udało się przestać ignorować: {{value0}}",
+          "ignoreTooltip": "Ignoruj: pomijaj przy usuwaniu zbiorczym",
+          "stopIgnoring": "Przestań ignorować",
+          "stopIgnoringNamed": "Przestań ignorować: {{value0}}"
         },
         "scan": {
           "progress": "Skanowanie przestrzeni roboczych ({{value0}}/{{value1}})",
@@ -21371,6 +21581,16 @@
             "unpushed": "Niewypchnięte",
             "unknown": "Nieznany stan"
           }
+        },
+        "confirm": {
+          "deletingTitle_one": "Usuwanie {{count}} przestrzeni roboczej",
+          "deletingTitle_other": "Usuwanie {{count}} przestrzeni roboczej",
+          "deletingTitle_few": "Usuwanie {{count}} przestrzeni roboczych",
+          "deletingTitle_many": "Usuwanie {{count}} przestrzeni roboczych",
+          "deleteTitle_one": "Usunąć {{count}} przestrzeń roboczą?",
+          "deleteTitle_other": "Usunąć {{count}} przestrzeni roboczej?",
+          "deleteTitle_few": "Usunąć {{count}} przestrzenie robocze?",
+          "deleteTitle_many": "Usunąć {{count}} przestrzeni roboczych?"
         }
       },
       "creation": {
@@ -21468,7 +21688,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Usuwaj margines przy kopiowaniu",
         "copyTrimsGutterDescription": "Pomija lewy margines, za którym rysowane jest wyjście agenta, dzięki czemu skopiowany tekst nie ma wcięcia. Usuwane jest tylko wcięcie wspólne dla wszystkich zaznaczonych wierszy.",
-        "copyOnSelectDescription": "Automatycznie kopiuje do schowka tekst zaznaczony w terminalu lub czacie."
+        "copyOnSelectDescription": "Automatycznie kopiuje do schowka tekst zaznaczony w terminalu lub czacie.",
+        "scrollOnUserInput": "Przewijaj na dół przy wpisywaniu",
+        "scrollOnUserInputDescription": "Pisanie lub wklejanie po przewinięciu w górę przenosi do najnowszego wyjścia. Wyłącz, aby zostać w bieżącym miejscu."
       },
       "terminal": {
         "clipboard": {
@@ -21483,14 +21705,26 @@
             "whitespace": "białe znaki",
             "spaces": "spacje"
           }
+        },
+        "search": {
+          "typing": "pisanie",
+          "input": "wprowadzanie",
+          "jump": "przeskok",
+          "bottom": "dół",
+          "scrollback": "historia przewijania",
+          "snap": "przyciąganie",
+          "position": "pozycja"
         }
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Kolejkuj kolejne wiadomości",
+        "scrollToLatestOnSendTitle": "Przewijaj do najnowszej wiadomości przy wysyłaniu",
+        "scrollToLatestOnSendCopy": "Wysłanie wiadomości po przewinięciu w górę przenosi do najnowszej wiadomości i śledzi odpowiedź. Wyłącz, aby zostać w bieżącym miejscu.",
+        "scrollToLatestOnSendSearchPosition": "pozycja",
         "inlineVisualsTitle": "Wizualizacje w treści",
         "inlineVisualsCopy": "Pozwala agentowi pokazywać wykresy, diagramy i makiety w odpowiedziach. Dotyczy nowo rozpoczętych czatów.",
         "inlineVisualsToggleLabel": "Przełącz wizualizacje w treści",
-        "followUpBehaviorCopy": "Wiadomości wysłane, gdy agent pracuje, czekają jako karty do końca tury, zamiast trafiać do trwającej tury. Cmd/Ctrl+Enter robi odwrotnie dla pojedynczej wiadomości.",
+        "followUpBehaviorCopy": "Wiadomości wysłane, gdy agent pracuje, czekają jako karty do końca tury, zamiast trafiać do trwającej tury. Cmd/Ctrl+Enter robi odwrotnie dla pojedynczej wiadomości. Wiadomości z obrazami również czekają jako karty.",
         "behaviorTitle": "Zachowanie",
         "resumeSearchUpdate": "aktualizacja",
         "resumeSearchRelaunch": "ponowne uruchomienie",
@@ -21508,7 +21742,13 @@
         "usageLimitContinueCopy": "Gdy limit się odnowi, Orca wysyła wiadomość „Continue where you left off.”. Dotyczy wszystkich czatów ze znanym czasem odnowienia limitu.",
         "usageLimitContinueSearchLimit": "limit użycia",
         "usageLimitContinueSearchReset": "odnowienie",
-        "usageLimitContinueToggleLabel": "Przełącz automatyczne kontynuowanie czatów po odnowieniu limitu użycia"
+        "usageLimitContinueToggleLabel": "Przełącz automatyczne kontynuowanie czatów po odnowieniu limitu użycia",
+        "idleStopTitle": "Zatrzymuj bezczynnych agentów po",
+        "idleStopCopy": "Kończy pracę agenta czatu, gdy czat jest bezczynny przez wybrany czas, aby zwolnić pamięć. Czat pozostaje, a następna wiadomość ponownie uruchamia agenta. Wybierz „Nigdy” dla agentów, którzy pracują w tle między turami.",
+        "idleStopSearchIdle": "bezczynny",
+        "idleStopSearchTimeout": "limit czasu",
+        "idleStopSearchKeepAlive": "utrzymanie aktywności",
+        "idleStopNever": "Nigdy"
       }
     },
     "agentChildRow": {
@@ -21686,11 +21926,36 @@
       "workerAutoClose": {
         "running": "Tymczasowy wykonawca orkiestracji · Zamknie się 2 minuty po zakończeniu",
         "finished": "Tymczasowy wykonawca orkiestracji zakończył pracę · Zamknięcie za {{countdown}}",
-        "keepOpen": "Nie zamykaj"
+        "keepOpen": "Nie zamykaj",
+        "bannerRunning": "Wykonawca orkiestracji · Zamknie się 2 minuty po zakończeniu pracy",
+        "bannerFinished": "Wykonawca orkiestracji zakończył pracę · Zamknięcie za {{countdown}}",
+        "temporaryBadge": "Tymczasowy"
       }
     },
     "wslHostMark": {
       "runsOn": "Działa w WSL: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "Nie udało się sformatować pliku {{file}}. Zapisywanie bez formatowania: {{reason}}"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "newTab": {
+          "title": "Tu uruchamiasz nowych agentów",
+          "body": "Kliknij +, aby uruchomić agenta, terminal lub kartę przeglądarki."
+        },
+        "splitChat": {
+          "title": "Dwa czaty obok siebie",
+          "body": "Naciśnij {terminal.splitRight} albo kliknij przycisk podziału u góry czatu. Każda strona ma własne karty.",
+          "bodyWithoutShortcut": "Kliknij przycisk podziału u góry czatu. Każda strona ma własne karty.",
+          "action": "Podziel czat"
+        },
+        "split": {
+          "bodyWithoutShortcut": "Kliknij panel prawym przyciskiem, aby zobaczyć opcje podziału."
+        }
+      }
     }
   },
   "dashboardPopout": {
@@ -21874,20 +22139,14 @@
       "offTerminal": "Wolisz terminal? Nadal jest w pełni obsługiwany. Agenci będą otwierać się w nim, dopóki nie wybierzesz czatu.",
       "onIntro": "Interfejs czatu nie jest już eksperymentalny i stał się częścią Orca. Agenci nadal otwierają się jako czaty, z rozbudowanymi wiadomościami, wizualizacjami i obrazami.",
       "onTerminal": "Terminal również pozostaje w pełni obsługiwany. Każdego agenta możesz w dowolnej chwili przełączyć z powrotem.",
-      "changeInSettings": "Zmienisz to w dowolnej chwili w <link>Ustawienia → Agenci</link>.",
+      "changeInSettings": "Możesz to zmienić w każdej chwili w <link>Ustawienia → Interfejs czatu</link>.",
       "stayInTerminal": "Zostań w terminalu",
       "switchToTerminal": "Przełącz na terminal",
       "cta": "Użyj interfejsu czatu",
-      "saveFailed": "Nie udało się włączyć interfejsu czatu. Wybierz „Czat” w Ustawienia → Agenci.",
-      "terminalSaveFailed": "Nie udało się przełączyć na terminal. Wybierz „Terminal” w Ustawienia → Agenci.",
+      "saveFailed": "Nie udało się włączyć interfejsu czatu. Włącz go w Ustawienia → Interfejs czatu.",
+      "terminalSaveFailed": "Nie udało się przełączyć na terminal. Wyłącz interfejs czatu w Ustawienia → Interfejs czatu.",
+      "switched": "Interfejs czatu jest teraz domyślny dla nowych agentów. Możesz to zmienić w każdej chwili w Ustawienia → Interfejs czatu.",
       "dismiss": "Zamknij",
-      "liveSwitching": "Przełączanie w locie jest dostępne",
-      "liveSwitchingTitle": "Przełączanie w locie – podstawy",
-      "liveSwitchingDescription": "Kliknij prawym przyciskiem kartę agenta, aby przełączać się między interfejsem czatu a terminalem.",
-      "liveSwitchingGotIt": "Rozumiem",
-      "liveSwitchingTerminalTab": "Claude Code",
-      "liveSwitchingPolishTab": "Dopracuj dolną część…",
-      "liveSwitchingCouncilTab": "Przegląd zespołowy",
       "demoTabTitle": "Wyjaśnij logowanie",
       "demoPrompt": "Rozpisz, jak działa logowanie",
       "demoReply": "Logowanie zaczyna się w pliku {{file}}: przeglądarka wysyła żądanie POST do /login, serwer sprawdza hasło i tworzy sesję, a potem przekierowuje do aplikacji. Oto przepływ:",
@@ -22352,6 +22611,7 @@
     "searchHitSourceHost": "Źródło: {{value0}}",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
+    "antigravityChatToCli": "Czat → CLI",
     "continueInCli": "Kontynuuj w CLI",
     "continueInCliNewTab": "Kontynuuj w CLI w nowej karcie",
     "subagents": {
@@ -24018,20 +24278,32 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "Modele agenta {{agent}} są niedostępne na tym hoście. Możesz zachować obecny wybór albo użyć pola „Argumenty”.",
+    "catalogFailed": "Nie udało się wczytać modeli agenta {{agent}}. Zamknij i ponownie otwórz menu wyboru agenta, aby spróbować ponownie.",
+    "catalogSignIn": "Zaloguj się w agencie {{agent}}, aby wczytać jego modele, a następnie zamknij i ponownie otwórz menu wyboru agenta.",
+    "catalogInstall": "Zainstaluj agenta {{agent}} na tym hoście, aby wczytać jego modele, a następnie zamknij i ponownie otwórz menu wyboru agenta.",
+    "catalogUnresolved": "Modele agenta {{agent}} nie zostały wczytane. Zamknij i ponownie otwórz menu wyboru agenta, aby spróbować ponownie.",
+    "catalogEmpty": "Agent {{agent}} nie ma dostępnych modeli.",
+    "workspaceStartupFailed": "Nie udało się uruchomić: {{agent}}. Sprawdź pole „Argumenty” w tej konfiguracji i spróbuj ponownie.",
     "search": "Szukaj agentów i konfiguracji…",
     "configure": "Skonfiguruj: {{agent}}",
     "arguments": "Argumenty",
     "argumentsHint": "Dotyczy tylko uruchomień przez CLI.",
     "launchChat": "Uruchom czat",
     "launchTerminal": "Uruchom terminal",
+    "sameAsTextDefault": "Jak domyślny · {{value0}}",
     "setByArguments": "Ustawione w argumentach",
     "searchModels": "Szukaj modeli",
     "noModels": "Brak modeli pasujących do wyszukiwania.",
     "legacyModels": "Starsze modele",
     "toggleArguments": "Pokaż/ukryj argumenty",
     "argumentsTerminalHint": "Dotyczy tylko uruchomień w terminalu (CLI)",
+    "chatChoicesNote": "Ustawienia modelu lub poziomu rozumowania agenta {{agent}}, które nie mają flagi CLI, dotyczą czatów.",
+    "composedChoicesNote": "Ustawienia poziomu rozumowania i szybkości agenta {{agent}} są zawarte w argumencie modelu.",
     "searchAgentModels": "Szukaj modeli {{agent}}…",
     "legacyModelCount": "Modele: {{total}}",
+    "use": "Użyj",
+    "select": "Wybierz agenta",
     "promptPlaceholder": "Dodaj prompt (opcjonalnie): / – umiejętności, @ – pliki",
     "promptPlaceholderFilesOnly": "Dodaj prompt (opcjonalnie): @ – pliki"
   },
@@ -24059,6 +24331,7 @@
       "hooksReviewBlocked": "Agent czeka, aż ktoś sprawdzi nowe lub zmienione hooki („Hooks need review”). Otwórz to uruchomienie i oznacz je jako zaufane albo je usuń. Zaplanowane uruchomienia trwają dalej i zakończą się powodzeniem, gdy nic nie będzie wymagało sprawdzenia.",
       "agentNeverStarted": "Agent automatyzacji nie uruchomił się po wysłaniu promptu.",
       "agentNoCompletion": "Agent automatyzacji nie zgłosił zakończenia.",
+      "agentInterrupted": "Agent został przerwany przed zakończeniem tego uruchomienia.",
       "watchTimedOut": "Orca przestała obserwować to uruchomienie po 6 h bez sygnału zakończenia.",
       "wslDistroStopped": "Dystrybucja WSL {{distro}} jest zatrzymana, więc to zaplanowane uruchomienie jej nie uruchomiło. Uruchom dystrybucję albo użyj opcji „Uruchom teraz”. Kolejne uruchomienia odbędą się, gdy dystrybucja będzie działać.",
       "projectSetupState": {
@@ -24396,5 +24669,8 @@
       "message": "{{plugin}} chce otworzyć witrynę {{host}}",
       "alwaysAllow": "Zawsze zezwalaj temu pluginowi na otwieranie witryny {{host}}"
     }
+  },
+  "checks": {
+    "rerunUnsuccessful": "Uruchom ponownie nieudane kontrole"
   }
 }
