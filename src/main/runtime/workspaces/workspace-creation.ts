@@ -35,6 +35,7 @@ import type { WorkspaceCreationHandle } from './workspace-lifecycle-creations'
 import { workspaceLifecycleKey } from './workspace-lifecycle-commands'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { applyWorkspaceCreatePluginHook } from '../../plugins/hooks/workspace-create-plugin-hook'
+import { withProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   protected abstract resolveLineageForWorktreeCreate(
@@ -69,18 +70,18 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
-    const request = await applyWorkspaceCreatePluginHook(args, repo)
-    // Listed from here: a create refused before its project resolved has nothing to show.
-    const creation = this.workspaceLifecycle?.openCreate({
-      creationId: request.creationId,
-      repoId: repo.id,
-      keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
+    return withProjectWorktreeCreate(repo, async () => {
+      const request = await applyWorkspaceCreatePluginHook(args, repo)
+      // Listed from here: a create refused before its project resolved has nothing to show.
+      const creation = this.workspaceLifecycle?.openCreate({
+        creationId: request.creationId,
+        repoId: repo.id,
+        keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
+      })
+      return this.createInResolvedProject(request, repo, creation, rearm, events).finally(() =>
+        creation?.close()
+      )
     })
-    try {
-      return await this.createInResolvedProject(request, repo, creation, rearm, events)
-    } finally {
-      creation?.close()
-    }
   }
 
   private async createInResolvedProject(
@@ -183,10 +184,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       rearm,
       timing
     })
-    const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
-      localCreate
-    const settings = createSettings
-    const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
+    const { worktree, worktreePath, includeCopyWarning, created, addResult } = localCreate
+    const { lineage, workspaceLineage, warnings: lineageWarnings } = localCreate.metadataResult
 
     let {
       setup,
@@ -200,7 +199,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       request: args,
       repo,
       worktreePath,
-      settings,
+      settings: createSettings,
       runtimeTarget: this.getLocalGitExecutionOptionArgs(repo)[0],
       shouldUseSetupRunner:
         this.authoritativeWindowId !== null ||

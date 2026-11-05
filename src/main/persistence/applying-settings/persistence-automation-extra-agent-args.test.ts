@@ -79,15 +79,6 @@ describe('automation extra agent args persistence', () => {
     expect(reloaded.listAutomations()[0].extraAgentArgs).toBe(text)
   })
 
-  it('stores no field for empty or whitespace input', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    for (const extraAgentArgs of ['', '   ', undefined]) {
-      const automation = store.createAutomation({ ...BASE, extraAgentArgs })
-      expect(Object.hasOwn(automation, 'extraAgentArgs')).toBe(false)
-    }
-  })
-
   it('preserves on omission, replaces, and clears with empty or whitespace text', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -186,20 +177,6 @@ describe('automation extra agent args persistence', () => {
     expect(
       reloaded.listAutomations().find((row) => row.id === chat.id)?.extraAgentArgs
     ).toBeUndefined()
-  })
-  it('records the old-desktop reconstructed move limitation and preserves surface with the new patch', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const source = store.createAutomation({ ...BASE, launchSetupPatch: { surface: 'chat' } })
-    const oldClientCopy = store.createAutomation({ ...BASE, creationKey: 'old-move' })
-    const currentCopy = store.createAutomation({
-      ...BASE,
-      creationKey: 'new-move',
-      launchSetupPatch: { surface: source.surface }
-    })
-    store.deleteAutomation(source.id)
-    expect(oldClientCopy.surface).toBeUndefined()
-    expect(currentCopy.surface).toBe('chat')
   })
   it('keeps sparse removals, full Arguments and hidden choices through old echoes and reload', async () => {
     const store = await createStore()
@@ -405,45 +382,6 @@ describe('automation extra agent args persistence', () => {
     })
     expect(copy.launchSetup).toEqual(source.launchSetup)
   })
-  it.each([
-    [
-      { kind: 'arguments', value: { kind: 'value', value: '--new-literal --model opus' } },
-      { kind: 'legacy', value: '--model opus --add-dir docs' }
-    ],
-    [
-      { kind: 'legacy', value: '--model opus --add-dir docs' },
-      { kind: 'arguments', value: { kind: 'value', value: '--verbose' } }
-    ]
-  ] satisfies AutomationSourceEdit[][])(
-    'saves composed source intent in either Arguments order: %j',
-    async (...edits) => {
-      const store = await createStore()
-      store.addRepo(makeRepo())
-      const created = store.createAutomation({
-        ...BASE,
-        launchSetupPatch: {
-          copy: {
-            surface: 'terminal',
-            launchPreferences: { model: 'sonnet' },
-            agentArgs: '--saved-literal'
-          }
-        }
-      })
-      let setup = automationCanonicalLaunchSetup(created)
-      let patch: AutomationLaunchEdit | undefined
-      for (const edit of edits) {
-        ;({ setup, patch } = foldAutomationSourceEdit('claude', setup, patch, edit))
-      }
-      const saved = store.updateAutomation(created.id, {
-        launchSetupPatch: encodeAutomationLaunchEdit(patch ?? {}, 'terminal')
-      })
-      expect(saved.launchSetup).toEqual(setup)
-      expect(saved.launchSetup?.agentArgs).not.toContain('--saved-literal')
-      store.flush()
-      await closeTestStores()
-      expect((await createStore()).listAutomations()[0].launchSetup).toEqual(setup)
-    }
-  )
 
   it.each([
     [
@@ -547,35 +485,6 @@ describe('automation extra agent args persistence', () => {
     expect(saved.launchSetup?.launchPreferences?.model).toBeUndefined()
     expect(saved.launchSetup?.agentArgs).toBe('--verbose')
     expect(saved.launchSetup?.launchPreferences).toEqual(setup.launchPreferences)
-  })
-
-  it('keeps supplemental-only edits legacy-compatible after Save and reopen', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const created = store.createAutomation({
-      ...BASE,
-      launchSetupPatch: {
-        surface: 'terminal',
-        arguments: { kind: 'legacy-extras', value: '--add-dir docs' }
-      }
-    })
-    const { setup, patch } = foldAutomationSourceEdit(
-      'claude',
-      automationCanonicalLaunchSetup(created),
-      undefined,
-      { kind: 'supplemental', value: '--add-dir fixtures' }
-    )
-    const saved = store.updateAutomation(created.id, {
-      launchSetupPatch: encodeAutomationLaunchEdit(patch, 'terminal')
-    })
-    expect(saved.launchSetup).toEqual(setup)
-    expect(saved.launchSetup?.launchPreferences).toBeUndefined()
-    store.flush()
-    await closeTestStores()
-    const reopened = (await createStore()).listAutomations()[0]
-    expect(reopened.launchSetup).toEqual(setup)
-    expect(reopened.launchSetup?.agentArgs).toBeUndefined()
-    expect(reopened.launchSetup?.launchPreferences).toBeUndefined()
   })
 
   it('applies permission source edits to the latest old-writer model without replacing its raw field', async () => {

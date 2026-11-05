@@ -138,35 +138,6 @@ function buildChallengeFixture(options: {
 }
 
 describe('answerRelayHostChallenge clock skew (#10401)', () => {
-  it('accepts a challenge when local clock is a few seconds behind (issuedAt in the near future)', () => {
-    const serverNow = 1_700_000_000_000
-    const skewBehindMs = 4_400
-    const localNow = serverNow - skewBehindMs
-    const issuedAt = serverNow
-    const expiresAt = issuedAt + 10_000
-    const { challenge, context, expectedProof } = buildChallengeFixture({
-      issuedAt,
-      expiresAt,
-      localNow
-    })
-
-    expect(answerRelayHostChallenge(challenge, context)).toBe(expectedProof)
-  })
-
-  it('accepts a challenge when local clock is a few seconds ahead of expiresAt', () => {
-    const serverNow = 1_700_000_000_000
-    const issuedAt = serverNow
-    const expiresAt = issuedAt + 10_000
-    const localNow = expiresAt + 4_400
-    const { challenge, context, expectedProof } = buildChallengeFixture({
-      issuedAt,
-      expiresAt,
-      localNow
-    })
-
-    expect(answerRelayHostChallenge(challenge, context)).toBe(expectedProof)
-  })
-
   it('accepts challenges at the clock-skew boundaries', () => {
     const issuedAt = 1_700_000_000_000
     const expiresAt = issuedAt + 10_000

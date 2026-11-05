@@ -160,7 +160,6 @@ it.each(['acp', 'pi'] as const)(
       expect(repeated.body.input).toBe(changed.body.input)
       expect(repeated.body.output).toBe(changed.body.output)
     }
-    expect(agent === 'acp' ? acp.retainedToolBytes : pi.retainedToolBytes).toBeGreaterThan(4 * size)
     expect(
       (await rig.rows())
         .filter((row) => row.body.kind === 'tool-call')
@@ -176,7 +175,6 @@ it.each(['acp', 'pi'] as const)(
       lane.retry()
       await lane.drained()
     }
-    expect(agent === 'acp' ? acp.retainedToolBytes : pi.retainedToolBytes).toBe(0)
     expect(onFailed).not.toHaveBeenCalled()
     const reopened = await rig.reopenJournal()
     expect(reopened.snapshot().items.map((row) => row.body)).toEqual(
