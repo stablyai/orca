@@ -1,4 +1,5 @@
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { TerminalTabCloseIntent } from '@/components/terminal/terminal-tab-close-intent'
 
 export const TOGGLE_TERMINAL_PANE_EXPAND_EVENT = 'orca-toggle-terminal-pane-expand'
 export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
@@ -59,6 +60,8 @@ export type RequestActiveTerminalPaneCloseDetail = {
 
 export type CloseTerminalPaneDetail = {
   tabId: string
+  /** Who asked, for when the pane is its tab's last and the whole tab closes. */
+  lastPaneCloseReason: TerminalTabCloseIntent
   paneRuntimeId?: number
   leafId?: string
   preservePty?: boolean

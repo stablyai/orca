@@ -5,11 +5,11 @@ import {
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain
 } from '../browser-cookie-import-policy'
-import { createChromiumCookieSnapshot } from '../../chromium-cookie-snapshot'
+import { createChromiumCookieSnapshot } from './chromium-cookie-snapshot'
 import { planImportWrites } from '../browser-cookie-import-write'
 import { readChromiumRowPartition } from '../sources/browser-cookie-source-partition'
 import { diag } from '../browser-cookie-import-diagnostics'
-import type { DetectedBrowser } from '../sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
 import type { CookieImportOptions } from '../browser-cookie-import-pipeline'
 import type { ChromiumImportContext } from './import-context'
 import type { Session } from 'electron'
@@ -82,7 +82,7 @@ export async function prepareChromiumCookieImport(
       )
     })
     const sourceKey = needsSourceKey
-      ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
+      ? await getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
       : null
     if (needsSourceKey && !sourceKey) {
       return {

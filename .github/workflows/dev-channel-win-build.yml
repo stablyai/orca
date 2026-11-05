@@ -241,7 +241,11 @@ jobs:
         shell: bash
         run: |
           if [[ "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" != '' ]]; then
-            node config/scripts/release-javascript-artifact.mjs restore
+            RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs'
+            if [ ! -f "$RELEASE_JAVASCRIPT_ARTIFACT" ]; then
+              RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release-javascript-artifact.mjs'
+            fi
+            node "$RELEASE_JAVASCRIPT_ARTIFACT" restore
             pnpm run build:release:host
           else
             pnpm build:release
@@ -317,7 +321,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
+          command: node $(if (Test-Path config/scripts/native-build/node-addons/ensure-native-runtime.mjs) { "config/scripts/native-build/node-addons/ensure-native-runtime.mjs" } else { "config/scripts/ensure-native-runtime.mjs" }) --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           ORCA_BUILD_COMMIT: ${{ inputs.ref }}
@@ -352,7 +356,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+          command: node $(if (Test-Path config/scripts/native-build/node-addons/ensure-native-runtime.mjs) { "config/scripts/native-build/node-addons/ensure-native-runtime.mjs" } else { "config/scripts/ensure-native-runtime.mjs" }) --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
         env:
           ORCA_BUILD_COMMIT: ${{ inputs.ref }}
           ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ inputs.orcad_template && '1' || '' }}

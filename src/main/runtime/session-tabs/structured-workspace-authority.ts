@@ -8,15 +8,15 @@ import {
   getRepoSshConnectionId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host'
-import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { beginWatcherInstall } from '../../ipc/watcher-removal-gate'
-import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { beginWatcherInstall } from '../../workspaces/removal/watcher-removal-gate'
+import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveFloatingWorkspacePath } from '../../persistence/restoring-sessions/floating-workspace-normalization'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { resolveLocalProjectRuntimeForRepo } from '../../workspaces/execution-host/local-project-runtime-resolution'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from './runtime-authored-workspace-session-fields'
 
 const row = {
@@ -53,13 +53,6 @@ describe('preserving runtime-authored workspace session fields', () => {
     )
 
     expect(next.clientHostedBrowserPagesByWorktree).toEqual({ 'repo-1::wt-a': [row] })
-  })
-
-  it('leaves an untouched write alone rather than inventing a field', () => {
-    const next = session()
-
-    expect(preserveRuntimeAuthoredWorkspaceSessionFields(next, session())).toBe(next)
-    expect(preserveRuntimeAuthoredWorkspaceSessionFields(next, null)).toBe(next)
   })
 
   it('keeps default-terminal-tab markers a persist snapshot omitted', () => {

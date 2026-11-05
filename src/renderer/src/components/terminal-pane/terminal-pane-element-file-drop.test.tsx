@@ -2,7 +2,7 @@
 import { act, cleanup, render } from '@testing-library/react'
 import { createPortal } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { PreparedDroppedPaths } from '../../../../shared/native-file-drop-preparation'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'

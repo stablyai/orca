@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
+import type * as LaunchSetup from './AgentLaunchSetupButton'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import {
@@ -11,10 +12,11 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
-vi.mock('./AgentLaunchSetupButton', () => ({
+vi.mock('./AgentLaunchSetupButton', async (importOriginal) => ({
+  ...(await importOriginal<typeof LaunchSetup>()),
   AgentLaunchSetupButton: vi.fn((props: ComponentProps<typeof AgentLaunchSetupButton>) => (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger asChild hideChevron>
@@ -69,10 +71,13 @@ it('skips unchanged search rows on unrelated inventory updates and launches curr
   const view = render(menu([codex, claude]))
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'host low' } })
   expect(screen.getByRole('menuitem').textContent).toContain('Codex · Host model · Low')
-  expect(vi.mocked(AgentLaunchSetupButton).mock.lastCall?.[0].initial).toEqual({
+  expect(vi.mocked(AgentLaunchSetupButton).mock.lastCall?.[0].seed).toEqual({
     agent: 'codex',
     surface: 'terminal',
-    choices: { model: 'host-model', options: { effort: 'low' } }
+    choices: { model: 'host-model', options: { effort: 'low' } },
+    acceptedEdits: { choices: { model: 'host-model', options: { effort: 'low' } } },
+    delegated: [],
+    literalKeys: []
   })
   vi.mocked(AgentLaunchSetupButton).mockClear()
   view.rerender(
@@ -85,7 +90,14 @@ it('skips unchanged search rows on unrelated inventory updates and launches curr
   fireEvent.click(screen.getByRole('menuitem'))
   expect(launch).toHaveBeenCalledWith(
     expect.objectContaining({ agent: 'codex', kind: 'cli' }),
-    { agent: 'codex', surface: 'terminal', choices: { model: 'host-model' } },
+    {
+      agent: 'codex',
+      surface: 'terminal',
+      choices: { model: 'host-model' },
+      acceptedEdits: { choices: { model: 'host-model', options: {} } },
+      delegated: [],
+      literalKeys: []
+    },
     codex
   )
 })

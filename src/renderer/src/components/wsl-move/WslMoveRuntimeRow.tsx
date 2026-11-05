@@ -1,7 +1,7 @@
 import React from 'react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
-import { SettingsRow } from '../settings/SettingsFormControls'
+import { SettingsRow } from '../settings/form-controls/SettingsFormControls'
 import { openWslMoveDialogFor } from './wsl-move-entry'
 
 /** The project runtime setting of a WSL project whose distro has a host: a move, not a toggle. */

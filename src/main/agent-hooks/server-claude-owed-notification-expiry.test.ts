@@ -1,6 +1,6 @@
 // No hook fires at lease expiry, so the server must release owed-notification holds itself.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from '../../shared/claude-owed-task-notifications'
+import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from '../../shared/agent-hook-listener/providers/claude-owed-task-notifications'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE, postHookEvent, RUNNING_SHELL } from './server.test-fixtures'
 
@@ -9,7 +9,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
 // The fixture's owner process is fictional; the pane's owning Claude is still running.
-vi.mock('../../shared/agent-process-presence-probe', () => ({
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
   probeAgentProcessPresence: vi.fn(async () => 'live')
 }))
 

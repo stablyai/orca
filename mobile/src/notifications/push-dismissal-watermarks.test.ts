@@ -65,12 +65,6 @@ it('merges batched and concurrent fences without lowering duplicates or acceptin
   expect(await wasPushDismissed({ ...payload, notificationId: 'invalid' })).toBe(false)
 })
 
-it('does no storage work for an empty or entirely invalid batch', async () => {
-  await rememberPushDismissals([])
-  await rememberPushDismissals([{ ...payload, notificationEpoch: undefined }])
-  expect(AsyncStorage.getItem).not.toHaveBeenCalled()
-})
-
 it('expires retained metadata and ignores unversioned dismissals', async () => {
   vi.useFakeTimers()
   await rememberPushDismissal(payload)

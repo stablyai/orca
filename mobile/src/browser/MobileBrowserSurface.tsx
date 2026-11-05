@@ -55,6 +55,7 @@ export function MobileBrowserSurface({ hostId, ...paneProps }: Props): React.JSX
     if (isBlankBrowserUrl(tab.url) || Date.now() - openedAt > FIRST_ADDRESS_WAIT_MS) {
       return
     }
+    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- Why: the host reports a new tab's first address asynchronously, and whether it still counts as the tab's first page depends on the clock, so this cannot be derived during render. The one stale frame shows the blank page the user is already looking at.
     setResume((current) =>
       isBlankBrowserUrl(current.url)
         ? { url: tab.url, generation: current.generation + (placesViews ? 0 : 1) }
@@ -66,7 +67,7 @@ export function MobileBrowserSurface({ hostId, ...paneProps }: Props): React.JSX
   const tunnel = useMobileBrowserLocalTunnel(client, hostId, worktreeId, mode === 'host')
   // The streamed pane and the drawn tab share the page's desktop or mobile layout.
   const viewMode = (): ReturnType<typeof getInitialMobileBrowserViewMode> =>
-    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
+    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId)
 
   const choose = (next: MobileBrowserDrawing): void => {
     if (next !== 'stream' && (picked ?? mode) === 'stream') {

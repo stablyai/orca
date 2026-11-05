@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { adfToMarkdownText } from '../../../../main/jira/adf-markdown'
 import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
-import { MarkdownPreviewBody } from '@/components/editor/MarkdownPreviewBody'
+import { MarkdownPreviewBody } from '@/components/editor/markdown-preview/render-tree/MarkdownPreviewBody'
 import { NativeChatCodeBlock } from '@/components/native-chat/NativeChatCodeBlock'
 import { NativeChatMarkdown } from '@/components/native-chat/NativeChatMarkdown'
 

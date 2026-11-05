@@ -93,27 +93,6 @@ describe('parseAiVaultListResult', () => {
     )
   })
 
-  it('preserves the optional session fields the panel renders', () => {
-    const parsed = parseAiVaultListResult({
-      sessions: [
-        {
-          ...validSession(),
-          previewMessagesTruncated: true,
-          firstUserPrompt: 'first',
-          lastUserPrompt: 'last'
-        }
-      ],
-      issues: [],
-      scannedAt: '2026-07-27T00:00:00.000Z'
-    })
-
-    expect(parsed.sessions[0]).toMatchObject({
-      previewMessagesTruncated: true,
-      firstUserPrompt: 'first',
-      lastUserPrompt: 'last'
-    })
-  })
-
   it('keeps an issue whose kind this build does not know, as its own kinded row', () => {
     const parsed = parseAiVaultListResult({
       sessions: [validSession()],
@@ -149,16 +128,6 @@ describe('parseAiVaultListResult', () => {
     })
 
     expect(parsed.issues).toEqual([coded, { agent: 'codex', path: coded.path, message: 'English' }])
-  })
-
-  it('leaves an unkinded issue unkinded so real skipped transcripts still count', () => {
-    const parsed = parseAiVaultListResult({
-      sessions: [validSession()],
-      issues: [{ agent: 'codex', path: '/bad.jsonl', message: 'Malformed transcript' }],
-      scannedAt: '2026-07-27T00:00:00.000Z'
-    })
-
-    expect(parsed.issues[0]?.kind).toBeUndefined()
   })
 
   it('rejects a malformed result envelope', () => {

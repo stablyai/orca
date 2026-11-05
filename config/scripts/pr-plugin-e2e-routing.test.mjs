@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { classifyE2eJobs, generalE2eShards } from './ci-e2e-job-selection.mjs'
+import { classifyE2eJobs, generalE2eShards } from './ci/e2e-selection/ci-e2e-job-selection.mjs'
 import { testImportClosure } from './e2e-test-import-closure.mjs'
-import { selectPrE2eSpecs } from './pr-e2e-source-routing.mjs'
+import { selectPrE2eSpecs } from './workflow/source-routing/pr-e2e-source-routing.mjs'
 import {
   PLUGIN_SYSTEM_SOURCE,
   PR_PLUGIN_E2E_SOURCE_ROUTES
-} from './pr-plugin-e2e-source-routes.mjs'
+} from './workflow/source-routing/pr-plugin-e2e-source-routes.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 
@@ -71,7 +71,7 @@ describe('plugin PR E2E routing', () => {
       'plugin-components-hot-reload'
     ],
     [
-      'src/renderer/src/components/right-sidebar/PluginDeclarativePanelNotices.tsx',
+      'src/renderer/src/components/right-sidebar/plugin-panels/declarative/PluginDeclarativePanelNotices.tsx',
       'plugin-components-hot-reload'
     ],
     ['src/main/plugins/plugin-dev-watcher.ts', 'plugin-components-hot-reload'],
@@ -82,7 +82,10 @@ describe('plugin PR E2E routing', () => {
     ['src/renderer/src/store/plugin-shot-replay.ts', 'plugin-shot'],
     ['src/main/plugins/testing/plugin-test-register.ts', 'plugin-shot'],
     ['src/renderer/src/components/plugins/view/plugin-view-request-handler.ts', 'plugin-shot'],
-    ['src/renderer/src/components/right-sidebar/plugin-panel-draw-status.ts', 'plugin-shot'],
+    [
+      'src/renderer/src/components/right-sidebar/plugin-panels/health/plugin-panel-draw-status.ts',
+      'plugin-shot'
+    ],
     ['src/main/runtime/rpc/methods/plugin-view.ts', 'plugin-shot'],
     ['src/cli/handlers/plugin-view.ts', 'plugin-shot'],
     ['src/cli/handlers/plugin-shot-default-dir.ts', 'plugin-shot'],
@@ -157,7 +160,7 @@ describe('plugin PR E2E routing', () => {
       'src/renderer/src/components/plugins/review/PluginUpdateReview.test.tsx',
       'src/main/plugins/plugin-service.test.ts',
       'src/main/plugins/__mocks__/plugin-git-ssh-remote-fixture.ts',
-      'src/renderer/src/components/settings/GeneralPane.tsx',
+      'src/renderer/src/components/settings/general/GeneralPane.tsx',
       'src/main/ipc/filesystem.ts'
     ]) {
       expect(routedPluginSpecs(file), file).toEqual([])

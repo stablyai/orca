@@ -34,7 +34,7 @@ function Harness(): null {
 beforeEach(() => {
   vi.useFakeTimers()
   replies = []
-  // SAFETY: the hook reads only browserTunnel and subscribe from the client.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only browserTunnel and subscribe from the client.
   client = {
     browserTunnel: { onFrame: () => () => {}, send: () => true },
     subscribe: (_method: string, _params: unknown, onData: Reply) => {

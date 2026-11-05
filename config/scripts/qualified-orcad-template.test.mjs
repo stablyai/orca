@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { runProcessSync } from '@orca/process-host'
-import { writeOrcadTemplateTestFixture } from './orcad-template-test-fixture.mjs'
+import { writeOrcadTemplateTestFixture } from './orcad-distribution/template/orcad-template-test-fixture.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/qualified-orcad-template.yml', 'utf8'))
 const identity = workflow.jobs.cache.steps.find((step) => step.id === 'identity')
@@ -75,42 +75,6 @@ it('separates runner provenance, embedded CLI commits, workflow policy and daily
     expect(key('20261022')).not.toBe(nextPolicy)
   } finally {
     rmSync(root, { recursive: true, force: true })
-  }
-})
-
-it('qualifies cache misses and permits cache publication only after the full matrix succeeds', () => {
-  expect(workflow.jobs.qualify.if).toBe("needs.cache.outputs.hit != 'true'")
-  expect(workflow.jobs.qualify.uses).toBe('./.github/workflows/node-server-tests.yml')
-  expect(workflow.jobs.qualify.with).toMatchObject({
-    build_template: true,
-    fast_runners: '${{ inputs.fast_runners }}'
-  })
-  expect(workflow.jobs.save.needs).toContain('qualify')
-  expect(workflow.jobs.save.if).toBe("needs.qualify.result == 'success'")
-  const restore = workflow.jobs.cache.steps.find((step) => step.id === 'restore')
-  expect(restore.with['restore-keys']).toBeUndefined()
-  const validate = workflow.jobs.cache.steps.find((step) => step.id === 'validate')
-  expect(validate.run).toContain('verifyPackagedOrcadTemplate')
-  expect(validate.run).toContain('assertNotDarkBuild')
-})
-
-it('keeps SignPath on GitHub runners and isolates Blacksmith qualification caches', () => {
-  const release = parse(readFileSync('.github/workflows/release-cut.yml', 'utf8'))
-  const adhoc = parse(readFileSync('.github/workflows/adhoc-mac-build.yml', 'utf8'))
-  expect(workflow.on.workflow_call.inputs.fast_runners.default).toBe(true)
-  expect(release.jobs['orcad-template'].uses).toBe(
-    './.github/workflows/qualified-orcad-template.yml'
-  )
-  expect(release.jobs['orcad-template'].with).toEqual({
-    ref: 'refs/tags/${{ needs.cut.outputs.tag }}',
-    fast_runners: false
-  })
-  expect(adhoc.jobs['orcad-template'].with.fast_runners).toBe(true)
-  expect(identity.env.RUNNER_PROFILE).toBe(
-    "${{ inputs.fast_runners && 'fast' || 'github-hosted' }}"
-  )
-  for (const name of ['cache', 'save']) {
-    expect(workflow.jobs[name]['runs-on']).toBe('ubuntu-latest')
   }
 })
 

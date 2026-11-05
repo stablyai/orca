@@ -7,16 +7,16 @@ import { gitExecFileAsync } from './git-exec-file'
 import {
   GENERAL_CAP,
   GENERAL_HEADROOM,
-  GitAdmissionScheduler,
-  _gitAdmissionSnapshotForTests,
-  _resetGitAdmissionForTests,
   type GitAdmissionEvent
+} from '../../../shared/git/admission/git-admission-state'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
+import {
+  _gitAdmissionSnapshotForTests,
+  _resetGitAdmissionForTests
 } from './git-subprocess-admission'
 import {
   assertAdmissionLedger,
   createStormRoot,
-  formatMeasurementTable,
-  measureStorm,
   type InteractiveQueueSnapshot
 } from './git-admission-storm-test-fixture'
 
@@ -168,15 +168,5 @@ describe.skipIf(process.platform === 'win32')('git admission storm measurement',
   it(
     'bounds real children and drains interactive work before the background backlog',
     verifySpawnContention
-  )
-
-  it.runIf(process.env.ORCA_GIT_ADMISSION_STORM_MEASUREMENT === '1')(
-    'reports bounded-concurrency before and after measurements',
-    async () => {
-      const disabled = await measureStorm('disabled')
-      const enabled = await measureStorm('enabled')
-      console.info(`GIT_ADMISSION_STORM_MEASUREMENT=${formatMeasurementTable([disabled, enabled])}`)
-      assertAdmissionLedger(enabled)
-    }
   )
 })

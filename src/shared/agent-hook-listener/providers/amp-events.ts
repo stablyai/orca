@@ -1,7 +1,7 @@
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
+} from '../../agent-status/contracts/agent-status-types'
 import { readFirstString } from '../interactive-tool'
 import { readBoundedString } from '../grok-result-discovery'
 import { clearPaneTurnCacheState, type HookListenerState } from '../listener-state'

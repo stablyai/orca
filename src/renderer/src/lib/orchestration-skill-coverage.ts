@@ -1,14 +1,9 @@
-import type { AgentType } from '../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../shared/skills'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import {
-  getNativeChatAgentProfile,
-  readsSkillSource,
-  type NativeChatAgentProfile
-} from '../../../shared/native-chat/native-chat-agent-profiles'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { agentReadsSkill } from './agent-skill-coverage'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { TUI_AGENT_AUTO_PICK_ORDER } from '../../../shared/tui-agent-selection'
+import { TUI_AGENT_AUTO_PICK_ORDER } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 
 export type OrchestrationSkillAgentStatus = {
   agent: TuiAgent
@@ -35,37 +30,15 @@ function isOrchestrationSkill(skill: DiscoveredSkill): boolean {
   )
 }
 
-// Chat-profile agents read chat roots; others read their own, while Claude Agent Teams uses Claude Code’s roots.
-function skillReaderForAgent(
-  agent: TuiAgent
-): Pick<NativeChatAgentProfile, 'skillSourceOwner' | 'readsSkillFoldersOf'> {
-  const owner: AgentType = agent === 'claude-agent-teams' ? 'claude' : agent
-  return getNativeChatAgentProfile(agent) ?? { skillSourceOwner: owner }
-}
-
 /** `skills` and `sources` must come from the same discovery scan. */
 export function agentHasOrchestrationSkill(
   agent: TuiAgent,
   skills: readonly DiscoveredSkill[],
   sources: readonly SkillDiscoverySource[]
 ): boolean {
-  const reader = skillReaderForAgent(agent)
-  return skills.some((skill) => {
-    if (!isOrchestrationSkill(skill)) {
-      return false
-    }
-    // Why: dedup keeps one row, so the roots it absorbed still have to be classified.
-    const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
-    return rootPaths.some((rootPath) =>
-      // One path can be home and repo simultaneously; keying only by path lets a repo duplicate shadow its owning home root.
-      sources.some(
-        (source) =>
-          source.path === rootPath &&
-          source.sourceKind !== 'repo' &&
-          readsSkillSource(reader, source)
-      )
-    )
-  })
+  return skills.some(
+    (skill) => isOrchestrationSkill(skill) && agentReadsSkill(agent, skill, sources)
+  )
 }
 
 export function sortOrchestrationAgents(agents: readonly TuiAgent[]): TuiAgent[] {

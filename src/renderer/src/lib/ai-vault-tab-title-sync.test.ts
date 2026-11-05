@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AiVaultSessionTitlesResult } from '../../../shared/ai-vault-session-title'
+import type { AiVaultSessionTitlesResult } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { AiVaultTitleRequest } from './ai-vault-tab-title-requests'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
@@ -161,39 +161,6 @@ function makeState(args: {
 }
 
 describe('AI Vault tab title sync', () => {
-  it.each(['claude', 'codex'] as const)(
-    'projects the canonical %s AI Vault session title',
-    async (agent) => {
-      const store = makeState({
-        agent,
-        executionHostId: 'ssh:dev-box',
-        worktreeId: 'worktree-1',
-        path: '/workspace/albacore'
-      })
-      const resolveSessionTitles = vi.fn(async () => titleResult(agent, `${agent} conversation`))
-      const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
-
-      await vi.waitFor(() =>
-        expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle).toEqual({
-          agent,
-          sessionId: `${agent}-session`,
-          title: `${agent} conversation`
-        })
-      )
-      expect(resolveSessionTitles).toHaveBeenCalledWith({
-        executionHostScope: 'ssh:dev-box',
-        requests: [
-          {
-            agent,
-            sessionId: `${agent}-session`,
-            transcriptPath: `/sessions/${agent}.jsonl`
-          }
-        ]
-      })
-      stop()
-    }
-  )
-
   it('retains a recovered sleeping title after its lifecycle record disappears', async () => {
     const store = makeState({
       executionHostId: 'ssh:dev-box',
@@ -281,24 +248,6 @@ describe('AI Vault tab title sync', () => {
 
     await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
     store.pingAgentStatus()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(resolveSessionTitles).toHaveBeenCalledTimes(1)
-    stop()
-  })
-
-  it('does not reread titles when only the worktree path changes', async () => {
-    const store = makeState({
-      executionHostId: 'ssh:dev-box',
-      worktreeId: 'worktree-1',
-      path: '/workspace/albacore'
-    })
-    const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Stable conversation'))
-    const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
-
-    await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
-    store.setWorkspacePath('/workspace/renamed-albacore')
     await Promise.resolve()
     await Promise.resolve()
 

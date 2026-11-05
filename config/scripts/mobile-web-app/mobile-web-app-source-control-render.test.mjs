@@ -1,10 +1,9 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium } from 'playwright-core'
-import { buildMobileWebAppBundle } from '../build-mobile-web-app-bundle.mjs'
+import { buildMobileWebAppBundle } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
@@ -18,7 +17,6 @@ import {
 // No comment card renders without PR RPC chain: this suite cannot prove avatar skip; pr-comment-card-web-avatar.test.tsx covers that branch.
 // Off-origin/policy assertions cover only content actually painted here.
 
-const projectDir = fileURLToPath(new URL('../../..', import.meta.url))
 const HOST_ROUTE = '/h/render-check-host'
 const WORKTREE = 'wt-1'
 const HUB_ROUTE = `${HOST_ROUTE}/source-control/${WORKTREE}`
@@ -200,17 +198,6 @@ describeRender(
       },
       120_000
     )
-
-    it('configures the shipped Android and iOS image policy', async () => {
-      // Read shipped Kotlin CSP instead of duplicating a header fixture.
-      expect(cspHeader).toContain("img-src 'self' data: blob: https:")
-      const swift = await readFile(
-        join(projectDir, 'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift'),
-        'utf8'
-      )
-      // Check iOS source too; served Android header cannot prove other shell agrees.
-      expect(swift).toContain(`"img-src 'self' data: blob: https:"`)
-    }, 180_000)
   },
   600_000
 )

@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { mobileWebAppModuleClosure } from '../build-mobile-web-app-bundle.mjs'
+import { mobileWebAppModuleClosure } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 
 it('resolves local entry paths against the requested tree and selects browser siblings', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-route-entrypoints-'))

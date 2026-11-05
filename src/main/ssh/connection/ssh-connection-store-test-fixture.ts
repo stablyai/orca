@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
 

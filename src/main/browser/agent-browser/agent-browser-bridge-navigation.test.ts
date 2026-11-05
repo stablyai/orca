@@ -40,7 +40,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
-vi.mock('../cdp-ws-proxy', () => ({
+vi.mock('../cdp/transport/cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
 vi.mock('../browser-error', () => ({
@@ -53,7 +53,7 @@ vi.mock('../browser-error', () => ({
   }
 }))
 
-vi.mock('../cdp-bridge', async () => {
+vi.mock('../cdp/commands/cdp-bridge', async () => {
   const { BrowserError } = await vi.importMock<typeof BrowserErrorTypes>('../browser-error')
   return { BrowserError }
 })

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
@@ -21,10 +21,13 @@ import {
 } from './runtime-home-service-test-harness'
 
 // Keep asserted config bytes independent of platform socket-path limits.
-vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
-}))
+vi.mock(
+  '../codex/configuration/shared-server/codex-daemon-socket-path-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    applyCodexDaemonSocketGuard: (config: string) => config
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -131,7 +134,7 @@ describe('CodexRuntimeHomeService', () => {
 
   it('bridges managed-account history into the real home when launching system default', async () => {
     const accountBridge = vi.fn(async () => {})
-    vi.doMock('../codex/codex-account-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/codex-account-session-bridge', () => ({
       startCodexAccountSessionBridgeInBackground: accountBridge
     }))
     const managedHomePath = createManagedAuth(
@@ -158,13 +161,13 @@ describe('CodexRuntimeHomeService', () => {
         hardlinkOnly: true
       })
     } finally {
-      vi.doUnmock('../codex/codex-account-session-bridge')
+      vi.doUnmock('../codex/history/bridges/codex-account-session-bridge')
     }
   })
 
   it('leaves a history source inside a WSL distro to the WSL lane', async () => {
     const accountBridge = vi.fn(async () => {})
-    vi.doMock('../codex/codex-account-session-bridge', () => ({
+    vi.doMock('../codex/history/bridges/codex-account-session-bridge', () => ({
       startCodexAccountSessionBridgeInBackground: accountBridge
     }))
     const managedHomePath = createManagedAuth(
@@ -188,7 +191,7 @@ describe('CodexRuntimeHomeService', () => {
       expect(service.prepareForCodexLaunch()).toBeNull()
       expect(accountBridge).not.toHaveBeenCalled()
     } finally {
-      vi.doUnmock('../codex/codex-account-session-bridge')
+      vi.doUnmock('../codex/history/bridges/codex-account-session-bridge')
     }
   })
 

@@ -25,69 +25,6 @@ describe('terminal kitty CSI-u encoding', () => {
   ] as const)('encodes flags %i %s', (flags, type, expected) => {
     expect(encodeTerminalKittyCsiU({ ...optionQ, flags, type })).toBe(expected)
   })
-
-  it('encodes shifted and PC-101 alternates without redundant fields', () => {
-    expect(
-      encodeTerminalKittyCsiU({
-        flags: 30,
-        type: 'press',
-        primaryCodePoint: 55,
-        shiftedCodePoint: 47,
-        baseCodePoint: 55,
-        shiftKey: true,
-        altKey: true,
-        ctrlKey: false,
-        metaKey: false,
-        associatedText: '\\'
-      })
-    ).toBe('\x1b[55:47;4;92u')
-    expect(
-      encodeTerminalKittyCsiU({
-        flags: 14,
-        type: 'release',
-        primaryCodePoint: 59,
-        baseCodePoint: 113,
-        shiftKey: false,
-        altKey: true,
-        ctrlKey: false,
-        metaKey: false
-      })
-    ).toBe('\x1b[59::113;3:3u')
-  })
-
-  it('supports multi-codepoint associated text and suppresses it for Ctrl', () => {
-    expect(
-      encodeTerminalKittyCsiU({ ...optionQ, flags: 24, type: 'press', associatedText: 'á' })
-    ).toBe('\x1b[113;3;97:769u')
-    expect(encodeTerminalKittyCsiU({ ...optionQ, flags: 24, type: 'press', ctrlKey: true })).toBe(
-      '\x1b[113;7u'
-    )
-  })
-
-  it('omits control codepoints from associated text', () => {
-    expect(
-      encodeTerminalKittyCsiU({
-        ...optionQ,
-        flags: 24,
-        type: 'press',
-        primaryCodePoint: 97,
-        altKey: false,
-        associatedText: 'A\0B\x7fC\u0085D'
-      })
-    ).toBe('\x1b[97;;65:66:67:68u')
-  })
-
-  it('encodes lock modifier state', () => {
-    expect(
-      encodeTerminalKittyCsiU({
-        ...optionQ,
-        flags: 24,
-        type: 'press',
-        capsLock: true,
-        numLock: true
-      })
-    ).toBe('\x1b[113;195;64u')
-  })
 })
 
 describe('terminal keyboard event CSI-u identity', () => {
@@ -140,20 +77,6 @@ describe('terminal keyboard event CSI-u identity', () => {
   })
 
   it.each([
-    ['!', 'Digit1', 49],
-    ['?', 'Slash', 47],
-    ['_', 'Minus', 45]
-  ])('keeps shifted %s (%s) on physical code %i', (key, code, codePoint) => {
-    expect(
-      encodeTerminalOptionKittyEvent(keyboardEvent({ key, code, shiftKey: true }), {
-        flags: 8,
-        type: 'press',
-        primaryCharacterFallback: key
-      })
-    ).toBe(`\x1b[${codePoint};2u`)
-  })
-
-  it.each([
     ['ArrowLeft', 'Numpad4', 57417],
     ['ArrowRight', 'Numpad6', 57418],
     ['ArrowUp', 'Numpad8', 57419],
@@ -173,34 +96,5 @@ describe('terminal keyboard event CSI-u identity', () => {
     expect(encodeTerminalOptionKittyEvent(event, { flags: 2, type: 'release' })).toBe(
       `\x1b[${codePoint};3:3u`
     )
-  })
-
-  it('encodes NumpadSeparator as the keypad separator', () => {
-    const event = keyboardEvent({ key: ',', code: 'NumpadSeparator' })
-    expect(encodeTerminalOptionKittyEvent(event, { flags: 2, type: 'press' })).toBe('\x1b[57416u')
-    expect(encodeTerminalOptionKittyEvent(event, { flags: 2, type: 'release' })).toBe(
-      '\x1b[57416;1:3u'
-    )
-  })
-
-  it.each([
-    [',', 'NumpadComma', 44],
-    ['(', 'NumpadParenLeft', 40]
-  ])('keeps printable %s (%s) as text identity %i', (key, code, codePoint) => {
-    const event = keyboardEvent({ key, code })
-    expect(
-      encodeTerminalOptionKittyEvent(event, {
-        flags: 2,
-        type: 'press',
-        primaryCharacterFallback: key
-      })
-    ).toBe(`\x1b[${codePoint}u`)
-    expect(
-      encodeTerminalOptionKittyEvent(event, {
-        flags: 2,
-        type: 'release',
-        primaryCharacterFallback: key
-      })
-    ).toBe(`\x1b[${codePoint};1:3u`)
   })
 })

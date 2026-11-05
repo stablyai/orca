@@ -278,9 +278,13 @@ async function main() {
   const bundlePath = join(bundleDir, 'wsl-agent-hook-relay.js')
   const versionPath = join(bundleDir, '.version')
   if (!existsSync(bundlePath) || !existsSync(versionPath)) {
-    await run(process.execPath, [join('config', 'scripts', 'build-wsl-guest.mjs')], {
-      cwd: process.cwd()
-    })
+    await run(
+      process.execPath,
+      [join('config', 'scripts', 'remote-host-build', 'wsl-guest', 'build-wsl-guest.mjs')],
+      {
+        cwd: process.cwd()
+      }
+    )
   }
 
   // Why: main's PTY graph reads app paths at import time; keep it inside a disposable directory.
@@ -309,7 +313,9 @@ async function main() {
     const { ensureWslHookRelayForReattach } = await jiti.import(
       '../../src/main/agent-hooks/wsl-hook-relay-reattach.ts'
     )
-    const { codexHookService } = await jiti.import('../../src/main/codex/hook-service.ts')
+    const { codexHookService } = await jiti.import(
+      '../../src/main/codex/hooks/installation/hook-service.ts'
+    )
     const { MANAGED_AGENT_HOOK_TARGETS } = await jiti.import(
       '../../src/shared/managed-agent-hook-targets.ts'
     )

@@ -1,5 +1,5 @@
 import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue
@@ -9,6 +9,7 @@ import {
   type SlashCommandSuggestion
 } from '../../native-chat/input/native-chat-slash-commands'
 import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
+import type { AgentSessionThreadGoalChange } from '../agent-session-thread-goal-wire'
 import type { AgentSessionSlashCommand } from '../agent-session-wire'
 import {
   structuredComposerFailure,
@@ -54,7 +55,7 @@ export type StructuredAgentSessionComposerOptions = {
     instructions?: string
   ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
   /** Without host goal support, /goal remains agent-handled text. */
-  setThreadGoalObjective?: (objective: string) => Promise<boolean>
+  changeThreadGoal?: (change: AgentSessionThreadGoalChange) => Promise<boolean>
 }
 
 /** Visible condition holding a refusal: agent/prompt/background work, an in-flight send or a Retry card. */
@@ -188,14 +189,25 @@ export function isStructuredAgentSessionGoalCommand(text: string): boolean {
   return commandParts(text)?.name === 'goal'
 }
 
-/** `/clear`, `/compact` and `/goal …` change the conversation; option and picker commands do not. */
+const GOAL_CONTROLS: ReadonlyMap<string, AgentSessionThreadGoalChange> = new Map([
+  ['pause', { kind: 'status', status: 'paused' }],
+  ['resume', { kind: 'status', status: 'active' }],
+  ['clear', { kind: 'clear' }]
+])
+
+/** `/goal pause|resume|clear` controls the current goal; any other text is a new objective. */
+export function structuredAgentSessionGoalChange(argument: string): AgentSessionThreadGoalChange {
+  return GOAL_CONTROLS.get(argument.toLowerCase()) ?? { kind: 'set', objective: argument }
+}
+
+/** `/clear`, `/compact` and goal changes that start work change the conversation; pausing or clearing a goal does not. */
 export function structuredAgentSessionCommandChangesConversation(text: string): boolean {
   const command = commandParts(text)
-  return (
-    command?.name === 'clear' ||
-    command?.name === 'compact' ||
-    (command?.name === 'goal' && command.argument !== '')
-  )
+  if (command?.name === 'goal') {
+    const change = command.argument ? structuredAgentSessionGoalChange(command.argument) : null
+    return change?.kind === 'set' || (change?.kind === 'status' && change.status === 'active')
+  }
+  return command?.name === 'clear' || command?.name === 'compact'
 }
 
 /** `/goal` with nothing after it: an entrance to goal mode, not an objective. */
@@ -223,7 +235,7 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   controller: StructuredAgentSessionComposerOptions
 ): Promise<StructuredAgentSessionCommandOutcome> {
   const command = commandParts(text)
-  if (command?.name === 'goal' && controller.setThreadGoalObjective) {
+  if (command?.name === 'goal' && controller.changeThreadGoal) {
     if (!command.argument) {
       return {
         handled: true,
@@ -234,7 +246,9 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     // A refusal reaches the user through the session's own error surface.
     return {
       handled: true,
-      accepted: await controller.setThreadGoalObjective(command.argument),
+      accepted: await controller.changeThreadGoal(
+        structuredAgentSessionGoalChange(command.argument)
+      ),
       error: null
     }
   }

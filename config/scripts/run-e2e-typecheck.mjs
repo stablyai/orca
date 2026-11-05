@@ -1,12 +1,12 @@
 import { availableParallelism } from 'node:os'
 import { runProcessSync } from '@orca/process-host'
-import { describeProcessFailure } from './process-failure-message.mjs'
-import { isDirectInvocation } from './script-entry-detection.mjs'
+import { describeProcessFailure } from './tool-invocation/process-failure-message.mjs'
+import { isDirectInvocation } from './tool-invocation/script-entry-detection.mjs'
 import {
   resolveTypecheckBunExecutable,
   resolveTypecheckCommand,
   selectTypecheckCompiler
-} from './run-typecheck-projects-in-parallel.mjs'
+} from './typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
 
 const CONFIG = 'config/tsconfig.e2e.json'
 

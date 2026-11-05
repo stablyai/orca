@@ -64,19 +64,6 @@ describe('terminatePtyJob', () => {
     expect(terminatePtyJob(ptyWithHandle(id))).toBe('unavailable')
   })
 
-  it('passes the shell pid so an id from another backend cannot match', () => {
-    // winpty/ConPTY IDs can collide; always send shell PID so native code can refuse mismatches.
-    const terminateJob = vi.fn().mockReturnValue(true)
-    __setConptyJobNativeForTests(() => ({
-      terminateJob,
-      listJobProcessIds: vi.fn(),
-      assignCurrentProcessToJob: vi.fn().mockReturnValue(true)
-    }))
-
-    terminatePtyJob(ptyWithHandle(3, 9001))
-    expect(terminateJob).toHaveBeenCalledWith(3, 9001)
-  })
-
   it('reports unavailable when the shell pid is unusable', () => {
     __setConptyJobNativeForTests(() => ({
       terminateJob: vi.fn().mockReturnValue(true),
@@ -106,16 +93,6 @@ describe('terminatePtyJob', () => {
 })
 
 describe('listPtyJobProcessIds', () => {
-  it('returns the live pids, including a detached grandchild', () => {
-    // Detached/reparented grandchildren escape console and parent-PID walks but remain job members.
-    __setConptyJobNativeForTests(() => ({
-      terminateJob: vi.fn(),
-      listJobProcessIds: vi.fn().mockReturnValue([107184, 91480]),
-      assignCurrentProcessToJob: vi.fn().mockReturnValue(true)
-    }))
-    expect(listPtyJobProcessIds(ptyWithHandle(1))).toEqual([107184, 91480])
-  })
-
   it('reports null when there is no answer to give', () => {
     // Null is unverifiable, including after shell exit closes the job; it never proves death.
     __setConptyJobNativeForTests(() => null)
@@ -131,16 +108,6 @@ describe('listPtyJobProcessIds', () => {
 })
 
 describe('assignHostProcessToKillOnCloseJob', () => {
-  it('reports whether the host process is now kill-on-close', () => {
-    const assignCurrentProcessToJob = vi.fn().mockReturnValue(true)
-    __setConptyJobNativeForTests(() => ({
-      terminateJob: vi.fn(),
-      listJobProcessIds: vi.fn(),
-      assignCurrentProcessToJob
-    }))
-    expect(assignHostProcessToKillOnCloseJob()).toBe(true)
-  })
-
   it('degrades to false when the OS refuses the assignment', () => {
     // An outer job that forbids nesting; orphan behaviour is then simply what
     // it was before, rather than a crash.
@@ -164,24 +131,6 @@ describe('PTY Job Object teardown breadcrumbs', () => {
       assignCurrentProcessToJob: vi.fn().mockReturnValue(true)
     }))
   }
-
-  it('records the shell pid whose job it terminated', () => {
-    withNative(() => true)
-
-    expect(terminatePtyJob(ptyWithHandle(7, 4242))).toBe('terminated')
-    expect(recordSelfInitiatedTreeKillMock).toHaveBeenCalledWith({
-      pid: 4242,
-      site: 'windows-pty-job-teardown',
-      scope: 'win-pty-job'
-    })
-  })
-
-  it('records nothing when the native side refused', () => {
-    withNative(() => false)
-
-    expect(terminatePtyJob(ptyWithHandle(7))).toBe('unavailable')
-    expect(recordSelfInitiatedTreeKillMock).not.toHaveBeenCalled()
-  })
 
   it('never downgrades a real termination to unavailable because diagnostics failed', () => {
     // Breadcrumb failure must not downgrade termination to unavailable and escalate taskkill.

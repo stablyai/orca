@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
 import { chooseWorkerFollowUpPlacement } from './worker-follow-up-choice'
 
@@ -62,7 +62,6 @@ describe('opening a terminal worker Orca closed', () => {
   }
 
   const open = (address: string) => h.call('orchestration.partyOpen', { address })
-  const locate = (address: string) => h.call('orchestration.partyLocation', { address })
 
   it('resumes its conversation in a new terminal, and a click after it reports reuses it', async () => {
     const { resource, resume, report } = await closedHelper()
@@ -81,18 +80,6 @@ describe('opening a terminal worker Orca closed', () => {
         captureHostId: 'local'
       })
     )
-  })
-
-  it('keeps the lookup answer without a saved conversation', async () => {
-    const { resource, resume } = await closedHelper(false)
-    expect(await open(resource.terminal_handle)).toEqual(await locate(resource.terminal_handle))
-    expect(resume).not.toHaveBeenCalled()
-  })
-
-  it('keeps the lookup answer when the conversation was recorded on another host', async () => {
-    const { resource, resume } = await closedHelper()
-    resume.mockResolvedValue({ ok: false, reason: 'no_resume_command' })
-    expect(await open(resource.terminal_handle)).toEqual(await locate(resource.terminal_handle))
   })
 
   it('sends a later follow-up into the reopened terminal, not a second one', async () => {

@@ -5,7 +5,7 @@ import process from 'node:process'
 
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
-import { isTestOnlySourcePath } from './test-only-source-path.mjs'
+import { isTestOnlySourcePath } from './static-analysis/process-boundaries/test-only-source-path.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])

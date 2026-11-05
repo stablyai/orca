@@ -4,6 +4,7 @@ import {
   type MobileBrowserTunnelEvent
 } from '../../../src/shared/mobile-browser-tunnel-protocol'
 import { OrcaProxiedBrowser } from '../../modules/orca-proxied-browser/src'
+import { translate } from '../i18n/mobile-i18n'
 import type { RpcClient } from '../transport/rpc-client'
 import { bridgeProxiedBrowserToTunnel, proxiedBrowserStoreId } from './mobile-browser-local-proxy'
 import { MobileBrowserTunnelClient } from './mobile-browser-tunnel-client'
@@ -99,7 +100,11 @@ export function useMobileBrowserLocalTunnel(
             onEvent(event)
           }
         }),
-      onClosed: () => setState({ status: 'failed', message: 'the host closed the tunnel' })
+      onClosed: () =>
+        setState({
+          status: 'failed',
+          message: translate('browser.localTunnel.hostClosed', 'the host closed the tunnel')
+        })
     })
     native
       .startProxy(proxyKey)

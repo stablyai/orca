@@ -10,7 +10,7 @@ import {
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
 } from '../../../../shared/browser-network-tunnel-protocol'
-import { browserNetworkExecutionHostKey } from '../../../browser/browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../browser/network/execution-routes/browser-network-execution-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { MOBILE_BROWSER_TUNNEL_METHODS } from './mobile-browser-network-tunnel'

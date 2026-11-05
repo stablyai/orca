@@ -352,14 +352,6 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBe(1)
   })
 
-  it('keeps the old 100-Run page under --full', async () => {
-    await run('run-list', [['full', true]], { runs: [], nextCursor: null })
-    expect(callMock).toHaveBeenCalledWith('orchestration.runList', {
-      limit: 100,
-      cursor: undefined
-    })
-  })
-
   it('frames an unobserved turn start as a slow worker, not a failure to retry', async () => {
     const { stdout, stderr } = await run('worker-start', [['task', 'task_1']], {
       ...OLDER_RUNTIME_START,

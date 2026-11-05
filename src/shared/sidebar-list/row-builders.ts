@@ -1,7 +1,7 @@
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
+import { getFolderWorkspaceHostIdentity } from '../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,
@@ -35,15 +35,14 @@ export function buildPendingCreationRow(
 
 export function buildImportedWorktreesCardRow(
   candidate: ImportedWorktreesCardCandidate,
-  placement: ImportedWorktreesCardRow['placement'],
   hostContext?: NoticeHostContext
 ): ImportedWorktreesCardRow {
   return {
     type: 'imported-worktrees-card',
-    key: `imported-worktrees-card:${placement}:${candidate.repo.id}`,
+    key: `imported-worktrees-card:repo-group:${candidate.repo.id}`,
     repo: candidate.repo,
     hiddenWorktrees: candidate.hiddenWorktrees,
-    placement,
+    placement: 'repo-group',
     ...(hostContext
       ? { hostContextLabel: hostContext.label, hostContextHostId: hostContext.hostId }
       : {})

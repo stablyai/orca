@@ -1,6 +1,6 @@
-import type { PairedE2EEFraming } from '../../../src/shared/paired-e2ee-client-handshake'
-import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../src/shared/paired-e2ee-handshake-deadline'
-import type { PairedE2EEFramingPolicy } from '../../../src/shared/paired-e2ee-framing-policy'
+import type { PairedE2EEFraming } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
+import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-handshake-deadline'
+import type { PairedE2EEFramingPolicy } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
 import { createDirectSocketFraming, type DirectSocketFraming } from './direct-socket-framing'
 import { isRpcResponse } from './rpc-response-shape'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
@@ -26,7 +26,7 @@ type SocketSessionOptions = {
   onHandshakeStarted: () => void
   onAuthenticated: (session: RpcClientSocketSession) => void
   onAuthRejected: (reason: string) => void
-  onRpcResponse: (response: RpcResponse) => void
+  onRpcResponse: (session: RpcClientSocketSession, response: RpcResponse) => void
   onBinary: (bytes: Uint8Array) => void
   onAnyInbound: (receivedAt: number) => void
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
@@ -204,8 +204,10 @@ export class RpcClientSocketSession {
           this.options.onAuthenticated(this)
         },
         onText: (plaintext) => {
-          this.options.onAuthenticatedInbound(this)
-          this.deliverRpcText(plaintext)
+          if (isCurrent()) {
+            this.options.onAuthenticatedInbound(this)
+            this.deliverRpcText(plaintext)
+          }
         },
         onBinary: (plaintext) => {
           if (isCurrent()) {
@@ -244,7 +246,7 @@ export class RpcClientSocketSession {
       return
     }
     if (isRpcResponse(response)) {
-      this.options.onRpcResponse(response)
+      this.options.onRpcResponse(this, response)
     }
   }
 

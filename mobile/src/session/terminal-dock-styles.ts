@@ -31,23 +31,16 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     zIndex: 20,
     backgroundColor: colors.bgPanel
   },
-  // Keys mode: the live field and its attach and mic buttons, on the composer's field shell.
-  keysBar: {
+  inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm
+    paddingVertical: spacing.sm
   },
   liveField: {
     flex: 1,
     minWidth: 0
-  },
-  composer: {
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm
   },
   keyRow: {
     height: KEY_ROW_HEIGHT,
@@ -68,12 +61,14 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     gap: KEY_GAP,
     paddingVertical: (KEY_ROW_HEIGHT - KEY_HEIGHT) / 2
   },
-  // Every key carries the one-shot outline's width so arming ctrl doesn't nudge the row.
   key: {
     ...key,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
     backgroundColor: colors.bgRaised
+  },
+  // The user's own keys from Settings, told apart from the built-in ones.
+  customKey: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.composerBorder
   },
   keyText: {
     color: colors.textPrimary,
@@ -84,18 +79,6 @@ export const terminalDockStyles = themedStyleSheet(() => ({
   keyPressed: {
     opacity: feedback.pressedOpacity
   },
-  keyOnce: {
-    borderColor: colors.accentBlue
-  },
-  keyOnceText: {
-    color: colors.accentBlue
-  },
-  keyLocked: {
-    backgroundColor: colors.accentBlue
-  },
-  keyLockedText: {
-    color: colors.onAccent
-  },
   ghostKey: {
     ...key,
     backgroundColor: 'transparent'
@@ -103,62 +86,8 @@ export const terminalDockStyles = themedStyleSheet(() => ({
   ghostKeyText: {
     color: colors.textSecondary
   },
-  iconKey: {
-    ...key,
-    width: 34,
-    paddingHorizontal: 0,
-    backgroundColor: 'transparent'
-  },
-  modeKey: {
-    ...key,
-    paddingHorizontal: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
-    backgroundColor: colors.composerSurface
-  },
-  modeKeyText: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '600'
-  },
   disabled: {
     opacity: feedback.disabledOpacity
-  },
-  arrowPad: {
-    width: 66,
-    height: KEY_HEIGHT,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
-  },
-  arrowPadDragging: {
-    backgroundColor: colors.borderSubtle
-  },
-  arrowLeft: {
-    position: 'absolute',
-    left: 6,
-    top: 10
-  },
-  arrowRight: {
-    position: 'absolute',
-    right: 6,
-    top: 10
-  },
-  arrowUp: {
-    position: 'absolute',
-    left: 27.5,
-    top: 2
-  },
-  arrowDown: {
-    position: 'absolute',
-    left: 27.5,
-    bottom: 2
-  },
-  liveInputCapture: {
-    position: 'absolute',
-    opacity: 0,
-    width: 1,
-    height: 1,
-    color: colors.textPrimary
   },
   sheetContent: {
     gap: spacing.md,

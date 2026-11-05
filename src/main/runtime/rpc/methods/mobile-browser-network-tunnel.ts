@@ -3,10 +3,10 @@ import {
   parseBrowserNetworkExecutionHostKey,
   type BrowserNetworkExecutionRoute,
   type BrowserNetworkExecutionRouteResolver
-} from '../../../browser/browser-network-execution-route'
-import { resolveBrowserNetworkExecutionRoute } from '../../../browser/browser-network-execution-route-dispatch'
-import type { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/browser-network-tunnel-outbound-memory-budget'
-import { BrowserNetworkTunnelSession } from '../../../browser/browser-network-tunnel-session'
+} from '../../../browser/network/execution-routes/browser-network-execution-route'
+import { resolveBrowserNetworkExecutionRoute } from '../../../browser/network/execution-routes/browser-network-execution-route-dispatch'
+import type { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
+import { BrowserNetworkTunnelSession } from '../../../browser/network/tunnels/browser-network-tunnel-session'
 import { randomUUID } from 'node:crypto'
 import {
   MOBILE_BROWSER_TUNNEL_METHOD,

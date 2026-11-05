@@ -69,7 +69,7 @@ export function MobileBrowserPane({
 }: MobileBrowserPaneProps) {
   useMobileTranslation()
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
-    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
+    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId)
   )
   const cacheKey = makeBrowserFrameCacheKey(worktreeId, tab.browserPageId, browserViewMode)
   const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
@@ -178,8 +178,8 @@ export function MobileBrowserPane({
   }, [resetBrowserZoomState, tab.browserPageId, tab.url])
 
   useEffect(() => {
-    setBrowserViewMode(getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url))
-  }, [tab.browserPageId, tab.url, worktreeId])
+    setBrowserViewMode(getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId))
+  }, [tab.browserPageId, worktreeId])
 
   const binaryScreencastGranted = useBrowserBinaryScreencastGrant()
 

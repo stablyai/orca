@@ -8,8 +8,8 @@ import { createSessionSearchService } from './session-search-service'
 import {
   AiVaultSearchResponseSchema,
   AiVaultSearchStatusSchema
-} from '../../shared/ai-vault-search-contract'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+} from '../../shared/ai-vault/search/ai-vault-search-contract'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
 
 let harness: SessionSearchHarness | undefined
 

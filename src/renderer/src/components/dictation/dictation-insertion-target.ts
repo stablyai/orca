@@ -18,7 +18,7 @@ export type DictationInsertionTarget =
 
 const composerTargets = new WeakMap<HTMLElement, (text: string) => void>()
 
-/** Capture a draft destination so a late transcript can follow an inline edit's hand-back. */
+/** A late transcript lands in the composer's draft even after focus left its editor. */
 export function registerDictationComposerTarget(
   root: HTMLElement,
   insert: (text: string) => void

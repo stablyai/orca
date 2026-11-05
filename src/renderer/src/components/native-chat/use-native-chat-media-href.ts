@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/native-chat/native-chat-href-routing'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import { getLocalImageCacheKey } from '@/components/editor/useLocalImageSrc'
+import { getLocalImageCacheKey } from '@/components/editor/document-images/useLocalImageSrc'
 import type { NativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import { isWslUncPath } from '../../../../shared/wsl-paths'

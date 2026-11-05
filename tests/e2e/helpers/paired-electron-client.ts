@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
@@ -189,8 +189,15 @@ export async function launchPairedElectronClient(
     userDataDir
   })
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+  const recordVideoDir = process.env.ORCA_E2E_RECORD_VIDEO === '1' ? testInfo.outputDir : null
+  if (recordVideoDir) {
+    mkdirSync(recordVideoDir, { recursive: true })
+  }
   const app = await electron.launch({
     args: getOrcaElectronLaunchArgs(mainPath, false),
+    ...(recordVideoDir
+      ? { recordVideo: { dir: recordVideoDir, size: { width: 1920, height: 1080 } } }
+      : {}),
     env: {
       ...homeIsolation.env,
       NODE_ENV: 'development',

@@ -8,7 +8,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript-api'
 import { defaultExclude } from 'vitest/config'
-import { UNIT_EXCLUDE, UNIT_INCLUDE } from './ci-unit-files.mjs'
+import { UNIT_EXCLUDE, UNIT_INCLUDE } from './ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 
 const VITEST_DEFAULT_INCLUDE = '**/*.{test,spec}.?(c|m)[jt]s?(x)'
 
@@ -64,7 +64,7 @@ const NON_UNIT_TEST_RUNNERS = [
       "'src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts'"
     ]
   },
-  ...['connector', 'push', 'relay'].map((app) => ({
+  ...['push', 'relay'].map((app) => ({
     name: `cloud ${app}`,
     include: [`cloud/apps/${app}/src/**/*.test.ts`],
     sources: [`cloud/apps/${app}/vitest.config.ts`],

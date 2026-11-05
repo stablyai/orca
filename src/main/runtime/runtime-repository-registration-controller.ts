@@ -10,8 +10,9 @@ import {
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
+import { getClonePathComparisonKey, getSavedProjectPathKeys } from '../git/repo-clone-path'
 import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../workspaces/catalog/project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
@@ -23,9 +24,9 @@ import {
   WslHostWindowsDriveRefusalError,
   type WslHostWindowsDriveRefusal
 } from '../../shared/wsl-host-windows-drive-refusal'
-import { describeWslUncAccessDenied } from '../wsl/wsl-unc-access-denied'
+import { describeWslUncAccessDenied } from '../wsl/filesystem/wsl-unc-access-denied'
 import { getResolvedFolderWorkspacePathStatus } from '../project-groups/folder-workspace-path-status'
-import { runAsWslUserAct, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { runAsWslUserAct, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { repoCreateFailure, type RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 
 type RuntimeRepositoryRegistrationDependencies = {
@@ -170,13 +171,15 @@ export class RuntimeRepositoryRegistrationController {
         : { error: error instanceof Error ? error.message : String(error) }
     }
     const targetPath = join(trimmedParentPath, trimmedName)
+    let targetPathKeys = await getSavedProjectPathKeys(targetPath)
     // Qualify by host: identical SSH paths name another machine's directory.
     const findLocalAtTarget = (): Repo | undefined =>
       store
         .getRepos()
         .find(
           (repo) =>
-            runtimeRepoIsRegistrationCandidate(repo) && runtimePathsEqual(repo.path, targetPath)
+            runtimeRepoIsRegistrationCandidate(repo) &&
+            targetPathKeys.includes(getClonePathComparisonKey(repo.path))
         )
     const existing = findLocalAtTarget()
     if (existing) {
@@ -214,18 +217,24 @@ export class RuntimeRepositoryRegistrationController {
         return failure
       }
     }
+    targetPathKeys = await getSavedProjectPathKeys(targetPath)
     const raceWinner = findLocalAtTarget()
     if (raceWinner) {
       return { repo: raceWinner }
     }
+    // Register Git's checkout path so the new project stays its own selected checkout.
+    const repoPath =
+      repoKind === 'git'
+        ? (await inspectGitRepoForRegistrationAsync(targetPath)).rootPath
+        : targetPath
     const detected = await detectRepoIconAndUpstream({
-      repoPath: targetPath,
+      repoPath,
       kind: repoKind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
     const repo: Repo = {
       id: randomUUID(),
-      path: targetPath,
+      path: repoPath,
       displayName: trimmedName,
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       ...detected,

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
+import { buildSidebarHostOptions } from '@/components/sidebar/worktree-list/controls/sidebar-host-options'
 import { getProjectGroupExecutionHostIdForRows } from '../../../../shared/sidebar-list/host-filtering'
 import { buildPaletteFilterModel } from '@/components/cmd-j/palette-filter-options'
 import {

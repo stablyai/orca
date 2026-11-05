@@ -1,8 +1,8 @@
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { ManagedDataAccountProvider } from '../../shared/managed-account-types'
 import { getManagedDataAccountService, type ManagedDataAccountService } from './service'
 import { MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS } from '../../shared/managed-data-account-environment'
-import { getAgentLaunchExecutableName } from '../../shared/agent-command-line-intent'
+import { getAgentLaunchExecutableName } from '../../shared/agent-launch/startup/agent-command-line-intent'
 import { MANAGED_DATA_ACCOUNT_RESUME_ENV } from '../../shared/managed-data-account-resume'
 
 export function applyManagedDataAccountEnvironment(

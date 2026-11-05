@@ -1,8 +1,8 @@
 import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
-import type { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -28,7 +28,7 @@ import {
   advanceRuntimeEnvironmentTransportGeneration,
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
-import { declareWslHostClient } from '../../wsl/wsl-host-client-declaration'
+import { declareWslHostClient } from '../../wsl/host-lifecycle/wsl-host-client-declaration'
 
 type CachedRuntimeConnection = {
   pairingKey: string

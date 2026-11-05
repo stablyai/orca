@@ -26,7 +26,7 @@ import {
 } from './local-pty-spawn-state'
 import { loadLocalPtyRuntimeSpawn } from './local-pty-runtime-spawn'
 import { destroyPtyProcess } from './local-pty-termination'
-import { updateHistoryEnvForFallback } from '../../terminal-history'
+import { updateHistoryEnvForFallback } from '../../pty/history/terminal-history'
 import type { PtySpawnOptions } from '../pty-provider-contract'
 import type { PtySpawnResult } from '../pty-spawn-result'
 

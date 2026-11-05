@@ -88,6 +88,7 @@ describe('Chat UI launch tip holdout', () => {
   it.each([
     [undefined, 'unassigned'],
     ['treatment', 'treatment'],
+    ['treatment-center', 'treatment-center'],
     ['treatment-live-switch', 'treatment-live-switch'],
     ['treatment-swapped-buttons', 'treatment-swapped-buttons']
   ] as const)(
@@ -97,19 +98,17 @@ describe('Chat UI launch tip holdout', () => {
       expect(container.querySelector('output')?.textContent).toBe('true')
       expect(useAppStore.getState().activeModal).toBe('none')
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
+        launch_tip_experiment_version: 'corner-card-v2',
         variant: 'chat_ui_off',
         launch_tip_cohort: label,
         shown: true
       })
-      expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_shown', { variant: 'chat_ui_off' })
+      expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_shown', {
+        launch_tip_experiment_version: 'corner-card-v2',
+        variant: 'chat_ui_off'
+      })
     }
   )
-
-  it('opens the center dialog for the center cohort', async () => {
-    await launch('treatment-center', { mode: 'not-switched', eligible: true })
-    expect(container.querySelector('output')?.textContent).toBe('false')
-    expect(useAppStore.getState().modalData).toMatchObject({ tipId: 'chat-ui-here' })
-  })
 
   it('holds back the not-switched targeting group when ineligible', async () => {
     await launch('treatment-center', { mode: 'not-switched', eligible: false })
@@ -119,6 +118,7 @@ describe('Chat UI launch tip holdout', () => {
   it('records control exposure without showing the tip, then lets the next tip open', async () => {
     await launch('control')
     expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
+      launch_tip_experiment_version: 'corner-card-v2',
       variant: 'chat_ui_off',
       launch_tip_cohort: 'control',
       shown: false
@@ -135,6 +135,7 @@ describe('Chat UI launch tip holdout', () => {
       vi.mocked(window.api.onboarding.getChatUiLaunchTipVariant).mockResolvedValue(variant)
       await launch('treatment', { mode: 'eligible-harnesses', eligible: false })
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
+        launch_tip_experiment_version: 'corner-card-v2',
         variant: variant === 'chat-ui-off' ? 'chat_ui_off' : 'chat_ui_on',
         launch_tip_cohort: 'treatment',
         targeting: 'eligible-harnesses',
@@ -157,6 +158,7 @@ describe('Chat UI launch tip holdout', () => {
       await launch(cohort, { mode: 'eligible-harnesses', eligible: false })
       expect(container.querySelector('output')?.textContent).toBe('false')
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
+        launch_tip_experiment_version: 'corner-card-v2',
         variant: 'chat_ui_off',
         launch_tip_cohort: cohort,
         targeting: 'eligible-harnesses',
@@ -181,6 +183,7 @@ describe('Chat UI launch tip holdout', () => {
       expect(useAppStore.getState().activeModal).toBe('none')
     }
     expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
+      launch_tip_experiment_version: 'corner-card-v2',
       variant: variant === 'chat-ui-off' ? 'chat_ui_off' : 'chat_ui_on',
       launch_tip_cohort: 'treatment',
       targeting: targeting.mode,
@@ -209,6 +212,7 @@ describe('Chat UI launch tip holdout', () => {
       Object.assign(window.api, { telemetryTrack })
       await launch(cohort)
       expect(telemetryTrack).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
+        launch_tip_experiment_version: 'corner-card-v2',
         variant: 'chat_ui_off',
         launch_tip_cohort: cohort,
         shown: cohort === 'treatment'

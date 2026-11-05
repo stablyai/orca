@@ -3,14 +3,14 @@ import type {
   RemoveWorktreeResult
 } from '../../shared/worktree/create-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
-import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupScopeKey } from '../../shared/git/branches/preserved-branch-cleanup'
 import {
   getRepoRoutingConnectionId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { forceDeleteLocalBranch } from '../git/worktree'
+import { forceDeleteLocalBranch } from '../git/worktrees/removal/worktree-branch-removal'
 import { gitExecFileAsync } from '../git/runner'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'

@@ -7,8 +7,8 @@ import {
   writeClaudeTranscript,
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
-import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 
 let harness: SessionSearchIndexerHarness
 let indexer: SessionSearchIndexer | undefined

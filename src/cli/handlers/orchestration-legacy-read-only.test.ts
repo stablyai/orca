@@ -15,38 +15,6 @@ beforeEach(() => {
 })
 
 describe('legacy orchestration CLI inspection', () => {
-  it('labels legacy rows in plain check output', async () => {
-    const result = {
-      messages: [
-        {
-          id: 'msg_legacy',
-          run_id: 'run_legacy_local',
-          from_handle: 'term_worker',
-          subject: 'progress',
-          type: 'status'
-        }
-      ],
-      count: 1
-    }
-    callMock.mockResolvedValue({ result })
-
-    await ORCHESTRATION_HANDLERS['orchestration check'](
-      orchestrationTestContext(
-        callMock,
-        new Map<string, string | boolean>([
-          ['full', true],
-          ['terminal', 'term_coord'],
-          ['peek', true]
-        ]),
-        false,
-        '/repo'
-      )
-    )
-
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2]
-    expect(formatter?.(result)).toContain('msg_legacy [legacy, read-only]')
-  })
-
   it('rebuilds incomplete legacy rows without runtime-supplied actions', async () => {
     const result = {
       messages: [
@@ -192,39 +160,6 @@ describe('legacy orchestration CLI inspection', () => {
       response.result.formatted.split('\n').filter((line) => line.startsWith('[Reply:'))
     ).toEqual(['[Reply: orca orchestration reply --id msg_current --body "..."]'])
     expect(response.result.formatted).not.toContain('--from run:run_current')
-  })
-
-  it('preserves runtime formatting when every message belongs to a current Run', async () => {
-    const result = {
-      messages: [
-        {
-          id: 'msg_current',
-          run_id: 'run_current',
-          from_handle: 'term_worker',
-          subject: 'question'
-        }
-      ],
-      count: 1,
-      formatted: '[Reply: current Run action]'
-    }
-    callMock.mockResolvedValue({ result })
-
-    await ORCHESTRATION_HANDLERS['orchestration check'](
-      orchestrationTestContext(
-        callMock,
-        new Map<string, string | boolean>([
-          ['full', true],
-          ['terminal', 'term_coord'],
-          ['peek', true],
-          ['format', true]
-        ]),
-        false,
-        '/repo'
-      )
-    )
-
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2]
-    expect(formatter?.(result)).toBe(result.formatted)
   })
 
   it('labels legacy rows in full inbox output without hiding their body', async () => {

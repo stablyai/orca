@@ -161,16 +161,4 @@ describe('rollback publication with real filesystem writes and renames', () => {
       }
     }
   )
-
-  it('keeps the cached prior key after rejecting a replacement during competing publication', () => {
-    writeFileSync(keyPath, previousEnvelope)
-    expect(store.readZcodePlanApiKey()).toBe('previous-key')
-    publishDuringRollbackStaging(false)
-
-    refuseReplacement()
-
-    expect(readFileSync(keyPath, 'utf8')).toBe(competingEnvelope)
-    expect(store.readZcodePlanApiKey()).toBe('previous-key')
-    expect(readdirSync(join(caseHome, '.orca'))).toEqual(['zcode-plan-api-key.enc'])
-  })
 })

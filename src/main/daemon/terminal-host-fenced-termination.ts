@@ -1,7 +1,7 @@
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
-} from '../../shared/pty-fenced-termination'
+} from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { Session } from './session'
 import type { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
 

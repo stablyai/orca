@@ -7,7 +7,7 @@ import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION,
   RELEASE_SYNCHRONIZED_OUTPUT
-} from '../../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,
@@ -115,6 +115,9 @@ export function createReattachPayloadHandlers(
         restoredSnapshotPaintsPrintableContent({ data: daemonSnapshotReplay })
       )
       session.recordRendererOrderedSeq({ seq: ctx.connectResult.snapshotSeq })
+      if (typeof ctx.connectResult.snapshotSeq === 'number') {
+        session.streamPosition.anchor(ctx.ptyId, ctx.connectResult.snapshotSeq)
+      }
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
         // Snapshot superseded the cold-restore payload; ack so the daemon doesn't redeliver it.
@@ -182,6 +185,9 @@ export function createReattachPayloadHandlers(
           restoredSnapshotPaintsPrintableContent(modelSnapshot)
         )
         session.recordRendererOrderedSeq(modelSnapshot)
+        if (typeof modelSnapshot.seq === 'number') {
+          session.streamPosition.anchor(ctx.ptyId, modelSnapshot.seq)
+        }
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
         if (ctx.connectResult?.coldRestore) {
           ackPaintedColdRestore(session, ctx.ptyId)
@@ -285,7 +291,7 @@ export function createReattachPayloadHandlers(
         session.showSessionRestoredBanner()
       }
       if (didPrepareResume) {
-        session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
+        session.keepResumeRecordAfterColdRestoreSpawn(preparedStartup)
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
       session.writeInputModeGround(POST_REPLAY_MODE_RESET)

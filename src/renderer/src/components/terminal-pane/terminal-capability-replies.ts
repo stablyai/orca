@@ -5,7 +5,7 @@ import {
   terminalOscColorQueryReplies,
   terminalOscColorQuerySlotsForBody,
   type TerminalOscColorQuerySlot
-} from '../../../../shared/terminal-osc-color-reply'
+} from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { installProgramStatusQueryResponder } from '../../../../shared/program-status/query-responder'
 import { terminalThemeColorSchemeReport } from './terminal-view-attributes-publisher'

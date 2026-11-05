@@ -5,8 +5,8 @@ import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
-import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
+import { resolveOxlintInvocation } from './tool-invocation/oxlint-cli-invocation.mjs'
+import { resolvePnpmCliInvocation } from './tool-invocation/pnpm-cli-invocation.mjs'
 
 // package.json script names, slowest first so short steps fill in around them.
 export const LINT_STEPS = [

@@ -13,21 +13,18 @@ import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
 import { agentHookServer } from '../agent-hooks/server'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { browserManager } from '../browser/browser-manager'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session/ownership/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
+import { codexAiVaultSessionResumePreparation } from '../codex/history/resume/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
-import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
+import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
 import { getDaemonProvider } from '../daemon/daemon-provider-state'
-import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
-import type { OrchestrationEnvironmentTransport } from '../runtime/orchestration/environment-transport'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
-import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
-import { pairedOrchestrationPeers } from '../runtime/orchestration/environment-transport'
+import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
+import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
@@ -64,28 +61,6 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   const stats = state.stats
   if (!store || !stats) {
     throw new Error('Store and stats must be initialized before runtime')
-  }
-  const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
-    resolve: (selector) => {
-      const environment = resolveEnvironment(getRuntimeEnvironmentRegistryRoot(), selector)
-      const connection = getPreferredPairedRuntimeConnection(environment)
-      return {
-        environmentId: environment.id,
-        name: environment.name,
-        ...pairedOrchestrationPeers(connection.hostPublicKeyB64, connection.credential.deviceToken),
-        pairingRevision: environment.pairingRevision ?? environment.createdAt
-      }
-    },
-    call: (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
-      callRuntimeEnvironment(
-        getRuntimeEnvironmentRegistryRoot(),
-        selector,
-        method,
-        params,
-        timeoutMs,
-        expectedPairingRevision,
-        envelope
-      )
   }
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
@@ -131,7 +106,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         homePath,
         resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
-    orchestrationEnvironmentTransport,
+    orchestrationEnvironmentTransport: createOrchestrationEnvironmentTransport(),
     workspaceSleepPlatform: {
       callEnvironment: (environmentId, method, params, timeoutMs) =>
         callRuntimeEnvironment(

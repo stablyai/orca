@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { PaneTopWarningBanner } from './PaneTopWarningBanner'
 import {
   dismissHeldPaneBanner,

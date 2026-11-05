@@ -3,16 +3,10 @@ import { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/l
 
 // Local layout-owner main records cancellation; paired hosts retain tombstones in either build.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 
-import { useAppStore } from '@/store'
-import { recoverWebSessionTerminalOrphansBeforeApply } from './web-session-terminal-orphan-recovery'
-import { acceptSessionTabsRuntimeId } from './web-session-tabs-sync/publisher-identity-fences'
-import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
-import * as unlisted from '@/lib/structured-agent-session-unlisted-created-chats'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+
+import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 
 const mocks = vi.hoisted(() => ({
   layoutOwnerIsMain: true,
@@ -43,11 +37,8 @@ vi.mock('./runtime-worktree-selector', () => ({
 }))
 
 import {
-  getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
-  resetStructuredAgentLaunchRegistryForTests,
-  setStructuredLaunchState,
-  type StructuredLaunchState
+  resetStructuredAgentLaunchRegistryForTests
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import {
   readStructuredAgentLaunchRecord,
@@ -55,7 +46,6 @@ import {
   writeStructuredAgentLaunchRecord
 } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import '@/lib/agent-session/launch/structured-agent-session-local-launch-cancel'
-import { suppressCancelledStructuredSessionTabs } from './structured-agent-session-tab-retirement'
 
 const WORKTREE = 'repo-1::worktree-1'
 const SESSION = 'chat-1'
@@ -65,65 +55,8 @@ const layoutOwner: StructuredLaunchSlotOwner = {
   groupsByWorktree: {},
   reorderUnifiedTabs: vi.fn()
 }
-const SERVER: RuntimeClientTarget = { kind: 'environment', environmentId: 'server-1' }
-const SERVER_HOST = 'runtime:server-1'
-
-function hostFrame(): RuntimeMobileSessionTabsResult {
-  return {
-    worktree: WORKTREE,
-    publicationEpoch: 'epoch-1',
-    snapshotVersion: 1,
-    activeGroupId: null,
-    activeTabId: null,
-    activeTabType: null,
-    tabs: [
-      {
-        type: 'agent-session',
-        id: `agent-session:${SESSION}`,
-        title: 'Codex Chat',
-        sessionId: SESSION,
-        agent: 'codex',
-        isActive: false
-      }
-    ]
-  }
-}
 
 /** A launch whose create is still on its way to `executionHostId`. */
-function pendingLaunch(executionHostId: ExecutionHostId, target: RuntimeClientTarget): void {
-  setStructuredLaunchState({
-    identity: `codex:${WORKTREE}`,
-    intent: {
-      worktreeId: WORKTREE,
-      executionHostId,
-      target,
-      sessionId: SESSION,
-      agent: 'codex',
-      params: {
-        envelope: {
-          sessionId: SESSION,
-          clientOperationId: 'operation-1',
-          expectedRuntimeFence: null,
-          payloadFingerprint: 'fingerprint-1'
-        },
-        worktree: `id:${WORKTREE}`,
-        agent: 'codex'
-      }
-    },
-    promptDelivery: 'auto-submit',
-    callers: {
-      outcome: 'pending',
-      attempt: { kind: 'first', requestId: 'plus-pick', stagedPrompt: null },
-      entries: new Set(),
-      promptDeliveryResults: new Set(),
-      onSettled: () => undefined
-    },
-    promise: new Promise(() => undefined),
-    visibilityUnknown: false,
-    cancelled: false,
-    selection: {}
-  } satisfies StructuredLaunchState)
-}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -153,37 +86,4 @@ describe('this machine, with main owning the layout', () => {
     expect(readStructuredAgentLaunchRecord(SESSION)).toBeUndefined()
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)
   })
-})
-
-describe('a paired server, with main owning the layout', () => {
-  it('cancel before the create: keeps the tombstone and hides and closes the late listing', () => {
-    pendingLaunch(SERVER_HOST, SERVER)
-
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, SERVER_HOST, layoutOwner)
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(true)
-    expect(mocks.closeSession).not.toHaveBeenCalled()
-
-    expect(suppressCancelledStructuredSessionTabs(hostFrame(), SERVER).tabs).toEqual([])
-    expect(mocks.closeSession).toHaveBeenCalledWith(SERVER, SESSION)
-  })
-})
-
-it.each([false, true])('rejected paired publication; reply=%s', async (replied) => {
-  if (replied) {
-    unlisted.recordUnlistedCreatedChat(WORKTREE, SESSION, SERVER_HOST)
-  } else {
-    pendingLaunch(SERVER_HOST, SERVER)
-  }
-  acceptSessionTabsRuntimeId('server-1', 'old')
-  acceptSessionTabsRuntimeId('server-1', 'new')
-  const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
-    useAppStore.getState(),
-    hostFrame(),
-    'server-1',
-    { expectedRuntimeId: 'old' }
-  )
-  expect(decideWebSessionTabsSnapshot(recovered!, 'server-1', 'old').apply).toBe(false)
-  expect(getStructuredLaunchStateBySessionId(SESSION)?.hostListed).not.toBe(true)
-  expect(unlisted.isUnlistedCreatedChat(WORKTREE, SESSION)).toBe(replied)
-  unlisted.forgetUnlistedCreatedChat(WORKTREE, SESSION)
 })

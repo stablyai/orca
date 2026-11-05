@@ -18,7 +18,7 @@ import {
   workspaceRootMirrorsIntoWsl
 } from '../../worktree-logic'
 import { shouldEmitBoundedWarning } from '../../bounded-warning-dedupe'
-import { resolveWorktreeCommonGitDirectory } from '../../worktree-common-git-directory'
+import { resolveWorktreeCommonGitDirectory } from './worktree-common-git-directory'
 import type {
   WorktreeBaseRepoWatchConfig,
   WorktreeBaseWatchKind,

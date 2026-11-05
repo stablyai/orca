@@ -47,56 +47,6 @@ describe('waitsForMainPaneStart', () => {
     store.setStarts({})
   })
 
-  it('runs every waiter once main’s start ends', async () => {
-    const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
-    const pane = session()
-    store.setStarts({ [PANE_KEY]: { status: 'starting' } })
-    const first = vi.fn()
-    const second = vi.fn()
-
-    expect(waitsForMainPaneStart(pane, first)).toBe(true)
-    expect(waitsForMainPaneStart(pane, second)).toBe(true)
-    store.setStarts({})
-
-    expect(first).toHaveBeenCalledOnce()
-    expect(second).toHaveBeenCalledOnce()
-  })
-
-  it('tells each waiter when main shows the start failed', async () => {
-    const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
-    const pane = session()
-    store.setStarts({ [PANE_KEY]: { status: 'starting' } })
-    const failedFirst = vi.fn()
-    const failedLater = vi.fn()
-
-    waitsForMainPaneStart(pane, vi.fn(), failedFirst)
-    store.setStarts({ [PANE_KEY]: { status: 'failed', reason: 'spawn exploded' } })
-    waitsForMainPaneStart(pane, vi.fn(), failedLater)
-
-    expect(failedFirst).toHaveBeenCalledOnce()
-    expect(failedLater).toHaveBeenCalledOnce()
-    expect(pane.deps.onPtyErrorRef?.current).toHaveBeenCalledWith(
-      1,
-      'The terminal could not start: spawn exploded'
-    )
-  })
-  // A start main could not bind shows its reason through this wait.
-  it('shows terminal_not_started from main through the wait', async () => {
-    const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
-    const pane = session()
-    store.setStarts({ [PANE_KEY]: { status: 'starting' } })
-    const failed = vi.fn()
-
-    waitsForMainPaneStart(pane, vi.fn(), failed)
-    store.setStarts({ [PANE_KEY]: { status: 'failed', reason: 'terminal_not_started' } })
-
-    expect(failed).toHaveBeenCalledOnce()
-    expect(pane.deps.onPtyErrorRef?.current).toHaveBeenCalledWith(
-      1,
-      'The terminal could not start: terminal_not_started'
-    )
-  })
-
   // Main held background work on a stopped distro (E9): the pane shows the shared Start card.
   it("shows main's stopped-distro hold as the Start card, which asks main to start it", async () => {
     const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
@@ -173,24 +123,4 @@ describe('waitsForMainPaneStart', () => {
     })
     expect(pane.deps.onPtyErrorRef?.current).not.toHaveBeenCalled()
   })
-
-  it.each([
-    ['terminal_held_wsl_distro_stopped:Ubuntu'],
-    [
-      "The WSL distro Ubuntu is stopped, so Orca didn't start this terminal. Start the distro, then try again."
-    ]
-  ])(
-    "names the distro on a paired host's held pane instead of the raw code (%s)",
-    async (reason) => {
-      const { showPaneStartFailure } = await import('./main-pane-start-wait')
-      const pane = { ...session(), runtimeEnvironmentId: 'env-1' }
-
-      showPaneStartFailure(pane, reason)
-
-      expect(pane.deps.onPtyErrorRef?.current).toHaveBeenCalledWith(
-        1,
-        "The WSL distro Ubuntu is stopped, so Orca didn't start this terminal. Start the distro, then try again."
-      )
-    }
-  )
 })

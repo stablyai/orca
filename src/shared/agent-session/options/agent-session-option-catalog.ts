@@ -1,6 +1,6 @@
 import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
 import { CODEBUDDY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-codebuddy'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,

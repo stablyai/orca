@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { View } from 'react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileLocalBrowser } from '../browser/MobileLocalBrowser'
@@ -109,7 +110,7 @@ describe('native.browser.view', () => {
       await shell.serveView({ action: 'move', id: 'a', frame: moved })
       finishRead('host')
     })
-    expect(renderer.root.findByType('View').props.style).toContainEqual(
+    expect(renderer.root.findByType(View).props.style).toContainEqual(
       expect.objectContaining({ top: 120, height: 520 })
     )
   })

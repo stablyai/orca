@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium } from 'playwright-core'
-import { buildMobileWebAppBundle } from '../build-mobile-web-app-bundle.mjs'
+import { buildMobileWebAppBundle } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
-import { MOBILE_WEB_PAGE_ROUTES } from '../mobile-web-page-routes.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from '../build/mobile-web-app/mobile-web-page-routes.mjs'
 import {
   createBundleServer,
   installShellDouble,
@@ -174,7 +174,7 @@ describeRender(
       const opened = await openRoute(SESSION_ROUTE, 'Terminal')
       const text = await opened.page.evaluate(() => document.body.innerText)
       // Accessory-bar keys prove session screen, beyond generic header text.
-      for (const key of ['esc', 'ctrl', 'tab', 'alt']) {
+      for (const key of ['Esc', 'Tab', 'Ctrl+C', 'Ctrl+R']) {
         expect(text).toContain(key)
       }
       expect(text).not.toContain(UNMATCHED)

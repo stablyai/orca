@@ -3,45 +3,45 @@ import {
   collectModuleSpecifiers,
   literalString,
   propertyName
-} from './static-module-specifiers.mjs'
+} from './static-analysis/module-requests/static-module-specifiers.mjs'
 import { hasNodeModulesBinSpawn } from './windows-bin-spawn-predicate.mjs'
 
 const references = new Map([
   [
-    'config/scripts/node-server-change-scope.mjs',
-    'config/scripts/capture-windows-native-environment.cmd'
+    'config/scripts/node-server/qualification/node-server-change-scope.mjs',
+    'config/scripts/native-build/windows/capture-windows-native-environment.cmd'
   ],
   [
-    'config/scripts/pr-code-change-scope.mjs',
-    'config/scripts/capture-windows-native-environment.cmd'
+    'config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
+    'config/scripts/native-build/windows/capture-windows-native-environment.cmd'
   ],
   [
-    'config/scripts/orcad-windows-prebuild-cache.mjs',
-    'config/scripts/capture-windows-native-environment.cmd'
+    'config/scripts/orcad-distribution/prebuilds/orcad-windows-prebuild-cache.mjs',
+    'config/scripts/native-build/windows/capture-windows-native-environment.cmd'
   ],
   [
-    'config/scripts/windows-native-toolchain-routing.test.mjs',
-    'config/scripts/capture-windows-native-environment.cmd'
+    'config/scripts/workflow/source-routing/windows-native-toolchain-routing.test.mjs',
+    'config/scripts/native-build/windows/capture-windows-native-environment.cmd'
   ],
   [
-    'config/scripts/windows-native-benchmark-observer.mjs',
+    'config/scripts/native-build/windows/windows-native-benchmark-observer.mjs',
     'capture-windows-native-environment.cmd'
   ],
   [
-    'config/scripts/initialize-windows-native-toolchain.mjs',
+    'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs',
     'capture-windows-native-environment.cmd'
   ],
   [
-    'config/scripts/benchmark-windows-native-preparation.mjs',
-    'config/scripts/capture-windows-native-environment.cmd'
+    'config/scripts/native-build/windows/benchmark-windows-native-preparation.mjs',
+    'config/scripts/native-build/windows/capture-windows-native-environment.cmd'
   ]
 ])
 const executors = new Map([
-  ['config/scripts/initialize-windows-native-toolchain.mjs', 'runProcessSync'],
-  ['config/scripts/benchmark-windows-native-preparation.mjs', 'runProcess']
+  ['config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs', 'runProcessSync'],
+  ['config/scripts/native-build/windows/benchmark-windows-native-preparation.mjs', 'runProcess']
 ])
-const initializer = 'config/scripts/initialize-windows-native-toolchain.mjs'
-const observer = 'config/scripts/windows-native-benchmark-observer.mjs'
+const initializer = 'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs'
+const observer = 'config/scripts/native-build/windows/windows-native-benchmark-observer.mjs'
 const rawProcessMethods = new Set([
   'spawn',
   'spawnSync',

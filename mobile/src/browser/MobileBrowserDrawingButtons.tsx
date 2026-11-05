@@ -1,4 +1,4 @@
-import { Maximize2, Minimize2, MonitorUp, Server, Smartphone } from 'lucide-react-native'
+import { ArrowLeftRight, Cast, MapPin, Maximize2, Minimize2 } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileBrowserDrawing } from '../storage/preferences'
 import { colors } from '../theme/mobile-theme'
@@ -43,19 +43,19 @@ export function MobileBrowserDrawingButtons({
         label={t('browser.localPane.streamFromHost', 'Stream from the host instead')}
         onPress={pick('stream')}
       >
-        <MonitorUp size={15} color={drawingColor(drawing === 'stream')} />
+        <Cast size={15} color={drawingColor(drawing === 'stream')} />
       </MobileBrowserToolbarIconButton>
       <MobileBrowserToolbarIconButton
         label={t('browser.localPane.throughHost', 'Connect through the host')}
         onPress={pick('host')}
       >
-        <Server size={15} color={drawingColor(drawing === 'host')} />
+        <ArrowLeftRight size={15} color={drawingColor(drawing === 'host')} />
       </MobileBrowserToolbarIconButton>
       <MobileBrowserToolbarIconButton
         label={t('browser.localPane.phoneNetwork', "Connect on the phone's network")}
         onPress={pick('phone')}
       >
-        <Smartphone size={15} color={drawingColor(drawing === 'phone')} />
+        <MapPin size={15} color={drawingColor(drawing === 'phone')} />
       </MobileBrowserToolbarIconButton>
       {fullScreen && (
         <MobileBrowserToolbarIconButton

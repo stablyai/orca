@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Text } from 'react-native'
-import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileLocalBrowserNetwork } from '../storage/preferences'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -44,6 +44,7 @@ export function MobileLocalBrowserFullScreen({
   onStreamFromHost
 }: Props): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [toast, setToast] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [currentUrl, setCurrentUrl] = useState(url)
@@ -68,7 +69,7 @@ export function MobileLocalBrowserFullScreen({
           fullScreen={{ active: true, onToggle: close }}
           pending={
             <Text style={styles.status} onPress={close}>
-              {translate('browser.shellLocal.starting', 'Connecting through the host…')}
+              {t('browser.shellLocal.starting', 'Connecting through the host…')}
             </Text>
           }
           onStreamFromHost={onStreamFromHost}
@@ -81,7 +82,7 @@ export function MobileLocalBrowserFullScreen({
         />
       ) : (
         <Text style={styles.status} onPress={close}>
-          {translate('browser.shellLocal.failed', 'Could not draw the page here: {{reason}}', {
+          {t('browser.shellLocal.failed', 'Could not draw the page here: {{reason}}', {
             reason: failure
           })}
         </Text>

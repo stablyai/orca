@@ -92,69 +92,6 @@ export async function saveTerminalTextScale(scale: number): Promise<void> {
   await persistMirrored(TEXT_SCALE_KEY, value)
 }
 
-const AUTOCOMPLETE_KEY = 'orca:terminalAutocompleteEnabled'
-
-// Default autocorrect off so keyboards cannot alter commands, flags or paths; phone-style typing is opt-in.
-export async function loadTerminalAutocompleteEnabled(): Promise<boolean> {
-  try {
-    const raw = await AsyncStorage.getItem(AUTOCOMPLETE_KEY)
-    return raw === 'true'
-  } catch {
-    return false
-  }
-}
-
-export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise<void> {
-  const value = String(enabled)
-  await persistMirrored(AUTOCOMPLETE_KEY, value)
-}
-
-const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
-
-export type DisabledTerminalLiveInputHandlesPreference = {
-  readonly handles: Set<string>
-  readonly loaded: boolean
-}
-
-function terminalLiveInputDisabledKey(hostId: string, worktreeId: string): string {
-  return `${TERMINAL_LIVE_INPUT_DISABLED_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(
-    worktreeId
-  )}`
-}
-
-export async function readDisabledTerminalLiveInputHandlesPreference(
-  hostId: string,
-  worktreeId: string
-): Promise<DisabledTerminalLiveInputHandlesPreference> {
-  try {
-    const raw = await AsyncStorage.getItem(terminalLiveInputDisabledKey(hostId, worktreeId))
-    if (!raw) {
-      return { handles: new Set(), loaded: true }
-    }
-    return { handles: new Set(stringArray(JSON.parse(raw))), loaded: true }
-  } catch {
-    return { handles: new Set(), loaded: false }
-  }
-}
-
-export async function loadDisabledTerminalLiveInputHandles(
-  hostId: string,
-  worktreeId: string
-): Promise<Set<string>> {
-  const preference = await readDisabledTerminalLiveInputHandlesPreference(hostId, worktreeId)
-  return preference.handles
-}
-
-export async function saveDisabledTerminalLiveInputHandles(
-  hostId: string,
-  worktreeId: string,
-  handles: ReadonlySet<string>
-): Promise<void> {
-  const key = terminalLiveInputDisabledKey(hostId, worktreeId)
-  const value = JSON.stringify([...handles])
-  await persistMirrored(key, value)
-}
-
 const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'
 
 // Caller also caps this tablet/foldable sidebar against the window to preserve detail space.

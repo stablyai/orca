@@ -24,7 +24,7 @@ jobs:
         with:
           sparse-checkout: |
             config/scripts/release-policy.mjs
-            config/scripts/release-tag-patterns.mjs
+            config/scripts/release/versioning/release-tag-patterns.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Enforce release policy

@@ -103,6 +103,7 @@ describe('a desktop AI-button launch', () => {
     settleAgentLaunchPaneStart(failed.tabId, failedLeaf, 'pty-2')
     await expect(failed.started).resolves.toBeNull()
   })
+
   it('keeps inactive launches in their requested group without revealing Terminal', () => {
     const initial = store.getState()
     const activeTabId = initial.activeTabId

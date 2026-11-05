@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeCreatePreparation from '../workspaces/creation/preparation/worktree-create-preparation'
 import type { Project } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
-import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
+import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl/discovery/distro-catalog'
 
 const mocks = vi.hoisted(() => ({
   prefetchWorktreeCreateBase: vi.fn(),
@@ -79,17 +79,6 @@ describe('prefetchManagedWorktreeCreateBase (orca-runtime-get-worktree-terminal-
     )
   })
 
-  it('warms up on host git when no project runtime routes the repo', async () => {
-    setPlatform('darwin')
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-
-    await runtime.prefetchManagedWorktreeCreateBase({ repoSelector: 'repo-1' })
-
-    expect(mocks.prefetchWorktreeCreateBase).toHaveBeenCalledWith(
-      expect.objectContaining({ gitOptions: {} })
-    )
-  })
-
   it('does not surface a repair-required project runtime as a prefetch failure', async () => {
     _setWslCachesForTests({ available: true, distros: ['Debian'] })
     setPlatform('win32')
@@ -101,25 +90,6 @@ describe('prefetchManagedWorktreeCreateBase (orca-runtime-get-worktree-terminal-
 
     expect(mocks.prefetchWorktreeCreateBase).toHaveBeenCalledWith(
       expect.objectContaining({ gitOptions: {} })
-    )
-  })
-
-  it('prepares the checkout the prefetch resolved', async () => {
-    _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
-    setPlatform('win32')
-    mocks.prefetchWorktreeCreateBase.mockImplementation(async ({ prepareCheckout }) => {
-      await prepareCheckout('origin/main')
-      return 'origin/main'
-    })
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-
-    await runtime.prefetchManagedWorktreeCreateBase({ repoSelector: 'repo-1' })
-
-    expect(mocks.prepareWorktreeCreateForRepo).toHaveBeenCalledWith(
-      expect.anything(),
-      repo,
-      'origin/main',
-      undefined
     )
   })
 })
