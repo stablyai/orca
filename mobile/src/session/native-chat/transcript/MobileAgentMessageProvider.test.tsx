@@ -25,12 +25,12 @@ describe('saved sender activity', () => {
       value = useMobileAgentMessageView(sender)
       return null
     }
-    let renderer: ReactTestRenderer | undefined
+    let renderer: ReactTestRenderer
     await act(async () => {
       renderer = create(createElement(Probe))
     })
     expect(value).toEqual({ agentType: 'codex' })
-    await act(async () => renderer?.unmount())
+    await act(async () => renderer.unmount())
     const source = createMobileAgentMessageSource()
     const tab: MobileSessionTab = {
       type: 'agent-session',
