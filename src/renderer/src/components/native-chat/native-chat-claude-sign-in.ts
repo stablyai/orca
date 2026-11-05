@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
+import { pinnedClaudeAccountId } from '@/lib/claude-project-account-pin'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
@@ -31,13 +32,16 @@ export function nativeChatClaudeSignInLabel(signIn: NativeChatClaudeSignIn): str
 export function useNativeChatClaudeSignIn(input: {
   agent: string
   target: RuntimeClientTarget
+  /** The chat's workspace; a pinned project signs in its own account. */
+  worktreeId?: string | null
   failure: unknown
   failureRows: number
 }): NativeChatClaudeSignIn | null {
   // Why local only: the hidden sign-in runs on this device, and Claude chats run on its host.
   const accountId = useAppStore((s) =>
     input.agent === 'claude' && input.target.kind === 'local'
-      ? (s.settings?.activeClaudeManagedAccountIdsByRuntime?.host ??
+      ? (pinnedClaudeAccountId(s, input.worktreeId) ??
+        s.settings?.activeClaudeManagedAccountIdsByRuntime?.host ??
         s.settings?.activeClaudeManagedAccountId ??
         null)
       : null

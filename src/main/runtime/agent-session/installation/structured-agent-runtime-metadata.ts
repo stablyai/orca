@@ -143,6 +143,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
             launchEnv,
             wslDistro: location?.wslDistro ?? null,
             ...(purpose === 'identity' ? { purpose } : {}),
+            ...(location?.workspaceId ? { worktreeId: location.workspaceId } : {}),
             getClaudeConfigDirectory: services.getClaudeConfigDirectory
           })
         )

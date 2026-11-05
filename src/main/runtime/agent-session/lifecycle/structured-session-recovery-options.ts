@@ -97,7 +97,9 @@ export async function structuredSessionRecoveryOptions(
       router &&
       record.provider === 'claude' &&
       record.location.wslDistro === null &&
-      metadata.launchFollowsSelection?.()
+      metadata.launchFollowsSelection?.() &&
+      // A pinned project's chat ignores the selection, so switching it cannot help.
+      !router.projectAccountId(record.location.workspaceId)
     ) {
       try {
         const roots = await Promise.all(

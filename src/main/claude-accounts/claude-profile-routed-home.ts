@@ -11,11 +11,14 @@ import { claudeProfileMissing } from './claude-profile-launch-errors'
 export async function claudeRoutedHomeAsync(
   router: Pick<
     ClaudeProfileRouter,
-    'selectedProfile' | 'savedAccount' | 'userConfigDir' | 'userHome'
+    'selectedProfile' | 'savedAccount' | 'userConfigDir' | 'userHome' | 'accountHome'
   >,
-  availability: 'checked' | 'identity' = 'checked'
+  availability: 'checked' | 'identity' = 'checked',
+  projectAccountId?: string | null
 ): Promise<string | null> {
-  const profile = router.selectedProfile()
+  const profile = projectAccountId
+    ? { accountId: projectAccountId, home: router.accountHome(projectAccountId) }
+    : router.selectedProfile()
   if (!profile) {
     return null
   }

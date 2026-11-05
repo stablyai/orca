@@ -101,7 +101,7 @@ export function registerFilesystemGitCommitGenerationHandlers(
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
         commitMessageAgentEnv,
-        getLocalAgentRuntimeTarget(gitOptions)
+        getLocalAgentRuntimeTarget(gitOptions, args.worktreeId)
       )
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }

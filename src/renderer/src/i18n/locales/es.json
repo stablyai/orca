@@ -23124,7 +23124,7 @@
     "claudeAccountFollowDefault": "Cuenta activa",
     "claudeAccount": "Cuenta",
     "claudeAccountLabel": "Cuenta de Claude de este proyecto",
-    "claudeAccountHint": "Se guarda en este proyecto. Las sesiones nuevas de terminal acá la usan; los chats usan la cuenta activa."
+    "claudeAccountHint": "Se guarda en este proyecto. Las sesiones nuevas acá la usan, en terminal o en chat."
   },
   "wslMove": {
     "entry": {

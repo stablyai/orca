@@ -110,10 +110,12 @@ export class ClaudeProfileRouter {
     return profile && !this.coveredBySystemDefault(profile.accountId) ? profile : null
   }
 
-  /** A saved account the worktree's project pins; a removed one falls back to the selection. */
+  /** A saved host account the worktree's project pins; a removed or WSL one falls back to the
+   *  selection, since this router only launches on the host. */
   projectAccountId(worktreeId?: string): string | null {
     const accountId = worktreeId ? this.args.getProjectAccountId?.(worktreeId) : null
-    return accountId && this.savedAccount(accountId) ? accountId : null
+    const saved = accountId ? this.savedAccount(accountId) : undefined
+    return saved && saved.managedAuthRuntime !== 'wsl' ? saved.id : null
   }
 
   accountLogin(accountId: string): ClaudeFolderLogin | null {

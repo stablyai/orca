@@ -232,8 +232,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     deliveryNotices
   })
   const claudeSignIn = useNativeChatClaudeSignIn({
-    agent: props.agent,
-    target: props.target,
+    ...props,
+    worktreeId: ownerWorktreeId,
     failure: provisionalLaunch.failure,
     failureRows: startFailures.filter((fact) => isClaudeSignInFailureKind(fact.kind)).length
   })

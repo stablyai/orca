@@ -91,7 +91,7 @@ export function ClaudeProjectAccountRow({
           <p className="px-2 pt-1.5 pb-1 text-xs text-muted-foreground">
             {translate(
               'agentPicker.claudeAccountHint',
-              'Saved for this project. New terminal sessions here use it; chats use the active account.'
+              'Saved for this project. New sessions here use it, in a terminal or a chat.'
             )}
           </p>
         </DropdownMenuContent>

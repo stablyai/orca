@@ -123,11 +123,13 @@ export async function getRepoForSourceControlAi(
 }
 
 export function getLocalAgentRuntimeTarget(
-  gitOptions: LocalProjectWorktreeGitOptions
+  gitOptions: LocalProjectWorktreeGitOptions,
+  worktreeId?: string
 ): CommitMessageAgentRuntimeTarget {
+  const project = worktreeId ? { worktreeId } : {}
   return gitOptions.wslDistro
-    ? { runtime: 'wsl', wslDistro: gitOptions.wslDistro }
-    : { runtime: 'host' }
+    ? { runtime: 'wsl', wslDistro: gitOptions.wslDistro, ...project }
+    : { runtime: 'host', ...project }
 }
 
 export async function resolveModelDiscoveryLocalPath(

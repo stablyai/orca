@@ -23544,7 +23544,7 @@
     "claudeAccountFollowDefault": "Active account",
     "claudeAccount": "Account",
     "claudeAccountLabel": "Claude account for this project",
-    "claudeAccountHint": "Saved for this project. New terminal sessions here use it; chats use the active account."
+    "claudeAccountHint": "Saved for this project. New sessions here use it, in a terminal or a chat."
   },
   "automations": {
     "runFailures": {

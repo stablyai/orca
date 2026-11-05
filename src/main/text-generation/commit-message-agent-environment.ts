@@ -17,6 +17,8 @@ export type CommitMessageAgentEnvironmentResolvers = {
 export type CommitMessageAgentRuntimeTarget = {
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
+  /** The workspace the text is for; its project may pin a Claude account. */
+  worktreeId?: string
 }
 
 function cloneProcessEnv(): Record<string, string> {

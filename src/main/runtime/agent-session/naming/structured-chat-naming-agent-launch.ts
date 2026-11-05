@@ -34,7 +34,12 @@ export async function chatNamingAgentTarget(
       ...withoutInheritedClaudeConfigDir(env),
       ...resolveTuiAgentLaunchEnv('claude', settings)
     }
-    const path = await resolveClaudeStructuredLaunchHome(getClaudeProfileRouter(), env, home.path)
+    const path = await resolveClaudeStructuredLaunchHome(
+      getClaudeProfileRouter(),
+      env,
+      home.path,
+      record.location.workspaceId
+    )
     const patch = claudeConfigDirEnvPatch(path, { env })
     return { kind: 'local', cwd, env: { CLAUDE_CONFIG_DIR: undefined, ...env, ...patch } }
   }
