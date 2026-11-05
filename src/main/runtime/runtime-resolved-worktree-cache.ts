@@ -1,4 +1,7 @@
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import type { RuntimeStore } from './runtime-store-contract'
+import type { ResolvedWorktreeRowsJoin } from './workspaces/resolved-worktree-scan-join'
+import { WORKTREE_METADATA_DOMAINS } from '../persistence/loading-store/worktree-identity-metadata'
 
 export type ResolvedWorktreeSnapshot = {
   worktrees: ResolvedWorktree[]
@@ -6,6 +9,8 @@ export type ResolvedWorktreeSnapshot = {
 }
 
 type ResolvedCache = ResolvedWorktreeSnapshot & { expiresAt: number; inventoryRevision: number }
+type CachedScanProjection = { inputs: readonly unknown[]; rows: ResolvedWorktreeRowsJoin }
+type StoreWrites = { store: RuntimeStore; revision: number }
 type ResolvedInFlight = {
   generation: number
   inventoryRevision: number
@@ -15,6 +20,8 @@ export class RuntimeResolvedWorktreeCache {
   private resolved: ResolvedCache | null = null
   private resolvedInFlight: ResolvedInFlight | null = null
   private resolvedGeneration = 0
+  private projection: CachedScanProjection | null = null
+  private storeWrites: StoreWrites | null = null
 
   get generation(): number {
     return this.resolvedGeneration
@@ -64,8 +71,54 @@ export class RuntimeResolvedWorktreeCache {
     }
   }
 
+  /** Rows projected from cached scans, reused until a store write, an invalidation, or a changed scan entry; stores that cannot report writes recompute every read. */
+  projectCachedScans(
+    store: RuntimeStore | null,
+    scanEntries: readonly unknown[],
+    project: () => ResolvedWorktreeRowsJoin
+  ): ResolvedWorktreeRowsJoin {
+    const revision = this.storeWriteRevision(store)
+    if (revision === null) {
+      return project()
+    }
+    // Captured before projecting: a metadata migration the read itself saves must miss next time.
+    const inputs = [revision, ...scanEntries]
+    const held = this.projection
+    if (
+      held &&
+      held.inputs.length === inputs.length &&
+      held.inputs.every((input, index) => input === inputs[index])
+    ) {
+      return held.rows
+    }
+    const generation = this.resolvedGeneration
+    const rows = project()
+    if (generation === this.resolvedGeneration) {
+      this.projection = { inputs, rows }
+    }
+    return rows
+  }
+
+  private storeWriteRevision(store: RuntimeStore | null): number | null {
+    if (!store?.onStateWritten) {
+      return null
+    }
+    if (this.storeWrites?.store !== store) {
+      const writes: StoreWrites = { store, revision: 0 }
+      this.storeWrites = writes
+      // Rows read metadata plus repos, lineage and folder workspaces, whose saves name no domain.
+      store.onStateWritten((domains) => {
+        if (!domains || WORKTREE_METADATA_DOMAINS.some((domain) => domains.includes(domain))) {
+          writes.revision += 1
+        }
+      })
+    }
+    return this.storeWrites.revision
+  }
+
   invalidateResolved(): void {
     this.resolvedGeneration += 1
     this.resolved = null
+    this.projection = null
   }
 }

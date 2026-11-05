@@ -15,8 +15,10 @@ import {
 import {
   joinResolvedWorktreeScans,
   platformsByRepoId,
+  projectResolvedWorktreeScans,
   scanResolvedWorktreeRepos,
   type ResolvedWorktreeRepoScans,
+  type ResolvedWorktreeRowsJoin,
   type ResolvedWorktreeScanJoin
 } from './resolved-worktree-scan-join'
 import { projectResolvedWorktreeLineage } from '../../../shared/resolved-worktree-lineage'
@@ -158,26 +160,35 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     )
   }
 
-  protected projectCachedWorktrees(): ResolvedWorktreeScanJoin {
-    const scans: ResolvedWorktreeRepoScans = new Map()
-    for (const repo of this.store?.getRepos() ?? []) {
-      const cached = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
-      if (cached) {
-        scans.set(getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)), {
-          ...(cached.listing ?? cached.result),
-          gitRun: cached
-        })
-      }
-    }
-    return joinResolvedWorktreeScans(
+  /** The fleet from cached scans for synchronous selector matching, reprojected only when its inputs change. */
+  protected projectCachedWorktrees(): ResolvedWorktreeRowsJoin {
+    const cachedScans = (this.store?.getRepos() ?? []).map((repo) => {
+      const entry = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
+      return { repo, entry, scan: entry && (entry.listing ?? entry.result) }
+    })
+    return this.resolvedWorktrees.projectCachedScans(
       this.store,
-      () => ({
-        ...this.repoWorktreeRowDeps(),
-        listFolderWorkspaces: (repo, count) =>
-          projectRuntimeFolderWorkspaces(this.requireStore(), repo, count)
-      }),
-      scans,
-      true
+      cachedScans.flatMap(({ repo, entry, scan }) => [repo, entry, scan]),
+      () => {
+        const scans: ResolvedWorktreeRepoScans = new Map()
+        for (const { repo, entry, scan } of cachedScans) {
+          if (entry && scan) {
+            scans.set(getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)), {
+              ...scan,
+              gitRun: entry
+            })
+          }
+        }
+        return projectResolvedWorktreeScans(
+          this.store,
+          () => ({
+            ...this.repoWorktreeRowDeps(),
+            listFolderWorkspaces: (repo, count) =>
+              projectRuntimeFolderWorkspaces(this.requireStore(), repo, count)
+          }),
+          scans
+        )
+      }
     )
   }
 
