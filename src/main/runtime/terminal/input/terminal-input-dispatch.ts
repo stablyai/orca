@@ -151,6 +151,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
+      const reattach = this.waitForPtyEndpointReattach(pty.pty.ptyId)
+      if (reattach) {
+        await reattach
+      }
       if (!(await this.launchComposerAdmitsSubmit(pty.pty.ptyId, action, options))) {
         return { handle, accepted: false, bytesWritten: 0 }
       }
@@ -183,6 +187,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     // Graph writability can be stale and unknown-id writes no-op; refuse only controller-proven absence, permitting unknown restored-daemon liveness.
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
+    }
+    const reattach = this.waitForPtyEndpointReattach(leaf.ptyId)
+    if (reattach) {
+      await reattach
     }
     if (!(await this.launchComposerAdmitsSubmit(leaf.ptyId, action, options))) {
       return { handle, accepted: false, bytesWritten: 0 }

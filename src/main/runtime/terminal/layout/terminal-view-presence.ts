@@ -10,6 +10,9 @@ import type { RuntimeTerminalBufferSnapshot } from '../../runtime-terminal-state
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../../orca-runtime-postlude'
 import { assertTerminalInputWithinLimitWithYield } from '../../terminal-send-payload'
 
+// Covers a daemon reconnect plus the attach; past it the write proceeds and is refused as before.
+const ENDPOINT_REATTACH_INPUT_WAIT_MS = 10_000
+
 export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged extends OrcaRuntimeWithRecordAgentPromptLifecycleState {
   protected abstract serializeTerminalBufferFromAvailableState(
     ptyId: string,
@@ -66,6 +69,27 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
   /** Live local daemon sessions with no ingested bytes need attachment; existing headless state or snapshot reconciliation means attach already began. */
   protected isKnownUnattachedLocalDaemonPty(ptyId: string): boolean {
     return this.mainDaemonAttachments.isKnownUnattachedLocal(ptyId)
+  }
+
+  /** The local provider lost this PTY's endpoint; a remote view re-attaches it once the daemon is back. */
+  notePtyEndpointLoss(ptyId: string): void {
+    this.mainDaemonAttachments.noteEndpointLoss(ptyId)
+  }
+
+  /** Input for a PTY an endpoint loss detached re-attaches it and waits for that, bounded, instead of being
+   *  refused; null (no wait at all) when no re-attach is owed. */
+  protected waitForPtyEndpointReattach(ptyId: string): Promise<void> | null {
+    const reattached = this.mainDaemonAttachments.reattachForInput(ptyId)
+    if (!reattached) {
+      return null
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    return Promise.race([
+      reattached,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ENDPOINT_REATTACH_INPUT_WAIT_MS)
+      })
+    ]).finally(() => clearTimeout(timer))
   }
 
   /** Mark a raw-output viewer without transferring terminal query authority. */

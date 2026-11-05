@@ -30,6 +30,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
     localProvider.onWriteUnavailable?.((payload) => {
       // Before the window check: a headless host has no window, only remote streams.
       publishPtyEndpointLoss(payload.id)
+      session.runtime?.notePtyEndpointLoss(payload.id)
       if (
         !session.mainWindow ||
         session.mainWindow.isDestroyed() ||
