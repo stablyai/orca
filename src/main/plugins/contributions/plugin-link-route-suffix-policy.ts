@@ -11,13 +11,18 @@ import {
 // for them. Exempt them rather than rejecting the dev-hostname case the feature exists for.
 const RESERVED_TLDS = new Set(['test', 'localhost', 'local', 'internal', 'example', 'invalid'])
 
+// Stands in for the one label `*.` replaces; any LDH label resolves the same under the PSL.
+const PROBE_LABEL = 'orca-link-route-probe'
+
 function finalLabel(host: string): string {
   return host.split('.').at(-1) ?? ''
 }
 
 /**
- * Reject a wildcard whose literal tail is itself a public suffix — `*.com`, `*.co.uk`,
- * `*.github.io`. Without this a plugin could claim an entire registrable namespace.
+ * Reject a label wildcard unless every host it matches shares one registrable domain inside its
+ * tail. `*.X` matches `L.X`, so this asks the PSL about `L.X` rather than `X`: that catches a tail
+ * that is a suffix (`*.com`, `*.co.uk`, `*.github.io`) and a tail whose children are suffixes under a
+ * PSL wildcard rule (`*.nom.br`, `*.oaiusercontent.com`), where each `L.X` is a different tenant.
  *
  * `allowPrivateDomains` matters: it is what makes `github.io` and `s3.amazonaws.com` suffixes rather
  * than ordinary domains, so unrelated tenants stay separated.
@@ -33,9 +38,9 @@ export function routePatternViolatesSuffixPolicy(pattern: NormalizedRoutePattern
   if (RESERVED_TLDS.has(finalLabel(pattern.tail))) {
     return null
   }
-  const parsed = parse(pattern.tail, { allowPrivateDomains: true })
-  if (parsed.domain === null || parsed.domain !== pattern.tail) {
-    return `"*.${pattern.tail}" would cover an entire public suffix; narrow it to a domain you control`
+  const { domain } = parse(`${PROBE_LABEL}.${pattern.tail}`, { allowPrivateDomains: true })
+  if (domain === null || (domain !== pattern.tail && !pattern.tail.endsWith(`.${domain}`))) {
+    return `"*.${pattern.tail}" would cover hosts under a public suffix that belong to different owners; narrow it to a domain you control`
   }
   return null
 }

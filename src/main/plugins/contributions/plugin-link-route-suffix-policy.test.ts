@@ -18,6 +18,20 @@ describe('validateManifestLinkRoutes', () => {
     }
   )
 
+  // PSL wildcard rules (`*.nom.br`, private `*.oaiusercontent.com`): the tail is a registrable
+  // domain, but every single-label child is its own public suffix, so each match is another tenant.
+  it.each(['*.nom.br', '*.sch.uk', '*.kawasaki.jp', '*.oaiusercontent.com', '*.r.appspot.com'])(
+    'rejects a wildcard whose matched hosts are each a public suffix: %s',
+    (hostname) => {
+      expect(ok(hostname)).not.toBeNull()
+    }
+  )
+
+  it('accepts a wildcard below a registrable domain, which one owner controls', () => {
+    expect(ok('*.staging.example.com')).toBeNull()
+    expect(ok('*.city.kawasaki.jp')).toBeNull()
+  })
+
   it('still rejects a bare reserved tld, which is as broad as *.com within a dev namespace', () => {
     expect(ok('*.test')).not.toBeNull()
     expect(ok('*.localhost')).not.toBeNull()

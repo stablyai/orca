@@ -38,10 +38,14 @@ dot-crossing wildcard would reach `victim-bucket.s3.amazonaws.com` — across a 
 though `s3.amazonaws.com` is a private suffix. Single-label matching is what keeps the suffix check
 meaningful.
 
-The suffix check itself (`src/main/plugins/contributions/plugin-link-route-suffix-policy.ts`, main-only because it
-needs `tldts`) rejects a wildcard whose tail is a public suffix: `*.com`, `*.co.uk`, `*.github.io`,
-`*.s3.amazonaws.com`. `allowPrivateDomains: true` is what makes the last two suffixes rather than
-ordinary domains.
+The suffix check itself (`src/main/plugins/contributions/plugin-link-route-suffix-policy.ts`,
+main-only because it needs `tldts`) asks the public suffix list about a host the wildcard would
+match, `<probe>.<tail>`, not about the tail. The wildcard is accepted only when that host's
+registrable domain is the tail or lies inside it, so one owner controls everything it matches. That
+rejects a tail that is a suffix (`*.com`, `*.co.uk`, `*.github.io`, `*.s3.amazonaws.com`) and a tail
+under a PSL wildcard rule, where each child is its own suffix (`*.nom.br`, `*.kawasaki.jp`,
+`*.oaiusercontent.com`). It accepts `*.example.com` and `*.staging.example.com`.
+`allowPrivateDomains: true` is what makes private-section entries count.
 
 **`*-devserver.test` — mid-label, reserved TLDs only.** The wildcard sits inside the registrable
 label, so a whole-tail suffix test cannot protect it: against a real TLD, `*e.com` passes such a test
