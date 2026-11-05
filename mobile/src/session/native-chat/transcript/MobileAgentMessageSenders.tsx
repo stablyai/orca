@@ -1,4 +1,4 @@
-import { useContext } from 'react'
+import { Fragment, useContext } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ArrowUpRight } from 'lucide-react-native'
 import {
@@ -14,7 +14,7 @@ import {
   useMobileAgentMessageName
 } from './mobile-agent-message-context'
 
-// Queued cards read "From A, B" in caption type, like desktop's queued sender line.
+// Queued names sit in a caption line, too short for a 44pt target.
 const QUEUED_HIT_SLOP = { top: 8, bottom: 8 }
 
 export function MobileAgentMessageSenders({
@@ -55,16 +55,21 @@ export function MobileAgentMessageSenders({
         const occurrence = occurrences.get(identity) ?? 0
         occurrences.set(identity, occurrence + 1)
         return (
-          <SenderName
-            key={`${identity}:${occurrence}`}
-            sender={sender}
-            from={from}
-            open={open}
-            compact={compact}
-            queued={queued}
-            shownCount={shown.length}
-            comma={queued && index < shown.length - 1}
-          />
+          <Fragment key={`${identity}:${occurrence}`}>
+            <SenderName
+              sender={sender}
+              from={from}
+              open={open}
+              compact={compact}
+              queued={queued}
+              shownCount={shown.length}
+              unnamed={unnamed}
+            />
+            {/* Outside the name, so truncating a long name keeps "A…, B". */}
+            {queued && index < shown.length - 1 ? (
+              <Text style={[styles.meta, styles.queuedComma]}>,</Text>
+            ) : null}
+          </Fragment>
         )
       })}
       {more > 0 ? (
@@ -86,21 +91,17 @@ function SenderName({
   compact,
   queued,
   shownCount,
-  comma
+  unnamed
 }: {
   compact: boolean
   queued: boolean
   shownCount: number
-  comma: boolean
+  unnamed: string
   sender: AgentMessageSource['senders'][number]
   from: AgentMessageSource
   open: React.ContextType<typeof MobileAgentMessageOpenContext>
 }) {
-  const t = useMobileTranslation()
-  const name = useMobileAgentMessageName(
-    sender,
-    t('session.agentMessageAttribution.unnamedSender', 'an agent')
-  )
+  const name = useMobileAgentMessageName(sender, unnamed)
   const canOpen = open !== undefined && agentMessageSenderCanOpen(sender)
   return (
     <Pressable
@@ -121,7 +122,6 @@ function SenderName({
         style={queued ? [styles.meta, canOpen && styles.queuedOpenableName] : styles.name}
       >
         {name}
-        {comma ? ',' : null}
       </Text>
       {canOpen && !queued ? (
         <ArrowUpRight

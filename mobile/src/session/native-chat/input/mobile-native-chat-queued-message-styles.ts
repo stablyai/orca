@@ -137,6 +137,12 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize
   },
+  editorHeading: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
   captionReturned: {
     color: colors.statusRed
   },

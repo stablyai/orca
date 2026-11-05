@@ -10,10 +10,9 @@ import {
   useMobileNativeChatDraftInputs
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { prepareQueuedMessageEditText } from '../../../src/shared/queued-message-edit-command'
-import { colors, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
 import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
 import { MobileAgentMessageSenders } from './native-chat/transcript/MobileAgentMessageSenders'
+import { queuedMessageStyles as styles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { createUuidV4 } from '../../../src/shared/uuid-v4'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -75,8 +74,8 @@ export function MobileQueuedMessageComposer({
   }
   return (
     <View testID="queued-card-editor">
-      <View style={styles.heading}>
-        <Text style={styles.headingLabel}>
+      <View style={styles.editorHeading}>
+        <Text style={styles.caption}>
           {t('session.queuedMessageComposer.editing', 'Editing message')}
         </Text>
         {from ? <MobileAgentMessageSenders queued from={from} /> : null}
@@ -136,8 +135,3 @@ export function MobileQueuedMessageComposer({
     </View>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  heading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
-  headingLabel: { color: colors.textMuted, fontSize: typography.metaSize }
-}))

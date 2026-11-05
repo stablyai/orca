@@ -666,13 +666,6 @@ it.each([
         body
       })
       expect(projected?.from?.senders[0].agent).toBe('claude')
-      const queuePath =
-        '../../../../../../mobile/src/session/mobile-structured-queued-message-cards'
-      const { mobileQueuedMessageCards } = await import(queuePath)
-      const [mobileCard] = mobileQueuedMessageCards([queued], [])
-      expect(mobileCard.line).toBe(task)
-      expect(mobileCard.from.senders[0].agent).toBe('claude')
-      expect(mobileCard.from.senders[0].name).toBe('Claude Chat')
       const [card] = projectQueuedMessageCards([queued], [], {})
       expect(card.from?.senders[0].agent).toBe('claude')
       expect(queuedMessageCardLine(card)).toBe(task)

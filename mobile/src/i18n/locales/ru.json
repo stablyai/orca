@@ -1882,7 +1882,7 @@
     },
     "agentMessageAttribution": {
       "unnamedSender": "агента",
-      "fromSender": "Отправитель"
+      "fromSender": "От"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Не удалось создать терминал",
