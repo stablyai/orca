@@ -16,7 +16,7 @@ import {
 import { ptyTuiIdleEvidence } from '../../tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
 import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
-import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
+import { hasTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
@@ -155,7 +155,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       lastInputAt !== null &&
       Date.now() - lastInputAt <= USER_INPUT_HOLD_CAP_MS &&
       !!state &&
-      !!readTerminalComposerTypedText(state.emulator.getCursorLineContext())
+      hasTerminalComposerTypedText(state.emulator.getCursorLineContext())
     )
   }
 

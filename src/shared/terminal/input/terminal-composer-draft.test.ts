@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   detectTerminalComposerDraft,
+  hasTerminalComposerTypedText,
   hasTerminalComposerPlaceholder,
   readTerminalComposerTypedText
 } from './terminal-composer-draft'
@@ -469,18 +470,20 @@ describe('readTerminalComposerTypedText', () => {
 })
 
 describe('OpenCode composer', () => {
-  // Shapes from OpenCode 2.2: a `┃` gutter box closed by `╹▀…`, the agent row last, no prompt glyph.
-  const box = (textRows: string[], cursorRow: number, beforeCursor: string) => {
-    const boxRows = ['   ┃', ...textRows.map((row) => `   ┃  ${row}`), '   ┃']
-    const below = [
-      ...boxRows.slice(cursorRow + 2),
-      '   ┃  Build · gpt-6.1 · medium',
-      '   ╹▀▀▀▀▀▀▀▀'
-    ]
+  // OpenCode 2.2's box: a padding row, the textarea, a spacer row, a metadata row; `╹▀` closes it on
+  // opaque themes only. The cursor sits in the textarea.
+  const box = (
+    textRows: string[],
+    cursorRow: number,
+    beforeCursor: string,
+    { metadata = 'Build · gpt-6.1 · medium', bottom = '   ╹▀▀▀▀▀▀▀▀' } = {}
+  ) => {
+    const rows = ['   ┃', ...textRows.map((row) => `   ┃  ${row}`), '   ┃', `   ┃  ${metadata}`]
+    const below = [...rows.slice(cursorRow + 2), ...(bottom ? [bottom] : [])]
     return {
-      rows: ['   /update to install', ...boxRows.slice(0, cursorRow + 2)],
-      typedRows: ['   /update to install', ...boxRows.slice(0, cursorRow + 2)],
-      promptGlyphBoldRows: boxRows.slice(0, cursorRow + 3).map(() => false),
+      rows: ['   /update to install', ...rows.slice(0, cursorRow + 2)],
+      typedRows: ['   /update to install', ...rows.slice(0, cursorRow + 2)],
+      promptGlyphBoldRows: rows.slice(0, cursorRow + 3).map(() => false),
       rowsBelow: below,
       typedRowsBelow: below,
       beforeCursor: `   ┃  ${beforeCursor}`,
@@ -491,30 +494,38 @@ describe('OpenCode composer', () => {
     }
   }
 
-  it('reads an empty box showing the stock placeholder as no draft', () => {
-    const empty = box(['Ask anything… "Fix a TODO in the codebase"'], 0, '')
-    expect(readTerminalComposerTypedText(empty)).toBe('')
-    expect(detectTerminalComposerDraft(empty)).toBeNull()
+  it.each([
+    ['the stock placeholder', box(['Ask anything… "Fix a TODO in the codebase"'], 0, '')],
+    ['the shell placeholder', box(['Run a command… "git status"'], 0, '', { metadata: 'Shell' })],
+    ['a placeholder clipped by a narrow pane', box(['Ask anything…'], 0, '', { metadata: '' })],
+    ['a transparent theme', box(['Ask anything… "Fix broken tests"'], 0, '', { bottom: '' })]
+  ])('reads an empty box showing %s as no draft', (_label, context) => {
+    expect(hasTerminalComposerTypedText(context)).toBe(false)
+    expect(detectTerminalComposerDraft(context)).toBeNull()
   })
 
-  it('reads a typed draft, including with the cursor moved to its start', () => {
-    const typed = box(['please refactor the auth module'], 0, 'please refactor the auth module')
-    expect(readTerminalComposerTypedText(typed)).toBe('please refactor the auth module')
-    expect(detectTerminalComposerDraft(typed)).toEqual({
-      text: 'please refactor the auth module',
-      promptRow: 10,
-      cursorRow: 10,
-      endRow: 10,
-      promptGlyph: '┃'
-    })
-    expect(readTerminalComposerTypedText(box(['please refactor the auth module'], 0, ''))).toBe(
-      'please refactor the auth module'
-    )
+  it.each([
+    ['at its end', box(['please refactor the auth'], 0, 'please refactor the auth')],
+    ['with the cursor moved to its start', box(['please refactor the auth'], 0, '')],
+    ['in shell mode', box(['ls -la'], 0, 'ls -la', { metadata: 'Shell' })],
+    ['under a model-only metadata row', box(['fix it'], 0, 'fix it', { metadata: 'Big Pickle' })],
+    ['on a transparent theme', box(['fix it'], 0, 'fix it', { bottom: '' })]
+  ])('reads a typed draft %s, without the metadata row', (_label, context) => {
+    expect(hasTerminalComposerTypedText(context)).toBe(true)
+    expect(detectTerminalComposerDraft(context)?.text).toBe(context.rows.at(-1)?.slice(6))
   })
 
   it('reads every line of a multi-line draft around the cursor', () => {
-    expect(readTerminalComposerTypedText(box(['first line', '', 'third line'], 1, ''))).toBe(
-      'first line\n\nthird line'
-    )
+    expect(detectTerminalComposerDraft(box(['first line', '', 'third line'], 1, ''))).toEqual({
+      text: 'first line\n\nthird line',
+      promptRow: 9,
+      cursorRow: 10,
+      endRow: 11,
+      promptGlyph: '┃'
+    })
+  })
+
+  it('leaves OpenCode out of the faithful draft that native chat picks up', () => {
+    expect(readTerminalComposerTypedText(box(['fix it'], 0, 'fix it'))).toBeNull()
   })
 })

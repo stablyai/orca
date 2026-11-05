@@ -88,7 +88,7 @@ export function projectTerminalVisibleLines(emulator: TerminalProjectionEmulator
   }
 }
 
-const PROJECTED_PROMPT_GLYPHS: ReadonlySet<string> = new Set(['❯', '›', '»'])
+const PROJECTED_PROMPT_GLYPHS: ReadonlySet<string> = new Set(['❯', '›', '»', '┃'])
 
 /** Restore blanked drafts before rules inspect what the TUI painted. */
 export function restoreProjectedComposerDraft(

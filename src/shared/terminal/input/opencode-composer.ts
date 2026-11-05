@@ -1,62 +1,73 @@
 import type { TerminalComposerDraft, TerminalCursorContext } from './terminal-composer-draft'
 
-// Why: OpenCode draws no prompt glyph: its composer is a `┃` gutter closed by `╹▀…`, its last row is
-// the agent row (`Build · model`), and its placeholder is undimmed, so only its stock wording marks it.
+// Why: OpenCode draws no prompt glyph. Its composer is a `┃` gutter block (closed by `╹▀…` only on
+// opaque themes) laid out as a padding row, the textarea, a spacer row and a metadata row (agent,
+// model or `Shell`). Its placeholder is undimmed, so only its stock wording marks it.
 const OPENCODE_BOX_GUTTER = '┃'
-const OPENCODE_BOX_BOTTOM = '╹▀'
-const OPENCODE_AGENT_ROW_SEPARATOR = '·'
-// Why String.raw: esbuild escapes strings for the ASCII orcad bundle but not regex or tagged templates.
-const OPENCODE_PLACEHOLDER = new RegExp(String.raw`^Ask anything\u2026 "`)
+const OPENCODE_PLACEHOLDERS = ['Ask anything', 'Run a command']
+const ELLIPSIS = '…'
 
+function isOpenCodePlaceholder(line: string): boolean {
+  // Narrow panes clip the placeholder to one row, ending it with an ellipsis.
+  const clipped = line.endsWith(ELLIPSIS) ? line.slice(0, -ELLIPSIS.length) : null
+  return OPENCODE_PLACEHOLDERS.some(
+    (placeholder) => line.startsWith(placeholder) || (!!clipped && placeholder.startsWith(clipped))
+  )
+}
+
+/** OpenCode's composer around the cursor. Its text is the screen copy, so a soft-wrapped draft reads
+ *  with a newline at each wrap: it says whether the user typed something, not exactly what. */
 export function detectOpenCodeComposer(
   context: TerminalCursorContext
 ): TerminalComposerDraft | null {
   const cursorIndex = context.rows.length - 1
   const column = (context.rows[cursorIndex] ?? '').indexOf(OPENCODE_BOX_GUTTER)
-  const startsAtGutter = (row: string | undefined, mark: string): boolean =>
-    column !== -1 && !!row && row.startsWith(mark, column) && !row.slice(0, column).trim()
-  if (context.cursorHidden || !startsAtGutter(context.rows[cursorIndex], OPENCODE_BOX_GUTTER)) {
+  const inBox = (row: string | undefined): boolean =>
+    column !== -1 &&
+    !!row &&
+    row.startsWith(OPENCODE_BOX_GUTTER, column) &&
+    !row.slice(0, column).trim()
+  if (context.cursorHidden || !inBox(context.rows[cursorIndex])) {
     return null
   }
   let top = cursorIndex
-  while (startsAtGutter(context.rows[top - 1], OPENCODE_BOX_GUTTER)) {
+  while (inBox(context.rows[top - 1])) {
     top -= 1
   }
-  let bottom = 0
-  while (startsAtGutter(context.rowsBelow[bottom], OPENCODE_BOX_GUTTER)) {
-    bottom += 1
+  let below = 0
+  while (inBox(context.rowsBelow[below])) {
+    below += 1
   }
-  if (!startsAtGutter(context.rowsBelow[bottom], OPENCODE_BOX_BOTTOM)) {
+  const rows = [
+    ...context.typedRows.slice(top, cursorIndex + 1),
+    ...context.typedRowsBelow.slice(0, below)
+  ].map((row) => row.slice(column + OPENCODE_BOX_GUTTER.length).trimEnd())
+  const cursorLine = cursorIndex - top
+  const spacer = rows.length - 2
+  if (rows.length < 4 || rows[0]?.trim() || rows[spacer]?.trim() || cursorLine >= spacer) {
     return null
   }
-  // The gutter's two-space padding is layout; text past it, and blank rows inside a draft, are the user's.
-  const content = (row: string): string =>
-    row
-      .slice(column + 1)
-      .replace(/^ {1,2}/, '')
-      .trimEnd()
-  const lines = [
-    ...context.typedRows.slice(top, cursorIndex + 1),
-    ...context.typedRowsBelow.slice(0, bottom)
-  ].map(content)
-  if (bottom > 0 && lines.at(-1)?.includes(OPENCODE_AGENT_ROW_SEPARATOR)) {
-    lines.pop()
-  }
+  // The metadata row shares the textarea's left padding; text past it is the user's.
+  const metadata = rows.at(-1) ?? ''
+  const padding = metadata.trim() ? metadata.length - metadata.trimStart().length : 2
+  const unpad = (row: string): string =>
+    row.startsWith(' '.repeat(padding)) ? row.slice(padding) : row.trimStart()
+  const lines = rows.slice(1, spacer).map(unpad)
   const first = lines.findIndex((line) => line.trim())
   const last = lines.findLastIndex((line) => line.trim())
-  const cursorLine = cursorIndex - top
   const placeholder =
-    first === cursorLine &&
-    last === first &&
-    !content(context.beforeCursor).trim() &&
-    OPENCODE_PLACEHOLDER.test(lines[first] ?? '')
+    first === 0 &&
+    last === 0 &&
+    cursorLine === 1 &&
+    !unpad(context.beforeCursor.slice(column + OPENCODE_BOX_GUTTER.length)) &&
+    isOpenCodePlaceholder(lines[0] ?? '')
   const text = first === -1 || placeholder ? '' : lines.slice(first, last + 1).join('\n')
-  const boxTop = context.cursorViewportRow - cursorLine
+  const textareaTop = context.cursorViewportRow - cursorLine + 1
   return {
     text,
-    promptRow: boxTop + Math.max(first, 0),
+    promptRow: textareaTop + Math.max(first, 0),
     cursorRow: context.cursorViewportRow,
-    endRow: boxTop + Math.max(last, first, 0),
-    promptGlyph: '┃'
+    endRow: textareaTop + Math.max(last, first, 0),
+    promptGlyph: OPENCODE_BOX_GUTTER
   }
 }

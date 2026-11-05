@@ -312,11 +312,17 @@ export function readTerminalComposerTypedText(
   context: TerminalCursorContext | null | undefined
 ): string | null {
   const boxed = context ? detectBoxedComposerDraft(context) : null
-  if (boxed) {
-    return boxed.text
-  }
-  const openCode = context ? detectOpenCodeComposer(context) : null
-  return openCode ? openCode.text : (detectTerminalComposer(context, true)?.text ?? null)
+  return boxed ? boxed.text : (detectTerminalComposer(context, true)?.text ?? null)
+}
+
+/** Whether the user has typed into the composer. Unlike readTerminalComposerTypedText this also covers
+ *  OpenCode, whose screen copy is not faithful enough to hand back as the draft itself. */
+export function hasTerminalComposerTypedText(
+  context: TerminalCursorContext | null | undefined
+): boolean {
+  return (
+    !!readTerminalComposerTypedText(context) || !!(context && detectOpenCodeComposer(context)?.text)
+  )
 }
 
 export function hasTerminalComposerPlaceholder(
