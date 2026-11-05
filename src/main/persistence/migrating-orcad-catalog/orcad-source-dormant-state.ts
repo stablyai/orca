@@ -15,6 +15,7 @@ import { collectOrcadMigrationSourceAutomationState } from './orcad-source-autom
 import { collectOrcadMigrationSourceWorkspaceSession } from './orcad-source-workspace-session'
 import {
   createOrcadMigrationExportScope,
+  orcadMigrationMayMoveChild,
   orcadMigrationOwnerMatchesScope,
   unqualifyOrcadMigrationOwnerKey
 } from './orcad-source-scope'
@@ -77,7 +78,7 @@ export function collectOrcadMigrationSourceDormantState(
 ): OrcadMigrationSourceDormantInspection {
   const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   assertNoCrossStoreLinkedWorkspaceInMove(state, (childKey) =>
-    orcadMigrationOwnerMatchesScope(childKey, scope)
+    orcadMigrationMayMoveChild(state, childKey, scope)
   )
   const blockedCounts = emptyBlockedCounts()
   const destinationRepos = catalog.repositories.map(toOrcadDestinationRepository)
