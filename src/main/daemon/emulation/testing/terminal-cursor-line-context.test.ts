@@ -1,0 +1,365 @@
+import { Terminal } from '@xterm/headless'
+import { describe, expect, it } from 'vitest'
+import {
+  detectTerminalComposerDraft,
+  hasTerminalComposerPlaceholder,
+  readTerminalComposerTypedText
+} from '../../../../shared/terminal/input/terminal-composer-draft'
+import { HeadlessEmulator } from '../headless-emulator'
+import { readTerminalCursorLineContext } from '../../../../shared/terminal/input/terminal-cursor-line-context'
+import { readRuntimeFixture } from '../../../runtime/agent-transcript-replay-test-harness'
+
+function writeSync(terminal: Terminal, data: string): void {
+  const core = (terminal as unknown as { _core: { writeSync(data: string): void } })._core
+  core.writeSync(data)
+}
+
+type Cell = ReturnType<Terminal['buffer']['active']['getNullCell']>
+
+function observeCellReads(terminal: Terminal) {
+  const allocated: Cell[] = []
+  const targets: (Cell | undefined)[] = []
+  const active = terminal.buffer.active
+  const source = {
+    rows: terminal.rows,
+    modes: terminal.modes,
+    buffer: {
+      active: {
+        baseY: active.baseY,
+        cursorX: active.cursorX,
+        cursorY: active.cursorY,
+        viewportY: active.viewportY,
+        getNullCell: () => {
+          const cell = active.getNullCell()
+          allocated.push(cell)
+          return cell
+        },
+        getLine: (row: number) => {
+          const line = active.getLine(row)
+          if (!line) {
+            return undefined
+          }
+          return {
+            isWrapped: line.isWrapped,
+            length: line.length,
+            translateToString: line.translateToString.bind(line),
+            getCell: (column: number, reusableCell?: Cell) => {
+              targets.push(reusableCell)
+              return line.getCell(column, reusableCell)
+            }
+          }
+        }
+      }
+    }
+  }
+  return { source, allocated, targets }
+}
+
+describe('readTerminalCursorLineContext', () => {
+  it.each([
+    { fixture: 'claude-2-1-316-labelled-empty', cursorHidden: false },
+    { fixture: 'claude-2-1-316-default-unlabelled-empty', cursorHidden: true }
+  ])(
+    'keeps recorded empty Claude composer $fixture out of draft and placeholder metadata',
+    async ({ fixture, cursorHidden }) => {
+      const emulator = new HeadlessEmulator({ cols: 100, rows: 30 })
+      try {
+        await emulator.write(readRuntimeFixture(fixture))
+        const context = emulator.getCursorLineContext()
+        expect(context?.cursorHidden).toBe(cursorHidden)
+        expect(context?.rows.at(-2)).toMatch(/^─{8,}/)
+        expect(detectTerminalComposerDraft(context)).toBeNull()
+        expect(hasTerminalComposerPlaceholder(context)).toBe(false)
+      } finally {
+        emulator.dispose()
+      }
+    }
+  )
+
+  const MULTILINE_DRAFT =
+    'Refactor the login page so that it preserves the existing authentication behavior and includes\nthe coverage report'
+
+  it.each([
+    {
+      fixture: 'claude-2-1-316-default-labelled-middle',
+      cursorInverse: true,
+      draft: { text: MULTILINE_DRAFT, promptRow: 8, cursorRow: 9, endRow: 9 }
+    },
+    {
+      fixture: 'claude-2-1-316-default-unlabelled-middle',
+      cursorInverse: true,
+      draft: { text: MULTILINE_DRAFT, promptRow: 8, cursorRow: 9, endRow: 9 }
+    },
+    {
+      // Focus-out drops the painted caret; the hidden cursor stays parked mid-draft.
+      fixture: 'claude-2-1-316-default-labelled-blurred',
+      cursorInverse: false,
+      draft: { text: 'Refactor the login page so that it', promptRow: 8, cursorRow: 8, endRow: 8 }
+    }
+  ])(
+    "reads Claude's default hidden caret inside $fixture",
+    async ({ fixture, cursorInverse, draft }) => {
+      const emulator = new HeadlessEmulator({ cols: 100, rows: 30 })
+      try {
+        await emulator.write(readRuntimeFixture(fixture))
+        const context = emulator.getCursorLineContext()
+        expect(context).toMatchObject({ cursorHidden: true, activeBuffer: 'normal', cursorInverse })
+        expect(detectTerminalComposerDraft(context)).toEqual({ ...draft, promptGlyph: '❯' })
+      } finally {
+        emulator.dispose()
+      }
+    }
+  )
+
+  it.each([
+    // Claude's alternate-screen redraw parks the hidden cursor in a complete box without caret paint.
+    { fixture: 'claude-interrupt-tool-cancel-supported', length: 1321, completeFrame: true },
+    // The dsh first-run guide redraws its text between rules with the cursor hidden.
+    { fixture: 'dsh-tui-0.17/first-run-guide', length: 10355, completeFrame: false }
+  ])(
+    'leaves an alternate-screen hidden cursor without caret paint out of drafts in $fixture',
+    async ({ fixture, length, completeFrame }) => {
+      const emulator = new HeadlessEmulator({ cols: 120, rows: 40 })
+      try {
+        await emulator.write(readRuntimeFixture(fixture).slice(0, length))
+        const context = emulator.getCursorLineContext()
+        expect(context).toMatchObject({
+          cursorHidden: true,
+          activeBuffer: 'alternate',
+          cursorInverse: false
+        })
+        expect(detectTerminalComposerDraft(context)).toBeNull()
+        if (completeFrame && context) {
+          // The buffer type alone keeps this otherwise complete frame out.
+          expect(detectTerminalComposerDraft({ ...context, activeBuffer: 'normal' })?.text).toMatch(
+            /^Use/
+          )
+        }
+      } finally {
+        emulator.dispose()
+      }
+    }
+  )
+
+  it('reads input rows below the cursor while the viewport is scrolled into history', () => {
+    const terminal = new Terminal({ cols: 30, rows: 9, scrollback: 100, allowProposedApi: true })
+    try {
+      const history = Array.from({ length: 50 }, (_, row) => `history ${row}`).join('\r\n')
+      writeSync(
+        terminal,
+        `${history}\r\n${'─'.repeat(20)}\r\n\x1b[1m❯\x1b[22m first line\x1b7\r\n  second line\r\n  third line\r\n${'─'.repeat(20)}\x1b8`
+      )
+      terminal.scrollLines(-8)
+      expect(terminal.buffer.active.viewportY).toBeLessThan(terminal.buffer.active.baseY)
+      expect(
+        readTerminalComposerTypedText(readTerminalCursorLineContext(terminal, terminal.rows))
+      ).toBe('first line\nsecond line\nthird line')
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('reuses one cell across every scan without retaining it between reads', () => {
+    const terminal = new Terminal({ cols: 12, rows: 5, allowProposedApi: true })
+    try {
+      writeSync(terminal, '\x1b[1m❯\x1b[22m 界e\u0301\x1b7\r\n\x1b[31mfooter\x1b8')
+      const rig = observeCellReads(terminal)
+      const first = readTerminalCursorLineContext(rig.source, terminal.rows)
+      expect(rig.allocated).toHaveLength(1)
+      expect(rig.targets.length).toBeGreaterThan(terminal.cols * 2)
+      expect(rig.targets.every((cell) => cell === rig.allocated[0])).toBe(true)
+      rig.targets.length = 0
+      expect(readTerminalCursorLineContext(rig.source, terminal.rows)).toEqual(first)
+      expect(rig.allocated).toHaveLength(2)
+      expect(rig.allocated[1]).not.toBe(rig.allocated[0])
+      expect(rig.targets.every((cell) => cell === rig.allocated[1])).toBe(true)
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('preserves full context for an adapter without reusable cells', () => {
+    const terminal = new Terminal({ cols: 12, rows: 5, allowProposedApi: true })
+    try {
+      writeSync(
+        terminal,
+        '\x1b[1m❯\x1b[22m typed\x1b7\x1b[2m hint\x1b[22m\r\n\x1b[38;2;1;2;3m界e\u0301\x1b[0m\x1b8'
+      )
+      const rig = observeCellReads(terminal)
+      const source = {
+        ...rig.source,
+        buffer: { active: { ...rig.source.buffer.active, getNullCell: undefined } }
+      }
+      const context = readTerminalCursorLineContext(source, terminal.rows)
+      expect(context).toEqual(readTerminalCursorLineContext(terminal, terminal.rows))
+      expect(context?.typedRows).toEqual(['❯ typed'])
+      expect(context?.typedRowsBelow[0]).toBe('界e\u0301')
+      expect(context?.beforeCursor).toBe('❯ typed')
+      expect(context?.afterCursor).toBe('')
+      expect(context?.rawAfterCursor).toBe(' hint')
+      expect(context?.promptGlyphBoldRows).toEqual([true])
+      expect(context?.rowsBelowCustomForeground?.[0]).toBe(true)
+      expect(rig.allocated).toEqual([])
+      expect(rig.targets.length).toBeGreaterThan(terminal.cols * 2)
+      expect(rig.targets.every((cell) => cell === undefined)).toBe(true)
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it.each([
+    { cols: 19, cursorRowTail: 'proceed with the ', continuation: 'release' },
+    { cols: 18, cursorRowTail: 'proceed with the', continuation: ' release' }
+  ])(
+    'preserves a space at a dimmed soft-wrap boundary with $cols columns',
+    ({ cols, cursorRowTail, continuation }) => {
+      const terminal = new Terminal({ cols, rows: 6, allowProposedApi: true })
+      writeSync(
+        terminal,
+        `${'─'.repeat(cols)}\r\n❯ \x1b7\x1b[2mproceed with the release\x1b[22m\x1b8`
+      )
+
+      const context = readTerminalCursorLineContext(terminal, 16)
+
+      expect(context?.rawAfterCursor).toBe(cursorRowTail)
+      expect(context?.rowsBelow).toEqual([continuation, '', '', ''])
+      expect(context?.rowsBelowWrapped).toEqual([true, false, false, false])
+      expect(detectTerminalComposerDraft(context)?.text).toBe('proceed with the release')
+      terminal.dispose()
+    }
+  )
+
+  it('preserves a typed space before the cursor moves onto a wrapped row', () => {
+    const terminal = new Terminal({ cols: 19, rows: 6, allowProposedApi: true })
+    writeSync(terminal, '───────────────────\r\n❯ proceed with the release')
+
+    const context = readTerminalCursorLineContext(terminal, 16)
+
+    expect(context?.typedRows).toEqual(['───────────────────', '❯ proceed with the ', 'release'])
+    expect(context?.rowsWrapped).toEqual([false, false, true])
+    expect(detectTerminalComposerDraft(context)?.text).toBe('proceed with the release')
+    terminal.dispose()
+  })
+
+  it('recognizes a colored context-only Codex status footer', () => {
+    const terminal = new Terminal({ cols: 80, rows: 8, allowProposedApi: true })
+    writeSync(
+      terminal,
+      '\x1b[1m›\x1b[22m \x1b7review the change\r\n \r\n\x1b[38;2;242;181;144mContext 0% used\x1b[0m\x1b8'
+    )
+
+    const context = readTerminalCursorLineContext(terminal, 16)
+
+    expect(detectTerminalComposerDraft(context)?.text).toBe('review the change')
+    terminal.dispose()
+  })
+
+  it("reads Codex 0.137's rotating dim placeholder as an empty composer", async () => {
+    const emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+    await emulator.write(readRuntimeFixture('codex-0-137-0-rotating-placeholder'))
+
+    const context = emulator.getCursorLineContext()
+
+    expect(context?.rawAfterCursor).toContain('Explain this codebase')
+    expect(detectTerminalComposerDraft(context)).toBeNull()
+    emulator.dispose()
+  })
+
+  it("masks Codex 0.157's placeholder when shortcut help sits under the status row", async () => {
+    const emulator = new HeadlessEmulator({ cols: 120, rows: 40 })
+    await emulator.write(readRuntimeFixture('codex-0157-plain-ready'))
+
+    const context = emulator.getCursorLineContext()
+
+    expect(context?.rowsBelow.at(-1)).toContain('? for shortcuts')
+    expect(hasTerminalComposerPlaceholder(context)).toBe(true)
+    emulator.dispose()
+  })
+
+  it('finds a composer prompt more than 16 wrapped rows above the cursor', async () => {
+    const draft = `proceed ${'with '.repeat(65)}release`
+    const emulator = new HeadlessEmulator({ cols: 19, rows: 30 })
+    await emulator.write(`${'─'.repeat(19)}\r\n❯ ${draft}`)
+
+    const context = emulator.getCursorLineContext()
+
+    expect(context?.rows.length).toBeGreaterThan(17)
+    expect(detectTerminalComposerDraft(context)?.text).toBe(draft)
+    emulator.dispose()
+  })
+
+  it.each([true, false])('bounds blank-row cell reads with reusable cells %s', (reusable) => {
+    const terminal = new Terminal({ cols: 12, rows: 5, allowProposedApi: true })
+    try {
+      const rig = observeCellReads(terminal)
+      const active = rig.source.buffer.active
+      const source = {
+        ...rig.source,
+        buffer: { active: { ...active, getNullCell: reusable ? active.getNullCell : undefined } }
+      }
+      const context = readTerminalCursorLineContext(source, terminal.rows)
+      expect(context?.typedRows).toEqual([''])
+      expect(context?.typedRowsBelow).toEqual(['', '', '', ''])
+      expect(context?.promptGlyphBoldRows).toEqual([false])
+      expect(context?.rowsBelowCustomForeground).toEqual([false, false, false, false])
+      // A blank glyph search must share the full row scan; the cursor suffix is separate.
+      expect(rig.targets.length).toBeLessThanOrEqual(terminal.cols * (terminal.rows + 1))
+      expect(rig.allocated).toHaveLength(reusable ? 1 : 0)
+      expect(rig.targets.every((cell) => cell === rig.allocated[0])).toBe(true)
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('keeps dimmed first-glyph styles while excluding their text', () => {
+    const terminal = new Terminal({ cols: 32, rows: 5, allowProposedApi: true })
+    try {
+      writeSync(terminal, '\x1b[2;1m›\x1b[0m typed\x1b7\r\n\x1b[2;31mfooter\x1b[0m\x1b8')
+      const context = readTerminalCursorLineContext(terminal, terminal.rows)
+      expect(context?.typedRows).toEqual([' typed'])
+      expect(context?.promptGlyphBoldRows).toEqual([true])
+      expect(context?.typedRowsBelow[0]).toBe('')
+      expect(context?.rowsBelowCustomForeground?.[0]).toBe(true)
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('uses the first visible glyph even when later glyphs have styles', () => {
+    const terminal = new Terminal({ cols: 32, rows: 5, allowProposedApi: true })
+    try {
+      writeSync(
+        terminal,
+        '\x1b[1m \u00a0\x1b[22m›\x1b[1mX\x1b[0m\x1b7\r\n' +
+          '\x1b[31m  \x1b[39mplain \x1b[32mlater\x1b[0m\x1b8'
+      )
+      const context = readTerminalCursorLineContext(terminal, terminal.rows)
+      expect(context?.promptGlyphBoldRows).toEqual([false])
+      expect(context?.rowsBelowCustomForeground?.[0]).toBe(false)
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('finds styled first glyphs after unstyled blank cells', () => {
+    const terminal = new Terminal({ cols: 32, rows: 5, allowProposedApi: true })
+    try {
+      writeSync(terminal, '  \x1b[1m›\x1b[0m typed\x1b7\r\n  \x1b[31mfooter\x1b[0m\x1b8')
+      const context = readTerminalCursorLineContext(terminal, terminal.rows)
+      expect(context?.promptGlyphBoldRows).toEqual([true])
+      expect(context?.rowsBelowCustomForeground?.[0]).toBe(true)
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('keeps an unwritten cell between typed glyphs as a space', () => {
+    const terminal = new Terminal({ cols: 12, rows: 5, allowProposedApi: true })
+    try {
+      writeSync(terminal, 'a\x1b[3Gb')
+      expect(readTerminalCursorLineContext(terminal, terminal.rows)?.typedRows).toEqual(['a b'])
+    } finally {
+      terminal.dispose()
+    }
+  })
+})

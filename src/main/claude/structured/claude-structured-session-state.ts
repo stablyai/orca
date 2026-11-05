@@ -12,7 +12,7 @@ import type {
   openClaudeStreamJsonConnection
 } from '../claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
-import type { StructuredLaunchRequest } from '../../runtime/structured-agent-launch-composition'
+import type { StructuredLaunchRequest } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from '../claude-prompt-registry'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'

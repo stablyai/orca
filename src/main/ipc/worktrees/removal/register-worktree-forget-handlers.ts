@@ -11,7 +11,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getLocalPtyProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
-import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
+import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
@@ -40,7 +40,7 @@ import {
   assertWslMoveRepoWritable,
   isWslMoveSourceHost
 } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { teardownStops } from '../../../runtime/owned-session-teardown-policy'
+import { teardownStops } from '../../../runtime/workspaces/removal/owned-session-teardown-policy'
 
 export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, worktreeRemovalsInFlight } = context

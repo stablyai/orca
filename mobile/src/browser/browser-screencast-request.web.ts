@@ -17,7 +17,7 @@ export type {
 } from './browser-screencast-request-parameters'
 
 // Worst-case quality 72 random-noise JPEG: real Page.startScreencast sweep (2026-09-20), 143 viewports from 320–1400×480–1600, 111 fit budget.
-// Measured 0.543986–0.552964 bytes/pixel; add 0.007036 (~1.3%) encoder-version margin. Re-run mobile-web-app-frame-budget-sweep.test.ts to change.
+// Measured 0.543986–0.552964 bytes/pixel; add 0.007036 (~1.3%) encoder-version margin. These are historical measurements, not a maintained encoder benchmark.
 // One large-frame sample understates small viewport costs. Known unswept device outlier: 1/41 dropped at 402×593 needs ~0.5649; shell still drops overflow (C6 ruling 1).
 export const WORST_CASE_JPEG_BYTES_PER_PIXEL = 0.56
 

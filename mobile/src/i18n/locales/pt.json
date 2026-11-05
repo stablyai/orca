@@ -193,6 +193,11 @@
       "sendQueueHint": "Executa depois do turno atual",
       "sendSteerHint": "Entra no que o agente está fazendo agora"
     },
+    "contextUsage": {
+      "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
+      "title": "Contexto",
+      "estimated": "Estimado a partir da última resposta."
+    },
     "composerAttachments": {
       "attachedImage": "Imagem anexada",
       "file": "Arquivo",
@@ -296,6 +301,13 @@
       "unnamedServer": "o servidor remoto",
       "update": "O Orca ({{machine}}) reiniciou para uma atualização enquanto esta resposta estava em andamento."
     },
+    "interruptedContinue": {
+      "failed": "Não foi possível continuar este chat. Tente novamente ou envie uma mensagem.",
+      "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída."
+    },
+    "sendError": {
+      "dismiss": "Descartar"
+    },
     "permission": {
       "needsAccessTo": "Precisa de acesso a: ",
       "newerVersionRequired": "Esta solicitação requer uma versão mais recente do Orca.",
@@ -379,7 +391,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Padrão",
-      "notReportedMarker": "Não informado"
+      "notReportedMarker": "Não informado",
+      "moreModels": "Mais modelos",
+      "fewerModels": "Menos modelos"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Enviado ao agente — não confirmado"
@@ -816,7 +830,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
-      "openImage": "Abrir imagem"
+      "openImage": "Abrir imagem",
+      "wrapLines": "Quebrar linhas",
+      "disableLineWrap": "Desativar quebra de linha"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fechar painel inferior"
@@ -1247,6 +1263,10 @@
       "retryLoading": "Tentar carregar {{path}} novamente",
       "unavailable": "Indisponível no celular"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Copiar Nome",
+      "copyRelativePath": "Copiar Caminho Relativo"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código-fonte Markdown carregado",
       "copySource": "Copiar código-fonte Markdown",
@@ -1590,7 +1610,7 @@
       "notificationsTitle": "Saiba quando um agente precisar de você",
       "openInChatUi": "Abrir sessões na interface de chat",
       "openInTerminal": "Abrir sessões no terminal",
-      "sessionViewDescription": "Escolha se as sessões de agentes compatíveis devem abrir no terminal ou na interface de chat neste dispositivo. Toque e segure uma aba de sessão para alternar a visualização ou altere o padrão depois em Configurações.",
+      "sessionViewDescription": "Escolha se as sessões de agentes compatíveis devem abrir no terminal ou na interface de chat neste dispositivo. Toque e segure uma aba de sessão para alternar a visualização ou altere o padrão a qualquer momento em Configurações → Interface de Chat.",
       "sessionViewTitle": "Como as sessões devem ser abertas?",
       "skipNotifications": "Pular notificações por enquanto",
       "useChatUi": "Usar interface de chat"
@@ -1822,13 +1842,8 @@
       "noUpdate": "Sem atualização há {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "De {{sender}}",
-      "fromMore": "De {{sender}} +{{count}}",
-      "fromUnnamed": "De um agente",
-      "messageFrom": "Mensagem de {{sender}}",
-      "messageFromMore": "Mensagem de {{sender}} +{{count}}",
-      "messageFromUnnamed": "Mensagem de um agente",
-      "unnamedSender": "um agente"
+      "unnamedSender": "um agente",
+      "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Falha ao criar terminal",
@@ -1858,6 +1873,7 @@
       "countWorkflows_one": "{{count}} fluxo de trabalho",
       "countWorkflows_other": "{{count}} fluxos de trabalho",
       "detailsUnavailable": "Os detalhes da tarefa não estão disponíveis para esta sessão.",
+      "outputFile": "Saída: {{value0}}",
       "groupAgents": "Agentes",
       "groupMonitors": "Monitores",
       "groupShell": "Shell",
@@ -2211,8 +2227,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Comandos não podem ser salvos em uma mensagem na fila.",
-      "editing": "Editando mensagem",
-      "editingAttributed": "Editando mensagem · {{attribution}}"
+      "editing": "Editando mensagem"
     },
     "quickCommandEditorForm": {
       "action": "Ação",

@@ -189,6 +189,11 @@
       "sendQueueHint": "現在のターンの後に実行します",
       "sendSteerHint": "Agent が今行っている作業に加えます"
     },
+    "contextUsage": {
+      "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
+      "title": "コンテキスト",
+      "estimated": "最後の応答から推定。"
+    },
     "composerAttachments": {
       "attachedImage": "添付画像",
       "file": "ファイル",
@@ -292,6 +297,13 @@
       "unnamedServer": "リモートサーバー",
       "update": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。"
     },
+    "interruptedContinue": {
+      "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
+      "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。"
+    },
+    "sendError": {
+      "dismiss": "閉じる"
+    },
     "permission": {
       "needsAccessTo": "アクセスが必要なパス: ",
       "newerVersionRequired": "このリクエストには新しいバージョンの Orca が必要です。",
@@ -375,7 +387,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "既定",
-      "notReportedMarker": "未報告"
+      "notReportedMarker": "未報告",
+      "moreModels": "その他のモデル",
+      "fewerModels": "表示を減らす"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Agent に送信済み — 未確認"
@@ -774,7 +788,9 @@
     },
     "markdownBlocks": {
       "copyCode": "コードをコピーする",
-      "openImage": "画像を開く"
+      "openImage": "画像を開く",
+      "wrapLines": "行を折り返す",
+      "disableLineWrap": "行の折り返しを無効にする"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "ドロワーを閉じる"
@@ -1204,6 +1220,10 @@
       "retryLoading": "{{path}} の読み込みを再試行",
       "unavailable": "モバイルでは利用不可"
     },
+    "fileExplorerRowActions": {
+      "copyName": "名前をコピー",
+      "copyRelativePath": "相対パスをコピー"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",
       "copySource": "Markdown ソースをコピー",
@@ -1547,7 +1567,7 @@
       "notificationsTitle": "Agent からの呼びかけを見逃さない",
       "openInChatUi": "セッションをチャット UI で開く",
       "openInTerminal": "セッションをターミナルで開く",
-      "sessionViewDescription": "この端末で、対応する Agent セッションをターミナルとチャット UI のどちらで開くか選択してください。セッションタブを長押しすると表示を切り替えられます。デフォルトは後から「設定」で変更できます。",
+      "sessionViewDescription": "この端末で、対応する Agent セッションをターミナルとチャット UI のどちらで開くか選択してください。セッションタブを長押しすると表示を切り替えられます。デフォルトはいつでも「設定」→「Chat UI」で変更できます。",
       "sessionViewTitle": "セッションの表示方法は？",
       "skipNotifications": "今は通知を有効にしない",
       "useChatUi": "チャット UI を使用"
@@ -1765,13 +1785,8 @@
       "noUpdate": "{{value0}}更新なし"
     },
     "agentMessageAttribution": {
-      "from": "{{sender}} から",
-      "fromMore": "{{sender}} ほか {{count}} 名から",
-      "fromUnnamed": "Agent から",
-      "messageFrom": "{{sender}} からのメッセージ",
-      "messageFromMore": "{{sender}} ほか {{count}} 名からのメッセージ",
-      "messageFromUnnamed": "Agent からのメッセージ",
-      "unnamedSender": "Agent"
+      "unnamedSender": "Agent",
+      "fromSender": "送信元:"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "ターミナルの作成に失敗しました。",
@@ -1796,6 +1811,7 @@
       "countWorkflows_one": "{{count}} ワークフロー",
       "countWorkflows_other": "{{count}} ワークフロー",
       "detailsUnavailable": "このセッションではタスクの詳細は利用できません。",
+      "outputFile": "出力: {{value0}}",
       "groupAgents": "Agent",
       "groupMonitors": "モニター",
       "groupShell": "シェル",
@@ -2139,8 +2155,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "キュー内のメッセージにコマンドは保存できません。",
-      "editing": "メッセージを編集中",
-      "editingAttributed": "メッセージを編集中 · {{attribution}}"
+      "editing": "メッセージを編集中"
     },
     "quickCommandEditorForm": {
       "action": "操作",

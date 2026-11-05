@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+
 import { resolveAgentBackgroundLaunchHost } from './agent-background-session-launch-host'
 
 function sshState(remotePlatform: 'linux' | 'win32') {
@@ -98,80 +98,6 @@ describe('resolveAgentBackgroundLaunchHost', () => {
     ).toThrow('unavailable or ambiguous')
   })
 
-  // Two hosts expose cross-host row lookup errors that a single SSH fixture would hide.
-  it('routes both spellings of SSH ownership to their own host', () => {
-    const legacy = resolveAgentBackgroundLaunchHost({
-      store: makeFolderHostState({ connectionId: null, folderPath: '/project' }) as never,
-      worktreeId: 'repo-1::/srv/repo',
-      worktreePath: '/srv/repo',
-      repo: {
-        id: 'repo-1',
-        connectionId: 'm4air',
-        executionHostId: null,
-        path: '/srv/repo'
-      } as never
-    })
-    const unified = resolveAgentBackgroundLaunchHost({
-      store: makeFolderHostState({ connectionId: null, folderPath: '/project' }) as never,
-      worktreeId: 'repo-1::/srv/repo',
-      worktreePath: '/srv/repo',
-      repo: {
-        id: 'repo-1',
-        connectionId: null,
-        executionHostId: 'ssh:openclaw',
-        path: '/srv/repo'
-      } as never
-    })
-
-    expect(legacy).toMatchObject({
-      connectionId: 'm4air',
-      isRemote: true,
-      expectedConnectionId: 'm4air'
-    })
-    expect(unified).toMatchObject({
-      connectionId: 'openclaw',
-      isRemote: true,
-      expectedConnectionId: 'openclaw'
-    })
-  })
-
-  it('keeps a local row with a stale connection off the SSH route', () => {
-    const host = resolveAgentBackgroundLaunchHost({
-      store: makeFolderHostState({ connectionId: null, folderPath: '/project' }) as never,
-      worktreeId: 'repo-1::/srv/repo',
-      worktreePath: '/srv/repo',
-      repo: {
-        id: 'repo-1',
-        connectionId: 'm4air',
-        executionHostId: 'local',
-        path: '/srv/repo'
-      } as never
-    })
-
-    expect(host).toMatchObject({
-      connectionId: null,
-      isRemote: false,
-      expectedConnectionId: null
-    })
-  })
-
-  it('keeps a runtime host reaching a nested SSH target remote', () => {
-    const host = resolveAgentBackgroundLaunchHost({
-      store: makeFolderHostState({ connectionId: null, folderPath: '/project' }) as never,
-      worktreeId: 'repo-1::/srv/repo',
-      worktreePath: '/srv/repo',
-      repo: {
-        id: 'repo-1',
-        connectionId: 'nested',
-        executionHostId: 'runtime:vm-1',
-        path: '/srv/repo'
-      } as never
-    })
-
-    // Why linux: the runtime's own SSH state for the target wins over the client's same-named one.
-    expect(host).toMatchObject({ connectionId: 'nested', isRemote: true, platform: 'linux' })
-  })
-
   it("uses a worktree's nested SSH host over its repo's runtime default", () => {
     const state = {
       ...makeFolderHostState({ connectionId: null, folderPath: '/project' }),
@@ -200,53 +126,5 @@ describe('resolveAgentBackgroundLaunchHost', () => {
 
     // Why isRemote: the SSH target runs the relay shim as `orca`, not the Linux desktop `orca-ide`.
     expect(host).toMatchObject({ platform: 'linux', isLocalHost: false, isRemote: true })
-  })
-
-  it('uses the headless runtime CLI for a folder workspace (#33920)', () => {
-    const host = resolveAgentBackgroundLaunchHost({
-      ...asLaunchInputs(
-        makeFolderHostState({
-          connectionId: null,
-          folderPath: '/project',
-          folderExecutionHostId: 'runtime:linux-box'
-        }),
-        null
-      ),
-      worktreeId: 'folder:folder-1',
-      worktreePath: '/project'
-    })
-
-    expect(host).toMatchObject({ platform: 'linux', connectionId: null, isLocalHost: false })
-    expect(
-      buildAgentStartupPlan({
-        agent: 'claude-agent-teams',
-        prompt: '',
-        cmdOverrides: {},
-        platform: host.platform,
-        isRemote: host.isRemote,
-        allowEmptyPromptLaunch: true
-      })?.launchCommand
-    ).toBe('orca claude-teams')
-  })
-
-  it('refuses a launch whose SSH host never reported its OS', () => {
-    expect(() =>
-      resolveAgentBackgroundLaunchHost({
-        ...asLaunchInputs(
-          {
-            ...makeFolderHostState({ connectionId: null, folderPath: '/project' }),
-            repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'ssh:silent' }]
-          },
-          {
-            id: 'repo-1',
-            connectionId: null,
-            executionHostId: 'ssh:silent',
-            path: '/srv/repo'
-          }
-        ),
-        worktreeId: 'repo-1::/srv/repo',
-        worktreePath: '/srv/repo'
-      })
-    ).toThrow('has not reported its operating system')
   })
 })

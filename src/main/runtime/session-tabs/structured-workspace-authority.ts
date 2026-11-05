@@ -28,10 +28,10 @@ import {
 import {
   isRuntimeFolderWorkspaceIdForRepo,
   getRuntimeFolderWorkspaceRootId
-} from '../runtime-folder-workspace'
-import { scanRuntimeWorktreesUntilNotOvertaken } from '../runtime-witnessed-worktree-scan'
+} from '../workspaces/catalog/runtime-folder-workspace'
+import { scanRuntimeWorktreesUntilNotOvertaken } from '../workspaces/catalog/runtime-witnessed-worktree-scan'
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
+import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 
 export class StructuredWorkspaceUnavailable extends Error {
   constructor(

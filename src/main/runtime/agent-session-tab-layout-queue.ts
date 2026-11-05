@@ -1,4 +1,4 @@
-import { savedSessionId } from './saved-structured-agent-session-restoration'
+import { savedSessionId } from './agent-session/lifecycle/saved-structured-agent-session-restoration'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'

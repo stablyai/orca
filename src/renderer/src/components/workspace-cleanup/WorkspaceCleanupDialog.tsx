@@ -38,6 +38,7 @@ import {
 } from './use-workspace-cleanup-dialog-lifecycle'
 import { useWorkspaceCleanupFacetRows } from './use-workspace-cleanup-facet-rows'
 import { useWorkspaceCleanupGitEvidence } from './use-workspace-cleanup-git-evidence'
+import { useWorkspaceCleanupIgnore } from './use-workspace-cleanup-ignore'
 import { useWorkspaceCleanupRowOrder } from './use-workspace-cleanup-row-order'
 import { openWorkspaceCleanupForgetLocally } from './workspace-cleanup-forget-locally-button'
 import {
@@ -69,7 +70,6 @@ function WorkspaceCleanupDialogContent({
   const spaceError = useAppStore((s) => s.workspaceSpaceScanError)
   const repos = useAppStore((s) => s.repos)
   const markCandidateViewed = useAppStore((s) => s.markWorkspaceCleanupCandidateViewed)
-  const dismissCandidates = useAppStore((s) => s.dismissWorkspaceCleanupCandidates)
   const refreshWorkspaceSpace = useAppStore((s) => s.refreshWorkspaceSpace)
   const workspaceSpaceScanning = useAppStore((s) => s.workspaceSpaceScanning)
   const workspaceSpaceProgress = useAppStore((s) => s.workspaceSpaceScanProgress)
@@ -225,32 +225,7 @@ function WorkspaceCleanupDialogContent({
     pruneVanishedSelections()
   }, [candidateIdentities, deletingIdentities, loading])
 
-  const ignoreCandidate = useCallback(
-    (candidate: WorkspaceCleanupCandidate) => {
-      void dismissCandidates([candidate])
-        .then(() => {
-          if (mountedRef.current) {
-            setSelectedIds((current) => {
-              const next = new Set(current)
-              next.delete(getWorkspaceCleanupCandidateIdentity(candidate))
-              return next
-            })
-          }
-        })
-        .catch((err: unknown) => {
-          if (mountedRef.current) {
-            toast.error(
-              translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7f451a3e2c',
-                'Could not ignore cleanup suggestion'
-              ),
-              { description: err instanceof Error ? err.message : String(err) }
-            )
-          }
-        })
-    },
-    [dismissCandidates, mountedRef, setSelectedIds]
-  )
+  const { ignoreCandidate, restoreCandidate } = useWorkspaceCleanupIgnore(setSelectedIds)
 
   const toggleExpandedRow = useCallback((identity: string) => {
     setExpandedRowIds((current) => toggleSetMember(current, identity))
@@ -344,14 +319,9 @@ function WorkspaceCleanupDialogContent({
         ) : !removal.confirming ? (
           <>
             <WorkspaceCleanupDialogHeader
-              selectedCount={selectedCount}
               loading={loading}
               scannedAt={scan?.scannedAt ?? null}
               scanProgress={scanProgress}
-              deleteDisabled={
-                selectedCount === 0 || removal.removalProgress !== null || removal.removalInFlight
-              }
-              onDeleteSelected={() => openConfirmRemove(selectedCandidates)}
               onRefresh={() => startWorkspaceCleanupScan({ notifyWhenReady: true })}
               onClose={closeModal}
             />
@@ -371,7 +341,12 @@ function WorkspaceCleanupDialogContent({
               facetPanelOpen={facetPanelOpen}
               onFacetPanelOpenChange={setFacetPanelOpen}
               selectableCount={selectableIdentities.length}
-              selectedCount={selectedSelectableCount}
+              selectedSelectableCount={selectedSelectableCount}
+              selectedCount={selectedCount}
+              deleteDisabled={
+                selectedCount === 0 || removal.removalProgress !== null || removal.removalInFlight
+              }
+              onDeleteSelected={() => openConfirmRemove(selectedCandidates)}
               spaceScanning={workspaceSpaceScanning}
               spaceProgress={workspaceSpaceProgress}
               gitPendingCount={gitEvidence.pendingWorktreeIds.size}
@@ -386,7 +361,7 @@ function WorkspaceCleanupDialogContent({
                 <WorkspaceCleanupRowList
                   rows={rows}
                   now={facetNow}
-                  scannedCount={candidates.length}
+                  scannedCandidates={candidates}
                   hasScanned={scan != null}
                   loading={loading}
                   deletionPhaseByIdentity={deletionPhaseByIdentity}
@@ -401,6 +376,7 @@ function WorkspaceCleanupDialogContent({
                   onToggleSelected={toggleSelectedRow}
                   onView={handleViewCandidate}
                   onIgnore={ignoreCandidate}
+                  onRestore={restoreCandidate}
                   onRemove={handleRemoveRow}
                   onForgetLocally={openWorkspaceCleanupForgetLocally}
                   onDeleteAnyway={removal.confirmUnverifiedRemoval}

@@ -1,3 +1,4 @@
+import { completePRCheckGraphQLResponse } from '../../shared/github/complete-pr-check-test-fixture'
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -78,6 +79,16 @@ describe('getPRForBranch', () => {
           statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'CANCELLED' }]
         })
       })
+      .mockResolvedValueOnce(
+        completePRCheckGraphQLResponse(7, 'head-oid', [
+          {
+            __typename: 'CheckRun',
+            status: 'COMPLETED',
+            conclusion: 'CANCELLED',
+            checkSuite: { databaseId: 1 }
+          }
+        ])
+      )
     const pr = await getPRForBranch('/repo-root', 'feature/test')
     expect(ghExecFileAsyncMock.mock.calls.slice(0, 2).map(([args]) => args.slice(0, 2))).toEqual([
       ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10'],
@@ -130,7 +141,12 @@ describe('getPRForBranch', () => {
       ['pr', 'list'],
       ['pr', 'view']
     ])
-    expect(pr).toMatchObject({ number: 7, checksStatus: 'failure' })
+    expect(pr).toMatchObject({
+      number: 7,
+      title: 'Partial check page',
+      headSha: 'head-oid',
+      checksStatus: 'neutral'
+    })
     expect(pr?.checksSummary).toBeUndefined()
   })
 
@@ -549,7 +565,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+        'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )

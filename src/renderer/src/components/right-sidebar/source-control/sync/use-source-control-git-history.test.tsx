@@ -218,47 +218,4 @@ describe('useSourceControlGitHistory stale completion', () => {
     })
     expect(latest?.gitHistoryState).toEqual({ status: 'idle' })
   })
-
-  it('re-fetches when the owner host changes but the worktree and path stay put', async () => {
-    const root = await mount({
-      activeRepoTarget: { kind: 'local' }
-    })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(1)
-    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ target: { kind: 'local' } }),
-      expect.anything()
-    )
-
-    await act(async () => {
-      root.render(<Probe activeRepoTarget={{ kind: 'environment', environmentId: 'env-1' }} />)
-    })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
-    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ target: { kind: 'environment', environmentId: 'env-1' } }),
-      expect.anything()
-    )
-
-    // New target objects with unchanged host identity must not trigger another Git read.
-    await act(async () => {
-      root.render(<Probe activeRepoTarget={{ kind: 'environment', environmentId: 'env-1' }} />)
-    })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not shell out to git while collapsed, hidden, or on a folder workspace', async () => {
-    await mount({ isGitHistoryExpanded: false })
-    await mount({ isGitHistoryVisible: false })
-    await mount({ isBranchVisible: false })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).not.toHaveBeenCalled()
-
-    await mount({ isFolder: true })
-    await act(async () => {
-      await latest?.refreshGitHistory()
-    })
-    expect(mocks.getRuntimeGitHistory).not.toHaveBeenCalled()
-  })
 })

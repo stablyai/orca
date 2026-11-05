@@ -1,3 +1,8 @@
+import type { OrchestrationDb } from './db'
+import type { OrchestrationCliCommand } from './cli-command'
+import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
+import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
+import type { SenderSnapshotResolver } from './agent-message-sender'
 /** What the structured mailbox lane needs from a chat host: ordinary sends, and reads of what became of them. */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -37,4 +42,22 @@ export type StructuredMailboxPointerHost = {
   currentFence: (sessionId: string) => number | null
   /** Coalesced journal publications of a session; returns the unsubscribe. */
   watchJournal: (sessionId: string, onActivity: () => void) => () => void
+}
+
+export type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
+  getDb: () => OrchestrationDb | null
+  getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
+  /** Resolve dispatch or direct-worker mail to its session; null delegates to the PTY lane. */
+  resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
+  redeliver?: (mailboxHandle: string) => void
+  /** Whether nothing can own the mailbox again; read from the database unless a test supplies it. */
+  mailboxEnded?: (mailboxHandle: string) => boolean
+  /** Why no chat resolves a mailbox; read from the database unless a test supplies it. */
+  unresolvedCustody?: (mailboxHandle: string) => 'elsewhere' | 'unverifiable'
+  /** The CLI name the recipient runs, for the reply line and the oversized-message pointer. */
+  getCliCommand: () => OrchestrationCliCommand
+  /** What Orca calls a sender now, snapshotted onto the message; null when it has no name. */
+  senderSnapshotReader?: () => SenderSnapshotResolver
+  senderSnapshot: SenderSnapshotResolver
+  host: StructuredMailboxPointerHost
 }

@@ -1,5 +1,5 @@
-import { MAX_TAIL_CHARS } from './terminal-tail-limits'
-import type { TerminalTailWaitState } from './terminal-wait-tail-state'
+import { MAX_TAIL_CHARS } from './terminal/output/tail/terminal-tail-limits'
+import type { TerminalTailWaitState } from './terminal/wait/terminal-wait-tail-state'
 
 /** Retain chunks and join once per throttled scan; per-frame concatenation/slicing flattened the full 256KiB window after saturation. */
 export type WaitBlockedAppendedCarry = {

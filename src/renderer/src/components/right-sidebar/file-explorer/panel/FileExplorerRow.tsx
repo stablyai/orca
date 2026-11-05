@@ -12,7 +12,6 @@ import {
 } from '@/lib/workspace-file-drag'
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
-import { RENAME_HOTSPOT_ATTR } from '../tree/file-explorer-dir-toggle-timing'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { useFileExplorerRowDrag } from '../mutations/useFileExplorerRowDrag'
 import { translate } from '@/i18n/i18n'
@@ -228,8 +227,6 @@ export function FileExplorerRow({
             </>
           )}
           <span
-            // Suppress directory toggling on the second click of a filename double-click rename.
-            {...{ [RENAME_HOTSPOT_ATTR]: '' }}
             className={cn(
               'truncate',
               isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
@@ -243,15 +240,6 @@ export function FileExplorerRow({
                   ? { color: 'var(--git-decoration-ignored)' }
                   : undefined
             }
-            onDoubleClick={(e) => {
-              // Outside-link rows are browse-only, so their name double-click pins the preview instead.
-              if (node.outsideProject) {
-                return
-              }
-              // Keep icon/empty-row double-clicks available for pin preview and directory toggling.
-              e.stopPropagation()
-              onStartRename(node)
-            }}
           >
             {node.name}
           </span>

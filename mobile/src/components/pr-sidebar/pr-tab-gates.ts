@@ -1,3 +1,5 @@
+import { isCompletePRCheckOwner } from '../../../../src/shared/github/complete-pr-check-owner'
+import { getProviderChecksOutcome } from '../../../../src/shared/source-control/checks/provider-check-summary'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
@@ -34,16 +36,17 @@ export function buildPrGateRows(input: GateInput): PrGateRow[] {
   // Null details means still loading; a placeholder means the read failed.
   const detailsLoading = input.details === null
   return [
-    checksGate(input.checks, input.checksError),
+    checksGate(input.checks, input.checksError, input.pr),
     threadsGate(details, detailsLoading, input.botAuthorOverrides),
     approvalsGate(input.pr, details, detailsLoading),
     conflictsGate(input.pr, details?.item.baseRefName ?? null)
   ]
 }
 
-function checksGate(checks: PRCheckDetail[], checksError: string | null): PrGateRow {
+function checksGate(checks: PRCheckDetail[], checksError: string | null, pr: PRInfo): PrGateRow {
   const base = { key: 'checks', target: 'checks' } as const
-  if (checksError !== null) {
+  const complete = isCompletePRCheckOwner(pr)
+  if ((!complete && checksError !== null) || (complete && !pr.checksSummary)) {
     return {
       ...base,
       tone: 'idle',
@@ -51,23 +54,30 @@ function checksGate(checks: PRCheckDetail[], checksError: string | null): PrGate
       subtitle: checksError
     }
   }
+  const ownerSummary = complete ? pr.checksSummary : undefined
   const broken = checks.filter((check) => checkOutcome(check) === 'failure')
-  if (broken.length > 0) {
+  const brokenCount = ownerSummary
+    ? ownerSummary.failed - (ownerSummary.cancelled ?? 0)
+    : broken.length
+  if (brokenCount > 0) {
     return {
       ...base,
       tone: 'blocking',
       title:
-        broken.length === 1
+        brokenCount === 1
           ? translate('pullRequest.gates.checksFailing_one', '{{count}} check failing', {
-              count: broken.length
+              count: brokenCount
             })
           : translate('pullRequest.gates.checksFailing_other', '{{count}} checks failing', {
-              count: broken.length
+              count: brokenCount
             }),
-      subtitle: broken.map((check) => check.name).join(', ')
+      subtitle: broken.length > 0 ? broken.map((check) => check.name).join(', ') : null
     }
   }
-  const summary = summarizePRChecks(checks)
+  const rowSummary = summarizePRChecks(checks)
+  const summary = ownerSummary
+    ? { ...ownerSummary, outcome: getProviderChecksOutcome(ownerSummary), label: rowSummary.label }
+    : rowSummary
   if (summary.pending > 0) {
     return {
       ...base,
@@ -93,7 +103,7 @@ function checksGate(checks: PRCheckDetail[], checksError: string | null): PrGate
       ...base,
       tone: 'idle',
       title: translate('pullRequest.checkStatus.cancelled', 'Cancelled'),
-      subtitle: summary.label
+      subtitle: checks.length > 0 ? rowSummary.label : null
     }
   }
   if (summary.total === 0) {

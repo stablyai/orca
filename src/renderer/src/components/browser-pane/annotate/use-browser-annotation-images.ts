@@ -6,7 +6,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { formatClipboardImagePasteError } from '@/components/terminal-pane/terminal-pane-paste-execution'
 import { resolveTerminalPasteRuntimeEnvironmentId } from '@/components/terminal-pane/terminal-paste-runtime'
-import { clipboardEventImageFile } from '@/components/native-chat/native-chat-clipboard-payload'
+import { clipboardEventImageFile } from '../../../../../shared/native-chat/input/native-chat-clipboard-event'
 import { useNativeChatComposerAttachmentPreviews } from '@/components/native-chat/use-native-chat-composer-attachment-previews'
 import type { NativeChatComposerImageAttachment } from '@/components/native-chat/NativeChatComposerField'
 

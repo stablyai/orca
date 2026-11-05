@@ -285,6 +285,41 @@ describe('the idle sweep', () => {
     )
   })
 
+  // Pi workers can start between the provider's reports, so only a fresh answer at stop time counts.
+  it('stops a running agent only after its provider confirms nothing is still working', async () => {
+    await foundRestTestChat(rig)
+    rig.adapter.confirmIdle.mockResolvedValueOnce('busy').mockResolvedValueOnce('unknown')
+    rig.clock.now += IDLE_MS + 1
+
+    await sweepOnce(rig.host)
+    expect(rig.adapter.confirmIdle).toHaveBeenCalledWith(SESSION)
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+    rig.clock.now += IDLE_MS + 1
+    await sweepOnce(rig.host)
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+    rig.adapter.confirmIdle.mockResolvedValueOnce('idle')
+    await sweepOnce(rig.host)
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
+  })
+
+  // The provider is asked outside the session lock, so a send can land while its answer is pending.
+  it('keeps an agent whose chat got a message while its provider was answering', async () => {
+    await foundRestTestChat(rig)
+    rig.host.collaboratorsForTests().lifetime.idleSweep.dispose()
+    const answer = Promise.withResolvers<'idle'>()
+    rig.adapter.confirmIdle.mockReturnValueOnce(answer.promise)
+    rig.clock.now += IDLE_MS + 1
+
+    const swept = sweepOnce(rig.host)
+    await vi.waitFor(() => expect(rig.adapter.confirmIdle).toHaveBeenCalledWith(SESSION))
+    expect((await rig.host.send(CALLER, restTestSend('still here', fence()))).ok).toBe(true)
+    answer.resolve('idle')
+    await swept
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+  })
+
   it('keeps a child an unanswered prompt waits on (P2-22 i)', async () => {
     await foundRestTestChat(rig)
     providerEvents().appendItem(
@@ -342,6 +377,7 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
       childWorkOpen: () => false,
       hasOpenDispatch: () => false,
       providerHoldsDispatch: () => false,
+      confirmIdle: () => undefined,
       stopAgent,
       stopStartingAgent: stopAgent,
       closeConversation,

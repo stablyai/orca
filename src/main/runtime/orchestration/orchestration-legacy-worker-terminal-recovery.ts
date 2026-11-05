@@ -1,4 +1,4 @@
-import { sessionIdFromStructuredWorkerIncarnation } from '../structured-worker-identity'
+import { sessionIdFromStructuredWorkerIncarnation } from './terminal-authority/structured-sessions/structured-worker-identity'
 import {
   isPtyIncarnationId,
   type PtyIncarnationId
