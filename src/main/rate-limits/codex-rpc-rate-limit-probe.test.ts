@@ -2,16 +2,12 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import {
   readCodexRateLimitsViaRpc,
-  readCodexAccountUsageViaRpc,
   type CodexRpcRateLimitChild
 } from './codex-rpc-rate-limit-probe'
 
 function makeRpcChild(
   rateLimitsReply: Record<string, unknown> = {
     result: { rateLimits: { primary: { usedPercent: 17 } } }
-  },
-  accountReply: Record<string, unknown> = {
-    result: { account: { type: 'chatgpt', email: 'work@example.com' } }
   }
 ): CodexRpcRateLimitChild {
   const child = new EventEmitter() as EventEmitter & CodexRpcRateLimitChild
@@ -25,14 +21,6 @@ function makeRpcChild(
           ;(child.stdout as EventEmitter).emit(
             'data',
             Buffer.from(`${JSON.stringify({ id: message.id, result: {} })}\n`)
-          )
-        })
-      }
-      if (message.method === 'account/read') {
-        queueMicrotask(() => {
-          ;(child.stdout as EventEmitter).emit(
-            'data',
-            Buffer.from(`${JSON.stringify({ id: message.id, ...accountReply })}\n`)
           )
         })
       }
@@ -111,28 +99,5 @@ describe('Codex RPC rate-limit probe error classification', () => {
     )
     expect(result.status).toBe('error')
     expect(result.usageMetadata).toBeUndefined()
-  })
-})
-
-describe('chat home-scoped RPC usage probe', () => {
-  it('reads identity plus usage, preserving unsupported RPC errors and API-key authentication', async () => {
-    const probe = (child: CodexRpcRateLimitChild) =>
-      readCodexAccountUsageViaRpc({
-        child,
-        codexCommand: 'codex',
-        initTimeoutMs: 1000,
-        rpcTimeoutMs: 1000,
-        terminate: async () => {}
-      })
-    await expect(probe(makeRpcChild())).resolves.toMatchObject({
-      account: { email: 'work@example.com' },
-      rateLimits: { status: 'ok', session: { usedPercent: 17 } }
-    })
-    await expect(
-      probe(makeRpcChild({ error: { code: -32601, message: 'Unknown method' } }))
-    ).rejects.toEqual({ code: -32601, message: 'Unknown method' })
-    await expect(
-      probe(makeRpcChild({}, { result: { account: { type: 'apiKey' } } }))
-    ).rejects.toMatchObject({ message: expect.stringContaining('API key') })
   })
 })

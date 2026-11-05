@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import type { AgentSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
+import type {
+  AgentSessionAccountUsage,
+  AgentSessionUsageAccount
+} from '../../../../shared/agent-session/agent-session-account-usage'
+import type { CodexRateLimitResetOutcome } from '../../../../shared/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { ProviderIdentityCard } from '../status-bar/ProviderIdentityCard'
@@ -14,24 +18,47 @@ import { formatResetCreditExpiry } from '../status-bar/tooltip'
 
 type UsageResult = Extract<AgentSessionAccountUsage, { status: 'ok' }>
 
-function chatAccountLabel(label: string): string {
-  return label === 'System default'
+function resetOutcomeNotice(outcome: CodexRateLimitResetOutcome): string {
+  switch (outcome) {
+    case 'reset':
+      return translate('components.native-chat.usage.outcome.reset', 'Codex limits were reset.')
+    case 'nothingToReset':
+      return translate(
+        'components.native-chat.usage.outcome.nothingToReset',
+        'Nothing to reset right now.'
+      )
+    case 'noCredit':
+      return translate(
+        'components.native-chat.usage.outcome.noCredit',
+        'No Codex reset credit is left on this account.'
+      )
+    case 'alreadyRedeemed':
+      return translate(
+        'components.native-chat.usage.outcome.alreadyRedeemed',
+        'That reset credit was already used.'
+      )
+  }
+}
+
+function chatAccountLabel(account: AgentSessionUsageAccount): string {
+  return account.kind === 'system'
     ? translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')
-    : label === 'Current shared account'
-      ? translate('components.native-chat.usage.sharedAccount', 'Current shared account')
-      : label
+    : (account.email ??
+        translate('components.native-chat.usage.sharedAccount', 'Current shared account'))
 }
 
 export function NativeChatAccountUsageCard({
   result,
+  notice,
   target,
   onDismiss,
   onRetry
 }: {
   result: AgentSessionAccountUsage | null
+  notice: string | null
   target: RuntimeClientTarget
   onDismiss: () => void
-  onRetry: () => void
+  onRetry: (notice?: string | null) => void
 }): React.JSX.Element {
   const display = normalizeUsagePercentageDisplay(useAppStore((s) => s.usagePercentageDisplay))
   const message =
@@ -73,17 +100,18 @@ export function NativeChatAccountUsageCard({
             </div>
             <ProviderIdentityCard
               p={result.rateLimits}
-              accountLabel={chatAccountLabel(result.accountLabel)}
+              accountLabel={chatAccountLabel(result.account)}
               usagePercentageDisplay={display}
               footer={<ChatUsageReset result={result} target={target} onRefresh={onRetry} />}
             />
+            {notice ? <div className="mt-2 text-xs text-muted-foreground">{notice}</div> : null}
           </>
         ) : (
           <div className="flex items-center gap-2">
             {result === null ? <Loader2 className="size-4 animate-spin" /> : null}
             {message}
             {result?.status === 'failed' ? (
-              <Button variant="outline" size="xs" onClick={onRetry}>
+              <Button variant="outline" size="xs" onClick={() => onRetry()}>
                 {translate('components.native-chat.usage.retry', 'Retry')}
               </Button>
             ) : null}
@@ -101,7 +129,7 @@ function ChatUsageReset({
 }: {
   result: UsageResult
   target: RuntimeClientTarget
-  onRefresh: () => void
+  onRefresh: (notice: string | null) => void
 }): React.JSX.Element | null {
   const [confirm, setConfirm] = useState(false)
   const [skip, setSkip] = useState(false)
@@ -111,7 +139,7 @@ function ChatUsageReset({
     idempotencyKey: string
     expectedScope: NonNullable<UsageResult['reset']>['expectedScope']
   } | null>(null)
-  const settings = useAppStore((s) => s.settings)
+  const skipConfirm = useAppStore((s) => s.settings?.skipCodexRateLimitResetConfirm === true)
   const credits = result.rateLimits.rateLimitResetCredits
   const count = result.reset?.available ?? credits?.availableCount
   if (count === undefined) {
@@ -129,9 +157,14 @@ function ChatUsageReset({
     setFailed(false)
     setConfirm(false)
     try {
-      await callRuntimeRpc(target, 'accounts.consumeCodexResetCredit', attempt.current)
+      const reply = await callRuntimeRpc<{ outcome?: CodexRateLimitResetOutcome }>(
+        target,
+        'accounts.consumeCodexResetCredit',
+        attempt.current
+      )
       attempt.current = null
-      onRefresh()
+      // A changed offer carries no outcome: the refreshed card shows the current offer.
+      onRefresh(reply?.outcome ? resetOutcomeNotice(reply.outcome) : null)
     } catch {
       setFailed(true)
     } finally {
@@ -149,7 +182,7 @@ function ChatUsageReset({
         canRedeemReset={result.reset !== undefined}
         isRedeemingReset={busy}
         onReset={() => {
-          if (settings?.skipCodexRateLimitResetConfirm || attempt.current) {
+          if (skipConfirm || attempt.current) {
             void redeem()
           } else {
             setSkip(false)
@@ -171,7 +204,7 @@ function ChatUsageReset({
       <CodexResetConfirmation
         open={confirm}
         onOpenChange={setConfirm}
-        accountLabel={chatAccountLabel(result.accountLabel)}
+        accountLabel={chatAccountLabel(result.account)}
         skipFutureResetConfirm={skip}
         onSkipChange={setSkip}
         isRedeemingReset={busy}

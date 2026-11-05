@@ -1,5 +1,3 @@
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import {
   supportsSessionAccountUsage,
   type AgentSessionAccountUsage
@@ -10,11 +8,13 @@ import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-s
 import type { RateLimitState } from '../../../../shared/rate-limit-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { buildCodexResetCreditExpectedScope } from '../../../../shared/codex-reset-credit-scope'
+import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
 import { getSelectedCodexAccountIdForTarget } from '../../../codex-accounts/runtime-selection'
 import {
   isCodexMethodNotFoundError,
   isCodexAppServerUnsupportedError
 } from '../../../codex/app-server/codex-app-server-session'
+import { CodexUsageApiKeyAuthError } from '../../../rate-limits/codex-rpc-rate-limit-mapper'
 import { defineMethod } from '../core'
 import { requireInstalledStructuredHost } from './structured-agent-session-gate'
 import { OptionsParams } from './structured-agent-session-schemas'
@@ -34,18 +34,12 @@ export function sessionAccountUsageOffer(
   const home = normalizeRuntimePathForComparison(
     requireLegacyAgentSessionAccountHome(record.accountHome).path
   )
-  const target = {
-    runtime: record.location.wslDistro ? ('wsl' as const) : ('host' as const),
-    wslDistro: record.location.wslDistro
-  }
+  // Usage is offered only for native-local chats, so the chat always runs on the host runtime.
+  const target = { runtime: 'host' as const, wslDistro: null }
   const account = (settings.codexManagedAccounts ?? []).find(
     (candidate) =>
-      (candidate.managedHomeRuntime ?? 'host') === target.runtime &&
-      (candidate.wslDistro ?? null) === target.wslDistro &&
-      [
-        candidate.managedHomePath,
-        ...(target.runtime === 'wsl' ? [candidate.wslLinuxHomePath] : [])
-      ].some((path) => path && normalizeRuntimePathForComparison(path) === home)
+      (candidate.managedHomeRuntime ?? 'host') === 'host' &&
+      normalizeRuntimePathForComparison(candidate.managedHomePath) === home
   )
   const matches =
     account &&
@@ -61,11 +55,11 @@ export function sessionAccountUsageOffer(
     : null
   const credits = scope ? state?.codex?.rateLimitResetCredits : undefined
   return {
-    accountLabel:
-      account?.email ??
-      (home === normalizeRuntimePathForComparison(join(homedir(), '.codex'))
-        ? 'System default'
-        : null),
+    account: account
+      ? { kind: 'managed' as const, email: account.email }
+      : home === normalizeRuntimePathForComparison(getSystemCodexHomePath())
+        ? { kind: 'system' as const }
+        : null,
     ...(scope && credits
       ? {
           reset: {
@@ -105,7 +99,7 @@ export const STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS = [
             timer = setTimeout(() => {
               abort.abort()
               reject(new Error('Codex usage timed out'))
-            }, 20_000)
+            }, 40_000)
           })
         ])
         const offer = sessionAccountUsageOffer(
@@ -116,27 +110,17 @@ export const STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS = [
         return {
           status: 'ok',
           ...offer,
-          accountLabel:
-            offer.accountLabel ??
-            (result.live ? result.account?.email : null) ??
-            'Current shared account',
+          account: offer.account ?? {
+            kind: 'shared',
+            ...(result.live && result.account?.email ? { email: result.account.email } : {})
+          },
           rateLimits: result.rateLimits
         }
       } catch (error) {
         if (isCodexMethodNotFoundError(error) || isCodexAppServerUnsupportedError(error)) {
           return { status: 'unsupported', reason: 'codexVersion' }
         }
-        const message =
-          error instanceof Error
-            ? error.message
-            : typeof error === 'object' && error !== null && 'message' in error
-              ? String(error.message)
-              : ''
-        if (
-          /api.?key|chatgpt.*(only|required)|requires.*chatgpt|only available.*chatgpt/i.test(
-            message
-          )
-        ) {
+        if (error instanceof CodexUsageApiKeyAuthError) {
           return { status: 'unsupported', reason: 'apiKeyAuth' }
         }
         return { status: 'failed' }

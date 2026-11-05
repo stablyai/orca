@@ -24,14 +24,15 @@ import {
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import type { CodexSession } from './codex-structured-session-state'
 
-export type CodexRenameInvocationDeps = CodexStructuredInvocationDeps & {
+export type CodexProviderInvocationDeps = CodexStructuredInvocationDeps & {
   resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
 }
 
-async function renameCwd(
+/** The chat's pinned launch directory when it still exists, else the hidden probe directory. */
+export async function codexProviderProbeCwd(
   record: AgentSessionRecord,
-  deps: CodexRenameInvocationDeps
+  deps: CodexProviderInvocationDeps
 ): Promise<string> {
   const cwd = resolve(
     agentSessionPinnedLaunchDirectory(record) ??
@@ -84,7 +85,7 @@ export async function renameCodexProviderSession(input: {
   record: AgentSessionRecord
   providerSessionId: string
   name: string
-  invocation?: CodexRenameInvocationDeps
+  invocation?: CodexProviderInvocationDeps
 }): Promise<void> {
   const { session, providerSessionId, name } = input
   const live = session && !session.ended && !session.connection.closed ? session : null
@@ -108,7 +109,7 @@ export async function renameCodexProviderSession(input: {
     throw new Error('Codex rename invocation is not configured')
   }
   const codexHome = requireLegacyAgentSessionAccountHome(record.accountHome).path
-  const cwd = await renameCwd(record, invocation)
+  const cwd = await codexProviderProbeCwd(record, invocation)
   const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
     ...invocation,
     resolveWorkingDirectory: () => cwd

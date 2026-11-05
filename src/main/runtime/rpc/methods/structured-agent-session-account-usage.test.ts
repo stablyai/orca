@@ -15,6 +15,7 @@ import {
   hostStub,
   SESSION
 } from './structured-agent-session-rpc.test-fixture'
+import { CodexUsageApiKeyAuthError } from '../../../rate-limits/codex-rpc-rate-limit-mapper'
 import { sessionAccountUsageOffer } from './structured-agent-session-account-usage'
 
 const account = {
@@ -77,7 +78,7 @@ describe('chat account usage', () => {
     const { read, overrides } = install()
     expect(await usage(overrides)).toMatchObject({
       status: 'ok',
-      accountLabel: 'work@example.com',
+      account: { kind: 'managed', email: 'work@example.com' },
       rateLimits: { updatedAt: 999 },
       reset: {
         available: 1,
@@ -96,7 +97,7 @@ describe('chat account usage', () => {
       { code: -32601, message: 'Method not found' },
       { status: 'unsupported', reason: 'codexVersion' }
     ],
-    [new Error('ChatGPT authentication required'), { status: 'unsupported', reason: 'apiKeyAuth' }],
+    [new CodexUsageApiKeyAuthError(), { status: 'unsupported', reason: 'apiKeyAuth' }],
     [new Error('network unavailable'), { status: 'failed' }]
   ])('classifies provider failure %s without publishing provider text', async (error, expected) => {
     const { overrides } = install(vi.fn().mockRejectedValue(error))
@@ -119,7 +120,7 @@ describe('chat account usage', () => {
       accountHome: { variable: 'CODEX_HOME', path: join(homedir(), '.codex') }
     }
     expect(sessionAccountUsageOffer(system, settings, state)).toEqual({
-      accountLabel: 'System default'
+      account: { kind: 'system' }
     })
     const { overrides } = install(undefined, {
       ...record,
@@ -127,7 +128,7 @@ describe('chat account usage', () => {
     })
     expect(await usage(overrides)).toMatchObject({
       status: 'ok',
-      accountLabel: 'Current shared account'
+      account: { kind: 'shared' }
     })
     expect(
       sessionAccountUsageOffer(

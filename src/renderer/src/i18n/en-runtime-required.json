@@ -1899,7 +1899,13 @@
         "retry": "Retry",
         "resetFailed": "Codex limits couldn’t be reset. Try again.",
         "confirmReset": "This uses one Codex rate-limit reset credit for {{account}} and resets any eligible usage windows immediately.",
-        "sharedAccount": "Current shared account"
+        "sharedAccount": "Current shared account",
+        "outcome": {
+          "reset": "Codex limits were reset.",
+          "nothingToReset": "Nothing to reset right now.",
+          "noCredit": "No Codex reset credit is left on this account.",
+          "alreadyRedeemed": "That reset credit was already used."
+        }
       }
     },
     "onboarding": {

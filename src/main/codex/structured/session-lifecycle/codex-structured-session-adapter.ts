@@ -83,7 +83,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     })
   }
 
-  readAccountUsage = readCodexSessionAccountUsage(this.sessions)
+  readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
 
   supportsLocation = supportsCodexStructuredLocation
 
@@ -98,7 +98,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     renameCodexProviderSession({
       ...input,
       session: this.sessions.get(input.record.sessionId),
-      invocation: this.deps.renameInvocation
+      invocation: this.deps.providerInvocation
     })
 
   permissionModeRequiresAcquisition = permission.codexNativeResumeRequirement(this.sessions)

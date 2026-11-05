@@ -44,7 +44,7 @@ export type CodexRpcRateLimitChild = {
   off(event: 'close', listener: CodexRpcCloseListener): unknown
 }
 
-export type CodexRpcRateLimitProbeOptions = {
+type CodexRpcRateLimitProbeOptions = {
   child: CodexRpcRateLimitChild
   codexCommand: string
   initTimeoutMs: number
@@ -60,29 +60,8 @@ function buildRpcMessage(id: number, method: string, params?: unknown): string {
 export function readCodexRateLimitsViaRpc(
   options: CodexRpcRateLimitProbeOptions
 ): Promise<ProviderRateLimits> {
-  return readCodexUsageProbe(options, false).then(({ rateLimits }) => rateLimits)
-}
-
-export type CodexAccountUsageRead = {
-  account?: { type?: string; email?: string; planType?: string } | null
-  rateLimits: ProviderRateLimits
-  live?: boolean
-}
-
-export function readCodexAccountUsageViaRpc(
-  options: CodexRpcRateLimitProbeOptions
-): Promise<CodexAccountUsageRead> {
-  return readCodexUsageProbe(options, true)
-}
-
-function readCodexUsageProbe(
-  options: CodexRpcRateLimitProbeOptions,
-  readAccount: boolean
-): Promise<CodexAccountUsageRead> {
-  return new Promise((resolve, reject) => {
+  return new Promise<ProviderRateLimits>((resolve) => {
     const { child, codexCommand, fetchOptions } = options
-    let account: CodexAccountUsageRead['account']
-    let rpcError: RpcResponse['error']
     let buffer = ''
     let stderr = ''
     let resolved = false
@@ -107,18 +86,14 @@ function readCodexUsageProbe(
       }
       resolved = true
       cleanupListeners()
-      const finish = (): void => {
-        if (readAccount && (rpcError || result.status !== 'ok')) {
-          reject(rpcError ?? new Error(result.error ?? 'Codex usage unavailable'))
-        } else {
-          resolve({ account, rateLimits: result })
-        }
-      }
       if (settleOptions?.kill) {
-        void options.terminate().then(finish, finish)
+        void options.terminate().then(
+          () => resolve(result),
+          () => resolve(result)
+        )
         return
       }
-      finish()
+      resolve(result)
     }
 
     function onAbort(): void {
@@ -204,7 +179,6 @@ function readCodexUsageProbe(
       })
     }
 
-    let accountId: number | null = null
     let rateLimitsId: number | null = null
     let initId: number
 
@@ -223,48 +197,19 @@ function readCodexUsageProbe(
             continue
           }
           if (message.id === initId) {
-            if (readAccount && message.error) {
-              rpcError = message.error
-              onError(new Error(message.error.message))
-              return
-            }
             armRpcDeadline(options.rpcTimeoutMs)
             try {
               sendNotification('initialized')
-              if (readAccount) {
-                accountId = sendRpc('account/read')
-              } else {
-                rateLimitsId = sendRpc('account/rateLimits/read')
-              }
+              rateLimitsId = sendRpc('account/rateLimits/read')
             } catch (error) {
               onError(error instanceof Error ? error : new Error(String(error)))
             }
-            continue
-          }
-          if (accountId !== null && message.id === accountId) {
-            if (message.error) {
-              rpcError = message.error
-              onError(new Error(message.error.message))
-              return
-            }
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: account/read supplies the Codex account envelope; missing account remains unknown.
-            account = (message.result as { account?: CodexAccountUsageRead['account'] })?.account
-            if (account?.type === 'apiKey') {
-              rpcError = {
-                code: -1,
-                message: 'API key authentication requires a ChatGPT account for usage'
-              }
-              onError(new Error(rpcError.message))
-              return
-            }
-            rateLimitsId = sendRpc('account/rateLimits/read')
             continue
           }
           if (rateLimitsId === null || message.id !== rateLimitsId || resolved) {
             continue
           }
           if (message.error) {
-            rpcError = message.error
             const failureKind = classifyCodexRpcErrorFailureKind(message.error.message)
             settle(
               {

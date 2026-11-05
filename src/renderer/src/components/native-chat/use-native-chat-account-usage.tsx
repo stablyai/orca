@@ -17,6 +17,8 @@ export function useNativeChatAccountUsage(args: {
     identity: string
     turnId: string | null
     result: AgentSessionAccountUsage | null
+    /** A reset's outcome, kept across the refresh it triggers. */
+    notice: string | null
   } | null>(null)
   const revision = useRef(0)
   const dismiss = useCallback(() => {
@@ -36,18 +38,21 @@ export function useNativeChatAccountUsage(args: {
     },
     []
   )
-  const open = useCallback(async () => {
-    const request = ++revision.current
-    setPanel({ identity, turnId, result: null })
-    const result = await callStructuredAgentSession<AgentSessionAccountUsage>(
-      target,
-      'agentSession.accountUsage',
-      { sessionId }
-    ).catch(() => ({ status: 'failed' as const }))
-    if (revision.current === request) {
-      setPanel({ identity, turnId, result })
-    }
-  }, [identity, sessionId, target, turnId])
+  const open = useCallback(
+    async (notice: string | null = null) => {
+      const request = ++revision.current
+      setPanel({ identity, turnId, result: null, notice })
+      const result = await callStructuredAgentSession<AgentSessionAccountUsage>(
+        target,
+        'agentSession.accountUsage',
+        { sessionId }
+      ).catch(() => ({ status: 'failed' as const }))
+      if (revision.current === request) {
+        setPanel({ identity, turnId, result, notice })
+      }
+    },
+    [identity, sessionId, target, turnId]
+  )
   const panelRevision = revision.current
   return {
     command: supported
@@ -61,11 +66,12 @@ export function useNativeChatAccountUsage(args: {
       supported && panel?.identity === identity ? (
         <NativeChatAccountUsageCard
           result={panel.result}
+          notice={panel.notice}
           target={target}
           onDismiss={dismiss}
-          onRetry={() => {
+          onRetry={(notice) => {
             if (revision.current === panelRevision) {
-              void open()
+              void open(notice)
             }
           }}
         />

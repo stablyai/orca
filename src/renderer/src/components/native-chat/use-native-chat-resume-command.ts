@@ -95,7 +95,7 @@ export function useNativeChatResumeCommand(args: {
       const rest = draft.replace(/^\/\S+\s*/, '')
       usage?.open()
       setDraft(rest)
-      setCaret(0)
+      setCaret(rest.length)
       setActiveSuggestion(0)
       setNotice(null)
       textareaRef.current?.focus()

@@ -25,7 +25,7 @@ vi.mock('@/store', () => {
 const target = { kind: 'environment' as const, environmentId: 'paired-host' }
 const result: AgentSessionAccountUsage = {
   status: 'ok',
-  accountLabel: 'chat@example.com',
+  account: { kind: 'managed', email: 'chat@example.com' },
   rateLimits: createResetCreditLimits(),
   reset: {
     available: 1,
@@ -64,11 +64,11 @@ afterEach(() => {
 })
 
 describe('chat usage card', () => {
-  it('renders the chat account’s provider usage and retries the same confirmed reset on its host', async () => {
+  it('renders the chat account’s provider usage, retries the same confirmed reset on its host and reports its outcome', async () => {
     mocks.read.mockResolvedValue(result)
     mocks.reset
       .mockRejectedValueOnce(new Error('connection lost'))
-      .mockResolvedValueOnce({ outcome: 'reset' })
+      .mockResolvedValueOnce({ outcome: 'nothingToReset' })
     render(<Chat />)
     fireEvent.click(screen.getByText('Usage'))
     await screen.findByText('chat@example.com')
@@ -87,6 +87,7 @@ describe('chat usage card', () => {
     await waitFor(() => expect(mocks.reset).toHaveBeenCalledTimes(2))
     expect(mocks.reset.mock.calls[1]).toEqual([target, 'accounts.consumeCodexResetCredit', first])
     await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(2))
+    await screen.findByText('Nothing to reset right now.')
   })
 
   it('does not reopen a dismissed card when an already-confirmed reset completes', async () => {

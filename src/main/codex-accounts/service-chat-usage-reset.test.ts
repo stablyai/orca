@@ -1,6 +1,5 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type * as RunProcess from '@orca/process-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
@@ -18,25 +17,7 @@ import {
   createResetRateLimitState
 } from './service-reset-credit-test-fixtures'
 
-const stubScript = vi.hoisted(() => ({ path: '' }))
-vi.mock(
-  '../worker-thread-child-process/worker-thread-child-process',
-  () =>
-    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
-)
-vi.mock('@orca/process-host', async (original) => {
-  const actual = await original<typeof RunProcess>()
-  return {
-    ...actual,
-    spawnProcess: (spec: Parameters<typeof actual.spawnProcess>[0]) =>
-      actual.spawnProcess({
-        ...spec,
-        program: process.execPath,
-        args: [stubScript.path, ...(spec.args ?? [])]
-      })
-  }
-})
-vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
+const stubScript = { path: '' }
 vi.mock('electron', () => ({ app: { getPath: () => testState.userDataDir } }))
 vi.mock(import('node:os'), async (original) => ({
   ...(await original()),
@@ -49,7 +30,8 @@ describe('chat reset offer through the account coordinator', () => {
   it('accepts the host-built offer and rejects a later stale offer without spending a credit', async () => {
     const { sessionAccountUsageOffer } =
       await import('../runtime/rpc/methods/structured-agent-session-account-usage')
-    const { readCodexAccountUsageForHome } = await import('../rate-limits/codex-fetcher')
+    const { readCodexSessionAccountUsage } =
+      await import('../codex/structured/session-lifecycle/codex-session-account-usage')
     stubScript.path = join(testState.userDataDir, 'chat-usage-cli.cjs')
     writeFileSync(
       stubScript.path,
@@ -102,7 +84,12 @@ describe('chat reset offer through the account coordinator', () => {
       provider: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: home }
     }
-    const usage = await readCodexAccountUsageForHome(home, new AbortController().signal)
+    // A chat at rest reads its pinned home through the chat's own configured Codex command.
+    const usage = await readCodexSessionAccountUsage(new Map(), () => ({
+      resolveLaunchArgs: () => [],
+      resolveWorkspacePath: async () => testState.userDataDir,
+      resolveCommand: () => ({ command: process.execPath, prefixArgs: [stubScript.path] })
+    }))(record, new AbortController().signal)
     expect(usage).toMatchObject({
       account: { email: home },
       rateLimits: { status: 'ok', session: { usedPercent: 17 } }

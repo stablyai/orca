@@ -51,7 +51,7 @@ export type {
 
 function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps, followUps, host } = context
-  const renameInvocation = {
+  const providerInvocation = {
     resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
     resolveWorkspacePath: deps.resolveWorkspacePath,
     resolveEnvironment: () => context.environment.resolveAgentEnvironment('codex'),
@@ -59,10 +59,10 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
     ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
   }
   return new CodexStructuredSessionAdapter({
-    renameInvocation,
+    providerInvocation,
     resolveAccountKind: deps.resolveCodexAccountKind,
     atRestCommands: createCodexAtRestSkillCatalog({
-      ...renameInvocation,
+      ...providerInvocation,
       ...(deps.prepareCodexCatalogProbeHome
         ? { prepareHome: deps.prepareCodexCatalogProbeHome }
         : {})
