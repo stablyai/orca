@@ -239,13 +239,25 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       }
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
         await state.emulator.write(chunk, { forwardQueryReplies })
-        // The reflowed grid distrusts cells wrapped at an older width. Fresh output retires that
-        // distrust: a full screen of bytes at this size, or an explicit full-screen erase, proves
-        // every visible cell was painted on this grid (#38418).
-        if (state.reflowRepaintBytesOutstanding !== undefined) {
-          state.reflowRepaintBytesOutstanding -= chunk.length
-          if (state.reflowRepaintBytesOutstanding <= 0 || chunk.includes('[2J')) {
-            state.reflowRepaintBytesOutstanding = undefined
+        // Fresh output retires the reflow distrust buffer by buffer: a full screen of bytes at this
+        // size, or a full-screen erase, proves every visible cell of the active buffer was painted
+        // on this grid. Output queued before the reflow boundary cannot retire it (#38418).
+        const trust = state.reflowRepaintTrust
+        if (trust && outputSequence > trust.boundarySequence) {
+          const alternate = state.emulator.isAlternateScreen
+          // Seen together with the carry, an escape sequence split across chunks still counts.
+          const followed = `${trust.escapeCarry}${chunk}`
+          trust.escapeCarry = followed.slice(-3)
+          const erased = followed.includes('[2J')
+          if (alternate) {
+            trust.alternateBytesOutstanding = erased
+              ? 0
+              : trust.alternateBytesOutstanding - chunk.length
+          } else {
+            trust.normalBytesOutstanding = erased ? 0 : trust.normalBytesOutstanding - chunk.length
+          }
+          if (trust.normalBytesOutstanding <= 0 && trust.alternateBytesOutstanding <= 0) {
+            state.reflowRepaintTrust = undefined
             state.unrepaintedReflowGrid = undefined
           }
         }

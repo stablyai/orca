@@ -184,7 +184,17 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
   /** The grid a screen-ruled agent's rule reads: as painted, and only on the PTY's own size. */
   protected readRuledScreen(ptyId: string | null | undefined): RuledScreen | null {
     const state = this.readWholeScreenModel(ptyId)
-    if (!ptyId || !state || state.unrepaintedReflowGrid !== undefined) {
+    if (!ptyId || !state) {
+      return null
+    }
+    // Per buffer: an erase on the alternate screen never repainted the normal buffer behind it.
+    const trust = state.reflowRepaintTrust
+    if (
+      trust &&
+      (state.emulator.isAlternateScreen
+        ? trust.alternateBytesOutstanding > 0
+        : trust.normalBytesOutstanding > 0)
+    ) {
       return null
     }
     // Why: a TUI painted for another grid garbles on this one, and a screen rule would refuse it.

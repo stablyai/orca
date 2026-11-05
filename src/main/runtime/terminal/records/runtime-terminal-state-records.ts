@@ -169,8 +169,21 @@ export type RuntimeHeadlessTerminal = {
   rendererSeedEscapeTail?: string
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
   unrepaintedReflowGrid?: { cols: number; rows: number }
-  /** Fresh bytes still needed at the reflowed size before every visible cell was painted there. */
-  reflowRepaintBytesOutstanding?: number
+  /** Per-buffer proof that the reflowed grid was repainted; see `readRuledScreen`. */
+  reflowRepaintTrust?: ReflowRepaintTrust
+}
+
+/** Fresh output retires the reflow distrust buffer by buffer: a TUI that erases the alternate
+ *  screen has not repainted the normal buffer it will return to. */
+export type ReflowRepaintTrust = {
+  /** Output at or below this sequence was queued before the reflow and cannot retire it. */
+  boundarySequence: number
+  /** Bytes still needed on the normal buffer before every visible cell was painted there. */
+  normalBytesOutstanding: number
+  /** The same for the alternate buffer. */
+  alternateBytesOutstanding: number
+  /** Tail of the last chunk, so an escape sequence split across chunks is still recognized. */
+  escapeCarry: string
 }
 
 export type RuntimeVisibleTerminalState = {

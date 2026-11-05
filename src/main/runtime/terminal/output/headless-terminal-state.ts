@@ -207,7 +207,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     // Why: a PTY resize off the reflowed grid makes the TUI repaint; an echo of it does not.
     if (unpainted && (unpainted.cols !== cols || unpainted.rows !== rows)) {
       state.unrepaintedReflowGrid = undefined
-      state.reflowRepaintBytesOutstanding = undefined
+      state.reflowRepaintTrust = undefined
     }
     // Reflow joins the byte stream so snapshots cannot capture wraps from an out-of-order width change.
     state.writeChain = state.writeChain
@@ -234,9 +234,14 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     // Why: nothing resized the PTY, so the TUI does not repaint and its cells keep the old grid.
     if (applied.cols !== cols || applied.rows !== rows) {
       state.unrepaintedReflowGrid = { cols, rows }
-      // A TUI that does paint its first frame repaints the whole screen at this size; distrust
-      // only until that much fresh output has arrived, not until an unrelated resize (#38418).
-      state.reflowRepaintBytesOutstanding = cols * rows
+      // A TUI that paints repaints a whole screen per buffer; distrust each buffer until that much
+      // fresh output arrived on it, and ignore what was queued before this boundary (#38418).
+      state.reflowRepaintTrust = {
+        boundarySequence: this.getPtyOutputSequence(ptyId),
+        normalBytesOutstanding: cols * rows,
+        alternateBytesOutstanding: cols * rows,
+        escapeCarry: ''
+      }
     }
   }
 
