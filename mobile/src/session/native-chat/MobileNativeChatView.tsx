@@ -382,7 +382,7 @@ export function MobileNativeChatView({
           {lockReason === 'waiting' ? composerPlaceholder : null}
         </Text>
         <MobileNativeChatSendErrorBanner
-          message={sendErrorMessage ?? null}
+          message={sendErrorMessage}
           onDismiss={onDismissSendError}
         />
         {trayContent}

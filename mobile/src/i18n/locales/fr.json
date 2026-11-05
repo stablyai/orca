@@ -302,7 +302,6 @@
       "update": "Orca sur {{machine}} a redémarré pour une mise à jour pendant que cette réponse était en cours."
     },
     "interruptedContinue": {
-      "continue": "Continuer",
       "failed": "Impossible de poursuivre cette conversation. Réessayez ou envoyez un message.",
       "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée."
     },

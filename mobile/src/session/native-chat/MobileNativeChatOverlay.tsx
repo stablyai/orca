@@ -182,28 +182,24 @@ export function MobileNativeChatOverlay({
   )
   const t = useMobileTranslation()
   const continuation = controller.nativeChatInterruptedContinue
-  const continueAvailable = continuation?.continueAvailable
-  const offeredTurnItemId = continuation?.offeredTurnItemId ?? null
-  const continueInterrupted = continuation?.continueNow
   const noticeView = useMemo(
     () => ({
       hostName,
       ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
-      ...(continueInterrupted && continueAvailable !== undefined
+      ...(continuation
         ? {
             continuation: {
-              continueAvailable,
-              offeredTurnItemId,
+              ...continuation,
               // A Continue tap is the person's newer action, so it clears the composer's error.
               continueNow: () => {
                 onClearSendError()
-                continueInterrupted()
+                continuation.continueNow()
               }
             }
           }
         : {})
     }),
-    [hostName, agent, continueAvailable, offeredTurnItemId, continueInterrupted, onClearSendError]
+    [hostName, agent, continuation, onClearSendError]
   )
   const markdownLinks = useMobileNativeChatMarkdownLinks({
     enabled: controller.showNativeChat,

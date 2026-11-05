@@ -298,7 +298,6 @@
       "update": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca bir güncelleme için yeniden başlatıldı."
     },
     "interruptedContinue": {
-      "continue": "Devam et",
       "failed": "Bu sohbete devam edilemedi. Yeniden deneyin veya bir mesaj gönderin.",
       "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder."
     },

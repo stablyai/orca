@@ -8,7 +8,8 @@ import {
   failNativeChatInterruptedContinue,
   nativeChatInterruptedContinueState,
   NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT,
-  requestNativeChatInterruptedContinue
+  nativeChatInterruptedContinueAccepted,
+  type NativeChatInterruptedContinueAttempt
 } from '../../../src/shared/native-chat/native-chat-interrupted-continue'
 import type { RpcClient } from '../transport/rpc-client'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
@@ -61,35 +62,39 @@ export function useMobileStructuredInterruptedContinue(
     resuming: false,
     attempt
   })
+  // Late answers only touch the session they were asked for.
+  const updateAttempt = useCallback(
+    (
+      next: (current: NativeChatInterruptedContinueAttempt) => NativeChatInterruptedContinueAttempt
+    ) =>
+      setHeld((current) =>
+        current.sessionKey === sessionKey ? { sessionKey, attempt: next(current.attempt) } : current
+      ),
+    [sessionKey]
+  )
   const continueNow = useCallback(() => {
     if (offeredTurnItemId === null || !client || !sessionId) {
       return
     }
     const turnItemId = offeredTurnItemId
     setHeld({ sessionKey, attempt: { asked: turnItemId, failedOn: null } })
-    void requestNativeChatInterruptedContinue(
-      (method, params) => callAgentSession<{ outcome?: string }>(client, method, params),
-      sessionId,
-      turnItemId
+    void nativeChatInterruptedContinueAccepted(
+      callAgentSession<{ outcome?: string }>(client, 'agentSession.continueInterrupted', {
+        sessionId,
+        turnItemId
+      })
     ).then((accepted) => {
       if (!accepted) {
-        setHeld((current) =>
-          current.sessionKey === sessionKey
-            ? {
-                sessionKey,
-                attempt: failNativeChatInterruptedContinue(current.attempt, turnItemId)
-              }
-            : current
-        )
+        updateAttempt((current) => failNativeChatInterruptedContinue(current, turnItemId))
       }
     })
-  }, [offeredTurnItemId, client, sessionId, sessionKey])
-  const dismissFailure = useCallback(() => {
-    setHeld((current) =>
-      current.sessionKey === sessionKey
-        ? { sessionKey, attempt: { ...current.attempt, failedOn: null } }
-        : current
-    )
-  }, [sessionKey])
-  return { continueAvailable, offeredTurnItemId, continueNow, failed, dismissFailure }
+  }, [offeredTurnItemId, client, sessionId, sessionKey, updateAttempt])
+  const dismissFailure = useCallback(
+    () => updateAttempt((current) => ({ ...current, failedOn: null })),
+    [updateAttempt]
+  )
+  return useMemo(
+    () => ({ continueAvailable, offeredTurnItemId, continueNow, failed, dismissFailure }),
+    [continueAvailable, offeredTurnItemId, continueNow, failed, dismissFailure]
+  )
 }

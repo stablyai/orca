@@ -3024,7 +3024,6 @@
       "unnamedServer": "the remote server"
     },
     "interruptedContinue": {
-      "continue": "Continue",
       "failed": "Couldn't continue this chat. Try again, or send a message.",
       "explanation": "Continue, and the agent first checks whether its last step finished."
     },

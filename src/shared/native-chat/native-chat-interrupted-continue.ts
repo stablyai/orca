@@ -54,17 +54,12 @@ export function failNativeChatInterruptedContinue(
   return { asked: attempt.asked === turnItemId ? null : attempt.asked, failedOn: turnItemId }
 }
 
-/** Resolves false when the host took nothing; the host rechecks the cut under the session lock. */
-export function requestNativeChatInterruptedContinue(
-  call: (
-    method: 'agentSession.continueInterrupted',
-    params: { sessionId: string; turnItemId: string }
-  ) => Promise<{ outcome?: string }>,
-  sessionId: string,
-  turnItemId: string
+/** False when the host took nothing; the host rechecks the cut under the session lock. */
+export function nativeChatInterruptedContinueAccepted(
+  answer: Promise<{ outcome?: string }>
 ): Promise<boolean> {
-  return call('agentSession.continueInterrupted', { sessionId, turnItemId }).then(
-    (answer) => answer.outcome !== 'refused',
+  return answer.then(
+    (settled) => settled.outcome !== 'refused',
     () => false
   )
 }

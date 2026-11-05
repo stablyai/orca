@@ -8,7 +8,7 @@ export function MobileNativeChatSendErrorBanner({
   message,
   onDismiss
 }: {
-  message: string | null
+  message?: string | null
   /** Present for an error that stays until dismissed, such as a failed Continue. */
   onDismiss?: () => void
 }): React.JSX.Element | null {

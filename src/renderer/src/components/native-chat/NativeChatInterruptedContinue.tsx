@@ -33,7 +33,7 @@ import {
   nativeChatInterruptedContinueState,
   NATIVE_CHAT_INTERRUPTED_CONTINUE_FAILED_COPY,
   NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT,
-  requestNativeChatInterruptedContinue
+  nativeChatInterruptedContinueAccepted
 } from '../../../../shared/native-chat/native-chat-interrupted-continue'
 import type { NativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { useStructuredAgentSessionHostLabel } from './use-structured-agent-session-host-label'
@@ -171,10 +171,11 @@ export function useNativeChatInterruptedContinuation(input: {
     const turnItemId = offered
     setAttempt({ asked: turnItemId, failedOn: null })
     reportComposerError(null)
-    void requestNativeChatInterruptedContinue(
-      (method, params) => callStructuredAgentSession<{ outcome?: string }>(target, method, params),
-      sessionId,
-      turnItemId
+    void nativeChatInterruptedContinueAccepted(
+      callStructuredAgentSession<{ outcome?: string }>(target, 'agentSession.continueInterrupted', {
+        sessionId,
+        turnItemId
+      })
     ).then((accepted) => {
       if (!accepted) {
         setAttempt((current) => failNativeChatInterruptedContinue(current, turnItemId))

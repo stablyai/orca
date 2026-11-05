@@ -302,7 +302,6 @@
       "update": "O Orca ({{machine}}) reiniciou para uma atualização enquanto esta resposta estava em andamento."
     },
     "interruptedContinue": {
-      "continue": "Continuar",
       "failed": "Não foi possível continuar este chat. Tente novamente ou envie uma mensagem.",
       "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída."
     },
