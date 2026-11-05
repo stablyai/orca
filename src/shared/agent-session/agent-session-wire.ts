@@ -224,6 +224,8 @@ export type AgentSessionStatusSummary = {
   effort?: string
   fastMode?: string
   serviceTier?: string
+  /** Saved next-turn intent; moves clients' option stamps without a turn or model change. */
+  interactionMode?: 'default' | 'plan'
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string

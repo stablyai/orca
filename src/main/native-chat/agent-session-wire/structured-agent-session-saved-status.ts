@@ -1,3 +1,4 @@
+import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/agent-session-interaction-mode'
 import type {
   StructuredAgentSessionStatusPublisher,
   StructuredAgentSessionStatusSink
@@ -33,6 +34,7 @@ export function savedStructuredAgentSessionStatus(
   const outcome =
     turn?.state === 'open' || (!turn && markerAt !== undefined) ? 'cancellation' : turn?.outcome
   const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)
+  const interactionMode = record.options?.interactionMode
   const launchDirectory = agentSessionPinnedLaunchDirectory(record)
   return {
     sessionId: record.sessionId,
@@ -45,6 +47,7 @@ export function savedStructuredAgentSessionStatus(
     ...(outcome ? { turnOutcome: outcome } : {}),
     ...(at !== undefined ? { statusStartedAt: at } : {}),
     ...(model ? { model } : {}),
+    ...(isAgentSessionInteractionMode(interactionMode) ? { interactionMode } : {}),
     ...(isAgentChatPermissionMode(record.permissionMode)
       ? { permissionMode: record.permissionMode }
       : {}),

@@ -1,3 +1,4 @@
+import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/agent-session-interaction-mode'
 import {
   structuredAgentSessionRuntimeModel,
   structuredAgentSessionRuntimePermission
@@ -65,6 +66,7 @@ export function structuredAgentSessionStatusSummary({
   const effort = record?.options?.effort
   const fastMode = record?.options?.fastMode
   const serviceTier = record?.options?.serviceTier
+  const interactionMode = record?.options?.interactionMode
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
@@ -93,6 +95,7 @@ export function structuredAgentSessionStatusSummary({
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
     ...(serviceTier ? { serviceTier } : {}),
+    ...(isAgentSessionInteractionMode(interactionMode) ? { interactionMode } : {}),
     ...childWork,
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),

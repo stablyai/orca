@@ -131,7 +131,7 @@ export function structuredSessionSlashCommands(
     ? [
         { name: 'plan', description: 'Switch to Plan mode', orcaOwned: true },
         ...(agent === 'codex'
-          ? [{ name: 'default', description: 'Switch to Build mode', orcaOwned: true }]
+          ? [{ name: 'default', description: 'Switch to Build mode', orcaOwned: true as const }]
           : [])
       ]
     : []

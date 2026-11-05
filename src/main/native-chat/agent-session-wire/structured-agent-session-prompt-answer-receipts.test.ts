@@ -461,13 +461,12 @@ it.each(['allow', 'deny'])(
         options: { model: 'opus[1m]', interactionMode }
       })
     await pick(before)
-    const identity = {
-      provider: 'orca' as const,
-      threadId: THREAD,
-      turnId: 'plan-turn',
-      ordinal: 1
+    const identity = { provider: 'orca' as const, clientMessageId: 'plan-approval' }
+    const events = acquire.mock.calls.at(-1)?.[0].events
+    if (!events) {
+      throw new Error('Expected acquired Claude events')
     }
-    acquire.mock.calls.at(-1)![0].events.appendItem(
+    events.appendItem(
       identity,
       {
         kind: 'approval',

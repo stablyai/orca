@@ -1,3 +1,4 @@
+import { savedStructuredAgentSessionStatus } from './structured-agent-session-saved-status'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -791,4 +792,31 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
       session: expect.objectContaining({ sessionId: SESSION, status: 'idle' })
     })
   })
+})
+
+it('publishes a saved mode-only change without journal activity and retains it in reconnect summaries', async () => {
+  const journal = await openJournal()
+  const sessions = new Map<string, Indexed>([[SESSION, { journal }]])
+  const record: Partial<AgentSessionRecord> = { options: {} }
+  const { feed, events, dispose } = feedFor(sessions, record)
+  const cursor = journal.cursor()
+  record.options = { interactionMode: 'plan' }
+  feed.publish(SESSION, journal)
+  expect(events.at(-1)).toEqual({
+    type: 'status',
+    session: expect.objectContaining({ interactionMode: 'plan' })
+  })
+  expect(journal.cursor()).toEqual(cursor)
+  const saved = savedStructuredAgentSessionStatus(
+    agentSessionConversationView({ ...agentSessionRecordFixture(), options: record.options })
+  )
+  expect(saved.interactionMode).toBe('plan')
+  expect(releasedStructuredStatusSummary(saved).interactionMode).toBe('plan')
+  record.options = { interactionMode: 'default' }
+  feed.publish(SESSION, journal)
+  expect(events.at(-1)).toEqual({
+    type: 'status',
+    session: expect.objectContaining({ interactionMode: 'default' })
+  })
+  dispose()
 })

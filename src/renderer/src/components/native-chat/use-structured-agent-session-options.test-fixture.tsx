@@ -1,3 +1,4 @@
+import { useStructuredAgentSessionOptionStamp } from './structured-agent-session-status-hooks'
 // @vitest-environment happy-dom
 
 import { renderHook } from '@testing-library/react'
@@ -9,6 +10,7 @@ import type { SelectionOutcome } from '../../../../shared/agent-session/options/
 
 type OptionsFixtureMocks = {
   call: Mock
+  subscribeStatus: Mock
   enqueue: Mock
   pick: Mock
   target: RuntimeClientTarget
@@ -37,6 +39,7 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
   }
   return {
     call: vi.fn(),
+    subscribeStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
     enqueue: vi.fn(),
     pick: vi.fn(),
     ...selection,
@@ -87,7 +90,7 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async () => {
 })
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
+  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus,
   callStructuredAgentSession: mocks.call
 }))
 
@@ -206,7 +209,12 @@ function renderOptions(initial: RenderProps, mutate: StructuredAgentSessionMutat
         stateRef: { current: { fence: props.fence } },
         enabled: props.transportEnabled
       })
+      const hostOptionStamp = useStructuredAgentSessionOptionStamp(
+        props.sessionId ?? 'session-1',
+        props.paired ? PAIRED_TARGET : LOCAL_TARGET
+      )
       const options = useStructuredAgentSessionOptions({
+        hostOptionStamp,
         agent: props.agent ?? 'codex',
         sessionId: props.sessionId ?? 'session-1',
         target: props.paired ? PAIRED_TARGET : LOCAL_TARGET,
