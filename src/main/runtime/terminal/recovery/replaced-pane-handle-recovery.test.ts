@@ -4,13 +4,15 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService, makePaneKey } = await import('../../orca-runtime-test-mocks.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('../../orca-runtime')
+const { makePaneKey } = await import('../../../../shared/workspace-layout/stable-pane-id')
 const { HEADLESS_LEAF_ID, HEADLESS_SECOND_LEAF_ID, TEST_REPO_ID, TEST_WORKTREE_ID, store } =
-  await import('../../orca-runtime-test-fixtures.spec')
+  await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { dropFromHostInventory, movePaneFirst, registerBoundPty } =
-  await import('../../bind-first-pane.test-fixture')
+  await import('../../orca-runtime-tests/bind-first-pane.test-fixture')
 
 function paneWithHandle(tabId: string) {
   const runtime = new OrcaRuntimeService(store)

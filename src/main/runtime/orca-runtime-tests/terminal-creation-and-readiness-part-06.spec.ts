@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -7,7 +8,7 @@ import {
   antigravityReadyScreen,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('waits for exit on background terminal handles', async () => {

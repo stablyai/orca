@@ -14,11 +14,11 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
+import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { adoptRuntimeTerminalOrphansFromInventory } from './runtime-terminal-orphan-adoption'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
+import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 
 export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntimeWithSubscribeToTerminalResize {

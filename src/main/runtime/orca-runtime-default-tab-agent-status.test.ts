@@ -8,12 +8,12 @@ import { buildHeadlessMobileSessionTerminalTabs } from './terminal/surface/mobil
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
-import { provisionWorktreeTerminals } from './runtime-worktree-terminal-provisioning'
+import { provisionWorktreeTerminals } from './workspaces/startup/runtime-worktree-terminal-provisioning'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
-import { withRuntimePaneAdmission } from './runtime-durable-store-fixture'
+import { withRuntimePaneAdmission } from './orca-runtime-tests/runtime-durable-store-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

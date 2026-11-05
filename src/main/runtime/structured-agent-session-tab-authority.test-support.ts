@@ -25,7 +25,7 @@ import { seedTestAgentSessionRecordStore } from './agent-session/records/agent-s
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
-import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
+import { chatTabCommandsSettled } from './orca-runtime-tests/session-layout-apply.test-fixture'
 import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
 
 export const B = 'chat-b-0002',

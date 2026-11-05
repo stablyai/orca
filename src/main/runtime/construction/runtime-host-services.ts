@@ -1,7 +1,7 @@
 import type * as Calls from './runtime-host-service-calls'
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
 
-import type { RuntimeRepositoryCommandSurface } from '../runtime-repository-command-surface'
+import type { RuntimeRepositoryCommandSurface } from '../repositories/runtime-repository-command-surface'
 
 import type { LegacyWorkerRecoveryCandidate } from '../runtime-legacy-worker-terminal-recovery-types'
 
@@ -9,10 +9,10 @@ import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/orchestr
 
 import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driver-resources'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from '../run-terminal-client-use'
 import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../shared/execution-host'
-import { RuntimePreservedBranchCleanup } from '../runtime-preserved-branch-cleanup'
+import { RuntimePreservedBranchCleanup } from '../repositories/runtime-preserved-branch-cleanup'
 import type * as TerminalContracts from '../runtime-terminal-contracts'
 
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -25,21 +25,21 @@ import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/worke
 import { RuntimeAccountController } from '../runtime-account-controller'
 import { RuntimeMobileSpeechCatalog } from '../runtime-mobile-speech-catalog'
 import { RuntimeMobileDictationController } from '../runtime-mobile-dictation-controller'
-import { RuntimeProjectHostSetupController } from '../runtime-project-host-setup-controller'
-import { RuntimeProjectGroupController } from '../runtime-project-group-controller'
-import { RuntimeNestedRepoImport } from '../runtime-nested-repo-import'
-import { RuntimeRepositoryRegistrationController } from '../runtime-repository-registration-controller'
-import { RuntimeRepositoryCloneController } from '../runtime-repository-clone-controller'
-import { RuntimeRepositorySettingsController } from '../runtime-repository-settings-controller'
-import { RuntimeRepositorySparsePresets } from '../runtime-repository-sparse-presets'
-import { RuntimeRepositoryRefQueries } from '../runtime-repository-ref-queries'
-import { RuntimeServerEnvironmentCommands } from '../runtime-server-environment-commands'
-import { RuntimeRepositoryForkBackfill } from '../runtime-repository-fork-backfill'
-import { RuntimeWorkspaceSessionController } from '../runtime-workspace-session-controller'
+import { RuntimeProjectHostSetupController } from '../repositories/runtime-project-host-setup-controller'
+import { RuntimeProjectGroupController } from '../repositories/runtime-project-group-controller'
+import { RuntimeNestedRepoImport } from '../repositories/runtime-nested-repo-import'
+import { RuntimeRepositoryRegistrationController } from '../repositories/runtime-repository-registration-controller'
+import { RuntimeRepositoryCloneController } from '../repositories/runtime-repository-clone-controller'
+import { RuntimeRepositorySettingsController } from '../repositories/runtime-repository-settings-controller'
+import { RuntimeRepositorySparsePresets } from '../repositories/runtime-repository-sparse-presets'
+import { RuntimeRepositoryRefQueries } from '../repositories/runtime-repository-ref-queries'
+import { RuntimeServerEnvironmentCommands } from '../files/server-browse/runtime-server-environment-commands'
+import { RuntimeRepositoryForkBackfill } from '../repositories/runtime-repository-fork-backfill'
+import { RuntimeWorkspaceSessionController } from '../workspaces/session-hosts/runtime-workspace-session-controller'
 import { RuntimeAiVaultCommands } from '../runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from '../claude-agent-teams-service'
-import { teardownFolderWorkspacePtys } from '../folder-workspace-pty-teardown'
-import { countRepoTerminalsNotKnownExited } from '../project-removal-impact'
+import { teardownFolderWorkspacePtys } from '../workspaces/removal/folder-workspace-pty-teardown'
+import { countRepoTerminalsNotKnownExited } from '../workspaces/removal/project-removal-impact'
 
 type SessionCreateOperation = TerminalContracts.AgentSessionCreateOperation
 

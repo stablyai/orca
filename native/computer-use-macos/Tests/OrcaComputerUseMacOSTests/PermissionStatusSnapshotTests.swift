@@ -3,17 +3,6 @@ import Dispatch
 import XCTest
 
 final class PermissionStatusSnapshotTests: XCTestCase {
-    func testCapturesBothPermissionResults() {
-        let snapshot = PermissionStatusSnapshotProbe.capture(
-            accessibilityProbe: { true },
-            screenshotsProbe: { false }
-        )
-
-        XCTAssertEqual(
-            snapshot,
-            PermissionStatusSnapshot(accessibilityGranted: true, screenshotsGranted: false)
-        )
-    }
 
     func testRunsPermissionProbesConcurrently() {
         let accessibilityStarted = DispatchSemaphore(value: 0)

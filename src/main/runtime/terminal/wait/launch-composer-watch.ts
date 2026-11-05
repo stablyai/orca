@@ -7,7 +7,7 @@ import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import {
   waitForWorktreeStartupDraft,
   type WorktreeStartupReadinessHost
-} from '../../runtime-worktree-startup-readiness'
+} from '../../workspaces/startup/runtime-worktree-startup-readiness'
 
 // Why: a paste that lands before Claude's composer mounts stays in its input, but its Enter is lost (#34580).
 const SUBMIT_WAITS_FOR_LAUNCH_COMPOSER: ReadonlySet<TuiAgent> = new Set([

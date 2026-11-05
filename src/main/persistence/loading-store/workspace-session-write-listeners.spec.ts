@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { WorkspaceLayoutStream } from '../../runtime/terminal/surface/workspace-layout-stream'
-import { collectLayoutEvents } from '../../runtime/workspace-layout-stream-events.test-fixture'
+import { collectLayoutEvents } from '../../runtime/orca-runtime-tests/workspace-layout-stream-events.test-fixture'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import type { Store } from './store'
 

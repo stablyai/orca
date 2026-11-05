@@ -1,20 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  electronMocks,
-  ipcMain,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES, electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { ipcMain } from 'electron'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { createMobileCreateTestNotifier } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('does not dedupe mobile terminal creates across worktrees with the same clientMutationId', async () => {

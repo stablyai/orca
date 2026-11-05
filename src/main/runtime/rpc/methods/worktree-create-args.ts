@@ -2,7 +2,10 @@ import { terminalImageViewerSupported } from '../../terminal/launch/terminal-ima
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { hostQualifiedRepoSelector, type RuntimeRepoSelector } from '../../runtime-repo-selector'
+import {
+  hostQualifiedRepoSelector,
+  type RuntimeRepoSelector
+} from '../../workspaces/catalog/runtime-repo-selector'
 import type { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>

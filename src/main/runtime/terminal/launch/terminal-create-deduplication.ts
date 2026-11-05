@@ -13,7 +13,7 @@ import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
 import {
   type ResolvedWorktree,
   inferWorktreeIdFromPtyId
-} from '../../runtime-worktree-path-identity'
+} from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   getConnectionExecutionHostId,
@@ -21,7 +21,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { resolveWorktreeLaunchHost } from '../../worktree-launch-host-repo'
+import { resolveWorktreeLaunchHost } from '../../workspaces/catalog/worktree-launch-host-repo'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 

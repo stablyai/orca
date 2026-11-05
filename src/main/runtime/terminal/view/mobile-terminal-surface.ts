@@ -6,7 +6,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } from '../../orca-runtime-core'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
+import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type {
   RuntimePtyTabCloseAuthority,

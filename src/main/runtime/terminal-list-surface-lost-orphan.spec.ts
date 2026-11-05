@@ -9,8 +9,8 @@ import type {
 import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { spawnSurfaceClaimSequence } from './terminal/surface/pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { bindPaneFirst } from './bind-first-pane.test-fixture'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { bindPaneFirst } from './orca-runtime-tests/bind-first-pane.test-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 export function registerTerminalListSurfaceLostOrphanTests(): void {
   // Orphan status must compare PTY claims to current layout topology (#18191); main-layout builds retract panes through main, not window graphs.

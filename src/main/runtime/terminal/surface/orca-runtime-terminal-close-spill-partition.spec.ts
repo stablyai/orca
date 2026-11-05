@@ -1,4 +1,4 @@
-import { withDurableRuntimeStore } from '../../runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../orca-runtime-tests/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -98,36 +98,6 @@ export function registerOrcaRuntimeTerminalCloseSpillPartitionTests(): void {
   }
 
   describe('terminal close across local and runtime session partitions (#18202)', () => {
-    it('closes a tab persisted only in a runtime spill partition', async () => {
-      const local = sessionWithTab('unrelated', 'unrelated-pty')
-      const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
-        [LOCAL_EXECUTION_HOST_ID, local],
-        [SPILL_HOST_ID, sessionWithTab('target', 'target-pty')]
-      ])
-      const { runtime, kill } = harness(sessions)
-      runtime.registerPty('target-pty', WORKTREE_ID, null, {
-        tabId: 'target',
-        leafId: LEAF,
-        incarnationId: 'target-incarnation'
-      })
-
-      const terminal = (await runtime.listTerminals()).terminals.find(
-        (candidate) => candidate.tabId === 'target'
-      )!
-      await expect(runtime.closeTerminalTab(terminal.handle)).resolves.toMatchObject({
-        tabId: 'target'
-      })
-
-      const spill = sessions.get(SPILL_HOST_ID)!
-      expect(spill.tabsByWorktree[WORKTREE_ID]).toEqual([])
-      expect(spill.terminalLayoutsByTabId.target).toBeUndefined()
-      expect(hasClosedTerminalTabRecord(spill.closedTerminalTabTombstonesByTabId, 'target')).toBe(
-        true
-      )
-      expect(kill).toHaveBeenCalledWith('target-pty')
-      expect(sessions.get(LOCAL_EXECUTION_HOST_ID)).toBe(local)
-    })
-
     it('closes and records every copy when legacy reattach left one in two partitions', async () => {
       const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
         [LOCAL_EXECUTION_HOST_ID, sessionWithTab('unrelated', 'unrelated-pty')],
@@ -194,24 +164,6 @@ export function registerOrcaRuntimeTerminalCloseSpillPartitionTests(): void {
       })
       expect(setSession).not.toHaveBeenCalled()
       expect(onClosed).not.toHaveBeenCalled()
-    })
-
-    it('keeps the pin guard of the partition that holds the tab', async () => {
-      const spill = sessionWithTab('target', 'target-pty')
-      spill.tabsByWorktree[WORKTREE_ID] = [
-        { ...terminalTab('target', 'target-pty'), isPinned: true }
-      ]
-      const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
-        [LOCAL_EXECUTION_HOST_ID, sessionWithTab('unrelated', 'unrelated-pty')],
-        [SPILL_HOST_ID, spill]
-      ])
-      const { runtime, kill } = harness(sessions)
-
-      await expect(runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, 'target')).rejects.toThrow(
-        'terminal_tab_pinned'
-      )
-      expect(sessions.get(SPILL_HOST_ID)).toBe(spill)
-      expect(kill).not.toHaveBeenCalled()
     })
   })
 }

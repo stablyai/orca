@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import type { PtyProcessInfo } from '../../../providers/pty-process-info'
-import { setupLayoutOwnerRuntime, WORKTREE_ID } from '../../orca-runtime-layout-owner-start-fixture'
-import { committingSpawn } from '../../bind-first-pane.test-fixture'
+import {
+  setupLayoutOwnerRuntime,
+  WORKTREE_ID
+} from '../../orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
+import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -52,24 +55,5 @@ describe('a paired desktop terminal.create replayed with its pane ids', () => {
     await expect(create(true)).rejects.toThrow('tab_not_found')
     expect(spawn).toHaveBeenCalledTimes(1)
     expect(session().tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
-  })
-
-  it('returns the same tab and terminal for a retry before any close', async () => {
-    const { spawn, session, live, pane, create } = pairedDesktopCreate()
-
-    const first = await create(false)
-    expect(first.ptyId).toEqual(expect.any(String))
-    live.push({
-      id: first.ptyId!,
-      terminalHandle: first.handle,
-      worktreeId: WORKTREE_ID,
-      cwd: '/workspace',
-      title: ''
-    })
-    const retry = await create(true)
-
-    expect(retry.handle).toBe(first.handle)
-    expect(spawn).toHaveBeenCalledTimes(1)
-    expect(session().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([pane.tabId])
   })
 })

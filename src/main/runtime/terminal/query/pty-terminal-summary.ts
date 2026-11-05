@@ -7,10 +7,10 @@ import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../../../shared/runtime-types'
-import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
+import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import {
   isTerminalLeafId,
   makePaneKey,

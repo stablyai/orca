@@ -11,7 +11,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamFrame,

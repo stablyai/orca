@@ -1,6 +1,6 @@
 import type { ClaudeRateLimitAccountsState } from '../../shared/managed-account-types'
 import { resolveClaudeLaunchAccount } from '../claude-accounts/claude-launch-account'
-import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
+import type { RuntimeManagedWorktreeCreateArgs } from './workspaces/creation/runtime-managed-worktree-create-types'
 import type { Repo } from '../../shared/repo-types'
 import type { LocalWindowsTerminalRuntimeOptions } from '../../shared/local-windows-terminal-runtime'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'

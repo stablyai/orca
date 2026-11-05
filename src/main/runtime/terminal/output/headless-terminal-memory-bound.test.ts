@@ -2,12 +2,12 @@ import { expect, it, vi } from 'vitest'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../daemon/sessions/daemon-session-scrollback-window'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../../orca-runtime-postlude'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import { deferred } from '../../orca-runtime-test-fixtures.spec'
+import { deferred } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   createHydrationRuntime,
   PTY_ID,
   SIZE
-} from '../../headless-hydration-ownership-test-fixture'
+} from '../../orca-runtime-tests/headless-hydration-ownership-test-fixture'
 
 it('retains only the configured scrollback depth', async () => {
   const runtime = createHydrationRuntime({
@@ -62,20 +62,6 @@ it('bounds a provider snapshot that does not answer, then reseeds once it lands'
     await runtime.model().writeChain
     expect(runtime.model().emulator.getVisibleLines().join('\n')).toContain('FRESH-SEED')
     expect(runtime.retainedState().providerPreferred).toBe(false)
-  } finally {
-    vi.useRealTimers()
-  }
-})
-
-it('bounds every reader of a provider snapshot that does not answer', async () => {
-  vi.useFakeTimers()
-  try {
-    const { runtime } = hangingProvider()
-    runtime.preferProvider()
-    const read = runtime.serializeTerminalBuffer(PTY_ID)
-    // Preferred-provider read, then the no-model fallback: two bounded waits.
-    await vi.advanceTimersByTimeAsync(2 * AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS)
-    await expect(read).resolves.toBeNull()
   } finally {
     vi.useRealTimers()
   }

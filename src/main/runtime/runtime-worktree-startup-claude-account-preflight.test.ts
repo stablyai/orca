@@ -8,12 +8,12 @@ vi.mock('electron', () => ({
 }))
 
 const createLocalMock = vi.hoisted(() => vi.fn())
-vi.mock('./runtime-local-worktree-create', () => ({
+vi.mock('./workspaces/creation/runtime-local-worktree-create', () => ({
   createRuntimeLocalManagedWorktree: createLocalMock
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 import type { PrepareClaudeAuth } from '../ipc/pty/host-env/types'
 
 const repo = { id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: 'blue', kind: 'git' }
