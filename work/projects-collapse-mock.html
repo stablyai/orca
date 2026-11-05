@@ -1,0 +1,173 @@
+<div id="projects-mock" class="viz-dotted-background">
+  <style>
+    #projects-mock {
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+    }
+    #projects-mock .sidebar {
+      width: 280px;
+      min-height: 260px;
+      padding: 18px 8px;
+      box-sizing: border-box;
+      background: #101019;
+      color: #d3d7ec;
+      font:
+        13px Geist,
+        sans-serif;
+      border-radius: 8px;
+    }
+    #projects-mock .toolbar {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      color: #949ab3;
+    }
+    #projects-mock .label {
+      flex: 1;
+      font-weight: 500;
+    }
+    #projects-mock button {
+      border: 0;
+      background: transparent;
+      color: inherit;
+      width: 26px;
+      height: 26px;
+      padding: 5px;
+      border-radius: 5px;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+    #projects-mock button:hover {
+      background: #292933;
+      color: #e5e7f0;
+    }
+    #projects-mock button svg {
+      width: 15px;
+      height: 15px;
+    }
+    #projects-mock .badge {
+      position: absolute;
+      top: -2px;
+      right: -1px;
+      border-radius: 9px;
+      background: #c99fe9;
+      color: #22202c;
+      font-size: 10px;
+      line-height: 13px;
+      min-width: 13px;
+    }
+    #projects-mock .dot {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #e9be36;
+    }
+    #projects-mock .section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 31px;
+      font-weight: 500;
+    }
+    #projects-mock .section svg,
+    #projects-mock .row svg {
+      width: 14px;
+      height: 14px;
+      color: #9da3ba;
+      flex: none;
+    }
+    #projects-mock .row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      height: 29px;
+      padding-left: 2px;
+    }
+    #projects-mock .child {
+      height: 27px;
+      padding-left: 35px;
+      color: #aeb5cc;
+      display: flex;
+      align-items: center;
+    }
+    #projects-mock .child.selected {
+      background: #292933;
+      border-radius: 5px;
+      color: #e5e7f0;
+    }
+    #projects-mock [hidden] {
+      display: none;
+    }
+  </style>
+  <div class="sidebar" aria-label="Projects sidebar preview">
+    <div class="toolbar">
+      <span class="label">Projects</span>
+      <button class="cursor-interaction" aria-label="Notifications" data-tooltip="Notifications">
+        <i data-lucide="bell" aria-hidden="true"></i><span class="dot"></span>
+      </button>
+      <button class="cursor-interaction" aria-label="Filters" data-tooltip="Filters">
+        <i data-lucide="sliders-horizontal" aria-hidden="true"></i><span class="badge">5</span>
+      </button>
+      <button
+        class="cursor-interaction"
+        id="project-toggle"
+        aria-label="Collapse all projects"
+        data-tooltip="Collapse all projects"
+      >
+        <i data-lucide="chevrons-down-up" aria-hidden="true"></i>
+      </button>
+      <button class="cursor-interaction" aria-label="Add folder" data-tooltip="Add folder">
+        <i data-lucide="folder-plus" aria-hidden="true"></i>
+      </button>
+      <button class="cursor-interaction" aria-label="Add project" data-tooltip="Add project">
+        <i data-lucide="plus" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="section"><i data-lucide="pin" aria-hidden="true"></i> Pinned</div>
+    <div class="child selected">orca / main</div>
+    <div class="row">
+      <i class="project-chevron" data-lucide="chevron-down" aria-hidden="true"></i
+      ><i data-lucide="folder" aria-hidden="true"></i> orca
+    </div>
+    <div class="child project-child">collapse-and-expand-all-projects</div>
+    <div class="child project-child">sidebar-improvements</div>
+    <div class="row">
+      <i class="project-chevron" data-lucide="chevron-down" aria-hidden="true"></i
+      ><i data-lucide="folder" aria-hidden="true"></i> website
+    </div>
+    <div class="child project-child">main</div>
+  </div>
+  <script>
+    ;(() => {
+      const root = document.getElementById('projects-mock')
+      const button = root.querySelector('#project-toggle')
+      let collapsed = false
+      button.addEventListener('click', () => {
+        collapsed = !collapsed
+        root.querySelectorAll('.project-child').forEach((child) => {
+          child.hidden = collapsed
+        })
+        root.querySelectorAll('.project-chevron').forEach((icon) => {
+          icon.outerHTML =
+            '<i class="project-chevron" data-lucide="' +
+            (collapsed ? 'chevron-right' : 'chevron-down') +
+            '" aria-hidden="true"></i>'
+        })
+        button.innerHTML =
+          '<i data-lucide="' +
+          (collapsed ? 'chevrons-up-down' : 'chevrons-down-up') +
+          '" aria-hidden="true"></i>'
+        const label = collapsed ? 'Expand all projects' : 'Collapse all projects'
+        button.setAttribute('aria-label', label)
+        button.setAttribute('data-tooltip', label)
+        lucide.createIcons({ attrs: { width: 16, height: 16 } })
+      })
+    })()
+  </script>
+</div>

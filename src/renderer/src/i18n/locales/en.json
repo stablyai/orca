@@ -6474,7 +6474,9 @@
         },
         "SidebarHeader": {
           "92154beb7e": "New workspace",
-          "addProject": "Add project"
+          "addProject": "Add project",
+          "expandAllProjects": "Expand all projects",
+          "collapseAllProjects": "Collapse all projects"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -21274,6 +21276,15 @@
         "split": {
           "bodyWithoutShortcut": "Right-click the pane for split options."
         }
+      },
+      "badgeNew": "New",
+      "projectsCollapseAll": {
+        "intro": {
+          "title": "Collapse all projects at once",
+          "body": "Press {sidebar.projects.toggleCollapse}, click this button, or {{modifier}}-click any project header.",
+          "bodyWithoutShortcut": "Click this button, or {{modifier}}-click any project header.",
+          "action": "Got it"
+        }
       }
     }
   },
@@ -23155,7 +23166,8 @@
       "terminalSwitchInputSource": "Switch input source / language (native)",
       "newAgentTab": "New {{agent}} tab",
       "tabNewBrowserSplitRight": "New browser tab in right split",
-      "viewPlugins": "Open Plugins"
+      "viewPlugins": "Open Plugins",
+      "sidebarProjectsToggleCollapse": "Collapse / Expand All Projects"
     },
     "group": {
       "global": "Global",
