@@ -261,7 +261,7 @@ function NativeChatImageThumbnail({
         showTitle
         toolbarActions={
           <NativeChatImageCommentButton
-            src={fullSizeSrc}
+            src={localSrc}
             title={label}
             onStart={() => setIsOpen(false)}
           />
