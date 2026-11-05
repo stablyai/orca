@@ -124,7 +124,8 @@ export function retainClaudeSettledRequests(
     return undefined
   }
   const kept = previous && sameClaudeRun(previous, next) ? [...(retained ?? [])] : []
-  for (const settled of settledRequestsOf(next)) {
+  // Only the newest entries can survive the bound, so a long batch costs the same as a short one.
+  for (const settled of settledRequestsOf(next).slice(-MAX_CLAUDE_SETTLED_REQUESTS)) {
     const existing = kept.findIndex((request) => sameRequest(request, settled))
     if (existing !== -1) {
       kept.splice(existing, 1)

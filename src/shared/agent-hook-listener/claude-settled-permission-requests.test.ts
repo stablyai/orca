@@ -46,6 +46,25 @@ describe('retained Claude request settlements', () => {
     ])
   })
 
+  it("keeps a long batch's retention cost independent of its length", () => {
+    const readsFor = (length: number): number => {
+      let reads = 0
+      const requests = Array.from({ length }, (_, index) => ({
+        get toolUseId() {
+          reads++
+          return `tool-${index}`
+        }
+      }))
+      const batch = { ...base, hookEventName: 'PostToolBatch', claudeSettledRequests: requests }
+      retainClaudeSettledRequests([{ toolUseId: 'earlier' }], base, batch)
+      return reads
+    }
+    // Only the newest MAX entries can be retained, each compared with at most 2 * MAX kept ones.
+    const bound = MAX_CLAUDE_SETTLED_REQUESTS * (2 * MAX_CLAUDE_SETTLED_REQUESTS + 1)
+    expect(readsFor(100)).toBeLessThanOrEqual(bound)
+    expect(readsFor(1000)).toBe(readsFor(100))
+  })
+
   it.each([
     { launchToken: 'launch-2' },
     { providerSession: { key: 'session_id' as const, id: 'session-2' } },

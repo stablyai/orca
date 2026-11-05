@@ -208,9 +208,8 @@ export function normalizeClaudeEvent(
       eventToolUseId !== undefined &&
       eventToolUseId !== lead.waitingToolUseId
     if (isParallelSiblingCompletionDuringChildQuestion) {
-      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
-        workingChildEvidence: true
-      })
+      // Restating the wait would replace the prompt row a receiver holds against other agents.
+      return null
     }
     // Approval clears the card and restores the displaced lead; inventing working cannot later fold back to done.
     const restored = setClaudeMainAgentTurnState(

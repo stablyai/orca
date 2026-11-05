@@ -30,6 +30,10 @@ export function settleClaudeToolBatch(
       ? null
       : buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
   }
+  // A child wait stashes no state only when it displaced the lead's own open prompt, which it can't restore; stay waiting.
+  if (eventAgentId !== undefined && lead.stateBeforeWait === undefined) {
+    return null
+  }
   const restored = setClaudeMainAgentTurnState(
     state,
     paneKey,

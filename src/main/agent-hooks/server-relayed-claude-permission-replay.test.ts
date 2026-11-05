@@ -164,18 +164,20 @@ describe('a relayed Claude permission wait across a reconnect (captured)', () =>
   })
 })
 
-describe('a relayed Claude permission wait that Claude denies itself (captured)', () => {
-  const permissionIndex = selfDenied.leadDenied.findIndex(
-    (event) => event.hook_event_name === 'PermissionRequest'
-  )
-  const untilWait = selfDenied.leadDenied.slice(0, permissionIndex + 1)
-  const afterWait = selfDenied.leadDenied.slice(permissionIndex + 1, permissionIndex + 3)
+describe.each([
+  ['lead', selfDenied.leadDenied],
+  ['subagent', selfDenied.childDenied]
+])('a relayed %s permission wait that Claude denies itself (captured)', (_owner, events) => {
+  const permissionIndex = events.findIndex((event) => event.hook_event_name === 'PermissionRequest')
+  const batchIndex = events.findIndex((event) => event.hook_event_name === 'PostToolBatch')
+  const untilWait = events.slice(0, permissionIndex + 1)
+  const untilBatch = events.slice(permissionIndex + 1, batchIndex + 1)
 
   it('clears when its batch end arrives live', async () => {
     const pane = await startSshPane()
     await postAll(pane, untilWait)
     expect(row(pane.desktop)).toMatchObject({ state: 'waiting' })
-    await postAll(pane, afterWait.slice(0, 1))
+    await postAll(pane, untilBatch)
     expect(row(pane.desktop)).toMatchObject({ state: 'working' })
   })
 
@@ -183,7 +185,7 @@ describe('a relayed Claude permission wait that Claude denies itself (captured)'
     const pane = await startSshPane()
     await postAll(pane, untilWait)
     pane.connected = false
-    await postAll(pane, afterWait)
+    await postAll(pane, [...untilBatch, events[batchIndex + 1]])
     reconnect(pane)
     expect(row(pane.desktop)).toMatchObject({ state: 'working' })
   })
