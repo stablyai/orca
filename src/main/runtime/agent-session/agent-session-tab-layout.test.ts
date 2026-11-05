@@ -91,6 +91,64 @@ describe('a windowless host’s chat tab saves', () => {
     ])
   })
 
+  it('save a fork right after its source, in the source group, from a place naming only the source', () => {
+    const tab = (sessionId: string, groupId: string): Tab => ({
+      id: `structured-agent-session-${sessionId}`,
+      entityId: sessionId,
+      groupId,
+      worktreeId: WT,
+      contentType: 'agent-session',
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    })
+    const session: WorkspaceSessionState = {
+      ...EMPTY,
+      unifiedTabs: { [WT]: [tab('source', 'group-1'), tab('b', 'group-1'), tab('c', 'group-2')] },
+      tabGroups: {
+        [WT]: [
+          {
+            id: 'group-1',
+            worktreeId: WT,
+            activeTabId: null,
+            tabOrder: ['structured-agent-session-source', 'structured-agent-session-b']
+          },
+          {
+            id: 'group-2',
+            worktreeId: WT,
+            activeTabId: null,
+            tabOrder: ['structured-agent-session-c']
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [WT]: 'group-2' }
+    }
+    const fork: ChatTabChange = {
+      open: {
+        sessionId: 'child',
+        agent: 'codex',
+        tabId: 'structured-agent-session-child',
+        placement: { afterTabId: 'structured-agent-session-source' }
+      }
+    }
+
+    const saved = change(session, [fork])
+
+    expect(saved.tabGroups?.[WT]?.map((group) => [group.id, group.tabOrder])).toEqual([
+      [
+        'group-1',
+        [
+          'structured-agent-session-source',
+          'structured-agent-session-child',
+          'structured-agent-session-b'
+        ]
+      ],
+      ['group-2', ['structured-agent-session-c']]
+    ])
+  })
+
   it('save a chat whose tab id another tab already holds, as they always have', () => {
     const saved = change(EMPTY, [open('chat-a', 'structured-agent-session-shared')])
     const both = change(saved, [open('chat-b', 'structured-agent-session-shared')])

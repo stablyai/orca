@@ -2,7 +2,11 @@ import { translate } from '../i18n/mobile-i18n'
 import { triggerError } from '../platform/haptics'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
-import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
+import type {
+  StructuredAgentSessionCreateParams,
+  StructuredAgentSessionForkSource
+} from '../../../src/shared/agent-session/structured-agent-session-create'
+import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
 import {
   launchedSelection,
@@ -21,7 +25,24 @@ type ForkScope = Pick<
   | 'pendingSelectionRef'
   | 'fetchSessionTabs'
   | 'showToast'
+  | 'hostCapabilities'
+  | 'sessionTabsRef'
 >
+
+/** Right after the source chat's tab, read before anything awaits so a later tab switch can't move it.
+ *  The host finds the tab's group; a missing anchor falls back to its usual place. */
+export function mobileChatForkTabPlacement(
+  scope: Pick<ForkScope, 'hostCapabilities' | 'sessionTabsRef'>,
+  sourceSessionId: string
+): StructuredAgentSessionCreateParams['tabPlacement'] {
+  if (!scope.hostCapabilities?.includes(AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY)) {
+    return undefined
+  }
+  const source = scope.sessionTabsRef.current.find(
+    (tab) => tab.type === 'agent-session' && tab.sessionId === sourceSessionId
+  )
+  return source ? { afterTabId: source.id } : undefined
+}
 
 /** Creates the fork through the phone's ordinary chat create and selects it; the source is untouched.
  *  Resolves once the outcome is known, so the caller's action stays disabled until then. */
@@ -36,6 +57,7 @@ export async function forkMobileStructuredChat(
     scope.showToast(message, 3000)
   }
   const { client } = scope
+  const tabPlacement = mobileChatForkTabPlacement(scope, forkFrom.sessionId)
   if (!client || scope.creatingTerminalRef.current) {
     report(mobileChatForkCopy.busy(agentName))
     return
@@ -50,7 +72,8 @@ export async function forkMobileStructuredChat(
       client,
       scope.worktreeId,
       agent,
-      forkFrom
+      forkFrom,
+      tabPlacement
     )
     if (result.kind === 'created') {
       scope.pendingSelectionRef.current = withLaunchReply(scope.pendingSelectionRef.current, lock, {

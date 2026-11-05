@@ -34,13 +34,15 @@ export function chatTabLayoutCommand(
 ): ChatTabLayoutCommand | null {
   const placement = 'open' in change ? change.open.placement : undefined
   const holds = (id: string | undefined) => workspace?.groups.some((group) => group.id === id)
-  // Prefer an existing client group, then the active group; otherwise open creates one.
+  // A client without group ids (a phone) names only the tab to follow, so its group is the place.
+  const after = placement?.afterTabId
+  const anchorGroupId = after
+    ? workspace?.groups.find((group) => group.tabOrder.includes(after))?.id
+    : undefined
+  // Prefer an existing client group, then the anchor's, then the active group; otherwise open creates one.
   const groupId = holds(placement?.groupId)
     ? placement?.groupId
-    : holds(activeGroupId)
-      ? activeGroupId
-      : undefined
-  const after = placement?.afterTabId
+    : (anchorGroupId ?? (holds(activeGroupId) ? activeGroupId : undefined))
   const afterTabId =
     after &&
     workspace?.groups.some((group) => group.id === groupId && group.tabOrder.includes(after))
