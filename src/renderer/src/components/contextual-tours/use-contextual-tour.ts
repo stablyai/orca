@@ -83,8 +83,7 @@ export function useContextualTour(
   const contextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.contextualToursBlockingSurfaceVisible
   )
-  // Don't watch the page for a tour that can't start.
-  const startBlockedByProgress = useAppStore((s) => isContextualTourStartBlockedByProgress(s, id))
+  const featureInteractions = useAppStore((s) => s.featureInteractions)
   const enabledInteractionSnapshotRef = useRef<{
     id: ContextualTourId
     source: string
@@ -174,9 +173,13 @@ export function useContextualTour(
       contextualToursBlockingSurfaceVisible ||
       activeContextualTourId !== null ||
       contextualToursSeenIds.includes(id) ||
-      startBlockedByProgress ||
       isContextualTourSessionConsumed(
         { contextualToursSeenIds, contextualToursStartedThisSession },
+        id
+      ) ||
+      // Don't watch the page for a tour that can't start.
+      isContextualTourStartBlockedByProgress(
+        { featureInteractions, contextualToursStartedThisSession },
         id
       )
     ) {
@@ -262,10 +265,10 @@ export function useContextualTour(
     contextualToursOnboardingVisible,
     contextualToursSeenIds,
     enabled,
+    featureInteractions,
     id,
     persistedUIReady,
     requestContextualTour,
-    source,
-    startBlockedByProgress
+    source
   ])
 }
