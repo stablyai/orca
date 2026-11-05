@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeGitLabLinkQuery } from './gitlab-links'
+import { buildGitLabIssueUrl, normalizeGitLabLinkQuery } from './gitlab-links'
 import { WORK_ITEM_LINK_QUERY_MAX_BYTES } from './work-item-link-query-bounds'
 
 describe('normalizeGitLabLinkQuery', () => {
@@ -16,5 +16,19 @@ describe('normalizeGitLabLinkQuery', () => {
       directNumber: null,
       tooLarge: true
     })
+  })
+})
+
+describe('buildGitLabIssueUrl', () => {
+  it('keeps the self-hosted host and nested groups', () => {
+    expect(buildGitLabIssueUrl({ host: 'git.acme.dev', path: 'team/sub/app' }, 7)).toBe(
+      'https://git.acme.dev/team/sub/app/-/issues/7'
+    )
+  })
+
+  it('decodes percent-encoded segments before encoding them once', () => {
+    expect(buildGitLabIssueUrl({ host: 'gitlab.com', path: '%73quad/app' }, 7)).toBe(
+      'https://gitlab.com/squad/app/-/issues/7'
+    )
   })
 })

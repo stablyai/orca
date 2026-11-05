@@ -40,6 +40,11 @@ import {
   remarkGitHubCallouts
 } from '@/lib/remark-github-callouts'
 import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
+import { buildGitHubRepoUrl, type RepoSlug } from '../../../../shared/github/links'
+import {
+  buildGitLabIssueUrl,
+  type ProjectSlug
+} from '../../../../shared/new-workspace/gitlab-links'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
@@ -47,10 +52,10 @@ type MarkdownPlugins = NonNullable<MarkdownOptions['rehypePlugins']>
 type RemarkPlugins = NonNullable<MarkdownOptions['remarkPlugins']>
 type UrlTransform = NonNullable<MarkdownOptions['urlTransform']>
 
-type GitHubRepoReference = {
-  owner: string
-  repo: string
-}
+/** Where a bare `#123` resolves. GitHub repos are two segments; GitLab project paths nest. */
+type IssueReferenceTarget =
+  | { provider: 'github'; slug: RepoSlug }
+  | { provider: 'gitlab'; slug: ProjectSlug }
 
 type MarkdownTextNode = {
   type: 'text'
@@ -93,55 +98,68 @@ const remarkPlugins = [
   remarkBreaks
 ]
 
-const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
+const ISSUE_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 
-function createGitHubIssueUrl(owner: string, repo: string, number: string): string {
-  return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${number}`
+function createIssueReferenceUrl(
+  target: IssueReferenceTarget,
+  explicitSlug: { owner: string; repo: string } | null,
+  rawNumber: string
+): string | null {
+  const number = Number(rawNumber)
+  if (!Number.isSafeInteger(number)) {
+    return null
+  }
+  if (target.provider === 'gitlab') {
+    // GitLab paths nest arbitrarily deep, so a two-segment `owner/repo#N` cannot name a project.
+    return explicitSlug ? null : buildGitLabIssueUrl(target.slug, number)
+  }
+  // An explicit owner/repo#N in a GHES comment names a repo on that same server.
+  const base = buildGitHubRepoUrl(
+    explicitSlug ? { ...explicitSlug, host: target.slug.host } : target.slug
+  )
+  return base === null ? null : `${base}/issues/${number}`
 }
 
-function isEmbeddedGitHubReference(value: string, index: number): boolean {
+function isEmbeddedIssueReference(value: string, index: number): boolean {
   if (index === 0) {
     return false
   }
   return /[A-Za-z0-9_./-]/.test(value[index - 1] ?? '')
 }
 
-function createGitHubReferenceLinkNode(
-  label: string,
-  owner: string,
-  repo: string,
-  number: string
-): MarkdownLinkNode {
+function createIssueReferenceLinkNode(label: string, url: string): MarkdownLinkNode {
   return {
     type: 'link',
-    url: createGitHubIssueUrl(owner, repo, number),
+    url,
     title: null,
     children: [{ type: 'text', value: label }]
   }
 }
 
-function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReference): MarkdownNode[] {
+function splitIssueReferenceText(value: string, target: IssueReferenceTarget): MarkdownNode[] {
   const parts: MarkdownNode[] = []
   let cursor = 0
 
-  for (const match of value.matchAll(GITHUB_REFERENCE_PATTERN)) {
+  for (const match of value.matchAll(ISSUE_REFERENCE_PATTERN)) {
     const label = match[0]
     const index = match.index ?? 0
-    if (isEmbeddedGitHubReference(value, index)) {
+    if (isEmbeddedIssueReference(value, index)) {
       continue
     }
 
-    const owner = match[1] ?? defaultRepo.owner
-    const repo = match[2] ?? defaultRepo.repo
-    const number = match[3]
+    const [, owner, repo, number] = match
     if (!number) {
+      continue
+    }
+    const url = createIssueReferenceUrl(target, owner && repo ? { owner, repo } : null, number)
+    if (url === null) {
       continue
     }
 
     if (index > cursor) {
       parts.push({ type: 'text', value: value.slice(cursor, index) })
     }
-    parts.push(createGitHubReferenceLinkNode(label, owner, repo, number))
+    parts.push(createIssueReferenceLinkNode(label, url))
     cursor = index + label.length
   }
 
@@ -154,10 +172,7 @@ function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReferenc
   return parts
 }
 
-function transformGitHubReferenceChildren(
-  node: MarkdownNode,
-  defaultRepo: GitHubRepoReference
-): void {
+function transformIssueReferenceChildren(node: MarkdownNode, target: IssueReferenceTarget): void {
   if (!node.children || node.type === 'link' || node.type === 'image') {
     return
   }
@@ -166,11 +181,11 @@ function transformGitHubReferenceChildren(
   for (const child of node.children) {
     if (child.type === 'text' && child.value !== undefined) {
       // Agent replies can contain thousands of issue refs; append iteratively to avoid V8’s argument limit.
-      for (const part of splitGitHubReferenceText(child.value, defaultRepo)) {
+      for (const part of splitIssueReferenceText(child.value, target)) {
         nextChildren.push(part)
       }
     } else {
-      transformGitHubReferenceChildren(child, defaultRepo)
+      transformIssueReferenceChildren(child, target)
       nextChildren.push(child)
     }
   }
@@ -178,10 +193,8 @@ function transformGitHubReferenceChildren(
   node.children = nextChildren
 }
 
-export function remarkGitHubReferences(
-  defaultRepo: GitHubRepoReference
-): () => (tree: MarkdownNode) => void {
-  return () => (tree) => transformGitHubReferenceChildren(tree, defaultRepo)
+function remarkIssueReferences(target: IssueReferenceTarget): () => (tree: MarkdownNode) => void {
+  return () => (tree) => transformIssueReferenceChildren(tree, target)
 }
 
 const commentMarkdownSanitizeSchema: SanitizeSchema = {
@@ -254,7 +267,9 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   content: string
   math?: boolean
   variant?: 'compact' | 'document'
-  githubRepo?: GitHubRepoReference | null
+  githubRepo?: RepoSlug | null
+  /** Bare `#N` resolves here when no `githubRepo` is set. */
+  gitlabProject?: ProjectSlug | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   /** Turns detected file paths into links, keeping only those this confirms exist. */
@@ -285,6 +300,7 @@ const CommentMarkdown = React.memo(
       className,
       variant = 'compact',
       githubRepo,
+      gitlabProject,
       onLinkClick,
       allowFileUriLinks = false,
       fileLinkExists,
@@ -330,8 +346,13 @@ const CommentMarkdown = React.memo(
         : basePlugins
       const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
-      return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
+      const target: IssueReferenceTarget | null = githubRepo
+        ? { provider: 'github', slug: githubRepo }
+        : gitlabProject
+          ? { provider: 'gitlab', slug: gitlabProject }
+          : null
+      return target ? [...withExtension, remarkIssueReferences(target)] : withExtension
+    }, [extension, fileLinkExists, githubRepo, gitlabProject, math, unknownHtmlAsText])
     const blocks = useMarkdownBlocks(content, growing, math, activeRemarkPlugins, extension)
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {

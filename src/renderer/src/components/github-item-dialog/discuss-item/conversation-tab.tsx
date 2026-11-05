@@ -140,7 +140,10 @@ export function ConversationTab({
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const prRepo = useMemo(() => resolvePullRequestRepo(item, projectOrigin), [item, projectOrigin])
   const markdownGitHubRepo = useMemo(
-    () => (projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : bodySlug),
+    () =>
+      projectOrigin
+        ? { owner: projectOrigin.owner, repo: projectOrigin.repo, host: projectOrigin.host }
+        : bodySlug,
     [bodySlug, projectOrigin]
   )
   const canEditBody =
