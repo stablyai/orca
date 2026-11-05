@@ -1,3 +1,7 @@
+import {
+  MAX_PARTIAL_ESCAPE_TAIL_LENGTH,
+  extractPartialEscapeTail
+} from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 import type { PtyDataMeta } from './pty-dispatcher'
 
 const CAN = '\x18'
@@ -17,6 +21,11 @@ export type StreamDelivery = {
   startsAtGround: boolean
   /** Bytes before this delivery were lost, so main cannot tell whether an escape is open. */
   boundaryUnknown: boolean
+  /**
+   * For a suffix the renderer cut from a chunk: the incomplete escape the cut-off bytes end in;
+   * absent when they end at ground or their state is unknown.
+   */
+  cutEscapeTail?: string
 }
 
 /**
@@ -35,14 +44,20 @@ export class TerminalStreamPosition {
   // xterm's parser is known to be at ground: it parsed nothing yet, or Orca's own CAN-led write last.
   private grounded = true
   private skippedUnknown = 0
+  // The escape tail the replay that set `seq` re-armed ('' for none); null when stream bytes set it.
+  private replayedEscapeTail: string | null = null
 
-  /** A replay (snapshot plus its pending escape tail) left xterm exactly at `seq`. */
-  anchor(ptyId: string, seq: number): void {
+  /**
+   * A replay (snapshot plus its pending escape tail) left xterm exactly at `seq`. A replay passes
+   * the tail it re-armed, '' for none, so a cut at `seq` can re-arm one its snapshot omitted.
+   */
+  anchor(ptyId: string, seq: number, replayedEscapeTail?: string): void {
     this.ptyId = ptyId
     this.seq = seq
     this.exact = true
     this.grounded = false
     this.skippedUnknown = 0
+    this.replayedEscapeTail = replayedEscapeTail ?? null
   }
 
   /** The stream's seq domain ended (exit, PTY replacement, a restarted counter); xterm keeps its parser state. */
@@ -89,9 +104,15 @@ export class TerminalStreamPosition {
       this.anchor(ptyId, endSeq)
       return wasGrounded ? data : `${CAN}${data}`
     } else if (this.seq !== null && this.exact && startSeq <= this.seq) {
-      // An exact continuation, or an overlap with bytes xterm already parsed.
+      // An exact continuation, or an overlap with bytes xterm already parsed. A snapshot can omit
+      // the escape open at its seq (#33766); a chunk cut there still holds that escape's start, so
+      // re-arm it from those bytes as the snapshot's pending tail would have.
+      const rearm =
+        startSeq === this.seq && this.replayedEscapeTail === ''
+          ? (delivery.cutEscapeTail ?? '')
+          : ''
       this.anchor(ptyId, endSeq)
-      return data
+      return `${rearm}${data}`
     }
     const releaseUnknown =
       delivery.boundaryUnknown && this.skippedUnknown >= MAX_SKIPPED_UNKNOWN_DELIVERIES
@@ -143,12 +164,34 @@ export function streamDeliveryOf(
     // A suffix of a transformed chunk has no exact raw position; never fabricate one.
     return { startSeq: undefined, endSeq: undefined, startsAtGround: false, boundaryUnknown: true }
   }
+  const cutEscapeTail = whole ? '' : escapeTailBeforeCut(data, delivered)
   return {
     startSeq: endSeq - (whole ? rawLength : data.length),
     endSeq,
     startsAtGround: whole && !delivered.midEscape,
-    boundaryUnknown: !whole || delivered.midEscape === 'unknown'
+    boundaryUnknown: !whole || delivered.midEscape === 'unknown',
+    ...(cutEscapeTail ? { cutEscapeTail } : {})
   }
+}
+
+/**
+ * The incomplete escape the bytes cut off before `data` end in, '' when none is known. Known only
+ * when main proved the chunk starts at ground and the cut-off bytes hold no 8-bit C1 control,
+ * which the scan does not follow (main's boundary tracking treats them the same way).
+ */
+function escapeTailBeforeCut(
+  data: string,
+  delivered: { data: string; midEscape?: true | 'unknown' }
+): string {
+  if (delivered.midEscape || !delivered.data.endsWith(data)) {
+    return ''
+  }
+  const cutOff = delivered.data.slice(0, delivered.data.length - data.length)
+  if (/[\u0080-\u009f]/.test(cutOff)) {
+    return ''
+  }
+  const tail = extractPartialEscapeTail(cutOff)
+  return tail.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : tail
 }
 
 /**
