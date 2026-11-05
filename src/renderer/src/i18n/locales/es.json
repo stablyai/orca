@@ -23119,7 +23119,12 @@
     "workspaceStartupFailed": "No se pudo iniciar {{agent}}. Comprueba los argumentos de esta configuración e inténtalo de nuevo.",
     "sameAsTextDefault": "Igual que el predeterminado · {{value0}}",
     "chatChoicesNote": "Las opciones de modelo o esfuerzo de {{agent}} sin una marca de CLI se aplican a los chats.",
-    "composedChoicesNote": "Las opciones de esfuerzo y velocidad de {{agent}} se incluyen en el argumento del modelo."
+    "composedChoicesNote": "Las opciones de esfuerzo y velocidad de {{agent}} se incluyen en el argumento del modelo.",
+    "claudeAccountFollow": "Cuenta activa ({{email}})",
+    "claudeAccountFollowDefault": "Cuenta activa",
+    "claudeAccount": "Cuenta",
+    "claudeAccountLabel": "Cuenta de Claude de este proyecto",
+    "claudeAccountHint": "Se guarda en este proyecto. Las sesiones nuevas de terminal acá la usan; los chats usan la cuenta activa."
   },
   "wslMove": {
     "entry": {

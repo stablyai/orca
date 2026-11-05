@@ -170,6 +170,7 @@ export function createRepoUpdateActions(
                 sourceControlAi,
                 externalWorktreeDiscoverySuppressedAt,
                 ghAccount,
+                claudeAccountId,
                 externalWorktreeVisibility,
                 agentWorktreeVisibility,
                 ...updatesWithoutClearSentinels
@@ -210,6 +211,13 @@ export function createRepoUpdateActions(
                 mergedRepo = repoWithoutGhAccount
               } else if (ghAccount !== undefined) {
                 mergedRepo = { ...mergedRepo, ghAccount }
+              }
+              if (claudeAccountId === null) {
+                const { claudeAccountId: _claudeAccountId, ...repoWithoutClaudeAccount } =
+                  mergedRepo
+                mergedRepo = repoWithoutClaudeAccount
+              } else if (claudeAccountId !== undefined) {
+                mergedRepo = { ...mergedRepo, claudeAccountId }
               }
               return s.githubSourceCollections?.adopt(mergedRepo) ?? mergedRepo
             })

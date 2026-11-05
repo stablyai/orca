@@ -102,16 +102,18 @@ function fixture(env: NodeJS.ProcessEnv = {}) {
       }
     })
   }
+  const projects: Record<string, string> = {}
   const router = new ClaudeProfileRouter({
     getSettings: () => settings,
     dataRoot,
     userHome,
     env,
     runSetup,
-    refreshWaitMs: 500
+    refreshWaitMs: 500,
+    getProjectAccountId: (worktreeId) => projects[worktreeId]
   })
   const home = (id: string) => join(dataRoot, 'claude-profiles', id, 'home')
-  return { root, userHome, dataRoot, settings, router, home, setup }
+  return { root, userHome, dataRoot, settings, router, home, setup, projects }
 }
 
 function signIn(stateDir: string, email: string, organizationUuid?: string): void {
@@ -512,6 +514,37 @@ describe('ClaudeProfileRouter', () => {
         f.router.publish()
         expect(claude(pane)).toBe(inherited.CLAUDE_CONFIG_DIR ?? 'unset')
       }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    "keeps a project's terminals on its pinned account while the selection moves",
+    () => {
+      const f = fixture()
+      mkdirSync(f.home('a'), { recursive: true })
+      mkdirSync(f.home('b'), { recursive: true })
+      f.projects['work::/repo'] = 'b'
+      const claude = claudeShellProbe(f.root)
+      f.router.publish()
+      const pinned = f.router.terminalEnv(undefined, 'work::/repo')
+      const other = f.router.terminalEnv(undefined, 'personal::/repo')
+      expect(claude(pinned)).toBe(f.home('b'))
+      expect(claude(other)).toBe(f.home('a'))
+      f.settings.activeClaudeManagedAccountId = null
+      f.router.publish()
+      expect(claude(pinned)).toBe(f.home('b'))
+      expect(claude(other)).toBe('unset')
+      expect(f.router.preparation(f.router.projectAccountId('work::/repo'))).toMatchObject({
+        configDir: f.home('b'),
+        provenance: 'profile:b'
+      })
+      // A removed account no longer pins its project.
+      f.settings.claudeManagedAccounts = f.settings.claudeManagedAccounts.filter(
+        (account) => account.id !== 'b'
+      )
+      expect(f.router.terminalEnv(undefined, 'work::/repo')).toEqual({
+        ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath
+      })
     }
   )
 

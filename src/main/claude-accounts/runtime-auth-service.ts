@@ -15,6 +15,7 @@ import {
 import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 
 export type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 
@@ -28,11 +29,15 @@ export class ClaudeRuntimeAuthService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
 
   constructor(
-    private readonly store: Pick<Store, 'getSettings'>,
+    private readonly store: Pick<Store, 'getSettings'> & Partial<Pick<Store, 'getRepo'>>,
     private readonly isDistroRunning: (distro: string) => Promise<boolean> = isWslDistroRunning
   ) {
     const args = { getSettings: () => store.getSettings(), dataRoot: this.dataRoot }
-    this.router = new ClaudeProfileRouter(args)
+    this.router = new ClaudeProfileRouter({
+      ...args,
+      getProjectAccountId: (worktreeId) =>
+        store.getRepo?.(getRepoIdFromWorktreeId(worktreeId))?.claudeAccountId
+    })
     installClaudeProfileRouter(this.router)
     installClaudeObservedConfigDirs(
       new ClaudeObservedConfigDirs(join(this.dataRoot, 'claude-observed-config-dirs.json'), () =>
@@ -50,7 +55,9 @@ export class ClaudeRuntimeAuthService {
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const wsl = this.wslRouteFor(target)
-    return wsl ? wsl.router.prepareLaunch(wsl.distro) : this.router.prepareLaunch()
+    return wsl
+      ? wsl.router.prepareLaunch(wsl.distro)
+      : this.router.prepareLaunch(target?.worktreeId)
   }
 
   async prepareForRateLimitFetch(

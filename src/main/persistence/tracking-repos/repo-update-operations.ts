@@ -119,6 +119,7 @@ export class RepoUpdatePersistenceOperations {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
+      claudeAccountId?: string | null
     }
   ): Repo | null {
     const repo = findRepoRowForHostScopedWrite(
@@ -190,6 +191,10 @@ export class RepoUpdatePersistenceOperations {
     if ('ghAccount' in sanitizedUpdates && sanitizedUpdates.ghAccount == null) {
       delete repo.ghAccount
       delete sanitizedUpdates.ghAccount
+    }
+    if ('claudeAccountId' in sanitizedUpdates && sanitizedUpdates.claudeAccountId == null) {
+      delete repo.claudeAccountId
+      delete sanitizedUpdates.claudeAccountId
     }
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath

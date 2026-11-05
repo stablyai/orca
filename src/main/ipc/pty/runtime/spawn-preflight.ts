@@ -100,10 +100,12 @@ export async function prepareRuntimePtySpawn(
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  // Why worktreeId: a project can pin its terminals to one Claude account.
+  const claudeTarget = { ...ctx.codexSelectionTarget, worktreeId: args.worktreeId }
+  args.env = withClaudeProfileTerminalEnv(args.env, claudeTarget)
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
+      ? await ctx.deps.prepareClaudeAuth(claudeTarget)
       : null
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true

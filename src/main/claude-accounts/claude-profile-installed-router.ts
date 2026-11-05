@@ -41,7 +41,7 @@ export function withClaudeProfileTerminalEnv<Env extends Record<string, string> 
   env: Env,
   target: ClaudeAccountSelectionTarget
 ): Env | Record<string, string> {
-  const profileEnv = installed?.terminalEnv(target)
+  const profileEnv = installed?.terminalEnv(target, target.worktreeId)
   return profileEnv ? { ...env, ...profileEnv } : env
 }
 

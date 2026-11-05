@@ -64,6 +64,7 @@ export type RepoUpdate = Partial<
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   ghAccount?: GhAccountBinding | null
+  claudeAccountId?: string | null
 }
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']

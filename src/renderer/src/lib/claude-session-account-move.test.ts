@@ -177,6 +177,17 @@ describe('findMovableClaudeSessions', () => {
     expect(await movable(null)).toEqual([ptyId(3)])
   })
 
+  it('leaves a project pinned to a saved account out of a switch, since it relaunches on that account', async () => {
+    seedPanes([{ n: 1, agentType: 'claude', configDir: FOLDER_A }])
+    const repo = { id: 'wt1', path: '/repo', displayName: 'repo', badgeColor: '#000', addedAt: 1 }
+    useAppStore.setState({ repos: [{ ...repo, claudeAccountId: 'acct-a' }] })
+    expect(await movable('acct-a')).toEqual([])
+    // A pin naming a removed account no longer holds the project.
+    useAppStore.setState({ repos: [{ ...repo, claudeAccountId: 'acct-gone' }] })
+    expect(await movable('acct-a')).toEqual([ptyId(1)])
+    useAppStore.setState({ repos: [] })
+  })
+
   it('keeps every live pane of a shared session running, even one already on the new account', async () => {
     seedPanes([
       { n: 1, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID },

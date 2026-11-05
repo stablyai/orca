@@ -63,6 +63,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
           ghAccount?: GhAccountBinding | null
+          claudeAccountId?: string | null
         }
       }
     ): Promise<Repo | null> => {
@@ -100,6 +101,13 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           } else {
             updates.ghAccount = normalized
           }
+        }
+      }
+      // Null clears the pin; the id names a folder, so malformed values are dropped.
+      if ('claudeAccountId' in updates) {
+        const id = updates.claudeAccountId
+        if (id != null && (typeof id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(id))) {
+          delete updates.claudeAccountId
         }
       }
       // Worktree materialization trims each path; reject malformed arrays at the IPC boundary.

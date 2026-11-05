@@ -7,6 +7,8 @@ import type {
 export type ClaudeAccountSelectionTarget = {
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
+  /** A launch's workspace; its project may pin a host account over the selection. */
+  worktreeId?: string
 }
 
 export type NormalizedClaudeAccountSelectionTarget = {

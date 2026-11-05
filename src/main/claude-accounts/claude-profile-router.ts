@@ -2,9 +2,9 @@ import { claudeAccountUsagePreparation } from './claude-account-usage-preparatio
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
 import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
@@ -16,7 +16,12 @@ import { claudeProfileMissing } from './claude-profile-launch-errors'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { probeRecentClaudeCliVersion } from '../claude/claude-hook-event-versions'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import {
+  claudeLaunchHome,
+  pinnedClaudePointer,
+  writeClaudePointerFile,
+  writeClaudeProjectPointer
+} from './claude-profile-project-pin'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import {
   describeClaudeProfile,
@@ -69,6 +74,8 @@ export class ClaudeProfileRouter {
       env?: NodeJS.ProcessEnv
       runSetup?: typeof runClaudeProfileSetupInWorker
       refreshWaitMs?: number
+      /** The account a project's terminals launch under, when the project names one. */
+      getProjectAccountId?: (worktreeId: string) => string | null | undefined
     }
   ) {
     this.pointerPath = join(args.dataRoot, 'claude-profiles', 'selected-host')
@@ -98,9 +105,15 @@ export class ClaudeProfileRouter {
     return id ? this.describe(id) : null
   }
 
-  private routedProfile(): ClaudeProfileDescriptor | null {
-    const profile = this.selectedProfile()
+  private routedProfile(projectAccountId?: string | null): ClaudeProfileDescriptor | null {
+    const profile = projectAccountId ? this.describe(projectAccountId) : this.selectedProfile()
     return profile && !this.coveredBySystemDefault(profile.accountId) ? profile : null
+  }
+
+  /** A saved account the worktree's project pins; a removed one falls back to the selection. */
+  projectAccountId(worktreeId?: string): string | null {
+    const accountId = worktreeId ? this.args.getProjectAccountId?.(worktreeId) : null
+    return accountId && this.savedAccount(accountId) ? accountId : null
   }
 
   accountLogin(accountId: string): ClaudeFolderLogin | null {
@@ -156,12 +169,7 @@ export class ClaudeProfileRouter {
       rmSync(this.pointerPath, { force: true })
       return false
     }
-    const home = this.routedProfile()?.home ?? ''
-    // Avoid rewriting the pointer on every launch.
-    if (!existsSync(this.pointerPath) || readFileSync(this.pointerPath, 'utf8') !== home) {
-      mkdirSync(dirname(this.pointerPath), { recursive: true, mode: 0o700 })
-      writeFileAtomically(this.pointerPath, home, { mode: 0o600 })
-    }
+    writeClaudePointerFile(this.pointerPath, this.routedProfile()?.home ?? '')
     return true
   }
 
@@ -172,24 +180,27 @@ export class ClaudeProfileRouter {
   }
 
   /** Initial setup must succeed; later refreshes may time out without blocking launch. */
-  async prepareLaunch(): Promise<ClaudeRuntimeAuthPreparation> {
-    const selected = this.selectedProfile()
+  async prepareLaunch(worktreeId?: string): Promise<ClaudeRuntimeAuthPreparation> {
+    const pinned = this.projectAccountId(worktreeId)
+    const selected = pinned ? this.describe(pinned) : this.selectedProfile()
     // Only fallback routing needs the shell env; account setup waits for it separately.
     if (!selected || !this.accountLogin(selected.accountId)) {
       await this.envReady
     }
     // Login changes since publication can change the route.
-    this.writePointer()
-    const profile = this.routedProfile()
+    if (!pinned) {
+      this.writePointer()
+    }
+    const profile = this.routedProfile(pinned)
     if (!profile) {
-      return this.preparation()
+      return this.preparation(pinned)
     }
     await prepareClaudeProfileForLaunch(
       profile,
       (value) => this.setUp(value),
       this.args.refreshWaitMs
     )
-    return this.preparation()
+    return this.preparation(pinned)
   }
 
   accountHome(accountId: string): string {
@@ -259,25 +270,26 @@ export class ClaudeProfileRouter {
     return report
   }
 
-  launchEnv(): ClaudeEnvPatch {
-    const home = this.routedHome()
+  launchEnv(projectAccountId?: string | null, pointer = this.pointerPath): ClaudeEnvPatch {
+    const home = claudeLaunchHome(this, projectAccountId)
     return {
-      [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath,
+      [CLAUDE_PROFILE_POINTER_ENV]: pointer,
       // Preserve the user's inherited CLAUDE_CONFIG_DIR for System default.
       ...(home ? { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home } : {})
     }
   }
 
   /** A broken account selection must not prevent opening a terminal. */
-  terminalEnv(target?: ClaudeAccountSelectionTarget): ClaudeEnvPatch {
+  terminalEnv(target?: ClaudeAccountSelectionTarget, worktreeId?: string): ClaudeEnvPatch {
     // Pass the pointer without waiting on the guest.
     if (target?.runtime === 'wsl') {
       return { [CLAUDE_PROFILE_POINTER_ENV]: `~/${wslClaudeProfilePointer(this.args.dataRoot)}` }
     }
     // Save the user's value so the shell function can restore it on System default.
     const userConfigDir = readUserClaudeConfigDirAsSet(this.env)
+    const pin = pinnedClaudePointer(this, this.projectAccountId(worktreeId), this.pointerPath)
     const base: ClaudeEnvPatch = {
-      [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath,
+      [CLAUDE_PROFILE_POINTER_ENV]: pin.pointer,
       ...(userConfigDir ? { [CLAUDE_USER_CONFIG_DIR_ENV]: userConfigDir } : {})
     }
     // Defer routing until the shell env resolves; the shell function will read the updated pointer.
@@ -287,25 +299,26 @@ export class ClaudeProfileRouter {
     try {
       this.writePointer()
       // Refresh without delaying terminal creation.
-      const profile = this.routedProfile()
+      const profile = this.routedProfile(pin.accountId)
       if (profile) {
         this.setUpInBackground(profile)
       }
-      return { ...base, ...this.launchEnv() }
+      return { ...base, ...this.launchEnv(pin.accountId, pin.pointer) }
     } catch {
       return base
     }
   }
 
-  preparation(): ClaudeRuntimeAuthPreparation {
-    const profile = this.routedProfile()
-    const home = this.routedHome()
+  preparation(projectAccountId?: string | null): ClaudeRuntimeAuthPreparation {
+    const profile = this.routedProfile(projectAccountId)
+    const home = claudeLaunchHome(this, projectAccountId)
+    const pointer = projectAccountId ? writeClaudeProjectPointer(this, projectAccountId) : undefined
     return {
       configDir: home ?? this.systemDefaultHome(),
       runtime: 'host',
       wslDistro: null,
       wslLinuxConfigDir: null,
-      envPatch: this.launchEnv(),
+      envPatch: this.launchEnv(projectAccountId, pointer),
       provenance: home ? `profile:${profile?.accountId}` : 'system'
     }
   }
