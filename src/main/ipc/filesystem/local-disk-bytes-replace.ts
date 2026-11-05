@@ -6,7 +6,7 @@ import type { FileBytesWritePrecondition } from '../../../shared/file-bytes-writ
 import { FILE_WRITE_OK, type FileWriteResult } from '../../../shared/file-write-disk-precondition'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/windows-retry-file-operations'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
-import { isENOENT } from './filesystem-path-containment'
+import { isENOENT } from './access/filesystem-path-containment'
 import { runLocalEditorWrite } from './local-disk-write-precondition'
 import { assertLocalWriteTargetIsRegularFile } from './local-regular-file-read'
 

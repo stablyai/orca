@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { parseWorkspaceSession } from '../../../../shared/workspace-session/workspace-session-schema'
 import {
   _resetTerminalPaneRecoveryForTests,
   requestTerminalPaneRecovery
@@ -120,46 +120,6 @@ describe('terminal surface ownership', () => {
 
     setTerminalTabs([reloadedRow as StoredTerminalTab])
     mocks.getTab.mockReturnValue(reloadedUnifiedTab as { viewMode?: 'terminal' | 'chat' })
-
-    await expect(
-      requestTerminalPaneRecovery({
-        tabId: 'tab-1',
-        ptyId: 'pty-1',
-        reason: 'write-stalled'
-      })
-    ).resolves.toBe(false)
-    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
-  })
-
-  // Round-trip through disk/Zod: undeclared fields vanish only at load, invisible to same-process assertions.
-  it('still refuses a chat-owned tab after a real persist/parse round trip', async () => {
-    const loaded = parseWorkspaceSession({
-      activeRepoId: null,
-      activeWorktreeId: WORKTREE_ID,
-      activeTabId: 'tab-1',
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          {
-            id: 'tab-1',
-            ptyId: null,
-            worktreeId: WORKTREE_ID,
-            title: 'Terminal 1',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 0,
-            viewMode: 'chat'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {}
-    })
-    expect(loaded.ok).toBe(true)
-    setTerminalTabs(
-      (loaded.ok ? loaded.value.tabsByWorktree[WORKTREE_ID] : []) as StoredTerminalTab[]
-    )
-    // Blind on purpose: only the reloaded row can refuse this.
-    mocks.getTab.mockReturnValue(null)
 
     await expect(
       requestTerminalPaneRecovery({

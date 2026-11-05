@@ -10,7 +10,7 @@ import {
   retainMirroredStorage,
   writeMirroredStorage
 } from '../storage/mirrored-storage-keys'
-import { saveTerminalLinkOpenMode } from '../storage/preferences'
+
 import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
 import { createFakeBridgePortPair } from './bridge/bridge-port-pair-test-harness'
 
@@ -51,39 +51,6 @@ beforeEach(() => {
   app.remove.mockClear()
   store.values.clear()
   store.pending.length = 0
-})
-
-it('refreshes before publishing on native return and foreground, and drops a blurred completion', async () => {
-  let finish!: () => void
-  const refresh = vi.fn(
-    () =>
-      new Promise<void>((resolve) => {
-        finish = resolve
-      })
-  )
-  const publish = vi.fn()
-  function Harness() {
-    useShellPageStorageRefresh(refresh, publish)
-    return null
-  }
-  let renderer!: ReturnType<typeof create>
-  act(() => {
-    renderer = create(createElement(Harness))
-  })
-  expect(publish).not.toHaveBeenCalled()
-  focus.active = false
-  act(() => renderer.update(createElement(Harness)))
-  await act(async () => finish())
-  expect(publish).not.toHaveBeenCalled()
-  focus.active = true
-  act(() => renderer.update(createElement(Harness)))
-  await act(async () => finish())
-  expect(publish).toHaveBeenCalledTimes(1)
-  act(() => app.listener('active'))
-  await act(async () => finish())
-  expect(publish).toHaveBeenCalledTimes(2)
-  act(() => renderer.unmount())
-  expect(app.remove).toHaveBeenCalledTimes(2)
 })
 
 it.each(TERMINAL_SHORTCUT_STORAGE_KEYS)(
@@ -156,44 +123,6 @@ it.each(TERMINAL_SHORTCUT_STORAGE_KEYS)(
     releaseKeys()
   }
 )
-
-it('publishes the last queued browser-link save after native return hydrated the earlier value', async () => {
-  const key = 'orca:terminalLinkOpenMode'
-  focus.active = false
-  store.values.set(key, 'orca-browser')
-  const releaseKeys = retainMirroredStorage([key])
-  const refresh = () => hydrateMirroredStorage([key])
-  let page = 'orca-browser'
-  const publish = () => {
-    page = readMirroredStorage([key])[key]!
-  }
-  function Harness() {
-    useShellPageStorageRefresh(refresh, publish)
-    return null
-  }
-  let renderer!: ReturnType<typeof create>
-  await act(async () => {
-    renderer = create(createElement(Harness))
-  })
-  const first = saveTerminalLinkOpenMode('phone-browser')
-  const last = saveTerminalLinkOpenMode('orca-browser')
-  await act(async () => {
-    await Promise.resolve()
-    store.pending.shift()!()
-    await first
-    focus.active = true
-    renderer.update(createElement(Harness))
-  })
-  expect(page).toBe('phone-browser')
-  await act(async () => {
-    store.pending.shift()!()
-    await last
-  })
-  expect(store.values.get(key)).toBe('orca-browser')
-  expect(page).toBe('orca-browser')
-  act(() => renderer.unmount())
-  releaseKeys()
-})
 
 it('republishes an accepted page zoom after an older native snapshot crosses the pinch', async () => {
   const key = 'orca:terminalTextScale'

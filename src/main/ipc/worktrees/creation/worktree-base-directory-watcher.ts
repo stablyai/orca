@@ -24,8 +24,8 @@ import {
   clearActiveGitStatusRefBinding,
   updateActiveGitStatusRefBinding,
   type GitStatusRefBindingRequest
-} from '../../worktree-git-status-ref-watch'
-import { WorktreeWatcherFailureRefreshCooldown } from '../../worktree-watcher-failure-refresh-cooldown'
+} from '../git/worktree-git-status-ref-watch'
+import { WorktreeWatcherFailureRefreshCooldown } from './worktree-watcher-failure-refresh-cooldown'
 import {
   handleLocalWatchEvents,
   handleWatchOverflow,

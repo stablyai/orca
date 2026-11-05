@@ -1,5 +1,5 @@
 import { basename, extname, join } from 'node:path'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { discoverFiles } from '../../../session-scanner-discovery'
 import { splitOpenCodeSqliteCandidate } from '../../../../../shared/opencode-sqlite-session-path'
 import { listOpenCodeSqliteSessionsViaWorker } from '../reader-transport/session-scanner-opencode-sqlite-worker-spawn'

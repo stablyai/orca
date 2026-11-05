@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
-import type { AddWorktreeResult } from '../../../git/worktree-operation-options'
+import type { AddWorktreeResult } from '../../../git/worktrees/worktree-operation-options'
 
 const mocks = vi.hoisted(() => ({
   mkdir: vi.fn(),
@@ -16,21 +16,21 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
-vi.mock('../../../git/worktree', () => ({ listWorktreeGraph: mocks.listWorktreeGraph }))
-vi.mock('../../../git/worktree-scan-cache', async (importOriginal) => ({
+
+vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreeGraph: mocks.listWorktreeGraph
 }))
-vi.mock('../../../git/worktree-create-preparation', () => ({
+vi.mock('../../../git/worktrees/creation/worktree-create-preparation', () => ({
   prepareWorktreeCreateCheckout: mocks.prepare,
   finalizePreparedWorktree: mocks.finalize,
   discardPreparedWorktree: mocks.discard,
   unlockPreparedWorktree: vi.fn()
 }))
-vi.mock('../../../git/worktree-base-ref-probe', () => ({
+vi.mock('../../../git/worktrees/creation/worktree-base-ref-probe', () => ({
   resolveLocalWorktreeBaseRef: mocks.resolveBaseRef
 }))
-vi.mock('../../../git/worktree-base-divergence', () => ({
+vi.mock('../../../git/worktrees/creation/worktree-base-divergence', () => ({
   measureRetargetDivergence: mocks.measureDivergence
 }))
 vi.mock('../../execution-host/project-runtime-git-options', () => ({

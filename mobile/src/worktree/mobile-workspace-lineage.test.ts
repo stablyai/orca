@@ -70,20 +70,26 @@ describe('applyMobileWorkspaceLineage', () => {
         plan
           .render(collapsed)
           .flatMap((section) => section.data)
-          .map((row) => row.worktreeId)
+          .map((item) => item.row.worktreeId)
       ).toEqual(duplicate ? ['parent', 'parent'] : ['parent'])
-      expect(plan.render(collapsed)[0]?.data[0]).toMatchObject({
+      expect(plan.render(collapsed)[0]?.data[0]?.view).toMatchObject({
         lineageChildCount: 1,
         lineageCollapsed: true
       })
       const sections = plan.render(new Set())
       expect(sections).toHaveLength(duplicate ? 2 : 1)
       for (const section of sections) {
-        expect(section.data.map((row) => row.worktreeId)).toEqual(['parent', 'child', 'grandchild'])
-        expect(section.data.map((row) => row.lineageDepth)).toEqual([0, 1, 2])
-        expect(section.data.map((row) => row.showProjectName)).toEqual([false, true, false])
+        expect(section.data.map((item) => item.row.worktreeId)).toEqual([
+          'parent',
+          'child',
+          'grandchild'
+        ])
+        expect(section.data.map((item) => item.view.lineageDepth)).toEqual([0, 1, 2])
+        expect(section.data.map((item) => item.view.showProjectName)).toEqual([false, true, false])
       }
-      const keys = sections.flatMap((section) => section.data.map((row) => row.sectionListKey))
+      const keys = sections.flatMap((section) =>
+        section.data.map((item) => item.view.sectionListKey)
+      )
       expect(new Set(keys).size).toBe(keys.length)
       const filtered = buildSections(
         [parent, child, { ...grandchild, repoId: 'repo-3' }],
@@ -96,7 +102,7 @@ describe('applyMobileWorkspaceLineage', () => {
       expect(
         filtered.map((section) => [
           section.key,
-          section.data.map((row) => [row.worktreeId, row.lineageDepth])
+          section.data.map((item) => [item.row.worktreeId, item.view.lineageDepth])
         ])
       ).toEqual([
         ['pinned', [['parent', 0]]],
@@ -117,8 +123,8 @@ describe('applyMobileWorkspaceLineage', () => {
 
     const rows = applyMobileWorkspaceLineage([child, parent])
 
-    expect(rows.map((row) => row.worktreeId)).toEqual(['child', 'parent'])
-    expect(rows.map((row) => row.lineageDepth)).toEqual([0, 0])
+    expect(rows.map((item) => item.row.worktreeId)).toEqual(['child', 'parent'])
+    expect(rows.map((item) => item.view.lineageDepth)).toEqual([0, 0])
   })
 
   it('keeps rows visible when lineage is cyclic', () => {
@@ -127,7 +133,7 @@ describe('applyMobileWorkspaceLineage', () => {
 
     const rows = applyMobileWorkspaceLineage([first, second])
 
-    expect(rows.map((row) => row.worktreeId).sort()).toEqual(['first', 'second'])
+    expect(rows.map((item) => item.row.worktreeId).sort()).toEqual(['first', 'second'])
   })
 
   it('keeps same-id rows on different hosts visible', () => {
@@ -136,6 +142,6 @@ describe('applyMobileWorkspaceLineage', () => {
 
     const rows = applyMobileWorkspaceLineage([local, remote])
 
-    expect(rows.map((row) => row.hostId)).toEqual(['local', 'ssh:builder'])
+    expect(rows.map((item) => item.row.hostId)).toEqual(['local', 'ssh:builder'])
   })
 })

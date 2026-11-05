@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ownedEditorFileId } from '../workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-ownership'
 import { build, emptyModel, testContext, WS } from './workspace-layout-command.test-fixture'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import { editorOpenFileId } from './workspace-layout-editor-open-file-id'

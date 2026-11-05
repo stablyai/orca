@@ -2,7 +2,7 @@ import { agentSessionConversationView } from '../../shared/agent-session/lifecyc
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   createReferenceAgentIndex,
@@ -20,9 +20,12 @@ const observations = vi.hoisted<{ status: 'live' | 'exited' | 'unverifiable'; re
     reachable: true
   })
 )
-vi.mock('./structured-worker-authority', () => ({
-  observeStructuredSession: () => ({ status: observations.status })
-}))
+vi.mock(
+  './orchestration/terminal-authority/structured-sessions/structured-worker-authority',
+  () => ({
+    observeStructuredSession: () => ({ status: observations.status })
+  })
+)
 vi.mock('./orchestration/structured-session-mail-address', () => ({
   structuredSessionMailReach: () => ({ kind: observations.reachable ? 'reachable' : 'ended' })
 }))

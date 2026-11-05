@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type * as CodexConfigMirror from '../codex/codex-config-mirror'
+import type * as CodexConfigMirror from '../codex/configuration/settings/codex-config-mirror'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
@@ -308,8 +308,10 @@ describe('CodexRuntimeHomeService', () => {
       getWslHome: () => 'C:\\Users\\alice'
     }))
     const syncConfig = vi.fn()
-    vi.doMock('../codex/codex-config-mirror', async () => ({
-      ...(await vi.importActual<typeof CodexConfigMirror>('../codex/codex-config-mirror')),
+    vi.doMock('../codex/configuration/settings/codex-config-mirror', async () => ({
+      ...(await vi.importActual<typeof CodexConfigMirror>(
+        '../codex/configuration/settings/codex-config-mirror'
+      )),
       syncSystemConfigIntoManagedCodexHome: syncConfig
     }))
 

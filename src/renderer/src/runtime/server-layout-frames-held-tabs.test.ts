@@ -9,7 +9,7 @@ import type {
   PublishedTab,
   PublishedWorkspaceLayout
 } from '../../../shared/workspace-layout/workspace-layout-published'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   DESKTOP_CREATED_SERVER_TAB_HOLDS,
   _reloadDesktopCreatedServerTabsForTests,

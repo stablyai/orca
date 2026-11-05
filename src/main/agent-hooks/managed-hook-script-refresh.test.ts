@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
+import type * as CodexHookHashLookup from '../codex/trust/hooks/codex-hook-hash-lookup'
 import {
   existsSync,
   chmodSync,
@@ -45,10 +45,12 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
-vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+vi.mock('../codex/trust/hooks/codex-hook-hash-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexHookHashLookup>()),
   resolveCodexHookAnswerForLaunch: async () =>
-    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
+    (
+      await import('../codex/hooks/installation/hook-service-test-harness')
+    ).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({

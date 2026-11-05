@@ -2,11 +2,12 @@ import { ipcMain } from 'electron'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult
-} from '../../../../shared/git-diff-compare-types'
-import { getBranchCompare, getCommitCompare } from '../../../git/status'
+} from '../../../../shared/git/diff/git-diff-compare-types'
+import { getBranchCompare } from '../../../git/source-control/branch-compare'
+import { getCommitCompare } from '../../../git/source-control/commit-compare'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { validateFullGitObjectId } from '../filesystem-path-containment'
+import { validateFullGitObjectId } from '../access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'

@@ -18,10 +18,10 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('./browser-renderer-trust', () => ({
+vi.mock('./browser/browser-renderer-trust', () => ({
   isTrustedBrowserRenderer: mocks.isTrustedBrowserRenderer
 }))
-vi.mock('../browser/doc-preview-guest-policy', () => ({
+vi.mock('../browser/document-preview/doc-preview-guest-policy', () => ({
   reportDocPreviewLinkClick: mocks.reportDocPreviewLinkClick
 }))
 vi.mock('../browser/browser-manager', () => ({
@@ -35,7 +35,7 @@ import {
 import {
   getDocPreviewGrant,
   revokeAllDocPreviewGrants
-} from '../browser/doc-preview-grant-registry'
+} from '../browser/document-preview/doc-preview-grant-registry'
 import {
   DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
   DOC_PREVIEW_MINT_GRANT_CHANNEL,

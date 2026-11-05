@@ -8,7 +8,7 @@ import {
   lookupOpenCodePaneLaunchToken,
   lookupOpenCodeSessionPane
 } from '../../shared/agent-hook-listener/opencode-session-registry'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 
 const PANE_A = makePaneKey('tab-a', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
 const PANE_B = makePaneKey('tab-b', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')

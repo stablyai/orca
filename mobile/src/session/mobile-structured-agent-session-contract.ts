@@ -15,16 +15,27 @@ import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat/n
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
-import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalSkillRef,
+  AgentJournalSubmission
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
   MobileNativeChatCommandRefusalCauses,
   MobileNativeChatSendErrorReporter
 } from './native-chat/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
+import type { NativeChatContextUsageSummary } from '../../../src/shared/native-chat/native-chat-context-usage-summary'
+import type { MobileStructuredInterruptedContinue } from './use-mobile-structured-interrupted-continue'
 
-export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
+export type StructuredMobileSession = Omit<
+  ReturnType<typeof useMobileStructuredAgentOptions>,
+  'contextUsageSupport'
+> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
+    /** The composer ring's readout; null until the session reports usage. */
+    contextUsage: NativeChatContextUsageSummary | null
+    submissions: readonly AgentJournalSubmission[]
     session: MobileNativeChatSession
     asyncQuestionSourceScope: string
     isWorking: boolean
@@ -54,6 +65,7 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     queued: MobileStructuredQueuedMessageControls
     commandRefusalCauses: MobileNativeChatCommandRefusalCauses
     backgroundTasks: MobileStructuredBackgroundTasks
+    interruptedContinue: MobileStructuredInterruptedContinue
     visualSource: MobileNativeChatVisualSource | null
     imagePreviewsByMessageId: Record<string, string[]>
   }

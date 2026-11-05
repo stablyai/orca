@@ -20,11 +20,9 @@ vi.mock('../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn
 import { getBranchConflictKind } from './repo-branch-conflict'
 import { pendingWslDirectGitReadEnvironment } from './command-runner/git-command-resolution'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitSpawn, gitStreamStdout } from './runner'
-import {
-  GitAdmissionScheduler,
-  _resetGitAdmissionForTests,
-  type GitAdmissionEvent
-} from './command-runner/git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../shared/git/admission/git-admission-scheduler'
+import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
+import type { GitAdmissionEvent } from '../../shared/git/admission/git-admission-state'
 import {
   getWslGitReadEnvironment,
   resetWslGitReadEnvironmentForTests,
@@ -33,9 +31,9 @@ import {
 } from './wsl-git-read-environment'
 import {
   prepareWslLinkedWorktreeGitRouting,
-  resetWslLinkedWorktreeGitRoutingForTests,
-  type WslLinkedWorktreeRoutingFileSystem
-} from './wsl-linked-worktree-git-routing'
+  resetWslLinkedWorktreeGitRoutingForTests
+} from './command-runner/wsl-linked-worktree-git-routing'
+import type { WslLinkedWorktreeRoutingFileSystem } from './command-runner/wsl-linked-worktree-git-route-probe'
 
 afterEach(() => _resetGitAdmissionForTests())
 

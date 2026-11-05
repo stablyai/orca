@@ -1,6 +1,6 @@
 import { toRuntimeExecutionHostId } from '../shared/execution-host'
 import type { RuntimeTerminalShow } from '../shared/runtime-types'
-import type { RuntimeTerminalReveal } from '../shared/terminal-pane-reveal'
+import type { RuntimeTerminalReveal } from '../shared/workspace-layout/terminal-pane-reveal'
 import { RuntimeClient } from './runtime-client'
 import { resolveEnvironment } from './runtime/environments'
 

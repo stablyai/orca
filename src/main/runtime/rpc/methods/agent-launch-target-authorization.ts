@@ -1,9 +1,9 @@
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 /** Authorize workspace creation against its own method allowlist; mobile access to agent.launch must not bypass create restrictions. */
 
-import { AgentLaunchTargetForbiddenError } from '../../../../shared/agent-launch-target-forbidden'
-import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
-import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobile-method-allowlist'
+import { AgentLaunchTargetForbiddenError } from '../../../../shared/agent-launch/contracts/agent-launch-target-forbidden'
+import type { AgentLaunchTarget } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../server/runtime-rpc-mobile-method-allowlist'
 import type { RpcContext } from '../core'
 
 const CREATE_METHOD_BY_TARGET_KIND = {

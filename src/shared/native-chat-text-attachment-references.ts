@@ -17,7 +17,8 @@ export type ChatAttachmentPart = { text: string; path?: string }
 /** Discover exact source tokens independently of their presentation. */
 export function nativeChatTextAttachmentParts(
   text: string,
-  structured: boolean
+  structured: boolean,
+  acceptPath: (path: string) => boolean = isCommittedChatAttachmentCandidate
 ): ChatAttachmentPart[] {
   if (!structured) {
     return [{ text }]
@@ -36,7 +37,7 @@ export function nativeChatTextAttachmentParts(
         ? token.slice(2, -1).replace(/\\"/g, '"')
         : token.slice(2, -1)
       : token.slice(1)
-    if (!isCommittedChatAttachmentCandidate(path)) {
+    if (!acceptPath(path)) {
       continue
     }
     if (match.index > end) {

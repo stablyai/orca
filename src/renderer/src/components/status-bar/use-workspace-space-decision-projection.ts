@@ -7,7 +7,7 @@ import {
 } from './workspace-space-decision-details'
 import { getWorkspaceSpaceDeleteState } from './workspace-space-state-resolution'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
 import { getWorktreeOnHostFromState } from '@/store/selectors'
 

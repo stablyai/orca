@@ -1,6 +1,6 @@
 import type { UISlice } from '../../store/slices/ui'
 import type { RepoUpdate } from '../../store/repos/repo-state'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 

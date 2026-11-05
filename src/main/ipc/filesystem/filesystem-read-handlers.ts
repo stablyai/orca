@@ -16,8 +16,8 @@ import {
   resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath,
   resolveLocalListRequestPath
-} from '../local-file-access-resolution'
-import { isPathAbsentError } from './filesystem-path-containment'
+} from './access/local-file-access-resolution'
+import { isPathAbsentError } from './access/filesystem-path-containment'
 import { listMarkdownDocuments } from '../markdown-documents'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'

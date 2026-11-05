@@ -1,4 +1,4 @@
-import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault-types'
+import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { asRecord } from '../session-scanner-record-value'
 
 export type DecodedToolCall = {

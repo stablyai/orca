@@ -1,5 +1,5 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { NativeChatSession } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'

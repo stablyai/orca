@@ -72,7 +72,8 @@ vi.mock('./gh-utils', () => ({
   _resetOwnerRepoCache: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
@@ -83,7 +84,7 @@ vi.mock('./rate-limit', () => ({
   spendsSharedGitHubComQuota: spendsSharedGitHubComQuotaMock
 }))
 
-import { getPRChecks } from './client/check/get-pr-checks'
+import { getPRChecks, getPRChecksViaRestFallback } from './client/check/get-pr-checks'
 import { rerunPRChecks } from './client/check/rerun-pr-checks'
 import { _resetOwnerRepoCache } from './gh-utils'
 
@@ -96,11 +97,13 @@ beforeEach(() => {
 function graphQLChecksResponse({
   contexts = [],
   checkSuites = [],
-  headRefOid = 'head-oid'
+  headRefOid = 'head-oid',
+  commitOid = headRefOid
 }: {
   contexts?: unknown[]
   checkSuites?: unknown[]
   headRefOid?: string
+  commitOid?: string
 } = {}): { stdout: string } {
   return {
     stdout: JSON.stringify({
@@ -112,6 +115,7 @@ function graphQLChecksResponse({
               nodes: [
                 {
                   commit: {
+                    oid: commitOid,
                     statusCheckRollup: { contexts: { nodes: contexts } },
                     checkSuites: { nodes: checkSuites }
                   }
@@ -450,6 +454,7 @@ describe('getPRChecks', () => {
       .mockRejectedValueOnce(new Error('GraphQL rollup failed'))
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
+          total_count: 1,
           check_runs: [
             {
               id: 88,
@@ -464,6 +469,7 @@ describe('getPRChecks', () => {
       })
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
+          total_count: 1,
           statuses: [
             {
               context: 'continuous-integration/jenkins/pr-merge',
@@ -473,19 +479,24 @@ describe('getPRChecks', () => {
           ]
         })
       })
-      .mockResolvedValueOnce({ stdout: JSON.stringify({ check_suites: [] }) })
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ total_count: 0, check_suites: [] }) })
 
     const checks = await getPRChecks('/repo-root', 42, 'head-oid')
 
     expectGraphQLRollupCall()
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['api', '--cache', '60s', 'repos/acme/widgets/commits/head-oid/check-runs?per_page=100'],
+      [
+        'api',
+        '--cache',
+        '60s',
+        'repos/acme/widgets/commits/head-oid/check-runs?per_page=100&page=1'
+      ],
       { cwd: '/repo-root', host: 'github.com' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
-      ['api', '--cache', '60s', 'repos/acme/widgets/commits/head-oid/status?per_page=100'],
+      ['api', '--cache', '60s', 'repos/acme/widgets/commits/head-oid/status?per_page=100&page=1'],
       { cwd: '/repo-root', host: 'github.com' }
     )
     expect(checks).toEqual([
@@ -558,7 +569,7 @@ describe('getPRChecks', () => {
         stdout: JSON.stringify([{ name: 'lint', state: 'PASS', link: 'https://example.com/lint' }])
       })
 
-    const checks = await getPRChecks('/repo-root', 42, 'stale-head')
+    const checks = await getPRChecks('/repo-root', 42, 'a'.repeat(40))
 
     expectGraphQLRollupCall()
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
@@ -760,4 +771,65 @@ describe('getPRChecks', () => {
 
     await expect(getPRChecks('/repo-root', 42)).rejects.toThrow('rate limited')
   })
+})
+
+it('carries the actual matching GraphQL commit identity rather than the requested head', async () => {
+  vi.clearAllMocks()
+  getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+  ghExecFileAsyncMock.mockResolvedValueOnce(
+    graphQLChecksResponse({
+      headRefOid: 'b'.repeat(40),
+      contexts: [{ __typename: 'StatusContext', context: 'Build', state: 'SUCCESS' }]
+    })
+  )
+  const checks = await getPRChecks('/repo-root', 42, 'a'.repeat(40))
+  expect(JSON.parse(JSON.stringify(checks))).toEqual([
+    {
+      name: 'Build',
+      status: 'completed',
+      conclusion: 'success',
+      url: null,
+      observedHeadSha: 'b'.repeat(40)
+    }
+  ])
+  ghExecFileAsyncMock.mockResolvedValueOnce(
+    graphQLChecksResponse({
+      headRefOid: 'a'.repeat(40),
+      commitOid: 'b'.repeat(40),
+      contexts: [{ __typename: 'StatusContext', context: 'Build', state: 'SUCCESS' }]
+    })
+  )
+  expect((await getPRChecks('/repo-root', 42, 'a'.repeat(40)))[0].observedHeadSha).toBeUndefined()
+})
+
+it('carries immutable REST endpoint identity through useful incomplete enrichment', async () => {
+  vi.clearAllMocks()
+  ghExecFileAsyncMock
+    .mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        total_count: 1,
+        check_runs: [
+          {
+            id: 88,
+            name: 'Build',
+            status: 'completed',
+            conclusion: 'failure',
+            html_url: '',
+            details_url: null
+          }
+        ]
+      })
+    })
+    .mockRejectedValueOnce(new Error('statuses unavailable'))
+    .mockResolvedValueOnce({ stdout: JSON.stringify({ total_count: 0, check_suites: [] }) })
+  const checks = await getPRChecksViaRestFallback(
+    { owner: 'acme', repo: 'widgets', host: 'github.com' },
+    'a'.repeat(40),
+    { cwd: '/repo-root' },
+    true
+  )
+  expect(checks).toMatchObject([{ name: 'Build', observedHeadSha: 'a'.repeat(40) }])
+  expect(ghExecFileAsyncMock.mock.calls[0][0]).toContain(
+    `repos/acme/widgets/commits/${'a'.repeat(40)}/check-runs?per_page=100&page=1`
+  )
 })

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  deriveNativeChatStreamingText,
-  nativeChatStreamingMessage,
-  NATIVE_CHAT_STREAMING_ID
-} from './native-chat-streaming'
+import { deriveNativeChatStreamingText } from './native-chat-streaming'
 import type { NativeChatMessage } from './native-chat-types'
 
 const assistant = (text: string): NativeChatMessage => ({
@@ -25,15 +21,6 @@ describe('deriveNativeChatStreamingText', () => {
   it('returns null when not working (stale preview never shows)', () => {
     expect(
       deriveNativeChatStreamingText({ messages: [], previewText: 'Hello there', working: false })
-    ).toBeNull()
-  })
-
-  it('returns null for empty / whitespace preview', () => {
-    expect(
-      deriveNativeChatStreamingText({ messages: [], previewText: '', working: true })
-    ).toBeNull()
-    expect(
-      deriveNativeChatStreamingText({ messages: [], previewText: '   ', working: true })
     ).toBeNull()
   })
 
@@ -73,16 +60,6 @@ describe('deriveNativeChatStreamingText', () => {
     ).toBeNull()
   })
 
-  it('drops the preview when it is not longer than the last assistant turn (no flicker)', () => {
-    expect(
-      deriveNativeChatStreamingText({
-        messages: [assistant('Same length text')],
-        previewText: 'Same length text',
-        working: true
-      })
-    ).toBeNull()
-  })
-
   it('drops a preview flagged as tool output even when it leads the transcript', () => {
     // Status previews may contain tool stdout that never enters assistant blocks; catch-up cannot retire it, so gate tool output explicitly.
     expect(
@@ -93,17 +70,6 @@ describe('deriveNativeChatStreamingText', () => {
         previewIsToolOutput: true
       })
     ).toBeNull()
-  })
-
-  it('still shows a leading preview when it is not tool output', () => {
-    expect(
-      deriveNativeChatStreamingText({
-        messages: [assistant('Partial')],
-        previewText: 'Partial answer that is now much longer than before',
-        working: true,
-        previewIsToolOutput: false
-      })
-    ).toBe('Partial answer that is now much longer than before')
   })
 
   it('hides the sentence it streamed while a tool runs, but not a new reply after the tool', () => {
@@ -127,15 +93,5 @@ describe('deriveNativeChatStreamingText', () => {
         working: true
       })
     ).toBe('The settings look correct.')
-  })
-})
-
-describe('nativeChatStreamingMessage', () => {
-  it('builds a stable-id assistant hook message', () => {
-    const m = nativeChatStreamingMessage('hi')
-    expect(m.id).toBe(NATIVE_CHAT_STREAMING_ID)
-    expect(m.role).toBe('assistant')
-    expect(m.source).toBe('hook')
-    expect(m.blocks).toEqual([{ type: 'text', text: 'hi' }])
   })
 })

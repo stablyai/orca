@@ -38,7 +38,7 @@ import {
 } from './synthetic-title-runtime'
 import { requireMainWindowServices } from './main-window-service-readiness'
 import { recordRendererLaunchFailureProbe } from '../window/renderer-launch-failure-probe'
-import { trackBrowserExtensionMainWindow } from '../browser/extensions/browser-extension-window-model'
+import { trackBrowserExtensionMainWindow } from '../browser/extensions/tabs-and-windows/browser-extension-window-model'
 
 import { isResourceWindowVisible } from '../window/resource-view-admission'
 import {

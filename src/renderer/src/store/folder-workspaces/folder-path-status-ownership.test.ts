@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspace-path-status'
+import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
 
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import './folder-path-status'

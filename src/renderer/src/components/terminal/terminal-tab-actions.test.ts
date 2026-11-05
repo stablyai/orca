@@ -44,7 +44,7 @@ vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
-vi.mock('../../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../../shared/workspace-layout/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: isWebTerminalSurfaceTabIdMock,
   toHostSessionTabId: toHostSessionTabIdMock
 }))
@@ -86,10 +86,10 @@ describe('closeTerminalTab', () => {
       setActiveTab: vi.fn()
     })
 
-    closeTerminalTab('local-tab-1')
+    closeTerminalTab('local-tab-1', { reason: 'user' })
 
     expect(closeTab).toHaveBeenCalledWith('local-tab-1', {
-      reason: undefined,
+      reason: 'user',
       remoteCloseOwnedByHost: true
     })
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
@@ -159,6 +159,32 @@ describe('closeTerminalTab', () => {
     })
   })
 
+  it.each([
+    ['user', 'user'],
+    ['requested', 'user'],
+    ['cleanup', 'cleanup']
+  ] as const)(
+    'sends a %s close to a paired host as %s, so only declared intent is destructive (#37245)',
+    (reason, wireReason) => {
+      isWebRuntimeSessionActiveMock.mockReturnValue(true)
+      resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
+      getStateMock.mockReturnValue({
+        ...terminalOwnerRows('web-runtime'),
+        tabsByWorktree: { 'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }] },
+        activeWorktreeId: 'wt-1',
+        activeTabId: 'local-tab-1',
+        closeTab: vi.fn(),
+        setActiveTab: vi.fn()
+      })
+
+      closeTerminalTab('local-tab-1', { reason, skipRunningProcessConfirm: true })
+
+      expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith(
+        expect.objectContaining({ tabId: 'host-tab-1', reason: wireReason })
+      )
+    }
+  )
+
   it('keeps the pinned confirmation guard for a hostCloseReason pty-exit close', () => {
     const requestPinnedTabCloseConfirm = vi.fn()
     const closeUnifiedTab = vi.fn()
@@ -211,9 +237,9 @@ describe('closeTerminalTab', () => {
       setActiveWorktree: vi.fn()
     })
 
-    closeTerminalTab('terminal-entity-1')
+    closeTerminalTab('terminal-entity-1', { reason: 'user' })
 
-    expect(closeTab).toHaveBeenCalledWith('terminal-entity-1', { reason: undefined })
+    expect(closeTab).toHaveBeenCalledWith('terminal-entity-1', { reason: 'user' })
     expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
 
@@ -234,10 +260,10 @@ describe('closeTerminalTab', () => {
       setActiveTab: vi.fn()
     })
 
-    closeTerminalTab('plain-uuid-tab')
+    closeTerminalTab('plain-uuid-tab', { reason: 'user' })
 
     expect(closeTab).toHaveBeenCalledWith('plain-uuid-tab', {
-      reason: undefined,
+      reason: 'user',
       remoteCloseOwnedByHost: true
     })
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
@@ -303,12 +329,12 @@ describe('closeTerminalTab', () => {
       })
     )
 
-    closeTerminalTab('pinned-entity-1', { onClosed })
+    closeTerminalTab('pinned-entity-1', { reason: 'user', onClosed })
     expect(onClosed).not.toHaveBeenCalled()
     const { onConfirm } = requestPinnedTabCloseConfirm.mock.calls[0][0] as { onConfirm: () => void }
     onConfirm()
 
-    expect(closeTab).toHaveBeenCalledWith('pinned-entity-1', { reason: undefined })
+    expect(closeTab).toHaveBeenCalledWith('pinned-entity-1', { reason: 'user' })
     expect(closeUnifiedTab).not.toHaveBeenCalled()
     expect(onClosed).toHaveBeenCalledTimes(1)
   })
@@ -325,7 +351,7 @@ describe('closeTerminalTab', () => {
     )
 
     // Overlay close supplies the unified ID, so pin detection must recognize it.
-    closeTerminalTab('unified-pinned-1')
+    closeTerminalTab('unified-pinned-1', { reason: 'user' })
 
     expect(closeUnifiedTab).not.toHaveBeenCalled()
     expect(requestPinnedTabCloseConfirm).toHaveBeenCalledTimes(1)

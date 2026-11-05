@@ -1,6 +1,9 @@
 // Read both current turn items and legacy turnLifecycle status rows still sent to older clients.
 
-import { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from '../../agent-turn-outcome'
+import {
+  AGENT_JOURNAL_TURN_OUTCOMES,
+  type AgentJournalTurnOutcome
+} from '../../agent-status/lifecycle/agent-turn-outcome'
 import type {
   AgentJournalItemBody,
   AgentJournalStatusItem,
@@ -8,8 +11,8 @@ import type {
   AgentJournalTurnLifecycle
 } from '../journal/agent-session-journal-types'
 import { isAdmissibleAgentSessionContextUsage } from '../agent-session-context-usage-schema'
-import { agentTurnLifecycleText } from '../../agent-turn-lifecycle-text'
-import { tuiAgentDisplayName } from '../../tui-agent-display-names'
+import { agentTurnLifecycleText } from '../../agent-status/presentation/agent-turn-lifecycle-text'
+import { tuiAgentDisplayName } from '../../agent-launch/catalog/tui-agent-display-names'
 
 export function readAgentJournalTurn(
   body: AgentJournalItemBody | undefined

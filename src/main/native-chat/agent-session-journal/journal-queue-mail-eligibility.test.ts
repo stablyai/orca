@@ -8,7 +8,7 @@ import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import type { AgentSessionJournal } from './journal-store'
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
-import { nextStructuredQueuedMessage } from '../agent-session-wire/structured-agent-session-queued-messages'
+import { nextStructuredQueuedMessage } from '../agent-session-wire/structured-agent-session-queued-gate'
 import { structuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import type { QueuedMessageRow } from './queued-message-table'
@@ -98,6 +98,87 @@ function handOver(journal: AgentSessionJournal, messageId: string) {
 }
 
 describe("the queue's one rule for the next card", () => {
+  it('uses the same steering selection at consume, retaining normal FIFO and command barriers', async () => {
+    const journal = await queue(new Set())
+    await journal.queuedMessages.insert({ messageId: 'person', body: personal('next') })
+    await journal.queuedMessages.insert({ messageId: 'report', body: mail('run:r', 'm') })
+    expect(next(journal)).toBe('person')
+    expect(journal.queuedMessages.nextInputCard(true, true)?.messageId).toBe('report')
+    await expect(handOver(journal, 'report')).rejects.toBeInstanceOf(
+      QueuedMessageNotConsumableError
+    )
+    const card = journal.queuedMessages.get('report')!
+    await journal.appendSubmission(
+      {
+        clientMessageId: 'steered',
+        origin: 'host',
+        payloadFingerprint: card.fingerprint,
+        body: card.body,
+        fence: 0,
+        handoverRecorded: true
+      },
+      { messageId: 'report', expect: 'waiting', yieldsToPause: true, steer: true }
+    )
+    expect(next(journal)).toBe('person')
+    await journal.queuedMessages.insert({
+      messageId: 'command',
+      body: { ...personal('/compact'), command: { name: 'compact' } }
+    })
+    await journal.queuedMessages.insert({ messageId: 'later', body: mail('run:r', 'later') })
+    expect(journal.queuedMessages.nextInputCard(true, true)).toBeNull()
+  })
+
+  it.each([20, 200])(
+    'does not walk %i person cards after the last mail is edited into a personal request',
+    async (count) => {
+      const journal = await queue(new Set())
+      await journal.queuedMessages.insert({ messageId: 'report', body: mail('run:r', 'm') })
+      const card = journal.queuedMessages.get('report')!
+      await journal.queuedMessages.update({
+        messageId: card.messageId,
+        expectedBodyFingerprint: card.fingerprint,
+        text: 'my request'
+      })
+      for (let i = 0; i < count; i++) {
+        await journal.queuedMessages.insert({ messageId: `person-${i}`, body: personal('next') })
+      }
+      const visits = countWalk()
+      for (let i = 0; i < 10; i++) {
+        await journal.queuedMessages.insert({ messageId: `extra-${i}`, body: personal('next') })
+        expect(journal.queuedMessages.nextInputCard(true, true)).toBeNull()
+      }
+      expect(visits()).toBe(0)
+    }
+  )
+
+  it.each([20, 200])(
+    'walks %i ordinary follow-ups once across repeated busy-turn checks',
+    async (count) => {
+      const unavailable = new Set<string>()
+      const journal = await queue(unavailable)
+      for (let i = 0; i < count; i++) {
+        await journal.queuedMessages.insert({ messageId: `person-${i}`, body: personal('next') })
+      }
+      await journal.queuedMessages.insert({ messageId: 'report', body: mail('run:r', 'm') })
+      const visits = countWalk()
+      for (let i = 0; i < 100; i++) {
+        expect(journal.queuedMessages.nextInputCard(true, true)?.messageId).toBe('report')
+        expect(next(journal)).toBe('person-0')
+      }
+      expect(visits()).toBe(count)
+      await journal.appendStopEvent({ reason: 'user-stop' }, 0)
+      unavailable.add('unreadable')
+      await journal.queuedMessages.insert({ messageId: 'unreadable', body: mail('run:r', 'u') })
+      await journal.queuedMessages.insert({ messageId: 'new-person', body: personal('next') })
+      const before = visits()
+      for (let i = 0; i < 100; i++) {
+        expect(journal.queuedMessages.nextInputCard(true, true)).toBeNull()
+        expect(next(journal)).toBeUndefined()
+      }
+      expect(visits() - before).toBe(0)
+    }
+  )
+
   it("passes mail it cannot decide on for the person's next card, never a held one", async () => {
     const journal = await queue(new Set(['A']))
     await journal.queuedMessages.insert({ messageId: 'A', body: mail('run:r', 'm1') })
@@ -138,6 +219,22 @@ describe("the queue's one rule for the next card", () => {
     expect(next(journal)).toBe('A')
     await expect(handOver(journal, 'C')).rejects.toBeInstanceOf(QueuedMessageNotConsumableError)
     await handOver(journal, 'A')
+  })
+
+  it('reconsiders a cleared personal card behind unavailable mail when Resume lifts its pause', async () => {
+    const journal = await queue(new Set(['A']))
+    await journal.queuedMessages.insert({ messageId: 'C', body: personal('held across clear') })
+    await journal.context.clear(
+      { operationId: 'clear', afterFence: 0, clearedAt: 1 },
+      { write: () => {}, committed: () => {} }
+    )
+    await journal.queuedMessages.insert({ messageId: 'A', body: mail('run:r', 'm1') })
+    await journal.queuedMessages.move({ messageId: 'A', beforeMessageId: 'C' })
+    expect(next(journal)).toBeUndefined()
+    await journal.appendQueueResume(0)
+    expect(next(journal)).toBe('C')
+    await handOver(journal, 'C')
+    expect(journal.queuedMessages.get('C')?.state).toBe('dispatched')
   })
 
   it('asks mail authority only once nothing else stops a send', async () => {

@@ -10,7 +10,7 @@ import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/e
 import {
   PTY_SESSION_ID_SEPARATOR,
   WORKTREE_ID_SEPARATOR
-} from '../../../shared/pty-session-id-format'
+} from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {

@@ -1,5 +1,5 @@
 import type { DiffComment } from '../../../../shared/diff-comment-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import type { DiffCommentOwner } from '../diff-comment-owner'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'

@@ -22,7 +22,7 @@ import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution
 import {
   isListedRemoteServer,
   runtimePairingRepairRoute
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
 import { connectedHostCountLabel, moreSshHostsLabel } from './ssh-status-segment-copy'
 import { SshHostFindPopover } from './SshHostFindPopover'
@@ -36,11 +36,9 @@ import {
   runtimeHostStatusForOverall,
   sshStatusForOverall
 } from './remote-host-connection-status'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
-import { RuntimeRepairDialog } from '../settings/RuntimeRepairDialog'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { isConnectedRuntimeHostState } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
+import { RuntimeRepairDialog } from '../runtime-access/RuntimeRepairDialog'
 
 export function SshStatusSegment({
   compact,

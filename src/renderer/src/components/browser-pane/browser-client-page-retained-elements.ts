@@ -36,7 +36,9 @@ export function hideRetainedHostWhileGuestIsBlank(
 ): (event: Electron.LoadCommitEvent) => void {
   return (event) => {
     if (event.isMainFrame) {
-      host.style.visibility = isBlankBrowserUrl(event.url) ? 'hidden' : ''
+      const blank = isBlankBrowserUrl(event.url)
+      host.dataset.browserClientPageBlank = String(blank)
+      host.style.visibility = blank ? 'hidden' : ''
     }
   }
 }

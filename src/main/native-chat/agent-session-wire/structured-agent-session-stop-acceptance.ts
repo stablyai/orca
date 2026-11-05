@@ -7,9 +7,9 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionCancelResult } from '../../../shared/agent-session/agent-session-wire'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../shared/agent-session/failures/agent-session-write-notice-copy'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
 import {
   classifyJournalOpenFailure,
@@ -105,8 +105,8 @@ export async function acceptCapturedChatStop(
     return accepted.ok ? { ok: true, value: { settled: false, turnId: null } } : accepted
   }
   const sinceStop = ctx.journal.queuedMessages.userStopInForce()?.sequence
-  const handed = ctx.journal
-    .submissions()
+  const handed = ctx.journal.inputOrder
+    .recoverableSubmissions()
     .some(
       (entry) =>
         entry.fence === ctx.fence &&

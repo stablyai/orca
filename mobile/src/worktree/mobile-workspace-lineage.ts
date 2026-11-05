@@ -3,7 +3,11 @@ import {
   getExpandedWorktreeOccurrences,
   type WorktreeOccurrencePlan
 } from '../../../src/shared/worktree-occurrence-plan'
-import type { Worktree } from './workspace-list-types'
+import type { WorkspaceListItem, Worktree } from './workspace-list-types'
+import {
+  NO_WORKTREE_HOST_CONTEXT,
+  type WorktreeHostContextOf
+} from './worktree-host-context-labels'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 
 type WorktreeLineageIdentitySource = Pick<Worktree, 'worktreeId' | 'hostId'>
@@ -60,27 +64,31 @@ export function getMobileWorkspaceLineageChildren(
 export function getMobileOccurrenceRows(
   plan: WorktreeOccurrencePlan<Worktree>,
   sectionKey: string,
-  collapsedGroups: ReadonlySet<string>
-): Worktree[] {
+  collapsedGroups: ReadonlySet<string>,
+  hostContextOf: WorktreeHostContextOf = NO_WORKTREE_HOST_CONTEXT
+): WorkspaceListItem[] {
   return getExpandedWorktreeOccurrences(plan.bySection.get(sectionKey) ?? [], (worktree) =>
     collapsedGroups.has(getMobileWorkspaceLineageGroupKey(worktree))
   ).map((occurrence) => ({
-    ...occurrence.row,
-    sectionListKey: occurrence.key,
-    lineageDepth: occurrence.depth,
-    lineageChildCount: occurrence.childCount,
-    lineageCollapsed:
-      occurrence.childCount > 0 &&
-      collapsedGroups.has(getMobileWorkspaceLineageGroupKey(occurrence.row)),
-    isLastLineageChild: occurrence.isLastChild,
-    showProjectName: occurrence.showProjectName
+    row: occurrence.row,
+    view: {
+      ...hostContextOf(occurrence.row),
+      sectionListKey: occurrence.key,
+      lineageDepth: occurrence.depth,
+      lineageChildCount: occurrence.childCount,
+      lineageCollapsed:
+        occurrence.childCount > 0 &&
+        collapsedGroups.has(getMobileWorkspaceLineageGroupKey(occurrence.row)),
+      isLastLineageChild: occurrence.isLastChild,
+      showProjectName: occurrence.showProjectName
+    }
   }))
 }
 
 export function applyMobileWorkspaceLineage(
   worktrees: readonly Worktree[],
   collapsedGroups: ReadonlySet<string> = new Set()
-): Worktree[] {
+): WorkspaceListItem[] {
   const plan = buildWorktreeOccurrencePlan({
     rows: worktrees,
     childrenByParentIdentity: getMobileWorkspaceLineageChildren(worktrees),

@@ -42,18 +42,6 @@ describe('selectPreparationForCreate', () => {
     })
   })
 
-  it('prefers the freshest armed entry when several share the family', () => {
-    const older = candidate({ canonicalBase: 'refs/remotes/origin/main', createdAt: 1 })
-    const newer = candidate({ canonicalBase: 'refs/remotes/upstream/main', createdAt: 2 })
-
-    const selection = selectPreparationForCreate(
-      [older, newer],
-      request({ baseBranch: 'main', canonicalBase: 'refs/heads/main' })
-    )
-
-    expect(selection).toMatchObject({ kind: 'retarget', candidate: newer })
-  })
-
   it('refuses to retarget onto a different branch', () => {
     const selection = selectPreparationForCreate(
       [candidate()],

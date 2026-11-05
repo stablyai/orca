@@ -1,11 +1,13 @@
-import type { QualifiedFolderHostState } from '../../../shared/folder-workspace-execution-host'
+import type { QualifiedFolderHostState } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId
+  toSshExecutionHostId,
+  type ExecutionHostId,
+  type ParsedExecutionHost
 } from '../../../shared/execution-host'
-import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {

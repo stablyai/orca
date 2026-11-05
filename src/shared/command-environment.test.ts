@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { extractLeadingEnvAssignments, mergeCommandEnvironment } from './command-environment'
-import { planAgentBinary, planCommitMessageGeneration } from './commit-message-plan'
-import { planCustomCommand } from './commit-message-prompt'
+import { planAgentBinary } from './agent-launch/startup/agent-command-plan'
+import { planCommitMessageGeneration } from './source-control/ai/generation/commit-message-plan'
+import { planCustomCommand } from './source-control/ai/generation/commit-message-prompt'
 
 describe('command environment assignments', () => {
   it('parses only leading valid names and retains literal values', () => {

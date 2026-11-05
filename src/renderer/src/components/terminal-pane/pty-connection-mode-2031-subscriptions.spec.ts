@@ -8,7 +8,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -59,6 +63,8 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         dispose: () => void
       }> {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-id')
         const captured: {
           current: ((data: string, meta?: { droppedOutput?: boolean }) => void) | null
@@ -79,7 +85,11 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         const pane = createPane(1)
         const manager = createManager(1)
         const deps = createDeps({ isVisibleRef: { current: true } })
-        const binding = connectPanePty(pane as never, manager as never, deps as never)
+        const binding = connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+        )
         await flushAsyncTicks(6)
         return {
           transport,
@@ -260,6 +270,8 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
 
     it('records hidden Codex mode 2031 subscribes split across becoming visible', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -282,12 +294,15 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef,
-          paneMode2031Ref,
-          paneLastThemeModeRef,
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef,
+            paneMode2031Ref,
+            paneLastThemeModeRef,
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks2
+        )
       )
       await flushAsyncTicks(6)
 
@@ -306,6 +321,8 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
 
     it('does not keep mode 2031 subscribed when a skipped hidden chunk unsubscribes last', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -323,12 +340,15 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
       const binding = connectPanePty(
         pane as never,
         manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          paneMode2031Ref,
-          paneLastThemeModeRef,
-          startup: { command: 'codex' }
-        }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({
+            isVisibleRef: { current: false },
+            paneMode2031Ref,
+            paneLastThemeModeRef,
+            startup: { command: 'codex' }
+          }) as never,
+          agentTitleMocks3
+        )
       )
       await flushAsyncTicks(6)
 

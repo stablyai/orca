@@ -7,7 +7,7 @@ import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import type { DiffCommentOwner } from '@/store/diff-comment-owner'
-import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
+import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
 import { DiffNotesPreviewPopover } from './combined-diff-notes-popover'
 
 function changedFilesSummary(

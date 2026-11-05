@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { GitRemoteIdentity } from '../../../shared/git-remote-identity'
+import type { GitRemoteIdentity } from '../../../shared/git/remotes/git-remote-identity'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { repoTarget } from '../../persistence/repo-host-target-matcher.test-fixture'

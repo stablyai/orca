@@ -20,7 +20,7 @@ import { MobileRelaySessionEstablisher } from './mobile-relay-session-establishe
 import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason } from './types'
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { MobileRelayBackgroundGrace } from './mobile-relay-background-grace'
 import {
   logRelayConnected,

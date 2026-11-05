@@ -1,7 +1,7 @@
 import {
   lastVerifiedRuntimeStatus,
   isRuntimeHostContactRevoked
-} from '../../../../shared/runtime-host-status'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '@/store'
 // Upload structured-chat client paths to their paired host; other remote chats cannot read client-local files.
 
@@ -40,7 +40,7 @@ export type NativeChatRuntimeSessionAttachmentOwner = {
 
 export type NativeChatAttachmentOwner =
   /** `structuredSessionId`: a structured chat on this machine, whose sends claim its pastes. */
-  | { kind: 'local'; structuredSessionId?: string }
+  | { kind: 'local'; structuredSessionId?: string; stagingScope?: string }
   | NativeChatRuntimeSessionAttachmentOwner
   /** Refuse client paths for terminal-backed remote or nested SSH/WSL chats; the paired store may not reach their agent. */
   | {
@@ -121,6 +121,8 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
 
 export type NativeChatStructuredAttachmentSession = {
   sessionId: string
+  /** Files belong to the draft until its future session can receive them. */
+  attachmentStagingScope?: string
   /** Null: the chat runs on this machine. */
   runtimeEnvironmentId: string | null
   /** The host has not confirmed this chat, so nothing can be uploaded into it. */

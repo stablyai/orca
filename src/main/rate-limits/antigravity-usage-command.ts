@@ -1,4 +1,4 @@
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 
 // Use agy print-mode /usage: only agy can authenticate daily-cloudcode-pa using its OS-keyring Google credential.
 // agy 1.2.11 verified zero quota/tokens/turns and empty conversation_id; /usage and /quota resolve identically, but help lists /usage.

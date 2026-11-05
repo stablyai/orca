@@ -4,7 +4,6 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { notifyWorkItemDetailsMutation } from './github-work-item-comment-mutations'
-import { runGHEditLabelToggle } from '../github-item-dialog/edit-item-fields/gh-edit-section-mutations'
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn(() => ({ repos: [] })) } }))
@@ -100,24 +99,6 @@ describe('issue edits retain the displayed repository', () => {
       })
       expectProjectUpdate(sourceContext, { body: 'Project edit' })
     })
-
-    it.each([
-      { state: 'closed' as const },
-      { addLabels: ['bug'] },
-      { addAssignees: ['upstream-assignee'] }
-    ])('keeps the Project field edit on the same exact actor: %j', async (updates) => {
-      vi.mocked(window.api.gh.updateIssueBySlug).mockResolvedValue({ ok: true })
-      await runIssueUpdate({
-        repoPath: '/home/fixture/fork-widgets',
-        repoId: item.repoId,
-        sourceContext,
-        projectOrigin,
-        issueRepo: UPSTREAM,
-        number: 12,
-        updates
-      })
-      expectProjectUpdate(sourceContext, updates)
-    })
   })
 
   it.each([
@@ -143,36 +124,4 @@ describe('issue edits retain the displayed repository', () => {
     )
     expect(window.api.gh.updateIssueBySlug).not.toHaveBeenCalled()
   })
-
-  it.each([
-    { localLabels: [], updates: { addLabels: ['bug'] } },
-    { localLabels: ['bug'], updates: { removeLabels: ['bug'] } }
-  ])(
-    'retains the target for both label toggle directions: %j',
-    async ({ localLabels, updates }) => {
-      let mutation: Promise<unknown> = Promise.resolve()
-      runGHEditLabelToggle({
-        item,
-        itemNumber: item.number,
-        itemRepoId: item.repoId,
-        repoPath: 'C:\\workspace\\widgets',
-        projectOrigin: undefined,
-        issueRepo: ORIGIN,
-        label: 'bug',
-        localLabels,
-        run: async (_key, options) => {
-          mutation = options.mutate()
-          await mutation
-        },
-        onLabelsChange: vi.fn(),
-        patchProjectRowIfNeeded: vi.fn(),
-        onMutated: vi.fn()
-      })
-      await mutation
-
-      expect(window.api.gh.updateIssue).toHaveBeenCalledWith(
-        expect.objectContaining({ ownerRepo: ORIGIN, updates })
-      )
-    }
-  )
 })

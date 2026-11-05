@@ -5,11 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { E2EEKeypair } from '../e2ee-keypair'
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/remote-runtime/relay/mobile-relay-close-codes'
 import { RelayControlClient } from './relay-control-client'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import { RelayUnavailableError } from './relay-readiness'
-import { mobileRelayMintFailureFromUnknown } from '../../../shared/mobile-relay-mint-failure'
+import { mobileRelayMintFailureFromUnknown } from '../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 
 const encoder = new TextEncoder()
 

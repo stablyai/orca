@@ -3,7 +3,10 @@ import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/
 import type { StructuredMobileSendAttachment } from '../use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { AskAnswerSelection } from '../../../../src/shared/native-chat/input/native-chat-ask-answer'
+import type {
+  AskAnswerSelection,
+  NativeChatAnswerSource
+} from '../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { MobileChatPermission } from './input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './input/mobile-native-chat-question'
@@ -21,10 +24,12 @@ import type {
 import type { MobileNativeChatCommandRefusalCauses } from './use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from '../use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from '../use-mobile-structured-background-tasks'
+import type { MobileStructuredInterruptedContinue } from '../use-mobile-structured-interrupted-continue'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
+import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
 
 export type MobileNativeChatController = {
@@ -68,11 +73,14 @@ export type MobileNativeChatController = {
   nativeChatQuestion: MobileChatQuestion | null
   // Keep dismissal above chat-view unmounts so toggling views cannot resurrect an answered ask.
   nativeChatAsk: AskPrompt | null
+  nativeChatAskSendSource?: NativeChatAnswerSource
+  nativeChatAskPending?: boolean
   nativeChatAskKey: string | null
   dismissNativeChatAsk: () => void
   handleNativeChatAnswerAsk: (
     prompt: AskPrompt,
-    selections: AskAnswerSelection[]
+    selections: AskAnswerSelection[],
+    onCreated?: (id: string) => void
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
   // Collapse writes nothing to the terminal and frees Send.
@@ -87,6 +95,8 @@ export type MobileNativeChatController = {
   handleNativeChatStop: () => void
   nativeChatQueued: MobileStructuredQueuedMessageControls
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
+  nativeChatContextUsage: NativeChatContextUsageSummary | null
+  nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
   nativeChatSkills: NativeChatSkillDiscoverySnapshot

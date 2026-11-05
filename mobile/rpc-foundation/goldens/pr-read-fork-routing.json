@@ -45,45 +45,20 @@
         }
       }
     },
-    "79b747202f2f": {
-      "check-details": {
-        "ok": true,
-        "result": {
-          "annotations": [],
-          "completedAt": {
-            "$rpc": "null"
-          },
-          "conclusion": "success",
-          "detailsUrl": {
-            "$rpc": "null"
-          },
-          "jobs": [],
-          "name": "build",
-          "startedAt": {
-            "$rpc": "null"
-          },
-          "status": "completed",
-          "summary": {
-            "$rpc": "null"
-          },
-          "text": {
-            "$rpc": "null"
-          },
-          "title": {
-            "$rpc": "null"
-          },
-          "url": {
-            "$rpc": "null"
-          }
-        }
-      },
-      "checks": {
+    "3d3e04f5c1cb": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
         "ok": true,
         "result": [
           {
             "checkRunId": 7,
             "conclusion": "success",
             "name": "build",
+            "observedHeadSha": {
+              "$rpc": "undefined"
+            },
             "status": "completed",
             "url": {
               "$rpc": "null"
@@ -183,6 +158,28 @@
         }
       }
     },
+    "9ad46f0a24c7": {
+      "checks": {
+        "ok": true,
+        "result": [
+          {
+            "checkRunId": 7,
+            "conclusion": "success",
+            "name": "build",
+            "observedHeadSha": {
+              "$rpc": "undefined"
+            },
+            "status": "completed",
+            "url": {
+              "$rpc": "null"
+            },
+            "workflowRunId": {
+              "$rpc": "undefined"
+            }
+          }
+        ]
+      }
+    },
     "c0db062cb341": {
       "name": "github.prChecks#1",
       "ordinal": 1,
@@ -234,7 +231,43 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prCheckDetails\",\"params\":{\"repo\":\"id:repo-9\",\"checkRunId\":7,\"checkName\":\"build\",\"url\":null,\"prRepo\":{\"owner\":\"fork-owner\",\"repo\":\"fork-repo\",\"host\":\"github.enterprise.test\"}}}"
     },
-    "daf4d0570339": {
+    "dd2205e9f2fb": {
+      "name": "github.prChecks#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12}}"
+    },
+    "ff556464fa8e": {
+      "check-details": {
+        "ok": true,
+        "result": {
+          "annotations": [],
+          "completedAt": {
+            "$rpc": "null"
+          },
+          "conclusion": "success",
+          "detailsUrl": {
+            "$rpc": "null"
+          },
+          "jobs": [],
+          "name": "build",
+          "startedAt": {
+            "$rpc": "null"
+          },
+          "status": "completed",
+          "summary": {
+            "$rpc": "null"
+          },
+          "text": {
+            "$rpc": "null"
+          },
+          "title": {
+            "$rpc": "null"
+          },
+          "url": {
+            "$rpc": "null"
+          }
+        }
+      },
       "checks": {
         "ok": true,
         "result": [
@@ -242,33 +275,9 @@
             "checkRunId": 7,
             "conclusion": "success",
             "name": "build",
-            "status": "completed",
-            "url": {
-              "$rpc": "null"
-            },
-            "workflowRunId": {
+            "observedHeadSha": {
               "$rpc": "undefined"
-            }
-          }
-        ]
-      }
-    },
-    "dd2205e9f2fb": {
-      "name": "github.prChecks#2",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12}}"
-    },
-    "e23eb2e4b033": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "ok": true,
-        "result": [
-          {
-            "checkRunId": 7,
-            "conclusion": "success",
-            "name": "build",
+            },
             "status": "completed",
             "url": {
               "$rpc": "null"
@@ -290,9 +299,9 @@
           "sender": ["c0db062cb341"],
           "payloads": ["08e5cc0c504e"],
           "settlements": {
-            "fork-checks": "e23eb2e4b033"
+            "fork-checks": "3d3e04f5c1cb"
           },
-          "state": "daf4d0570339",
+          "state": "9ad46f0a24c7",
           "effects": []
         }
       },
@@ -302,10 +311,10 @@
           "sender": ["c0db062cb341", "997e2aac6183"],
           "payloads": ["08e5cc0c504e", "d982d58879cb"],
           "settlements": {
-            "fork-checks": "e23eb2e4b033",
+            "fork-checks": "3d3e04f5c1cb",
             "fork-check-details": "1c88fe396b45"
           },
-          "state": "79b747202f2f",
+          "state": "ff556464fa8e",
           "effects": []
         }
       },
@@ -315,11 +324,11 @@
           "sender": ["c0db062cb341", "997e2aac6183", "88a456608739"],
           "payloads": ["08e5cc0c504e", "d982d58879cb", "dd2205e9f2fb"],
           "settlements": {
-            "fork-checks": "e23eb2e4b033",
+            "fork-checks": "3d3e04f5c1cb",
             "fork-check-details": "1c88fe396b45",
-            "no-head-sha": "e23eb2e4b033"
+            "no-head-sha": "3d3e04f5c1cb"
           },
-          "state": "79b747202f2f",
+          "state": "ff556464fa8e",
           "effects": []
         }
       }

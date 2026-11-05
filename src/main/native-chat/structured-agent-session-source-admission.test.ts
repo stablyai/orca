@@ -2,6 +2,10 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+// Adoption forks the AI Vault service for the chat's title; naming is covered elsewhere.
+vi.mock('../ai-vault/session-titles/session-title-resolver', () => ({
+  resolveLocalAiVaultSessionTitles: async () => ({ titles: [] })
+}))
 import { CLAUDE_CLI_CONVERSATIONS } from '../claude/claude-cli-conversations'
 import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/agent-session/structured-agent-session-create-adoption'
 import {
@@ -15,10 +19,10 @@ import type { AgentSessionAttachParams } from './agent-session-wire/structured-a
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
 import { prepareCodexAdoption } from './codex-adoption-preparation'
-import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
-import * as codexHomes from '../codex/codex-home-paths'
+import { codexAiVaultSessionResumePreparation } from '../codex/history/resume/codex-ai-vault-session-resume'
+import * as codexHomes from '../codex/configuration/homes/codex-home-paths'
 import { adoptedDirectoryProbes } from './agent-session-journal/adopted-directory-probe'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 let root: string
 beforeEach(async () => {

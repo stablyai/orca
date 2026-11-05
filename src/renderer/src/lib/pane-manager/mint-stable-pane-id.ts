@@ -1,4 +1,4 @@
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { createBrowserUuid } from '../browser-uuid'
 
 export function mintStablePaneId(): TerminalLeafId {

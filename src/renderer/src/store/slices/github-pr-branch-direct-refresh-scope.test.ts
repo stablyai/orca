@@ -11,7 +11,7 @@ import {
   runtimeEnvironmentCall
 } from './github-slice-test-harness'
 import type { AppState } from '../types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 
 beforeEach(() => {
@@ -203,7 +203,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         fetchedAt: Date.now()
       })
 
-      await expect(request).resolves.toMatchObject({ title: 'Same-ms direct PR refresh' })
+      await expect(request).resolves.toBeNull()
       expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
       expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
         data: externalReview,

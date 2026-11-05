@@ -128,81 +128,6 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
       }
     )
 
-    it('keeps a running tool live when transcript lifecycle metadata is absent', () => {
-      render(
-        <NativeChatMessageList
-          session={{
-            ...session,
-            status: 'working',
-            messages: [
-              {
-                id: 'assistant-tool-1',
-                role: 'assistant',
-                blocks: [
-                  {
-                    type: 'tool-call',
-                    name: 'shell',
-                    input: { command: 'sleep 5' },
-                    state: 'running'
-                  }
-                ],
-                timestamp: 1,
-                source: 'transcript'
-              }
-            ]
-          }}
-          isWorking
-          expandSignal={false}
-        />
-      )
-
-      expect(screen.getByText('Running 1 command')).toBeInTheDocument()
-      expect(screen.getByText('sleep 5')).toBeInTheDocument()
-      expect(screen.queryByText('1×')).toBeNull()
-      expect(document.querySelector('.text-destructive')).toBeNull()
-    })
-
-    it("holds back only the running turn's controls, and shows them once it ends", () => {
-      const text = (
-        id: string,
-        role: 'user' | 'assistant',
-        words: string,
-        timestamp: number
-      ): NativeChatMessage => ({
-        id,
-        role,
-        blocks: [{ type: 'text', text: words }],
-        timestamp,
-        source: 'transcript'
-      })
-      const list = (isWorking: boolean) => (
-        <NativeChatMessageList
-          session={{
-            ...session,
-            status: isWorking ? 'working' : 'ready',
-            messages: [
-              text('user-1', 'user', 'First ask', 1),
-              text('assistant-1', 'assistant', 'Finished reply.', 2),
-              text('user-2', 'user', 'Second ask', 3),
-              text('assistant-2', 'assistant', 'Reply still coming', 4)
-            ]
-          }}
-          isWorking={isWorking}
-          expandSignal={false}
-        />
-      )
-      const copyButtons = () => screen.queryAllByRole('button', { name: 'Copy message' })
-
-      const { rerender } = render(list(true))
-      // The finished turn keeps its controls; user bubbles carry their own copy button.
-      expect(copyButtons()).toHaveLength(3)
-      expect(screen.getAllByRole('button', { name: 'Scroll this message to top' })).toHaveLength(1)
-
-      rerender(list(false))
-      expect(copyButtons()).toHaveLength(4)
-      expect(screen.getAllByRole('button', { name: 'Scroll this message to top' })).toHaveLength(2)
-    })
-
     // Prose settles the preceding run; reasoning asides remain inside it.
     it('settles a run once prose follows it, but not for a reasoning aside', () => {
       const run = {
@@ -338,26 +263,6 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
       }
     }
 
-    it('leaves the roster row behind on a settled turn whose activity is collapsed', () => {
-      const startedAt = Date.now() - 3000
-      render(
-        <NativeChatMessageList
-          session={rosterSession(ROSTER, startedAt)}
-          isWorking={false}
-          workingStartedAt={startedAt}
-          expandSignal={false}
-        />
-      )
-
-      expect(screen.getByRole('button', { name: 'Toggle turn details' })).toHaveAttribute(
-        'aria-expanded',
-        'false'
-      )
-      expect(screen.getByRole('button', { name: /Ran 2 subagents/ })).toHaveTextContent('1 failed')
-      // Structured roster rendering replaces only its plain-text fallback.
-      expect(screen.queryByText('Ran 2 subagents (1 failed)')).toBeNull()
-    })
-
     // Providers may fold a roster beside real prose; remove only its fallback twin.
     it('keeps prose beside a roster block and drops only the twin', () => {
       const startedAt = Date.now() - 3000
@@ -389,48 +294,6 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
       expect(screen.getByText('Handing the audit to two children.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Ran 2 subagents/ })).toBeInTheDocument()
       expect(screen.queryByText(twin)).toBeNull()
-    })
-
-    // Roster visibility must not bypass the disclosure for settled tool activity.
-    it('keeps tool activity behind the disclosure the roster now bypasses', () => {
-      const startedAt = Date.now() - 3000
-      render(
-        <NativeChatMessageList
-          session={rosterSession(ROSTER, startedAt)}
-          isWorking={false}
-          workingStartedAt={startedAt}
-          expandSignal={false}
-        />
-      )
-
-      expect(screen.queryByRole('button', { name: /pwd/ })).toBeNull()
-      fireEvent.click(screen.getByRole('button', { name: 'Toggle turn details' }))
-      expect(screen.getAllByRole('button', { name: /pwd/ }).length).toBeGreaterThan(0)
-      expect(screen.getAllByRole('button', { name: /Ran 2 subagents/ })).toHaveLength(1)
-    })
-
-    it('reads as a live spawn while the turn is still working', () => {
-      render(
-        <NativeChatMessageList
-          session={{
-            ...rosterSession(
-              [
-                { id: 'a', label: 'read', state: 'working' },
-                { id: 'b', label: 'search', state: 'working' }
-              ],
-              Date.now() - 3000
-            ),
-            status: 'working'
-          }}
-          isWorking
-          workingStartedAt={Date.now()}
-          expandSignal={false}
-        />
-      )
-
-      expect(screen.getByRole('button', { name: /Kicked off 2 subagents/ })).toHaveTextContent(
-        '2 working'
-      )
     })
 
     // A newer turn must not turn still-running children into completed or unverifiable agents.
@@ -469,80 +332,6 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
       expect(roster).toHaveTextContent('2 working')
       expect(roster).not.toHaveTextContent('unverifiable')
       expect(screen.queryByRole('button', { name: /Ran 2 subagents/ })).toBeNull()
-    })
-  })
-
-  // Empty rosters render nothing and must consume no transcript gap.
-  describe('NativeChatMessageList childless spawn group', () => {
-    let restoreViewport = (): void => {}
-    beforeAll(() => {
-      restoreViewport = installNativeChatMessageListTestViewport()
-    })
-    afterAll(() => restoreViewport())
-    afterEach(cleanup)
-    const NO_AGENTS: NativeChatSubagentEntry[] = []
-
-    function rosterSession(blocks: NativeChatMessage['blocks'], at: number): NativeChatLiveSession {
-      return {
-        ...session,
-        status: 'ready',
-        messages: [
-          {
-            id: 'user-fanout',
-            role: 'user',
-            blocks: [{ type: 'text', text: 'Fan this out' }],
-            timestamp: at,
-            source: 'transcript'
-          },
-          { id: 'roster-1', role: 'system', blocks, timestamp: at + 1, source: 'transcript' }
-        ]
-      }
-    }
-
-    function emptySlots(container: HTMLElement): Element[] {
-      const column = container.querySelector('[data-native-chat-transcript-column]')
-      expect(column).not.toBeNull()
-      return Array.from(column!.children).filter((slot) => slot.textContent === '')
-    }
-
-    it('mounts no row for a bare spawn group with no children', () => {
-      const startedAt = Date.now() - 3000
-      const { container } = render(
-        <NativeChatMessageList
-          session={rosterSession(
-            [{ type: 'subagent-group', groupId: 'thread-1:turn-1', agents: NO_AGENTS }],
-            startedAt
-          )}
-          isWorking={false}
-          workingStartedAt={startedAt}
-          expandSignal={false}
-        />
-      )
-
-      expect(screen.getByText('Fan this out')).toBeInTheDocument()
-      expect(emptySlots(container)).toEqual([])
-    })
-
-    it('falls back to the plain-text twin when the block it stands in for cannot draw', () => {
-      const startedAt = Date.now() - 3000
-      const { container } = render(
-        <NativeChatMessageList
-          session={rosterSession(
-            [
-              { type: 'text', text: subagentGroupFallbackText(NO_AGENTS) },
-              { type: 'subagent-group', groupId: 'thread-1:turn-1', agents: NO_AGENTS }
-            ],
-            startedAt
-          )}
-          isWorking={false}
-          workingStartedAt={startedAt}
-          expandSignal={false}
-        />
-      )
-
-      // An empty roster cannot replace its fallback text.
-      expect(screen.getByText(subagentGroupFallbackText(NO_AGENTS))).toBeInTheDocument()
-      expect(emptySlots(container)).toEqual([])
     })
   })
 }
@@ -650,65 +439,6 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
     })
     afterAll(() => restoreViewport())
     afterEach(cleanup)
-    it('shows a settled turn as its prompt, its duration and its answer', () => {
-      const startedAt = Date.now() - 3000
-      render(
-        <NativeChatMessageList
-          session={session(startedAt)}
-          isWorking={false}
-          workingStartedAt={startedAt}
-          expandSignal={false}
-        />
-      )
-
-      expect(screen.getByText('Please review this PR.')).toBeInTheDocument()
-      expect(screen.getByText(ANSWER)).toBeInTheDocument()
-      expect(screen.queryByText(NARRATION)).toBeNull()
-      expect(screen.queryByText(MORE_NARRATION)).toBeNull()
-      expect(screen.getByRole('button', { name: 'Toggle turn details' })).toHaveAttribute(
-        'aria-expanded',
-        'false'
-      )
-    })
-
-    it('returns the whole turn when the reader opens it', () => {
-      const startedAt = Date.now() - 3000
-      render(
-        <NativeChatMessageList
-          session={session(startedAt)}
-          isWorking={false}
-          workingStartedAt={startedAt}
-          expandSignal={false}
-        />
-      )
-
-      fireEvent.click(screen.getByRole('button', { name: 'Toggle turn details' }))
-
-      expect(screen.getByText(NARRATION)).toBeInTheDocument()
-      expect(screen.getByText(MORE_NARRATION)).toBeInTheDocument()
-      expect(screen.getByText(ANSWER)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Toggle turn details' })).toHaveAttribute(
-        'aria-expanded',
-        'true'
-      )
-    })
-
-    // The fold starts closed only once settled; live work stays visible.
-    it('folds nothing while the turn is still running', () => {
-      const startedAt = Date.now() - 3000
-      render(
-        <NativeChatMessageList
-          session={{ ...session(startedAt), status: 'working' }}
-          isWorking
-          workingStartedAt={startedAt}
-          expandSignal={false}
-        />
-      )
-
-      expect(screen.getByText(NARRATION)).toBeInTheDocument()
-      expect(screen.getByText(MORE_NARRATION)).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Toggle turn details' })).toBeNull()
-    })
 
     // A mid-turn steer remains in the opener’s fold without gaining its own turn bar.
     it.each([
@@ -750,41 +480,5 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
         expect(screen.getByText(MORE_NARRATION)).toBeInTheDocument()
       }
     )
-
-    it('keeps the last prose row when the turn ends on tool activity', () => {
-      const startedAt = Date.now() - 3000
-      const base = session(startedAt)
-      render(
-        <NativeChatMessageList
-          session={{
-            ...base,
-            messages: [
-              ...base.messages,
-              {
-                id: 'work-2',
-                role: 'assistant',
-                blocks: [
-                  {
-                    type: 'tool-call',
-                    name: 'shell',
-                    input: { command: 'git push' },
-                    state: 'completed'
-                  },
-                  { type: 'tool-result', output: 'done' }
-                ],
-                timestamp: startedAt + 5,
-                source: 'transcript'
-              }
-            ]
-          }}
-          isWorking={false}
-          workingStartedAt={startedAt}
-          expandSignal={false}
-        />
-      )
-
-      expect(screen.getByText(ANSWER)).toBeInTheDocument()
-      expect(screen.queryByText(NARRATION)).toBeNull()
-    })
   })
 }

@@ -1,4 +1,4 @@
-import WorktreeCard from '@/components/sidebar/WorktreeCard'
+import WorktreeCard from '@/components/sidebar/workspace-card/surface/WorktreeCard'
 import { stopNestedWorktreeCardBubble } from '@/components/sidebar/worktree-list/rows/header-event-guards'
 import {
   getLineageChildrenInlineStyle,

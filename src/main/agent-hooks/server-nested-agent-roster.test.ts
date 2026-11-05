@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({

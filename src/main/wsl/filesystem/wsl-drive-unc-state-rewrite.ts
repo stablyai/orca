@@ -14,7 +14,7 @@ import {
   splitWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
-import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
+import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
 import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'

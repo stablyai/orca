@@ -1,7 +1,11 @@
 // Reconcile live working state with provider turn boundaries so a dropped final hook cannot leave Stop stuck.
 
-import type { AgentStatusEntry, AgentStatusState, AgentType } from '../agent-status-types'
-import { isAgentStatusFresh } from '../agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentStatusState,
+  AgentType
+} from '../agent-status/contracts/agent-status-types'
+import { isAgentStatusFresh } from '../agent-status/contracts/agent-status-freshness'
 import type {
   NativeChatMessage,
   NativeChatSession,

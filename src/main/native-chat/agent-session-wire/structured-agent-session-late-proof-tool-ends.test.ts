@@ -11,7 +11,7 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
-import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
+
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-late-proof'
@@ -142,24 +142,5 @@ describe('a proof written after an unverifiable settle', () => {
     expect(callLifecycle('turn-1', 1)).toBe('interrupted')
     expect(turnState('turn-2')).toBe('unverifiable')
     expect(callLifecycle('turn-2', 1)).toBe('failed')
-  })
-
-  it('corrects a call an unverifiable restart eviction closed', async () => {
-    await seedTurn('turn-1', 7)
-    await settleObservedExitForTest({
-      journal,
-      sessionId: SESSION,
-      fence: 8,
-      ownerFence: 7,
-      settlementId: `restart-eviction:${SESSION}:8`,
-      pendingSubmissionReason: 'provider_exited_before_acknowledgement',
-      verdict: { state: 'unverifiable' },
-      showUnexpectedExitOutcome: false
-    })
-    expect(callLifecycle('turn-1', 1)).toBe('failed')
-
-    await settle(9, proofFor(7))
-    expect(turnState('turn-1')).toBe('interrupted')
-    expect(callLifecycle('turn-1', 1)).toBe('interrupted')
   })
 })

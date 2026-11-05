@@ -1,17 +1,18 @@
 import type { AppState } from '../../../types'
-import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
+
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import {
+  type WorkspaceKey,
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../../../shared/workspace-scope'
 import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
-import { repoMatchesHostIdentity } from '../../repo-host-identity'
+import { resolveReviewRepository } from '@/lib/review-owner'
 import {
-  getWorktreeExecutionHostId,
+  getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
@@ -36,10 +37,8 @@ export function resolveWorktreeCreateParent(
   const picked = requestedParentWorktreeId
     ? getIndexedWorktreesById(selectWorktreesByRepo(state), requestedParentWorktreeId).find(
         (candidate) => {
-          const repo = state.repos.find((owner) =>
-            repoMatchesHostIdentity(owner, candidate.repoId, candidate.hostId ?? executionHostId)
-          )
-          return Boolean(repo && getWorktreeExecutionHostId(candidate, repo) === executionHostId)
+          const repo = resolveReviewRepository(state.repos, candidate)
+          return Boolean(repo && getRepoExecutionHostId(repo) === executionHostId)
         }
       )
     : undefined

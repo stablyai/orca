@@ -9,7 +9,11 @@ import {
   createManager
 } from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
@@ -143,6 +147,7 @@ async function connectRemotePane(): Promise<{
   dispose: () => void
 }> {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, 'env-1')
   const transport = createMockTransport('remote:env-1@@terminal-1')
   const captured: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }
@@ -172,7 +177,9 @@ async function connectRemotePane(): Promise<{
   })
 
   const manager = createManager(1)
-  const disposable = connectPanePty(...mockPanePtyArgs(pane, manager, createDeps()))
+  const disposable = connectPanePty(
+    ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(createDeps(), agentTitleMocks))
+  )
   await flushAsyncTicks(6)
   transport.resize.mockClear()
 

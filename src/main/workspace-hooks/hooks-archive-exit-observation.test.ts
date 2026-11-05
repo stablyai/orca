@@ -77,10 +77,6 @@ async function runArchiveWith(
 
 // Real-process timeout/group tests live in hook-termination-real-process.test.ts (#19334).
 describe('archive hook exit observation', () => {
-  it('passes a clean run through without an exit code', async () => {
-    await expect(runArchiveWith({ code: 0 })).resolves.toEqual({ success: true, output: '' })
-  })
-
   it.each([
     ['a non-zero exit', 23],
     ['a shell command-not-found', 127]

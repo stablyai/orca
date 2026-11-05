@@ -3,7 +3,7 @@ import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import {
   canonicalWorktreePath,
   looksLikePosixAbsolutePath
-} from '../../git/worktree-path-comparison'
+} from '../../git/worktrees/catalog/worktree-path-comparison'
 
 /** Persisted namespace bytes are frozen, including WSL case folding; use areWorktreePathsEqual for equality. */
 export function worktreePathComparisonKey(pathValue: string, platform = process.platform): string {

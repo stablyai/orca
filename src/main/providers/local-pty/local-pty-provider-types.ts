@@ -1,4 +1,4 @@
-import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { PtySpawnOptions } from '../pty-provider-contract'
 
 export type LocalPtyProviderOptions = {

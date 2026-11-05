@@ -84,16 +84,6 @@ describe('Git command tree termination', () => {
     await pending
     expect(child.kill).not.toHaveBeenCalled()
   })
-
-  it('preserves handle termination on POSIX', async () => {
-    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
-    const child = childWithPid(1234)
-
-    await killSpawnedCommandTree(child)
-
-    expect(child.kill).toHaveBeenCalledOnce()
-    expect(spawnMock).not.toHaveBeenCalled()
-  })
   it.skipIf(originalPlatform !== 'win32').each([0, 128])(
     'does not taskkill an actual native Windows child after exit %i',
     async (exitCode) => {

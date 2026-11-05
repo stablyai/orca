@@ -93,7 +93,8 @@ describe('Pi host awaited open', () => {
         command === 'get_state' ? Promise.resolve(unknown) : undefined
     })
     await expect(openAt8(h, acquired.acquisitionGeneration)).rejects.toMatchObject({
-      reason: 'notSignedIn'
+      retry: 'never',
+      cause: { reason: 'notSignedIn' }
     })
   })
 

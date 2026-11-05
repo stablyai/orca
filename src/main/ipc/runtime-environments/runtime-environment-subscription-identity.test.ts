@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
-import type * as RuntimeEnvironmentStore from '../../../shared/runtime-environment-store'
+import type * as RuntimeEnvironmentStore from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
 
 const mocks = vi.hoisted(() => ({
@@ -11,10 +11,13 @@ const mocks = vi.hoisted(() => ({
   resolve: vi.fn()
 }))
 vi.mock('electron', () => ({ ipcMain: { handle: mocks.handle, on: mocks.on } }))
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
-  resolveEnvironment: mocks.resolve
-}))
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+    resolveEnvironment: mocks.resolve
+  })
+)
 vi.mock('./runtime-environment-transport-routing', () => ({
   subscribeRuntimeEnvironment: mocks.subscribe
 }))

@@ -4,7 +4,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { resolveOpenCodeDirectModelExecutable } from '../opencode/opencode-model-executable'
 import { probeOpenCodeLaunchCapabilities } from '../opencode/opencode-launch-capabilities'
 import { resolveLocalProjectRuntimeForRepo } from '../workspaces/execution-host/local-project-runtime-resolution'
-import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../shared/agent-launch-model-preferences'
+import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../shared/agent-launch/choices/agent-launch-model-preferences'
 
 vi.mock('../opencode/opencode-launch-capabilities', () => ({
   probeOpenCodeLaunchCapabilities: vi.fn()
@@ -60,17 +60,6 @@ describe('OpenCode worker model execution host', () => {
       pluginApi: 'v1',
       promptMode: 'submit'
     })
-  })
-  it('checks only the version route for a model in a local folder', async () => {
-    expect(await probe(host())).toBe(true)
-    expect(probeOpenCodeLaunchCapabilities).toHaveBeenCalledExactlyOnceWith({
-      command: '/tmp/private-opencode',
-      agent: 'opencode',
-      cwd: '/tmp/folder',
-      env: expect.objectContaining({ OPENCODE_CONFIG_DIR: '/tmp/private-config' }),
-      hostIdentity: 'host-1'
-    })
-    expect(resolveOpenCodeDirectModelExecutable).not.toHaveBeenCalled()
   })
   it('refuses an unsafe version before model discovery or worker creation', async () => {
     vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({

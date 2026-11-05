@@ -1,4 +1,4 @@
-import { resolveCodexStructuredInvocation } from '../codex/codex-structured-launch-resolution'
+import { resolveCodexStructuredInvocation } from '../codex/structured/launch/codex-structured-launch-resolution'
 import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

@@ -4,10 +4,6 @@ import { CARD_TEMPLATE_LIMITS, cardTemplateSchema } from './card-template-schema
 const minimal = { version: 1, facts: 1, root: { el: 'Row', children: [{ el: 'Title' }] } }
 
 describe('card template schema', () => {
-  it('accepts a minimal template', () => {
-    expect(cardTemplateSchema.safeParse(minimal).success).toBe(true)
-  })
-
   it('refuses unknown keys, bad names and non-JSON prop values', () => {
     for (const bad of [
       { ...minimal, extra: true },

@@ -24,7 +24,7 @@ import {
 } from '../session/ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
@@ -41,7 +41,7 @@ import {
 import {
   AgentHistoryResumeNotice,
   AgentHistoryResumeToast,
-  AgentHistorySkippedNotice,
+  AgentHistoryScanNotices,
   useAgentHistoryResumeToast
 } from './AgentHistoryNotices'
 import { useNow } from '../hooks/use-now'
@@ -56,7 +56,7 @@ export type MobileAgentSessionHistoryPanelProps = {
   origin?: string
 }
 
-function scopeSegments(t: Translate): MobileSegment<AiVaultScope>[] {
+function scopeSegments(t: Translate): MobileSegment<AiVault.AiVaultScope>[] {
   return [
     { value: 'workspace', label: t('agentHistory.panel.workspace', 'Workspace') },
     { value: 'project', label: t('agentHistory.panel.project', 'Project') },
@@ -179,7 +179,7 @@ function MobileAgentSessionHistoryPanelContent({
   )
 
   const onResumeSession = useCallback(
-    async (session: AiVaultSession): Promise<void> => {
+    async (session: AiVault.AiVaultSession): Promise<void> => {
       if (resumeLaunchInFlightRef.current) {
         return
       }
@@ -363,7 +363,7 @@ function MobileAgentSessionHistoryPanelContent({
         <MobileLoadErrorState error={screenState.message} onRetry={retry} />
       ) : (
         <>
-          {issues.length > 0 ? <AgentHistorySkippedNotice issues={issues} /> : null}
+          <AgentHistoryScanNotices sessions={sessions} issues={issues} />
           {resumeMessage ? (
             <AgentHistoryResumeNotice
               message={resumeMessage}
@@ -414,8 +414,8 @@ function MobileAgentSessionHistoryPanelContent({
   )
 }
 
-const EMPTY_SESSIONS: AiVaultSession[] = []
-const EMPTY_ISSUES: { agent: AiVaultSession['agent']; path: string; message: string }[] = []
+const EMPTY_SESSIONS: AiVault.AiVaultSession[] = []
+const EMPTY_ISSUES: AiVault.AiVaultScanIssue[] = []
 
 function createMobileAiVaultResumeMutationId(sessionId: string): string {
   const sessionPart = sessionId.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 64) || 'session'

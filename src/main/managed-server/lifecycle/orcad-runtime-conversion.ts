@@ -3,13 +3,13 @@
 import { randomUUID } from 'node:crypto'
 import type { OrcadManagedConversionResult } from '../../../shared/orcad-managed-runtime'
 import type { OrcadMigrationSourceCutover } from '../../../shared/orcad-migration/orcad-migration-source-cutover'
-import { recordManagedOrcadMigration } from '../../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { recordManagedOrcadMigration } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   redactRuntimeEnvironment,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runTargetLifecycle } from '../../ipc/ssh/ssh-target-lifecycle-queue'
 import { environmentMatchesManagedOrcadCutover } from './orcad-managed-migration-status'
 import { requireManagedOrcadInfrastructure } from './orcad-managed-runtime-context'

@@ -2,7 +2,7 @@ import {
   AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
   type AiVaultSessionTitle,
   type AiVaultSessionTitlesResult
-} from '../../../shared/ai-vault-session-title'
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 
 export function parseAiVaultSessionTitlesResult(value: unknown): AiVaultSessionTitlesResult {
   if (!value || typeof value !== 'object') {

@@ -1,8 +1,8 @@
-import { normalizeSourceControlAiActionDefaults } from '../source-control-ai-actions'
+import { normalizeSourceControlAiActionDefaults } from '../source-control/ai/recipes/source-control-ai-actions'
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from './worktree-params'
-import { CONFLICT_RESOLUTIONS } from '../source-control-entry-actions'
+import { CONFLICT_RESOLUTIONS } from '../source-control/listing/source-control-entry-actions'
 
 export const WorktreeSelector = z.object({
   worktree: z

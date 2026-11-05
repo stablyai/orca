@@ -717,3 +717,38 @@ describe('Claude accepted message choices', () => {
     }
   })
 })
+
+it.each([false, true])(
+  'applies a frozen Ultracode choice before first input (resume: %s)',
+  async (resumesTranscript) => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude, { resumesTranscript })
+    const saved = { effort: 'ultracode', fastMode: 'true' } as const
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'ultracode',
+      options: saved,
+      events: recordingJournalSink()
+    })
+    const connection = claude.connections[0]!
+    claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-sonnet-5' })
+    const sent = await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'frozen-ultracode',
+      body: USER_MESSAGE,
+      executionOptions: saved,
+      fence: 7
+    })
+    expect(sent).toMatchObject({ state: 'admitted' })
+    expect(connection.launch.options.effort).toBe('xhigh')
+    expect(
+      connection.calls.filter(({ subtype }) => subtype === 'apply_flag_settings')
+    ).toContainEqual({
+      subtype: 'apply_flag_settings',
+      params: { settings: { effortLevel: 'xhigh', ultracode: true } }
+    })
+    expect(connection.sent).toHaveLength(1)
+    await adapter.closeAll()
+  }
+)

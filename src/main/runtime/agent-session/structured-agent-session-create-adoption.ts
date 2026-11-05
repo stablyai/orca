@@ -4,7 +4,10 @@ import {
   isAgentSessionRefusalError
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { prepareCodexAdoption } from '../../native-chat/codex-adoption-preparation'
-import type { NativeCodexResumePreparation } from '../../codex/codex-ai-vault-session-resume'
+import { isAiVaultTitleAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
+import { generatedSessionTitle } from '../../ai-vault/session-scanner-accumulator'
+import { resolveLocalAiVaultSessionTitles } from '../../ai-vault/session-titles/session-title-resolver'
+import type { NativeCodexResumePreparation } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
 import type {
   StructuredAgentCliSourceEvidence,
@@ -28,7 +31,7 @@ import {
   resolveStructuredAgentSessionAdoption,
   structuredAdoptionConflictError
 } from '../../native-chat/structured-agent-session-history-adoption'
-import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from './installation/structured-agent-runtime-metadata'
 import type {
   StructuredAgentTranscriptImport,
   StructuredAgentTranscriptImportSettings
@@ -198,14 +201,23 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
       launchEnv: input.launchEnv,
       workspaceCwd: input.workspaceCwd
     })
-    return input.agent === 'codex'
-      ? await prepareCodexAdoption(
-          adoption,
-          input.providerSessionId,
-          input.prepareCodexResume,
-          candidates
-        )
-      : adoption
+    // Title from where History found the transcript: Codex preparation may copy it to another home.
+    const [prepared, conversationName] = await Promise.all([
+      input.agent === 'codex'
+        ? prepareCodexAdoption(
+            adoption,
+            input.providerSessionId,
+            input.prepareCodexResume,
+            candidates
+          )
+        : adoption,
+      resolveAdoptedConversationName({
+        agent: input.agent,
+        providerSessionId: input.providerSessionId,
+        transcriptPath: adoption.transcriptPath
+      })
+    ])
+    return { ...prepared, conversationName }
   } catch (error) {
     if (isAgentSessionRefusalError(error)) {
       throw error
@@ -216,6 +228,35 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
       error instanceof Error ? error.message : String(error)
     )
   }
+}
+
+const ADOPTED_CONVERSATION_NAME_TIMEOUT_MS = 2_000
+
+/** The title Session History shows for the adopted conversation, so the chat opens under it. */
+async function resolveAdoptedConversationName(input: {
+  agent: StructuredAgentId
+  providerSessionId: string
+  transcriptPath: string
+}): Promise<string | undefined> {
+  if (!isAiVaultTitleAgent(input.agent)) {
+    return undefined
+  }
+  // Naming is cosmetic: a failed lookup, or one queued behind a History scan, must not hold up the resume.
+  const { titles } = await resolveLocalAiVaultSessionTitles(
+    [
+      {
+        agent: input.agent,
+        sessionId: input.providerSessionId,
+        transcriptPath: input.transcriptPath
+      }
+    ],
+    AbortSignal.timeout(ADOPTED_CONVERSATION_NAME_TIMEOUT_MS)
+  ).catch(() => ({ titles: [] }))
+  const title = titles[0]?.title
+  // History's "<Agent> <id prefix>" fallback names nothing.
+  return title && title !== generatedSessionTitle(input.agent, input.providerSessionId)
+    ? title
+    : undefined
 }
 
 /** Only adopt seeds the handle chain; ensure already passes providerHandle without adopting. */
@@ -229,6 +270,7 @@ export function structuredAgentSessionAdoptAttach(input: {
   transcriptPath: string
   providerSessionId: string
   workspaceCwd: string
+  conversationName?: string
 }): NonNullable<AgentSessionAttachParams['adopt']> {
   return {
     providerHandle: {
@@ -243,6 +285,7 @@ export function structuredAgentSessionAdoptAttach(input: {
       ...(input.conversationStore !== undefined
         ? { conversationStore: input.conversationStore }
         : {})
-    }
+    },
+    conversationName: input.conversationName
   }
 }

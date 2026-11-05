@@ -2,7 +2,7 @@ import type * as WslPathOwner from '../../../shared/wsl-paths'
 import type * as FsPromises from 'node:fs/promises'
 import { sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 const {
   existsSyncMock,
