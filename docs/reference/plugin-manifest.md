@@ -45,6 +45,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
 | `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8. |
+| `contributes.linkRoutes` | [LinkRouteContribution](#linkroutecontribution)[] | no | 1.4.251 | Hostnames whose clicked links open in Orca's built-in browser or the system browser. At most 64. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
@@ -210,6 +211,16 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 | `tone` | `"neutral"` \| `"accent"` \| `"success"` \| `"warning"` \| `"danger"` | no | 1.4.248 | Colour of the item. Defaults to `neutral`. Example: `"warning"` |
 | `tooltip` | string | no | 1.4.248 | Shown on hover. Defaults to the plugin name. |
 | `command` | string | no | 1.4.248 | Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed. Example: `"guard.showLog"` |
+
+## LinkRouteContribution
+
+Opens clicked links to a hostname in a chosen browser.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `hostname` | string | yes | 1.4.251 | Hostname whose clicked links this route opens: exact (`app.example.com`), one leading label wildcard (`*.example.com`, one label deep, never a public suffix), or a mid-label wildcard under a reserved TLD (`*-dev.test`). Each hostname may be listed once. Example: `"*.example.com"` |
+| `destination` | `"orca-browser"` \| `"system-browser"` | yes | 1.4.251 | Where a matching link opens. Example: `"orca-browser"` |
+| `description` | string | no | 1.4.251 | Why the route exists, shown at approval. |
 
 ## Capability
 

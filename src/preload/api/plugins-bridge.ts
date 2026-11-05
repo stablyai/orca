@@ -34,6 +34,8 @@ export const pluginsApi = {
   loadIconTheme: (id) => ipcRenderer.invoke('plugins:loadIconTheme', id),
   listSyntaxes: () => ipcRenderer.invoke('plugins:listSyntaxes'),
   loadSyntax: (id) => ipcRenderer.invoke('plugins:loadSyntax', id),
+  // Name must start with `list`: the web fallback proxy resolves list* to [] rather than undefined.
+  listLinkRoutes: () => ipcRenderer.invoke('plugins:listLinkRoutes'),
   consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>
     ipcRenderer.invoke('plugins:consent', args),
   setEnabled: (args: { pluginKey: string; enabled: boolean }): Promise<PluginHostListEntry[]> =>

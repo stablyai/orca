@@ -335,6 +335,15 @@
             "$ref": "#/$defs/StatusBarItemContribution"
           }
         },
+        "linkRoutes": {
+          "description": "Hostnames whose clicked links open in Orca's built-in browser or the system browser. At most 64.",
+          "x-orca-since": "1.4.251",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkRouteContribution"
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -1475,6 +1484,45 @@
       ],
       "additionalProperties": false,
       "description": "An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`."
+    },
+    "LinkRouteContribution": {
+      "type": "object",
+      "properties": {
+        "hostname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Hostname whose clicked links this route opens: exact (`app.example.com`), one leading label wildcard (`*.example.com`, one label deep, never a public suffix), or a mid-label wildcard under a reserved TLD (`*-dev.test`). Each hostname may be listed once.",
+          "x-orca-since": "1.4.251",
+          "examples": [
+            "*.example.com"
+          ]
+        },
+        "destination": {
+          "type": "string",
+          "enum": [
+            "orca-browser",
+            "system-browser"
+          ],
+          "description": "Where a matching link opens.",
+          "x-orca-since": "1.4.251",
+          "examples": [
+            "orca-browser"
+          ]
+        },
+        "description": {
+          "description": "Why the route exists, shown at approval.",
+          "x-orca-since": "1.4.251",
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "hostname",
+        "destination"
+      ],
+      "additionalProperties": false,
+      "description": "Opens clicked links to a hostname in a chosen browser."
     },
     "Capability": {
       "type": "object",

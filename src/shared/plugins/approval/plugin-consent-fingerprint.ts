@@ -41,6 +41,20 @@ export function requiresPluginContentApproval(manifest: PluginConsentSubject): b
   return hasDeclarativePluginContributions(manifest) || bindsExecutableContent(manifest)
 }
 
+// Bound by value too: a catalog or preview fingerprint can have no resolved content identity, and
+// consent renders every field, so description is included. Sorted so ordering is not a new grant.
+function canonicalizeLinkRoutes(manifest: PluginConsentSubject): string {
+  const entries = (manifest.contributes?.linkRoutes ?? [])
+    .map((route) =>
+      isPluginJsonObject(route)
+        ? `${String(route.hostname)}\0${String(route.destination)}\0${typeof route.description === 'string' ? route.description : ''}`
+        : ''
+    )
+    // map already copied; the phone's Hermes engine lacks toSorted.
+    .sort()
+  return entries.length > 0 ? `\0link-routes:${entries.join('\n')}` : ''
+}
+
 /**
  * Consent covers both the declared host capabilities and whether the plugin
  * executes trusted Node code. A panel-only update that adds `main` crosses a
@@ -66,7 +80,7 @@ export function canonicalizePluginConsent(
   const declarativeIdentity = hasDeclarativePluginContributions(manifest)
     ? `\0instructional-content:${contentIdentity ?? 'unresolved'}`
     : ''
-  return `${capabilities}${executionIdentity}${workerIdentity}${executableIdentity}${declarativeIdentity}${replacementIdentity(manifest)}`
+  return `${capabilities}${executionIdentity}${workerIdentity}${executableIdentity}${declarativeIdentity}${replacementIdentity(manifest)}${canonicalizeLinkRoutes(manifest)}`
 }
 
 /** Taking over a built-in action needs its own approval, also for a dev folder whose code may

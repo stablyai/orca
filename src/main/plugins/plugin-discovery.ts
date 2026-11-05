@@ -22,6 +22,7 @@ import {
   hasDeclarativePluginContributions,
   requiresPluginContentApproval
 } from '../../shared/plugins/approval/plugin-consent-fingerprint'
+import { validateManifestLinkRoutes } from './contributions/plugin-link-route-suffix-policy'
 import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
 import { readPluginManifestText } from './plugin-manifest-file'
 import { readPluginCurrentPointer } from './installation/plugin-current-pointer'
@@ -126,9 +127,14 @@ async function readManifestDir(
       isDev
     }
   }
+  const routePolicy = validateManifestLinkRoutes(manifest.contributes.linkRoutes)
+  if (routePolicy) {
+    return { pluginKey, rootDir, error: `invalid link route: ${routePolicy}`, isDev }
+  }
   const artifacts = await validateDeclaredPluginArtifacts(rootDir, manifest, {
     allowCaseMismatch: !isDev
   })
+
   if (!artifacts.ok) {
     return {
       pluginKey,

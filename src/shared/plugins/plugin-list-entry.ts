@@ -107,6 +107,14 @@ export type PluginHostListEntry = {
       command: string
     }[]
   }[]
+  /** Declared, not approved: consent must show what a pending plugin is asking for. */
+  linkRoutes?: {
+    hostname: string
+    destination: 'orca-browser' | 'system-browser'
+    description?: string
+    /** The route will not be published; the renderer owns the wording. */
+    conflict?: true
+  }[]
   restarts: number
   blockedByKillList?: { reason: string; advisoryUrl?: string }
   source?: {

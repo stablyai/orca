@@ -234,7 +234,8 @@ function openShiftModifiedMarkdownLink({
     const destinations = httpLinkActionDestinationsFor(
       state.settings,
       sourceOwner,
-      canOpenOwnedBrowser
+      canOpenOwnedBrowser,
+      classified.url
     )
     openRoutedHttpLink(classified.url, {
       worktreeId,

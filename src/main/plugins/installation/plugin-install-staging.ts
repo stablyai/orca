@@ -29,6 +29,7 @@ import { readPluginManifestText } from '../plugin-manifest-file'
 import { pluginInstallTrustError } from './plugin-install-trust'
 import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
 import { readPluginLockfile } from './plugin-install-lockfile-store'
+import { validateManifestLinkRoutes } from '../contributions/plugin-link-route-suffix-policy'
 
 export type PluginInstallResult =
   | {
@@ -74,6 +75,10 @@ async function readInstallManifest(
       ok: false,
       error: `plugin requires Orca ${parsed.manifest.engines.orca} (this is ${hostVersion})`
     }
+  }
+  const routePolicy = validateManifestLinkRoutes(parsed.manifest.contributes.linkRoutes)
+  if (routePolicy) {
+    return { ok: false, error: `invalid link route: ${routePolicy}` }
   }
   return { ok: true, manifest: parsed.manifest }
 }

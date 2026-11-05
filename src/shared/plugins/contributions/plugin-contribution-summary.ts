@@ -92,7 +92,13 @@ export function pluginContributionSummary(
       (newFile) => newFile.extension
     ),
     // Each item's text, or its id when it shows only an icon.
-    ...named('statusBarItems', c.statusBarItems, (item) => item.text || item.id)
+    ...named('statusBarItems', c.statusBarItems, (item) => item.text || item.id),
+    ...named(
+      'linkRoutes',
+      c.linkRoutes,
+      (route) => route.hostname,
+      (route) => route.destination
+    )
   ].slice(0, PLUGIN_CONTRIBUTION_SUMMARY_LIMIT)
 }
 

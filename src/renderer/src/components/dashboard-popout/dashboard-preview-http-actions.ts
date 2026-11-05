@@ -90,7 +90,7 @@ export function dashboardPreviewHttpActions(
         : canOpenWorkspaceBrowserTabOnSsh(state, source.worktreeId, owner.connectionId)))
   )
   const destinations = canOpen
-    ? httpLinkActionDestinationsFor(state.settings, owner, true)
+    ? httpLinkActionDestinationsFor(state.settings, owner, true, url)
     : { primary: 'system' as const }
   const open = (destination: HttpLinkDestination | undefined, inSourceGroup = false): void => {
     const current = dashboardPreviewHttpActions(source, url, onForegroundOpen)

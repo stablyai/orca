@@ -50,6 +50,7 @@ import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry
 import type { PluginStatusBarOverrides } from '../../shared/plugins/contributions/plugin-status-bar-state'
 import type { PluginDeclaredSettingsSnapshot } from '../../shared/plugins/contributions/plugin-settings-values'
 import type { PluginJsonValue } from '../../shared/plugins/workers/plugin-host-api'
+import type { NormalizedLinkRoute } from '../../shared/plugins/contributions/plugin-link-route-matching'
 
 export type PluginHostLogLine = {
   ts: number
@@ -150,6 +151,8 @@ export type PluginMarketplaceHostInstallPreview = {
 export type PluginsApi = {
   list: () => Promise<PluginHostListEntry[]>
   listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
+  /** Approved, conflict-filtered, ranked. First match wins. Desktop IPC only. */
+  listLinkRoutes: () => Promise<NormalizedLinkRoute[]>
   listThemes: () => Promise<PluginThemeRegistration[]>
   listTerminalThemes: () => Promise<PluginTerminalThemeRegistration[]>
   listIconThemes: () => Promise<PluginIconThemeMetadata[]>

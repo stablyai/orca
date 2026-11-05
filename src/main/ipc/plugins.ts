@@ -129,6 +129,7 @@ export function registerPluginHandlers(
   handleContentPacks('plugins:loadSyntax', (id) =>
     typeof id === 'string' ? contentPacks.syntaxes.load(id) : null
   )
+  handleContentPacks('plugins:listLinkRoutes', () => contentPacks.linkRoutes.list())
   ipcMain.handle('plugins:consent', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)

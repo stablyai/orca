@@ -8,12 +8,14 @@ import {
   PLUGIN_ICON_THEME_LIMIT,
   PLUGIN_KEYBINDING_LIMIT,
   PLUGIN_LANGUAGE_PACK_LIMIT,
+  PLUGIN_LINK_ROUTE_LIMIT,
   PLUGIN_SYNTAX_LIMIT,
   PLUGIN_TERMINAL_THEME_LIMIT,
   PLUGIN_THEME_LIMIT,
   PLUGIN_VM_RECIPE_LIMIT,
   pluginKeybindingContributionSchema,
   pluginLanguagePackContributionSchema,
+  pluginLinkRouteContributionSchema,
   pluginSyntaxContributionSchema,
   pluginThemeContributionSchema,
   pluginVmRecipeContributionSchema
@@ -36,6 +38,7 @@ import { PLUGIN_PANEL_LIMIT, pluginPanelContributionSchema } from './plugin-pane
 import {
   pluginFieldDoc,
   PLUGIN_HOOKS_SINCE,
+  PLUGIN_LINK_ROUTES_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_PANEL_BRIDGE_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
@@ -66,7 +69,8 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'customEditors',
   'newFiles',
   'settings',
-  'statusBarItems'
+  'statusBarItems',
+  'linkRoutes'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
@@ -222,6 +226,12 @@ export const pluginContributesFields = {
     PLUGIN_STATUS_BAR_ITEM_LIMIT,
     'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled.',
     PLUGIN_STATUS_BAR_SINCE
+  ),
+  linkRoutes: contributionList(
+    pluginLinkRouteContributionSchema,
+    PLUGIN_LINK_ROUTE_LIMIT,
+    "Hostnames whose clicked links open in Orca's built-in browser or the system browser.",
+    PLUGIN_LINK_ROUTES_SINCE
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
@@ -269,5 +279,7 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   // Why sandboxed-ui: only code reads a setting, and panels are the least code there is.
   settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false },
   // Why declarative: a static item only names its own command; updating it needs a worker.
-  statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false }
+  statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false },
+  // Why bound: a route silently changes where the user's clicks go, so any change needs review.
+  linkRoutes: { execution: 'declarative', catalogType: 'instructions', bindsContent: true }
 }

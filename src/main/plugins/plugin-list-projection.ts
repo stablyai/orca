@@ -106,6 +106,7 @@ export async function buildPluginList(
           commands: [],
           hasWorker: false,
           vmRecipes: [],
+          linkRoutes: [],
           restarts: 0,
           ...lockEntrySource(lockEntry)
         }
@@ -212,6 +213,12 @@ export async function buildPluginList(
           name: recipe.name,
           ...(recipe.description ? { description: recipe.description } : {}),
           commands: listPluginVmRecipeCommands(recipe)
+        })),
+        linkRoutes: service.contentPacks.linkRoutes.declared(plugin.pluginKey).map((route) => ({
+          hostname: route.hostname,
+          destination: route.destination,
+          ...(route.description ? { description: route.description } : {}),
+          ...(route.conflict ? { conflict: route.conflict } : {})
         })),
         restarts: worker.restarts,
         ...(killListEntry

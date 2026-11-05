@@ -15,11 +15,11 @@ import {
   withMode
 } from './plugin-contribution-row-labels'
 
-/** The manifest points shown as named rows; commands, shortcuts, events and settings have their
- *  own lists, and hooks show as the trusted-worker access they need. */
+/** The manifest points shown as named rows; commands, shortcuts, events, settings and link
+ *  routes have their own lists, and hooks show as the trusted-worker access they need. */
 export type PluginContributionKind = Exclude<
   PluginContributionPoint,
-  'commands' | 'keybindings' | 'events' | 'hooks' | 'settings'
+  'commands' | 'keybindings' | 'events' | 'hooks' | 'settings' | 'linkRoutes'
 >
 
 /** One named thing a plugin adds, ready to show as a row. */

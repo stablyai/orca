@@ -38,7 +38,7 @@ export function useWorkspaceReferenceLinkActions(
     const state = useAppStore.getState()
     const anchor = event.currentTarget
     const plainClickBehavior = nativeChatPlainLinkClickBehavior(state.settings)
-    const routing = resolveNativeChatHttpLinkRouting(state, workspaceId)
+    const routing = resolveNativeChatHttpLinkRouting(state, workspaceId, url)
     let requested = false
     const consumed = handleNativeChatWebLink(event, url, {
       worktreeId: workspaceId,

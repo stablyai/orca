@@ -21,6 +21,8 @@ export const PLUGIN_EDITOR_FRAME_SINCE = '1.4.248'
 export const PLUGIN_HOOKS_SINCE = '1.4.248'
 /** Workers act on workspaces, terminals and agents: `workspace:write`, `terminal:read`, `agent:launch`. */
 export const PLUGIN_HOST_ACTIONS_SINCE = '1.4.248'
+/** First release that reads `contributes.linkRoutes`. */
+export const PLUGIN_LINK_ROUTES_SINCE = '1.4.251'
 
 type PluginFieldDoc = {
   description: string
