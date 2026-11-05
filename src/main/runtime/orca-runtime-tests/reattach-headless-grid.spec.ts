@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createRuntime, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
+import { createRuntime, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 describe('headless model grid after a reattach', () => {
   it('reflows a model that live bytes created at the 80x24 default onto the PTY grid', async () => {

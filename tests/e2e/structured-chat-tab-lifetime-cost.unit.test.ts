@@ -5,7 +5,7 @@ import {
   authorityProfile,
   openAuthorityRuntime
 } from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
-import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
+import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
 import type { createChatTabLayoutQueue } from '../../src/main/runtime/agent-session-tab-layout-queue'
 import { fixture } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
 import {
@@ -389,7 +389,8 @@ it.each([
       createStructuredSweepProgress,
       closeStructuredSessionsForWorktree,
       retireStructuredSessionTabsForWorktree
-    } = await import('../../src/main/runtime/structured-session-worktree-teardown')
+    } =
+      await import('../../src/main/runtime/workspaces/removal/structured-session-worktree-teardown')
     const ids = Array.from({ length: s }, (_, i) => `sweep-${i.toString().padStart(5, '0')}`)
     const background = Array.from({ length: n }, (_, i) => `other-${i.toString().padStart(5, '0')}`)
     const rig = await openAuthorityRuntime(

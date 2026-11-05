@@ -18,7 +18,7 @@ import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   buildVisibleSnapshotReadFallback,

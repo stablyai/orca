@@ -19,7 +19,7 @@ import {
   getLeafDisplayRecord,
   getPtyDisplayRecord,
   type TitleDisplayClear
-} from '../../runtime-worktree-status-projection'
+} from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { detectTerminalWaitBlockedReason } from '../wait/terminal-wait-detection'
 import { getTerminalState } from '../wait/terminal-wait-results'
 import { buildTerminalWaitText } from '../wait/terminal-wait-tail-state'

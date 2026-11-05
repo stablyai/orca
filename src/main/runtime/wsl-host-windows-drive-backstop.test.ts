@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { WslHostWindowsDriveRefusalError } from '../../shared/wsl-host-windows-drive-refusal'
 import type { Repo } from '../../shared/repo-types'
-import { RuntimeProjectGroupController } from './runtime-project-group-controller'
-import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
-import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
+import { RuntimeProjectGroupController } from './repositories/runtime-project-group-controller'
+import { RuntimeRepositoryCloneController } from './repositories/runtime-repository-clone-controller'
+import { RuntimeRepositoryRegistrationController } from './repositories/runtime-repository-registration-controller'
 import type { RuntimeStore } from './runtime-store-contract'
 
 // Stands in for a WSL host whose /mnt/c is the C: drive; SSH and desktop never refuse.

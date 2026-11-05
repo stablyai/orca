@@ -18,7 +18,7 @@ import {
   partialRuntimeStore,
   storeProject,
   storeProjectGroup
-} from '../../runtime/runtime-store-partial-fixture'
+} from '../../runtime/orca-runtime-tests/runtime-store-partial-fixture'
 
 const WINDOWS_ENV = {
   COMSPEC: 'C:\\Windows\\system32\\cmd.exe',

@@ -27,7 +27,7 @@ import {
   panesBoundToGoneLocalTerminals
 } from '../../terminal/recovery/foreign-pane-bindings'
 import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+import { getExplicitWorktreeIdSelector } from '../catalog/runtime-worktree-selection'
 import { followExportedPaneKeys } from '../../terminal/identity/exported-pane-key-follow'
 
 export const FIRST_SURFACE_PLACEMENT_WAIT_MS = 500

@@ -17,7 +17,7 @@ import {
   expectSettingsWorkScale,
   createGlobalSettingsFixture
 } from '../../../../shared/global-settings-test-fixture'
-import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../codex/hooks/installation/managed-wsl-home-shell-preflight', () => ({
   prepareManagedWslCodexHomeBeforeShellLaunch: async ({

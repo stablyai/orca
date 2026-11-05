@@ -14,7 +14,7 @@ import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import {
   pasteWorktreeStartupDraftWhenReady,
   type WorktreeStartupReadinessHost
-} from './runtime-worktree-startup-readiness'
+} from './workspaces/startup/runtime-worktree-startup-readiness'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const listings = getWorktreeListingMocks()

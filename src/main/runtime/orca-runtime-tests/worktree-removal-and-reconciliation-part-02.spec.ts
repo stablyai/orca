@@ -1,35 +1,33 @@
 import type * as WorktreeRemovalModule from '../../git/worktrees/removal/worktree-removal'
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
-import { readFile } from 'node:fs/promises'
+import { readFile, mkdir, rm, writeFile } from 'node:fs/promises'
 const { removeWorktree: removeNativeWorktree } = await vi.importActual<
   typeof WorktreeRemovalModule
 >('../../git/worktrees/removal/worktree-removal')
 
+import './runtime-test-module-registration.spec'
 import {
   MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  WATCHER_REMOVAL_DRAIN_BUDGET_MS,
-  assertWorktreeCleanForRemoval,
-  beginWatcherInstall,
   closeLocalWatcherForWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   forceDeleteLocalBranchMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  getEffectiveHooks,
-  join,
-  listWorktrees,
-  listWorktreesStrict,
-  localWorktreeFilesystem,
-  mkdir,
-  removeWorktree,
   removeWorktreeLinkedPathsMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  rm,
-  runHook,
-  setPlatform,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
+  setPlatform
+} from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../../workspaces/removal/watcher-removal-drain'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
+import { beginWatcherInstall } from '../../workspaces/removal/watcher-removal-gate'
+import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
+import { join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import * as localWorktreeFilesystem from '../../workspaces/removal/local-worktree-filesystem'
+
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -40,8 +38,8 @@ import {
   makeWorktreeMeta,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // Connected SSH fixtures need the host HOME for removal guards.

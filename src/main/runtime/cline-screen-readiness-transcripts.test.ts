@@ -3,7 +3,7 @@ import {
   createTranscriptPane,
   waitForTranscriptIdle,
   TRANSCRIPT_PANE_PTY_ID
-} from './agent-transcript-pane-test-harness'
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 import {
   finalReadProjection,
   finalReplayFrame,

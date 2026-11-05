@@ -25,7 +25,7 @@ import {
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import type { BrowserExecutionHostKeyResolution } from '../runtime-browser-client-page-adoption'
 import { browserNetworkExecutionHostKey } from '../../browser/network/execution-routes/browser-network-execution-route'
 

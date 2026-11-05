@@ -70,28 +70,27 @@ import { RpcDispatcher } from '../dispatcher'
 import { UnixSocketTransport } from '../unix-socket-transport'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
 import { WORKTREE_METHODS } from './worktree'
-import {
-  OrcaRuntimeService,
-  addWorktree,
-  listWorktrees,
-  MOCK_GIT_WORKTREES
-} from '../../orca-runtime-test-mocks.spec'
-import '../../orca-runtime-test-lifecycle.spec'
+import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../../orca-runtime'
+import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
+import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
+import { MOCK_GIT_WORKTREES } from '../../orca-runtime-test-mocks/setup.spec'
+import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import {
   store as runtimeStore,
   TEST_WORKTREE_ID,
   createFolderWorkspaceRuntimeStore,
   makeFolderWorkspace
-} from '../../orca-runtime-test-fixtures.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from '../../agent-session/records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { setAgentLaunchRecordStore } from './agent-launch.test-fixture'
-import { RuntimeWorktreeLineageController } from '../../runtime-worktree-lineage-controller'
+import { RuntimeWorktreeLineageController } from '../../workspaces/lineage/runtime-worktree-lineage-controller'
 import * as createdWorkspaceLaunch from '../../../agent-launch/agent-launch-created-workspace'
-import { formatAmbiguousCwdParentMessage } from '../../runtime-worktree-lineage-resolution'
+import { formatAmbiguousCwdParentMessage } from '../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import { managedCwdMobileFixture } from './managed-cwd-mobile.test-fixture'
 import { managedCwdLaunchFixture } from './managed-cwd-launch.test-fixture'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch/contracts/agent-launch-operation'

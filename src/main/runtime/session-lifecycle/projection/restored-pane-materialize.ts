@@ -9,7 +9,7 @@ import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './build-he
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isUnclaimedRunningSleepRecord, markResumedRecordLive } from './sleep-record-pane-claim'
-import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
+import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace-sleep'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'

@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  FLOATING_TERMINAL_WORKTREE_ID,
-  OrcaRuntimeService,
   electronMocks,
   scanLocalRepoWorktreesForResolutionMock
-} from '../orca-runtime-test-mocks.spec'
+} from '../orca-runtime-test-mocks/setup.spec'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,
@@ -14,8 +15,8 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
+} from './orca-runtime-test-fixtures.spec'
+import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 
 describe('OrcaRuntimeService', () => {
   it('starts unavailable with no authoritative window', () => {

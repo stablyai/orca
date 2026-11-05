@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { withDurableRuntimeStore } from '../../runtime/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../runtime/orca-runtime-tests/runtime-durable-store-fixture'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
