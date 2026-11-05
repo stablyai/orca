@@ -67,6 +67,8 @@ describe('MobileNativeChatMessage', () => {
     node
       .findAll((child) => String(child.type) === 'MobileMarkdown')
       .map((markdown) => markdown.props.content)
+  const textIn = (node: ReactTestInstance): string[] =>
+    findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
 
   it.each(['task', 'generic'] as const)(
     'expands and refolds %s messages and preserves old-server body',
