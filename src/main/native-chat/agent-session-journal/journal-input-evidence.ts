@@ -47,6 +47,9 @@ export class JournalInputEvidence extends JournalInputObservations {
   linkedTo(id: string): Iterable<AgentJournalSubmission> {
     return this.links.to(id)
   }
+  recoverableSubmissionValues(): Iterable<AgentJournalSubmission> {
+    return this.recoverable.values()
+  }
   recoverableSubmissions(): AgentJournalSubmission[] {
     return [...this.recoverable.values()].sort(
       (a, b) => this.inputOrdinal(a.clientMessageId) - this.inputOrdinal(b.clientMessageId)

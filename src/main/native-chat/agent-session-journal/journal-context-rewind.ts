@@ -12,7 +12,11 @@ import {
   buildJournalTombstoneRow,
   journalRowBase
 } from './journal-row-builders'
-import type { JournalRowWriter, JournalOperationReceipt } from './journal-row-writer'
+import type {
+  JournalRowWriter,
+  JournalOperationReceipt,
+  JournalFinishFold
+} from './journal-row-writer'
 import { composeJournalOperationReceipts } from './journal-row-writer'
 import { buildJournalQueueClearRow } from './journal-stop-and-resume-rows'
 import { journalQueuePauseRestatement } from './queued-message-pause'
@@ -35,13 +39,12 @@ export async function rewindJournalContext(input: {
   inputReceipt: (
     rows: readonly JournalRow[],
     receipt?: JournalOperationReceipt
-  ) => JournalOperationReceipt | undefined
+  ) => JournalOperationReceipt | undefined | Promise<JournalOperationReceipt | undefined>
   receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
 }): Promise<AgentJournalCursor> {
-  let receipt: JournalOperationReceipt | undefined
-  let retainFailures: ((draft: JournalReducerState) => void) | undefined
+  let retainFailures: JournalFinishFold | undefined
   const rows = await input.writer.enqueueRows(
-    () => {
+    function* () {
       const state = input.state()
       const floor = input.floor
       if (
@@ -55,25 +58,30 @@ export async function rewindJournalContext(input: {
         state.latestAcceptedTurnSequence,
         input.cards.pauses()
       )
-      const retained = journalInputOrder(state).newestTurn.retainFailures(
+      const retained = yield* journalInputOrder(state).newestTurn.retainFailuresSteps(
         state,
-        input.items.map((item) => agentJournalItemKey(item.identity))
+        (function* () {
+          for (const item of input.items) {
+            yield agentJournalItemKey(item.identity)
+          }
+        })()
       )
       retainFailures = (draft) => retained(journalInputOrder(draft).newestTurn, draft)
-      const queued = new Set(
-        journalInputOrder(state)
-          .recoverableSubmissions()
-          .filter(isQueuedAgentJournalSubmission)
-          .map((entry) => agentJournalSubmissionKey(entry.clientMessageId))
-      )
+      const queued = new Set<string>()
+      for (const entry of journalInputOrder(state).recoverableSubmissionValues()) {
+        if (isQueuedAgentJournalSubmission(entry)) {
+          queued.add(agentJournalSubmissionKey(entry.clientMessageId))
+        }
+        yield
+      }
       const removed = new Set<string>()
       for (const item of state.items.values()) {
+        yield
         if (item.sequence > (floor?.sequence ?? 0) && !queued.has(item.itemId)) {
           removed.add(item.itemId)
         }
       }
       const revisions = new Map<string, number>()
-      const plan: ((seq: number, ts: number) => JournalRow)[] = []
       const boundary = input.boundary
       if (boundary) {
         const previous = state.historyOrigin
@@ -81,7 +89,7 @@ export async function rewindJournalContext(input: {
           previous && sameJournalConversation(previous.providerHandle, boundary.providerHandle)
             ? { historyOrigin: previous.raw }
             : {}
-        plan.push((seq, ts) => ({
+        yield (seq: number, ts: number) => ({
           kind: 'epoch',
           ...boundary,
           ...historyOrigin,
@@ -90,12 +98,12 @@ export async function rewindJournalContext(input: {
               ? 'session_created'
               : boundary.reason,
           ...journalRowBase(state.epoch, seq, input.fence, ts)
-        }))
+        })
       }
       for (const itemId of removed) {
         const row = buildJournalTombstoneRow({ state, itemId, seq: 0, ts: 0, fence: input.fence })
         revisions.set(itemId, row.revision)
-        plan.push((seq, ts) => ({ ...row, seq, ts }))
+        yield (seq: number, ts: number) => ({ ...row, seq, ts })
       }
       const scope = new JournalDerivedTurnScope()
       for (const item of input.items) {
@@ -113,7 +121,7 @@ export async function rewindJournalContext(input: {
         revisions.set(itemId, revision)
         const turnScope = item.turnScope ?? scope.scopeFor(item.body)
         scope.observe(itemId, isRootAgentJournalItem(item), undefined, item.body)
-        plan.push((seq, ts) => ({
+        yield (seq: number, ts: number) => ({
           ...buildJournalItemRow({
             state,
             ...item,
@@ -125,28 +133,27 @@ export async function rewindJournalContext(input: {
             turnScope
           }),
           revision
-        }))
+        })
       }
       if (cleared) {
-        plan.push((seq, ts) =>
+        yield (seq: number, ts: number) =>
           buildJournalQueueClearRow({ state, seq, ts, fence: input.fence, clear: cleared })
-        )
       }
-      receipt = input.receipt?.({
-        epoch: boundary
+    },
+    async (rows) => {
+      const state = input.state()
+      const receipt = input.receipt?.({
+        epoch: input.boundary
           ? journalContextEpoch(state.epoch, state.lastSequence + 1)
           : journalContextCursor(state).epoch,
-        sequence: state.lastSequence + plan.length
+        sequence: rows.at(-1)?.seq ?? state.lastSequence
       })
-      return plan
-    },
-    (rows) => {
       const foldReceipt: JournalOperationReceipt = {
         fold: (draft) => retainFailures?.(draft),
         write: () => {},
         committed: () => {}
       }
-      const inputReceipt = input.inputReceipt(rows, receipt)
+      const inputReceipt = await input.inputReceipt(rows, receipt)
       return composeJournalOperationReceipts(foldReceipt, ...(inputReceipt ? [inputReceipt] : []))
     }
   )

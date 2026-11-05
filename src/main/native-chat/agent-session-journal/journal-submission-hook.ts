@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import type { JournalPersistencePlan } from './journal-persistence-plan'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalRow } from './journal-row-schema'
@@ -41,9 +42,19 @@ export function journalInputClaimsReceipt(
   rows: readonly JournalRow[],
   receipt?: JournalOperationReceipt
 ): JournalOperationReceipt | undefined {
+  return finishJournalSteps(journalInputClaimsReceiptSteps(claim, isLiveGoal, rows, receipt))
+}
+
+export function* journalInputClaimsReceiptSteps(
+  claim: JournalAttachmentClaim,
+  isLiveGoal: (id: string) => boolean,
+  rows: readonly JournalRow[],
+  receipt?: JournalOperationReceipt
+): Generator<void, JournalOperationReceipt | undefined> {
   const bodies: AgentJournalMessageItem[] = []
   for (const row of rows) {
     for (const item of row.kind === 'lifecycle-batch' ? row.mutations : [row]) {
+      yield
       if (
         item.kind === 'item' &&
         item.body.kind === 'message' &&

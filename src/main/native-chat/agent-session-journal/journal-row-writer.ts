@@ -1,3 +1,4 @@
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 import type { JournalPersistencePlan } from './journal-persistence-plan'
 import { journalRowReadBack } from './journal-row-table'
 import type { JournalHostDatabase } from './journal-host-database'
@@ -7,24 +8,32 @@ import { assertJournalFence, assertJournalWritable } from './journal-write-guard
 import type { JournalWriteBody } from './journal-write-queue'
 import type { JournalReducerState } from './journal-reducer'
 
+export type JournalFinishFold = (draft: JournalReducerState) => void | Generator<void>
+type JournalRowPlan = () => Iterable<void | ((seq: number, ts: number) => JournalRow)>
+
 /** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
-  fold?: (draft: JournalReducerState) => void
+  fold?: JournalFinishFold
   write: (plan: JournalPersistencePlan, row?: JournalRow) => void | Promise<void>
   committed: () => void
 }
 
 export type JournalReceiptPreparation =
   | JournalOperationReceipt
-  | ((rows: readonly JournalRow[]) => JournalOperationReceipt | undefined)
+  | ((
+      rows: readonly JournalRow[]
+    ) => JournalOperationReceipt | undefined | Promise<JournalOperationReceipt | undefined>)
 
 export function composeJournalOperationReceipts(
   ...receipts: JournalOperationReceipt[]
 ): JournalOperationReceipt {
   return {
-    fold: (draft) => {
+    fold: function* (draft) {
       for (const receipt of receipts) {
-        receipt.fold?.(draft)
+        const steps = receipt.fold?.(draft)
+        if (steps) {
+          yield* steps
+        }
       }
     },
     write: async (plan, row) => {
@@ -62,7 +71,7 @@ export type JournalRowWriterDeps = {
     plan: JournalPersistencePlan,
     rows: readonly JournalRow[],
     savedAt: number,
-    finishFold?: (draft: JournalReducerState) => void
+    finishFold?: JournalFinishFold
   ) => Promise<() => void>
   project?: (rows: readonly JournalRow[]) => JournalRow[]
   commit: (rows: readonly JournalRow[], savedAt: number, inputChanged?: boolean) => void
@@ -91,7 +100,7 @@ export class JournalRowWriter {
 
   /** Plan on the write lane and commit all rows atomically; receiptRow identifies the receipt target. */
   enqueueRows(
-    plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
+    plan: JournalRowPlan,
     receipt?: JournalReceiptPreparation,
     receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
   ): Promise<JournalRow[]> {
@@ -100,7 +109,7 @@ export class JournalRowWriter {
 
   /** Caller must already own the write lane. */
   async writeRows(
-    plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
+    plan: JournalRowPlan,
     prepareReceipt?: JournalReceiptPreparation,
     receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
   ): Promise<JournalRow[]> {
@@ -110,19 +119,15 @@ export class JournalRowWriter {
         assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
         const first = this.deps.nextSequence()
         const savedAt = this.deps.now()
-        const rows = plan().map((build, index) => build(first + index, savedAt))
+        const rows = await finishJournalStepsAsync(this.buildRows(plan, first, savedAt))
         if (rows.length === 0) {
           return { rows, savedAt, receipt: undefined, adopt: undefined }
         }
-        for (const row of rows) {
-          assertJournalFence(row.fence, this.deps.highestFence())
-        }
-        const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
+        const receipt =
+          typeof prepareReceipt === 'function' ? await prepareReceipt(rows) : prepareReceipt
         streamed = !receipt && rows.length > 0 && this.streamed(rows)
         if (!this.deps.prepare) {
-          for (const row of rows) {
-            this.stageRow(db, row, savedAt)
-          }
+          await finishJournalStepsAsync(this.stageRows(db, rows, savedAt))
         }
         const adopt = rows.length
           ? await this.deps.prepare?.(db, rows, savedAt, receipt?.fold)
@@ -158,6 +163,34 @@ export class JournalRowWriter {
       epoch: row.epoch,
       sequence: row.seq
     }))
+  }
+
+  private *buildRows(
+    plan: JournalRowPlan,
+    first: number,
+    savedAt: number
+  ): Generator<void, JournalRow[]> {
+    const rows: JournalRow[] = []
+    for (const build of plan()) {
+      if (build) {
+        const row = build(first + rows.length, savedAt)
+        assertJournalFence(row.fence, this.deps.highestFence())
+        rows.push(row)
+      }
+      yield
+    }
+    return rows
+  }
+
+  private *stageRows(
+    plan: JournalPersistencePlan,
+    rows: readonly JournalRow[],
+    savedAt: number
+  ): Generator<void> {
+    for (const row of rows) {
+      this.stageRow(plan, row, savedAt)
+      yield
+    }
   }
 
   private stageRow(plan: JournalPersistencePlan, row: JournalRow, savedAt: number): void {

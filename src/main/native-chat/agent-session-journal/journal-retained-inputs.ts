@@ -1,3 +1,7 @@
+import {
+  firstJournalInputEvidence,
+  JOURNAL_INPUT_EVIDENCE_PAGE
+} from './journal-input-evidence-read'
 import { journalInputOrder } from './journal-input-order'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
@@ -47,12 +51,14 @@ function* retainedJournalInputSteps(
   source: JournalOutcomeSource,
   prefixRevisions?: ReadonlyMap<string, number>
 ): JournalInputReadSteps<void> {
+  const decisions = new Map<string, number>()
   const admissions = yield* historicalAdmissionSourceSteps(
     db,
     state.sessionId,
     state.epoch,
     source,
-    state
+    state,
+    decisions
   )
   for (const [id, admission] of admissions) {
     yield
@@ -82,60 +88,57 @@ function* retainedJournalInputSteps(
       state.inputs.rejections.set(id, send)
     }
   }
-  const first =
-    db.prepare(`SELECT seq,field,entry_key,format,ordinal,value_json,deleted FROM journal_outcomes
-    WHERE generation=? AND field='queue.cards' AND entry_key=? AND seq<=? ORDER BY seq LIMIT 1`)
-  const latestSubmission = db.prepare(
-    `SELECT seq FROM journal_outcomes WHERE generation=? AND field='submissions' AND entry_key=? AND seq<=? ORDER BY seq DESC LIMIT 1`
-  )
-  const keys = db.prepare(
-    `SELECT entry_key FROM journal_outcomes WHERE generation=? AND field='queue.cards' AND entry_key>? AND seq<=? ORDER BY entry_key,seq DESC LIMIT 1`
-  )
+  const page = firstJournalInputEvidence(db, 'queue.cards')
   let after = ''
   for (;;) {
-    const key = yield keys.get(source.generation, after, source.through)
-    if (!key || typeof key.entry_key !== 'string') {
+    const records = yield page(source.generation, after, source.through)
+    if (!records.length) {
       break
     }
-    after = key.entry_key
-    const record = yield first.get(source.generation, after, source.through)
-    if (!record || record.deleted !== 0) {
-      continue
-    }
-    const value = decodeJournalOutcome(record)
-    const [id, card] = outcomeFormat1EntryParsers['queue.cards'].parse(JSON.parse(value.json))
-    // A raw-prefix card already has its actual selection; a tail's first update is not its birth.
-    if (value.ordinal === 'b') {
-      continue
-    }
-    const members = families.get(id) ?? []
-    const preceding: typeof members = []
-    for (const member of members) {
-      if ((journalInputSourceSequence(member[1]) ?? Infinity) < value.seq) {
-        preceding.push(member)
-      }
+    for (const record of records) {
       yield
-    }
-    const latest = journalInputSourceId(preceding.at(-1)?.[1])
-    const send = latest ? state.submissions.get(latest) : undefined
-    const decision = latest
-      ? yield latestSubmission.get(source.generation, JSON.stringify(latest), source.through)
-      : undefined
-    const decisionSequence = typeof decision?.seq === 'number' ? decision.seq : Infinity
-    const terminalBeforeSelection =
-      send &&
-      (send.dispatchState === 'accepted' || send.dispatchState === 'rejected') &&
-      (send.dispatchState === 'accepted'
-        ? (state.receipts.get(latest!)?.cursor.sequence ?? decisionSequence) < value.seq
-        : typeof decision?.seq === 'number' && decision.seq < value.seq)
-    const selected =
-      card.consumedAs ??
-      (card.holdReason === 'delivery_unconfirmed' && !terminalBeforeSelection ? latest : undefined)
-    if (selected) {
-      state.inputs.presentations.set(selected, card)
-      const current = state.queue.cards.get(id)
-      if (current && !card.consumedAs && card.holdReason === 'delivery_unconfirmed') {
-        current.recovers = selected
+      if (typeof record.entry_key !== 'string') {
+        throw new Error('invalid retained card key')
+      }
+      after = record.entry_key
+      if (!record || record.deleted !== 0) {
+        continue
+      }
+      const value = decodeJournalOutcome(record)
+      const [id, card] = outcomeFormat1EntryParsers['queue.cards'].parse(JSON.parse(value.json))
+      // A raw-prefix card already has its actual selection; a tail's first update is not its birth.
+      if (value.ordinal === 'b') {
+        continue
+      }
+      const members = families.get(id) ?? []
+      const preceding: typeof members = []
+      for (const member of members) {
+        if ((journalInputSourceSequence(member[1]) ?? Infinity) < value.seq) {
+          preceding.push(member)
+        }
+        yield
+      }
+      const latest = journalInputSourceId(preceding.at(-1)?.[1])
+      const send = latest ? state.submissions.get(latest) : undefined
+      const decision = latest ? decisions.get(JSON.stringify(latest)) : undefined
+      const decisionSequence = decision ?? Infinity
+      const terminalBeforeSelection =
+        send &&
+        (send.dispatchState === 'accepted' || send.dispatchState === 'rejected') &&
+        (send.dispatchState === 'accepted'
+          ? (state.receipts.get(latest!)?.cursor.sequence ?? decisionSequence) < value.seq
+          : decision !== undefined && decision < value.seq)
+      const selected =
+        card.consumedAs ??
+        (card.holdReason === 'delivery_unconfirmed' && !terminalBeforeSelection
+          ? latest
+          : undefined)
+      if (selected) {
+        state.inputs.presentations.set(selected, card)
+        const current = state.queue.cards.get(id)
+        if (current && !card.consumedAs && card.holdReason === 'delivery_unconfirmed') {
+          current.recovers = selected
+        }
       }
     }
   }
@@ -149,9 +152,7 @@ function* retainedJournalInputSteps(
       state.queue.returnedCommands.add(card.messageId)
     }
   }
-  const removals =
-    db.prepare(`SELECT seq,field,entry_key,format,ordinal,value_json,deleted FROM journal_outcomes
-    WHERE generation=? AND field='tombstones' AND entry_key=? AND seq>? AND seq<=? ORDER BY seq LIMIT 1`)
+  const removals = new Map<string, { sequence: number; native: string; restatements: number }>()
   for (const [provider, native] of state.aliases) {
     yield
     const identity = parseAgentJournalItemKey(native)
@@ -171,25 +172,27 @@ function* retainedJournalInputSteps(
     if (sequence === undefined || !item) {
       continue
     }
-    // Each retained removal plus native restatement advances twice without provider participation.
-    let restatements = 0
-    let afterRemoval = Math.max(sequence, source.prefix)
-    for (;;) {
-      const record = yield removals.get(
-        source.generation,
-        JSON.stringify(native),
-        afterRemoval,
-        source.through
-      )
-      if (!record) {
-        break
-      }
-      const removal = decodeJournalOutcome(record)
-      afterRemoval = removal.seq
-      if (!removal.deleted) {
-        restatements++
-      }
+    removals.set(JSON.stringify(native), {
+      native,
+      sequence: Math.max(sequence, source.prefix),
+      restatements: 0
+    })
+  }
+  const keys: string[] = []
+  for (const key of removals.keys()) {
+    keys.push(key)
+    yield
+    if (keys.length === JOURNAL_INPUT_EVIDENCE_PAGE) {
+      yield* countRetainedRemovals(db, source, keys, removals)
+      keys.length = 0
     }
+  }
+  if (keys.length) {
+    yield* countRetainedRemovals(db, source, keys, removals)
+  }
+  for (const { native, restatements } of removals.values()) {
+    yield
+    const item = state.items.get(native)!
     if (item.revision > (prefixRevisions?.get(native) ?? 0) + 2 * restatements) {
       state.inputs.echoes.add(native)
     }
@@ -197,5 +200,45 @@ function* retainedJournalInputSteps(
   for (const [id] of ordered) {
     yield
     refreshJournalInputCandidate(state, id)
+  }
+}
+
+/** Read removal evidence in native pages instead of one worker request per alias/removal. */
+function* countRetainedRemovals(
+  db: Database.Database | JournalReadConnection,
+  source: JournalOutcomeSource,
+  keys: string[],
+  removals: Map<string, { sequence: number; native: string; restatements: number }>
+): JournalInputReadSteps<void> {
+  const page =
+    db.prepare(`WITH inputs(input_key,after_seq) AS (VALUES ${keys.map(() => '(?,?)').join(',')})
+    SELECT seq,field,entry_key,format,ordinal,value_json,deleted
+    FROM inputs JOIN journal_outcomes ON entry_key=input_key
+    WHERE generation=? AND field='tombstones' AND seq>after_seq AND seq<=?
+    AND (entry_key,seq)>(?,?) ORDER BY entry_key,seq LIMIT 128`)
+  const parameters = keys.flatMap((key) => [key, removals.get(key)!.sequence])
+  let after = '',
+    sequence = 0
+  for (;;) {
+    const records = yield page.all(
+      ...parameters,
+      source.generation,
+      source.through,
+      after,
+      sequence
+    )
+    if (!records.length) {
+      return
+    }
+    for (const record of records) {
+      const removal = decodeJournalOutcome(record)
+      after = removal.key
+      sequence = removal.seq
+      const entry = removals.get(after)!
+      if (removal.seq > entry.sequence && !removal.deleted) {
+        entry.restatements++
+      }
+      yield
+    }
   }
 }

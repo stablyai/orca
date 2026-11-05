@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import { testJournalNativeDatabase } from './journal-host-database-test-support'
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
@@ -45,7 +46,10 @@ export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
       for (const row of rows) {
         applyJournalRow(draft, row, savedAt)
       }
-      finishFold?.(draft)
+      const steps = finishFold?.(draft)
+      if (steps) {
+        finishJournalSteps(steps)
+      }
     })
     for (const row of rows) {
       db.add({

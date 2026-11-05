@@ -1,3 +1,4 @@
+import type { JournalFinishFold } from './journal-row-writer'
 import type Database from '../../sqlite/sync-database'
 import { finishJournalSteps, finishJournalStepsAsync } from './journal-reconstruction-steps'
 import { journalInputAcceptance, prepareJournalAcceptance } from './journal-input-provenance'
@@ -53,7 +54,7 @@ export async function prepareJournalOutcomeWriteAsync(
   live: JournalReducerState,
   rows: readonly JournalRow[],
   savedAt: number,
-  finishFold?: (draft: JournalReducerState) => void
+  finishFold?: JournalFinishFold
 ) {
   const previous = await plan.source(live.sessionId, live.epoch)
   if (previous && previous.through !== live.lastSequence) {
@@ -71,7 +72,10 @@ export async function prepareJournalOutcomeWriteAsync(
     !previous || previous.format < 2,
     finishFold
       ? function* (state) {
-          finishFold(state)
+          const steps = finishFold(state)
+          if (steps) {
+            yield* steps
+          }
           yield
         }
       : undefined,

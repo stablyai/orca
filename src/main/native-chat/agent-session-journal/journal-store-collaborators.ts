@@ -1,3 +1,5 @@
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { finishJournalStepsAsync, sortJournalSteps } from './journal-reconstruction-steps'
 import { journalInputOrder } from './journal-input-order'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -25,6 +27,7 @@ import type { AgentSessionJournal } from './journal-store'
 import type { JournalWriteBody } from './journal-write-queue'
 import {
   journalInputClaimsReceipt,
+  journalInputClaimsReceiptSteps,
   journalAttachmentClaimsReceipt,
   type JournalAttachmentClaim
 } from './journal-submission-hook'
@@ -123,20 +126,42 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     committed: host.notifyCommitted,
     claimAttachments
   })
-  const rewindReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) => {
+  const rewindReceipt = async (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) => {
     const state = host.state()
-    const pending = journalInputOrder(state)
-      .recoverableSubmissions()
-      .filter(isQueuedAgentJournalSubmission)
-    const bodies = queuedMessages.list().map((card) => card.body)
-    for (const submission of pending) {
-      const body = state.items.get(agentJournalSubmissionKey(submission.clientMessageId))?.body
-      if (body?.kind !== 'message') {
-        throw new Error('journal_queued_submission_body_missing')
-      }
-      bodies.push(body)
-    }
-    return inputReceipt(rows, journalAttachmentClaimsReceipt(claimAttachments, bodies, receipt))
+    const order = journalInputOrder(state)
+    const bodies = await finishJournalStepsAsync(
+      (function* () {
+        const bodies: AgentJournalMessageItem[] = []
+        for (const card of queuedMessages.list()) {
+          bodies.push(card.body)
+          yield
+        }
+        const pending = yield* sortJournalSteps(
+          order.recoverableSubmissionValues(),
+          (a, b) => order.inputOrdinal(a.clientMessageId) - order.inputOrdinal(b.clientMessageId)
+        )
+        for (const submission of pending) {
+          yield
+          if (!isQueuedAgentJournalSubmission(submission)) {
+            continue
+          }
+          const body = state.items.get(agentJournalSubmissionKey(submission.clientMessageId))?.body
+          if (body?.kind !== 'message') {
+            throw new Error('journal_queued_submission_body_missing')
+          }
+          bodies.push(body)
+        }
+        return bodies
+      })()
+    )
+    return finishJournalStepsAsync(
+      journalInputClaimsReceiptSteps(
+        claimAttachments,
+        (id) => goalAttachments.isLive(id),
+        rows,
+        journalAttachmentClaimsReceipt(claimAttachments, bodies, receipt)
+      )
+    )
   }
   const epochController = new JournalEpochController({
     identity: host.identity,

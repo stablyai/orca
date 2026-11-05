@@ -1,3 +1,4 @@
+import type { JournalFinishFold } from './journal-row-writer'
 import { isDeepStrictEqual } from 'node:util'
 import type { JournalPersistencePlan } from './journal-persistence-plan'
 import type { JournalHostDatabase } from './journal-host-database'
@@ -34,7 +35,7 @@ export class JournalWriteProjection {
     db: JournalPersistencePlan,
     rows: readonly JournalRow[],
     savedAt: number,
-    finishFold?: (draft: JournalReducerState) => void
+    finishFold?: JournalFinishFold
   ): Promise<() => void> {
     const transition = await prepareJournalOutcomeWriteAsync(
       db,
