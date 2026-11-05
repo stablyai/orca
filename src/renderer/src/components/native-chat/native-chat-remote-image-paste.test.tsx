@@ -59,10 +59,12 @@ function Probe({
   acceptsImages,
   owner,
   onReady,
-  declineText = false
+  declineText = false,
+  refuseSettlement = false
 }: {
   acceptsImages: boolean
   declineText?: boolean
+  refuseSettlement?: boolean
   owner: () => NativeChatAttachmentOwner
   onReady: (api: Api) => void
 }): React.JSX.Element {
@@ -94,7 +96,9 @@ function Probe({
     attachCopiedFiles: () => {},
     captureCopiedFiles: () => async () => {},
     beginPendingImageAttachment: attachments.beginPendingImageAttachment,
-    resolvePendingImageAttachment: attachments.resolvePendingImageAttachment,
+    resolvePendingImageAttachment: refuseSettlement
+      ? () => false
+      : attachments.resolvePendingImageAttachment,
     revealPendingImageAttachment: attachments.revealPendingImageAttachment,
     dropPendingImageAttachment: attachments.dropPendingImageAttachment,
     removeImageAttachment: attachments.removeImageAttachment,
@@ -119,7 +123,8 @@ let root: Root | null = null
 async function render(
   owner: () => NativeChatAttachmentOwner,
   acceptsImages = true,
-  declineText = false
+  declineText = false,
+  refuseSettlement = false
 ): Promise<() => Api> {
   const container = document.createElement('div')
   document.body.append(container)
@@ -127,7 +132,13 @@ async function render(
   root = createRoot(container)
   await act(async () => {
     root?.render(
-      createElement(Probe, { acceptsImages, owner, declineText, onReady: (next) => (api = next) })
+      createElement(Probe, {
+        acceptsImages,
+        owner,
+        declineText,
+        refuseSettlement,
+        onReady: (next) => (api = next)
+      })
     )
   })
   return () => {
@@ -342,6 +353,17 @@ it('does not insert comments when disabling the composer clears its pending imag
     await result
   })
   expect(await result).toBe(false)
+  expect(latest().attachments.imageAttachments).toEqual([])
+  expect(latest().draft).toBe('')
+})
+
+it('refuses comment insertion when an enabled composer cannot settle its pending image', async () => {
+  const latest = await render(() => SERVER_OWNER, true, false, true)
+  let result = true
+  await act(async () => {
+    result = await latest().paste.attachCommentedImage('data:image/png;base64,cG5n', 'Feedback')
+  })
+  expect(result).toBe(false)
   expect(latest().attachments.imageAttachments).toEqual([])
   expect(latest().draft).toBe('')
 })

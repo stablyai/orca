@@ -35,7 +35,11 @@ export function useNativeChatImageSave({
       }
       if (pendingId) {
         lifetime.pending.delete(pendingId)
-        return resolvePendingImageAttachment(pendingId, path, null) !== false
+        const settled = resolvePendingImageAttachment(pendingId, path, null)
+        if (settled === false) {
+          dropImagePaste(pendingId)
+        }
+        return settled !== false
       }
       attachResolvedPaths([path], null)
       return true

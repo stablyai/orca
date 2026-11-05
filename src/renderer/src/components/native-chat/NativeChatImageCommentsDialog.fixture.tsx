@@ -1,3 +1,9 @@
+import { useContext, useRef } from 'react'
+import {
+  NativeChatImageCommentsProvider,
+  NativeChatImageCommentsContext
+} from './NativeChatImageCommentsProvider'
+import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NativeChatImageCommentsDialog } from './NativeChatImageCommentsDialog'
 
@@ -20,3 +26,34 @@ export const preview = defineFixture({
     </div>
   )
 })
+
+function OpenComments(): React.JSX.Element {
+  const open = useContext(NativeChatImageCommentsContext)
+  return <button onClick={() => open?.(image, 'Campaign preview')}>Comment image</button>
+}
+
+function FocusFixture(): React.JSX.Element {
+  const input = useRef<HTMLTextAreaElement>(null)
+  const composerRef = useRef<NativeChatComposerHandle>({
+    attachCommentedImage: async () => true,
+    insertAgentReferences: () => true,
+    focus: () => {
+      input.current?.focus()
+      return true
+    },
+    insertTypedText: () => true,
+    acceptsText: () => true,
+    appendText: () => {},
+    handlePasteEvent: () => {},
+    pasteFromClipboard: () => {},
+    contains: (node) => input.current?.contains(node) ?? false
+  })
+  return (
+    <NativeChatImageCommentsProvider composerRef={composerRef}>
+      <textarea ref={input} aria-label="Chat draft" />
+      <OpenComments />
+    </NativeChatImageCommentsProvider>
+  )
+}
+
+export const focusRestoration = defineFixture({ width: 1280, render: () => <FocusFixture /> })

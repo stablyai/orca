@@ -91,7 +91,10 @@ export function NativeChatImageCommentsProvider({
         <NativeChatImageCommentsDialog
           image={request.image}
           title={request.title}
-          onClose={() => setRequest(null)}
+          onClose={() => {
+            setRequest(null)
+            requestAnimationFrame(() => request.destination.focus())
+          }}
           onDone={async (dataUrl, text) => {
             const attached = await request.destination.attachCommentedImage?.(dataUrl, text)
             if (!attached) {
