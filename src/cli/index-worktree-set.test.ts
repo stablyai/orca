@@ -490,7 +490,14 @@ describe('orca cli worktree awareness', () => {
       if (method === 'status.get') {
         return okFixture('req_status', { capabilities: [] })
       }
-      throw new Error(`unexpected ${method}`)
+      if (method === 'worktree.show') {
+        const parent = { ...buildWorktree('/tmp/repo', 'main'), instanceId: 'parent-instance' }
+        return okFixture('req_show', { worktree: parent })
+      }
+      if (method === 'worktree.lineageList') {
+        return okFixture('req_lineage', { lineage: {}, installationId: 'mac-install' })
+      }
+      return okFixture('req_set', { worktree: buildWorktree('/srv/child', 'child') })
     })
     try {
       await main(
@@ -512,7 +519,6 @@ describe('orca cli worktree awareness', () => {
       const methods = callMock.mock.calls.map(([method]) => method)
       expect(methods).toContain('status.get')
       expect(methods).not.toContain('worktree.set')
-      expect(methods).not.toContain('worktree.crossStoreParentRef')
       expect(process.exitCode).toBe(1)
     } finally {
       process.exitCode = priorExitCode

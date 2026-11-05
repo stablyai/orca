@@ -106,7 +106,6 @@ export type RuntimeManagedWorktreeCreateArgs = {
     envParentWorkspace?: string
     parentWorktree?: string
     crossStoreParent?: CrossStoreParentRef
-    crossStoreParentInferred?: true
     cwdParentWorktree?: string
     cwdParentAmbiguous?: true
     noParent?: boolean

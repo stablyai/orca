@@ -1,8 +1,13 @@
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeStatus, RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import {
+  isWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../shared/workspace-scope'
 import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'
 import { assertCrossStoreLineageSupported } from '../../shared/worktree-runtime-capabilities'
 import { getOptionalStringFlag } from '../flags'
-import { RuntimeClient } from '../runtime-client'
+import { RuntimeClient, RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector } from '../selectors'
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 
@@ -11,82 +16,97 @@ export function callerOrcaClient(client: RuntimeClient): RuntimeClient {
   return client.isRemote ? new RuntimeClient(client.userDataPath, undefined, null, null) : client
 }
 
-/** `failed`: an inferred attempt fell back, so nothing else may stand in for that parent. */
-type CrossStoreParentAttempt =
-  | { kind: 'not-attempted' }
-  | { kind: 'parent'; parent: CrossStoreParentRef }
-  | { kind: 'failed' }
-
 /**
- * A parent on this machine for a workspace on the connected server. The server must advertise
- * the capability before anything is sent (an older one would apply the rest and drop the parent);
- * the parent's own Orca names it and its install. Explicit parents refuse; inferred ones warn and fall back.
+ * A parent on this machine for a workspace on the connected server. The server must advertise the
+ * capability before anything is sent (an older one would apply the rest and drop the parent); this
+ * desktop's Orca supplies its own installationId and the parent row's identity.
  */
-export async function resolveCallerCrossStoreParent(
+async function resolveCallerCrossStoreParent(
   client: RuntimeClient,
-  selector: string | undefined,
-  options: { explicit: boolean; reparent: boolean }
-): Promise<CrossStoreParentAttempt> {
-  if (!selector || !client.isRemote) {
-    return { kind: 'not-attempted' }
+  selector: string | undefined
+): Promise<CrossStoreParentRef | undefined> {
+  if (!selector) {
+    return undefined
   }
-  try {
-    const status = (await client.call<RuntimeStatus>('status.get')).result
-    assertCrossStoreLineageSupported(
-      status.capabilities,
-      client.environmentSelector ?? 'the connected server'
+  const status = (await client.call<RuntimeStatus>('status.get')).result
+  assertCrossStoreLineageSupported(
+    status.capabilities,
+    client.environmentSelector ?? 'the connected server'
+  )
+  const local = callerOrcaClient(client)
+  const parent = (
+    await local.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', { worktree: selector })
+  ).result.worktree
+  const { installationId } = (await local.call<{ installationId?: string }>('worktree.lineageList'))
+    .result
+  if (isWorkspaceKey(parent.id) || !parent.instanceId || !installationId) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      isWorkspaceKey(parent.id)
+        ? "A folder workspace can't parent a workspace on another machine yet."
+        : "Couldn't confirm the parent's machine or workspace identity. Refresh it and try again."
     )
-    const minted = await callerOrcaClient(client).call<{ parent: CrossStoreParentRef }>(
-      'worktree.crossStoreParentRef',
-      { worktree: selector, ...(options.reparent ? { reparent: true } : {}) }
-    )
-    return { kind: 'parent', parent: minted.result.parent }
-  } catch (error) {
-    if (options.explicit) {
-      throw error
-    }
-    const reason = error instanceof Error ? error.message : String(error)
-    console.error(`warning: ${reason} Creating without a parent.`)
-    return { kind: 'failed' }
+  }
+  return {
+    installationId,
+    workspaceKey: worktreeWorkspaceKey(parent.id),
+    instanceId: parent.instanceId
   }
 }
 
-/** `worktree create`'s parent fields. Explicit active/current against a server, or an inferred terminal
- * parent, is on this machine: sent as a cross-store parent, which the host takes over inferred ones.
- * A failed inferred attempt sends noParent, so the server's own inference can't pick a same-store twin. */
+/** `worktree create`'s parent fields. Explicit active/current against a server is a parent on this
+ * machine. Only an explicit request crosses machines: this machine's terminal, cwd and env context
+ * names nothing on the server, so it is never sent there, where it could match a same-store twin. */
 export async function resolveCreateParentFields(
   client: RuntimeClient,
   args: {
     explicitParent: { parentWorktree?: string; parentWorkspace?: string; onCallerMachine?: true }
     inferredParent: string | undefined
     cwdContext: { parentWorktree?: { selector: string }; parentAmbiguous?: true }
+    callerTerminalHandle: string | undefined
     noParent: boolean
   }
 ): Promise<Record<string, unknown>> {
-  const { explicitParent, inferredParent, cwdContext } = args
-  const explicit = explicitParent.onCallerMachine === true
-  const attempt = await resolveCallerCrossStoreParent(
-    client,
-    explicit ? explicitParent.parentWorktree : inferredParent,
-    { explicit, reparent: false }
-  )
-  if (attempt.kind === 'failed') {
-    return { noParent: true }
+  const { explicitParent, inferredParent, cwdContext, noParent } = args
+  if (explicitParent.onCallerMachine) {
+    const crossStoreParent = await resolveCallerCrossStoreParent(
+      client,
+      explicitParent.parentWorktree
+    )
+    return { crossStoreParent, noParent }
+  }
+  const targetParent = {
+    parentWorktree: explicitParent.parentWorktree,
+    ...(explicitParent.parentWorkspace ? { parentWorkspace: explicitParent.parentWorkspace } : {}),
+    noParent
+  }
+  if (client.isRemote) {
+    if (inferredParent) {
+      await printNotNestedNote(client, inferredParent)
+    }
+    return targetParent
   }
   return {
-    ...(attempt.kind === 'parent'
-      ? {
-          crossStoreParent: attempt.parent,
-          ...(explicit ? {} : { crossStoreParentInferred: true })
-        }
-      : { parentWorktree: explicitParent.parentWorktree }),
-    ...(explicitParent.parentWorkspace ? { parentWorkspace: explicitParent.parentWorkspace } : {}),
+    ...targetParent,
     ...(inferredParent ? { envParentWorkspace: inferredParent } : {}),
     ...(cwdContext.parentWorktree ? { cwdParentWorktree: cwdContext.parentWorktree.selector } : {}),
     // Older hosts ignore the observation and keep this first-row cwd parent.
     ...(cwdContext.parentAmbiguous ? { cwdParentAmbiguous: cwdContext.parentAmbiguous } : {}),
-    noParent: args.noParent
+    callerTerminalHandle: args.callerTerminalHandle
   }
+}
+
+async function printNotNestedNote(client: RuntimeClient, workspaceKey: string): Promise<void> {
+  const scope = parseWorkspaceKey(workspaceKey)
+  const name = await callerOrcaClient(client)
+    .call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+      worktree: scope?.type === 'worktree' ? `id:${scope.worktreeId}` : workspaceKey
+    })
+    .then((shown) => shown.result.worktree.displayName || workspaceKey)
+    .catch(() => workspaceKey)
+  console.error(
+    `note: not nested. Add --parent-worktree active to nest it under ${name} on this machine.`
+  )
 }
 
 /** `worktree set`'s parent: active/current against a server names this machine's workspace. */
@@ -103,11 +123,7 @@ export async function resolveSetParentFields(
       cwd,
       callerOrcaClient(client)
     )
-    const attempt = await resolveCallerCrossStoreParent(client, selector, {
-      explicit: true,
-      reparent: true
-    })
-    return attempt.kind === 'parent' ? { crossStoreParent: attempt.parent } : {}
+    return { crossStoreParent: await resolveCallerCrossStoreParent(client, selector) }
   }
   return {
     parentWorktree: await withWorktreeSelectorRecovery(
