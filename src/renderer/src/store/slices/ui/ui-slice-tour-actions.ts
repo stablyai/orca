@@ -47,7 +47,6 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     contextualToursSeenIds: [],
     contextualToursAutoEligible: null,
     activeContextualTourId: null,
-    pendingContextualTourContinuation: null,
     activeContextualTourStepIndex: 0,
     activeContextualTourSource: null,
     activeContextualTourSourceDetached: false,
@@ -83,25 +82,18 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     requestContextualTour: (id, source, wasFeaturePreviouslyInteracted, options) =>
       set((s) => {
         const tour = getContextualTour(id)
-        const continuation = s.pendingContextualTourContinuation
-        const resumeStepIndex =
-          continuation?.tourId === id
-            ? tour.steps.findIndex((step) => step.id === continuation.resumeStepId)
-            : -1
-        const resuming = resumeStepIndex >= 0
         const decision = getContextualTourRequestDecision({
           tour,
           persistedUIReady: s.persistedUIReady,
           autoEligible: options?.force === true || s.contextualToursAutoEligible === true,
           onboardingVisible: s.contextualToursOnboardingVisible,
-          seenIds: options?.force === true || resuming ? [] : s.contextualToursSeenIds,
-          sessionConsumed:
-            options?.force !== true && !resuming && isContextualTourSessionConsumed(s, id),
+          seenIds: options?.force === true ? [] : s.contextualToursSeenIds,
+          sessionConsumed: options?.force !== true && isContextualTourSessionConsumed(s, id),
           activeTourId: s.activeContextualTourId,
           activeModal: s.activeModal,
           blockingSurfaceVisible: s.contextualToursBlockingSurfaceVisible,
           targetExists: hasContextualTourTarget,
-          ...(resuming ? { startStepIndex: resumeStepIndex } : {}),
+          activeTabType: s.activeTabType,
           isStepDone: (step) => isContextualTourStepDone(step, s.featureInteractions)
         })
         if (decision.kind !== 'start') {
@@ -119,7 +111,6 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         void _consumed
         return {
           activeContextualTourId: id,
-          pendingContextualTourContinuation: null,
           activeContextualTourStepIndex: decision.stepIndex,
           activeContextualTourSource: source,
           activeContextualTourSourceDetached: false,
@@ -164,17 +155,25 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         const nextStepIndex = getNextVisibleContextualTourStepIndex({
           tour,
           currentStepIndex: s.activeContextualTourStepIndex,
-          targetExists: hasContextualTourTarget
+          targetExists: hasContextualTourTarget,
+          activeTabType: s.activeTabType,
+          isStepDone: (step) => isContextualTourStepDone(step, s.featureInteractions)
         })
         if (nextStepIndex !== null) {
           return { activeContextualTourStepIndex: nextStepIndex }
         }
-        // Why: browser step 3's target lives in a closed menu until that step is active.
-        if (
-          s.activeContextualTourId === 'browser' &&
-          s.activeContextualTourStepIndex + 1 < tour.steps.length
-        ) {
-          return { activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1 }
+        // Preserve an owed action-tour step while its target is unavailable.
+        if (hasContextualTourActionStep(tour) || s.activeContextualTourId === 'browser') {
+          const pendingStepIndex = getNextVisibleContextualTourStepIndex({
+            tour,
+            currentStepIndex: s.activeContextualTourStepIndex,
+            targetExists: () => true,
+            activeTabType: s.activeTabType,
+            isStepDone: (step) => isContextualTourStepDone(step, s.featureInteractions)
+          })
+          if (pendingStepIndex !== null) {
+            return { activeContextualTourStepIndex: pendingStepIndex }
+          }
         }
         return s
       }),
@@ -186,7 +185,8 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         const previousStepIndex = getPreviousVisibleContextualTourStepIndex({
           tour: getContextualTour(s.activeContextualTourId),
           currentStepIndex: s.activeContextualTourStepIndex,
-          targetExists: hasContextualTourTarget
+          targetExists: hasContextualTourTarget,
+          activeTabType: s.activeTabType
         })
         if (previousStepIndex === null) {
           return s
@@ -208,7 +208,6 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         }
         return {
           activeContextualTourId: null,
-          pendingContextualTourContinuation: null,
           activeContextualTourStepIndex: 0,
           activeContextualTourSource: null,
           activeContextualTourSourceDetached: false,
@@ -233,7 +232,6 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         }
         return {
           activeContextualTourId: null,
-          pendingContextualTourContinuation: null,
           activeContextualTourStepIndex: 0,
           activeContextualTourSource: null,
           activeContextualTourSourceDetached: false,
@@ -250,18 +248,10 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         if (!tourId || (id && activeTourId !== id)) {
           return s
         }
-        const tour = getContextualTour(tourId)
-        const step = tour.steps[s.activeContextualTourStepIndex]
-        const nextStep = tour.steps[s.activeContextualTourStepIndex + 1]
-        const continuation =
-          step?.continueAfterModal === s.activeModal && nextStep
-            ? { tourId, resumeStepId: nextStep.id }
-            : s.pendingContextualTourContinuation
         // An unshown informational attempt frees the session for a retry; an action tour stays paused.
         const freesSession =
           !s.contextualToursSeenIds.includes(tourId) && isInformationalTour(tourId)
         return {
-          pendingContextualTourContinuation: continuation,
           activeContextualTourId: null,
           activeContextualTourStepIndex: 0,
           activeContextualTourSource: null,

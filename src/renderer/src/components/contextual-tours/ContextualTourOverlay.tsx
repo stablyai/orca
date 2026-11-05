@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { useAppStore } from '@/store'
+import { runActiveNativeChatSplit } from '@/components/native-chat/native-chat-layout-actions'
 import {
   getContextualTour,
   hasUndoneContextualTourAction,
+  hasContextualTourActionStep,
+  isContextualTourStepDone,
   type ContextualTourId,
   type ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
@@ -47,14 +50,17 @@ export function ContextualTourOverlay(): JSX.Element | null {
     s.activeContextualTourId
       ? hasUndoneContextualTourAction(
           getContextualTour(s.activeContextualTourId),
-          s.featureInteractions
+          s.featureInteractions,
+          s.activeContextualTourStepIndex
         )
       : false
   )
   const activeTabId = useAppStore((s) => s.activeTabId)
+  const activeTabType = useAppStore((s) => s.activeTabType)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
   const advanceContextualTour = useAppStore((s) => s.advanceContextualTour)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const regressContextualTour = useAppStore((s) => s.regressContextualTour)
   const dismissContextualTour = useAppStore((s) => s.dismissContextualTour)
   const completeContextualTour = useAppStore((s) => s.completeContextualTour)
@@ -158,11 +164,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
     }
 
     telemetryDefinedStepCountRef.current = activeTour.steps.length
+    const state = useAppStore.getState()
     const measurement = measureContextualTourOverlayRenderState({
       tour: activeTour,
       activeStepIndex,
       sidebarOpen,
       keybindings,
+      activeTabType: state.activeTabType,
+      isStepDone: (step) => isContextualTourStepDone(step, state.featureInteractions),
       previousTelemetryTotalSteps: telemetryTotalStepsRef.current
     })
     telemetryTotalStepsRef.current = Math.max(
@@ -173,9 +182,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (measurement.kind !== 'render') {
       // Discard stale/detached targets so the next scroll performs a full scan.
       measuredTargetRef.current = null
+      setRenderState(null)
     }
     if (measurement.kind === 'advance') {
       advanceContextualTour()
+      return
+    }
+    if (measurement.kind === 'regress') {
+      regressContextualTour()
       return
     }
     if (measurement.kind === 'wait') {
@@ -205,6 +219,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     cancelContextualTour,
     emitContextualTourOutcome,
     keybindings,
+    regressContextualTour,
     sidebarOpen
   ])
 
@@ -250,13 +265,15 @@ export function ContextualTourOverlay(): JSX.Element | null {
 
   useLayoutEffect(() => {
     measureTourOverlay()
-  }, [measureTourOverlay])
+  }, [activeTabId, activeTabType, measureTourOverlay])
 
   useEffect(() => {
     if (
       !activeTourId ||
       !renderState ||
       activeTourHasUndoneAction ||
+      (hasContextualTourActionStep(getContextualTour(activeTourId)) &&
+        activeStepIndex !== getContextualTour(activeTourId).steps.length - 1) ||
       // A step change keeps the previous step's renderState until the new step measures.
       renderedStepIndexRef.current !== activeStepIndex ||
       markedTourIdRef.current === activeTourId
@@ -336,7 +353,21 @@ export function ContextualTourOverlay(): JSX.Element | null {
     completeContextualTour(activeTourId)
   }
 
+  const acknowledgeOrAdvance = (): void => {
+    if (activeTour?.steps[activeStepIndex]?.id === 'agent-sessions-add-project') {
+      void recordFeatureInteraction('project-add-introduction')
+    } else if (renderState.isLastStep) {
+      finishTour()
+    } else {
+      advanceContextualTour()
+    }
+  }
+
   const handleStepAction = (action: ContextualTourStepAction): void => {
+    if (action.kind === 'next') {
+      acknowledgeOrAdvance()
+      return
+    }
     performContextualTourStepAction({
       action,
       activeTabId,
@@ -361,6 +392,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
       },
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
       dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,
+      splitActiveChat: () => {
+        const { activeWorktreeId, activeGroupIdByWorktree } = useAppStore.getState()
+        runActiveNativeChatSplit(
+          activeWorktreeId,
+          activeWorktreeId ? (activeGroupIdByWorktree[activeWorktreeId] ?? null) : null,
+          'right'
+        )
+      },
       schedule: (callback) => {
         window.setTimeout(callback, 0)
       }
@@ -378,13 +417,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
         dismissContextualTour(id)
       }}
       onBack={regressContextualTour}
-      onNext={() => {
-        if (renderState.isLastStep) {
-          finishTour()
-        } else {
-          advanceContextualTour()
-        }
-      }}
+      onNext={acknowledgeOrAdvance}
       onStepAction={handleStepAction}
       onOverlayKeyDownCapture={handleContextualTourOverlayKeyDown}
     />

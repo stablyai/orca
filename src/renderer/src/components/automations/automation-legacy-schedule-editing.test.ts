@@ -1,16 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
-import {
-  isRunnableAutomationSchedule,
-  isValidAutomationSchedule
-} from '../../../../shared/automation-schedule-parsing'
-import { automationDraftLaunchSetup } from './automation-launch-surface'
-import {
-  automationWithLaunchSetup,
-  applyAutomationLaunchSetupPatch
-} from '../../../../shared/automation-launch-setup'
+import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
+
 import { buildAutomationEditDraft } from './automation-edit-draft'
-import { getCronScheduleStatusLabel } from './AutomationCustomCronPanel'
+
 import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
 
 // `*/90` on minutes was accepted before the oversized-step refusal (#15895) and still runs,
@@ -44,11 +37,6 @@ const makeAutomation = (overrides: Partial<Automation> = {}): Automation => ({
 })
 
 describe('editing an automation whose saved schedule predates the input gate', () => {
-  it('still refuses the same expression as new input', () => {
-    expect(isValidAutomationSchedule(LEGACY_OVERSIZED_STEP)).toBe(false)
-    expect(isRunnableAutomationSchedule(LEGACY_OVERSIZED_STEP)).toBe(true)
-  })
-
   it('opens the editor with the saved schedule intact and no warning', () => {
     const draft = buildAutomationEditDraft(makeAutomation())
     expect(draft.preset).toBe('custom')
@@ -93,61 +81,10 @@ describe('editing an automation whose saved schedule predates the input gate', (
     ).toBe(false)
   })
 
-  // Apply the save gate to live validation too; unchanged legacy cadences must not show a new-input error.
-  it('reports the saved schedule as valid in the editor cron status', () => {
-    const draft = buildAutomationEditDraft(makeAutomation())
-    const accepts = (schedule: string): boolean =>
-      acceptsAutomationDraftSchedule({
-        customSchedule: schedule,
-        savedRrule: draft.savedSchedule,
-        validate: isValidAutomationSchedule
-      })
-    expect(getCronScheduleStatusLabel(draft.customSchedule, accepts).kind).toBe('valid')
-    // A different oversized step is new input, so it is still called out.
-    expect(getCronScheduleStatusLabel('*/91 * * * *', accepts).kind).toBe('invalid')
-  })
-
-  it('carries the saved schedule on the draft so the gate can see it', () => {
-    expect(buildAutomationEditDraft(makeAutomation()).savedSchedule).toBe(LEGACY_OVERSIZED_STEP)
-  })
-
   // Only oversized steps receive legacy leniency; unparseable schedules still need warnings.
   it('keeps warning about a saved schedule that cannot be parsed', () => {
     const draft = buildAutomationEditDraft(makeAutomation({ rrule: '0 9 32 * *' }))
     expect(draft.customSchedule).toBe('')
     expect(draft.scheduleWarning).toBeTruthy()
-  })
-})
-
-describe('saved setup draft writes', () => {
-  it('keeps canonical model and extras through an unrelated save', () => {
-    const current = automationWithLaunchSetup(
-      makeAutomation({ launchPreferences: { model: 'sonnet' }, extraAgentArgs: '--add-dir docs' })
-    )
-    const draft = { ...buildAutomationEditDraft(current), name: 'Renamed' }
-    const updates = automationDraftLaunchSetup(draft, 'terminal', current)
-    expect(updates).toEqual({})
-    expect(applyAutomationLaunchSetupPatch(updates, current)).toMatchObject({
-      launchPreferences: { model: 'sonnet' },
-      extraAgentArgs: '--add-dir docs'
-    })
-  })
-
-  it('keeps a surface-only pick and the following legacy extras edit together', () => {
-    const current = makeAutomation()
-    const draft = {
-      ...buildAutomationEditDraft(current),
-      surface: 'terminal' as const,
-      extraAgentArgs: '--model sonnet',
-      launchSetupPatch: {
-        surface: 'chat' as const,
-        arguments: { kind: 'legacy-extras' as const, value: '--model sonnet' }
-      }
-    }
-    const updates = automationDraftLaunchSetup(draft, 'terminal', current)
-    expect(applyAutomationLaunchSetupPatch(updates, current)).toMatchObject({
-      surface: 'terminal',
-      extraAgentArgs: '--model sonnet'
-    })
   })
 })

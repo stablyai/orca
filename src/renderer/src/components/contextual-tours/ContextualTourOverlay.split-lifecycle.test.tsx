@@ -95,7 +95,9 @@ beforeEach(() => {
     contextualToursAutoEligible: true,
     contextualToursSeenIds: [],
     contextualToursStartedThisSession: [],
-    featureInteractions: {},
+    featureInteractions: {
+      'project-add-introduction': { firstInteractedAt: 1, interactionCount: 1 }
+    },
     activeModal: 'none',
     sidebarOpen: true,
     contextualToursOnboardingVisible: false,

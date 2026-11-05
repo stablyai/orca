@@ -2,6 +2,7 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { act } from 'react'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -19,8 +20,16 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackContextualTourOutcome: vi.fn()
 }))
 
-function Workspace() {
-  useContextualTour('workspace-agent-sessions', true)
+function Workspace({
+  enabled = true,
+  hostedOpen = false,
+  showNewAgents = false
+}: {
+  enabled?: boolean
+  hostedOpen?: boolean
+  showNewAgents?: boolean
+}) {
+  useContextualTour('workspace-agent-sessions', enabled)
   const modal = useAppStore((state) => state.activeModal)
   const closeModal = useAppStore((state) => state.closeModal)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
@@ -29,9 +38,10 @@ function Workspace() {
     <TooltipProvider>
       <button onClick={toggleSidebar}>Toggle sidebar</button>
       {sidebarOpen && <SidebarHeaderActions onWorkspaceBoardMenuOpenChange={() => {}} />}
-      <div data-contextual-tour-target="terminal-pane-split-target" />
+      {enabled && <div data-contextual-tour-target="terminal-pane-split-target" />}
+      {enabled && showNewAgents && <div data-contextual-tour-target="tab-create-menu" />}
       <AddRepoDialogChrome
-        isOpen={modal === 'add-repo'}
+        isOpen={hostedOpen || modal === 'add-repo'}
         isAdding={false}
         isCloning={false}
         step="add"
@@ -57,7 +67,8 @@ beforeEach(() => {
       ...useAppStore.getInitialState(),
       persistedUIReady: true,
       contextualToursAutoEligible: true,
-      activeTabId: 'terminal-1'
+      activeTabId: 'terminal-1',
+      activeTabType: 'terminal'
     },
     true
   )
@@ -91,25 +102,112 @@ async function splitFromTip(): Promise<unknown> {
   return received
 }
 
-it('leads from the first project tip to an actionable terminal split', async () => {
-  render(<Workspace />)
+it('acknowledges Next across interruptions and Back without skipping an unfinished split', async () => {
+  const view = render(<Workspace showNewAgents />)
+  await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+  await screen.findByRole('button', { name: 'Split terminal' })
+  await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+  view.rerender(<Workspace enabled={false} />)
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Split terminal' })).toBeNull())
+  view.rerender(<Workspace showNewAgents />)
   await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
   expect(await splitFromTip()).toEqual({ tabId: 'terminal-1', direction: 'vertical' })
+  await act(async () => {
+    await useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+  })
+  await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+  await screen.findByText('Start another task in parallel')
+  await waitFor(() =>
+    expect(useAppStore.getState().contextualToursSeenIds).toContain('workspace-agent-sessions')
+  )
 })
 
 it('keeps terminal splitting available when the project control disappears with the sidebar', async () => {
   render(<Workspace />)
-  await screen.findByRole('button', { name: 'Next' })
+  await screen.findByRole('button', { name: 'Split terminal' })
   await userEvent.click(screen.getByRole('button', { name: 'Toggle sidebar' }))
   expect(await splitFromTip()).toEqual({ tabId: 'terminal-1', direction: 'vertical' })
+  await act(async () => {
+    await useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+  })
+  await screen.findByRole('button', { name: 'Add project' })
+  await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+  await screen.findByText('Start another task in parallel')
 })
 
-it('continues to splitting after the actual Add Project control opens and closes its dialog', async () => {
-  render(<Workspace />)
-  await screen.findByRole('button', { name: 'Next' })
+it('remembers the opened dialog through repeated interruptions and hydrated restart', async () => {
+  const view = render(<Workspace />)
+  await screen.findByRole('button', { name: 'Split terminal' })
   await userEvent.click(screen.getByRole('button', { name: 'Add project' }))
   await screen.findByRole('dialog', { name: 'Add a project' })
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Next' })).toBeNull())
   await userEvent.click(screen.getByRole('button', { name: 'Close' }))
-  expect(await splitFromTip()).toEqual({ tabId: 'terminal-1', direction: 'vertical' })
+  await screen.findByRole('button', { name: 'Split terminal' })
+  view.rerender(<Workspace enabled={false} />)
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Split terminal' })).toBeNull())
+  view.rerender(<Workspace />)
+  await screen.findByRole('button', { name: 'Split terminal' })
+  const progress = useAppStore.getState().featureInteractions
+  cleanup()
+  act(() =>
+    useAppStore.setState(
+      {
+        ...useAppStore.getInitialState(),
+        persistedUIReady: true,
+        contextualToursAutoEligible: true,
+        featureInteractions: progress
+      },
+      true
+    )
+  )
+  render(<Workspace />)
+  await screen.findByRole('button', { name: 'Split terminal' })
+  await act(async () => {
+    await useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+  })
+  await screen.findByText('Start another task in parallel')
+})
+
+it('observes hosted dialog opening across hydration, but not its parent composer or a closed dialog', async () => {
+  act(() =>
+    useAppStore.setState({ persistedUIReady: false, activeModal: 'new-workspace-composer' })
+  )
+  const view = render(<Workspace enabled={false} />)
+  act(() => useAppStore.setState({ persistedUIReady: true }))
+  expect(useAppStore.getState().featureInteractions['project-add-introduction']).toBeUndefined()
+  act(() => useAppStore.getState().closeModal())
+  view.rerender(<Workspace />)
+  await screen.findByRole('button', { name: 'Split terminal' })
+  act(() => useAppStore.setState({ persistedUIReady: false }))
+  view.rerender(<Workspace enabled={false} hostedOpen />)
+  act(() => useAppStore.setState({ persistedUIReady: true }))
+  view.rerender(<Workspace />)
+  await screen.findByRole('button', { name: 'Split terminal' })
+  expect(useAppStore.getState().featureInteractions['project-add-introduction']).toBeDefined()
+})
+
+it('waits for the introduction target after splitting even when Parallel is measurable', async () => {
+  const view = render(<Workspace />)
+  await screen.findByRole('button', { name: 'Split terminal' })
+  document.querySelector('[data-contextual-tour-target="project-add-control"]')?.remove()
+  await act(async () => {
+    await useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+  })
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Split terminal' })).toBeNull())
+  expect(screen.queryByRole('button', { name: 'Next' })).toBeNull()
+  expect(screen.queryByText('Start another task in parallel')).toBeNull()
+  expect(useAppStore.getState().contextualToursSeenIds).not.toContain('workspace-agent-sessions')
+  expect(
+    document.querySelector('[data-contextual-tour-target="workspace-create-control"]')
+  ).not.toBeNull()
+  view.rerender(<Workspace enabled={false} />)
+  await userEvent.click(screen.getByRole('button', { name: 'Toggle sidebar' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Toggle sidebar' }))
+  view.rerender(<Workspace />)
+  await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+  await screen.findByText('Start another task in parallel')
+  await waitFor(() =>
+    expect(useAppStore.getState().contextualToursSeenIds).toContain('workspace-agent-sessions')
+  )
 })

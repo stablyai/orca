@@ -1,12 +1,8 @@
 import { useAppStore } from '@/store'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { isContextualTourStepActive } from '../../../../shared/contextual-tours'
 import { requestContextualTourWhenReady } from './request-contextual-tour-when-ready'
 
-export function openWorkspaceCreationComposerWithTourHandoff(options?: {
-  initialRepoId?: string
-  initialWorkspaceTarget?: WorkspaceCreationTargetHint
-}): void {
+export function openWorkspaceCreationComposerWithTourHandoff(): void {
   const state = useAppStore.getState()
   const hasProjects = state.repos.length > 0
 
@@ -21,10 +17,6 @@ export function openWorkspaceCreationComposerWithTourHandoff(options?: {
 
   state.openModal('new-workspace-composer', {
     telemetrySource: 'sidebar',
-    ...(options?.initialRepoId ? { initialRepoId: options.initialRepoId } : {}),
-    ...(options?.initialWorkspaceTarget
-      ? { initialWorkspaceTarget: options.initialWorkspaceTarget }
-      : {}),
     ...(shouldHandoffFromAgentSessionsTour
       ? { contextualTourSource: 'workspace_creation_modal' }
       : {})

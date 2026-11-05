@@ -56,7 +56,6 @@ function renderActions(
   })
   const onOnboardingChange = vi.fn()
   const persistCurrentStep = vi.fn().mockResolvedValue({ ok: true })
-  const updateSettings = vi.fn().mockResolvedValue(undefined)
   const { result } = renderHook(() => {
     const closeWith = useCloseWith({
       onOnboardingChange,
@@ -80,13 +79,14 @@ function renderActions(
       stepIndex,
       setStepIndex: vi.fn(),
       selectedAgent,
+      agentSurface: 'terminal',
       themeLookBaseline: null,
       setTheme: vi.fn(),
-      updateSettings,
+      updateSettings: vi.fn(),
       skipOptions: { skipIntegrations: true, skipWindowsTerminal: true }
     })
   })
-  return { result, openModal, update, persistCurrentStep, onOnboardingChange, updateSettings }
+  return { result, openModal, update, persistCurrentStep, onOnboardingChange }
 }
 
 describe('onboarding completion destination', () => {
@@ -167,50 +167,15 @@ describe('onboarding completion destination', () => {
     )
   })
 
-  it.each([true, false])(
-    'returns to the main page when setting up later, selected workspace=%s',
-    async (hasSelectedWorkspace) => {
-      const { result, openModal, update, onOnboardingChange, updateSettings } = renderActions(
-        hasSelectedWorkspace,
-        0,
-        'claude'
-      )
-      await act(() => result.current.setUpLater())
-      expect(updateSettings).toHaveBeenCalledWith({ defaultTuiAgent: 'claude' })
-      expect(update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          outcome: 'completed',
-          lastCompletedStep: 5,
-          checklist: { dismissed: false }
-        })
-      )
-      expect(onOnboardingChange).toHaveBeenCalledOnce()
-      expect(openModal).not.toHaveBeenCalled()
-      expect(launch).not.toHaveBeenCalled()
-    }
-  )
-
-  it('keeps onboarding open for retry when setting up later cannot save completion', async () => {
-    const { result, update, onOnboardingChange, openModal } = renderActions(true, 0)
-    update.mockRejectedValueOnce(new Error('save failed'))
-    await act(() => result.current.setUpLater())
-    expect(onOnboardingChange).not.toHaveBeenCalled()
-    expect(openModal).not.toHaveBeenCalled()
+  it('keeps explicit project setup even with a selected workspace', async () => {
+    const { result, openModal } = renderActions(true, 0)
+    await act(() => result.current.skipToRepo())
     expect(launch).not.toHaveBeenCalled()
-    await act(() => result.current.setUpLater())
-    expect(onOnboardingChange).toHaveBeenCalledOnce()
-    expect(openModal).not.toHaveBeenCalled()
-    expect(launch).not.toHaveBeenCalled()
-  })
-
-  it('does not leave onboarding when the skipped agent preference cannot be saved', async () => {
-    const { result, updateSettings, update, onOnboardingChange, openModal } = renderActions(true, 0)
-    updateSettings.mockRejectedValueOnce(new Error('settings save failed'))
-    await act(() => result.current.setUpLater())
-    expect(update).not.toHaveBeenCalled()
-    expect(onOnboardingChange).not.toHaveBeenCalled()
-    expect(openModal).not.toHaveBeenCalled()
-    expect(launch).not.toHaveBeenCalled()
+    expect(openModal).toHaveBeenCalledWith('add-repo')
+    expect(track).toHaveBeenCalledWith(
+      'onboarding_completed',
+      expect.objectContaining({ path: 'add_project_modal' })
+    )
   })
 
   it('keeps onboarding open when completion cannot be saved', async () => {

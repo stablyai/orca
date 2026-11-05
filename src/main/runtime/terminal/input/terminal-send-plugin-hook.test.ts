@@ -1,45 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PluginHookName } from '../../../../shared/plugins/contributions/plugin-hook-contribution'
-import type { PluginHookChainOutcome } from '../../../../shared/plugins/workers/plugin-hook-chain'
+
 import { setPluginHookRunner } from '../../../plugins/hooks/plugin-hook-dispatch'
-import {
-  runTerminalSendPluginHook,
-  terminalHookOrderKind,
-  TerminalPluginHookOrder
-} from './terminal-send-plugin-hook'
+import { terminalHookOrderKind, TerminalPluginHookOrder } from './terminal-send-plugin-hook'
 
-function installRunner(
-  decide: (payload: unknown) => PluginHookChainOutcome | Promise<PluginHookChainOutcome>
-) {
-  const run = vi.fn(async (_event: PluginHookName, payload: unknown) => decide(payload))
-  setPluginHookRunner({ wants: (event) => event === 'terminal.send', run })
-  return run
-}
-
-const rewrite = (changes: Record<string, unknown>) => (payload: unknown) => ({
-  kind: 'continue' as const,
-  payload: { ...Object(payload), ...changes }
-})
 const allowed = vi.fn(async () => undefined)
 
 afterEach(() => {
   setPluginHookRunner(null)
   allowed.mockClear()
-})
-
-describe('terminal.send hook site', () => {
-  it('refuses a rewrite the caller’s own checks would refuse, and skips them when unchanged', async () => {
-    installRunner(rewrite({ text: 'claude --resume owned-by-chat' }))
-    const refuse = vi.fn(async () => {
-      throw new Error('legacy writer refused')
-    })
-    await expect(runTerminalSendPluginHook('t', { text: 'ls' }, 'driving', refuse)).rejects.toThrow(
-      'legacy writer refused'
-    )
-    installRunner(rewrite({}))
-    await runTerminalSendPluginHook('t', { text: 'ls' }, 'driving', refuse)
-    expect(refuse).toHaveBeenCalledOnce()
-  })
 })
 
 describe('TerminalPluginHookOrder', () => {
