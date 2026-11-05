@@ -13,6 +13,7 @@ export const SHELL_PREFIXES = [
   'src/main/runtime/agent-session/environment/structured-session-login-shell-test-harness',
   'src/main/runtime/agent-session/environment/structured-session-child-env',
   'src/main/startup/shell-probe-terminal-detach',
+  'src/main/startup/shell-probe-lifetime',
   'src/main/startup/hydrate-shell-path',
   'src/main/startup/login-shell-environment',
   'src/main/startup/shell-path-probe',
