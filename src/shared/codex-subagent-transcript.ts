@@ -16,6 +16,7 @@ import { readApprovalsReviewer } from './codex-subagent-reviewer'
 import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 
 import {
+  enrichCodexSubagentIdentity,
   finishCodexSubagent,
   setCodexSubagentModel,
   upsertCodexSubagent,
@@ -298,6 +299,7 @@ export function reconcileCodexSubagentTranscript(
         entriesByDirectory
       )
     }
+    changed = enrichCodexSubagentIdentity(roster, id, tracked.filePath) || changed
     const records = readJsonlCursor(tracked, isCodexStatusTranscriptLine)
     changed ||= Boolean(records?.length)
     if (!records) {

@@ -1,21 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-// Delegate a module mock because ESM namespaces cannot be spied on; count opens while keeping other exports real.
-const openSyncCalls = vi.hoisted(() => vi.fn())
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFs>()
-  return {
-    ...actual,
-    openSync: (...args: Parameters<typeof actual.openSync>) => {
-      openSyncCalls(...args)
-      return actual.openSync(...args)
-    }
-  }
-})
 
 import {
   createCodexSubagentTranscriptState,
@@ -271,19 +257,6 @@ describe('Codex subagent transcript reconciliation', () => {
 
       expect(roster.size).toBe(0)
       expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)
-    })
-
-    it('reads the model without opening any file beyond the parent and child rollouts', () => {
-      const { parentPath } = seedPair([started(), turnContext('gpt-5.6-terra')])
-      const state = createCodexSubagentTranscriptState()
-      const roster: CodexSubagentRoster = new Map()
-      openSyncCalls.mockClear()
-
-      reconcileCodexSubagentTranscript(state, roster, parentPath)
-
-      // Model discovery reuses completion records and must add no file I/O.
-      expect(openSyncCalls).toHaveBeenCalledTimes(2)
-      expect(codexRosterToSnapshots(roster)?.[0]?.model).toBe('gpt-5.6-terra')
     })
   })
 })

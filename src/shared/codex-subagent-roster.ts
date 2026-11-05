@@ -70,19 +70,22 @@ export function enrichCodexSubagentIdentity(
   roster: CodexSubagentRoster,
   id: string,
   transcriptPath: string | undefined
-): void {
+): boolean {
   const child = roster.get(id.trim())
   if (!child || !transcriptPath || child.identityTranscriptPath === transcriptPath) {
-    return
+    return false
   }
   const identity = readCodexSubagentIdentity(transcriptPath, id.trim())
   if (!identity) {
-    return
+    return false
   }
   child.identityTranscriptPath = transcriptPath
-  child.description =
+  const description =
     normalizeOptionalField(identity.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ??
     child.description
+  const changed = description !== child.description
+  child.description = description
+  return changed
 }
 
 /** Update only an existing child’s model, preserving lifecycle so late discovery cannot resurrect finished children. */
