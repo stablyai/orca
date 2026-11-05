@@ -1,6 +1,7 @@
 import { connect, type Socket } from 'node:net'
 import { DaemonProtocolError } from './types'
 import { ensureDaemonSocketDir } from './daemon-socket-endpoint-path'
+import { startResponsiveDeadline } from './daemon-responsive-deadline'
 
 export function connectDaemonSocket(socketPath: string, timeoutMs: number): Promise<Socket> {
   return new Promise((resolve, reject) => {
@@ -8,7 +9,7 @@ export function connectDaemonSocket(socketPath: string, timeoutMs: number): Prom
     ensureDaemonSocketDir(socketPath)
     const socket = connect(socketPath)
     const cleanup = (): void => {
-      clearTimeout(timer)
+      cancelDeadline()
       socket.removeListener('connect', onConnect)
       socket.removeListener('error', onError)
     }
@@ -20,11 +21,12 @@ export function connectDaemonSocket(socketPath: string, timeoutMs: number): Prom
       cleanup()
       reject(err)
     }
-    const timer = setTimeout(() => {
+    // A connect that completed while this process was frozen must not be timed out ahead of its event.
+    const cancelDeadline = startResponsiveDeadline(timeoutMs, () => {
       cleanup()
       socket.destroy()
       reject(new DaemonProtocolError('Connection timed out'))
-    }, timeoutMs)
+    })
 
     socket.on('connect', onConnect)
     socket.on('error', onError)

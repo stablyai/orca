@@ -1,5 +1,6 @@
 import type { Socket } from 'node:net'
 import { encodeNdjson } from './ndjson'
+import { startResponsiveDeadline } from './daemon-responsive-deadline'
 import {
   WRITE_ACCEPTED,
   writeRefused,
@@ -33,7 +34,7 @@ export async function writeNotifyWithSettlement(
         return
       }
       settled = true
-      clearTimeout(timer)
+      cancelDeadline()
       resolve(settlement)
     }
     const disconnectAndSettle = (settlement: WriteSettlement): void => {
@@ -47,9 +48,9 @@ export async function writeNotifyWithSettlement(
         console.warn('[daemon] Write recovery notification failed:', error)
       }
     }
-    const timer = setTimeout(
-      () => disconnectAndSettle(writeUnverifiable('settlement_timeout', true)),
-      timeoutMs
+    // A freeze in this process must not read as a dead endpoint and tear down every session's link.
+    const cancelDeadline = startResponsiveDeadline(timeoutMs, () =>
+      disconnectAndSettle(writeUnverifiable('settlement_timeout', true))
     )
     try {
       socket.write(encoded, (error) =>

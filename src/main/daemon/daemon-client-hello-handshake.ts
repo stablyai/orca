@@ -4,6 +4,7 @@ import { BINARY_STREAM_FRAMING, type DaemonStreamFraming } from './daemon-stream
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION, DaemonProtocolError } from './types'
 import type { DaemonEndpointIdentity, HelloMessage, HelloResponse } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
+import { startResponsiveDeadline } from './daemon-responsive-deadline'
 
 export type DaemonHelloRequest = {
   socket: Socket
@@ -44,12 +45,10 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
     const chunks: Buffer[] = []
     let bufferedBytes = 0
     let settled = false
-    let timer: ReturnType<typeof setTimeout> | null = null
+    let cancelDeadline: (() => void) | null = null
     const cleanup = (): void => {
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
-      }
+      cancelDeadline?.()
+      cancelDeadline = null
       socket.removeListener('data', onData)
       socket.removeListener('error', onError)
       socket.removeListener('close', onClose)
@@ -118,11 +117,11 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
     const onClose = (): void =>
       finish(new DaemonProtocolError('Connection closed before hello response'))
 
-    timer = setTimeout(() => {
-      // An accepted socket can still be a hung daemon; bound the hello wait.
+    // An accepted socket can still be a hung daemon; bound the hello wait, but not by our own freezes.
+    cancelDeadline = startResponsiveDeadline(timeoutMs, () => {
       finish(new DaemonProtocolError('Hello response timed out'))
       socket.destroy()
-    }, timeoutMs)
+    })
     socket.on('data', onData)
     socket.on('error', onError)
     socket.on('close', onClose)
