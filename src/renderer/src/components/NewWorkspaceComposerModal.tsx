@@ -37,12 +37,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import type { LinkedPluginTask } from '../../../shared/plugins/tasks/plugin-task-link'
-import {
-  describePluginTaskSessionOptions,
-  sessionOptionsForAgent,
-  type PluginTaskSessionOptions
-} from '@/lib/plugin-task-session-options'
+import { usePluginTaskLaunch, type PluginTaskLaunch } from './new-workspace/use-plugin-task-launch'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
@@ -70,19 +65,13 @@ type ComposerModalData = {
   taskSourceContext?: TaskSourceContext | null
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialBaseBranch?: string
-  /** Editable draft typed into the agent after launch (e.g. a plugin task's prompt). */
-  initialAgentDraft?: string
-  /** Per-launch agent session options (e.g. model, effort) from the opener. */
-  initialAgentSessionOptions?: PluginTaskSessionOptions
-  /** Plugin task the new workspace links back to. */
-  linkedPluginTask?: LinkedPluginTask
   initialWorkspaceStatus?: WorkspaceStatus
   enableIssueAutomation?: boolean
   /** Creation-surface telemetry; each opener supplies it, otherwise use unknown. */
   telemetrySource?: WorkspaceCreateTelemetrySource
   contextualTourSource?: string
   setupGuideTourRequestId?: string
-}
+} & PluginTaskLaunch
 
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
@@ -259,12 +248,7 @@ function QuickTabBody({
     [observation.contextKey]
   )
 
-  const [agentDraft, setAgentDraft] = useState<string | null>(modalData.initialAgentDraft ?? null)
-  const { initialAgentSessionOptions, linkedPluginTask } = modalData
-  const launchSessionOptions = useMemo(
-    () => sessionOptionsForAgent(initialAgentSessionOptions, quickAgent),
-    [initialAgentSessionOptions, quickAgent]
-  )
+  const pluginTask = usePluginTaskLaunch(modalData, quickAgent)
   const handleCreate = useCallback(async (): Promise<void> => {
     if (createDisabled) {
       return
@@ -289,15 +273,11 @@ function QuickTabBody({
       setupOnly: quickAgent === null,
       launchChoice: launchSelection.choice,
       ...(launchInputs ? { launchInputs } : {}),
-      ...(agentDraft?.trim() ? { agentDraft } : {}),
-      ...(launchSessionOptions ? { sessionOptions: launchSessionOptions } : {}),
-      ...(linkedPluginTask ? { linkedPluginTask } : {})
+      ...pluginTask.submitOptions
     })
   }, [
-    agentDraft,
+    pluginTask.submitOptions,
     createDisabled,
-    launchSessionOptions,
-    linkedPluginTask,
     quickAgent,
     launchSelection.choice,
     submitQuick,
@@ -345,17 +325,6 @@ function QuickTabBody({
     : cardProps.selectedRepoIsGit
       ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
       : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
-  const agentDraftUnavailableReason = isFolderWorkspaceTarget
-    ? translate(
-        'auto.components.NewWorkspaceComposerModal.agentDraftFolderGroup',
-        'Folder workspaces do not take an agent prompt, so this one will not be sent.'
-      )
-    : quickAgent === null
-      ? translate(
-          'auto.components.NewWorkspaceComposerModal.agentDraftNoAgent',
-          'Pick an agent to send this prompt.'
-        )
-      : null
 
   // Let Radix own Escape for the topmost layer. This dialog auto-focuses input, so page-style blur-first handling swallowed its first Escape.
   const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
@@ -419,10 +388,7 @@ function QuickTabBody({
           observation.model.pickerContext?.executionHostId !== 'local'
         }
         onQuickAgentChange={handleQuickAgentChange}
-        agentDraft={agentDraft}
-        onAgentDraftChange={setAgentDraft}
-        agentDraftUnavailableReason={agentDraftUnavailableReason}
-        agentSessionNote={describePluginTaskSessionOptions(initialAgentSessionOptions, quickAgent)}
+        {...pluginTask.cardProps(isFolderWorkspaceTarget)}
         {...cardProps}
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}

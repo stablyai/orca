@@ -12,6 +12,7 @@ import { fileList } from './plugin-contribution-file-list'
 import {
   statusBarContributionRows,
   statusBarItemTitles,
+  taskSourceContributionRows,
   withMode
 } from './plugin-contribution-row-labels'
 
@@ -258,18 +259,16 @@ export function describePluginContributions(
       ...languageDetail(language.coverage)
     })
   }
-  const titledKinds = [
-    ['panels', translate('auto.components.settings.PluginDetailSections.panel', 'Sidebar panel')],
-    [
-      'taskSources',
-      translate('auto.components.settings.PluginDetailSections.taskSource', 'Task list')
-    ]
-  ] as const
-  for (const [kind, detail] of titledKinds) {
-    for (const [index, title] of source[kind].entries()) {
-      rows.push({ key: `${kind}:${index}`, kind, title, detail, tone: 'default' })
-    }
+  for (const [index, title] of source.panels.entries()) {
+    rows.push({
+      key: `panels:${index}`,
+      kind: 'panels',
+      title,
+      detail: translate('auto.components.settings.PluginDetailSections.panel', 'Sidebar panel'),
+      tone: 'default'
+    })
   }
+  rows.push(...taskSourceContributionRows(source.taskSources))
   for (const [index, editor] of source.customEditors.entries()) {
     const label = translate('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
     const files = fileList(editor.extensions, editor.filenames)

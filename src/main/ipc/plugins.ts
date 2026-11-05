@@ -15,6 +15,7 @@ import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
 import { readApprovedPluginNewFileTemplate } from '../plugins/plugin-new-file-template'
 import { handlePluginPanelStateRequest } from '../plugins/panels/plugin-panel-state'
 import type { PluginService } from '../plugins/plugin-service'
+import { invokePluginTaskSource } from '../plugins/plugin-task-source-invocation'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
 import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
 import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
@@ -214,7 +215,7 @@ export function registerPluginHandlers(
 
   ipcMain.handle('plugins:invokeTaskSource', async (_event, args: unknown) => {
     await pluginService.whenReady()
-    return pluginService.invokeTaskSource(args)
+    return invokePluginTaskSource(pluginService, args)
   })
 
   ipcMain.handle('plugins:resolveGitSource', async (_event, args: unknown) =>

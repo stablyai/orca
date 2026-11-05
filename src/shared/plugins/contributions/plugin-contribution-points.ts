@@ -34,10 +34,6 @@ import {
 } from './plugin-new-file-contribution'
 import { PLUGIN_PANEL_LIMIT, pluginPanelContributionSchema } from './plugin-panel-contribution'
 import {
-  PLUGIN_SETTING_LIMIT,
-  pluginSettingContributionSchema
-} from './plugin-settings-contribution'
-import {
   PLUGIN_TASK_SOURCE_LIMIT,
   pluginTaskSourceContributionSchema
 } from '../tasks/plugin-task-source'

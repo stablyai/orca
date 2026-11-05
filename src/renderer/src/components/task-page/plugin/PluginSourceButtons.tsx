@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { usePluginTaskSources } from '@/store/plugin-task-sources'
-import { resolvePluginPanelIcon } from '@/components/right-sidebar/plugin-panel-activity-items'
+import { resolvePluginPanelIcon } from '@/components/right-sidebar/plugin-panels/plugin-panel-activity-items'
 import { TaskPageSourceIconButton } from '../SourceIconButton'
 
 /** Source tabs contributed by enabled plugins; picking one is remembered for the next bare open. */

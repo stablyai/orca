@@ -5,23 +5,24 @@ import {
   type PluginTaskListResult
 } from '../../shared/plugins/tasks/plugin-task-source'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
-import type { PluginWorkerController } from './workers/plugin-worker-controller'
+import type { PluginEventDeliveryContext } from './plugin-event-delivery'
 
-/** Null unless the plugin is installed, approved, and allowed to start work. */
-export type PluginApprovedLookup = {
+/** What a task-source call needs from the plugin service. */
+export type PluginTaskSourceHost = {
+  /** Null unless the plugin is installed, approved, and allowed to start work. */
   findApprovedPlugin(pluginKey: string): ValidDiscoveredPlugin | null
+  eventDelivery: Pick<PluginEventDeliveryContext, 'ensureWorker'>
 }
 
 /** Runs one task-source operation in the plugin's worker. Both the request
  *  (from a renderer or paired client) and the worker's answer are untrusted. */
 export async function invokePluginTaskSource(
-  plugins: PluginApprovedLookup,
-  workers: Pick<PluginWorkerController, 'ensure'>,
+  host: PluginTaskSourceHost,
   rawRequest: unknown
 ): Promise<PluginTaskListResult | PluginTaskDetail> {
   const request = pluginTaskSourceRequestSchema.parse(rawRequest)
   const { pluginKey, sourceId, operation } = request
-  const plugin = plugins.findApprovedPlugin(pluginKey)
+  const plugin = host.findApprovedPlugin(pluginKey)
   if (!plugin) {
     throw new Error(`plugin ${pluginKey} is not enabled`)
   }
@@ -33,7 +34,7 @@ export async function invokePluginTaskSource(
   if (!plugin.manifest.capabilities.some((capability) => capability.kind === 'tasks:provide')) {
     throw new Error(`plugin ${pluginKey} is not allowed to provide tasks`)
   }
-  const handle = await workers.ensure(plugin)
+  const handle = await host.eventDelivery.ensureWorker(plugin)
   if (!handle.taskSources.includes(sourceId)) {
     throw new Error(`plugin ${pluginKey} registered no handler for task source ${sourceId}`)
   }

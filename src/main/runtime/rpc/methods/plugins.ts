@@ -10,7 +10,6 @@ import {
   PluginDevUnloadParams,
   PluginGetLogsParams,
   PluginInvokeCommandParams,
-  PluginInvokeTaskSourceParams,
   PluginReadPanelEntryParams,
   PluginRestartParams,
   PluginRpcConsentParams,
@@ -316,17 +315,6 @@ export const PLUGIN_METHODS = [
       const service = requirePluginService()
       await service.whenReady()
       return service.invokeCommand(params.pluginKey, params.commandId, params.args)
-    }
-  }),
-  defineMethod({
-    name: 'plugins.invokeTaskSource',
-    // Why: lists and reads a task source's items, like plugins.readPanelEntry; it runs no commands.
-    permission: 'workspace',
-    params: PluginInvokeTaskSourceParams,
-    handler: async (params) => {
-      const service = requirePluginService()
-      await service.whenReady()
-      return service.invokeTaskSource(params)
     }
   })
 ]

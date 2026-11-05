@@ -2,11 +2,10 @@
   "manifestVersion": 2,
   "execution": "trusted-worker",
   "id": "hello-tasks",
-  "publisher": "your-github-user",
   "name": "Hello Tasks",
   "version": "1.0.0",
   "description": "Sample plugin that adds a task list to the Tasks page and starts workspaces from it.",
-  "engines": { "orca": ">=1.4.245" },
+  "engines": { "orca": ">=1.4.246" },
   "pluginApi": 1,
   "main": "main.mjs",
   "contributes": {

@@ -34,6 +34,8 @@ function worker(): PluginWorkerHandle {
   return {
     commands: [],
     invokeCommand: vi.fn(),
+    taskSources: [],
+    invokeTaskSource: vi.fn(),
     deliverEvent: vi.fn(),
     requestFromPanel: vi.fn(),
     runHook: vi.fn(),

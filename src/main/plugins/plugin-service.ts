@@ -46,7 +46,6 @@ import { invokePluginWorkerCommand } from './plugin-command-invocation'
 import { deliverPluginEvent, pluginWorkersWantEvent } from './plugin-event-delivery'
 import type { PluginEventDeliveryContext } from './plugin-event-delivery'
 import { PluginInstallationState } from './installation/plugin-installation-state'
-import { invokePluginTaskSource } from './plugin-task-source-invocation'
 
 export class PluginService {
   readonly options: PluginServiceOptions
@@ -280,10 +279,6 @@ export class PluginService {
   invokeCommand(pluginKey: string, commandId: string, args?: unknown, startBy?: number) {
     const [plugin, workers] = [this.findApprovedPlugin(pluginKey), this.workerController]
     return invokePluginWorkerCommand(pluginKey, plugin, workers, commandId, args, startBy)
-  }
-
-  invokeTaskSource(request: unknown): ReturnType<typeof invokePluginTaskSource> {
-    return invokePluginTaskSource(this, this.workerController, request)
   }
 
   wantsEvent(event: PluginEventName): boolean {

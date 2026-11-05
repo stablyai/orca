@@ -45,6 +45,9 @@ function worker(value: unknown, taskSources = ['roadmap']): PluginWorkerHandle {
     taskSources,
     invokeTaskSource: vi.fn(async () => value),
     deliverEvent: vi.fn(),
+    requestFromPanel: vi.fn(),
+    runHook: vi.fn(),
+    notifyDataChanged: vi.fn(),
     lastActivityAt: () => Date.now(),
     inFlightCount: () => 0,
     dispose: vi.fn(async () => undefined),
@@ -61,12 +64,8 @@ function deps(
   return {
     findApprovedPlugin: (pluginKey: string) =>
       options.enabled === false || pluginKey !== PLUGIN_KEY ? null : subject,
-    ensure: vi.fn(async () => handle)
+    eventDelivery: { ensureWorker: vi.fn(async () => handle) }
   }
-}
-
-function invoke(lookup: ReturnType<typeof deps>, request: unknown) {
-  return invokePluginTaskSource(lookup, lookup, request)
 }
 
 const listRequest = {
@@ -82,7 +81,7 @@ describe('invokePluginTaskSource', () => {
       items: [{ id: 'a', title: 'Plan A', status: { label: 'Open', tone: 'open' } }]
     })
 
-    const result = await invoke(deps(handle), listRequest)
+    const result = await invokePluginTaskSource(deps(handle), listRequest)
 
     expect(handle.invokeTaskSource).toHaveBeenCalledWith('roadmap', 'list', {
       query: 'calibration',
@@ -96,7 +95,7 @@ describe('invokePluginTaskSource', () => {
   it('rejects a worker result that does not match the contract', async () => {
     const handle = worker({ items: [{ id: 'a', title: 'Plan A', surprise: true }] })
 
-    await expect(invoke(deps(handle), listRequest)).rejects.toThrow(
+    await expect(invokePluginTaskSource(deps(handle), listRequest)).rejects.toThrow(
       'returned an invalid list result'
     )
   })
@@ -105,7 +104,7 @@ describe('invokePluginTaskSource', () => {
     const handle = worker({ item: { id: 'a', title: 'A', url: 'file:///etc/passwd' } })
 
     await expect(
-      invoke(deps(handle), {
+      invokePluginTaskSource(deps(handle), {
         pluginKey: PLUGIN_KEY,
         sourceId: 'roadmap',
         operation: 'get',
@@ -120,22 +119,22 @@ describe('invokePluginTaskSource', () => {
     const unconsented = deps(handle, { subject: plugin([]) })
     const undeclared = deps(handle)
 
-    await expect(invoke(disabled, listRequest)).rejects.toThrow('not enabled')
-    await expect(invoke(unconsented, listRequest)).rejects.toThrow(
+    await expect(invokePluginTaskSource(disabled, listRequest)).rejects.toThrow('not enabled')
+    await expect(invokePluginTaskSource(unconsented, listRequest)).rejects.toThrow(
       'not allowed to provide tasks'
     )
     await expect(
-      invoke(undeclared, { ...listRequest, sourceId: 'other' })
+      invokePluginTaskSource(undeclared, { ...listRequest, sourceId: 'other' })
     ).rejects.toThrow('does not contribute task source other')
-    expect(disabled.ensure).not.toHaveBeenCalled()
-    expect(unconsented.ensure).not.toHaveBeenCalled()
-    expect(undeclared.ensure).not.toHaveBeenCalled()
+    expect(disabled.eventDelivery.ensureWorker).not.toHaveBeenCalled()
+    expect(unconsented.eventDelivery.ensureWorker).not.toHaveBeenCalled()
+    expect(undeclared.eventDelivery.ensureWorker).not.toHaveBeenCalled()
   })
 
   it('refuses a declared source the worker never registered', async () => {
     const handle = worker({ items: [] }, [])
 
-    await expect(invoke(deps(handle), listRequest)).rejects.toThrow(
+    await expect(invokePluginTaskSource(deps(handle), listRequest)).rejects.toThrow(
       'registered no handler'
     )
   })
@@ -144,10 +143,10 @@ describe('invokePluginTaskSource', () => {
     const handle = worker({ items: [] })
 
     await expect(
-      invoke(deps(handle), { ...listRequest, operation: 'delete' })
+      invokePluginTaskSource(deps(handle), { ...listRequest, operation: 'delete' })
     ).rejects.toThrow()
     await expect(
-      invoke(deps(handle), {
+      invokePluginTaskSource(deps(handle), {
         ...listRequest,
         params: { filters: { 'Bad Key': 'x' } }
       })
