@@ -123,6 +123,32 @@ describe('mailbox delivery into a pane awaiting the user', () => {
     }
   )
 
+  it('holds the pointer for five seconds after a keystroke and delivers when that pause ends', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-typing-pause-delivery-hold-')
+    const { runtime, write } = createRuntime(db, {
+      getAgentStatusSnapshot: () => [claudeHookRow('done')],
+      checkHookAgentPresence: async () => 'live',
+      launchAgent: 'claude'
+    })
+    const run = createBoundRun(db, 'Claude Run')
+    await runtime.listTerminals()
+
+    // A keystroke the draft reader cannot see on screen.
+    runtime.onPtyData(PTY_ID, `\x1b]0;✳ Claude Code\x07${'─'.repeat(40)}\r\n❯ `, 1)
+    runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'p')
+    insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(4500)
+    expect(write).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(write.mock.calls[0]?.[1]).toEqual(
+      expect.stringContaining('You have 1 orchestration message')
+    )
+    db.close()
+  })
+
   it("delivers past the agent's dim prompt suggestion right after the user typed (#38015)", async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-prompt-suggestion-delivery-')
