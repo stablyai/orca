@@ -13,6 +13,7 @@ import {
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
 import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
+import { settledWriteStub } from '../providers/settled-pty-write-stub'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -188,4 +189,43 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       db.close()
     }
   )
+
+  it('after an Orca restart, holds mail while the restored screen is still loading', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-restoring-screen-delivery-hold-')
+    const { runtime, write } = createRuntime(db, {
+      getAgentStatusSnapshot: () => [claudeHookRow('done')],
+      checkHookAgentPresence: async () => 'live',
+      launchAgent: 'claude'
+    })
+    let finishRestore = (_screen: string): void => {}
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      getForegroundProcess: async () => null,
+      hasRendererSerializer: () => true,
+      serializeBuffer: () =>
+        new Promise((resolve) => {
+          finishRestore = (data) => resolve({ data, cols: 80, rows: 24 })
+        })
+    })
+    const run = createBoundRun(db, 'Claude Run')
+    await runtime.listTerminals()
+
+    runtime.onPtyData(PTY_ID, '\x1b]0;✳ Claude Code\x07', 1)
+    await vi.advanceTimersByTimeAsync(200)
+    insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(write).not.toHaveBeenCalled()
+
+    finishRestore(`${'─'.repeat(40)}\r\n❯ `)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    db.close()
+  })
 })

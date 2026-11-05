@@ -155,14 +155,21 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       ? readTerminalComposerTypedText(state.emulator.getCursorLineContext())
       : null
     const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
+    const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
     // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
-    // launch text; a process it attached to, as after a restart, may hold one typed before.
+    // launch text; a process it attached to, as after a restart, may hold one typed before, which a
+    // screen still restoring cannot rule out yet.
+    const restoring = !state && this.headlessHydrationState.get(ptyId) === 'pending'
     const unattributedSince = facts.noteUnattributedDraft(
       ptyId,
-      !!draft && drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
+      unattributed && (!!draft || restoring)
     )
     const holdSince = drivingInputAt ?? unattributedSince
-    return !!draft && holdSince !== null && Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
+    return (
+      (!!draft || (unattributed && restoring)) &&
+      holdSince !== null &&
+      Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
+    )
   }
 
   protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {
